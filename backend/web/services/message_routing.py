@@ -16,6 +16,7 @@ async def route_message_to_brain(
     thread_id: str,
     content: str,
     source: str = "owner",
+    enable_trajectory: bool = False,
     sender_name: str | None = None,
     sender_avatar_url: str | None = None,
     attachments: list[str] | None = None,
@@ -77,7 +78,14 @@ async def route_message_to_brain(
             meta.update(message_metadata)
         if attachments:
             meta["attachments"] = attachments
-        run_id = start_agent_run(agent, thread_id, run_content, app, message_metadata=meta)
+        run_id = start_agent_run(
+            agent,
+            thread_id,
+            run_content,
+            app,
+            enable_trajectory=enable_trajectory,
+            message_metadata=meta,
+        )
         # @@@monitor-resource-cache-run-start - a fresh run can create or resume a lease immediately.
         # Drop the cached monitor snapshot so the next /api/monitor/resources read reflects the live topology.
         clear_monitor_resource_overview_cache()

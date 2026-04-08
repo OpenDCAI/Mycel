@@ -65,6 +65,7 @@ class _FakeGraphAgent:
 class _FakeTrajectoryStore:
     header_calls: list[dict] = []
     finalize_calls: list[dict] = []
+    metric_calls: list[dict] = []
 
     def __init__(self) -> None:
         return None
@@ -73,12 +74,16 @@ class _FakeTrajectoryStore:
     def reset(cls) -> None:
         cls.header_calls = []
         cls.finalize_calls = []
+        cls.metric_calls = []
 
     def upsert_run_header(self, **payload) -> None:
         _FakeTrajectoryStore.header_calls.append(payload)
 
     def finalize_run(self, **payload) -> None:
         _FakeTrajectoryStore.finalize_calls.append(payload)
+
+    def save_metrics(self, run_id: str, tier: str, metrics) -> None:
+        _FakeTrajectoryStore.metric_calls.append({"run_id": run_id, "tier": tier, "metrics": metrics.model_dump()})
 
 
 class _FakeTrajectoryTracer:
@@ -171,6 +176,7 @@ async def test_run_agent_to_buffer_persists_running_then_completed_eval_row(monk
             "trajectory_json": '{"id":"run-123","thread_id":"thread-1","user_message":"hello","final_response":"done","llm_calls":[],"tool_calls":[],"run_tree_json":"{}","started_at":"2026-04-08T12:00:00+00:00","finished_at":"2026-04-08T12:01:00+00:00","status":"completed"}',
         }
     ]
+    assert [call["tier"] for call in _FakeTrajectoryStore.metric_calls] == ["system", "objective"]
 
 
 @pytest.mark.asyncio
