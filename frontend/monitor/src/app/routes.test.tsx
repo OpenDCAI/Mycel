@@ -386,19 +386,19 @@ describe("MonitorRoutes", () => {
   it("renders evaluation as a truthful operator surface", async () => {
     mockRoutePayloads({
       "/evaluation": {
-        status: "unavailable",
-        kind: "unavailable",
-        tone: "warning",
-        headline: "Evaluation operator truth is not wired in this runtime yet.",
-        summary: "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
-        facts: [{ label: "Status", value: "unavailable" }],
+        status: "idle",
+        kind: "no_recorded_runs",
+        tone: "default",
+        headline: "No persisted evaluation runs are available yet.",
+        summary: "Evaluation storage is wired, but there are no recorded runs to report yet.",
+        facts: [{ label: "Status", value: "idle" }],
         artifacts: [],
         artifact_summary: {
           present: 0,
           missing: 0,
           total: 0,
         },
-        next_steps: ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
+        next_steps: ["Run an evaluation to populate the operator surface with persisted runtime truth."],
         raw_notes: null,
       },
     });
@@ -411,10 +411,11 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByText("Evaluation operator truth is not wired in this runtime yet.")).toBeInTheDocument();
+    expect(screen.getByText("No persisted evaluation runs are available yet.")).toBeInTheDocument();
     expect(screen.getByText("Operator Facts")).toBeInTheDocument();
-    expect(screen.getByText("Artifact Coverage")).toBeInTheDocument();
     expect(screen.getByText("Next Steps")).toBeInTheDocument();
-    expect(screen.getByText("Restore a truthful evaluation runtime source before reviving the monitor evaluation page.")).toBeInTheDocument();
+    expect(screen.getByText("Run an evaluation to populate the operator surface with persisted runtime truth.")).toBeInTheDocument();
+    expect(screen.queryByText("Artifact Coverage")).not.toBeInTheDocument();
+    expect(screen.queryByText("Artifacts")).not.toBeInTheDocument();
   });
 });
