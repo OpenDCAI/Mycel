@@ -1893,6 +1893,92 @@ describe("MonitorRoutes", () => {
     expect(detailLabel.nextElementSibling).toHaveTextContent("1");
   });
 
+  it("surfaces live usage coverage in the local provider detail overview", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 3,
+        },
+        providers: [
+          {
+            id: "local",
+            name: "local",
+            description: "Local provider",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 3, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 8, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 20, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+            sessions: [
+              {
+                id: "session-1",
+                threadId: "thread-1",
+                agentName: "Local Agent 1",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 0.4,
+                  memory: 0.5,
+                  memoryLimit: 1,
+                  disk: 0.2,
+                  diskLimit: 3,
+                  cpuNote: null,
+                  memoryNote: null,
+                  diskNote: null,
+                  probeError: null,
+                },
+              },
+              {
+                id: "session-2",
+                threadId: "thread-2",
+                agentName: "Local Agent 2",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+              {
+                id: "session-3",
+                threadId: "thread-3",
+                agentName: "Local Agent 3",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    const detailLabel = await screen.findByText("有用量");
+    expect(detailLabel).toHaveClass("inline-metric__label");
+    expect(detailLabel.nextElementSibling).toHaveTextContent("1");
+  });
+
   it("surfaces when a ready provider still has no live telemetry", async () => {
     mockRoutePayloads({
       "/resources": {
