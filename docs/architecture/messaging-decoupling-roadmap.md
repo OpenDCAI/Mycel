@@ -185,7 +185,7 @@ It should not become a grab bag for unrelated communication cleanup.
 Until the first bounded slice is explicitly assigned, this branch is frozen as:
 
 - one repo-shipping architecture roadmap
+- do not start Slice 1 implementation yet
 - no production-code changes
-- no opportunistic tests
-- no cleanup hitchhiking
+- no opportunistic tests or cleanup hitchhiking
 - no parallel “helper roadmap” or scratchpad documents inside the repo
