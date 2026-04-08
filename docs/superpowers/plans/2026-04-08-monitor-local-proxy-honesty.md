@@ -14,11 +14,15 @@
 
 - Modify: `frontend/monitor/vite.config.ts`
   - add worktree-aware port resolution
+- Create: `frontend/monitor/dev-ports.ts`
+  - read env/worktree config for Vite
 - Modify: `frontend/monitor/package.json`
   - stop overriding config ports with hardcoded CLI flags
 - Modify: `frontend/monitor/README.md`
   - document real local-dev port contract
-- Create: `frontend/monitor/vite.config.test.ts`
+- Create: `frontend/monitor/src/monitor-ports.ts`
+  - pure port-resolution helper
+- Create: `frontend/monitor/src/test/vite-port-config.test.ts`
   - lock env/worktree port resolution behavior
 
 ## Mandatory Boundary
@@ -32,11 +36,13 @@
 ## Task 1: Lock monitor Vite resolution behavior
 
 **Files:**
-- Create: `frontend/monitor/vite.config.test.ts`
+- Create: `frontend/monitor/dev-ports.ts`
+- Create: `frontend/monitor/src/monitor-ports.ts`
+- Create: `frontend/monitor/src/test/vite-port-config.test.ts`
 - Modify: `frontend/monitor/vite.config.ts`
 - Modify: `frontend/monitor/package.json`
 - Test:
-  - `cd frontend/monitor && npm test -- --run vite.config.test.ts`
+  - `cd frontend/monitor && npm test -- --run src/test/vite-port-config.test.ts`
 
 - [ ] Add a failing test that proves monitor resolves:
   - backend target from `LEON_BACKEND_PORT` before worktree config
@@ -45,8 +51,8 @@
   - fallback values when no env/worktree config exists
 - [ ] Run the targeted test and verify it fails.
 - [ ] Implement the smallest config change:
-  - add `getWorktreePort(...)`
-  - export a small helper for resolved config values so the test can read them
+  - keep the pure resolution logic in `src/monitor-ports.ts`
+  - keep `git config` and `process.env` reads in `dev-ports.ts`
   - remove hardcoded `--port` flags from `package.json` so Vite config actually owns the ports
 - [ ] Re-run the targeted test and verify it passes.
 - [ ] Re-run monitor build and verify it still passes:
@@ -54,7 +60,7 @@
 - [ ] Commit:
 
 ```bash
-git add frontend/monitor/vite.config.ts frontend/monitor/vite.config.test.ts frontend/monitor/package.json
+git add frontend/monitor/dev-ports.ts frontend/monitor/src/monitor-ports.ts frontend/monitor/src/test/vite-port-config.test.ts frontend/monitor/vite.config.ts frontend/monitor/package.json
 git commit -m "feat: align monitor local vite ports with worktree config"
 ```
 
@@ -71,8 +77,8 @@ git commit -m "feat: align monitor local vite ports with worktree config"
   - `LEON_MONITOR_PORT`
   - `LEON_MONITOR_PREVIEW_PORT`
   - `worktree.ports.backend`
-  - `worktree.ports.monitor_frontend`
-  - `worktree.ports.monitor_preview`
+  - `worktree.ports.monitor-frontend`
+  - `worktree.ports.monitor-preview`
 - [ ] Keep the wording narrow:
   - local-dev honesty only
   - no claim that monitor auto-discovers or heals wrong ports
@@ -91,7 +97,7 @@ git commit -m "docs: document monitor local port contract"
 - No required code files
 
 - [ ] Run:
-  - `cd frontend/monitor && npm test -- --run vite.config.test.ts`
+  - `cd frontend/monitor && npm test -- --run src/test/vite-port-config.test.ts`
   - `cd frontend/monitor && npm run build`
 - [ ] Record the honest boundary:
   - this PR only fixes local-dev proxy/port honesty

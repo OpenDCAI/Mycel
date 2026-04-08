@@ -75,11 +75,11 @@ Use the same local-dev truth sources the app already uses:
   - fallback `8001`
 - monitor dev port from:
   - `LEON_MONITOR_PORT`
-  - `worktree.ports.monitor_frontend`
+  - `worktree.ports.monitor-frontend`
   - fallback `5174`
 - monitor preview port from:
   - `LEON_MONITOR_PREVIEW_PORT`
-  - `worktree.ports.monitor_preview`
+  - `worktree.ports.monitor-preview`
   - fallback `4174`
 
 Pros:
@@ -129,8 +129,8 @@ Monitor should not reuse `worktree.ports.frontend`, because that key already bel
 
 So monitor gets its own optional keys:
 
-- `worktree.ports.monitor_frontend`
-- `worktree.ports.monitor_preview`
+- `worktree.ports.monitor-frontend`
+- `worktree.ports.monitor-preview`
 
 And matching env overrides:
 
