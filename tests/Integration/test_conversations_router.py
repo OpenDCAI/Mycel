@@ -14,30 +14,32 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
                 list_by_owner_user_id=lambda _user_id: [],
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
+                get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("visit rows should use messaging summary, not thread fallback")),
             ),
             agent_pool={},
             thread_last_active={},
             messaging_service=SimpleNamespace(
-                list_chats_for_user=lambda _user_id: [{"id": "chat-1"}],
-                list_chat_members=lambda _chat_id: [
-                    {"user_id": "human-user-1"},
-                    {"user_id": "thread-user-1"},
+                list_chats_for_user=lambda _user_id: [
+                    {
+                        "id": "chat-1",
+                        "title": "Toad",
+                        "avatar_url": avatar_url("agent-user-1", False),
+                        "updated_at": "2026-04-07T00:00:00Z",
+                        "unread_count": 3,
+                        "entities": [
+                            {
+                                "id": "thread-user-1",
+                                "name": "Toad",
+                                "type": "agent",
+                                "avatar_url": avatar_url("agent-user-1", False),
+                            }
+                        ],
+                    }
                 ],
             ),
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    None
-                    if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, display_name="Toad", avatar=None)
-                    if uid == "agent-user-1"
-                    else None
-                ),
-            ),
-            chat_repo=SimpleNamespace(
-                get_by_id=lambda _chat_id: SimpleNamespace(id="chat-1", title=None, created_at="2026-04-07T00:00:00Z")
-            ),
-            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: 3),
+            user_repo=SimpleNamespace(get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))),
+            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))),
+            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))),
         )
     )
 
@@ -75,24 +77,27 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
             agent_pool={},
             thread_last_active={"thread-1": 1775540000.0},
             messaging_service=SimpleNamespace(
-                list_chats_for_user=lambda _user_id: [{"id": "chat-1"}],
-                list_chat_members=lambda _chat_id: [
-                    {"user_id": "human-user-1"},
-                    {"user_id": "member-agent-2"},
+                list_chats_for_user=lambda _user_id: [
+                    {
+                        "id": "chat-1",
+                        "title": "Toad",
+                        "avatar_url": avatar_url("member-agent-2", False),
+                        "updated_at": 1775540100.0,
+                        "unread_count": 0,
+                        "entities": [
+                            {
+                                "id": "member-agent-2",
+                                "name": "Toad",
+                                "type": "agent",
+                                "avatar_url": avatar_url("member-agent-2", False),
+                            }
+                        ],
+                    }
                 ],
             ),
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", avatar=None) if uid == "member-agent-2" else None
-            ),
-            chat_repo=SimpleNamespace(
-                get_by_id=lambda _chat_id: SimpleNamespace(
-                    id="chat-1",
-                    title=None,
-                    created_at=1775540100.0,
-                    updated_at=1775540100.0,
-                )
-            ),
-            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: 0),
+            user_repo=SimpleNamespace(get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))),
+            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))),
+            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))),
         )
     )
 
@@ -145,26 +150,32 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
                 list_by_owner_user_id=lambda _user_id: [],
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
+                get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not bridge visit rows itself")),
             ),
             agent_pool={},
             thread_last_active={},
             messaging_service=SimpleNamespace(
-                list_chats_for_user=lambda _user_id: [{"id": "chat-1"}],
-                list_chat_members=lambda _chat_id: [
-                    {"user_id": "human-user-1"},
-                    {"user_id": "thread-user-1"},
+                list_chats_for_user=lambda _user_id: [
+                    {
+                        "id": "chat-1",
+                        "title": "Morel",
+                        "avatar_url": avatar_url("agent-user-1", True),
+                        "updated_at": "2026-04-07T00:00:00Z",
+                        "unread_count": 0,
+                        "entities": [
+                            {
+                                "id": "thread-user-1",
+                                "name": "Morel",
+                                "type": "agent",
+                                "avatar_url": avatar_url("agent-user-1", True),
+                            }
+                        ],
+                    }
                 ],
             ),
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    SimpleNamespace(id=uid, display_name="Morel", avatar="avatars/morel.png") if uid == "agent-user-1" else None
-                ),
-            ),
-            chat_repo=SimpleNamespace(
-                get_by_id=lambda _chat_id: SimpleNamespace(id="chat-1", title=None, created_at="2026-04-07T00:00:00Z")
-            ),
-            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: 0),
+            user_repo=SimpleNamespace(get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit entities"))),
+            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))),
+            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))),
         )
     )
 

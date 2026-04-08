@@ -380,6 +380,10 @@ def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> No
             "avatar_url": avatar_url("agent-user-1", False),
         },
     ]
+    assert chats[0]["title"] == "Toad"
+    assert chats[0]["avatar_url"] == avatar_url("agent-user-1", False)
+    assert chats[0]["updated_at"] == "2026-04-07T00:00:00Z"
+    assert chats[0]["unread_count"] == 0
 
 
 def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_watermark() -> None:
