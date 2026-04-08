@@ -651,6 +651,12 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin-top: 0.8rem;
 }
 
+.provider-card__truth {
+  margin-top: 0.8rem;
+  font-size: 0.76rem;
+  color: #f4cf83;
+}
+
 .provider-capability-chip {
   padding: 0.28rem 0.55rem;
   font-size: 0.68rem;

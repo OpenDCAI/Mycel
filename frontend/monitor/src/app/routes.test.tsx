@@ -602,6 +602,9 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
+    const providerCard = await screen.findByRole("button", { name: /agentbay/i });
+    expect(within(providerCard).getByText("暂无 live telemetry")).toBeInTheDocument();
+    fireEvent.click(providerCard);
     expect(await screen.findByText("当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。")).toBeInTheDocument();
   });
 });

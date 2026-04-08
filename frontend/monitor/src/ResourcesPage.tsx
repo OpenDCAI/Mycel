@@ -380,6 +380,13 @@ function ProviderCard({
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const capabilityList = capabilityTags(provider.capabilities);
   const showCpuMetric = provider.cardCpu.used != null || provider.cardCpu.limit != null;
+  const showTelemetryGapTruth =
+    provider.type !== "local" &&
+    provider.status === "ready" &&
+    runningCount === 0 &&
+    provider.telemetry.cpu.freshness === "stale" &&
+    provider.telemetry.memory.freshness === "stale" &&
+    provider.telemetry.disk.freshness === "stale";
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
@@ -422,6 +429,10 @@ function ProviderCard({
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
       </div>
+
+      {showTelemetryGapTruth && (
+        <div className="provider-card__truth">暂无 live telemetry</div>
+      )}
 
       {capabilityList.length > 0 && (
         <div className="provider-card__capabilities">
