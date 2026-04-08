@@ -34,6 +34,42 @@ class TrajectoryStore:
         trajectory_json = trajectory.model_dump_json()
         return self._repo.save_trajectory(trajectory, trajectory_json)
 
+    def upsert_run_header(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        started_at: str,
+        user_message: str,
+        status: str,
+    ) -> None:
+        self._repo.upsert_run_header(
+            run_id=run_id,
+            thread_id=thread_id,
+            started_at=started_at,
+            user_message=user_message,
+            status=status,
+        )
+
+    def finalize_run(
+        self,
+        *,
+        run_id: str,
+        finished_at: str,
+        final_response: str,
+        status: str,
+        run_tree_json: str,
+        trajectory_json: str,
+    ) -> None:
+        self._repo.finalize_run(
+            run_id=run_id,
+            finished_at=finished_at,
+            final_response=final_response,
+            status=status,
+            run_tree_json=run_tree_json,
+            trajectory_json=trajectory_json,
+        )
+
     def save_metrics(
         self,
         run_id: str,
