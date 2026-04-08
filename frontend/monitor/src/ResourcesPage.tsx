@@ -275,6 +275,10 @@ export default function ResourcesPage() {
   }, [loadSnapshot]);
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
+  const runningSessionCount = providers.reduce(
+    (total, provider) => total + provider.sessions.filter((session) => session.status === "running").length,
+    0,
+  );
   const runtimeUnboundRunningCount = providers.reduce(
     (total, provider) =>
       total +
@@ -342,7 +346,7 @@ export default function ResourcesPage() {
             <span className="resources-summary-dot resources-summary-dot--ok" />
             {summary?.active_providers ?? 0} 活跃 provider
           </div>
-          <div className="resources-summary-pill">{summary?.running_sessions ?? 0} 运行会话</div>
+          <div className="resources-summary-pill">{runningSessionCount} 运行会话</div>
           {runtimeUnboundRunningCount > 0 && (
             <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
           )}
