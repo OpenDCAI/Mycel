@@ -41,10 +41,7 @@ node_modules/
 .env
 frontend/app/.env.development
 
-# Claude Code - only commands stay in git; everything else stays local
-.claude/*
-!.claude/commands/
-!.claude/commands/**
+# Claude Code - track config, exclude local/generated
 .claude/**/.DS_Store
 .claude/.stfolder/
 .claude/.vscode/
