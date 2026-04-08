@@ -582,6 +582,14 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
       Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
     );
   }).length;
+  const liveUsageRunningCount = provider.sessions.filter((session) => {
+    const metrics = session.metrics;
+    return (
+      session.status === "running" &&
+      metrics != null &&
+      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
+    );
+  }).length;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const isLocal = provider.type === "local";
@@ -653,6 +661,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
               ) : (
                 <div className="provider-inline-metrics">
                   <InlineMetric label="运行中" value={String(runningCount)} />
+                  {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && (
+                    <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
+                  )}
                   {runtimeUnboundRunningCount > 0 && <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />}
                   {quotaOnlyRunningCount > 0 && <InlineMetric label="仅配额" value={String(quotaOnlyRunningCount)} />}
                   <InlineMetric label="已暂停" value={String(pausedCount)} />
