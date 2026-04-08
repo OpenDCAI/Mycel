@@ -393,6 +393,7 @@ def build_evaluation_operator_surface(
         ]
 
     return {
+        "status": status,
         "kind": kind,
         "tone": tone,
         "headline": headline,
