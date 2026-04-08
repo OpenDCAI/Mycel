@@ -151,12 +151,9 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 owner_id = agent_user.owner_user_id or ""
                 chat_repos = {
                     "chat_identity_id": chat_identity_id,
-                    "user_id": chat_identity_id,
                     "owner_id": owner_id,
                     "user_repo": user_repo,
                     "messaging_service": getattr(app_obj.state, "messaging_service", None),
-                    "chat_member_repo": getattr(app_obj.state, "chat_member_repo", None),
-                    "messages_repo": getattr(app_obj.state, "messages_repo", None),
                     "relationship_repo": getattr(app_obj.state, "relationship_repo", None),
                     "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
                 }

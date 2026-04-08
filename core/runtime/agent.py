@@ -1254,7 +1254,7 @@ class LeonAgent:
         # @@@chat-tools - register chat tools for agents with user identity (v2 messaging)
         if self._chat_repos:
             repos = self._chat_repos
-            chat_identity_id = repos.get("chat_identity_id") or repos.get("user_id")
+            chat_identity_id = repos.get("chat_identity_id")
             owner_id = repos.get("owner_id", "")
             if chat_identity_id:
                 from messaging.tools.chat_tool_service import ChatToolService
@@ -1408,7 +1408,7 @@ class LeonAgent:
         # @@@chat-identity — inject chat identity so agent knows who it is in the social layer
         if self._chat_repos:
             repos = self._chat_repos
-            uid = repos.get("chat_identity_id") or repos.get("user_id")
+            uid = repos.get("chat_identity_id")
             owner_uid = repos.get("owner_id", "")
             if uid:
                 user_repo = repos.get("user_repo")
