@@ -6,6 +6,7 @@ import logging
 import random
 import uuid as _uuid
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
@@ -693,6 +694,8 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     stream_gen = None
     pending_tool_calls: dict[str, dict] = {}
     output_parts: list[str] = []
+    store = None
+    trajectory_status = "completed"
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
@@ -705,6 +708,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         tracer = None
         if enable_trajectory:
             try:
+                from eval.storage import TrajectoryStore
                 from eval.tracer import TrajectoryTracer
 
                 cost_calc = getattr(
@@ -715,7 +719,16 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                 tracer = TrajectoryTracer(
                     thread_id=thread_id,
                     user_message=message,
+                    run_id=run_id,
                     cost_calculator=cost_calc,
+                )
+                store = TrajectoryStore()
+                store.upsert_run_header(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    started_at=tracer._start_time.isoformat(),
+                    user_message=message,
+                    status="running",
                 )
                 config["callbacks"] = [tracer]
             except ImportError:
@@ -1226,6 +1239,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                 await stream_gen.aclose()
                 await asyncio.sleep(wait)
             else:
+                trajectory_status = "error"
                 _log_captured_exception(
                     f"[streaming] stream failed for thread {thread_id}",
                     stream_err,
@@ -1243,15 +1257,19 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             )
 
         # Persist trajectory
-        if tracer is not None:
+        if tracer is not None and store is not None:
             try:
-                from eval.storage import TrajectoryStore
-
                 trajectory = tracer.to_trajectory()
                 if hasattr(agent, "runtime"):
                     tracer.enrich_from_runtime(trajectory, agent.runtime)
-                store = TrajectoryStore()
-                store.save_trajectory(trajectory)
+                store.finalize_run(
+                    run_id=run_id,
+                    finished_at=trajectory.finished_at,
+                    final_response=trajectory.final_response,
+                    status=trajectory_status,
+                    run_tree_json=trajectory.run_tree_json,
+                    trajectory_json=trajectory.model_copy(update={"status": trajectory_status}).model_dump_json(),
+                )
             except Exception:
                 logger.error("Failed to persist trajectory for thread %s", thread_id, exc_info=True)
 
@@ -1265,6 +1283,19 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return "".join(output_parts).strip()
     except asyncio.CancelledError:
+        if tracer is not None and store is not None:
+            try:
+                trajectory = tracer.to_trajectory()
+                store.finalize_run(
+                    run_id=run_id,
+                    finished_at=datetime.now(UTC).isoformat(),
+                    final_response=trajectory.final_response,
+                    status="cancelled",
+                    run_tree_json=trajectory.run_tree_json,
+                    trajectory_json=trajectory.model_copy(update={"status": "cancelled"}).model_dump_json(),
+                )
+            except Exception:
+                logger.error("Failed to finalize cancelled trajectory for thread %s", thread_id, exc_info=True)
         cancelled_tool_call_ids = await write_cancellation_markers(agent, config, pending_tool_calls)
         await _persist_cancelled_run_input_if_missing(
             agent=agent,
@@ -1293,6 +1324,19 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return ""
     except Exception as e:
+        if tracer is not None and store is not None:
+            try:
+                trajectory = tracer.to_trajectory()
+                store.finalize_run(
+                    run_id=run_id,
+                    finished_at=datetime.now(UTC).isoformat(),
+                    final_response=trajectory.final_response,
+                    status="error",
+                    run_tree_json=trajectory.run_tree_json,
+                    trajectory_json=trajectory.model_copy(update={"status": "error"}).model_dump_json(),
+                )
+            except Exception:
+                logger.error("Failed to finalize errored trajectory for thread %s", thread_id, exc_info=True)
         _log_captured_exception(
             f"[streaming] run failed for thread {thread_id}",
             e,
