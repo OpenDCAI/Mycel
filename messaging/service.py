@@ -56,6 +56,24 @@ class MessagingService:
             "ai_metadata": row.get("ai_metadata") or row.get("ai_metadata_json") or {},
         }
 
+    def _project_message_response(self, row: dict[str, Any]) -> dict[str, Any]:
+        # @@@message-response-projection - public chat message payload must keep
+        # sender projection ownership in MessagingService so route send/list stay thin.
+        message = self._normalize_message_row(row)
+        sender = self._resolve_display_user(message.get("sender_id", ""))
+        return {
+            "id": message["id"],
+            "chat_id": message["chat_id"],
+            "sender_id": message.get("sender_id"),
+            "sender_name": sender.display_name if sender else "unknown",
+            "content": message["content"],
+            "message_type": message.get("message_type", "human"),
+            "mentioned_ids": message.get("mentioned_ids") or [],
+            "signal": message.get("signal"),
+            "retracted_at": message.get("retracted_at"),
+            "created_at": message.get("created_at"),
+        }
+
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         return resolve_messaging_display_user(
             user_repo=self._user_repo,
@@ -65,6 +83,9 @@ class MessagingService:
 
     def resolve_display_user(self, social_user_id: str) -> Any | None:
         return self._resolve_display_user(social_user_id)
+
+    def project_message_response(self, row: dict[str, Any]) -> dict[str, Any]:
+        return self._project_message_response(row)
 
     def _build_chat_entities(self, chat_id: str) -> list[dict[str, Any]]:
         entities_info = []
@@ -275,6 +296,17 @@ class MessagingService:
             viewer_id=viewer_id,
         )
         return [self._normalize_message_row(row) for row in rows]
+
+    def list_message_responses(
+        self, chat_id: str, *, limit: int = 50, before: str | None = None, viewer_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        rows = self._messages.list_by_chat(
+            chat_id,
+            limit=limit,
+            before=before,
+            viewer_id=viewer_id,
+        )
+        return [self._project_message_response(row) for row in rows]
 
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
         return [self._normalize_message_row(row) for row in self._messages.list_unread(chat_id, user_id)]
