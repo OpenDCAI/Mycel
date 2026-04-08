@@ -717,6 +717,105 @@ describe("MonitorRoutes", () => {
     expect(screen.queryByText(/无 runtime/)).not.toBeInTheDocument();
   });
 
+  it("surfaces ready remote providers that still have no live telemetry in the summary strip", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 3,
+          active_providers: 0,
+          unavailable_providers: 0,
+          running_sessions: 0,
+        },
+        providers: [
+          {
+            id: "agentbay",
+            name: "agentbay",
+            description: "AgentBay cloud sandbox",
+            type: "cloud",
+            status: "ready",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 0, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: null, limit: null, unit: "%", source: "unknown", freshness: "stale" },
+              memory: { used: null, limit: null, unit: "GB", source: "unknown", freshness: "stale" },
+              disk: { used: null, limit: null, unit: "GB", source: "unknown", freshness: "stale" },
+            },
+            cardCpu: { used: null, limit: null, unit: "%", source: "unknown", freshness: "stale" },
+            sessions: [],
+          },
+          {
+            id: "docker",
+            name: "docker",
+            description: "Docker sandbox",
+            type: "container",
+            status: "ready",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 0, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: null, limit: null, unit: "%", source: "unknown", freshness: "stale" },
+              memory: { used: null, limit: null, unit: "GB", source: "unknown", freshness: "stale" },
+              disk: { used: null, limit: null, unit: "GB", source: "unknown", freshness: "stale" },
+            },
+            cardCpu: { used: null, limit: null, unit: "%", source: "unknown", freshness: "stale" },
+            sessions: [],
+          },
+          {
+            id: "local",
+            name: "local",
+            description: "Local provider",
+            type: "local",
+            status: "ready",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 0, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 0, limit: 100, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 0, limit: 8, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 0, limit: 20, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 0, limit: 100, unit: "%", source: "api", freshness: "live" },
+            sessions: [],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("2 遥测未知")).toBeInTheDocument();
+  });
+
   it("surfaces when a ready provider still has no live telemetry", async () => {
     mockRoutePayloads({
       "/resources": {

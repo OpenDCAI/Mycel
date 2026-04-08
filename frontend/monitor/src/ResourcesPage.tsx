@@ -283,6 +283,15 @@ export default function ResourcesPage() {
       ).length,
     0,
   );
+  const readyWithoutLiveTelemetryCount = providers.filter(
+    (provider) =>
+      provider.type !== "local" &&
+      provider.status === "ready" &&
+      provider.sessions.length === 0 &&
+      provider.telemetry.cpu.freshness === "stale" &&
+      provider.telemetry.memory.freshness === "stale" &&
+      provider.telemetry.disk.freshness === "stale",
+  ).length;
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -336,6 +345,9 @@ export default function ResourcesPage() {
           <div className="resources-summary-pill">{summary?.running_sessions ?? 0} 运行会话</div>
           {runtimeUnboundRunningCount > 0 && (
             <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
+          )}
+          {readyWithoutLiveTelemetryCount > 0 && (
+            <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 遥测未知</div>
           )}
           <div className="resources-summary-pill">
             <span
