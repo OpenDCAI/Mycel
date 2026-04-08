@@ -403,6 +403,10 @@ function ProviderCard({
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const capabilityList = capabilityTags(provider.capabilities);
   const showCpuMetric = provider.cardCpu.used != null || provider.cardCpu.limit != null;
+  const runningMetric = {
+    ...provider.telemetry.running,
+    used: runningCount,
+  };
   const showTelemetryGapTruth =
     provider.type !== "local" &&
     provider.status === "ready" &&
@@ -441,7 +445,7 @@ function ProviderCard({
         </div>
       ) : (
         <div className="provider-card__metric-row">
-          <MetricOrb label="运行数" metric={provider.telemetry.running} />
+          <MetricOrb label="运行数" metric={runningMetric} />
           {showCpuMetric && <MetricOrb label="CPU" metric={provider.cardCpu} />}
         </div>
       )}
