@@ -373,6 +373,9 @@ function ProviderCard({
   onSelect: () => void;
 }) {
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const runtimeUnboundRunningCount = provider.sessions.filter(
+    (session) => session.status === "running" && !session.runtimeSessionId,
+  ).length;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const capabilityList = capabilityTags(provider.capabilities);
@@ -415,6 +418,7 @@ function ProviderCard({
 
       <div className="provider-card__footer">
         <span>{runningCount} 占用中</span>
+        {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
       </div>

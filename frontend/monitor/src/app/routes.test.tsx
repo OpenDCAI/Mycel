@@ -546,6 +546,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
+    expect(await screen.findByRole("button", { name: /daytona_selfhost/i })).toHaveTextContent("1 无 runtime");
     expect(await screen.findByText("无 active runtime")).toBeInTheDocument();
     const runtimeGapLabel = screen.getByText("无 runtime");
     expect(runtimeGapLabel).toBeInTheDocument();
