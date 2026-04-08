@@ -367,3 +367,25 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
     assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
     assert not (tmp_path / "members" / "agent-user-1").exists()
+
+
+def test_publish_requires_repos(monkeypatch):
+    import backend.web.services.marketplace_client as marketplace_client
+
+    monkeypatch.setattr(
+        marketplace_client,
+        "members_dir",
+        lambda: (_ for _ in ()).throw(AssertionError("local member dir should not be touched")),
+    )
+
+    with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+        marketplace_client.publish(
+            user_id="agent-user-1",
+            type_="member",
+            bump_type="patch",
+            release_notes="repo publish",
+            tags=["repo"],
+            visibility="private",
+            publisher_user_id="owner-1",
+            publisher_username="owner-name",
+        )
