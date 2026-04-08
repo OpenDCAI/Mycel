@@ -585,6 +585,15 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
   const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const runtimeUnboundUsageCount = provider.sessions.filter((session) => {
+    const metrics = session.metrics;
+    return (
+      session.status === "running" &&
+      !session.runtimeSessionId &&
+      metrics != null &&
+      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
+    );
+  }).length;
   const runtimeUnboundRunningCount = provider.sessions.filter(
     (session) => session.status === "running" && !session.runtimeSessionId,
   ).length;
@@ -704,6 +713,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                   )}
                   {runtimeBoundTelemetryGapCount > 0 && (
                     <InlineMetric label="有 runtime无遥测" value={String(runtimeBoundTelemetryGapCount)} />
+                  )}
+                  {runtimeUnboundUsageCount > 0 && (
+                    <InlineMetric label="无 runtime有用量" value={String(runtimeUnboundUsageCount)} />
                   )}
                   {runtimeUnboundRunningCount > 0 && <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />}
                   {quotaOnlyRunningCount > 0 && <InlineMetric label="仅配额" value={String(quotaOnlyRunningCount)} />}
