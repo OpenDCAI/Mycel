@@ -14,6 +14,31 @@ beforeEach(() => {
     new Response(
       JSON.stringify({
         snapshot_at: "2026-04-08T00:00:00Z",
+        resources_summary: {
+          running_sessions: 0,
+          active_providers: 0,
+          unavailable_providers: 0,
+        },
+        infra: {
+          providers_active: 0,
+          providers_unavailable: 0,
+          leases_total: 0,
+          leases_diverged: 0,
+          leases_orphan: 0,
+          leases_healthy: 0,
+        },
+        workload: {
+          db_sessions_total: 0,
+          provider_sessions_total: 0,
+          running_sessions: 0,
+          evaluations_running: 0,
+        },
+        latest_evaluation: {
+          status: "idle",
+          kind: "no_recorded_runs",
+          tone: "default",
+          headline: "No persisted evaluation runs are available yet.",
+        },
       }),
       {
         status: 200,
@@ -50,6 +75,7 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: /threads/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /resources/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /leases/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /evaluation/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /diverged/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /events/i })).toBeInTheDocument();
   });
@@ -80,10 +106,30 @@ describe("MonitorRoutes", () => {
     mockRoutePayloads({
       "/dashboard": {
         snapshot_at: "2026-04-08T00:00:00Z",
-        summary: {
-          active_threads: 7,
-          active_leases: 3,
-          resources_ready: 4,
+        resources_summary: {
+          running_sessions: 4,
+          active_providers: 2,
+          unavailable_providers: 1,
+        },
+        infra: {
+          providers_active: 2,
+          providers_unavailable: 1,
+          leases_total: 3,
+          leases_diverged: 1,
+          leases_orphan: 0,
+          leases_healthy: 2,
+        },
+        workload: {
+          db_sessions_total: 7,
+          provider_sessions_total: 4,
+          running_sessions: 4,
+          evaluations_running: 1,
+        },
+        latest_evaluation: {
+          status: "running",
+          kind: "running_recorded",
+          tone: "warning",
+          headline: "Evaluation run is actively recording new metrics.",
         },
       },
     });
@@ -96,16 +142,35 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByText("Runtime Surfaces")).toBeInTheDocument();
     expect(screen.getByText("Operator Attention")).toBeInTheDocument();
+    expect(screen.getByText("Running Sessions")).toBeInTheDocument();
+    expect(screen.getByText("Evaluations Running")).toBeInTheDocument();
+    expect(screen.getByText("Tracked Leases")).toBeInTheDocument();
+    expect(screen.getByText("Latest Evaluation")).toBeInTheDocument();
+    expect(screen.getByText("Evaluation run is actively recording new metrics.")).toBeInTheDocument();
   });
 
   it("renders leases with a triage summary before the raw table", async () => {
     mockRoutePayloads({
       "/leases": {
-        title: "Leases",
+        title: "All Leases",
         count: 1,
+        summary: {
+          healthy: 1,
+          diverged: 0,
+          orphan: 0,
+          orphan_diverged: 0,
+          total: 1,
+        },
+        groups: [],
         triage: {
-          active: 1,
-          residue: 0,
+          summary: {
+            active_drift: 1,
+            detached_residue: 0,
+            orphan_cleanup: 0,
+            healthy_capacity: 0,
+            total: 1,
+          },
+          groups: [],
         },
         items: [
           {
@@ -137,6 +202,9 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByText("Lease Triage")).toBeInTheDocument();
+    expect(screen.getByText("Active Drift")).toBeInTheDocument();
+    expect(screen.getByText("Detached Residue")).toBeInTheDocument();
+    expect(screen.getByText("Tracked Leases")).toBeInTheDocument();
     expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
   });
 
@@ -175,6 +243,60 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByText("Thread Pressure")).toBeInTheDocument();
     expect(screen.getByText("Raw Thread Table")).toBeInTheDocument();
+  });
+
+  it("renders thread detail session ids as plain text when monitor has no session route", async () => {
+    mockRoutePayloads({
+      "/thread/thread-1": {
+        thread_id: "thread-1",
+        breadcrumb: [
+          { label: "Threads", url: "/threads" },
+          { label: "thread-1", url: "/thread/thread-1" },
+        ],
+        sessions: {
+          title: "Sessions",
+          count: 1,
+          items: [
+            {
+              session_id: "session-1",
+              session_url: "/session/session-1",
+              status: "running",
+              started_ago: "1m",
+              ended_ago: null,
+              lease: {
+                lease_id: "lease-1",
+                lease_url: "/lease/lease-1",
+              },
+              state_badge: {
+                color: "green",
+                observed: "running",
+                desired: "running",
+                text: "running",
+              },
+              error: null,
+            },
+          ],
+        },
+        related_leases: {
+          title: "Related Leases",
+          items: [{ lease_id: "lease-1", lease_url: "/lease/lease-1" }],
+        },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/thread/thread-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /thread:/i })).toBeInTheDocument();
+    expect(screen.getByText("session-")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "session-" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "lease-1" })).toHaveLength(2);
+    for (const link of screen.getAllByRole("link", { name: "lease-1" })) {
+      expect(link).toHaveAttribute("href", "/lease/lease-1");
+    }
   });
 
   it("renders diverged leases with triage before the raw table", async () => {
@@ -259,5 +381,41 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByText("Signal Feed")).toBeInTheDocument();
     expect(screen.getByText("Raw Event Table")).toBeInTheDocument();
+  });
+
+  it("renders evaluation as a truthful operator surface", async () => {
+    mockRoutePayloads({
+      "/evaluation": {
+        status: "idle",
+        kind: "no_recorded_runs",
+        tone: "default",
+        headline: "No persisted evaluation runs are available yet.",
+        summary: "Evaluation storage is wired, but there are no recorded runs to report yet.",
+        facts: [{ label: "Status", value: "idle" }],
+        artifacts: [],
+        artifact_summary: {
+          present: 0,
+          missing: 0,
+          total: 0,
+        },
+        next_steps: ["Run an evaluation to populate the operator surface with persisted runtime truth."],
+        raw_notes: null,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/evaluation"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("No persisted evaluation runs are available yet.")).toBeInTheDocument();
+    expect(screen.getByText("Operator Facts")).toBeInTheDocument();
+    expect(screen.getByText("Next Steps")).toBeInTheDocument();
+    expect(screen.getByText("Run an evaluation to populate the operator surface with persisted runtime truth.")).toBeInTheDocument();
+    expect(screen.queryByText("Artifact Coverage")).not.toBeInTheDocument();
+    expect(screen.queryByText("Artifacts")).not.toBeInTheDocument();
   });
 });

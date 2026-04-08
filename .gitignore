@@ -95,9 +95,9 @@ worktrees/
 /*.yml
 /*.yaml
 !docker-compose.yml
+!.pre-commit-config.yaml
 /dogfood-output/
 /current-chat.yaml
-/.claude/skills/
 
 # Development artifacts — never commit
 docs/lessons/

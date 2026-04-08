@@ -8,11 +8,10 @@ Usage:
 Extracts OpenAPI specification without running the server.
 """
 
-import sys
 import json
+import sys
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from importlib import import_module
-from importlib.util import spec_from_file_location, module_from_spec
 
 
 def load_fastapi_app(file_path: str, app_name: str = "app"):
@@ -44,6 +43,7 @@ def load_fastapi_app(file_path: str, app_name: str = "app"):
     # Verify it's a FastAPI app
     try:
         from fastapi import FastAPI
+
         if not isinstance(app, FastAPI):
             print(f"Error: '{app_name}' is not a FastAPI instance")
             sys.exit(1)
@@ -70,6 +70,7 @@ def generate_openapi_spec(app, output_path: str, format: str = "json"):
     elif format == "yaml":
         try:
             import yaml
+
             with open(output_path, "w") as f:
                 yaml.dump(openapi_schema, f, sort_keys=False)
             print(f"✓ OpenAPI spec generated: {output_path}")
@@ -119,7 +120,7 @@ def main():
     app = load_fastapi_app(app_file, app_name)
 
     # Generate OpenAPI spec
-    print(f"Generating OpenAPI spec...")
+    print("Generating OpenAPI spec...")
     generate_openapi_spec(app, output_file, format)
 
 

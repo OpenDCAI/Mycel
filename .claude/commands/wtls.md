@@ -4,6 +4,8 @@
 
 ## Step 0：定位主仓库
 
+`<base-branch>` = 从对话上下文确定的项目默认开发分支。
+
 ```bash
 MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
 ```
@@ -20,10 +22,10 @@ git fetch origin                       # 同步远端状态
 
 # 对每个 worktree 采集：
 git -C <path> status --short           # DIRTY
-git -C <path> rev-list origin/main..HEAD --count   # AHEAD
-git -C <path> rev-list HEAD..origin/main --count   # BEHIND
+git -C <path> rev-list origin/<base-branch>..HEAD --count   # AHEAD
+git -C <path> rev-list HEAD..origin/<base-branch> --count   # BEHIND
 git -C <path> log -1 --format="%ai"               # 最近 commit 时间
-git -C <path> log --format="%ai" $(git -C <path> merge-base HEAD origin/main) -1  # 分叉时间
+git -C <path> log --format="%ai" $(git -C <path> merge-base HEAD origin/<base-branch>) -1  # 分叉时间
 gh pr view --json state,url,number -R <repo> -b <branch> 2>/dev/null  # PR 状态
 
 # 读取 worktree config（新创建的 worktree 才有）：

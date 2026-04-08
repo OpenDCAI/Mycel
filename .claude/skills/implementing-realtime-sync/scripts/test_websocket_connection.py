@@ -10,12 +10,11 @@ Usage:
     python test_websocket_connection.py --url wss://api.example.com/ws --auth-token SECRET
 """
 
-import asyncio
 import argparse
+import asyncio
 import json
 import sys
 from datetime import datetime
-from typing import Optional
 
 try:
     import websockets
@@ -25,12 +24,7 @@ except ImportError:
     sys.exit(1)
 
 
-async def test_connection(
-    url: str,
-    auth_token: Optional[str] = None,
-    test_messages: int = 5,
-    timeout: int = 10
-):
+async def test_connection(url: str, auth_token: str | None = None, test_messages: int = 5, timeout: int = 10):
     """Test WebSocket connection with optional authentication."""
 
     headers = {}
@@ -44,7 +38,7 @@ async def test_connection(
 
     try:
         async with websockets.connect(url, extra_headers=headers) as ws:
-            print(f"✅ Connected successfully!")
+            print("✅ Connected successfully!")
             print(f"   Server: {ws.response_headers.get('Server', 'Unknown')}")
             print(f"   Protocol: {ws.subprotocol or 'None'}")
             print("")
@@ -63,7 +57,7 @@ async def test_connection(
                     "type": "test",
                     "sequence": i + 1,
                     "timestamp": datetime.utcnow().isoformat(),
-                    "payload": f"Test message {i + 1}"
+                    "payload": f"Test message {i + 1}",
                 }
 
                 await ws.send(json.dumps(message))
@@ -71,12 +65,9 @@ async def test_connection(
 
                 # Wait for response
                 try:
-                    response = await asyncio.wait_for(
-                        ws.recv(),
-                        timeout=timeout
-                    )
+                    response = await asyncio.wait_for(ws.recv(), timeout=timeout)
                     print(f"   Received: {response[:100]}...")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     print(f"   ⚠️  No response (timeout: {timeout}s)")
 
                 await asyncio.sleep(0.5)
@@ -85,8 +76,8 @@ async def test_connection(
             print("✅ All tests passed!")
             print("")
             print("📊 Summary:")
-            print(f"   Connection: Success")
-            print(f"   Ping/Pong: Success")
+            print("   Connection: Success")
+            print("   Ping/Pong: Success")
             print(f"   Messages sent: {test_messages}")
 
             return True
@@ -104,13 +95,13 @@ async def test_connection(
         print("   Hint: Use ws:// or wss:// scheme")
         return False
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print(f"❌ Connection timeout after {timeout}s")
         print("   Hint: Server may be down or unreachable")
         return False
 
     except ConnectionRefusedError:
-        print(f"❌ Connection refused")
+        print("❌ Connection refused")
         print("   Hint: Is the server running?")
         return False
 
@@ -120,42 +111,16 @@ async def test_connection(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Test WebSocket server connectivity"
-    )
-    parser.add_argument(
-        "--url",
-        required=True,
-        help="WebSocket URL (ws:// or wss://)"
-    )
-    parser.add_argument(
-        "--auth-token",
-        help="Bearer token for authentication"
-    )
-    parser.add_argument(
-        "--messages",
-        type=int,
-        default=5,
-        help="Number of test messages to send (default: 5)"
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=10,
-        help="Timeout in seconds (default: 10)"
-    )
+    parser = argparse.ArgumentParser(description="Test WebSocket server connectivity")
+    parser.add_argument("--url", required=True, help="WebSocket URL (ws:// or wss://)")
+    parser.add_argument("--auth-token", help="Bearer token for authentication")
+    parser.add_argument("--messages", type=int, default=5, help="Number of test messages to send (default: 5)")
+    parser.add_argument("--timeout", type=int, default=10, help="Timeout in seconds (default: 10)")
 
     args = parser.parse_args()
 
     # Run async test
-    success = asyncio.run(
-        test_connection(
-            url=args.url,
-            auth_token=args.auth_token,
-            test_messages=args.messages,
-            timeout=args.timeout
-        )
-    )
+    success = asyncio.run(test_connection(url=args.url, auth_token=args.auth_token, test_messages=args.messages, timeout=args.timeout))
 
     sys.exit(0 if success else 1)
 

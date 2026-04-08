@@ -1,17 +1,34 @@
 import ErrorState from "../components/ErrorState";
 import { useMonitorData } from "../app/fetch";
 
+type DashboardPayload = {
+  snapshot_at: string;
+  infra: {
+    providers_active: number;
+    providers_unavailable: number;
+    leases_total: number;
+    leases_diverged: number;
+    leases_orphan: number;
+  };
+  workload: {
+    running_sessions: number;
+    evaluations_running: number;
+  };
+  latest_evaluation: {
+    headline: string;
+  };
+};
+
 export default function DashboardPage() {
-  const { data, error } = useMonitorData<any>("/dashboard");
+  const { data, error } = useMonitorData<DashboardPayload>("/dashboard");
 
   if (error) return <ErrorState title="Dashboard" error={error} />;
   if (!data) return <div>Loading...</div>;
 
-  const summary = data.summary ?? {};
   const surfaces = [
-    { label: "Active Threads", value: summary.active_threads ?? 0 },
-    { label: "Active Leases", value: summary.active_leases ?? 0 },
-    { label: "Resources Ready", value: summary.resources_ready ?? 0 },
+    { label: "Running Sessions", value: data.workload.running_sessions },
+    { label: "Evaluations Running", value: data.workload.evaluations_running },
+    { label: "Tracked Leases", value: data.infra.leases_total },
   ];
 
   return (
@@ -32,17 +49,22 @@ export default function DashboardPage() {
       <section className="surface-section">
         <h2>Operator Attention</h2>
         <div className="surface-grid">
-          <article className="surface-card" key="coverage">
-            <p className="surface-card__eyebrow">Coverage</p>
+          <article className="surface-card" key="providers">
+            <p className="surface-card__eyebrow">Provider Coverage</p>
             <p className="surface-card__body">
-              {summary.resources_ready ?? 0} resource surfaces reporting against {summary.active_leases ?? 0} active
-              leases.
+              {data.infra.providers_active} active providers, {data.infra.providers_unavailable} unavailable.
             </p>
           </article>
-          <article className="surface-card" key="focus">
-            <p className="surface-card__eyebrow">Immediate Focus</p>
+          <article className="surface-card" key="leases">
+            <p className="surface-card__eyebrow">Lease Drift</p>
             <p className="surface-card__body">
-              Check leases that drift away from running state before moving deeper into thread or resource drilldown.
+              {data.infra.leases_diverged} diverged leases, {data.infra.leases_orphan} orphan leases.
+            </p>
+          </article>
+          <article className="surface-card" key="evaluation">
+            <p className="surface-card__eyebrow">Latest Evaluation</p>
+            <p className="surface-card__body">
+              {data.latest_evaluation.headline}
             </p>
           </article>
         </div>

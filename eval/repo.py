@@ -67,7 +67,11 @@ CREATE INDEX IF NOT EXISTS idx_eval_metrics_run ON eval_metrics(run_id, tier);
 class SQLiteEvalRepo:
     """Repository boundary for eval DB SQL operations."""
 
-    def __init__(self, db_path: str | Path, conn: sqlite3.Connection | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | Path,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
         self._own_conn = conn is None
         if conn is not None:
             self._conn = conn
@@ -80,6 +84,45 @@ class SQLiteEvalRepo:
 
     def ensure_schema(self) -> None:
         self._conn.executescript(_SCHEMA_SQL)
+
+    def upsert_run_header(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        started_at: str,
+        user_message: str,
+        status: str,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO eval_runs (id, thread_id, started_at, user_message, status) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "thread_id = excluded.thread_id, "
+            "started_at = excluded.started_at, "
+            "user_message = excluded.user_message, "
+            "status = excluded.status",
+            (run_id, thread_id, started_at, user_message, status),
+        )
+        self._conn.commit()
+
+    def finalize_run(
+        self,
+        *,
+        run_id: str,
+        finished_at: str,
+        final_response: str,
+        status: str,
+        run_tree_json: str,
+        trajectory_json: str,
+    ) -> None:
+        result = self._conn.execute(
+            "UPDATE eval_runs SET finished_at = ?, final_response = ?, status = ?, run_tree_json = ?, trajectory_json = ? WHERE id = ?",
+            (finished_at, final_response, status, run_tree_json, trajectory_json, run_id),
+        )
+        if result.rowcount != 1:
+            raise RuntimeError(f"SQLite eval repo expected existing run for finalize_run: {run_id}")
+        self._conn.commit()
 
     def save_trajectory(self, trajectory: RunTrajectory, trajectory_json: str) -> str:
         run_id = trajectory.id
@@ -140,7 +183,13 @@ class SQLiteEvalRepo:
         self._conn.commit()
         return run_id
 
-    def save_metrics(self, run_id: str, tier: str, timestamp: str, metrics_json: str) -> None:
+    def save_metrics(
+        self,
+        run_id: str,
+        tier: str,
+        timestamp: str,
+        metrics_json: str,
+    ) -> None:
         self._conn.execute(
             "INSERT INTO eval_metrics (id, run_id, tier, timestamp, metrics_json) VALUES (?, ?, ?, ?, ?)",
             (

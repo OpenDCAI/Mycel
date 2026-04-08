@@ -37,7 +37,10 @@ export default function ThreadDetailPage() {
             {data.sessions.items.map((s: any) => (
               <tr key={s.session_id}>
                 <td>
-                  <Link to={s.session_url}>{s.session_id.slice(0, 8)}</Link>
+                  {/* @@@dead-monitor-session-route - backend still surfaces session_url, but monitor has no mounted /session route. */}
+                  <span className="mono" title={s.session_id}>
+                    {s.session_id.slice(0, 8)}
+                  </span>
                 </td>
                 <td>{s.status}</td>
                 <td>{s.started_ago}</td>

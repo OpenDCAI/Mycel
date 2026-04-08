@@ -45,6 +45,20 @@ def _stub_monitor_leases(monkeypatch):
     return payload
 
 
+def _stub_monitor_evaluation_summary(monkeypatch):
+    payload = {
+        "evaluations_running": 0,
+        "latest_evaluation": {
+            "status": "idle",
+            "kind": "no_recorded_runs",
+            "tone": "default",
+            "headline": "No persisted evaluation runs are available yet.",
+        },
+    }
+    monkeypatch.setattr(monitor.monitor_service, "get_monitor_evaluation_dashboard_summary", lambda: payload)
+    return payload
+
+
 def _build_monitor_test_app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
     app.include_router(monitor.router)
@@ -151,6 +165,7 @@ def test_monitor_dashboard_route_smoke(monkeypatch):
     _stub_monitor_resource_snapshot(monkeypatch)
     _stub_monitor_health(monkeypatch)
     _stub_monitor_leases(monkeypatch)
+    _stub_monitor_evaluation_summary(monkeypatch)
 
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/dashboard")
@@ -207,6 +222,59 @@ def test_monitor_evaluation_route_exposes_operator_truth(monkeypatch):
     assert payload["kind"] == "unavailable"
     assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
     assert payload["artifact_summary"] == {"present": 0, "missing": 0, "total": 0}
+
+
+def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
+    class FakeStore:
+        def list_runs(self, thread_id=None, limit=50):
+            return [
+                {
+                    "id": "run-1",
+                    "thread_id": "thread-eval",
+                    "started_at": "2026-04-08T00:00:00Z",
+                    "finished_at": "2026-04-08T00:03:00Z",
+                    "status": "completed",
+                    "user_message": "solve the eval task",
+                }
+            ]
+
+        def get_metrics(self, run_id, tier=None):
+            return [
+                {
+                    "id": "metric-1",
+                    "tier": "system",
+                    "timestamp": "2026-04-08T00:03:01Z",
+                    "metrics": {
+                        "total_tokens": 123,
+                        "llm_call_count": 3,
+                        "tool_call_count": 2,
+                    },
+                }
+            ]
+
+    monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
+    _stub_monitor_resource_snapshot(monkeypatch)
+    _stub_monitor_health(monkeypatch)
+    _stub_monitor_leases(monkeypatch)
+
+    with TestClient(_build_monitor_test_app()) as client:
+        evaluation_response = client.get("/api/monitor/evaluation")
+        dashboard_response = client.get("/api/monitor/dashboard")
+
+    assert evaluation_response.status_code == 200
+    evaluation_payload = evaluation_response.json()
+    assert evaluation_payload["status"] == "completed"
+    assert evaluation_payload["kind"] == "completed_recorded"
+    assert evaluation_payload["headline"] == "Latest persisted evaluation run completed successfully."
+    assert dashboard_response.status_code == 200
+    dashboard_payload = dashboard_response.json()
+    assert dashboard_payload["workload"]["evaluations_running"] == 0
+    assert dashboard_payload["latest_evaluation"] == {
+        "status": "completed",
+        "kind": "completed_recorded",
+        "tone": "success",
+        "headline": "Latest persisted evaluation run completed successfully.",
+    }
 
 
 def test_monitor_dashboard_route_derives_evaluation_summary_from_service(monkeypatch):

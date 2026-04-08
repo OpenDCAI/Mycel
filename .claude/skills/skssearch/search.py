@@ -1,30 +1,28 @@
 #!/usr/bin/env python3
 """skssearch - Search SkillsMP for skills."""
+
 import json
 import os
 import re
-import sys
 import subprocess
+import sys
 import threading
 import urllib.parse
 from pathlib import Path
 
 # ANSI colors
-BOLD  = "\033[1m"
-CYAN  = "\033[36m"
+BOLD = "\033[1m"
+CYAN = "\033[36m"
 GREEN = "\033[32m"
-GRAY  = "\033[90m"
-RED   = "\033[31m"
+GRAY = "\033[90m"
+RED = "\033[31m"
 RESET = "\033[0m"
 
 
 def get_paths() -> tuple[Path, Path, Path]:
     """Return (claude_dir, skills_dir, groups_dir)."""
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
         claude_dir = Path(result.stdout.strip()) / ".claude"
     except subprocess.CalledProcessError:
         claude_dir = Path.cwd() / ".claude"
@@ -38,10 +36,7 @@ def load_api_key() -> str | None:
         return key
     # Try to source shell configs
     for cfg in ["~/.zshrc", "~/.bash_profile", "~/.bashrc"]:
-        result = subprocess.run(
-            ["bash", "-c", f"source {cfg} 2>/dev/null; echo $SKILLSMP_API_KEY"],
-            capture_output=True, text=True
-        )
+        result = subprocess.run(["bash", "-c", f"source {cfg} 2>/dev/null; echo $SKILLSMP_API_KEY"], capture_output=True, text=True)
         key = result.stdout.strip()
         if key:
             return key
@@ -51,8 +46,7 @@ def load_api_key() -> str | None:
 def fetch_url(url: str, api_key: str) -> dict:
     """Fetch JSON via curl."""
     result = subprocess.run(
-        ["curl", "-s", "--max-time", "15", url, "-H", f"Authorization: Bearer {api_key}"],
-        capture_output=True, text=True
+        ["curl", "-s", "--max-time", "15", url, "-H", f"Authorization: Bearer {api_key}"], capture_output=True, text=True
     )
     if result.returncode != 0:
         return {}
@@ -81,8 +75,8 @@ def main() -> None:
 
     # Check for Chinese characters
     if re.search(r"[\u4e00-\u9fff]", keyword):
-        print(f"❌ 检测到中文关键词，SkillsMP 仅支持英文搜索")
-        print(f"建议使用英文关键词，例如：readme writer / documentation / testing")
+        print("❌ 检测到中文关键词，SkillsMP 仅支持英文搜索")
+        print("建议使用英文关键词，例如：readme writer / documentation / testing")
         sys.exit(0)
 
     api_key = load_api_key()
@@ -94,8 +88,6 @@ def main() -> None:
 
     enc = urllib.parse.quote(keyword)
     base = "https://skillsmp.com/api/v1/skills"
-    results: dict[str, dict] = {}
-
     kw_data: list[dict] = []
     ai_data: list[dict] = []
 
@@ -111,8 +103,10 @@ def main() -> None:
 
     t1 = threading.Thread(target=fetch_kw)
     t2 = threading.Thread(target=fetch_ai)
-    t1.start(); t2.start()
-    t1.join(); t2.join()
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
 
     # Merge results
     skills: dict[str, dict] = {}
@@ -137,8 +131,8 @@ def main() -> None:
             "id": sid,
             "name": file_meta.get("skill-name", ""),
             "description": "",  # Not in file metadata, would need to parse content
-            "githubUrl": "",    # Not available in this structure
-            "stars": 0,         # Not available
+            "githubUrl": "",  # Not available in this structure
+            "stars": 0,  # Not available
             "author": sid.split("-")[0] if "-" in sid else "",  # Extract from ID
         }
 
@@ -178,12 +172,10 @@ def main() -> None:
     for s in result:
         cmd = parse_install_cmd(s.get("githubUrl", "")) or s.get("name", "")
         save.append({**s, "installCmd": cmd})
-    (claude_dir / ".sks-last-search.json").write_text(
-        json.dumps(save, ensure_ascii=False, indent=2)
-    )
+    (claude_dir / ".sks-last-search.json").write_text(json.dumps(save, ensure_ascii=False, indent=2))
 
     # Output
-    print(f"\n{BOLD}搜索 \"{keyword}\" 共 {len(result)} 条：{RESET}\n")
+    print(f'\n{BOLD}搜索 "{keyword}" 共 {len(result)} 条：{RESET}\n')
     for i, s in enumerate(save, 1):
         name = s.get("name", "")
         desc = s.get("description", "").replace("\n", " ")
@@ -191,9 +183,7 @@ def main() -> None:
         author = s.get("author", "")
         cmd = s.get("installCmd", "")
         src = s.get("_from", "kw")
-        tag = (f"{GREEN}[kw+ai]{RESET}" if src == "both"
-               else f"{CYAN}[ai]{RESET}" if src == "ai"
-               else f"{GRAY}[kw]{RESET}")
+        tag = f"{GREEN}[kw+ai]{RESET}" if src == "both" else f"{CYAN}[ai]{RESET}" if src == "ai" else f"{GRAY}[kw]{RESET}"
         print(f"  {CYAN}{i:>2}. {BOLD}{name}{RESET}  {tag}  {GRAY}⭐{stars}  {author}{RESET}")
         if desc:
             print(f"      {GRAY}{desc[:80]}{'...' if len(desc) > 80 else ''}{RESET}")

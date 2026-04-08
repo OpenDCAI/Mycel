@@ -10,6 +10,7 @@ from typing import Any
 
 from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
+from eval.storage import TrajectoryStore
 from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
@@ -25,6 +26,10 @@ def make_chat_session_repo() -> SQLiteChatSessionRepo:
 
 def make_lease_repo() -> SQLiteLeaseRepo:
     return SQLiteLeaseRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
+
+
+def make_eval_store() -> TrajectoryStore:
+    return TrajectoryStore()
 
 
 def _format_time_ago(iso_timestamp: str | None) -> str:
@@ -422,9 +427,112 @@ def _evaluation_unavailable_surface() -> dict[str, Any]:
     }
 
 
+def _evaluation_no_runs_surface() -> dict[str, Any]:
+    return {
+        "status": "idle",
+        "kind": "no_recorded_runs",
+        "tone": "default",
+        "headline": "No persisted evaluation runs are available yet.",
+        "summary": "Evaluation storage is wired, but there are no recorded runs to report yet.",
+        "facts": [{"label": "Status", "value": "idle"}],
+        "artifacts": [],
+        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
+        "next_steps": ["Run an evaluation to populate the operator surface with persisted runtime truth."],
+        "raw_notes": None,
+    }
+
+
+def _normalize_persisted_eval_status(raw_status: str | None) -> tuple[str, str, str, str]:
+    status = str(raw_status or "").strip().lower()
+    # @@@eval-status-normalization - persisted eval_runs only record coarse terminal status,
+    # so monitor must normalize them without pretending the old manifest/thread truth still exists.
+    if status == "running":
+        return (
+            "running",
+            "running_recorded",
+            "default",
+            "Latest persisted evaluation run is still marked running.",
+        )
+    if status in {"error", "failed", "cancelled"}:
+        return (
+            "completed_with_errors",
+            "run_recorded_with_errors",
+            "warning",
+            "Latest persisted evaluation run finished with errors.",
+        )
+    if status == "completed":
+        return (
+            "completed",
+            "completed_recorded",
+            "success",
+            "Latest persisted evaluation run completed successfully.",
+        )
+    return (
+        "provisional",
+        "persisted_status_unknown",
+        "warning",
+        "Latest persisted evaluation run reported an unknown status.",
+    )
+
+
+def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    status, kind, tone, headline = _normalize_persisted_eval_status(run.get("status"))
+    metrics_by_tier = {str(row.get("tier") or "").strip().lower(): row.get("metrics") or {} for row in metrics_rows}
+    system_metrics = metrics_by_tier.get("system") or {}
+    objective_metrics = metrics_by_tier.get("objective") or {}
+    facts = [
+        {"label": "Status", "value": status},
+        {"label": "Run ID", "value": str(run.get("id") or "-")},
+        {"label": "Thread ID", "value": str(run.get("thread_id") or "-")},
+        {"label": "Started At", "value": str(run.get("started_at") or "-")},
+        {"label": "Finished At", "value": str(run.get("finished_at") or "-")},
+        {"label": "Metric Tiers", "value": str(len(metrics_rows))},
+    ]
+    user_message = str(run.get("user_message") or "").strip()
+    if user_message:
+        facts.append({"label": "User Message", "value": user_message})
+    total_tokens = system_metrics.get("total_tokens")
+    if total_tokens is not None:
+        facts.append({"label": "Total tokens", "value": str(total_tokens)})
+    llm_call_count = system_metrics.get("llm_call_count")
+    if llm_call_count is not None:
+        facts.append({"label": "LLM calls", "value": str(llm_call_count)})
+    tool_call_count = system_metrics.get("tool_call_count")
+    if tool_call_count is not None:
+        facts.append({"label": "Tool calls", "value": str(tool_call_count)})
+    total_duration_ms = objective_metrics.get("total_duration_ms")
+    if total_duration_ms is not None:
+        duration_value = int(total_duration_ms) if float(total_duration_ms).is_integer() else total_duration_ms
+        facts.append({"label": "Duration (ms)", "value": str(duration_value)})
+
+    return {
+        "status": status,
+        "kind": kind,
+        "tone": tone,
+        "headline": headline,
+        "summary": (
+            "Monitor is reading the latest persisted eval run from eval_runs/eval_metrics. "
+            "Legacy manifest, artifact, and thread-materialization detail are not wired in this slice."
+        ),
+        "facts": facts,
+        "artifacts": [],
+        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
+        "next_steps": [
+            "Use the persisted run and metric facts here as the current source of truth.",
+            "Restore richer artifact and thread drilldown in later evaluation runtime slices if still needed.",
+        ],
+        "raw_notes": None,
+    }
+
+
 def get_monitor_evaluation_truth() -> dict[str, Any]:
-    # @@@evaluation-truth-stopline - PR-D1 exposes explicit unavailable truth until a real runtime source is wired.
-    return _evaluation_unavailable_surface()
+    store = make_eval_store()
+    runs = store.list_runs(limit=1)
+    if not runs:
+        return _evaluation_no_runs_surface()
+    latest_run = runs[0]
+    metrics_rows = store.get_metrics(str(latest_run.get("id") or ""))
+    return _build_persisted_evaluation_surface(latest_run, metrics_rows)
 
 
 def build_monitor_evaluation_dashboard_summary(payload: dict[str, Any]) -> dict[str, Any]:

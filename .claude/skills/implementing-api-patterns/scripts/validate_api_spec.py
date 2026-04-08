@@ -8,8 +8,8 @@ Usage:
 Validates OpenAPI spec against OpenAPI 3.1 schema.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 
@@ -24,6 +24,7 @@ def load_spec(file_path: str):
     if file_path.suffix in [".yaml", ".yml"]:
         try:
             import yaml
+
             with open(file_path) as f:
                 return yaml.safe_load(f)
         except ImportError:
@@ -99,9 +100,9 @@ def validate_spec(spec: dict):
 
 def print_results(errors: list, warnings: list):
     """Print validation results"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("OpenAPI Specification Validation Results")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
     if errors:
         print(f"❌ ERRORS ({len(errors)}):")
@@ -125,7 +126,7 @@ def print_results(errors: list, warnings: list):
         print("✗ OpenAPI specification has errors")
         print()
 
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 def print_summary(spec: dict):
@@ -137,8 +138,7 @@ def print_summary(spec: dict):
 
     if "paths" in spec:
         total_endpoints = sum(
-            len([m for m in path.keys() if m in ['get', 'post', 'put', 'delete', 'patch']])
-            for path in spec["paths"].values()
+            len([m for m in path.keys() if m in ["get", "post", "put", "delete", "patch"]]) for path in spec["paths"].values()
         )
         print(f"  Paths: {len(spec['paths'])}")
         print(f"  Total Endpoints: {total_endpoints}")

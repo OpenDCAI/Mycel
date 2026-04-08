@@ -32,12 +32,14 @@ class TrajectoryTracer(BaseTracer):
         thread_id: str,
         user_message: str,
         cost_calculator: Any | None = None,
+        run_id: str | None = None,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.thread_id = thread_id
         self.user_message = user_message
         self.cost_calculator = cost_calculator
+        self.run_id = run_id
         self.traced_runs: list[Run] = []
         self._start_time = datetime.now(UTC)
 
@@ -65,17 +67,21 @@ class TrajectoryTracer(BaseTracer):
 
         finished_at = datetime.now(UTC)
 
-        return RunTrajectory(
-            thread_id=self.thread_id,
-            user_message=self.user_message,
-            final_response=final_response,
-            llm_calls=llm_calls,
-            tool_calls=tool_calls,
-            run_tree_json=json.dumps(run_tree_data, default=str, ensure_ascii=False),
-            started_at=self._start_time.isoformat(),
-            finished_at=finished_at.isoformat(),
-            status="completed",
-        )
+        trajectory_kwargs = {
+            "thread_id": self.thread_id,
+            "user_message": self.user_message,
+            "final_response": final_response,
+            "llm_calls": llm_calls,
+            "tool_calls": tool_calls,
+            "run_tree_json": json.dumps(run_tree_data, default=str, ensure_ascii=False),
+            "started_at": self._start_time.isoformat(),
+            "finished_at": finished_at.isoformat(),
+            "status": "completed",
+        }
+        if self.run_id is not None:
+            trajectory_kwargs["id"] = self.run_id
+
+        return RunTrajectory(**trajectory_kwargs)
 
     def enrich_from_runtime(self, trajectory: RunTrajectory, runtime: Any) -> None:
         """Enrich trajectory with token data from MonitorMiddleware runtime.

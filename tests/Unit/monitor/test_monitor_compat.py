@@ -1,3 +1,5 @@
+import pytest
+
 from backend.web.services import monitor_service
 
 
@@ -273,13 +275,95 @@ def test_build_evaluation_operator_surface_marks_completed_with_errors():
     }
 
 
-def test_monitor_evaluation_truth_defaults_to_explicit_unavailable_surface():
-    payload = monitor_service.get_monitor_evaluation_truth()
+def test_evaluation_unavailable_surface_stays_explicit():
+    payload = monitor_service._evaluation_unavailable_surface()
 
     assert payload["status"] == "unavailable"
     assert payload["kind"] == "unavailable"
     assert payload["tone"] == "warning"
     assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
+    assert payload["artifact_summary"] == {
+        "present": 0,
+        "missing": 0,
+        "total": 0,
+    }
+    assert payload["raw_notes"] is None
+
+
+def test_monitor_evaluation_truth_reports_idle_when_repo_has_no_runs(monkeypatch):
+    class FakeStore:
+        def list_runs(self, thread_id=None, limit=50):
+            return []
+
+    monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
+
+    payload = monitor_service.get_monitor_evaluation_truth()
+
+    assert payload["status"] == "idle"
+    assert payload["kind"] == "no_recorded_runs"
+    assert payload["tone"] == "default"
+    assert payload["headline"] == "No persisted evaluation runs are available yet."
+    assert payload["artifact_summary"] == {
+        "present": 0,
+        "missing": 0,
+        "total": 0,
+    }
+    assert payload["facts"] == [{"label": "Status", "value": "idle"}]
+    assert payload["raw_notes"] is None
+
+
+def test_monitor_evaluation_truth_uses_latest_persisted_eval_run(monkeypatch):
+    class FakeStore:
+        def list_runs(self, thread_id=None, limit=50):
+            return [
+                {
+                    "id": "run-1",
+                    "thread_id": "thread-eval",
+                    "started_at": "2026-04-08T00:00:00Z",
+                    "finished_at": "2026-04-08T00:03:00Z",
+                    "status": "completed",
+                    "user_message": "solve the eval task",
+                }
+            ]
+
+        def get_metrics(self, run_id, tier=None):
+            assert run_id == "run-1"
+            return [
+                {
+                    "id": "metric-1",
+                    "tier": "system",
+                    "timestamp": "2026-04-08T00:03:01Z",
+                    "metrics": {
+                        "total_tokens": 123,
+                        "llm_call_count": 3,
+                        "tool_call_count": 2,
+                    },
+                },
+                {
+                    "id": "metric-2",
+                    "tier": "objective",
+                    "timestamp": "2026-04-08T00:03:02Z",
+                    "metrics": {
+                        "total_duration_ms": 4567.0,
+                    },
+                },
+            ]
+
+    monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
+
+    payload = monitor_service.get_monitor_evaluation_truth()
+
+    assert payload["status"] == "completed"
+    assert payload["kind"] == "completed_recorded"
+    assert payload["tone"] == "success"
+    assert payload["headline"] == "Latest persisted evaluation run completed successfully."
+    facts = {(item["label"], item["value"]) for item in payload["facts"]}
+    assert ("Run ID", "run-1") in facts
+    assert ("Thread ID", "thread-eval") in facts
+    assert ("Total tokens", "123") in facts
+    assert ("LLM calls", "3") in facts
+    assert ("Tool calls", "2") in facts
+    assert ("Duration (ms)", "4567") in facts
     assert payload["artifact_summary"] == {
         "present": 0,
         "missing": 0,
@@ -313,6 +397,142 @@ def test_monitor_evaluation_dashboard_summary_reduces_operator_truth():
             "headline": "Evaluation is actively running.",
         },
     }
+
+
+@pytest.mark.asyncio
+async def test_monitor_evaluation_truth_reads_live_running_row_from_same_persisted_source(monkeypatch, tmp_path):
+    import asyncio
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from backend.web.services.event_buffer import ThreadEventBuffer
+    from backend.web.services.streaming_service import _run_agent_to_buffer
+    from core.runtime.middleware.monitor import AgentState
+    from eval.repo import SQLiteEvalRepo
+    from eval.storage import TrajectoryStore
+
+    class FakeDisplayBuilder:
+        def apply_event(self, thread_id: str, event_type: str, data: dict) -> None:
+            return None
+
+    class FakeRuntime:
+        def __init__(self) -> None:
+            self.current_state = AgentState.ACTIVE
+            self.current_run_source = None
+            self.state = SimpleNamespace(flags=SimpleNamespace(is_compacting=False))
+
+        def set_event_callback(self, cb) -> None:
+            self._event_callback = cb
+
+        def get_status_dict(self) -> dict[str, object]:
+            return {"state": {"state": "idle", "flags": {}}, "calls": 0}
+
+        def transition(self, new_state) -> bool:
+            self.current_state = new_state
+            return True
+
+    class FakeGraphAgent:
+        async def aget_state(self, _config):
+            return SimpleNamespace(values={"messages": []})
+
+        async def astream(self, *_args, **_kwargs):
+            await asyncio.Event().wait()
+            if False:
+                yield None
+
+    class FakeTrajectoryTracer:
+        def __init__(self, *, thread_id: str, user_message: str, run_id: str | None = None, cost_calculator=None, **_kwargs):
+            self.thread_id = thread_id
+            self.user_message = user_message
+            self.run_id = run_id
+            self._start_time = datetime.fromisoformat("2026-04-08T12:00:00+00:00").astimezone(UTC)
+
+        def to_trajectory(self):
+            from eval.models import RunTrajectory
+
+            return RunTrajectory(
+                id=self.run_id or "missing-run-id",
+                thread_id=self.thread_id,
+                user_message=self.user_message,
+                final_response="",
+                run_tree_json="{}",
+                started_at="2026-04-08T12:00:00+00:00",
+                finished_at="2026-04-08T12:01:00+00:00",
+                status="completed",
+            )
+
+        def enrich_from_runtime(self, trajectory, runtime) -> None:
+            return None
+
+    async def noop_async(*_args, **_kwargs) -> None:
+        return None
+
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    repo = SQLiteEvalRepo(tmp_path / "eval.db")
+    repo.ensure_schema()
+    store = TrajectoryStore(eval_repo=repo)
+
+    monkeypatch.setattr(monitor_service, "make_eval_store", lambda: store)
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", noop_async)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+    monkeypatch.setattr("backend.web.services.streaming_service._consume_followup_queue", noop_async)
+    monkeypatch.setattr("backend.web.services.streaming_service.write_cancellation_markers", noop_async)
+    monkeypatch.setattr("backend.web.services.streaming_service._persist_cancelled_run_input_if_missing", noop_async)
+    monkeypatch.setattr("backend.web.services.streaming_service._flush_cancelled_owner_steers", noop_async)
+    monkeypatch.setattr("eval.storage.TrajectoryStore", lambda: store)
+    monkeypatch.setattr("eval.tracer.TrajectoryTracer", FakeTrajectoryTracer)
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=FakeDisplayBuilder(),
+            thread_tasks={},
+            thread_last_active={},
+            typing_tracker=None,
+            queue_manager=SimpleNamespace(peek=lambda _thread_id: False),
+        )
+    )
+    agent = SimpleNamespace(
+        agent=FakeGraphAgent(),
+        runtime=FakeRuntime(),
+        storage_container=None,
+    )
+
+    task = asyncio.create_task(
+        _run_agent_to_buffer(
+            agent,
+            "thread-eval",
+            "hello",
+            app,
+            True,
+            ThreadEventBuffer(),
+            "run-live",
+        )
+    )
+
+    payload = None
+    for _ in range(100):
+        payload = monitor_service.get_monitor_evaluation_truth()
+        if payload["status"] == "running":
+            break
+        await asyncio.sleep(0)
+
+    assert payload is not None
+    assert payload["status"] == "running"
+    assert payload["kind"] == "running_recorded"
+    facts = {(item["label"], item["value"]) for item in payload["facts"]}
+    assert ("Run ID", "run-live") in facts
+    assert ("Thread ID", "thread-eval") in facts
+
+    task.cancel()
+    result = await task
+    assert result == ""
 
 
 def test_cleanup_resource_leases_deletes_allowed_detached_residue(monkeypatch):
