@@ -193,7 +193,7 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
-        user_id="owner-user-1",
+        chat_identity_id="owner-user-1",
         messaging_service=_messaging_display_service(),
     )
 
@@ -208,7 +208,7 @@ def test_send_message_schema_marks_user_id_name_as_legacy() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
-        user_id="agent-user-1",
+        chat_identity_id="agent-user-1",
     )
 
     send_message = registry.get("send_message")
@@ -225,7 +225,7 @@ def test_read_messages_schema_requires_non_empty_chat_or_user_identifier() -> No
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
-        user_id="agent-user-1",
+        chat_identity_id="agent-user-1",
     )
 
     read_messages = registry.get("read_messages")
@@ -247,6 +247,16 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     )
 
     assert registry.get("list_chats") is not None
+
+
+def test_chat_tool_service_rejects_legacy_constructor_user_id() -> None:
+    registry = ToolRegistry()
+
+    with pytest.raises(TypeError):
+        ChatToolService(
+            registry=registry,
+            user_id="agent-user-1",
+        )
 
 
 def test_chat_tool_service_rejects_dead_repo_constructor_kwargs() -> None:
