@@ -79,6 +79,11 @@ Use Proposal B as the overall workstream, but execute it as three explicit PRs:
 
 This keeps the end-state ambitious while keeping each merge slice narrow.
 
+Alongside that shell revival sequence, one mandatory companion lane remains explicitly open:
+- evaluation system runtime activation
+- this is not optional follow-up polish
+- it requires tighter coordination with the upstream identity/core owner because “visible eval page” and “eval system truly runs again” are not the same thing
+
 ## Sequence Of PRs
 
 ### `PR-C1` shell revival
@@ -91,16 +96,19 @@ This keeps the end-state ambitious while keeping each merge slice narrow.
 - `MonitorNav`
 - grouped left-sidebar navigation
 - route organization for:
+  - `dashboard`
+  - `threads`
   - `resources`
   - `leases`
-  - `traces`
-  - `evaluation`
+  - `diverged`
+  - `events`
 - shell chrome, titles, and content framing
 
 **Does not include**
 - major backend changes
 - page-internal density overhauls
 - product route work
+- reviving monitor pages that do not currently have backing routes on `dev`
 
 **Merge bar**
 - left sidebar exists and is the primary navigation
@@ -117,8 +125,9 @@ This keeps the end-state ambitious while keeping each merge slice narrow.
 **Includes**
 - `resources` rail/detail re-organization
 - `leases` drilldown structure
-- `traces` placement within the shell hierarchy
-- `evaluation` shell alignment
+- `threads` and `events` placement within the shell hierarchy
+- `dashboard` alignment as the default landing surface
+- re-introducing `evaluation` / `traces` only if their backing routes are restored or intentionally added in-scope
 
 **Does not include**
 - density polish across every table/panel
@@ -145,6 +154,20 @@ This keeps the end-state ambitious while keeping each merge slice narrow.
 - density improves readability without breaking shell structure
 - no contract churn
 - browser proof shows the intended hierarchy still holds after polish
+
+### Mandatory companion lane: evaluation runtime activation
+
+**Goal**
+- Get the evaluation system to run for real again, not merely appear in shell/navigation.
+
+**Why it stays separate**
+- shell revival and eval runtime recovery are different risk classes
+- current `dev` does not expose a full eval route surface the way the historical branch did
+- making eval truly runnable again will likely require coordination with the upstream owner and may cross backend/runtime boundaries that `PR-C1` must not absorb
+
+**Hard rule**
+- `PR-C1` / `PR-C2` / `PR-C3` may restore shell placement and page organization
+- they do not count as closure for the broader monitor revival unless the evaluation system itself is later proven runnable
 
 ## `PR-C1` Architecture
 
@@ -180,9 +203,13 @@ The shell should not become a new monolith. Navigation model, shell frame, and p
 - shell does not take ownership of page data
 
 That means:
+- `dashboard` keeps using `/api/monitor/dashboard`
+- `threads` keeps using `/api/monitor/threads`
 - `resources` keeps using `/api/monitor/resources`
 - `leases` keeps using `/api/monitor/leases`
-- `traces` and `evaluation` keep their current route contracts
+- `diverged` keeps using `/api/monitor/diverged`
+- `events` keeps using `/api/monitor/events`
+- `evaluation` and `traces` are outside `PR-C1` unless real route surfaces exist on the target branch
 
 ### Error Handling
 
@@ -197,7 +224,7 @@ If a page is still thin or awkward, that is a `PR-C2` problem, not a reason to o
 - light console shell, not a dark dashboard clone
 - clear left rail with grouped ops navigation
 - dense enough for operator work, but not yet the final density pass
-- resources, leases, traces, and evaluation should read as one product family
+- dashboard, resources, threads, leases, diverged, and events should read as one product family
 
 ## Non-goals
 
@@ -216,7 +243,7 @@ If a page is still thin or awkward, that is a `PR-C2` problem, not a reason to o
 - browser proof:
   - sidebar visible
   - route switching works
-  - `/resources`, `/leases`, `/traces`, `/evaluation` all render under the unified shell
+  - `/dashboard`, `/resources`, `/threads`, `/leases`, `/diverged`, `/events` all render under the unified shell
 
 ### `PR-C2`
 
