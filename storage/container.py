@@ -67,15 +67,16 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
 class StorageContainer:
     """Composition root for storage repos (Supabase-only)."""
 
-    def __init__(self, supabase_client: Any, **_kwargs: Any) -> None:
+    def __init__(self, supabase_client: Any, public_supabase_client: Any | None = None, **_kwargs: Any) -> None:
         if supabase_client is None:
             raise RuntimeError("StorageContainer requires a supabase_client.")
         self._supabase_client = supabase_client
+        self._public_supabase_client = public_supabase_client or supabase_client
 
-    def _build(self, name: str) -> Any:
+    def _build(self, name: str, *, client: Any | None = None) -> Any:
         mod_path, cls_name = _REPO_REGISTRY[name]
         mod = importlib.import_module(mod_path)
-        return getattr(mod, cls_name)(client=self._supabase_client)
+        return getattr(mod, cls_name)(client=client or self._supabase_client)
 
     def checkpoint_repo(self) -> CheckpointRepo:
         return self._build("checkpoint_repo")
@@ -111,7 +112,9 @@ class StorageContainer:
         return self._build("chat_session_repo")
 
     def panel_task_repo(self) -> PanelTaskRepo:
-        return self._build("panel_task_repo")
+        # @@@panel-task-public-schema - panel task board is still a public-schema
+        # island, so the live repo must not silently inherit runtime staging schema.
+        return self._build("panel_task_repo", client=self._public_supabase_client)
 
     def cron_job_repo(self) -> CronJobRepo:
         return self._build("cron_job_repo")

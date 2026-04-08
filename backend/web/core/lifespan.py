@@ -43,11 +43,12 @@ async def lifespan(app: FastAPI):
     await _validate_web_checkpointer_contract()
 
     # ---- Member-Chat repos + services ----
-    from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
+    from backend.web.core.supabase_factory import create_public_supabase_client, create_supabase_auth_client, create_supabase_client
     from storage.container import StorageContainer
 
     _supabase_client = create_supabase_client()
-    storage_container = StorageContainer(supabase_client=_supabase_client)
+    _public_supabase_client = create_public_supabase_client()
+    storage_container = StorageContainer(supabase_client=_supabase_client, public_supabase_client=_public_supabase_client)
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.thread_launch_pref_repo = storage_container.thread_launch_pref_repo()
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     app.state.panel_task_repo = storage_container.panel_task_repo()
     app.state.cron_job_repo = storage_container.cron_job_repo()
     app.state._supabase_client = _supabase_client
+    app.state._public_supabase_client = _public_supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
     app.state._storage_container = storage_container
 

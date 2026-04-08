@@ -21,22 +21,30 @@ def _resolve_supabase_auth_url() -> str:
     return url
 
 
-def create_supabase_client():
-    """Build a supabase-py client from runtime environment.
+def _create_storage_client(*, schema: str):
+    """Build a schema-scoped supabase-py client from runtime environment.
 
     Uses SUPABASE_INTERNAL_URL when available (direct server-side access, e.g. same-host
     or SSH tunnel), falling back to SUPABASE_PUBLIC_URL.  trust_env=False ensures the
     httpx client never routes through any system/VPN proxy.
     """
-    # Prefer internal URL (same-host direct connection) over public tunnel URL.
     url = _resolve_supabase_url()
     key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for Supabase storage runtime.")
-    schema = os.getenv("LEON_DB_SCHEMA", "public")
     timeout = httpx.Timeout(30.0, connect=10.0)
     http_client = httpx.Client(timeout=timeout, trust_env=False)
     return create_client(url, key, options=ClientOptions(httpx_client=http_client, schema=schema))
+
+
+def create_supabase_client():
+    """Build a supabase-py client for the runtime schema."""
+    return _create_storage_client(schema=os.getenv("LEON_DB_SCHEMA", "public"))
+
+
+def create_public_supabase_client():
+    """Build a supabase-py client pinned to the public schema."""
+    return _create_storage_client(schema="public")
 
 
 def create_supabase_auth_client():
@@ -65,11 +73,4 @@ def create_messaging_supabase_client():
     schema redesign as users/threads, so this client must honor LEON_DB_SCHEMA
     instead of silently drifting back to public.
     """
-    url = _resolve_supabase_url()
-    key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
-    if not key:
-        raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for messaging.")
-    schema = os.getenv("LEON_DB_SCHEMA", "public")
-    timeout = httpx.Timeout(30.0, connect=10.0)
-    http_client = httpx.Client(timeout=timeout, trust_env=False)
-    return create_client(url, key, options=ClientOptions(httpx_client=http_client, schema=schema))
+    return _create_storage_client(schema=os.getenv("LEON_DB_SCHEMA", "public"))

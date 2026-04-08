@@ -17,10 +17,17 @@ def _supabase_client() -> Any:
     return create_supabase_client()
 
 
+@lru_cache(maxsize=1)
+def _public_supabase_client() -> Any:
+    from backend.web.core.supabase_factory import create_public_supabase_client
+
+    return create_public_supabase_client()
+
+
 def make_panel_task_repo() -> Any:
     from storage.providers.supabase.panel_task_repo import SupabasePanelTaskRepo
 
-    return SupabasePanelTaskRepo(_supabase_client())
+    return SupabasePanelTaskRepo(_public_supabase_client())
 
 
 def make_cron_job_repo() -> Any:
