@@ -2191,6 +2191,110 @@ describe("MonitorRoutes", () => {
     expect(detailLabel.nextElementSibling).toHaveTextContent("1");
   });
 
+  it("surfaces live telemetry gap in the provider detail overview", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 3,
+        },
+        providers: [
+          {
+            id: "daytona_selfhost",
+            name: "daytona_selfhost",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 3, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: {
+              used: null,
+              limit: null,
+              unit: "%",
+              source: "unknown",
+              freshness: "live",
+              error: "CPU usage is per-sandbox, not a provider-level quota.",
+            },
+            sessions: [
+              {
+                id: "lease-1:thread-1",
+                leaseId: "lease-1",
+                threadId: "thread-1",
+                runtimeSessionId: "runtime-1",
+                agentName: "Remote Agent 1",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 0.4,
+                  memory: 0.5,
+                  memoryLimit: 1,
+                  disk: 0.2,
+                  diskLimit: 3,
+                  cpuNote: null,
+                  memoryNote: null,
+                  diskNote: null,
+                  probeError: null,
+                },
+              },
+              {
+                id: "lease-2:thread-2",
+                leaseId: "lease-2",
+                threadId: "thread-2",
+                runtimeSessionId: "runtime-2",
+                agentName: "Remote Agent 2",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+              {
+                id: "lease-3:thread-3",
+                leaseId: "lease-3",
+                threadId: "thread-3",
+                runtimeSessionId: "runtime-3",
+                agentName: "Remote Agent 3",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    const detailLabel = (await screen.findAllByText("无 live telemetry")).find((node) =>
+      node.classList.contains("inline-metric__label"),
+    );
+    expect(detailLabel).toBeDefined();
+    if (!detailLabel) {
+      throw new Error("Expected provider detail telemetry-gap metric");
+    }
+    expect(detailLabel.nextElementSibling).toHaveTextContent("2");
+  });
+
   it("surfaces live usage coverage in the local provider detail overview", async () => {
     mockRoutePayloads({
       "/resources": {
