@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
-from messaging.display_user import resolve_messaging_display_user
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -79,11 +78,7 @@ def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
 
 
 def _resolve_display_user(app: Any, social_user_id: str) -> Any | None:
-    return resolve_messaging_display_user(
-        user_repo=app.state.user_repo,
-        thread_repo=getattr(app.state, "thread_repo", None),
-        social_user_id=social_user_id,
-    )
+    return _messaging(app).resolve_display_user(social_user_id)
 
 
 def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
