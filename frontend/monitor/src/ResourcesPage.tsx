@@ -452,6 +452,15 @@ function ProviderCard({
   onSelect: () => void;
 }) {
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const runtimeUnboundUsageCount = provider.sessions.filter((session) => {
+    const metrics = session.metrics;
+    return (
+      session.status === "running" &&
+      !session.runtimeSessionId &&
+      metrics != null &&
+      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
+    );
+  }).length;
   const runtimeUnboundRunningCount = provider.sessions.filter(
     (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
   ).length;
@@ -539,6 +548,7 @@ function ProviderCard({
         <span>{runningCount} 占用中</span>
         {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && <span>{liveUsageRunningCount} 有用量</span>}
         {missingLiveTelemetryRunningCount > 0 && <span>{missingLiveTelemetryRunningCount} 无 live telemetry</span>}
+        {runtimeUnboundUsageCount > 0 && <span>{runtimeUnboundUsageCount} 无 runtime有用量</span>}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
