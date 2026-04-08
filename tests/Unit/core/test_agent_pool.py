@@ -278,8 +278,10 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
 
     chat_repos = cast(dict[str, object], captured["chat_repos"])
     assert chat_repos["chat_identity_id"] == "agent-user-5"
-    assert chat_repos["user_id"] == "agent-user-5"
     assert chat_repos["owner_id"] == "owner-5"
+    assert "user_id" not in chat_repos
+    assert "chat_member_repo" not in chat_repos
+    assert "messages_repo" not in chat_repos
 
 
 @pytest.mark.asyncio

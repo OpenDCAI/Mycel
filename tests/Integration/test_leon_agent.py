@@ -837,7 +837,7 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
     agent._chat_repos = {
-        "user_id": "agent-member-1",
+        "chat_identity_id": "agent-member-1",
         "owner_id": "human-user-1",
         "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
@@ -852,6 +852,24 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     assert "- The chat tools still use the parameter name user_id for legacy reasons." in prompt
     assert "- Your owner: Owner (human user_id: human-user-1)" in prompt
     assert "- Your user_id:" not in prompt
+
+
+def test_leon_agent_chat_identity_prompt_does_not_fallback_to_legacy_user_id() -> None:
+    from core.runtime.agent import LeonAgent
+
+    agent = object.__new__(LeonAgent)
+    agent._build_system_prompt = lambda: "BASE"
+    cast(Any, agent).config = SimpleNamespace(system_prompt=None)
+    agent._chat_repos = {
+        "user_id": "agent-member-legacy",
+        "owner_id": "human-user-legacy",
+        "user_repo": SimpleNamespace(get_by_id=lambda uid: SimpleNamespace(id=uid, display_name=f"resolved:{uid}")),
+    }
+
+    prompt = LeonAgent._compose_system_prompt(agent)
+
+    assert "**Chat Identity:**" not in prompt
+    assert "agent-member-legacy" not in prompt
 
 
 def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy_user_id():
