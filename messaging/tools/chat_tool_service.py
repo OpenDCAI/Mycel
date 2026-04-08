@@ -86,14 +86,12 @@ class ChatToolService:
         self,
         registry: ToolRegistry,
         *,
-        chat_identity_id: str | None = None,
-        user_id: str | None = None,
+        chat_identity_id: str,
         messaging_service: Any = None,  # MessagingService (new)
     ) -> None:
-        identity_id = chat_identity_id or user_id
-        if not identity_id:
-            raise ValueError("ChatToolService requires chat_identity_id or legacy user_id")
-        self._chat_identity_id: str = identity_id
+        if not chat_identity_id:
+            raise ValueError("ChatToolService requires chat_identity_id")
+        self._chat_identity_id: str = chat_identity_id
         self._messaging = messaging_service
         self._register(registry)
 
