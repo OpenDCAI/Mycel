@@ -4,17 +4,44 @@ import ErrorState from "../components/ErrorState";
 import StateBadge from "../components/StateBadge";
 import { useMonitorData } from "../app/fetch";
 
+type LeasesPayload = {
+  title: string;
+  count: number;
+  triage?: {
+    summary?: {
+      active_drift?: number;
+      detached_residue?: number;
+      orphan_cleanup?: number;
+      healthy_capacity?: number;
+      total?: number;
+    };
+  };
+  items: Array<{
+    lease_id: string;
+    lease_url: string;
+    provider: string;
+    instance_id?: string | null;
+    thread: {
+      thread_id?: string | null;
+      thread_url?: string | null;
+    };
+    state_badge: Record<string, unknown>;
+    updated_ago?: string | null;
+    error?: string | null;
+  }>;
+};
+
 export default function LeasesPage() {
-  const { data, error } = useMonitorData<any>("/leases");
+  const { data, error } = useMonitorData<LeasesPayload>("/leases");
 
   if (error) return <ErrorState title="Leases" error={error} />;
   if (!data) return <div>Loading...</div>;
 
-  const triage = data.triage ?? {};
+  const triage = data.triage?.summary ?? {};
   const triageCards = [
-    { label: "Active", value: triage.active ?? 0 },
-    { label: "Residue", value: triage.residue ?? 0 },
-    { label: "Total", value: data.count ?? 0 },
+    { label: "Active Drift", value: triage.active_drift ?? 0 },
+    { label: "Detached Residue", value: triage.detached_residue ?? 0 },
+    { label: "Tracked Leases", value: triage.total ?? data.count ?? 0 },
   ];
 
   return (
