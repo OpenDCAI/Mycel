@@ -418,6 +418,22 @@ class ChatSessionManager:
 
         self._repo.delete_session(session_id, reason=reason)
 
+    def delete_thread(self, thread_id: str, *, reason: str = "thread_deleted") -> None:
+        # @@@thread-hard-delete-before-terminal-delete - thread teardown must
+        # remove chat_session rows before terminal rows or live Supabase FKs block terminal deletion.
+        for live_terminal_id, session in list(self._live_sessions.items()):
+            if session.thread_id != thread_id:
+                continue
+            assert_chat_session_transition(
+                parse_chat_session_state(session.status),
+                ChatSessionState.CLOSED,
+                reason=reason,
+            )
+            self._close_runtime(session, reason=reason)
+            self._live_sessions.pop(live_terminal_id, None)
+
+        self._repo.delete_by_thread(thread_id)
+
     def close(self, reason: str = "manager_close") -> None:
         for live_terminal_id, session in list(self._live_sessions.items()):
             assert_chat_session_transition(
