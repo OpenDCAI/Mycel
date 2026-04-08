@@ -14,6 +14,31 @@ beforeEach(() => {
     new Response(
       JSON.stringify({
         snapshot_at: "2026-04-08T00:00:00Z",
+        resources_summary: {
+          running_sessions: 0,
+          active_providers: 0,
+          unavailable_providers: 0,
+        },
+        infra: {
+          providers_active: 0,
+          providers_unavailable: 0,
+          leases_total: 0,
+          leases_diverged: 0,
+          leases_orphan: 0,
+          leases_healthy: 0,
+        },
+        workload: {
+          db_sessions_total: 0,
+          provider_sessions_total: 0,
+          running_sessions: 0,
+          evaluations_running: 0,
+        },
+        latest_evaluation: {
+          status: "idle",
+          kind: "no_recorded_runs",
+          tone: "default",
+          headline: "No persisted evaluation runs are available yet.",
+        },
       }),
       {
         status: 200,
@@ -81,10 +106,30 @@ describe("MonitorRoutes", () => {
     mockRoutePayloads({
       "/dashboard": {
         snapshot_at: "2026-04-08T00:00:00Z",
-        summary: {
-          active_threads: 7,
-          active_leases: 3,
-          resources_ready: 4,
+        resources_summary: {
+          running_sessions: 4,
+          active_providers: 2,
+          unavailable_providers: 1,
+        },
+        infra: {
+          providers_active: 2,
+          providers_unavailable: 1,
+          leases_total: 3,
+          leases_diverged: 1,
+          leases_orphan: 0,
+          leases_healthy: 2,
+        },
+        workload: {
+          db_sessions_total: 7,
+          provider_sessions_total: 4,
+          running_sessions: 4,
+          evaluations_running: 1,
+        },
+        latest_evaluation: {
+          status: "running",
+          kind: "running_recorded",
+          tone: "warning",
+          headline: "Evaluation run is actively recording new metrics.",
         },
       },
     });
@@ -97,6 +142,11 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByText("Runtime Surfaces")).toBeInTheDocument();
     expect(screen.getByText("Operator Attention")).toBeInTheDocument();
+    expect(screen.getByText("Running Sessions")).toBeInTheDocument();
+    expect(screen.getByText("Evaluations Running")).toBeInTheDocument();
+    expect(screen.getByText("Tracked Leases")).toBeInTheDocument();
+    expect(screen.getByText("Latest Evaluation")).toBeInTheDocument();
+    expect(screen.getByText("Evaluation run is actively recording new metrics.")).toBeInTheDocument();
   });
 
   it("renders leases with a triage summary before the raw table", async () => {
