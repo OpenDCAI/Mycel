@@ -8,6 +8,7 @@ import pytest
 from backend.web.utils.serializers import avatar_url
 from core.agents.communication import delivery as delivery_module
 from core.runtime.registry import ToolRegistry
+from core.runtime.tool_result import ToolResultEnvelope
 from messaging.delivery.actions import DeliveryAction
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.relationships.service import RelationshipService
@@ -554,10 +555,40 @@ def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
     send_message = registry.get("send_message")
     assert send_message is not None
 
-    with pytest.raises(RuntimeError, match="You have 1 unread message\\(s\\)\\. Call read_messages\\(chat_id='chat-1'\\) first\\."):
-        send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
+    result = send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
 
+    assert isinstance(result, ToolResultEnvelope)
+    assert result.kind == "error"
+    assert result.metadata["error_type"] == "chat_not_caught_up"
+    assert result.content == "You have 1 unread message(s). Call read_messages(chat_id='chat-1') first."
     assert sent == []
+
+
+def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> None:
+    registry = ToolRegistry()
+    def _send(*_args, **_kwargs):
+        raise RuntimeError("Chat advanced after your last read. Call read_messages(chat_id='chat-1') first.")
+
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="thread-user-1",
+        owner_id="owner-user-1",
+        chat_member_repo=SimpleNamespace(is_member=lambda _chat_id, _user_id: True),
+        messaging_service=SimpleNamespace(
+            count_unread=lambda _chat_id, _user_id: 0,
+            send=_send,
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    result = send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
+
+    assert isinstance(result, ToolResultEnvelope)
+    assert result.kind == "error"
+    assert result.metadata["error_type"] == "chat_not_caught_up"
+    assert result.content == "Chat advanced after your last read. Call read_messages(chat_id='chat-1') first."
 
 
 def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:

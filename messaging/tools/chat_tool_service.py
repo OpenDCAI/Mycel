@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.tool_result import tool_error
 
 logger = logging.getLogger(__name__)
 
@@ -317,20 +318,32 @@ class ChatToolService:
             # otherwise siblings can race on stale history and fork the conversation.
             unread = self._messaging.count_unread(resolved_chat_id, eid)
             if unread > 0:
-                raise RuntimeError(f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.")
+                return tool_error(
+                    f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.",
+                    metadata={"error_type": "chat_not_caught_up", "chat_id": resolved_chat_id},
+                )
 
             effective_signal = signal if signal in ("yield", "close") else None
             if effective_signal:
                 content = f"{content}\n[signal: {effective_signal}]"
 
-            self._messaging.send(
-                resolved_chat_id,
-                eid,
-                content,
-                mentions=mentions,
-                signal=effective_signal,
-                enforce_caught_up=True,
-            )
+            try:
+                self._messaging.send(
+                    resolved_chat_id,
+                    eid,
+                    content,
+                    mentions=mentions,
+                    signal=effective_signal,
+                    enforce_caught_up=True,
+                )
+            except RuntimeError as exc:
+                message = str(exc)
+                if message.startswith("Chat advanced after your last read."):
+                    return tool_error(
+                        message,
+                        metadata={"error_type": "chat_not_caught_up", "chat_id": resolved_chat_id},
+                    )
+                raise
             return f"Message sent to {target_name}."
 
         registry.register(
