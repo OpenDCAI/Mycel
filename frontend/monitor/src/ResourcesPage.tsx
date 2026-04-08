@@ -654,6 +654,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
               {isLocal ? (
                 <div className="provider-inline-metrics">
                   <InlineMetric label="运行中" value={String(runningCount)} />
+                  {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && (
+                    <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
+                  )}
                   <InlineMetric label="CPU" value={formatMetricRange(provider.cardCpu)} />
                   <InlineMetric label="RAM" value={formatMetricRange(provider.telemetry.memory)} />
                   <InlineMetric label="Disk" value={formatMetricRange(provider.telemetry.disk)} />
