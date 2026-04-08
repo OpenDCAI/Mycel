@@ -270,6 +270,48 @@ def test_build_evaluation_operator_surface_marks_completed_with_errors():
     }
 
 
+def test_monitor_evaluation_truth_defaults_to_explicit_unavailable_surface():
+    payload = monitor_service.get_monitor_evaluation_truth()
+
+    assert payload["status"] == "unavailable"
+    assert payload["kind"] == "unavailable"
+    assert payload["tone"] == "warning"
+    assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
+    assert payload["artifact_summary"] == {
+        "present": 0,
+        "missing": 0,
+        "total": 0,
+    }
+    assert payload["raw_notes"] is None
+
+
+def test_monitor_evaluation_dashboard_summary_reduces_operator_truth():
+    summary = monitor_service.build_monitor_evaluation_dashboard_summary(
+        {
+            "status": "running",
+            "kind": "running_active",
+            "tone": "default",
+            "headline": "Evaluation is actively running.",
+            "summary": "Long form summary that should not leak into dashboard shape.",
+            "facts": [],
+            "artifacts": [],
+            "artifact_summary": {"present": 2, "missing": 1, "total": 3},
+            "next_steps": [],
+            "raw_notes": "runner=direct rc=0",
+        }
+    )
+
+    assert summary == {
+        "evaluations_running": 1,
+        "latest_evaluation": {
+            "status": "running",
+            "kind": "running_active",
+            "tone": "default",
+            "headline": "Evaluation is actively running.",
+        },
+    }
+
+
 def test_cleanup_resource_leases_deletes_allowed_detached_residue(monkeypatch):
     rows = [
         {
