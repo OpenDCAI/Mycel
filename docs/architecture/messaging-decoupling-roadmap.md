@@ -6,6 +6,8 @@ Turn `messaging/` into the single owner of messaging-domain truth instead of a t
 
 This roadmap is intentionally scoped as a long-lived implementation lane, not a one-shot refactor. The initial placeholder PR should carry this document plus follow-up implementation slices, rather than letting each slice invent its own local truth.
 
+Current campaign ruling: this branch remains a docs-only shell until the principal assigns the first bounded implementation slice. The roadmap is canonical direction for the lane, not standing permission to start Slice 1.
+
 ## Why This Exists
 
 The current codebase already treats `messaging/` as a bounded domain:
@@ -177,3 +179,13 @@ The placeholder PR for this roadmap should be allowed to carry:
 - subsequent implementation slices that stay inside the ownership plan above
 
 It should not become a grab bag for unrelated communication cleanup.
+
+## Freeze Rule
+
+Until the first bounded slice is explicitly assigned, this branch is frozen as:
+
+- one repo-shipping architecture roadmap
+- no production-code changes
+- no opportunistic tests
+- no cleanup hitchhiking
+- no parallel “helper roadmap” or scratchpad documents inside the repo
