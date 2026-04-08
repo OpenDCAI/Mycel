@@ -816,7 +816,7 @@ function MonitorFileBrowser({
 
   const openFile = React.useCallback(
     async (path: string) => {
-      if (!leaseId) return;
+      if (!leaseId && !isLocal) return;
       if (selectedFile === path) {
         setSelectedFile(null);
         setFileContent(null);
@@ -826,7 +826,7 @@ function MonitorFileBrowser({
       setSelectedFile(path);
       await loadFile(path);
     },
-    [leaseId, selectedFile, loadFile],
+    [isLocal, leaseId, selectedFile, loadFile],
   );
 
   if (!leaseId && !isLocal) {
