@@ -10,6 +10,11 @@ interface ConversationState {
 
 let inflight: Promise<void> | null = null;
 
+function isActiveChatRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/chat" || path.startsWith("/chat/");
+}
+
 export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
   loading: false,
@@ -28,6 +33,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           set({ conversations: data });
         }
       } catch (err) {
+        // @@@conversation-route-teardown - chat sidebar polling can resolve
+        // after the user has already left /chat. Only log if chat is still the
+        // active route, otherwise this is stale noise.
+        if (!isActiveChatRoute()) return;
         console.error("[ConversationStore] fetch failed:", err);
       } finally {
         inflight = null;
