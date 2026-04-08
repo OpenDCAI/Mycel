@@ -112,7 +112,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
                 {
                     "thread_id": "thread-parent",
                     "agent_name": "Morel",
-                    "avatar_url": "/api/members/agent-1/avatar",
+                    "avatar_url": "/api/users/agent-1/avatar",
                 }
             ],
             "recipe_name": "Daytona Default",
@@ -170,12 +170,12 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
         {
             "thread_id": "thread-a",
             "agent_name": "Morel",
-            "avatar_url": "/api/members/agent-1/avatar",
+            "avatar_url": "/api/users/agent-1/avatar",
         },
         {
             "thread_id": "thread-b",
             "agent_name": "Morel",
-            "avatar_url": "/api/members/agent-1/avatar",
+            "avatar_url": "/api/users/agent-1/avatar",
         },
     ]
 

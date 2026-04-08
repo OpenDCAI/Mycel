@@ -50,13 +50,13 @@ def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
 router = APIRouter(prefix="/api/entities", tags=["entities"])
 
 # ---------------------------------------------------------------------------
-# Members (legacy route prefix, user-backed agent directory)
+# Users (user-backed avatar and agent directory)
 # ---------------------------------------------------------------------------
 
-members_router = APIRouter(prefix="/api/members", tags=["members"])
+users_router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-@members_router.get("")
+@users_router.get("")
 async def list_members(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
@@ -99,7 +99,7 @@ def _get_owned_avatar_user_or_404(user_id: str, current_user_id: str, user_repo:
     raise HTTPException(403, "Not authorized")
 
 
-@members_router.put("/{user_id}/avatar")
+@users_router.put("/{user_id}/avatar")
 async def upload_avatar(
     user_id: str,
     file: UploadFile,
@@ -126,7 +126,7 @@ async def upload_avatar(
     return {"status": "ok", "avatar": f"avatars/{user_id}.png"}
 
 
-@members_router.get("/{user_id}/avatar")
+@users_router.get("/{user_id}/avatar")
 async def get_avatar(user_id: str) -> FileResponse:
     """Serve avatar image. No auth (public). 300s browser cache."""
     path = _avatar_path(user_id)
@@ -135,7 +135,7 @@ async def get_avatar(user_id: str) -> FileResponse:
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=300"})
 
 
-@members_router.delete("/{user_id}/avatar")
+@users_router.delete("/{user_id}/avatar")
 async def delete_avatar(
     user_id: str,
     current_user_id: Annotated[str, Depends(get_current_user_id)],

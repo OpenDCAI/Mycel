@@ -252,7 +252,7 @@ function AuthenticatedLayout() {
             <Popover>
               <PopoverTrigger asChild>
                 <button className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors duration-fast w-full`}>
-                  <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
+                  <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/users/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
                   {showLabels && (
                     <div className="min-w-0 flex-1 text-left">
                       <p className="text-xs font-medium text-foreground truncate">{authUser?.name || "User"}</p>
@@ -263,7 +263,7 @@ function AuthenticatedLayout() {
               <PopoverContent side="top" align="start" className="w-56">
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative group/avatar cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-                    <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
+                    <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/users/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
                     <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-fast flex items-center justify-center">
                       <Camera className="w-5 h-5 text-white" />
                     </div>

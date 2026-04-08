@@ -62,11 +62,13 @@ def test_avatar_user_helper_raises_403_for_unrelated_user():
 
 def test_avatar_mutation_routes_use_user_id_path_param():
     route_paths = {
-        (route.path, tuple(sorted(route.methods))) for route in entities_router.members_router.routes if getattr(route, "methods", None)
+        (route.path, tuple(sorted(route.methods))) for route in entities_router.users_router.routes if getattr(route, "methods", None)
     }
 
-    assert ("/api/members/{user_id}/avatar", ("PUT",)) in route_paths
-    assert ("/api/members/{user_id}/avatar", ("DELETE",)) in route_paths
+    assert ("/api/users/{user_id}/avatar", ("GET",)) in route_paths
+    assert ("/api/users/{user_id}/avatar", ("PUT",)) in route_paths
+    assert ("/api/users/{user_id}/avatar", ("DELETE",)) in route_paths
+    assert all(not path.startswith("/api/members/") for path, _methods in route_paths)
 
 
 @pytest.mark.asyncio

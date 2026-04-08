@@ -59,7 +59,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const threadDisplayName = currentThread?.sidebar_label ?? currentThread?.agent_name ?? null;
   const agentName = threadDisplayName ?? undefined;
   const agentAvatarUrl = currentThread?.avatar_url;
-  const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
+  const userAvatarUrl = userHasAvatar && userId ? `/api/users/${userId}/avatar` : undefined;
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;

@@ -37,7 +37,7 @@ function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; 
 
   return (
     <div className="relative group/avatar" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
-      <MemberAvatar avatarUrl={(hasAvatar || rev > 0) ? `/api/members/${memberId}/avatar` : undefined} name={name} size="md" className="rounded-xl" rev={rev} type="mycel_agent" />
+      <MemberAvatar avatarUrl={(hasAvatar || rev > 0) ? `/api/users/${memberId}/avatar` : undefined} name={name} size="md" className="rounded-xl" rev={rev} type="mycel_agent" />
       <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-fast flex items-center justify-center cursor-pointer">
         {uploading ? (
           <div className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />

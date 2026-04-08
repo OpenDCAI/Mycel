@@ -15,9 +15,9 @@ def strip_system_tags(content: str) -> str:
     return content.strip()
 
 
-def avatar_url(member_id: str | None, has_avatar: bool) -> str | None:
+def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
     """Build avatar URL. Returns None if no avatar uploaded."""
-    return f"/api/members/{member_id}/avatar" if member_id and has_avatar else None
+    return f"/api/users/{user_id}/avatar" if user_id and has_avatar else None
 
 
 def extract_text_content(raw_content: Any) -> str:

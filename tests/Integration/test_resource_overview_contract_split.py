@@ -79,7 +79,7 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
                 "agents": [
                     {
                         "agent_name": "Morel",
-                        "avatar_url": "/api/members/member-1/avatar",
+                        "avatar_url": "/api/users/member-1/avatar",
                     }
                 ],
                 "observed_state": "running",

@@ -321,7 +321,7 @@ export async function revokeInviteCode(code: string): Promise<void> {
 export async function uploadMemberAvatar(memberId: string, file: File): Promise<void> {
   const form = new FormData();
   form.append("file", file);
-  const response = await authFetch(`/api/members/${memberId}/avatar`, {
+  const response = await authFetch(`/api/users/${memberId}/avatar`, {
     method: "PUT",
     body: form,
   });
