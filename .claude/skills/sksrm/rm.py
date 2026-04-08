@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 """sksrm - Remove a single skill from a group."""
+
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 # ANSI colors
-BOLD  = "\033[1m"
-CYAN  = "\033[36m"
+BOLD = "\033[1m"
+CYAN = "\033[36m"
 GREEN = "\033[32m"
-GRAY  = "\033[90m"
-RED   = "\033[31m"
+GRAY = "\033[90m"
+RED = "\033[31m"
 RESET = "\033[0m"
 
 
 def get_paths() -> tuple[Path, Path, Path]:
     """Return (claude_dir, skills_dir, groups_dir)."""
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
         claude_dir = Path(result.stdout.strip()) / ".claude"
     except subprocess.CalledProcessError:
         claude_dir = Path.cwd() / ".claude"
