@@ -257,6 +257,7 @@ class LocalSandbox(Sandbox):
         self._provider = LocalSessionProvider(default_cwd=workspace_root)
         self._manager = SandboxManager(provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db"))
         self._capability_cache: dict[str, SandboxCapability] = {}
+        self._owned_thread_ids: set[str] = set()
 
     @property
     def name(self) -> str:
@@ -280,6 +281,7 @@ class LocalSandbox(Sandbox):
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
+        self._owned_thread_ids.add(thread_id)
         cached = self._capability_cache.get(thread_id)
         if cached is not None and _cached_capability_is_stale(self._manager, thread_id, cached):
             self._capability_cache.pop(thread_id, None)
@@ -301,16 +303,21 @@ class LocalSandbox(Sandbox):
         self._get_capability()
 
     def pause_thread(self, thread_id: str) -> bool:
+        self._owned_thread_ids.add(thread_id)
         self._capability_cache.pop(thread_id, None)
         return self._manager.pause_session(thread_id)
 
     def resume_thread(self, thread_id: str) -> bool:
+        self._owned_thread_ids.add(thread_id)
         self._capability_cache.pop(thread_id, None)
         return self._manager.resume_session(thread_id)
 
     def close(self) -> None:
-        for session in self._manager.list_sessions():
+        # @@@local-close-owned-threads - backend shutdown must only clean
+        # threads this sandbox instance actually touched, not sweep the shared runtime universe.
+        for thread_id in sorted(self._owned_thread_ids):
             try:
-                self._manager.destroy_session(session["thread_id"])
+                self._manager.destroy_session(thread_id)
             except Exception:
-                logger.exception("[LocalSandbox] Failed to destroy session %s", session.get("thread_id"))
+                logger.exception("[LocalSandbox] Failed to destroy session %s", thread_id)
+        self._owned_thread_ids.clear()

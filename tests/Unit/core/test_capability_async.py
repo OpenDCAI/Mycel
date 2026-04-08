@@ -114,6 +114,50 @@ def test_local_sandbox_rebuilds_stale_closed_capability_before_execute_async(tmp
     assert "hi" in result.stdout
 
 
+def test_local_sandbox_close_destroys_only_owned_threads_without_global_inventory():
+    class _Manager:
+        def __init__(self):
+            self.destroyed: list[str] = []
+
+        def list_sessions(self):
+            raise AssertionError("LocalSandbox.close must not scan shared session inventory")
+
+        def destroy_session(self, thread_id: str):
+            self.destroyed.append(thread_id)
+
+    sandbox = object.__new__(LocalSandbox)
+    sandbox._manager = _Manager()
+    sandbox._capability_cache = {}
+    sandbox._owned_thread_ids = {"thread-b", "thread-a"}
+
+    sandbox.close()
+
+    assert sandbox._manager.destroyed == ["thread-a", "thread-b"]
+
+
+def test_local_sandbox_records_thread_id_when_building_capability():
+    class _Manager:
+        def __init__(self):
+            self.requested: list[str] = []
+
+        def get_sandbox(self, thread_id: str):
+            self.requested.append(thread_id)
+            return SimpleNamespace(_session=SimpleNamespace(session_id=f"sess-{thread_id}", status="active"))
+
+    sandbox = object.__new__(LocalSandbox)
+    sandbox._manager = _Manager()
+    sandbox._capability_cache = {}
+    sandbox._owned_thread_ids = set()
+
+    set_current_thread_id("thread-owned")
+
+    capability = sandbox._get_capability()
+
+    assert capability._session.session_id == "sess-thread-owned"
+    assert sandbox._manager.requested == ["thread-owned"]
+    assert sandbox._owned_thread_ids == {"thread-owned"}
+
+
 def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
     class _PausedLease:
         def __init__(self):
