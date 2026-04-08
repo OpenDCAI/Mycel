@@ -21,6 +21,63 @@ class SupabaseEvalRepo:
         """Supabase schema is managed via migrations, not runtime DDL."""
         return None
 
+    def upsert_run_header(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        started_at: str,
+        user_message: str,
+        status: str,
+    ) -> None:
+        rows = q.rows(
+            self._t("eval_runs")
+            .upsert(
+                {
+                    "id": run_id,
+                    "thread_id": thread_id,
+                    "started_at": started_at,
+                    "user_message": user_message,
+                    "status": status,
+                },
+                on_conflict="id",
+            )
+            .execute(),
+            _REPO,
+            "upsert_run_header",
+        )
+        if not rows:
+            raise RuntimeError("Supabase eval repo expected row for upsert_run_header. Check table permissions.")
+
+    def finalize_run(
+        self,
+        *,
+        run_id: str,
+        finished_at: str,
+        final_response: str,
+        status: str,
+        run_tree_json: str,
+        trajectory_json: str,
+    ) -> None:
+        rows = q.rows(
+            self._t("eval_runs")
+            .update(
+                {
+                    "finished_at": finished_at,
+                    "final_response": final_response,
+                    "status": status,
+                    "run_tree_json": run_tree_json,
+                    "trajectory_json": trajectory_json,
+                }
+            )
+            .eq("id", run_id)
+            .execute(),
+            _REPO,
+            "finalize_run",
+        )
+        if not rows:
+            raise RuntimeError(f"Supabase eval repo expected existing row for finalize_run: {run_id}")
+
     def save_trajectory(self, trajectory: RunTrajectory, trajectory_json: str) -> str:
         run_id = trajectory.id
         run_rows = q.rows(

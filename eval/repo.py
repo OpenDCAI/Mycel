@@ -81,6 +81,46 @@ class SQLiteEvalRepo:
     def ensure_schema(self) -> None:
         self._conn.executescript(_SCHEMA_SQL)
 
+    def upsert_run_header(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        started_at: str,
+        user_message: str,
+        status: str,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO eval_runs (id, thread_id, started_at, user_message, status) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "thread_id = excluded.thread_id, "
+            "started_at = excluded.started_at, "
+            "user_message = excluded.user_message, "
+            "status = excluded.status",
+            (run_id, thread_id, started_at, user_message, status),
+        )
+        self._conn.commit()
+
+    def finalize_run(
+        self,
+        *,
+        run_id: str,
+        finished_at: str,
+        final_response: str,
+        status: str,
+        run_tree_json: str,
+        trajectory_json: str,
+    ) -> None:
+        result = self._conn.execute(
+            "UPDATE eval_runs SET finished_at = ?, final_response = ?, status = ?, "
+            "run_tree_json = ?, trajectory_json = ? WHERE id = ?",
+            (finished_at, final_response, status, run_tree_json, trajectory_json, run_id),
+        )
+        if result.rowcount != 1:
+            raise RuntimeError(f"SQLite eval repo expected existing run for finalize_run: {run_id}")
+        self._conn.commit()
+
     def save_trajectory(self, trajectory: RunTrajectory, trajectory_json: str) -> str:
         run_id = trajectory.id
         self._conn.execute(
