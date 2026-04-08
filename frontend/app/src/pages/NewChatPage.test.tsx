@@ -250,4 +250,31 @@ describe("NewChatPage", () => {
       expect(consoleError).not.toHaveBeenCalled();
     });
   });
+
+  it("does not log a failed default-thread resolve once navigation already left the hire route", async () => {
+    handleGetDefaultThread.mockImplementation(async () => {
+      window.history.replaceState({}, "", "/chat");
+      throw new TypeError("Failed to fetch");
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+            <Route path="/chat" element={<div>chat-page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(handleGetDefaultThread).toHaveBeenCalledOnce();
+    });
+
+    await waitFor(() => {
+      expect(consoleError).not.toHaveBeenCalled();
+    });
+  });
 });
