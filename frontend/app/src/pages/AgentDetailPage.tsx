@@ -29,7 +29,7 @@ const modules: ModuleDef[] = [
   { id: "role", label: "角色", icon: FileText },
   { id: "mcp", label: "MCP", icon: Plug, count: c => c.mcps.length },
   { id: "skills", label: "技能", icon: Zap, count: c => c.skills.length },
-  { id: "subagents", label: "子成员", icon: Users, count: c => c.subAgents.length },
+  { id: "subagents", label: "子 Agent", icon: Users, count: c => c.subAgents.length },
 ];
 
 // ==================== Main Component ====================
@@ -707,7 +707,7 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
   onRemove?: (name: string) => void;
   onAdd?: () => void;
 }) {
-  const labels = { skill: "技能", mcp: "MCP 服务器", agent: "成员" };
+  const labels = { skill: "技能", mcp: "MCP 服务器", agent: "子 Agent" };
   const icons = { skill: Zap, mcp: Plug, agent: Users };
   const Icon = icons[type];
 
