@@ -10,7 +10,6 @@ from typing import Any
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import build_provider_from_config_name
-from backend.web.utils.serializers import avatar_url
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.providers.agentbay import AgentBayProvider
 from sandbox.providers.daytona import DaytonaProvider
@@ -20,6 +19,10 @@ from sandbox.providers.local import LocalSessionProvider
 from storage.runtime import build_member_repo, build_thread_repo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
+
+
+def _resource_avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
+    return f"/api/users/{user_id}/avatar" if user_id and has_avatar else None
 
 
 @dataclass(frozen=True)
@@ -227,7 +230,7 @@ def member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]]
         return {
             member.id: {
                 "agent_name": member.name,
-                "avatar_url": avatar_url(member.id, bool(member.avatar)),
+                "avatar_url": _resource_avatar_url(member.id, bool(member.avatar)),
             }
             for member in members
             if member.id and member.name

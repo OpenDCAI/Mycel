@@ -11,7 +11,6 @@ from typing import Any
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.utils.helpers import is_virtual_thread_id
-from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
@@ -25,6 +24,12 @@ SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 _SANDBOX_INVENTORY_LOCK = threading.Lock()
 _SANDBOX_INVENTORY: tuple[dict[str, Any], dict[str, Any]] | None = None
+
+
+def _resource_avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
+    # @@@resource-avatar-contract - keep the resource lane aligned with #259's public users avatar route
+    # without widening this PR into a repo-wide serializer migration.
+    return f"/api/users/{user_id}/avatar" if user_id and has_avatar else None
 
 
 def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
@@ -106,7 +111,7 @@ def list_user_leases(
                     "thread_id": thread_id,
                     "agent_user_id": actor_user_id,
                     "agent_name": actor.name,
-                    "avatar_url": avatar_url(actor.id, bool(actor.avatar)),
+                    "avatar_url": _resource_avatar_url(actor.id, bool(actor.avatar)),
                 }
             )
             if not group["cwd"] and row.get("cwd"):

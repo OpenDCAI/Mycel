@@ -34,11 +34,11 @@ def test_thread_owners_resolves_member_metadata_from_runtime_storage():
     owners = resource_common.thread_owners(
         ["thread-1", "thread-2"],
         thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
-        member_repo=_FakeMemberRepo([_FakeAgent("agent-1", "Toad")]),
+        member_repo=_FakeMemberRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
     )
 
     assert owners == {
-        "thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None},
+        "thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"},
         "thread-2": {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None},
     }
 
