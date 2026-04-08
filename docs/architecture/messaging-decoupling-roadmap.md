@@ -8,6 +8,12 @@ This roadmap is intentionally scoped as a long-lived implementation lane, not a 
 
 Current campaign ruling: this branch remains a docs-only shell until the principal assigns the first bounded implementation slice. The roadmap is canonical direction for the lane, not standing permission to start Slice 1.
 
+Current parking trigger: implementation may resume only after the principal's `chat-thread-runtime-closure` lane materially closes three checkpoints on mainline:
+
+1. group-chat turn semantics are caller-proven with real backend probes, including no duplicated first-turn replies and no noisy contention failures being treated as backend errors
+2. thread runtime/file-channel closure is caller-proven on the canonical path, including `create-thread -> files/channels -> upload -> agent reads uploaded file`, while legacy incomplete threads are converged or purged from owner-facing surfaces
+3. the brutal integration proof checkpoint on `chat-thread-runtime-closure` is materially closed with backend brutal-probe evidence recorded, not mechanism-level tests only
+
 ## Why This Exists
 
 The current codebase already treats `messaging/` as a bounded domain:
@@ -189,3 +195,4 @@ Until the first bounded slice is explicitly assigned, this branch is frozen as:
 - no production-code changes
 - no opportunistic tests or cleanup hitchhiking
 - no parallel “helper roadmap” or scratchpad documents inside the repo
+- implementation resumes only when the parking trigger above is satisfied or the principal assigns a different bounded cut
