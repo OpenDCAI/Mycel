@@ -79,6 +79,19 @@ function formatMetricRange(metric: UsageMetric): string {
   return `limit ${formatMetric(metric.limit, metric.unit)}`;
 }
 
+function formatSessionMetricRange(used: number | null | undefined, limit: number | null | undefined, unit: string): string {
+  if (used == null && limit == null) {
+    return "--";
+  }
+  if (used != null && limit != null) {
+    return `${formatMetric(used, unit)} / ${formatMetric(limit, unit)}`;
+  }
+  if (used != null) {
+    return formatMetric(used, unit);
+  }
+  return `limit ${formatMetric(limit, unit)}`;
+}
+
 function calculateDuration(createdAt: string): number | null {
   const startedAt = new Date(createdAt).getTime();
   if (Number.isNaN(startedAt)) {
@@ -696,9 +709,9 @@ function SandboxCard({
       </div>
       {hasMetrics && (
         <div className="sandbox-card__metrics">
-          <span>CPU {formatMetric(metrics?.cpu, "%")}</span>
-          <span>RAM {formatMetric(metrics?.memory, "GB")}</span>
-          <span>Disk {formatMetric(metrics?.disk, "GB")}</span>
+          <span>CPU {formatSessionMetricRange(metrics?.cpu, null, "%")}</span>
+          <span>RAM {formatSessionMetricRange(metrics?.memory, metrics?.memoryLimit, "GB")}</span>
+          <span>Disk {formatSessionMetricRange(metrics?.disk, metrics?.diskLimit, "GB")}</span>
         </div>
       )}
       <div className="sandbox-card__lease">{group.leaseId || "local"}</div>
