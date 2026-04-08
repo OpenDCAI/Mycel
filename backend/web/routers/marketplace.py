@@ -38,6 +38,7 @@ async def publish_to_marketplace(
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
     from backend.web.services.profile_service import get_profile
@@ -55,6 +56,8 @@ async def publish_to_marketplace(
         visibility=req.visibility,
         publisher_user_id=user_id,
         publisher_username=username,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
     )
     return result
 

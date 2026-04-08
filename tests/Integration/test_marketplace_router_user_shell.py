@@ -13,20 +13,19 @@ from backend.web.routers import marketplace as marketplace_router
 async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
-    async def fake_publish(**kwargs):
-        seen.update(kwargs)
-        return {"ok": True}
-
     monkeypatch.setattr(marketplace_router.marketplace_client, "publish", lambda **kwargs: seen.update(kwargs) or {"ok": True})
     monkeypatch.setattr("backend.web.services.profile_service.get_profile", lambda: {"name": "owner-name"})
 
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+    )
+    agent_config_repo = SimpleNamespace()
     req = PublishToMarketplaceRequest(user_id="agent-1")
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                user_repo=SimpleNamespace(
-                    get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
-                )
+                user_repo=user_repo,
+                agent_config_repo=agent_config_repo,
             )
         )
     )
@@ -37,6 +36,8 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
     assert seen["user_id"] == "agent-1"
     assert seen["publisher_user_id"] == "owner-1"
     assert seen["publisher_username"] == "owner-name"
+    assert seen["user_repo"] is user_repo
+    assert seen["agent_config_repo"] is agent_config_repo
 
 
 @pytest.mark.asyncio

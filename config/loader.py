@@ -475,7 +475,12 @@ def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> Agent
 
     # Skills from agent_skills table
     skill_rows = agent_config_repo.list_skills(agent_config_id)
-    skills = [{"name": s.get("name", ""), "content": s.get("content", "")} for s in skill_rows]
+    skills = []
+    for s in skill_rows:
+        item = {"name": s.get("name", ""), "content": s.get("content", "")}
+        if isinstance(s.get("meta_json"), dict):
+            item["meta"] = s.get("meta_json")
+        skills.append(item)
 
     # MCP from config
     mcp_data = config.get("mcp") or {}

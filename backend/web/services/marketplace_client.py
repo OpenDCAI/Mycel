@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 from fastapi import HTTPException
 
 from backend.web.core.paths import members_dir
-from config.loader import AgentLoader
+from config.loader import AgentLoader, load_bundle_from_repo
+from config.types import AgentBundle
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,42 @@ def _read_json(path: Path) -> dict:
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _render_agent_md(bundle: AgentBundle) -> str:
+    fm: dict[str, Any] = {"name": bundle.agent.name}
+    if bundle.agent.description:
+        fm["description"] = bundle.agent.description
+    if bundle.agent.model:
+        fm["model"] = bundle.agent.model
+    if bundle.agent.tools and bundle.agent.tools != ["*"]:
+        fm["tools"] = bundle.agent.tools
+    frontmatter = yaml.dump(fm, allow_unicode=True, default_flow_style=False).strip()
+    return f"---\n{frontmatter}\n---\n\n{bundle.agent.system_prompt}\n"
+
+
+def _render_sub_agent_md(agent: Any) -> str:
+    fm: dict[str, Any] = {"name": agent.name}
+    if getattr(agent, "description", ""):
+        fm["description"] = agent.description
+    if getattr(agent, "model", None):
+        fm["model"] = agent.model
+    if getattr(agent, "tools", None) and agent.tools != ["*"]:
+        fm["tools"] = agent.tools
+    frontmatter = yaml.dump(fm, allow_unicode=True, default_flow_style=False).strip()
+    return f"---\n{frontmatter}\n---\n\n{getattr(agent, 'system_prompt', '')}\n"
+
+
+def _bundle_snapshot(bundle: AgentBundle) -> dict:
+    return {
+        "agent_md": _render_agent_md(bundle),
+        "rules": bundle.rules,
+        "agents": [{"name": agent.name, "content": _render_sub_agent_md(agent)} for agent in bundle.agents],
+        "skills": bundle.skills,
+        "mcp": {name: cfg.model_dump(exclude_none=True) for name, cfg in bundle.mcp.items()},
+        "runtime": {name: cfg.model_dump(exclude_none=True) for name, cfg in bundle.runtime.items()},
+        "meta": bundle.meta,
+    }
 
 
 def _serialize_user_snapshot(user_id: str) -> dict:
@@ -104,6 +142,16 @@ def _serialize_user_snapshot(user_id: str) -> dict:
     }
 
 
+def _load_repo_publish_material(user_id: str, user_repo: Any, agent_config_repo: Any) -> tuple[AgentBundle, dict[str, Any]]:
+    user = user_repo.get_by_id(user_id)
+    if user is None or user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+    bundle = load_bundle_from_repo(agent_config_repo, user.agent_config_id)
+    if bundle is None:
+        raise RuntimeError(f"Agent config bundle not found for user {user_id}")
+    return bundle, dict(bundle.meta)
+
+
 def publish(
     user_id: str,
     type_: str,
@@ -113,10 +161,23 @@ def publish(
     visibility: str,
     publisher_user_id: str,
     publisher_username: str,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
 ) -> dict:
     """Publish a local agent user bundle to the Hub."""
     member_dir = members_dir() / user_id
-    meta = _read_json(member_dir / "meta.json")
+    if user_repo is not None and agent_config_repo is not None:
+        bundle, meta = _load_repo_publish_material(user_id, user_repo, agent_config_repo)
+        if member_dir.is_dir():
+            # @@@publish-repo-bundle - snapshot/version now come from repo data; old marketplace lineage still lives in meta.json.source.
+            meta = {**meta, **_read_json(member_dir / "meta.json")}
+        snapshot = _bundle_snapshot(bundle)
+        snapshot["meta"] = dict(meta)
+    else:
+        meta = _read_json(member_dir / "meta.json")
+        snapshot = _serialize_user_snapshot(user_id)
+        loader = AgentLoader()
+        bundle = loader.load_bundle(member_dir)
 
     # Calculate new version
     current_version = meta.get("version", "0.1.0")
@@ -130,12 +191,7 @@ def publish(
         patch += 1
     new_version = f"{major}.{minor}.{patch}"
 
-    # Serialize snapshot
-    snapshot = _serialize_user_snapshot(user_id)
-
     # Get slug from agent name
-    loader = AgentLoader()
-    bundle = loader.load_bundle(member_dir)
     slug = bundle.agent.name.lower().replace(" ", "-")
 
     # Check for fork/parent relationship
@@ -174,7 +230,30 @@ def publish(
     meta["source"]["installed_version"] = new_version
     meta["source"]["installed_at"] = int(time.time() * 1000)
     meta["source"]["modified"] = False
-    _write_json(member_dir / "meta.json", meta)
+    if member_dir.is_dir():
+        _write_json(member_dir / "meta.json", meta)
+    if user_repo is not None and agent_config_repo is not None:
+        user = user_repo.get_by_id(user_id)
+        if user is None or user.agent_config_id is None:
+            raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+        agent_config_repo.save_config(
+            user.agent_config_id,
+            {
+                "id": user.agent_config_id,
+                "agent_user_id": user_id,
+                "name": bundle.agent.name,
+                "description": bundle.agent.description,
+                "model": bundle.agent.model,
+                "tools": bundle.agent.tools,
+                "system_prompt": bundle.agent.system_prompt,
+                "status": meta["status"],
+                "version": meta["version"],
+                "created_at": meta.get("created_at", int(time.time() * 1000)),
+                "updated_at": meta["updated_at"],
+                "runtime": snapshot["runtime"],
+                "mcp": snapshot["mcp"],
+            },
+        )
 
     return result
 
