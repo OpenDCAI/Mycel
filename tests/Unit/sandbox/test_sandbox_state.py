@@ -9,6 +9,7 @@ def test_map_running_state():
     """Test mapping of running state (detached + running)."""
     assert map_lease_to_session_status("detached", "running") == "running"
 
+
 def test_map_pausing_state():
     """Test mapping of pausing in progress (detached + paused)."""
     assert map_lease_to_session_status("detached", "paused") == "paused"
@@ -30,10 +31,12 @@ def test_map_destroying_state():
     assert map_lease_to_session_status("detached", "destroyed") == "destroying"
     assert map_lease_to_session_status("paused", "destroyed") == "destroying"
 
+
 def test_case_insensitive():
     """Test that mapping is case-insensitive."""
     assert map_lease_to_session_status("DETACHED", "RUNNING") == "running"
     assert map_lease_to_session_status("Paused", "Paused") == "paused"
+
 
 def test_whitespace_handling():
     """Test that mapping handles whitespace."""

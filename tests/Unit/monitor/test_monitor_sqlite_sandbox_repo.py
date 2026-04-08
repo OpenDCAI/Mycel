@@ -390,7 +390,15 @@ def test_supabase_list_probe_targets_prefers_provider_session_id_matches_sqlite(
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                ("lease-running", "daytona_selfhost", "running", "detached", "instance-fallback", "2026-04-05T10:00:00", "2026-04-05T10:10:00"),
+                (
+                    "lease-running",
+                    "daytona_selfhost",
+                    "running",
+                    "detached",
+                    "instance-fallback",
+                    "2026-04-05T10:00:00",
+                    "2026-04-05T10:10:00",
+                ),
                 ("lease-paused", "local", "paused", "paused", "instance-local", "2026-04-05T10:00:01", "2026-04-05T10:11:00"),
                 ("lease-stopped", "docker", "stopped", "stopped", "instance-stopped", "2026-04-05T10:00:02", "2026-04-05T10:12:00"),
             ],

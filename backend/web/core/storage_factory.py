@@ -89,6 +89,8 @@ def make_chat_session_repo(db_path: Any = None) -> Any:
     from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 
     return SQLiteChatSessionRepo(db_path=db_path or _sandbox_db_path())
+
+
 def list_resource_snapshots(lease_ids: list[str]) -> dict[str, Any]:
     if _strategy() == "supabase":
         from storage.providers.supabase.resource_snapshot_repo import list_snapshots_by_lease_ids

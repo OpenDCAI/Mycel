@@ -48,9 +48,13 @@ def test_make_sandbox_monitor_repo_uses_supabase_for_supabase_strategy(monkeypat
 def test_make_sandbox_monitor_repo_supabase_requires_runtime_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
     monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr(
+        "backend.web.core.supabase_factory.create_supabase_client",
+        lambda: (_ for _ in ()).throw(RuntimeError("missing runtime config")),
+    )
     storage_factory._supabase_client.cache_clear()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="missing runtime config"):
         storage_factory.make_sandbox_monitor_repo()
 
 

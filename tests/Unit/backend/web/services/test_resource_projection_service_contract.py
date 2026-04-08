@@ -170,9 +170,7 @@ def test_list_resource_providers_keeps_sessions_under_unavailable_provider(monke
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {
-            tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids
-        },
+        lambda thread_ids: {tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
     monkeypatch.setattr(resource_projection_service.LocalSessionProvider, "get_metrics", lambda self, _session_id: None)
@@ -221,10 +219,7 @@ def test_list_resource_providers_keeps_remote_session_actor_first(monkeypatch):
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {
-            tid: {"agent_user_id": "agent-remote", "agent_name": "Remote Agent", "avatar_url": None}
-            for tid in thread_ids
-        },
+        lambda thread_ids: {tid: {"agent_user_id": "agent-remote", "agent_name": "Remote Agent", "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
     monkeypatch.setattr(resource_projection_service.LocalSessionProvider, "get_metrics", lambda self, _session_id: None)
