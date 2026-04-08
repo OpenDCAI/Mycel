@@ -19,6 +19,11 @@ interface UseBackgroundTasksProps {
 
 const threadTasksInflight = new Map<string, Promise<BackgroundTask[]>>();
 
+function isActiveThreadRoute(threadId: string): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.startsWith("/chat/hire/thread/") && path.endsWith(`/${encodeURIComponent(threadId)}`);
+}
+
 function loadThreadTasks(threadId: string): Promise<BackgroundTask[]> {
   const existing = threadTasksInflight.get(threadId);
   if (existing) return existing;
@@ -48,6 +53,10 @@ export function useBackgroundTasks({ threadId, subscribe }: UseBackgroundTasksPr
       const data = await loadThreadTasks(threadId);
       setTasks(data);
     } catch (err) {
+      // @@@background-tasks-route-teardown - browser navigation can leave the
+      // old thread task fetch resolving after the chat page already moved to a
+      // different route. Only log if this thread page is still active.
+      if (!isActiveThreadRoute(threadId)) return;
       console.error('[BackgroundTasks] Error fetching tasks:', err);
     }
   }, [threadId]);
