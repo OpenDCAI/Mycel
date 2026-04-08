@@ -63,6 +63,9 @@ class MessagingService:
             social_user_id=social_user_id,
         )
 
+    def resolve_display_user(self, social_user_id: str) -> Any | None:
+        return self._resolve_display_user(social_user_id)
+
     def _build_chat_entities(self, chat_id: str) -> list[dict[str, Any]]:
         entities_info = []
         for member in self._members_repo.list_members(chat_id):

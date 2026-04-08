@@ -1262,8 +1262,6 @@ class LeonAgent:
                     registry=self._tool_registry,
                     chat_identity_id=chat_identity_id,
                     messaging_service=repos.get("messaging_service"),
-                    user_repo=repos.get("user_repo"),
-                    thread_repo=self._thread_repo,
                 )
 
         # LSP tools — DEFERRED, always registered, multilspy checked at call time

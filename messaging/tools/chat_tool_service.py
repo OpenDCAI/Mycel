@@ -89,31 +89,18 @@ class ChatToolService:
         chat_identity_id: str | None = None,
         user_id: str | None = None,
         messaging_service: Any = None,  # MessagingService (new)
-        user_repo: Any = None,
-        thread_repo: Any = None,
     ) -> None:
         identity_id = chat_identity_id or user_id
         if not identity_id:
             raise ValueError("ChatToolService requires chat_identity_id or legacy user_id")
         self._chat_identity_id: str = identity_id
         self._messaging = messaging_service
-        self._user_repo = user_repo
-        self._thread_repo = thread_repo
         self._register(registry)
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
-        user = self._user_repo.get_by_id(social_user_id) if self._user_repo else None
-        if user is not None:
-            return user
-        if self._thread_repo is None:
+        if self._messaging is None:
             return None
-        thread = self._thread_repo.get_by_user_id(social_user_id)
-        if thread is None:
-            return None
-        agent_user_id = thread.get("agent_user_id")
-        if not agent_user_id or self._user_repo is None:
-            return None
-        return self._user_repo.get_by_id(agent_user_id)
+        return self._messaging.resolve_display_user(social_user_id)
 
     def _register(self, registry: ToolRegistry) -> None:
         self._register_list_chats(registry)
