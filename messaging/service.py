@@ -279,6 +279,9 @@ class MessagingService:
     def count_unread(self, chat_id: str, user_id: str) -> int:
         return self._messages.count_unread(chat_id, user_id)
 
+    def find_direct_chat_id(self, actor_id: str, target_id: str) -> str | None:
+        return self._members_repo.find_chat_between(actor_id, target_id)
+
     def search_messages(self, query: str, *, chat_id: str | None = None) -> list[dict[str, Any]]:
         return self._messages.search(query, chat_id=chat_id)
 
@@ -287,6 +290,16 @@ class MessagingService:
 
     def is_chat_member(self, chat_id: str, user_id: str) -> bool:
         return self._members_repo.is_member(chat_id, user_id)
+
+    def list_messages_by_time_range(
+        self,
+        chat_id: str,
+        *,
+        after: str | None = None,
+        before: str | None = None,
+    ) -> list[dict[str, Any]]:
+        rows = self._messages.list_by_time_range(chat_id, after=after, before=before)
+        return [self._normalize_message_row(row) for row in rows]
 
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None) -> None:
         self._members_repo.update_mute(chat_id, user_id, muted, mute_until)

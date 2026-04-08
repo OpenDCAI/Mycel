@@ -102,8 +102,6 @@ class ChatToolService:
         self._chat_identity_id: str = identity_id
         self._owner_id = owner_id
         self._messaging = messaging_service
-        self._chat_members = chat_member_repo
-        self._messages = messages_repo
         self._user_repo = user_repo
         self._thread_repo = thread_repo
         self._relationships = relationship_repo
@@ -146,14 +144,14 @@ class ChatToolService:
             limit = parsed["limit"]
             skip_last = parsed["skip_last"]
             fetch_count = limit + skip_last
-            msgs = self._messages.list_by_chat(chat_id, limit=fetch_count, viewer_id=self._chat_identity_id)
+            msgs = self._messaging.list_messages(chat_id, limit=fetch_count, viewer_id=self._chat_identity_id)
             if skip_last > 0:
                 msgs = msgs[: len(msgs) - skip_last] if len(msgs) > skip_last else []
             return msgs
         else:
             after_iso = datetime.fromtimestamp(parsed["after"], tz=UTC).isoformat() if parsed.get("after") else None
             before_iso = datetime.fromtimestamp(parsed["before"], tz=UTC).isoformat() if parsed.get("before") else None
-            return self._messages.list_by_time_range(chat_id, after=after_iso, before=before_iso)
+            return self._messaging.list_messages_by_time_range(chat_id, after=after_iso, before=before_iso)
 
     def _register_list_chats(self, registry: ToolRegistry) -> None:
         eid = self._chat_identity_id
@@ -213,7 +211,7 @@ class ChatToolService:
             if chat_id:
                 pass
             elif user_id:
-                chat_id = self._chat_members.find_chat_between(eid, user_id)
+                chat_id = self._messaging.find_direct_chat_id(eid, user_id)
                 if not chat_id:
                     target = self._resolve_display_user(user_id)
                     name = target.display_name if target else user_id
@@ -299,7 +297,7 @@ class ChatToolService:
             target_name = "chat"
 
             if chat_id:
-                if not self._chat_members.is_member(chat_id, eid):
+                if not self._messaging.is_chat_member(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
             elif user_id:
                 if user_id == eid:
@@ -398,7 +396,7 @@ class ChatToolService:
         def handle(query: str, user_id: str | None = None) -> str:
             chat_id = None
             if user_id:
-                chat_id = self._chat_members.find_chat_between(eid, user_id)
+                chat_id = self._messaging.find_direct_chat_id(eid, user_id)
                 if not chat_id:
                     target = self._resolve_display_user(user_id)
                     name = target.display_name if target else user_id
