@@ -77,7 +77,7 @@ export default function SandboxDetailSheet({
             {/* Agents */}
             <section>
               <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
-                成员
+                Agent
               </p>
               <div className="space-y-2">
                 {group.sessions.map((s) => (
