@@ -191,6 +191,7 @@ def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_mate
         threads_done=0,
     )
 
+    assert payload["status"] == "provisional"
     assert payload["kind"] == "bootstrap_failure"
     assert payload["tone"] == "danger"
     assert payload["headline"] == "Runner exited before evaluation threads materialized."
@@ -235,6 +236,7 @@ def test_build_evaluation_operator_surface_marks_running_waiting_for_threads():
         threads_done=0,
     )
 
+    assert payload["status"] == "running"
     assert payload["kind"] == "running_waiting_for_threads"
     assert payload["tone"] == "default"
     assert "actively running" in payload["headline"]
@@ -260,6 +262,7 @@ def test_build_evaluation_operator_surface_marks_completed_with_errors():
         threads_done=10,
     )
 
+    assert payload["status"] == "completed_with_errors"
     assert payload["kind"] == "completed_with_errors"
     assert payload["tone"] == "warning"
     assert "completed with recorded errors" in payload["headline"]
@@ -267,6 +270,48 @@ def test_build_evaluation_operator_surface_marks_completed_with_errors():
         "present": 4,
         "missing": 2,
         "total": 6,
+    }
+
+
+def test_monitor_evaluation_truth_defaults_to_explicit_unavailable_surface():
+    payload = monitor_service.get_monitor_evaluation_truth()
+
+    assert payload["status"] == "unavailable"
+    assert payload["kind"] == "unavailable"
+    assert payload["tone"] == "warning"
+    assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
+    assert payload["artifact_summary"] == {
+        "present": 0,
+        "missing": 0,
+        "total": 0,
+    }
+    assert payload["raw_notes"] is None
+
+
+def test_monitor_evaluation_dashboard_summary_reduces_operator_truth():
+    summary = monitor_service.build_monitor_evaluation_dashboard_summary(
+        {
+            "status": "running",
+            "kind": "running_active",
+            "tone": "default",
+            "headline": "Evaluation is actively running.",
+            "summary": "Long form summary that should not leak into dashboard shape.",
+            "facts": [],
+            "artifacts": [],
+            "artifact_summary": {"present": 2, "missing": 1, "total": 3},
+            "next_steps": [],
+            "raw_notes": "runner=direct rc=0",
+        }
+    )
+
+    assert summary == {
+        "evaluations_running": 1,
+        "latest_evaluation": {
+            "status": "running",
+            "kind": "running_active",
+            "tone": "default",
+            "headline": "Evaluation is actively running.",
+        },
     }
 
 
