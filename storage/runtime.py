@@ -25,11 +25,7 @@ def build_storage_container(
     public_client = (
         public_supabase_client
         if public_supabase_client is not None
-        else (
-            _resolve_supabase_client(public_supabase_client, public_supabase_client_factory)
-            if public_supabase_client_factory
-            else None
-        )
+        else (_resolve_supabase_client(public_supabase_client, public_supabase_client_factory) if public_supabase_client_factory else None)
     )
     return StorageContainer(supabase_client=client, public_supabase_client=public_client)
 
