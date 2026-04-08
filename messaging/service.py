@@ -17,6 +17,7 @@ from typing import Any
 
 from backend.web.utils.serializers import avatar_url
 from messaging.contracts import ContentType, MessageType
+from messaging.display_user import resolve_messaging_display_user
 
 logger = logging.getLogger(__name__)
 
@@ -56,18 +57,11 @@ class MessagingService:
         }
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
-        user = self._user_repo.get_by_id(social_user_id)
-        if user is not None:
-            return user
-        if self._thread_repo is None:
-            return None
-        thread = self._thread_repo.get_by_user_id(social_user_id)
-        if thread is None:
-            return None
-        agent_user_id = thread.get("agent_user_id")
-        if not agent_user_id:
-            return None
-        return self._user_repo.get_by_id(agent_user_id)
+        return resolve_messaging_display_user(
+            user_repo=self._user_repo,
+            thread_repo=self._thread_repo,
+            social_user_id=social_user_id,
+        )
 
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
