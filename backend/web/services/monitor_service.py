@@ -477,10 +477,7 @@ def _normalize_persisted_eval_status(raw_status: str | None) -> tuple[str, str, 
 
 def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
     status, kind, tone, headline = _normalize_persisted_eval_status(run.get("status"))
-    metrics_by_tier = {
-        str(row.get("tier") or "").strip().lower(): row.get("metrics") or {}
-        for row in metrics_rows
-    }
+    metrics_by_tier = {str(row.get("tier") or "").strip().lower(): row.get("metrics") or {} for row in metrics_rows}
     system_metrics = metrics_by_tier.get("system") or {}
     objective_metrics = metrics_by_tier.get("objective") or {}
     facts = [
