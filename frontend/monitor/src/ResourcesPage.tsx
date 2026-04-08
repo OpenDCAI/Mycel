@@ -407,6 +407,8 @@ function ProviderCard({
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const capabilityList = capabilityTags(provider.capabilities);
   const showCpuMetric = provider.cardCpu.used != null || provider.cardCpu.limit != null;
+  const showMemoryMetric = provider.telemetry.memory.used != null || provider.telemetry.memory.limit != null;
+  const showDiskMetric = provider.telemetry.disk.used != null || provider.telemetry.disk.limit != null;
   const runningMetric = {
     ...provider.telemetry.running,
     used: runningCount,
@@ -456,6 +458,8 @@ function ProviderCard({
         <div className="provider-card__metric-row">
           <MetricOrb label="运行数" metric={runningMetric} />
           {showCpuMetric && <MetricOrb label="CPU" metric={provider.cardCpu} />}
+          {showMemoryMetric && <MetricOrb label="RAM" metric={provider.telemetry.memory} />}
+          {showDiskMetric && <MetricOrb label="Disk" metric={provider.telemetry.disk} />}
         </div>
       )}
 
@@ -487,11 +491,16 @@ function ProviderCard({
 }
 
 function MetricOrb({ label, metric }: { label: string; metric: UsageMetric }) {
+  const value =
+    metric.used == null
+      ? "--"
+      : metric.unit === "%" || metric.unit === "GB"
+        ? formatMetric(metric.used, metric.unit)
+        : formatNumber(metric.used);
+
   return (
     <div className="metric-orb" title={metric.error || undefined}>
-      <div className="metric-orb__value">
-        {metric.used != null ? `${formatNumber(metric.used)}${metric.unit === "%" ? "%" : ""}` : "--"}
-      </div>
+      <div className="metric-orb__value">{value}</div>
       <div className="metric-orb__label">{label}</div>
       {metric.limit != null && <div className="metric-orb__sub">{formatMetric(metric.limit, metric.unit)}</div>}
     </div>
