@@ -61,11 +61,13 @@ def list_user_leases(
     own_repos = False
     try:
         rows = monitor_repo.list_leases_with_threads()
+        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None)
         grouped: dict[str, dict[str, Any]] = {}
         for row in rows:
             lease_id = str(row.get("lease_id") or "").strip()
             if not lease_id:
                 continue
+            runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
             group = grouped.setdefault(
                 lease_id,
                 {
@@ -81,6 +83,8 @@ def list_user_leases(
                     "agents": [],
                 },
             )
+            if runtime_session_id and not group.get("runtime_session_id"):
+                group["runtime_session_id"] = runtime_session_id
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id in group["thread_ids"]:
                 continue

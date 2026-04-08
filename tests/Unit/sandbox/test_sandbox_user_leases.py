@@ -4,11 +4,15 @@ from backend.web.services import sandbox_service
 
 
 class _FakeMonitorRepo:
-    def __init__(self, rows):
+    def __init__(self, rows, instance_ids=None):
         self._rows = rows
+        self._instance_ids = instance_ids or {}
 
     def list_leases_with_threads(self):
         return list(self._rows)
+
+    def query_lease_instance_id(self, lease_id: str):
+        return self._instance_ids.get(lease_id)
 
     def close(self):
         pass
@@ -181,6 +185,42 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
             "avatar_url": "/api/members/agent-1/avatar",
         },
     ]
+
+
+def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "recipe_id": "daytona:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/home/daytona/files/app",
+            "thread_id": "thread-parent",
+        },
+    ]
+    thread_repo = _FakeThreadRepo({"thread-parent": {"agent_user_id": "agent-1"}})
+    member_repo = _FakeMemberRepo(
+        {
+            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(
+        sandbox_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeMonitorRepo(rows, instance_ids={"lease-1": "provider-session-1"}),
+    )
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        member_repo=member_repo,
+    )
+
+    assert leases[0]["runtime_session_id"] == "provider-session-1"
 
 
 def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch):

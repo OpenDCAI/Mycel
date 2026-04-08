@@ -86,6 +86,7 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
                 "observed_state": "running",
                 "desired_state": "running",
                 "created_at": "2026-04-07T10:00:00Z",
+                "runtime_session_id": "provider-session-1",
             }
         ],
     )
@@ -121,6 +122,7 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
     assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
     assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
+    assert payload["providers"][0]["sessions"][0]["runtimeSessionId"] == "provider-session-1"
     assert payload["providers"][0]["sessions"][0]["startedAt"] == "2026-04-07T10:00:00Z"
 
 

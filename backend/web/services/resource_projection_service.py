@@ -62,7 +62,7 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
                 session_identity=f"{lease['lease_id']}:{thread_id}",
                 lease_id=str(lease["lease_id"]),
                 thread_id=thread_id,
-                runtime_session_id=None,
+                runtime_session_id=lease.get("runtime_session_id"),
                 owner=owner,
                 status=status,
                 started_at=str(lease.get("created_at") or ""),
