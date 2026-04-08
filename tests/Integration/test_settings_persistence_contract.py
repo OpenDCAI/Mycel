@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from backend.web.routers import settings as settings_router
 
@@ -50,6 +52,13 @@ def _request(repo: _FakeSettingsRepo | None):
     return SimpleNamespace(app=SimpleNamespace(state=state))
 
 
+def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
+    app = FastAPI()
+    app.state.user_settings_repo = repo
+    app.include_router(settings_router.router)
+    return app
+
+
 def test_resolve_settings_storage_marks_repo_backed(monkeypatch):
     req = _request(_FakeSettingsRepo())
     monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
@@ -91,6 +100,35 @@ def test_load_models_data_falls_back_to_user_json_without_repo_context(monkeypat
     data = settings_router._load_models_data(storage)
 
     assert data == {"pool": {"enabled": ["fallback"]}}
+
+
+def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch):
+    repo = _FakeSettingsRepo()
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "load_merged_models",
+        lambda: SimpleNamespace(
+            mapping={"default": SimpleNamespace(model="openai:gpt-5.4")},
+            providers={"openai": SimpleNamespace(api_key=None, base_url="https://api.openai.com")},
+            pool=SimpleNamespace(enabled=["openai:gpt-5.4"], custom=[]),
+        ),
+    )
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.get("/api/settings")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "default_workspace": "/repo/ws",
+        "recent_workspaces": ["/repo/ws", "/repo/alt"],
+        "default_model": "openai:gpt-5.4",
+        "model_mapping": {"default": "openai:gpt-5.4"},
+        "enabled_models": ["openai:gpt-5.4"],
+        "custom_models": [],
+        "custom_config": {},
+        "providers": {"openai": {"api_key": None, "base_url": "https://api.openai.com"}},
+    }
 
 
 @pytest.mark.asyncio
@@ -150,6 +188,23 @@ async def test_update_observation_settings_does_not_import_filesystem_when_repo_
     assert repo.saved_observation == {"active": "langsmith"}
 
 
+def test_update_observation_settings_route_does_not_import_filesystem_when_repo_row_missing(monkeypatch):
+    repo = _FakeSettingsRepo()
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "_load_user_json",
+        lambda *_parts: {"active": "legacy", "langfuse": {"public_key": "legacy-pk"}},
+    )
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post("/api/settings/observation", json={"active": "langsmith"})
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True, "active": "langsmith"}
+    assert repo.saved_observation == {"active": "langsmith"}
+
+
 @pytest.mark.asyncio
 async def test_save_sandbox_config_does_not_import_filesystem_when_repo_row_missing(
     monkeypatch,
@@ -169,6 +224,31 @@ async def test_save_sandbox_config_does_not_import_filesystem_when_repo_row_miss
     )
 
     assert result == {"success": True, "path": "supabase://user_settings/user-1/sandbox_configs/beta"}
+    assert "alpha" not in repo.saved_sandboxes
+    assert repo.saved_sandboxes["beta"]["provider"] == "local"
+    assert repo.saved_sandboxes["beta"]["name"] == "local"
+    assert repo.saved_sandboxes["beta"]["on_exit"] == "pause"
+
+
+def test_save_sandbox_config_route_does_not_import_filesystem_when_repo_row_missing(
+    monkeypatch,
+    tmp_path: Path,
+):
+    repo = _FakeSettingsRepo()
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    sandboxes_dir = tmp_path / "sandboxes"
+    sandboxes_dir.mkdir()
+    (sandboxes_dir / "alpha.json").write_text(json.dumps({"provider": "local"}), encoding="utf-8")
+    monkeypatch.setattr(settings_router, "user_home_read_candidates", lambda *_parts: [sandboxes_dir])
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post(
+            "/api/settings/sandboxes",
+            json={"name": "beta", "config": {"provider": "local"}},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True, "path": "supabase://user_settings/user-1/sandbox_configs/beta"}
     assert "alpha" not in repo.saved_sandboxes
     assert repo.saved_sandboxes["beta"]["provider"] == "local"
     assert repo.saved_sandboxes["beta"]["name"] == "local"
