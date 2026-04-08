@@ -46,6 +46,11 @@ const TABS: { id: Tab; label: string; icon: typeof Cpu; desc: string }[] = [
   { id: "invite", label: "邀请码", icon: Ticket, desc: "管理注册邀请码" },
 ];
 
+function isActiveSettingsRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/settings";
+}
+
 function formatInviteDate(dateStr?: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -306,6 +311,10 @@ export default function SettingsPage() {
       setSandboxes(sandboxesData.sandboxes || {});
       setObservationConfig(observationData);
     } catch (err) {
+      // @@@settings-route-teardown - settings bootstrap requests can finish
+      // after navigation already left /settings. Only surface failures while
+      // this route is still active; otherwise this is stale UI noise.
+      if (!isActiveSettingsRoute()) return;
       console.error("Failed to load settings:", err);
       setError(err instanceof Error ? err.message : "加载设置失败");
     } finally {
