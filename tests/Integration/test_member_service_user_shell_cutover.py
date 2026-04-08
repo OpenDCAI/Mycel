@@ -147,6 +147,10 @@ def _write_member_shell(member_dir: Path, *, name: str = "Toad", description: st
     )
 
 
+def _snapshot_tree(root: Path) -> dict[str, str]:
+    return {str(path.relative_to(root)): path.read_text(encoding="utf-8") for path in sorted(root.rglob("*")) if path.is_file()}
+
+
 def test_list_members_uses_user_repo_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
@@ -387,6 +391,48 @@ def test_update_member_uses_repo_even_when_member_dir_is_absent(monkeypatch: pyt
     assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
 
 
+def test_update_member_prefers_repo_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    member_dir = tmp_path / "agent-1"
+    _write_member_shell(member_dir, name="Legacy Toad", description="legacy shell")
+    before = _snapshot_tree(member_dir)
+    user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+    agent_config_repo = _FakeAgentConfigRepo()
+    agent_config_repo.save_config(
+        "cfg-1",
+        {
+            "agent_user_id": "agent-1",
+            "name": "Toad",
+            "description": "helper",
+            "tools": ["*"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {},
+            "mcp": {},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+    )
+
+    result = member_service.update_member(
+        "agent-1",
+        name="Dryad",
+        description="analyst",
+        status="active",
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
+
+    assert result is not None
+    assert result["name"] == "Dryad"
+    assert result["description"] == "analyst"
+    assert result["status"] == "active"
+    assert user_repo.updated == [("agent-1", {"display_name": "Dryad"})]
+    assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
+    assert _snapshot_tree(member_dir) == before
+
+
 def test_update_member_config_uses_repo_even_when_member_dir_is_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
@@ -438,6 +484,57 @@ def test_update_member_config_uses_repo_even_when_member_dir_is_absent(monkeypat
     assert saved_config["mcp"] == {"filesystem": {"command": "uvx", "args": ["mcp"], "env": {"A": "1"}, "disabled": False}}
 
 
+def test_update_member_config_prefers_repo_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class _ExplodingAgentLoader:
+        def load_bundle(self, _member_dir: Path) -> object:
+            raise AssertionError("legacy member dir should not drive repo-backed config sync")
+
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    monkeypatch.setattr(member_service, "AgentLoader", _ExplodingAgentLoader)
+    member_dir = tmp_path / "agent-1"
+    _write_member_shell(member_dir)
+    before = _snapshot_tree(member_dir)
+    user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+    agent_config_repo = _FakeAgentConfigRepo()
+    agent_config_repo.save_config(
+        "cfg-1",
+        {
+            "agent_user_id": "agent-1",
+            "name": "Toad",
+            "description": "helper",
+            "tools": ["search"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
+            "mcp": {"filesystem": {"command": "npx", "args": ["-y"], "env": {}, "disabled": False}},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+    )
+
+    result = member_service.update_member_config(
+        "agent-1",
+        {
+            "prompt": "updated prompt",
+            "rules": [{"name": "guard", "content": "be careful"}],
+            "tools": [{"name": "send_message", "enabled": True, "desc": "Send"}],
+            "skills": [{"name": "lookup", "enabled": True, "desc": "Lookup"}],
+            "mcps": [{"name": "filesystem", "command": "uvx", "args": ["mcp"], "env": {"A": "1"}, "disabled": False}],
+            "subAgents": [{"name": "Guide", "desc": "helper", "tools": [], "system_prompt": "guide"}],
+        },
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
+
+    assert result is not None
+    assert result["config"]["prompt"] == "updated prompt"
+    assert result["config"]["rules"] == [{"name": "guard", "content": "be careful"}]
+    assert [row["name"] for row in agent_config_repo.list_skills("cfg-1")] == ["lookup"]
+    assert [row["name"] for row in agent_config_repo.list_sub_agents("cfg-1")] == ["Guide"]
+    assert _snapshot_tree(member_dir) == before
+
+
 def test_publish_member_reads_and_writes_repo_by_agent_config_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     _write_member_shell(tmp_path / "agent-1")
@@ -477,6 +574,39 @@ def test_publish_member_uses_repo_even_when_member_dir_is_absent(monkeypatch: py
     assert result["status"] == "active"
     assert result["version"] == "0.1.1"
     assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
+
+
+def test_publish_member_prefers_repo_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonKeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    member_dir = tmp_path / "agent-1"
+    _write_member_shell(member_dir)
+    before = _snapshot_tree(member_dir)
+    user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+    agent_config_repo = _FakeAgentConfigRepo()
+    agent_config_repo.save_config(
+        "cfg-1",
+        {
+            "agent_user_id": "agent-1",
+            "name": "Toad",
+            "description": "helper",
+            "tools": ["*"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {},
+            "mcp": {},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+    )
+
+    result = member_service.publish_member("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
+
+    assert result is not None
+    assert result["status"] == "active"
+    assert result["version"] == "0.1.1"
+    assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
+    assert _snapshot_tree(member_dir) == before
 
 
 def test_delete_member_deletes_user_and_agent_config_by_agent_config_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

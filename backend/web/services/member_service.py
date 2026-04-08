@@ -520,16 +520,8 @@ def update_member(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
-    member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
-        if user_repo is None or agent_config_repo is None:
-            return None
-        user = user_repo.get_by_id(member_id)
-        if user is None or user.agent_config_id is None:
-            return None
-        config = agent_config_repo.get_config(user.agent_config_id)
-        if config is None:
-            return None
+    user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if user is not None and config is not None:
         allowed = {"name", "description", "status"}
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if not updates:
@@ -547,6 +539,10 @@ def update_member(
             },
         )
         return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+
+    member_dir = MEMBERS_DIR / member_id
+    if not member_dir.is_dir():
+        return None
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
@@ -604,11 +600,13 @@ def update_member_config(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
+    user, _config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if user is not None and _config is not None:
+        return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
+
     member_dir = MEMBERS_DIR / member_id
     if not member_dir.is_dir():
-        if user_repo is None or agent_config_repo is None:
-            return None
-        return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
+        return None
 
     # prompt → agent.md body
     if "prompt" in config_patch and config_patch["prompt"] is not None:
@@ -978,18 +976,16 @@ def _write_mcps(member_dir: Path, mcps: list[dict[str, Any]]) -> None:
 
 
 def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
-    member_dir = MEMBERS_DIR / member_id
-    user = None
-    config = None
-    if user_repo is not None:
-        user = user_repo.get_by_id(member_id)
-    if agent_config_repo and user is not None and user.agent_config_id is not None:
-        config = agent_config_repo.get_config(user.agent_config_id)
-    if not member_dir.is_dir() and config is None:
-        return None
+    user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if user is not None and config is not None:
+        current_version = config.get("version", "0.1.0")
+    else:
+        member_dir = MEMBERS_DIR / member_id
+        if not member_dir.is_dir():
+            return None
+        meta = _read_json(member_dir / "meta.json", {})
+        current_version = meta.get("version", "0.1.0")
 
-    meta = _read_json(member_dir / "meta.json", {}) if member_dir.is_dir() else {}
-    current_version = meta.get("version") or (config or {}).get("version", "0.1.0")
     parts = current_version.split(".")
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
     if bump_type == "major":
@@ -998,33 +994,43 @@ def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = No
         minor, patch = minor + 1, 0
     else:
         patch += 1
-    meta["version"] = f"{major}.{minor}.{patch}"
-    meta["status"] = "active"
-    meta["updated_at"] = int(time.time() * 1000)
-    if member_dir.is_dir():
+    next_version = f"{major}.{minor}.{patch}"
+    updated_at = int(time.time() * 1000)
+
+    if user is None or config is None:
+        meta["version"] = next_version
+        meta["status"] = "active"
+        meta["updated_at"] = updated_at
         _write_json(member_dir / "meta.json", meta)
 
-    # Dual-write publish status to Supabase repo
-    if agent_config_repo:
-        if user_repo is None:
-            raise RuntimeError("user_repo is required when publishing member config to agent_config_repo")
-        if user is None or user.agent_config_id is None:
-            raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
-        try:
-            if config:
-                agent_config_repo.save_config(
-                    user.agent_config_id,
-                    {
-                        **config,
-                        "version": meta["version"],
-                        "status": "active",
-                        "updated_at": meta["updated_at"],
-                    },
-                )
-        except Exception:
-            logger.warning("Failed to update repo for publish of %s", member_id, exc_info=True)
+    if user is not None and config is not None:
+        agent_config_repo.save_config(
+            user.agent_config_id,
+            {
+                **config,
+                "version": next_version,
+                "status": "active",
+                "updated_at": updated_at,
+            },
+        )
 
     return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+
+
+def _resolve_repo_backed_agent(
+    member_id: str, user_repo: Any = None, agent_config_repo: Any = None
+) -> tuple[Any | None, dict[str, Any] | None]:
+    if user_repo is None or agent_config_repo is None:
+        return None, None
+    user = user_repo.get_by_id(member_id)
+    if user is None or user.agent_config_id is None:
+        return None, None
+    # @@@repo-backed-agent-wins - repo-backed agent users must not silently fall
+    # back to legacy member-dir writes just because an old shell still exists.
+    config = agent_config_repo.get_config(user.agent_config_id)
+    if config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+    return user, config
 
 
 def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> bool:
