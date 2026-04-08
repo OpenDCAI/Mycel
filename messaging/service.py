@@ -294,6 +294,10 @@ class MessagingService:
                             "avatar_url": avatar_url(e.id, bool(e.avatar)),
                         }
                     )
+            other_entities = [entity for entity in entities_info if entity["id"] != user_id]
+            other_names = [entity["name"] for entity in other_entities if entity.get("name")]
+            title = chat.title or ", ".join(other_names) or "Chat"
+            chat_avatar_url = other_entities[0]["avatar_url"] if other_entities else None
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
             if msgs:
@@ -308,9 +312,11 @@ class MessagingService:
             result.append(
                 {
                     "id": cid,
-                    "title": chat.title,
+                    "title": title,
                     "status": chat.status,
                     "created_at": chat.created_at,
+                    "updated_at": getattr(chat, "updated_at", None) or getattr(chat, "created_at", None),
+                    "avatar_url": chat_avatar_url,
                     "entities": entities_info,
                     "last_message": last_msg,
                     "unread_count": unread,
