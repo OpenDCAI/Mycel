@@ -671,6 +671,11 @@ function SandboxCard({
     group.status === "running" &&
     Boolean(group.leaseId) &&
     !group.sessions.some((session) => Boolean(session.runtimeSessionId));
+  const showQuotaOnlyDiskTruth =
+    metrics != null &&
+    metrics.disk == null &&
+    metrics.diskLimit != null &&
+    Boolean(metrics.diskNote || metrics.probeError);
 
   return (
     <button type="button" className={`sandbox-card sandbox-card--${group.status}`} onClick={onOpen}>
@@ -699,6 +704,7 @@ function SandboxCard({
           // before the operator drills into a guaranteed-failing file browser.
           <div className="sandbox-card__warning">无 active runtime</div>
         )}
+        {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">Disk 仅配额</div>}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
