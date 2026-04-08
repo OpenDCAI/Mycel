@@ -27,6 +27,11 @@ const PROVIDER_CONFIGS = [
   },
 ];
 
+function isActiveSettingsRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/settings";
+}
+
 export default function ProvidersSection({ providers, onUpdate }: ProvidersSectionProps) {
   const [saving, setSaving] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
@@ -51,6 +56,10 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
       setSuccessMessage(providerId);
       setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
     } catch (error) {
+      // @@@provider-route-teardown - provider saves can resolve after
+      // navigation already left /settings. Only log while the settings route
+      // is still active; otherwise this is stale UI noise.
+      if (!isActiveSettingsRoute()) return;
       console.error("Failed to save provider:", error);
     } finally {
       setSaving(null);
