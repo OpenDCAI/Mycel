@@ -19,15 +19,15 @@ export default function ContactList() {
   const [createOpen, setCreateOpen] = useState(false);
   const { id: activeId } = useParams<{ id?: string }>();
 
-  const members = useAppStore((s) => s.memberList);
-  const fetchMembers = useAppStore((s) => s.fetchMembers);
+  const agentsState = useAppStore((s) => s.agentList);
+  const fetchAgents = useAppStore((s) => s.fetchAgents);
 
   useEffect(() => {
-    void fetchMembers();
-  }, [fetchMembers]);
+    void fetchAgents();
+  }, [fetchAgents]);
 
   // Filter agents (non-builtin members)
-  const agents = members.filter((m) => !m.builtin);
+  const agents = agentsState.filter((m) => !m.builtin);
   const filtered = search
     ? agents.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()))
     : agents;

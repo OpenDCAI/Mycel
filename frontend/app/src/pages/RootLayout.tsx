@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { MessageSquare, Users, Store, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { uploadMemberAvatar } from "@/api/client";
+import { uploadUserAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
@@ -48,7 +48,7 @@ function AuthenticatedLayout() {
     const file = e.target.files?.[0];
     if (!file || !authUser) return;
     try {
-      await uploadMemberAvatar(authUser.id, file);
+      await uploadUserAvatar(authUser.id, file);
       setAvatarRev(r => r + 1);
       // Persist avatar flag so it survives page refresh
       useAuthStore.setState(s => ({ user: s.user ? { ...s.user, avatar: `avatars/${authUser.id}.png` } : s.user }));

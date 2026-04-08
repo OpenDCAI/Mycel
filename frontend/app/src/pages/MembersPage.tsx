@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Plus, Zap, Users, Wrench, Plug, SearchX, ArrowUpDown, AlertTriangle, RefreshCw, MessageSquare, Copy, Trash2, Bot, Camera } from "lucide-react";
 import MemberAvatar from "@/components/MemberAvatar";
-import { uploadMemberAvatar } from "@/api/client";
+import { uploadUserAvatar } from "@/api/client";
 import { useNavigate } from "react-router-dom";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -28,7 +28,7 @@ function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; 
     if (!file) return;
     setUploading(true);
     try {
-      await uploadMemberAvatar(memberId, file);
+      await uploadUserAvatar(memberId, file);
       setRev((r) => r + 1);
       toast.success("头像已更新");
     } catch (err) { toast.error(`上传失败: ${err instanceof Error ? err.message : "unknown"}`); }
@@ -57,17 +57,17 @@ export default function MembersPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft" | "inactive">("all");
   const [sortBy, setSortBy] = useState<SortKey>(null);
   const navigate = useNavigate();
-  const memberList = useAppStore(s => s.memberList);
+  const agentList = useAppStore(s => s.agentList);
   const loadAll = useAppStore(s => s.loadAll);
   const error = useAppStore(s => s.error);
   const retry = useAppStore(s => s.retry);
-  const deleteMember = useAppStore(s => s.deleteMember);
-  const addMember = useAppStore(s => s.addMember);
-  const updateMemberConfig = useAppStore(s => s.updateMemberConfig);
+  const deleteAgent = useAppStore(s => s.deleteAgent);
+  const addAgent = useAppStore(s => s.addAgent);
+  const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  let filtered = memberList.filter((s) => {
+  let filtered = agentList.filter((s) => {
     if (statusFilter !== "all" && s.status !== statusFilter) return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.description.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -86,7 +86,7 @@ export default function MembersPage() {
       <div className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-foreground">成员</h2>
-          <span className="text-xs text-muted-foreground font-mono">{memberList.length}</span>
+          <span className="text-xs text-muted-foreground font-mono">{agentList.length}</span>
         </div>
         <button onClick={() => setCreateOpen(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast">
           <Plus className="w-4 h-4" />
@@ -103,7 +103,7 @@ export default function MembersPage() {
 
         <div className="flex items-center gap-1.5 shrink-0">
           {(["all", "active", "draft", "inactive"] as const).map((s) => {
-            const count = s === "all" ? memberList.length : memberList.filter((st) => st.status === s).length;
+            const count = s === "all" ? agentList.length : agentList.filter((st) => st.status === s).length;
             return (
               <button key={s} onClick={() => setStatusFilter(s)} className={`px-2 py-1 rounded-md text-xs transition-colors duration-fast whitespace-nowrap ${
                 statusFilter === s ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -140,7 +140,7 @@ export default function MembersPage() {
             </button>
           </div>
         ) : filtered.length === 0 ? (
-          memberList.length === 0 ? (
+          agentList.length === 0 ? (
             /* Truly empty — no members at all */
             <div className="flex flex-col items-center justify-center py-24">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
@@ -183,8 +183,8 @@ export default function MembersPage() {
               const handleCopy = async (e: React.MouseEvent) => {
                 e.stopPropagation();
                 try {
-                  const newMember = await addMember(`${member.name} (副本)`, member.description);
-                  await updateMemberConfig(newMember.id, {
+                  const newAgent = await addAgent(`${member.name} (副本)`, member.description);
+                  await updateAgentConfig(newAgent.id, {
                     prompt: member.config.prompt,
                     tools: member.config.tools,
                     mcps: member.config.mcps,
@@ -199,7 +199,7 @@ export default function MembersPage() {
                 e.stopPropagation();
                 if (isBuiltin) return;
                 try {
-                  await deleteMember(member.id);
+                  await deleteAgent(member.id);
                   toast.success("已删除");
                 } catch { toast.error("删除失败"); }
               };

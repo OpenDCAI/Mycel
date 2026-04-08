@@ -88,10 +88,10 @@ describe("thread api client contract", () => {
     );
   });
 
-  it("uploadMemberAvatar sends user avatar path instead of members path", async () => {
+  it("uploadUserAvatar sends user avatar path instead of members path", async () => {
     authFetch.mockResolvedValue(okJson({ ok: true }));
 
-    await api.uploadMemberAvatar("agent-1", new File(["png"], "avatar.png", { type: "image/png" }));
+    await api.uploadUserAvatar("agent-1", new File(["png"], "avatar.png", { type: "image/png" }));
 
     expect(authFetch).toHaveBeenCalledWith(
       "/api/users/agent-1/avatar",

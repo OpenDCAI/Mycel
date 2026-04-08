@@ -13,7 +13,7 @@ interface NewChatDialogProps {
 
 export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const navigate = useNavigate();
-  const memberList = useAppStore(s => s.memberList);
+  const agentList = useAppStore(s => s.agentList);
   const loadAll = useAppStore(s => s.loadAll);
   const [filter, setFilter] = useState("");
 
@@ -25,14 +25,14 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
   }, [open, loadAll]);
 
   const filtered = useMemo(() => {
-    if (!filter) return memberList;
+    if (!filter) return agentList;
     const q = filter.toLowerCase();
-    return memberList.filter(m =>
+    return agentList.filter(m =>
       m.name.toLowerCase().includes(q) || m.description?.toLowerCase().includes(q)
     );
-  }, [memberList, filter]);
+  }, [agentList, filter]);
 
-  const handleSelect = (member: typeof memberList[0]) => {
+  const handleSelect = (member: typeof agentList[0]) => {
     onOpenChange(false);
     navigate(`/chat/hire/${member.id}`);
   };
@@ -59,7 +59,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
         <div className="border-t max-h-80 overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              {memberList.length === 0 ? "暂无成员" : "无匹配结果"}
+              {agentList.length === 0 ? "暂无成员" : "无匹配结果"}
             </p>
           ) : (
             filtered.map(member => (

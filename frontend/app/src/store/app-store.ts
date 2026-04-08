@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type {
-  Member, Task, ResourceItem, UserProfile,
-  MemberConfig, TaskStatus, CronJob,
+  Agent, Task, ResourceItem, UserProfile,
+  AgentConfig, TaskStatus, CronJob,
 } from "./types";
 import { useAuthStore } from "./auth-store";
 
@@ -10,7 +10,7 @@ let loadAllInflight: Promise<void> | null = null;
 
 interface AppState {
   // ── Data ──
-  memberList: Member[];
+  agentList: Agent[];
   taskList: Task[];
   cronJobs: CronJob[];
   librarySkills: ResourceItem[];
@@ -26,14 +26,14 @@ interface AppState {
   retry: () => Promise<void>;
   resetSessionData: () => void;
 
-  // ── Members ──
-  fetchMembers: () => Promise<void>;
-  addMember: (name: string, description?: string) => Promise<Member>;
-  updateMember: (id: string, fields: Partial<Member>) => Promise<void>;
-  updateMemberConfig: (id: string, patch: Partial<MemberConfig>) => Promise<void>;
-  publishMember: (id: string, bumpType: string) => Promise<Member>;
-  deleteMember: (id: string) => Promise<void>;
-  getMemberById: (id: string) => Member | undefined;
+  // ── Agents ──
+  fetchAgents: () => Promise<void>;
+  addAgent: (name: string, description?: string) => Promise<Agent>;
+  updateAgent: (id: string, fields: Partial<Agent>) => Promise<void>;
+  updateAgentConfig: (id: string, patch: Partial<AgentConfig>) => Promise<void>;
+  publishAgent: (id: string, bumpType: string) => Promise<Agent>;
+  deleteAgent: (id: string) => Promise<void>;
+  getAgentById: (id: string) => Agent | undefined;
 
   // ── Tasks ──
   fetchTasks: () => Promise<void>;
@@ -69,7 +69,7 @@ interface AppState {
   updateProfile: (fields: Partial<UserProfile>) => Promise<void>;
 
   // ── Helpers ──
-  getMemberNames: () => { id: string; name: string }[];
+  getAgentNames: () => { id: string; name: string }[];
   getResourceUsedBy: (type: string, name: string) => string[];
 }
 
@@ -92,7 +92,7 @@ function getLibraryStateKey(type: string): LibraryStateKey {
 
 function emptySessionState() {
   return {
-    memberList: [],
+    agentList: [],
     taskList: [],
     cronJobs: [],
     librarySkills: [],
@@ -126,9 +126,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       try {
         // @@@load-all-singleflight - RootLayout can mount twice in dev StrictMode and /threads
         // index redirect now avoids AppLayout, so keep the global panel bootstrap idempotent
-        // instead of firing duplicate members/tasks/library/profile bursts.
+        // instead of firing duplicate agents/tasks/library/profile bursts.
         await Promise.all([
-          get().fetchMembers(),
+          get().fetchAgents(),
           get().fetchTasks(),
           get().fetchCronJobs(),
           get().fetchLibrary("skill"),
@@ -165,51 +165,51 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   // ── Agents ──
-  fetchMembers: async () => {
-    const data = await api<{ items: Member[] }>("/agents");
-    set({ memberList: data.items });
+  fetchAgents: async () => {
+    const data = await api<{ items: Agent[] }>("/agents");
+    set({ agentList: data.items });
   },
 
-  addMember: async (name, description = "") => {
-    const member = await api<Member>("/agents", {
+  addAgent: async (name, description = "") => {
+    const agent = await api<Agent>("/agents", {
       method: "POST",
       body: JSON.stringify({ name, description }),
     });
-    set((s) => ({ memberList: [member, ...s.memberList] }));
-    return member;
+    set((s) => ({ agentList: [agent, ...s.agentList] }));
+    return agent;
   },
 
-  updateMember: async (id, fields) => {
-    const updated = await api<Member>(`/agents/${id}`, {
+  updateAgent: async (id, fields) => {
+    const updated = await api<Agent>(`/agents/${id}`, {
       method: "PUT",
       body: JSON.stringify(fields),
     });
-    set((s) => ({ memberList: s.memberList.map((x) => (x.id === id ? updated : x)) }));
+    set((s) => ({ agentList: s.agentList.map((x) => (x.id === id ? updated : x)) }));
   },
 
-  updateMemberConfig: async (id, patch) => {
-    const updated = await api<Member>(`/agents/${id}/config`, {
+  updateAgentConfig: async (id, patch) => {
+    const updated = await api<Agent>(`/agents/${id}/config`, {
       method: "PUT",
       body: JSON.stringify(patch),
     });
-    set((s) => ({ memberList: s.memberList.map((x) => (x.id === id ? updated : x)) }));
+    set((s) => ({ agentList: s.agentList.map((x) => (x.id === id ? updated : x)) }));
   },
 
-  publishMember: async (id, bumpType) => {
-    const updated = await api<Member>(`/agents/${id}/publish`, {
+  publishAgent: async (id, bumpType) => {
+    const updated = await api<Agent>(`/agents/${id}/publish`, {
       method: "PUT",
       body: JSON.stringify({ bump_type: bumpType }),
     });
-    set((s) => ({ memberList: s.memberList.map((x) => (x.id === id ? updated : x)) }));
+    set((s) => ({ agentList: s.agentList.map((x) => (x.id === id ? updated : x)) }));
     return updated;
   },
 
-  deleteMember: async (id) => {
+  deleteAgent: async (id) => {
     await api(`/agents/${id}`, { method: "DELETE" });
-    set((s) => ({ memberList: s.memberList.filter((x) => x.id !== id) }));
+    set((s) => ({ agentList: s.agentList.filter((x) => x.id !== id) }));
   },
 
-  getMemberById: (id) => get().memberList.find((x) => x.id === id),
+  getAgentById: (id) => get().agentList.find((x) => x.id === id),
 
   // ── Tasks ──
   fetchTasks: async () => {
@@ -370,12 +370,12 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   // ── Helpers ──
-  getMemberNames: () => get().memberList.map((s) => ({ id: s.id, name: s.name })),
+  getAgentNames: () => get().agentList.map((s) => ({ id: s.id, name: s.name })),
 
   getResourceUsedBy: (type, name) => {
     if (type === "recipe") return [];
     const key = type === "skill" ? "skills" : type === "mcp" ? "mcps" : "subAgents";
-    return get().memberList.filter((s) =>
+    return get().agentList.filter((s) =>
       (s.config?.[key as keyof typeof s.config] as { name: string }[] | undefined)?.some((i) => i.name === name)
     ).map((s) => s.name);
   },

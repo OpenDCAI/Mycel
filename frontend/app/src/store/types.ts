@@ -1,4 +1,4 @@
-export type MemberStatus = "active" | "draft" | "inactive";
+export type AgentStatus = "active" | "draft" | "inactive";
 
 export interface CrudItem {
   id?: string;
@@ -29,7 +29,7 @@ export interface McpItem {
   disabled: boolean;
 }
 
-export interface MemberConfig {
+export interface AgentConfig {
   prompt: string;
   rules: RuleItem[];
   tools: CrudItem[];
@@ -38,14 +38,14 @@ export interface MemberConfig {
   subAgents: SubAgent[];
 }
 
-export interface Member {
+export interface Agent {
   id: string;
   name: string;
   description: string;
-  status: MemberStatus;
+  status: AgentStatus;
   version: string;
   avatar_url?: string;
-  config: MemberConfig;
+  config: AgentConfig;
   created_at: number;
   updated_at: number;
   builtin?: boolean;
@@ -113,8 +113,3 @@ export interface UserProfile {
   initials: string;
   email: string;
 }
-
-// Backward compatibility aliases
-export type StaffStatus = MemberStatus;
-export type StaffConfig = MemberConfig;
-export type Staff = Member;

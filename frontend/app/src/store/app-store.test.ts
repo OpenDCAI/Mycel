@@ -33,14 +33,14 @@ describe("app store agent panel contract", () => {
     });
   });
 
-  it("fetchMembers hits /agents instead of /members", async () => {
+  it("fetchAgents hits /agents instead of /members", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ items: [] }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await useAppStore.getState().fetchMembers();
+    await useAppStore.getState().fetchAgents();
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/panel/agents",
@@ -66,11 +66,11 @@ describe("app store agent panel contract", () => {
       });
     vi.stubGlobal("fetch", fetchMock);
 
-    await useAppStore.getState().addMember("Toad", "helper");
-    await useAppStore.getState().updateMember("agent-1", { name: "Dryad" });
-    await useAppStore.getState().updateMemberConfig("agent-1", { prompt: "hello" });
-    await useAppStore.getState().publishMember("agent-1", "minor");
-    await useAppStore.getState().deleteMember("agent-1");
+    await useAppStore.getState().addAgent("Toad", "helper");
+    await useAppStore.getState().updateAgent("agent-1", { name: "Dryad" });
+    await useAppStore.getState().updateAgentConfig("agent-1", { prompt: "hello" });
+    await useAppStore.getState().publishAgent("agent-1", "minor");
+    await useAppStore.getState().deleteAgent("agent-1");
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -115,7 +115,7 @@ describe("app store agent panel contract", () => {
 
   it("resets loaded member state when auth identity changes", () => {
     useAppStore.setState({
-      memberList: [{ id: "m-old", name: "Old", status: "active" } as never],
+      agentList: [{ id: "m-old", name: "Old", status: "active" } as never],
       loaded: true,
       error: "stale",
     });
@@ -123,7 +123,7 @@ describe("app store agent panel contract", () => {
     useAppStore.getState().resetSessionData();
 
     const state = useAppStore.getState();
-    expect(state.memberList).toEqual([]);
+    expect(state.agentList).toEqual([]);
     expect(state.loaded).toBe(false);
     expect(state.error).toBeNull();
   });

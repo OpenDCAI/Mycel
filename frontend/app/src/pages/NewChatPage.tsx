@@ -141,10 +141,10 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const [configSnapshot, setConfigSnapshot] = useState<ConfigSnapshot | null>(null);
 
   const authAgent = useAuthStore(s => s.agent);
-  const memberList = useAppStore(s => s.memberList);
+  const agentList = useAppStore(s => s.agentList);
   const libraryRecipes = useAppStore(s => s.libraryRecipes);
   const decodedAgentId = agentId ? decodeURIComponent(agentId) : null;
-  const resolvedMember = decodedAgentId ? memberList.find(m => m.id === decodedAgentId) : undefined;
+  const resolvedMember = decodedAgentId ? agentList.find(m => m.id === decodedAgentId) : undefined;
   const isOwnedAgent = decodedAgentId === authAgent?.id;
   const memberName = resolvedMember?.name ?? (isOwnedAgent ? (authAgent?.name || "Agent") : "Agent");
   const memberAvatarUrl = resolvedMember?.avatar_url;

@@ -18,7 +18,7 @@ vi.mock("zustand/middleware", async () => {
 });
 
 vi.mock("@/api/client", () => ({
-  uploadMemberAvatar: vi.fn(),
+  uploadUserAvatar: vi.fn(),
 }));
 
 vi.mock("@/components/ui/popover", () => ({
