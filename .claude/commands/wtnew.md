@@ -1,6 +1,8 @@
 # 创建 Worktree
 
-基于最新 `origin/dev` 创建隔离的 worktree 开发环境，并自动拉起一个并行工作的 Kitty + Codex 开发位。
+基于最新 `origin/<base-branch>` 创建隔离的 worktree 开发环境，并自动拉起一个并行工作的 Kitty + Codex 开发位。
+
+`<base-branch>` = 从对话上下文确定的项目默认开发分支。
 
 ## 参数
 
@@ -21,7 +23,7 @@ PROJECT_NAME=$(basename "$MAIN_REPO")
 git fetch origin
 ```
 
-确保基于最新的 `origin/dev` 创建，避免从过时的 base 分叉。
+确保基于最新的 `origin/<base-branch>` 创建，避免从过时的 base 分叉。
 
 ## Step 2：启用 worktreeConfig
 
@@ -38,7 +40,7 @@ git config extensions.worktreeConfig true
 路径规则：`~/worktrees/<项目名>--<目录名>`（如 `~/worktrees/leon--feat-eval`）
 
 ```bash
-git worktree add "$HOME/worktrees/$PROJECT_NAME--<目录名>" -b $ARGUMENTS origin/dev
+git worktree add "$HOME/worktrees/$PROJECT_NAME--<目录名>" -b $ARGUMENTS origin/<base-branch>
 ```
 
 - worktree 存放在 `~/worktrees/`，与主仓库完全隔离
@@ -163,7 +165,7 @@ ln -s "$MAIN_REPO/CLAUDE.local.md" CLAUDE.local.md 2>/dev/null
 输出：
 - worktree 路径
 - 分支名
-- base 分支（必须明确是 `origin/dev`）
+- base 分支（明确标注实际使用的 `origin/<base-branch>`）
 - 分配的端口（backend / frontend）
 - 自动生成的描述
 - `CLAUDE.local.md` 符号链接状态
