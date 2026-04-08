@@ -157,7 +157,7 @@ class SupabaseLeaseRepo:
                 "version": (existing.get("version") or 0) + 1,
                 "observed_at": now,
                 "last_error": None,
-                "needs_refresh": True,
+                "needs_refresh": 1,
                 "refresh_hint_at": now,
                 "status": "active",
                 "updated_at": now,
@@ -187,7 +187,7 @@ class SupabaseLeaseRepo:
             self._leases()
             .update(
                 {
-                    "needs_refresh": True,
+                    "needs_refresh": 1,
                     "refresh_hint_at": hinted_at,
                     "updated_at": now,
                 }

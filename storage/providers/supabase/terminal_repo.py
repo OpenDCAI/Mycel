@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from storage.providers.supabase import _query as q
@@ -10,6 +10,10 @@ from storage.providers.supabase import _query as q
 _REPO = "terminal repo"
 _TERMINALS_TABLE = "abstract_terminals"
 _POINTERS_TABLE = "thread_terminal_pointers"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class SupabaseTerminalRepo:
@@ -130,7 +134,7 @@ class SupabaseTerminalRepo:
         existing = self._get_pointer_row(thread_id)
         if existing:
             return
-        now = datetime.now().isoformat()
+        now = _utc_now_iso()
         self._pointers().insert(
             {
                 "thread_id": thread_id,
@@ -147,7 +151,7 @@ class SupabaseTerminalRepo:
         lease_id: str,
         initial_cwd: str = "/root",
     ) -> dict[str, Any]:
-        now = datetime.now().isoformat()
+        now = _utc_now_iso()
         env_delta_json = "{}"
         state_version = 0
         self._terminals().insert(
@@ -182,7 +186,7 @@ class SupabaseTerminalRepo:
         if terminal["thread_id"] != thread_id:
             raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal['thread_id']}, not thread {thread_id}")
 
-        now = datetime.now().isoformat()
+        now = _utc_now_iso()
         pointer = self._get_pointer_row(thread_id)
         if pointer is None:
             self._pointers().insert(
@@ -226,7 +230,7 @@ class SupabaseTerminalRepo:
                     {
                         "active_terminal_id": next_terminal_id if active_terminal_id == terminal_id else active_terminal_id,
                         "default_terminal_id": next_terminal_id if default_terminal_id == terminal_id else default_terminal_id,
-                        "updated_at": datetime.now().isoformat(),
+                        "updated_at": _utc_now_iso(),
                     }
                 ).eq("thread_id", thread_id).execute()
 

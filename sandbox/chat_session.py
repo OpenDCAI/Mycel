@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
 from sandbox.lifecycle import (
     ChatSessionState,
     assert_chat_session_transition,
@@ -105,13 +106,13 @@ class ChatSession:
         self._session_repo = session_repo
 
     def is_expired(self) -> bool:
-        now = datetime.now()
+        now = utc_now()
         idle_seconds = (now - self.last_active_at).total_seconds()
         total_seconds = (now - self.started_at).total_seconds()
         return idle_seconds > self.policy.idle_ttl_sec or total_seconds > self.policy.max_duration_sec
 
     def touch(self) -> None:
-        now = datetime.now()
+        now = utc_now()
         self.last_active_at = now
         if self.status != "paused":
             assert_chat_session_transition(
@@ -142,7 +143,7 @@ class ChatSession:
             reason=reason,
         )
         self.status = "closed"
-        self.ended_at = datetime.now()
+        self.ended_at = utc_now()
         self.close_reason = reason
         if self._session_repo is not None:
             self._session_repo.delete_session(self.session_id, reason=self.close_reason)
@@ -290,13 +291,13 @@ class ChatSessionManager:
                 idle_ttl_sec=row["idle_ttl_sec"],
                 max_duration_sec=row["max_duration_sec"],
             ),
-            started_at=datetime.fromisoformat(row["started_at"]),
-            last_active_at=datetime.fromisoformat(row["last_active_at"]),
+            started_at=parse_runtime_datetime(row["started_at"]),
+            last_active_at=parse_runtime_datetime(row["last_active_at"]),
             db_path=self.db_path,
             runtime_id=row["runtime_id"],
             status=row["status"],
             budget_json=row["budget_json"],
-            ended_at=datetime.fromisoformat(row["ended_at"]) if row["ended_at"] else None,
+            ended_at=parse_runtime_datetime(row["ended_at"]) if row["ended_at"] else None,
             close_reason=row["close_reason"],
             session_repo=self._repo,
         )
@@ -316,7 +317,7 @@ class ChatSessionManager:
         policy: ChatSessionPolicy | None = None,
     ) -> ChatSession:
         policy = policy or self.default_policy
-        now = datetime.now()
+        now = utc_now()
 
         existing = self._live_sessions.get(terminal.terminal_id)
         if existing and existing.session_id != session_id:
@@ -364,11 +365,11 @@ class ChatSessionManager:
         current = parse_chat_session_state(current_raw)
         target = ChatSessionState.PAUSED if current == ChatSessionState.PAUSED else ChatSessionState.ACTIVE
         assert_chat_session_transition(current, target, reason="touch_manager")
-        now = datetime.now().isoformat()
+        now = utc_now_iso()
         self._repo.touch(session_id, last_active_at=now, status=target.value)
         for session in self._live_sessions.values():
             if session.session_id == session_id:
-                session.last_active_at = datetime.fromisoformat(now)
+                session.last_active_at = parse_runtime_datetime(now)
                 session.status = target.value
                 break
 
@@ -439,15 +440,15 @@ class ChatSessionManager:
     def cleanup_expired(self) -> int:
         count = 0
         for session in self._repo.list_active():
-            started_at = datetime.fromisoformat(session["started_at"])
-            last_active_at = datetime.fromisoformat(session["last_active_at"])
+            started_at = parse_runtime_datetime(session["started_at"])
+            last_active_at = parse_runtime_datetime(session["last_active_at"])
             idle_ttl_sec = self.default_policy.idle_ttl_sec
             max_duration_sec = self.default_policy.max_duration_sec
             policy = self._repo.get_session_policy(session["session_id"])
             if policy:
                 idle_ttl_sec = policy["idle_ttl_sec"]
                 max_duration_sec = policy["max_duration_sec"]
-            now = datetime.now()
+            now = utc_now()
             idle_elapsed = (now - last_active_at).total_seconds()
             total_elapsed = (now - started_at).total_seconds()
             if idle_elapsed > idle_ttl_sec or total_elapsed > max_duration_sec:

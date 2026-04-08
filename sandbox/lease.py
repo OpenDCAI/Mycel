@@ -11,6 +11,7 @@ State machine contract:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import uuid
@@ -20,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
 from sandbox.lifecycle import (
     LeaseInstanceState,
     assert_lease_instance_transition,
@@ -73,6 +75,16 @@ REQUIRED_EVENT_COLUMNS = {
 
 def _connect(db_path: Path) -> sqlite3.Connection:
     return connect_sqlite(db_path)
+
+
+def _use_supabase_storage() -> bool:
+    return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase"
+
+
+def _make_lease_repo(db_path: Path | None = None):
+    from backend.web.core.storage_factory import make_lease_repo
+
+    return make_lease_repo(db_path=db_path)
 
 
 @dataclass
@@ -229,7 +241,7 @@ class SQLiteLease(SandboxLease):
     def _is_fresh(self, max_age_sec: float = LEASE_FRESHNESS_TTL_SEC) -> bool:
         if not self.observed_at:
             return False
-        return (datetime.now() - self.observed_at).total_seconds() <= max_age_sec
+        return (utc_now() - self.observed_at).total_seconds() <= max_age_sec
 
     def _instance_state(self) -> LeaseInstanceState:
         if not self._current_instance:
@@ -325,7 +337,7 @@ class SQLiteLease(SandboxLease):
                     source,
                     json.dumps(payload),
                     error,
-                    datetime.now().isoformat(),
+                    utc_now_iso(),
                 ),
             )
             if should_commit:
@@ -372,7 +384,7 @@ class SQLiteLease(SandboxLease):
                     1 if self.needs_refresh else 0,
                     self.refresh_hint_at.isoformat() if self.refresh_hint_at else None,
                     self.status,
-                    datetime.now().isoformat(),
+                    utc_now_iso(),
                     self.lease_id,
                 ),
             )
@@ -393,7 +405,7 @@ class SQLiteLease(SandboxLease):
                         self._current_instance.instance_id,
                         self._current_instance.status,
                         self._current_instance.created_at.isoformat(),
-                        datetime.now().isoformat(),
+                        utc_now_iso(),
                     ),
                 )
 
@@ -406,7 +418,7 @@ class SQLiteLease(SandboxLease):
                     """,
                     (
                         "stopped",
-                        datetime.now().isoformat(),
+                        utc_now_iso(),
                         detached_instance.instance_id,
                     ),
                 )
@@ -452,7 +464,7 @@ class SQLiteLease(SandboxLease):
                     1 if self.needs_refresh else 0,
                     self.refresh_hint_at.isoformat() if self.refresh_hint_at else None,
                     self.status,
-                    datetime.now().isoformat(),
+                    utc_now_iso(),
                     self.lease_id,
                 ),
             )
@@ -465,9 +477,25 @@ class SQLiteLease(SandboxLease):
     def _record_provider_error(self, message: str) -> None:
         self.last_error = message[:500]
         self.needs_refresh = True
-        self.refresh_hint_at = datetime.now()
+        self.refresh_hint_at = utc_now()
         self.version += 1
+        if _use_supabase_storage():
+            repo = _make_lease_repo(self.db_path)
+            try:
+                repo.mark_needs_refresh(self.lease_id, hint_at=self.refresh_hint_at)
+            finally:
+                repo.close()
+            return
         self._persist_lease_metadata()
+
+    def _reload_from_storage(self) -> None:
+        repo = _make_lease_repo(self.db_path)
+        try:
+            row = repo.get(self.lease_id)
+        finally:
+            repo.close()
+        if row:
+            self._sync_from(lease_from_row(row, self.db_path))
 
     def _sync_from(self, other: SQLiteLease) -> None:
         self._current_instance = other._current_instance
@@ -498,16 +526,8 @@ class SQLiteLease(SandboxLease):
 
         with self._instance_lock():
             if event_type != "intent.ensure_running":
-                from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-
-                _repo = SQLiteLeaseRepo(db_path=self.db_path)
-                try:
-                    _row = _repo.get(self.lease_id)
-                finally:
-                    _repo.close()
-                if _row:
-                    self._sync_from(lease_from_row(_row, self.db_path))
-            now = datetime.now()
+                self._reload_from_storage()
+            now = utc_now()
 
             try:
                 if event_type == "intent.pause":
@@ -613,8 +633,8 @@ class SQLiteLease(SandboxLease):
                 error = str(exc)
                 self.last_error = error[:500]
                 self.needs_refresh = True
-                self.refresh_hint_at = datetime.now()
-                self.observed_at = datetime.now()
+                self.refresh_hint_at = utc_now()
+                self.observed_at = utc_now()
                 self.version += 1
                 with _connect(self.db_path) as conn:
                     self._persist_lease_metadata(conn=conn)
@@ -653,12 +673,25 @@ class SQLiteLease(SandboxLease):
                     return resolved
             try:
                 status = provider.get_session_status(self._current_instance.instance_id)
-                self.apply(
-                    provider,
-                    event_type="observe.status",
-                    source="run.refresh",
-                    payload={"status": status},
-                )
+                if _use_supabase_storage():
+                    repo = _make_lease_repo(self.db_path)
+                    try:
+                        row = repo.adopt_instance(
+                            lease_id=self.lease_id,
+                            provider_name=self.provider_name,
+                            instance_id=self._current_instance.instance_id,
+                            status=self._normalize_provider_state(status),
+                        )
+                    finally:
+                        repo.close()
+                    self._sync_from(lease_from_row(row, self.db_path))
+                else:
+                    self.apply(
+                        provider,
+                        event_type="observe.status",
+                        source="run.refresh",
+                        payload={"status": status},
+                    )
                 if self.observed_state == "running" and self._current_instance:
                     return self._current_instance
                 if self.observed_state == "paused":
@@ -669,15 +702,7 @@ class SQLiteLease(SandboxLease):
                 self._record_provider_error(str(exc))
 
         with self._instance_lock():
-            from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-
-            _repo = SQLiteLeaseRepo(db_path=self.db_path)
-            try:
-                _row = _repo.get(self.lease_id)
-            finally:
-                _repo.close()
-            if _row:
-                self._sync_from(lease_from_row(_row, self.db_path))
+            self._reload_from_storage()
 
             if self._current_instance:
                 if not capability.supports_status_probe:
@@ -686,12 +711,25 @@ class SQLiteLease(SandboxLease):
                         return resolved
                 try:
                     status = provider.get_session_status(self._current_instance.instance_id)
-                    self.apply(
-                        provider,
-                        event_type="observe.status",
-                        source="run.refresh_locked",
-                        payload={"status": status},
-                    )
+                    if _use_supabase_storage():
+                        repo = _make_lease_repo(self.db_path)
+                        try:
+                            row = repo.adopt_instance(
+                                lease_id=self.lease_id,
+                                provider_name=self.provider_name,
+                                instance_id=self._current_instance.instance_id,
+                                status=self._normalize_provider_state(status),
+                            )
+                        finally:
+                            repo.close()
+                        self._sync_from(lease_from_row(row, self.db_path))
+                    else:
+                        self.apply(
+                            provider,
+                            event_type="observe.status",
+                            source="run.refresh_locked",
+                            payload={"status": status},
+                        )
                     if self.observed_state == "running" and self._current_instance:
                         return self._current_instance
                     if self.observed_state == "paused":
@@ -702,7 +740,8 @@ class SQLiteLease(SandboxLease):
                     self._record_provider_error(str(exc))
 
             self.status = "recovering"
-            self._persist_lease_metadata()
+            if not _use_supabase_storage():
+                self._persist_lease_metadata()
             from sandbox.thread_context import get_current_thread_id
 
             thread_id = get_current_thread_id()
@@ -711,14 +750,27 @@ class SQLiteLease(SandboxLease):
                 instance_id=session_info.session_id,
                 provider_name=self.provider_name,
                 status="running",
-                created_at=datetime.now(),
+                created_at=utc_now(),
             )
-            self.apply(
-                provider,
-                event_type="intent.ensure_running",
-                source="run.create",
-                payload={"created": True, "instance_id": session_info.session_id},
-            )
+            if _use_supabase_storage():
+                repo = _make_lease_repo(self.db_path)
+                try:
+                    row = repo.adopt_instance(
+                        lease_id=self.lease_id,
+                        provider_name=self.provider_name,
+                        instance_id=session_info.session_id,
+                        status="running",
+                    )
+                finally:
+                    repo.close()
+                self._sync_from(lease_from_row(row, self.db_path))
+            else:
+                self.apply(
+                    provider,
+                    event_type="intent.ensure_running",
+                    source="run.create",
+                    payload={"created": True, "instance_id": session_info.session_id},
+                )
             from sandbox.resource_snapshot import probe_and_upsert_for_instance
 
             probe_result = probe_and_upsert_for_instance(
@@ -731,7 +783,6 @@ class SQLiteLease(SandboxLease):
                 db_path=self.db_path,
             )
             if not probe_result["ok"]:
-                # @@@create-probe-fail-loud - lease creation succeeds, but resource probe failure stays explicit.
                 print(f"[lease:{self.lease_id}] create probe error: {probe_result['error']}")
             if not self._current_instance:
                 raise RuntimeError(f"Lease {self.lease_id}: failed to bind created instance")
@@ -787,8 +838,15 @@ class SQLiteLease(SandboxLease):
 
     def mark_needs_refresh(self, hint_at: datetime | None = None) -> None:
         self.needs_refresh = True
-        self.refresh_hint_at = hint_at or datetime.now()
+        self.refresh_hint_at = hint_at or utc_now()
         self.version += 1
+        if _use_supabase_storage():
+            repo = _make_lease_repo(self.db_path)
+            try:
+                repo.mark_needs_refresh(self.lease_id, hint_at=self.refresh_hint_at)
+            finally:
+                repo.close()
+            return
         self._persist_lease_metadata()
 
 
@@ -801,23 +859,23 @@ def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
             instance_id=inst_data["instance_id"],
             provider_name=row["provider_name"],
             status=inst_data.get("status", "unknown"),
-            created_at=datetime.fromisoformat(str(inst_data["created_at"])),
+            created_at=parse_runtime_datetime(str(inst_data["created_at"])),
         )
     elif row.get("current_instance_id"):
         instance = SandboxInstance(
             instance_id=row["current_instance_id"],
             provider_name=row["provider_name"],
             status=row.get("instance_status") or row.get("observed_state") or "unknown",
-            created_at=datetime.fromisoformat(str(row["instance_created_at"])) if row.get("instance_created_at") else datetime.now(),
+            created_at=parse_runtime_datetime(str(row["instance_created_at"])) if row.get("instance_created_at") else utc_now(),
         )
 
     observed_at = None
     if row.get("observed_at"):
-        observed_at = datetime.fromisoformat(str(row["observed_at"]))
+        observed_at = parse_runtime_datetime(str(row["observed_at"]))
 
     refresh_hint_at = None
     if row.get("refresh_hint_at"):
-        refresh_hint_at = datetime.fromisoformat(str(row["refresh_hint_at"]))
+        refresh_hint_at = parse_runtime_datetime(str(row["refresh_hint_at"]))
 
     return SQLiteLease(
         lease_id=row["lease_id"],

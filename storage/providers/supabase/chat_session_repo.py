@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from storage.providers.supabase import _query as q
@@ -11,6 +11,10 @@ _REPO = "chat session repo"
 _SESSIONS_TABLE = "chat_sessions"
 _COMMANDS_TABLE = "terminal_commands"
 _CHUNKS_TABLE = "terminal_command_chunks"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class SupabaseChatSessionRepo:
@@ -162,7 +166,7 @@ class SupabaseChatSessionRepo:
         started_at: str | None = None,
         last_active_at: str | None = None,
     ) -> dict[str, Any]:
-        now_iso = started_at or datetime.now().isoformat()
+        now_iso = started_at or _utc_now_iso()
         last_active = last_active_at or now_iso
 
         # Supersede any existing active sessions for this terminal
@@ -205,14 +209,14 @@ class SupabaseChatSessionRepo:
         }
 
     def touch(self, session_id: str, last_active_at: str | None = None, status: str | None = None) -> None:
-        now = last_active_at or datetime.now().isoformat()
+        now = last_active_at or _utc_now_iso()
         update: dict[str, Any] = {"last_active_at": now}
         if status is not None:
             update["status"] = status
         self._sessions().update(update).eq("chat_session_id", session_id).execute()
 
     def touch_thread_activity(self, thread_id: str, last_active_at: str | None = None) -> None:
-        now = last_active_at or datetime.now().isoformat()
+        now = last_active_at or _utc_now_iso()
         self._sessions().update({"last_active_at": now}).eq("thread_id", thread_id).neq("status", "closed").execute()
 
     def pause(self, session_id: str) -> None:
@@ -226,7 +230,7 @@ class SupabaseChatSessionRepo:
         ).execute()
 
     def delete_session(self, session_id: str, *, reason: str = "closed") -> None:
-        self._sessions().update({"status": "closed", "ended_at": datetime.now().isoformat(), "close_reason": reason}).eq(
+        self._sessions().update({"status": "closed", "ended_at": _utc_now_iso(), "close_reason": reason}).eq(
             "chat_session_id", session_id
         ).in_("status", ["active", "idle", "paused"]).execute()
 

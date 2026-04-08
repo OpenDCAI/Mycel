@@ -117,7 +117,9 @@ def _new_test_manager() -> Any:
     # @@@nu59-sandbox-manager-harness - these tests intentionally bypass
     # SandboxManager.__init__ and monkey-build partial instances. Treat that
     # object as a test harness, not a fully typed production manager.
-    return cast(Any, object.__new__(SandboxManager))
+    manager = cast(Any, object.__new__(SandboxManager))
+    manager.db_path = Path("/tmp/fake-sandbox.db")
+    return manager
 
 
 def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
@@ -257,6 +259,26 @@ def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
 
     assert destroy_calls == [True]
     assert manager.session_manager.deleted == [("sess-1", "idle_timeout")]
+
+
+def test_enforce_idle_timeouts_accepts_aware_supabase_timestamps():
+    manager = _new_test_manager()
+    manager.provider = SimpleNamespace(name="daytona_selfhost", get_capability=lambda: SimpleNamespace(can_pause=True, can_destroy=True))
+    manager.session_manager = SimpleNamespace(
+        list_active=lambda: [
+            {
+                "session_id": "sess-1",
+                "thread_id": "thread-1",
+                "started_at": "2099-04-04T00:00:00+00:00",
+                "last_active_at": "2099-04-04T00:00:00+00:00",
+                "idle_ttl_sec": 3600,
+                "max_duration_sec": 7200,
+                "status": "active",
+            }
+        ]
+    )
+
+    assert manager.enforce_idle_timeouts() == 0
 
 
 def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id():

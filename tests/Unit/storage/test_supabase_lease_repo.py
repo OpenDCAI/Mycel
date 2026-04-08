@@ -96,3 +96,43 @@ def test_supabase_lease_repo_create_persists_utc_timestamps():
     assert payload["created_at"].endswith("+00:00")
     assert payload["updated_at"].endswith("+00:00")
     assert payload["observed_at"].endswith("+00:00")
+
+
+def test_supabase_lease_repo_adopt_instance_persists_integer_refresh_flag():
+    tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "local",
+                "recipe_id": None,
+                "workspace_key": None,
+                "recipe_json": None,
+                "current_instance_id": None,
+                "instance_created_at": None,
+                "desired_state": "running",
+                "observed_state": "detached",
+                "version": 0,
+                "observed_at": "2026-04-07T00:00:00+00:00",
+                "last_error": None,
+                "needs_refresh": 0,
+                "refresh_hint_at": None,
+                "status": "active",
+                "volume_id": None,
+                "created_at": "2026-04-07T00:00:00+00:00",
+                "updated_at": "2026-04-07T00:00:00+00:00",
+            }
+        ],
+        "sandbox_instances": [],
+    }
+    repo = SupabaseLeaseRepo(client=FakeSupabaseClient(tables=tables))
+
+    repo.adopt_instance(
+        lease_id="lease-1",
+        provider_name="local",
+        instance_id="inst-1",
+        status="running",
+    )
+
+    lease_row = tables["sandbox_leases"][0]
+    assert lease_row["needs_refresh"] == 1
+    assert type(lease_row["needs_refresh"]) is int
