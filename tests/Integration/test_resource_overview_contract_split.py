@@ -145,10 +145,11 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                 "lease_id": "lease-1",
                 "provider_name": "daytona_selfhost",
                 "thread_ids": ["thread-1"],
-                "agents": [{"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None}],
+                "agents": [{"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": "/api/users/agent-1/avatar"}],
                 "observed_state": "paused",
                 "desired_state": "paused",
                 "created_at": "2026-04-07T10:00:00Z",
+                "runtime_session_id": "provider-session-1",
             }
         ],
     )
@@ -179,6 +180,12 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
         "code": "PROVIDER_UNAVAILABLE",
         "message": "provider unavailable",
     }
+    assert payload["providers"][0]["sessions"][0]["runtimeSessionId"] == "provider-session-1"
+    assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
+    assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
+    assert payload["providers"][0]["sessions"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert "memberId" not in payload["providers"][0]["sessions"][0]
+    assert "memberName" not in payload["providers"][0]["sessions"][0]
 
 
 def test_provider_display_contract_exposes_public_metadata(monkeypatch) -> None:

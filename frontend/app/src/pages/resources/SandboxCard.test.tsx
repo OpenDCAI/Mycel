@@ -13,4 +13,10 @@ describe("SandboxCard source", () => {
     expect(source).toContain("s.agentName");
     expect(source).not.toContain("s.memberName");
   });
+
+  it("renders resource agent avatars from avatarUrl", () => {
+    const source = sourceModules["./SandboxCard.tsx"];
+
+    expect(source).toContain("s.avatarUrl");
+  });
 });
