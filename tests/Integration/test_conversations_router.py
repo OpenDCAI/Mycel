@@ -14,7 +14,9 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
                 list_by_owner_user_id=lambda _user_id: [],
-                get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("visit rows should use messaging summary, not thread fallback")),
+                get_by_user_id=lambda _uid: (_ for _ in ()).throw(
+                    AssertionError("visit rows should use messaging summary, not thread fallback")
+                ),
             ),
             agent_pool={},
             thread_last_active={},
@@ -37,9 +39,15 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
                     }
                 ],
             ),
-            user_repo=SimpleNamespace(get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))),
-            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))),
-            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))
+            ),
+            chat_repo=SimpleNamespace(
+                get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))
+            ),
+            messages_repo=SimpleNamespace(
+                count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))
+            ),
         )
     )
 
@@ -95,9 +103,15 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                     }
                 ],
             ),
-            user_repo=SimpleNamespace(get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))),
-            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))),
-            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))
+            ),
+            chat_repo=SimpleNamespace(
+                get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))
+            ),
+            messages_repo=SimpleNamespace(
+                count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))
+            ),
         )
     )
 
@@ -173,9 +187,15 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
                     }
                 ],
             ),
-            user_repo=SimpleNamespace(get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit entities"))),
-            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))),
-            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit entities"))
+            ),
+            chat_repo=SimpleNamespace(
+                get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))
+            ),
+            messages_repo=SimpleNamespace(
+                count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(AssertionError("router should not recount unread"))
+            ),
         )
     )
 
