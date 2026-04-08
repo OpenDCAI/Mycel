@@ -385,6 +385,16 @@ def _member_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
     }
 
 
+def _resolve_repo_backed_agent(member_id: str, user_repo: Any, agent_config_repo: Any) -> tuple[Any, dict[str, Any]] | None:
+    user = user_repo.get_by_id(member_id)
+    if user is None or user.agent_config_id is None:
+        return None
+    config = agent_config_repo.get_config(user.agent_config_id)
+    if config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+    return user, config
+
+
 # ── Leon builtin ──
 
 
@@ -520,16 +530,38 @@ def update_member(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
+    # @@@repo-first-member-writes - repo-backed agent users are the live contract now.
+    # A leftover member dir must not silently take write precedence.
+    repo_target = None
+    if user_repo is not None and agent_config_repo is not None:
+        repo_target = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if repo_target is not None:
+        user, config = repo_target
+        allowed = {"name", "description", "status"}
+        updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if not updates:
+            return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+        if "name" in updates:
+            user_repo.update(member_id, display_name=updates["name"])
+        agent_config_repo.save_config(
+            user.agent_config_id,
+            {
+                **config,
+                "name": updates.get("name", config.get("name") or user.display_name),
+                "description": updates.get("description", config.get("description", "")),
+                "status": updates.get("status", config.get("status", "draft")),
+                "updated_at": int(time.time() * 1000),
+            },
+        )
+        return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     member_dir = MEMBERS_DIR / member_id
     if not member_dir.is_dir():
         if user_repo is None or agent_config_repo is None:
             return None
-        user = user_repo.get_by_id(member_id)
-        if user is None or user.agent_config_id is None:
+        repo_target = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+        if repo_target is None:
             return None
-        config = agent_config_repo.get_config(user.agent_config_id)
-        if config is None:
-            return None
+        user, config = repo_target
         allowed = {"name", "description", "status"}
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if not updates:
@@ -604,6 +636,10 @@ def update_member_config(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
+    if user_repo is not None and agent_config_repo is not None:
+        repo_target = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+        if repo_target is not None:
+            return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
     member_dir = MEMBERS_DIR / member_id
     if not member_dir.is_dir():
         if user_repo is None or agent_config_repo is None:
