@@ -1223,6 +1223,137 @@ describe("MonitorRoutes", () => {
     expect(within(providerCard).getByText("1 有用量")).toBeInTheDocument();
   });
 
+  it("surfaces global live usage coverage in the summary strip", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 2,
+          active_providers: 2,
+          unavailable_providers: 0,
+          running_sessions: 4,
+        },
+        providers: [
+          {
+            id: "daytona_selfhost",
+            name: "daytona_selfhost",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 3, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: {
+              used: null,
+              limit: null,
+              unit: "%",
+              source: "unknown",
+              freshness: "live",
+              error: "CPU usage is per-sandbox, not a provider-level quota.",
+            },
+            sessions: [
+              {
+                id: "lease-1:thread-1",
+                leaseId: "lease-1",
+                threadId: "thread-1",
+                runtimeSessionId: "runtime-1",
+                agentName: "Remote Agent 1",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 0.4,
+                  memory: 0.5,
+                  memoryLimit: 1,
+                  disk: 0.2,
+                  diskLimit: 3,
+                  cpuNote: null,
+                  memoryNote: null,
+                  diskNote: null,
+                  probeError: null,
+                },
+              },
+              {
+                id: "lease-2:thread-2",
+                leaseId: "lease-2",
+                threadId: "thread-2",
+                runtimeSessionId: "runtime-2",
+                agentName: "Remote Agent 2",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+              {
+                id: "lease-3:thread-3",
+                leaseId: "lease-3",
+                threadId: "thread-3",
+                runtimeSessionId: "runtime-3",
+                agentName: "Remote Agent 3",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+          {
+            id: "local",
+            name: "local",
+            description: "Local provider",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 8, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 20, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+            sessions: [
+              {
+                id: "session-1",
+                threadId: "thread-4",
+                agentName: "Local Agent",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    const summaryPills = await screen.findAllByText("1 有用量");
+    expect(summaryPills[0]).toHaveClass("resources-summary-pill");
+  });
+
   it("surfaces quota-only sandbox metrics instead of pretending they are fully missing", async () => {
     mockRoutePayloads({
       "/resources": {

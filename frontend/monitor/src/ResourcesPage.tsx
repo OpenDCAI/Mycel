@@ -300,6 +300,19 @@ export default function ResourcesPage() {
       ).length,
     0,
   );
+  const liveUsageRunningCount = providers.reduce(
+    (total, provider) =>
+      total +
+      provider.sessions.filter((session) => {
+        const metrics = session.metrics;
+        return (
+          session.status === "running" &&
+          metrics != null &&
+          (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
+        );
+      }).length,
+    0,
+  );
   const readyWithoutLiveTelemetryCount = providers.filter(
     (provider) =>
       provider.type !== "local" &&
@@ -376,6 +389,9 @@ export default function ResourcesPage() {
             {summary?.active_providers ?? 0} 活跃 provider
           </div>
           <div className="resources-summary-pill">{runningSessionCount} 运行会话</div>
+          {liveUsageRunningCount > 0 && liveUsageRunningCount < runningSessionCount && (
+            <div className="resources-summary-pill">{liveUsageRunningCount} 有用量</div>
+          )}
           {runtimeUnboundRunningCount > 0 && (
             <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
           )}
