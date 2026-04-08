@@ -7,7 +7,6 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from config.user_paths import preferred_existing_user_home_path
 from core.identity.agent_registry import get_or_create_agent_id
 from core.runtime.agent import create_leon_agent
 from sandbox.manager import lookup_sandbox_for_thread
@@ -27,6 +26,8 @@ def create_agent_sync(
     model_name: str | None = None,
     agent: str | None = None,
     bundle_dir: Path | None = None,
+    agent_config_id: str | None = None,
+    agent_config_repo: Any = None,
     thread_repo: Any = None,
     user_repo: Any = None,
     queue_manager: Any = None,
@@ -54,6 +55,8 @@ def create_agent_sync(
         verbose=True,
         agent=agent,
         bundle_dir=bundle_dir,
+        agent_config_id=agent_config_id,
+        agent_config_repo=agent_config_repo,
         extra_allowed_paths=extra_allowed_paths,
     )
 
@@ -119,10 +122,17 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None → default Leon agent
         bundle_dir = None
+        agent_config_id = None
+        agent_config_repo = getattr(app_obj.state, "agent_config_repo", None)
+        agent_user = None
         if thread_data and thread_data.get("agent_user_id"):
-            member_dir = preferred_existing_user_home_path("members", str(thread_data["agent_user_id"]))
-            if member_dir.is_dir():
-                bundle_dir = member_dir.resolve()
+            user_repo = getattr(app_obj.state, "user_repo", None)
+            if user_repo is None:
+                raise RuntimeError(f"user_repo is required to resolve agent_config_id for thread {thread_id}")
+            agent_user = user_repo.get_by_id(thread_data["agent_user_id"])
+            if agent_user is None or getattr(agent_user, "agent_config_id", None) is None:
+                raise RuntimeError(f"thread.agent_user_id is missing agent_config_id for runtime startup: {thread_id}")
+            agent_config_id = agent_user.agent_config_id
 
         # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None
@@ -131,7 +141,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             agent_user_id = thread_data.get("agent_user_id")
             if not agent_user_id:
                 raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
-            agent_user = user_repo.get_by_id(agent_user_id) if agent_user_id else None
+            agent_user = agent_user or (user_repo.get_by_id(agent_user_id) if agent_user_id else None)
             if agent_user:
                 chat_identity_id = agent_user_id
                 # @@@thread-chat-identity-source - agent users are now the stable social
@@ -173,20 +183,23 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
         qm = getattr(app_obj.state, "queue_manager", None)
-        agent_obj = await asyncio.to_thread(
-            create_agent_sync,
-            sandbox_name=sandbox_type,
-            workspace_root=workspace_root,
-            model_name=model_name,
-            agent=agent_name,
-            bundle_dir=bundle_dir,
-            thread_repo=getattr(app_obj.state, "thread_repo", None),
-            user_repo=getattr(app_obj.state, "user_repo", None),
-            queue_manager=qm,
-            chat_repos=chat_repos,
-            extra_allowed_paths=extra_allowed_paths_or_none,
-            web_app=app_obj,
-        )
+        create_kwargs = {
+            "sandbox_name": sandbox_type,
+            "workspace_root": workspace_root,
+            "model_name": model_name,
+            "agent": agent_name,
+            "bundle_dir": bundle_dir,
+            "thread_repo": getattr(app_obj.state, "thread_repo", None),
+            "user_repo": getattr(app_obj.state, "user_repo", None),
+            "queue_manager": qm,
+            "chat_repos": chat_repos,
+            "extra_allowed_paths": extra_allowed_paths_or_none,
+            "web_app": app_obj,
+        }
+        if agent_config_id is not None:
+            create_kwargs["agent_config_id"] = agent_config_id
+            create_kwargs["agent_config_repo"] = agent_config_repo
+        agent_obj = await asyncio.to_thread(create_agent_sync, **create_kwargs)
         agent_identity_user_id = str(thread_data.get("agent_user_id") or "").strip() if thread_data else ""
         if not agent_identity_user_id:
             agent_identity_user_id = agent_name or "leon"

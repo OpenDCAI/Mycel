@@ -20,6 +20,7 @@ from core.agents.service import (
     TASK_OUTPUT_SCHEMA,
     AgentService,
     _BashBackgroundRun,
+    _resolve_subagent_model,
     _RunningTask,
 )
 from core.runtime.middleware import ToolCallRequest
@@ -783,6 +784,26 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_p
 
     assert captured["model_name"] == "env-model"
     assert captured["kwargs"]["agent"] == "explore"
+
+
+def test_resolve_subagent_model_ignores_member_dir_frontmatter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    home_root = tmp_path
+    monkeypatch.setattr("config.loader.user_home_read_candidates", lambda *parts: (home_root.joinpath(*parts),))
+    member_dir = home_root / "members" / "explore"
+    member_dir.mkdir(parents=True)
+    (member_dir / "agent.md").write_text(
+        "---\nname: explore\nmodel: member-model\ntools:\n  - Read\n---\nmember prompt\n",
+        encoding="utf-8",
+    )
+
+    resolved = _resolve_subagent_model(
+        workspace_root=tmp_path,
+        subagent_type="explore",
+        requested_model=None,
+        inherited_model="parent-model",
+    )
+
+    assert resolved == "parent-model"
 
 
 @pytest.mark.asyncio

@@ -208,7 +208,7 @@ def test_project_agent_file_does_not_claim_bundle_source_dir(tmp_path: Path):
     assert agent.source_dir is None
 
 
-def test_member_agent_retains_bundle_source_dir(tmp_path: Path, monkeypatch):
+def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path, monkeypatch):
     home_root = tmp_path
     monkeypatch.setattr("config.loader.user_home_read_candidates", lambda *parts: (home_root.joinpath(*parts),))
     member_dir = home_root / "members" / "alice"
@@ -218,9 +218,7 @@ def test_member_agent_retains_bundle_source_dir(tmp_path: Path, monkeypatch):
         encoding="utf-8",
     )
 
-    agent = AgentLoader(workspace_root=tmp_path).load_all_agents()["alice"]
-
-    assert agent.source_dir == member_dir.resolve()
+    assert "alice" not in AgentLoader(workspace_root=tmp_path).load_runtime_agents()
 
 
 def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
