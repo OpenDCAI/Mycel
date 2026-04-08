@@ -102,6 +102,11 @@ export interface ResourceSummary {
 export interface ResourceOverviewResponse {
   summary: ResourceSummary;
   providers: ProviderInfo[];
+  triage?: {
+    summary?: {
+      detached_residue?: number;
+    };
+  };
 }
 
 export interface BrowseItem {

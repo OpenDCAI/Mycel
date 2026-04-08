@@ -3158,4 +3158,76 @@ describe("MonitorRoutes", () => {
     fireEvent.click(providerCard);
     expect(await screen.findByText("当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。")).toBeInTheDocument();
   });
+
+  it("surfaces detached residue in the resources summary strip", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 3,
+        },
+        triage: {
+          summary: {
+            detached_residue: 38,
+          },
+        },
+        providers: [
+          {
+            id: "local",
+            name: "local",
+            description: "Local runtime",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 3, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+              memory: { used: 5, limit: 32, unit: "GB", source: "direct", freshness: "live" },
+              disk: { used: 40, limit: 100, unit: "GB", source: "direct", freshness: "live" },
+            },
+            cardCpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+            sessions: [
+              {
+                id: "session-1",
+                threadId: "thread-1",
+                agentName: "Agent 1",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 12,
+                  memory: 5,
+                  memoryLimit: 32,
+                  disk: 40,
+                  diskLimit: 100,
+                  networkIn: null,
+                  networkOut: null,
+                },
+                runtimeSessionId: "runtime-1",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("38 Detached Residue")).toBeInTheDocument();
+  });
 });
