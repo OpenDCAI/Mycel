@@ -181,7 +181,6 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
     ChatToolService(
         registry=registry,
         user_id="owner-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             list_all=lambda: [
                 SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", owner_user_id="owner-user-1"),
@@ -193,7 +192,6 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
         thread_repo=SimpleNamespace(
             get_default_thread=lambda member_id: {"id": "thread-1", "user_id": "thread-user-1"} if member_id == "agent-user-1" else None
         ),
-        relationship_repo=None,
     )
 
     for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
@@ -208,7 +206,6 @@ def test_send_message_schema_marks_user_id_name_as_legacy() -> None:
     ChatToolService(
         registry=registry,
         user_id="agent-user-1",
-        owner_id="owner-user-1",
     )
 
     send_message = registry.get("send_message")
@@ -226,7 +223,6 @@ def test_read_messages_schema_requires_non_empty_chat_or_user_identifier() -> No
     ChatToolService(
         registry=registry,
         user_id="agent-user-1",
-        owner_id="owner-user-1",
     )
 
     read_messages = registry.get("read_messages")
@@ -244,7 +240,6 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     ChatToolService(
         registry=registry,
         chat_identity_id="agent-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             list_all=lambda: [
                 SimpleNamespace(id="agent-user-2", display_name="Morel", type="agent", owner_user_id="owner-user-1"),
@@ -256,7 +251,6 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
         thread_repo=SimpleNamespace(
             get_default_thread=lambda member_id: {"id": "thread-2", "user_id": "thread-user-2"} if member_id == "agent-user-2" else None
         ),
-        relationship_repo=None,
     )
 
     assert registry.get("list_chats") is not None
@@ -265,13 +259,14 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
 def test_chat_tool_service_rejects_dead_repo_constructor_kwargs() -> None:
     registry = ToolRegistry()
 
-    with pytest.raises(TypeError, match="chat_member_repo|messages_repo"):
+    with pytest.raises(TypeError, match="chat_member_repo|messages_repo|owner_id|relationship_repo"):
         ChatToolService(
             registry=registry,
             chat_identity_id="agent-user-1",
             owner_id="owner-user-1",
             messaging_service=SimpleNamespace(),
             chat_member_repo=SimpleNamespace(),
+            relationship_repo=SimpleNamespace(),
         )
 
 
@@ -590,7 +585,6 @@ def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
     service = ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 None
@@ -616,7 +610,6 @@ def test_chat_tool_send_accepts_thread_user_target_id() -> None:
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 None
@@ -651,7 +644,6 @@ def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
             count_unread=lambda _chat_id, _user_id: 0,
@@ -689,7 +681,6 @@ def test_chat_tool_send_checks_group_membership_via_messaging_service_without_me
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: False,
         ),
@@ -708,7 +699,6 @@ def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
     ChatToolService(
         registry=registry,
         chat_identity_id="thread-user-1",
-        owner_id="owner-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
             count_unread=lambda _chat_id, _user_id: 1,
@@ -744,7 +734,6 @@ def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> No
     ChatToolService(
         registry=registry,
         chat_identity_id="thread-user-1",
-        owner_id="owner-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
             count_unread=lambda _chat_id, _user_id: 0,
@@ -768,7 +757,6 @@ def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 None
@@ -797,7 +785,6 @@ def test_read_messages_uses_messaging_service_direct_chat_lookup_without_member_
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 None
@@ -828,7 +815,6 @@ def test_read_messages_uses_messaging_service_time_range_history_without_message
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         messaging_service=SimpleNamespace(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
                 {
@@ -866,7 +852,6 @@ def test_chat_tool_search_does_not_fall_back_to_global_search_for_thread_user_ta
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 None
@@ -900,7 +885,6 @@ def test_chat_tool_search_uses_messaging_service_direct_chat_lookup_without_memb
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 None

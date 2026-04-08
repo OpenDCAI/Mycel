@@ -1255,18 +1255,15 @@ class LeonAgent:
         if self._chat_repos:
             repos = self._chat_repos
             chat_identity_id = self._runtime_chat_identity_id()
-            owner_id = repos.get("owner_id", "")
             if chat_identity_id:
                 from messaging.tools.chat_tool_service import ChatToolService
 
                 self._chat_tool_service = ChatToolService(
                     registry=self._tool_registry,
                     chat_identity_id=chat_identity_id,
-                    owner_id=owner_id,
                     messaging_service=repos.get("messaging_service"),
                     user_repo=repos.get("user_repo"),
                     thread_repo=self._thread_repo,
-                    relationship_repo=repos.get("relationship_repo"),
                 )
 
         # LSP tools — DEFERRED, always registered, multilspy checked at call time
