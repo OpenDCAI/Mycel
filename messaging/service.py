@@ -295,7 +295,8 @@ class MessagingService:
                         }
                     )
             other_entities = [entity for entity in entities_info if entity["id"] != user_id]
-            title = chat.title or ", ".join(entity["name"] for entity in other_entities) or "Chat"
+            other_names = [entity["name"] for entity in other_entities if entity.get("name")]
+            title = chat.title or ", ".join(other_names) or "Chat"
             chat_avatar_url = other_entities[0]["avatar_url"] if other_entities else None
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
