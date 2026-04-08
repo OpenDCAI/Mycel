@@ -152,11 +152,25 @@ describe("MonitorRoutes", () => {
   it("renders leases with a triage summary before the raw table", async () => {
     mockRoutePayloads({
       "/leases": {
-        title: "Leases",
+        title: "All Leases",
         count: 1,
+        summary: {
+          healthy: 1,
+          diverged: 0,
+          orphan: 0,
+          orphan_diverged: 0,
+          total: 1,
+        },
+        groups: [],
         triage: {
-          active: 1,
-          residue: 0,
+          summary: {
+            active_drift: 1,
+            detached_residue: 0,
+            orphan_cleanup: 0,
+            healthy_capacity: 0,
+            total: 1,
+          },
+          groups: [],
         },
         items: [
           {
@@ -188,6 +202,9 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByText("Lease Triage")).toBeInTheDocument();
+    expect(screen.getByText("Active Drift")).toBeInTheDocument();
+    expect(screen.getByText("Detached Residue")).toBeInTheDocument();
+    expect(screen.getByText("Tracked Leases")).toBeInTheDocument();
     expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
   });
 
