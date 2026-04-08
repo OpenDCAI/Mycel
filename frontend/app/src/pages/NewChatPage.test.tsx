@@ -169,7 +169,7 @@ describe("NewChatPage", () => {
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
           <Route element={<ContextOutlet />}>
-            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
           </Route>
         </Routes>
       </MemoryRouter>,
@@ -190,7 +190,7 @@ describe("NewChatPage", () => {
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
           <Route element={<ContextOutlet />}>
-            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
           </Route>
         </Routes>
       </MemoryRouter>,
@@ -207,7 +207,7 @@ describe("NewChatPage", () => {
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
           <Route element={<ContextOutlet />}>
-            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
             <Route path="/chat/hire/thread/:threadId" element={<ThreadRouteProbe />} />
           </Route>
         </Routes>

@@ -27,6 +27,8 @@ describe("router legacy contract", () => {
     expect(routePaths.has("/resources")).toBe(false);
     expect(routePaths.has("/invite-codes")).toBe(false);
     expect(routePaths.has("hire/:memberId/:threadId")).toBe(false);
+    expect(routePaths.has("hire/:memberId")).toBe(false);
+    expect(routePaths.has("hire/:agentId")).toBe(true);
     expect(routePaths.has("contacts")).toBe(true);
   });
 });

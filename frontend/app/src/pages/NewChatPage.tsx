@@ -115,7 +115,7 @@ function enabledFeatureLabels(recipe: RecipeSnapshot | null): string[] {
 
 export default function NewChatPage({ mode = "member" }: { mode?: "member" | "new" }) {
   const navigate = useNavigate();
-  const { memberId } = useParams<{ memberId: string }>();
+  const { agentId } = useParams<{ agentId: string }>();
   const { tm } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetDefaultThread } = tm;
   const { settings, loading, hasWorkspace, refreshSettings, setDefaultWorkspace } = useWorkspaceSettings();
@@ -143,9 +143,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const authAgent = useAuthStore(s => s.agent);
   const memberList = useAppStore(s => s.memberList);
   const libraryRecipes = useAppStore(s => s.libraryRecipes);
-  const decodedMemberId = memberId ? decodeURIComponent(memberId) : null;
-  const resolvedMember = decodedMemberId ? memberList.find(m => m.id === decodedMemberId) : undefined;
-  const isOwnedAgent = decodedMemberId === authAgent?.id;
+  const decodedAgentId = agentId ? decodeURIComponent(agentId) : null;
+  const resolvedMember = decodedAgentId ? memberList.find(m => m.id === decodedAgentId) : undefined;
+  const isOwnedAgent = decodedAgentId === authAgent?.id;
   const memberName = resolvedMember?.name ?? (isOwnedAgent ? (authAgent?.name || "Agent") : "Agent");
   const memberAvatarUrl = resolvedMember?.avatar_url;
 
@@ -156,14 +156,14 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     const ac = new AbortController();
 
     async function resolveDefaultThread() {
-      if (!decodedMemberId) {
-        setError("Missing member ID");
+      if (!decodedAgentId) {
+        setError("Missing agent ID");
         setResolveState("error");
         return;
       }
 
       try {
-        const thread = await handleGetDefaultThread(decodedMemberId, ac.signal);
+        const thread = await handleGetDefaultThread(decodedAgentId, ac.signal);
         if (cancelled) return;
         if (thread) {
           navigate(`/chat/hire/thread/${thread.thread_id}`, { replace: true });
@@ -185,7 +185,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       cancelled = true;
       ac.abort();
     };
-  }, [decodedMemberId, handleGetDefaultThread, navigate, shouldResolveDefaultThread]);
+  }, [decodedAgentId, handleGetDefaultThread, navigate, shouldResolveDefaultThread]);
 
   useEffect(() => {
     let cancelled = false;
@@ -276,18 +276,18 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }, [selectedWorkspace, settings?.default_workspace]);
 
   useEffect(() => {
-    if (!decodedMemberId) {
+    if (!decodedAgentId) {
       setConfigDefaultsLoading(false);
       return;
     }
-    const memberIdForDefaults = decodedMemberId;
+    const agentIdForDefaults = decodedAgentId;
     let cancelled = false;
     const ac = new AbortController();
 
     async function loadDefaultConfig() {
       setConfigDefaultsLoading(true);
       try {
-        const payload = await getDefaultThreadConfig(memberIdForDefaults, ac.signal);
+        const payload = await getDefaultThreadConfig(agentIdForDefaults, ac.signal);
         if (cancelled) return;
         applyResolvedConfig(payload.config);
         setCreateModeInitialized(true);
@@ -306,7 +306,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       ac.abort();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decodedMemberId]);
+  }, [decodedAgentId]);
 
   const selectedRecipe = useMemo(
     () => recipeOptions.find((item) => item.value === selectedRecipeId)?.recipe ?? recipeOptions[0]?.recipe ?? null,
@@ -335,8 +335,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       setShowWorkspaceSetup(true);
       return;
     }
-    if (!decodedMemberId) {
-      throw new Error("Cannot create thread without member ID");
+    if (!decodedAgentId) {
+      throw new Error("Cannot create thread without agent ID");
     }
 
     let threadId: string;
@@ -347,7 +347,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       threadId = await handleCreateThread(
         selectedLease.provider_name,
         undefined,
-        decodedMemberId,
+        decodedAgentId,
         model,
         selectedLease.lease_id,
       );
@@ -359,7 +359,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       threadId = await handleCreateThread(
         selectedProviderConfig || selectedSandbox,
         cwd,
-        decodedMemberId,
+        decodedAgentId,
         model,
         undefined,
         selectedRecipeSnapshot,
@@ -435,8 +435,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }
 
   async function persistDefaultConfig(draftModel: string, workspace: string | null) {
-    if (!decodedMemberId) return;
-    await saveDefaultThreadConfig(decodedMemberId, {
+    if (!decodedAgentId) return;
+    await saveDefaultThreadConfig(decodedAgentId, {
       create_mode: createMode,
       provider_config: selectedProviderConfig,
       recipe: selectedRecipeSnapshot,

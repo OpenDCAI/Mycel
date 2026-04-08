@@ -6,7 +6,7 @@ import { useThreadManager } from "@/hooks/use-thread-manager";
 
 export default function ChatLayout() {
   const params = useParams();
-  const hasActiveConversation = Boolean(params.threadId || params.chatId || params.memberId);
+  const hasActiveConversation = Boolean(params.threadId || params.chatId || params.agentId);
   const tm = useThreadManager();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [, setSessionsOpen] = useState(false);
