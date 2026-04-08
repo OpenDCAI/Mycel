@@ -746,6 +746,11 @@ function SandboxCard({
     metrics.disk == null &&
     metrics.diskLimit != null &&
     Boolean(metrics.diskNote || metrics.probeError);
+  const showMissingLiveTelemetryTruth =
+    group.status === "running" &&
+    !showRuntimeBindingWarning &&
+    !showQuotaOnlyDiskTruth &&
+    (metrics == null || (metrics.cpu == null && metrics.memory == null && metrics.disk == null));
 
   return (
     <button type="button" className={`sandbox-card sandbox-card--${group.status}`} onClick={onOpen}>
@@ -775,6 +780,7 @@ function SandboxCard({
           <div className="sandbox-card__warning">无 active runtime</div>
         )}
         {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">Disk 仅配额</div>}
+        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">无 live telemetry</div>}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
