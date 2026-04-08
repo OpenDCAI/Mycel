@@ -153,6 +153,14 @@ def _load_repo_publish_material(user_id: str, user_repo: Any, agent_config_repo:
     return bundle, dict(bundle.meta)
 
 
+def _load_local_publish_material(user_id: str) -> tuple[AgentBundle, dict[str, Any], dict[str, Any]]:
+    member_dir = members_dir() / user_id
+    meta = _read_json(member_dir / "meta.json")
+    snapshot = _serialize_user_snapshot(user_id)
+    bundle = AgentLoader().load_bundle(member_dir)
+    return bundle, meta, snapshot
+
+
 def publish(
     user_id: str,
     type_: str,
@@ -169,16 +177,10 @@ def publish(
     member_dir = members_dir() / user_id
     if user_repo is not None and agent_config_repo is not None:
         bundle, meta = _load_repo_publish_material(user_id, user_repo, agent_config_repo)
-        if member_dir.is_dir():
-            # @@@publish-repo-bundle - snapshot/version now come from repo data; old marketplace lineage still lives in meta.json.source.
-            meta = {**meta, **_read_json(member_dir / "meta.json")}
         snapshot = _bundle_snapshot(bundle)
         snapshot["meta"] = copy.deepcopy(meta)
     else:
-        meta = _read_json(member_dir / "meta.json")
-        snapshot = _serialize_user_snapshot(user_id)
-        loader = AgentLoader()
-        bundle = loader.load_bundle(member_dir)
+        bundle, meta, snapshot = _load_local_publish_material(user_id)
 
     # Calculate new version
     current_version = meta.get("version", "0.1.0")
