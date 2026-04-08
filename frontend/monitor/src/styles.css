@@ -169,6 +169,44 @@ h2 {
   margin-bottom: 1rem;
 }
 
+.surface-section {
+  margin-bottom: 1.75rem;
+}
+
+.surface-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.surface-card {
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 252, 245, 0.82);
+  box-shadow: 0 12px 30px rgba(82, 59, 27, 0.06);
+}
+
+.surface-card__eyebrow {
+  color: #8f5d2f;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.surface-card__value {
+  margin-top: 0.5rem;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #241d14;
+}
+
+.surface-card__body {
+  margin-top: 0.5rem;
+  color: #5c5145;
+}
+
 .description {
   color: #5c5145;
   margin-bottom: 1rem;

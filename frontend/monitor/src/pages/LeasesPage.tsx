@@ -10,10 +10,29 @@ export default function LeasesPage() {
   if (error) return <ErrorState title="Leases" error={error} />;
   if (!data) return <div>Loading...</div>;
 
+  const triage = data.triage ?? {};
+  const triageCards = [
+    { label: "Active", value: triage.active ?? 0 },
+    { label: "Residue", value: triage.residue ?? 0 },
+    { label: "Total", value: data.count ?? 0 },
+  ];
+
   return (
     <div className="page">
       <h1>{data.title}</h1>
       <p className="count">Total: {data.count}</p>
+      <section className="surface-section">
+        <h2>Lease Triage</h2>
+        <div className="surface-grid">
+          {triageCards.map((card) => (
+            <article className="surface-card" key={card.label}>
+              <p className="surface-card__eyebrow">{card.label}</p>
+              <p className="surface-card__value">{card.value}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <h2>Raw Lease Table</h2>
       <table>
         <thead>
           <tr>
