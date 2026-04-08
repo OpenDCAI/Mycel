@@ -3394,4 +3394,82 @@ describe("MonitorRoutes", () => {
     }
     expect(within(providerCard).getByText("1 Detached Residue")).toBeInTheDocument();
   });
+
+  it("surfaces detached residue directly on the sandbox card", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "local",
+            name: "local",
+            description: "Local runtime",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+              memory: { used: 5, limit: 32, unit: "GB", source: "direct", freshness: "live" },
+              disk: { used: 40, limit: 100, unit: "GB", source: "direct", freshness: "live" },
+            },
+            cardCpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+            sessions: [
+              {
+                id: "running-1",
+                leaseId: "lease-running",
+                threadId: "thread-running",
+                agentName: "Agent 1",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 12,
+                  memory: 5,
+                  memoryLimit: 32,
+                  disk: 40,
+                  diskLimit: 100,
+                  networkIn: null,
+                  networkOut: null,
+                },
+                runtimeSessionId: "runtime-1",
+              },
+              {
+                id: "stopped-residue",
+                leaseId: "lease-residue",
+                threadId: "thread-stopped",
+                agentName: "Agent 2",
+                status: "stopped",
+                startedAt: "2026-04-07T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    const sandboxCard = await screen.findByRole("button", { name: /agent 2/i });
+    expect(within(sandboxCard).getByText("Detached Residue")).toBeInTheDocument();
+  });
 });
