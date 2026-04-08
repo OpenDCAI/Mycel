@@ -360,7 +360,14 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {tid: {"agent_user_id": "agent-remote", "agent_name": "Remote Agent", "avatar_url": None} for tid in thread_ids},
+        lambda thread_ids: {
+            tid: {
+                "agent_user_id": "agent-remote",
+                "agent_name": "Remote Agent",
+                "avatar_url": "/api/users/agent-remote/avatar",
+            }
+            for tid in thread_ids
+        },
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
@@ -372,5 +379,6 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
     assert session["runtimeSessionId"] == "provider-session-1"
     assert session["agentUserId"] == "agent-remote"
     assert session["agentName"] == "Remote Agent"
+    assert session["avatarUrl"] == "/api/users/agent-remote/avatar"
     assert "memberId" not in session
     assert "memberName" not in session
