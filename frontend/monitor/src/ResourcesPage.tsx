@@ -435,6 +435,14 @@ function ProviderCard({
   const runtimeUnboundRunningCount = provider.sessions.filter(
     (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
   ).length;
+  const liveUsageRunningCount = provider.sessions.filter((session) => {
+    const metrics = session.metrics;
+    return (
+      session.status === "running" &&
+      metrics != null &&
+      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
+    );
+  }).length;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const capabilityList = capabilityTags(provider.capabilities);
@@ -497,6 +505,7 @@ function ProviderCard({
 
       <div className="provider-card__footer">
         <span>{runningCount} 占用中</span>
+        {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && <span>{liveUsageRunningCount} 有用量</span>}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
