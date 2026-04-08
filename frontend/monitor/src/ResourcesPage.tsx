@@ -448,6 +448,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
   const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const runtimeUnboundRunningCount = provider.sessions.filter(
+    (session) => session.status === "running" && !session.runtimeSessionId,
+  ).length;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const isLocal = provider.type === "local";
@@ -507,6 +510,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
               ) : (
                 <div className="provider-inline-metrics">
                   <InlineMetric label="运行中" value={String(runningCount)} />
+                  {runtimeUnboundRunningCount > 0 && <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />}
                   <InlineMetric label="已暂停" value={String(pausedCount)} />
                   <InlineMetric label="已结束" value={String(stoppedCount)} />
                 </div>
