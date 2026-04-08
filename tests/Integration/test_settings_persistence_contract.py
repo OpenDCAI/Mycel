@@ -203,8 +203,6 @@ def test_update_observation_settings_route_does_not_import_filesystem_when_repo_
     assert response.status_code == 200
     assert response.json() == {"success": True, "active": "langsmith"}
     assert repo.saved_observation == {"active": "langsmith"}
-
-
 @pytest.mark.asyncio
 async def test_save_sandbox_config_does_not_import_filesystem_when_repo_row_missing(
     monkeypatch,
