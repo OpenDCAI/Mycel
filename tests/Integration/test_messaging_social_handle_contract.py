@@ -318,6 +318,39 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     assert data["sender_name"] == "Toad"
 
 
+def test_messaging_service_event_bus_message_uses_service_owned_projection() -> None:
+    published: list[dict[str, object]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
+        messages_repo=SimpleNamespace(create=lambda row: row),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
+                if uid == "human-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+        event_bus=SimpleNamespace(publish=lambda _chat_id, payload: published.append(payload)),
+    )
+
+    created = service.send("chat-1", "thread-user-1", "hello", mentions=["human-user-1"], signal="open")
+
+    payload = cast(dict[str, object], published[0])
+    assert payload == {
+        "event": "message",
+        "data": service.project_message_response(created),
+    }
+
+
 def test_messaging_service_list_message_responses_projects_sender_name_from_thread_user_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(),

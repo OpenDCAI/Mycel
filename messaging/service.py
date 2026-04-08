@@ -195,14 +195,12 @@ class MessagingService:
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)
-        sender = self._resolve_display_user(sender_id)
-        sender_name = sender.display_name if sender else "unknown"
         if self._event_bus:
             self._event_bus.publish(
                 chat_id,
                 {
                     "event": "message",
-                    "data": {**created, "sender_name": sender_name},
+                    "data": self._project_message_response(created),
                 },
             )
 
