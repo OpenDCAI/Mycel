@@ -179,6 +179,10 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
         const message = err instanceof Error ? err.message : "无法获取默认线程";
+        // @@@default-thread-route-teardown - default thread resolution can
+        // finish after navigation already left the hire flow. Only log while
+        // /chat/hire is still active; otherwise this is stale UI noise.
+        if (!isActiveHireRoute()) return;
         console.error("[NewChatPage] resolve default thread failed:", err);
         setError(message);
         setResolveState("error");
