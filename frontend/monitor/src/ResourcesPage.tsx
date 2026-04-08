@@ -357,6 +357,7 @@ export default function ResourcesPage() {
     0,
   );
   const detachedResidueCount = triage?.summary?.detached_residue ?? 0;
+  const orphanCleanupCount = triage?.summary?.orphan_cleanup ?? 0;
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -428,6 +429,9 @@ export default function ResourcesPage() {
           )}
           {detachedResidueCount > 0 && (
             <div className="resources-summary-pill">{detachedResidueCount} Detached Residue</div>
+          )}
+          {orphanCleanupCount > 0 && (
+            <div className="resources-summary-pill">{orphanCleanupCount} Orphan Cleanup</div>
           )}
           <div className="resources-summary-pill">
             <span

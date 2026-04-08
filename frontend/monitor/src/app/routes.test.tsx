@@ -3231,6 +3231,60 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByText("38 Detached Residue")).toBeInTheDocument();
   });
 
+  it("surfaces orphan cleanup in the resources summary strip", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 0,
+        },
+        triage: {
+          summary: {
+            orphan_cleanup: 3,
+          },
+        },
+        providers: [
+          {
+            id: "local",
+            name: "local",
+            description: "Local runtime",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 0, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+              memory: { used: 5, limit: 32, unit: "GB", source: "direct", freshness: "live" },
+              disk: { used: 40, limit: 100, unit: "GB", source: "direct", freshness: "live" },
+            },
+            cardCpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+            sessions: [],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("3 Orphan Cleanup")).toBeInTheDocument();
+  });
+
   it("surfaces detached residue in the provider detail overview", async () => {
     mockRoutePayloads({
       "/resources": {

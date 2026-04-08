@@ -105,6 +105,7 @@ export interface ResourceOverviewResponse {
   triage?: {
     summary?: {
       detached_residue?: number;
+      orphan_cleanup?: number;
     };
   };
 }
