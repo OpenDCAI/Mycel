@@ -489,4 +489,65 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByText("hello from local sandbox")).toBeInTheDocument();
   });
+
+  it("does not pretend a remote lease is browsable when runtime session binding is missing", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "daytona_selfhost",
+            name: "daytona_selfhost",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+            sessions: [
+              {
+                id: "lease-1:thread-1",
+                leaseId: "lease-1",
+                threadId: "thread-1",
+                agentName: "Remote Agent",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /remote agent/i }));
+
+    expect(await screen.findByText("当前 lease 没有 active runtime session，无法浏览文件。")).toBeInTheDocument();
+  });
 });

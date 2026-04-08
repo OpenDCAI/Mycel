@@ -628,6 +628,10 @@ function SandboxInspector({
   }, [group, onClose]);
 
   if (!group) return null;
+  const browserUnavailableReason =
+    providerType !== "local" && group.leaseId && !group.sessions.some((session) => Boolean(session.runtimeSessionId))
+      ? "当前 lease 没有 active runtime session，无法浏览文件。"
+      : null;
 
   return (
     <div className="sandbox-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
@@ -704,6 +708,7 @@ function SandboxInspector({
             leaseId={group.leaseId}
             providerType={providerType}
             disabled={group.status === "stopped" || group.status === "destroying"}
+            unavailableReason={browserUnavailableReason}
           />
         </div>
       </div>
@@ -727,10 +732,12 @@ function MonitorFileBrowser({
   leaseId,
   providerType,
   disabled,
+  unavailableReason,
 }: {
   leaseId: string;
   providerType: ProviderInfo["type"];
   disabled: boolean;
+  unavailableReason?: string | null;
 }) {
   const isLocal = providerType === "local" || !leaseId;
   const defaultPath = isLocal ? "~" : "/";
@@ -831,6 +838,10 @@ function MonitorFileBrowser({
 
   if (!leaseId && !isLocal) {
     return <p className="file-browser__empty">当前沙盒没有 lease id，无法浏览文件。</p>;
+  }
+
+  if (unavailableReason) {
+    return <p className="file-browser__empty">{unavailableReason}</p>;
   }
 
   if (disabled) {
