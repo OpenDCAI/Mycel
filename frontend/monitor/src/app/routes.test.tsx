@@ -1363,6 +1363,105 @@ describe("MonitorRoutes", () => {
     expect(within(sandboxCard).getByText("Disk 仅配额")).toBeInTheDocument();
   });
 
+  it("surfaces quota-only running sandboxes in the summary strip", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 2,
+        },
+        providers: [
+          {
+            id: "daytona_selfhost",
+            name: "daytona_selfhost",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 2, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: {
+              used: null,
+              limit: null,
+              unit: "%",
+              source: "unknown",
+              freshness: "live",
+              error: "CPU usage is per-sandbox, not a provider-level quota.",
+            },
+            sessions: [
+              {
+                id: "lease-1:thread-1",
+                leaseId: "lease-1",
+                threadId: "thread-1",
+                runtimeSessionId: "runtime-1",
+                agentName: "Remote Agent 1",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: null,
+                  memory: null,
+                  memoryLimit: 1,
+                  memoryNote: null,
+                  disk: null,
+                  diskLimit: 3,
+                  diskNote: "disk usage not measurable inside container; showing quota only",
+                  networkIn: null,
+                  networkOut: null,
+                  probeError: null,
+                },
+              },
+              {
+                id: "lease-2:thread-2",
+                leaseId: "lease-2",
+                threadId: "thread-2",
+                runtimeSessionId: "runtime-2",
+                agentName: "Remote Agent 2",
+                status: "running",
+                startedAt: "2026-04-08T00:05:00Z",
+                metrics: {
+                  cpu: null,
+                  memory: null,
+                  memoryLimit: 1,
+                  memoryNote: null,
+                  disk: null,
+                  diskLimit: 3,
+                  diskNote: "disk usage not measurable inside container; showing quota only",
+                  networkIn: null,
+                  networkOut: null,
+                  probeError: null,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("2 仅配额")).toBeInTheDocument();
+  });
+
   it("surfaces when a ready provider still has no live telemetry", async () => {
     mockRoutePayloads({
       "/resources": {
