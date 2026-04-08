@@ -69,4 +69,19 @@ describe("useThreadPermissions", () => {
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
+
+  it("does not treat removed /threads routes as active thread pages", async () => {
+    window.history.replaceState({}, "", "/threads/thread-1");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    getThreadPermissions.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    render(<Harness threadId="thread-1" />);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
 });
