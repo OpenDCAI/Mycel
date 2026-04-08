@@ -32,12 +32,12 @@ describe("MonitorRoutes", () => {
     );
 
     expect(screen.getByText("Leon Sandbox Monitor")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Threads" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Resources" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Leases" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Diverged" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Events" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /threads/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /resources/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /leases/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /diverged/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /events/i })).toBeInTheDocument();
   });
 
   it("shows dashboard content for /dashboard", async () => {
@@ -49,5 +49,16 @@ describe("MonitorRoutes", () => {
 
     expect(screen.getByText("Leon Sandbox Monitor")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+  });
+
+  it("renders the shell with a sidebar and highlights the active route", () => {
+    render(
+      <MemoryRouter initialEntries={["/leases"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("navigation", { name: "Monitor sections" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /leases/i })).toHaveAttribute("aria-current", "page");
   });
 });
