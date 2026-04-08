@@ -139,4 +139,78 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByText("Lease Triage")).toBeInTheDocument();
     expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
   });
+
+  it("renders threads with pressure summary before the raw table", async () => {
+    mockRoutePayloads({
+      "/threads": {
+        title: "Threads",
+        count: 1,
+        items: [
+          {
+            thread_id: "thread-1",
+            thread_url: "/thread/thread-1",
+            session_count: 2,
+            last_active_ago: "2m",
+            lease: {
+              lease_id: "lease-1",
+              lease_url: "/lease/lease-1",
+              provider: "local",
+            },
+            state_badge: {
+              color: "yellow",
+              observed: "paused",
+              desired: "running",
+              text: "paused",
+            },
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/threads"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Thread Pressure")).toBeInTheDocument();
+    expect(screen.getByText("Raw Thread Table")).toBeInTheDocument();
+  });
+
+  it("renders diverged leases with triage before the raw table", async () => {
+    mockRoutePayloads({
+      "/diverged": {
+        title: "Diverged leases",
+        description: "Leases whose observed state diverges from desired state.",
+        count: 1,
+        items: [
+          {
+            lease_id: "lease-1",
+            lease_url: "/lease/lease-1",
+            provider: "daytona_selfhost",
+            thread: {
+              thread_id: "thread-1",
+              thread_url: "/thread/thread-1",
+            },
+            state_badge: {
+              color: "red",
+              desired: "running",
+              observed: "stopped",
+              hours_diverged: 5,
+            },
+            error: "provider unavailable",
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/diverged"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Drift Triage")).toBeInTheDocument();
+    expect(screen.getByText("Raw Divergence Table")).toBeInTheDocument();
+  });
 });

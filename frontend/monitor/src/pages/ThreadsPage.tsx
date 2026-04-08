@@ -10,10 +10,35 @@ export default function ThreadsPage() {
   if (error) return <ErrorState title="Threads" error={error} />;
   if (!data) return <div>Loading...</div>;
 
+  const items = data.items ?? [];
+  const threadCards = [
+    { label: "Active Threads", value: data.count ?? items.length },
+    {
+      label: "Attached Leases",
+      value: items.filter((item: any) => item.lease?.lease_id).length,
+    },
+    {
+      label: "Pressure Sessions",
+      value: items.reduce((total: number, item: any) => total + (item.session_count ?? 0), 0),
+    },
+  ];
+
   return (
     <div className="page">
       <h1>{data.title}</h1>
       <p className="count">Total: {data.count}</p>
+      <section className="surface-section">
+        <h2>Thread Pressure</h2>
+        <div className="surface-grid">
+          {threadCards.map((card) => (
+            <article className="surface-card" key={card.label}>
+              <p className="surface-card__eyebrow">{card.label}</p>
+              <p className="surface-card__value">{card.value}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <h2>Raw Thread Table</h2>
       <table>
         <thead>
           <tr>

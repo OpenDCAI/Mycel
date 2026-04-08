@@ -9,11 +9,36 @@ export default function DivergedPage() {
   if (error) return <ErrorState title="Diverged leases" error={error} />;
   if (!data) return <div>Loading...</div>;
 
+  const items = data.items ?? [];
+  const triageCards = [
+    { label: "Total Diverged", value: data.count ?? items.length },
+    {
+      label: "Critical",
+      value: items.filter((item: any) => item.state_badge?.color === "red").length,
+    },
+    {
+      label: "Orphans",
+      value: items.filter((item: any) => !item.thread?.thread_id).length,
+    },
+  ];
+
   return (
     <div className="page">
       <h1>{data.title}</h1>
       <p className="description">{data.description}</p>
       <p className="count">Total: {data.count}</p>
+      <section className="surface-section">
+        <h2>Drift Triage</h2>
+        <div className="surface-grid">
+          {triageCards.map((card) => (
+            <article className="surface-card" key={card.label}>
+              <p className="surface-card__eyebrow">{card.label}</p>
+              <p className="surface-card__value">{card.value}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <h2>Raw Divergence Table</h2>
       <table>
         <thead>
           <tr>
