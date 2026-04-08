@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MonitorRoutes } from "./routes";
@@ -547,6 +547,9 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByText("无 active runtime")).toBeInTheDocument();
+    const runtimeGapLabel = screen.getByText("无 runtime");
+    expect(runtimeGapLabel).toBeInTheDocument();
+    expect(within(runtimeGapLabel.parentElement as HTMLElement).getByText("1")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /remote agent/i }));
 
     expect(await screen.findByText("当前 lease 没有 active runtime session，无法浏览文件。")).toBeInTheDocument();
