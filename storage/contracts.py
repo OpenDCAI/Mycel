@@ -673,6 +673,25 @@ class SandboxVolumeRepo(Protocol):
 
 class EvalRepo(Protocol):
     def ensure_schema(self) -> None: ...
+    def upsert_run_header(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        started_at: str,
+        user_message: str,
+        status: str,
+    ) -> None: ...
+    def finalize_run(
+        self,
+        *,
+        run_id: str,
+        finished_at: str,
+        final_response: str,
+        status: str,
+        run_tree_json: str,
+        trajectory_json: str,
+    ) -> None: ...
     def save_trajectory(self, trajectory: Any, trajectory_json: str) -> str: ...
     def save_metrics(self, run_id: str, tier: str, timestamp: str, metrics_json: str) -> None: ...
     def get_trajectory_json(self, run_id: str) -> str | None: ...
