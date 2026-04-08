@@ -860,10 +860,18 @@ def _write_mcps(member_dir: Path, mcps: list[dict[str, Any]]) -> None:
 
 def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
     member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+    user = None
+    config = None
+    if user_repo is not None:
+        user = user_repo.get_by_id(member_id)
+    if agent_config_repo and user is not None and user.agent_config_id is not None:
+        config = agent_config_repo.get_config(user.agent_config_id)
+    if not member_dir.is_dir() and config is None:
         return None
-    meta = _read_json(member_dir / "meta.json", {})
-    parts = meta.get("version", "0.1.0").split(".")
+
+    meta = _read_json(member_dir / "meta.json", {}) if member_dir.is_dir() else {}
+    current_version = meta.get("version") or (config or {}).get("version", "0.1.0")
+    parts = current_version.split(".")
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
     if bump_type == "major":
         major, minor, patch = major + 1, 0, 0
@@ -874,17 +882,16 @@ def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = No
     meta["version"] = f"{major}.{minor}.{patch}"
     meta["status"] = "active"
     meta["updated_at"] = int(time.time() * 1000)
-    _write_json(member_dir / "meta.json", meta)
+    if member_dir.is_dir():
+        _write_json(member_dir / "meta.json", meta)
 
     # Dual-write publish status to Supabase repo
     if agent_config_repo:
         if user_repo is None:
             raise RuntimeError("user_repo is required when publishing member config to agent_config_repo")
-        user = user_repo.get_by_id(member_id)
         if user is None or user.agent_config_id is None:
             raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
         try:
-            config = agent_config_repo.get_config(user.agent_config_id)
             if config:
                 agent_config_repo.save_config(
                     user.agent_config_id,
@@ -905,14 +912,14 @@ def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any 
     if member_id == "__leon__":
         return False
     member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+    user = user_repo.get_by_id(member_id) if user_repo is not None else None
+    if not member_dir.is_dir() and user is None:
         return False
 
     # Delete from Supabase repo before removing filesystem
     if agent_config_repo:
         if user_repo is None:
             raise RuntimeError("user_repo is required when deleting member config from agent_config_repo")
-        user = user_repo.get_by_id(member_id)
         if user is None or user.agent_config_id is None:
             raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
         try:
@@ -920,7 +927,8 @@ def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any 
         except Exception:
             logger.warning("Failed to delete config from repo for %s", member_id, exc_info=True)
 
-    shutil.rmtree(member_dir)
+    if member_dir.is_dir():
+        shutil.rmtree(member_dir)
 
     # Also remove from unified users table
     if user_repo is None:

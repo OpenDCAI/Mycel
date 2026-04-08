@@ -235,7 +235,6 @@ class AuthService:
             raise RuntimeError("Agent config repo required for initial agent creation during schema cutover.")
         from pathlib import Path
 
-        from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
         from storage.utils import generate_agent_config_id, generate_member_id
 
         initial_agents = [
@@ -248,13 +247,6 @@ class AuthService:
         for i, agent_def in enumerate(initial_agents):
             agent_id = generate_member_id()
             agent_config_id = generate_agent_config_id()
-            agent_dir = MEMBERS_DIR / agent_id
-            agent_dir.mkdir(parents=True, exist_ok=True)
-            _write_agent_md(agent_dir / "agent.md", name=agent_def["name"], description=agent_def["description"])
-            _write_json(
-                agent_dir / "meta.json",
-                {"status": "active", "version": "1.0.0", "created_at": int(now * 1000), "updated_at": int(now * 1000)},
-            )
             self._users.create(
                 UserRow(
                     id=agent_id,

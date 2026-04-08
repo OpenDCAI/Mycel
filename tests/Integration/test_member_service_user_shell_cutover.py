@@ -294,9 +294,50 @@ def test_publish_member_reads_and_writes_repo_by_agent_config_id(monkeypatch: py
     assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
 
 
+def test_publish_member_uses_repo_even_when_member_dir_is_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+    agent_config_repo = _FakeAgentConfigRepo()
+    agent_config_repo.save_config(
+        "cfg-1",
+        {
+            "agent_user_id": "agent-1",
+            "name": "Toad",
+            "description": "helper",
+            "tools": ["*"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {},
+            "mcp": {},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+    )
+
+    result = member_service.publish_member("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
+
+    assert result is not None
+    assert result["status"] == "active"
+    assert result["version"] == "0.1.1"
+    assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
+
+
 def test_delete_member_deletes_user_and_agent_config_by_agent_config_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     _write_member_shell(tmp_path / "agent-1")
+    user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+    agent_config_repo = _FakeAgentConfigRepo()
+
+    ok = member_service.delete_member("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
+
+    assert ok is True
+    assert agent_config_repo.deleted == ["cfg-1"]
+    assert user_repo.deleted == ["agent-1"]
+
+
+def test_delete_member_deletes_db_shell_even_when_member_dir_is_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
     agent_config_repo = _FakeAgentConfigRepo()
 

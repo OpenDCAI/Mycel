@@ -101,6 +101,28 @@ def test_complete_register_creates_human_and_owned_agent_users(monkeypatch: pyte
     assert invite_codes.used == [("invite-1", "user-1")]
 
 
+def test_complete_register_does_not_write_member_shell_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    monkeypatch.setattr(
+        "backend.web.services.auth_service.jwt.decode",
+        lambda *_args, **_kwargs: {"sub": "user-1", "email": "fresh@example.com"},
+    )
+    monkeypatch.setattr(
+        "backend.web.routers.entities.process_and_save_avatar",
+        lambda _src, agent_id: f"avatars/{agent_id}.png",
+    )
+    service = _service(
+        user_repo=_FakeUserRepo(),
+        agent_config_repo=_FakeAgentConfigRepo(),
+        invite_codes=_FakeInviteCodes(),
+    )
+
+    service.complete_register("temp-1", "invite-1")
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_complete_register_existing_user_path_uses_user_repo_not_member_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
     monkeypatch.setattr(
