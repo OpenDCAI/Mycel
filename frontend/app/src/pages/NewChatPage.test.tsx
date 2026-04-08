@@ -8,6 +8,9 @@ import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
 
 const handleGetDefaultThread = vi.fn();
+const clientMocks = vi.hoisted(() => ({
+  getDefaultThreadConfig: vi.fn(() => new Promise(() => {})),
+}));
 
 vi.mock("zustand/middleware", async () => {
   const actual = await vi.importActual<typeof import("zustand/middleware")>("zustand/middleware");
@@ -48,7 +51,7 @@ vi.mock("../api", () => ({
 }));
 
 vi.mock("../api/client", () => ({
-  getDefaultThreadConfig: vi.fn(() => new Promise(() => {})),
+  getDefaultThreadConfig: clientMocks.getDefaultThreadConfig,
   listMyLeases: vi.fn(async () => []),
   saveDefaultThreadConfig: vi.fn(async () => undefined),
 }));
@@ -86,6 +89,8 @@ describe("NewChatPage", () => {
   beforeEach(() => {
     handleGetDefaultThread.mockReset();
     handleGetDefaultThread.mockResolvedValue(null);
+    clientMocks.getDefaultThreadConfig.mockReset();
+    clientMocks.getDefaultThreadConfig.mockImplementation(() => new Promise(() => {}));
 
     useAuthStore.setState({
       token: "token",
@@ -216,6 +221,33 @@ describe("NewChatPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("thread-route:thread-42")).toBeTruthy();
+    });
+  });
+
+  it("does not log a failed default-config fetch once navigation already left the hire route", async () => {
+    clientMocks.getDefaultThreadConfig.mockImplementation(async () => {
+      window.history.replaceState({}, "", "/chat");
+      throw new TypeError("Failed to fetch");
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+            <Route path="/chat" element={<div>chat-page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(clientMocks.getDefaultThreadConfig).toHaveBeenCalledOnce();
+    });
+
+    await waitFor(() => {
+      expect(consoleError).not.toHaveBeenCalled();
     });
   });
 });

@@ -113,6 +113,11 @@ function enabledFeatureLabels(recipe: RecipeSnapshot | null): string[] {
     .map((item) => item.name);
 }
 
+function isActiveHireRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.startsWith("/chat/hire");
+}
+
 export default function NewChatPage({ mode = "member" }: { mode?: "member" | "new" }) {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
@@ -294,6 +299,10 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
+        // @@@default-config-route-teardown - default thread config can resolve
+        // after navigation already left the hire flow. Only log while the
+        // /chat/hire route is still active; otherwise this is stale UI noise.
+        if (!isActiveHireRoute()) return;
         console.error("[NewChatPage] load default thread config failed:", err);
       } finally {
         if (!cancelled && !ac.signal.aborted) setConfigDefaultsLoading(false);
