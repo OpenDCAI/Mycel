@@ -313,6 +313,7 @@ export default function ResourcesPage() {
       }).length,
     0,
   );
+  const missingLiveTelemetryRunningCount = runningSessionCount - liveUsageRunningCount;
   const readyWithoutLiveTelemetryCount = providers.filter(
     (provider) =>
       provider.type !== "local" &&
@@ -391,6 +392,9 @@ export default function ResourcesPage() {
           <div className="resources-summary-pill">{runningSessionCount} 运行会话</div>
           {liveUsageRunningCount > 0 && liveUsageRunningCount < runningSessionCount && (
             <div className="resources-summary-pill">{liveUsageRunningCount} 有用量</div>
+          )}
+          {missingLiveTelemetryRunningCount > 0 && (
+            <div className="resources-summary-pill">{missingLiveTelemetryRunningCount} 无 live telemetry</div>
           )}
           {runtimeUnboundRunningCount > 0 && (
             <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
