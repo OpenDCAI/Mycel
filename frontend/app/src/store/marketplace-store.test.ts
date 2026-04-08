@@ -87,4 +87,22 @@ describe("useMarketplaceStore", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(consoleError).not.toHaveBeenCalled();
   });
+
+  it("does not log a failed update check once navigation already left the marketplace route", async () => {
+    window.history.replaceState({}, "", "/marketplace?tab=installed");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      window.history.replaceState({}, "", "/chat");
+      throw new TypeError("Failed to fetch");
+    });
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await useMarketplaceStore.getState().checkUpdates([
+      { marketplace_item_id: "item-1", installed_version: "1.0.0" },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
 });

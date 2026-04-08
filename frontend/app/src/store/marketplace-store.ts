@@ -235,6 +235,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       });
       set({ updates: data.updates || [] });
     } catch (e) {
+      // @@@marketplace-updates-route-teardown - installed update checks can
+      // resolve after the user already left /marketplace. Only log if the
+      // marketplace route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceRoute()) return;
       console.error("Failed to check updates:", e);
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     }
