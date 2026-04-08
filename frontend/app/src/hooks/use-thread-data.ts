@@ -23,6 +23,11 @@ export interface ThreadDataActions {
 
 const threadDetailInflight = new Map<string, Promise<ThreadDetail>>();
 
+function isActiveThreadRoute(threadId: string): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.startsWith("/chat/hire/thread/") && path.endsWith(`/${encodeURIComponent(threadId)}`);
+}
+
 function loadThreadDetail(threadId: string): Promise<ThreadDetail> {
   const existing = threadDetailInflight.get(threadId);
   if (existing) return existing;
@@ -49,6 +54,10 @@ export function useThreadData(threadId: string | undefined, skipInitialLoad = fa
       const sandbox = thread.sandbox;
       setActiveSandbox(sandbox);
     } catch (err) {
+      // @@@thread-route-teardown - browser navigation can leave an abandoned
+      // thread fetch resolving after the chat page already moved elsewhere.
+      // Only log if this thread page is still the active route.
+      if (!isActiveThreadRoute(id)) return;
       console.error("[useThreadData] Failed to load thread:", err);
     } finally {
       if (!silent) setLoading(false);
