@@ -10,7 +10,7 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.web.monitor import list_leases, router
-from backend.web.services import monitor_service
+from backend.web.services import monitor_service, resource_service
 from backend.web.services.resource_cache import (
     get_monitor_resource_overview_snapshot,
     refresh_monitor_resource_overview_sync,
@@ -21,6 +21,13 @@ class ResourceCleanupRequest(BaseModel):
     action: str = Field(default="cleanup_residue")
     lease_ids: list[str]
     expected_category: str
+
+
+def _refresh_monitor_resources_sync():
+    # @@@manual-resource-refresh-must-probe - the operator-facing refresh button must fetch new
+    # sandbox metrics first; recomputing the overview alone just re-labels stale snapshots.
+    resource_service.refresh_resource_snapshots()
+    return refresh_monitor_resource_overview_sync()
 
 
 @router.get("/health")
@@ -72,7 +79,7 @@ def resources_overview():
 @router.post("/resources/refresh")
 async def resources_refresh():
     # @@@refresh-off-main-loop - provider I/O stays off event loop to avoid request head-of-line blocking.
-    return await asyncio.to_thread(refresh_monitor_resource_overview_sync)
+    return await asyncio.to_thread(_refresh_monitor_resources_sync)
 
 
 @router.post("/resources/cleanup")

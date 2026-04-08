@@ -93,6 +93,7 @@ def _stub_monitor_resource_snapshot(monkeypatch):
 
     monkeypatch.setattr(monitor, "get_monitor_resource_overview_snapshot", lambda: snapshot)
     monkeypatch.setattr(monitor, "refresh_monitor_resource_overview_sync", lambda: snapshot)
+    monkeypatch.setattr(resource_service, "refresh_resource_snapshots", lambda: {"probed": 0, "errors": 0})
     return snapshot
 
 
@@ -128,6 +129,49 @@ def test_monitor_resources_refresh_route_smoke(monkeypatch):
     assert "last_refreshed_at" in payload["summary"]
     assert "refresh_status" in payload["summary"]
     assert set(payload["triage"]["summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
+
+
+def test_monitor_resources_refresh_route_probes_before_refresh(monkeypatch):
+    calls: list[str] = []
+    snapshot = {
+        "summary": {
+            "snapshot_at": "2026-04-07T00:00:00Z",
+            "last_refreshed_at": "2026-04-07T00:00:00Z",
+            "refresh_status": "fresh",
+            "running_sessions": 0,
+            "active_providers": 0,
+            "unavailable_providers": 0,
+        },
+        "providers": [],
+        "triage": {
+            "summary": {
+                "total": 0,
+                "active_drift": 0,
+                "detached_residue": 0,
+                "orphan_cleanup": 0,
+                "healthy_capacity": 0,
+            },
+            "groups": [],
+        },
+    }
+
+    def _probe():
+        calls.append("probe")
+        return {"probed": 1, "errors": 0}
+
+    def _refresh():
+        calls.append("refresh")
+        return snapshot
+
+    monkeypatch.setattr(resource_service, "refresh_resource_snapshots", _probe)
+    monkeypatch.setattr(monitor, "refresh_monitor_resource_overview_sync", _refresh)
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.post("/api/monitor/resources/refresh")
+
+    assert response.status_code == 200
+    assert response.json() == snapshot
+    assert calls == ["probe", "refresh"]
 
 
 def test_monitor_and_product_resource_routes_coexist_intentionally(monkeypatch):
