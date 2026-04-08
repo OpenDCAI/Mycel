@@ -812,6 +812,18 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin: 0.75rem 0;
 }
 
+.sandbox-card__warning {
+  display: inline-flex;
+  margin: 0.7rem 0 0.15rem;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid rgba(245, 185, 66, 0.32);
+  border-radius: 999px;
+  background: rgba(245, 185, 66, 0.08);
+  color: #f4cf83;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
 .sandbox-card__agent-row,
 .sandbox-session-row__identity,
 .sandbox-session-row__status {

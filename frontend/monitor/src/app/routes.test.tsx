@@ -546,6 +546,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
+    expect(await screen.findByText("无 active runtime")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /remote agent/i }));
 
     expect(await screen.findByText("当前 lease 没有 active runtime session，无法浏览文件。")).toBeInTheDocument();

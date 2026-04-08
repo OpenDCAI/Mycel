@@ -526,6 +526,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                     <SandboxCard
                       key={group.leaseId || group.sessions.map((session) => session.id).join("|")}
                       group={group}
+                      providerType={provider.type}
                       onOpen={() => setSelectedGroup(group)}
                     />
                   ))}
@@ -554,7 +555,15 @@ function InlineMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void }) {
+function SandboxCard({
+  group,
+  providerType,
+  onOpen,
+}: {
+  group: LeaseGroup;
+  providerType: ProviderInfo["type"];
+  onOpen: () => void;
+}) {
   const duration = formatStartedAtDuration(group.startedAt);
   const names = group.sessions.map((session) => session.agentName || "未绑定").join(", ");
   const metrics = group.metrics;
@@ -565,6 +574,11 @@ function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void 
       metrics.memoryLimit != null ||
       metrics.disk != null ||
       metrics.diskLimit != null);
+  const showRuntimeBindingWarning =
+    providerType !== "local" &&
+    group.status === "running" &&
+    Boolean(group.leaseId) &&
+    !group.sessions.some((session) => Boolean(session.runtimeSessionId));
 
   return (
     <button type="button" className={`sandbox-card sandbox-card--${group.status}`} onClick={onOpen}>
@@ -587,6 +601,12 @@ function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void 
           </div>
           <div className="sandbox-card__names">{names}</div>
         </div>
+        {showRuntimeBindingWarning && (
+          // @@@running-card-without-runtime - a persisted lease row can still say `running`
+          // after the live runtime session disappears; the card has to surface that drift
+          // before the operator drills into a guaranteed-failing file browser.
+          <div className="sandbox-card__warning">无 active runtime</div>
+        )}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
