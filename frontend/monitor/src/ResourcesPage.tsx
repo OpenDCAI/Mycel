@@ -463,6 +463,17 @@ function ProviderCard({
       (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
     );
   }).length;
+  const runtimeBoundTelemetryGapCount = provider.sessions.filter((session) => {
+    const metrics = session.metrics;
+    const hasLiveUsage = metrics != null && (metrics.cpu != null || metrics.memory != null || metrics.disk != null);
+    const isQuotaOnly =
+      metrics != null &&
+      metrics.memory == null &&
+      metrics.disk == null &&
+      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
+      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError);
+    return session.status === "running" && Boolean(session.runtimeSessionId) && !hasLiveUsage && !isQuotaOnly;
+  }).length;
   const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
@@ -596,6 +607,17 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
       (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
     );
   }).length;
+  const runtimeBoundTelemetryGapCount = provider.sessions.filter((session) => {
+    const metrics = session.metrics;
+    const hasLiveUsage = metrics != null && (metrics.cpu != null || metrics.memory != null || metrics.disk != null);
+    const isQuotaOnly =
+      metrics != null &&
+      metrics.memory == null &&
+      metrics.disk == null &&
+      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
+      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError);
+    return session.status === "running" && Boolean(session.runtimeSessionId) && !hasLiveUsage && !isQuotaOnly;
+  }).length;
   const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
@@ -679,6 +701,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                   )}
                   {missingLiveTelemetryRunningCount > 0 && (
                     <InlineMetric label="无 live telemetry" value={String(missingLiveTelemetryRunningCount)} />
+                  )}
+                  {runtimeBoundTelemetryGapCount > 0 && (
+                    <InlineMetric label="有 runtime无遥测" value={String(runtimeBoundTelemetryGapCount)} />
                   )}
                   {runtimeUnboundRunningCount > 0 && <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />}
                   {quotaOnlyRunningCount > 0 && <InlineMetric label="仅配额" value={String(quotaOnlyRunningCount)} />}
