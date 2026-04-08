@@ -391,6 +391,14 @@ def test_update_member_uses_repo_even_when_member_dir_is_absent(monkeypatch: pyt
     assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
 
 
+def test_update_member_requires_repos_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    _write_member_shell(tmp_path / "agent-1")
+
+    with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+        member_service.update_member("agent-1", name="Dryad")
+
+
 def test_update_member_prefers_repo_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     member_dir = tmp_path / "agent-1"
@@ -482,6 +490,14 @@ def test_update_member_config_uses_repo_even_when_member_dir_is_absent(monkeypat
         "skills:lookup": {"enabled": True, "desc": "Lookup"},
     }
     assert saved_config["mcp"] == {"filesystem": {"command": "uvx", "args": ["mcp"], "env": {"A": "1"}, "disabled": False}}
+
+
+def test_update_member_config_requires_repos_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    _write_member_shell(tmp_path / "agent-1")
+
+    with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+        member_service.update_member_config("agent-1", {"prompt": "updated prompt"})
 
 
 def test_update_member_config_prefers_repo_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -576,6 +592,14 @@ def test_publish_member_uses_repo_even_when_member_dir_is_absent(monkeypatch: py
     assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
 
 
+def test_publish_member_requires_repos_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    _write_member_shell(tmp_path / "agent-1")
+
+    with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+        member_service.publish_member("agent-1")
+
+
 def test_publish_member_prefers_repo_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonKeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     member_dir = tmp_path / "agent-1"
@@ -632,6 +656,18 @@ def test_delete_member_deletes_db_shell_even_when_member_dir_is_absent(monkeypat
     assert ok is True
     assert agent_config_repo.deleted == ["cfg-1"]
     assert user_repo.deleted == ["agent-1"]
+
+
+def test_delete_member_requires_repos_even_when_legacy_member_dir_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    member_dir = tmp_path / "agent-1"
+    _write_member_shell(member_dir)
+    before = _snapshot_tree(member_dir)
+
+    with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+        member_service.delete_member("agent-1")
+
+    assert _snapshot_tree(member_dir) == before
 
 
 def test_delete_member_fails_loudly_when_agent_config_delete_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

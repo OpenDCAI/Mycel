@@ -512,6 +512,11 @@ def create_member(
     return get_member(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)  # type: ignore
 
 
+def _require_repo_backed_member_ops(user_repo: Any = None, agent_config_repo: Any = None) -> None:
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required for owner-scoped agent operations")
+
+
 def update_member(
     member_id: str,
     user_repo: Any = None,
@@ -520,74 +525,26 @@ def update_member(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
     user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
-    if user is not None and config is not None:
-        allowed = {"name", "description", "status"}
-        updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
-        if not updates:
-            return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
-        if "name" in updates:
-            user_repo.update(member_id, display_name=updates["name"])
-        agent_config_repo.save_config(
-            user.agent_config_id,
-            {
-                **config,
-                "name": updates.get("name", config.get("name") or user.display_name),
-                "description": updates.get("description", config.get("description", "")),
-                "status": updates.get("status", config.get("status", "draft")),
-                "updated_at": int(time.time() * 1000),
-            },
-        )
-        return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
-
-    member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+    if user is None or config is None:
         return None
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
         return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
-    if "status" in updates:
-        meta = _read_json(member_dir / "meta.json", {})
-        meta["status"] = updates["status"]
-        meta["updated_at"] = int(time.time() * 1000)
-        _write_json(member_dir / "meta.json", meta)
-    if "name" in updates or "description" in updates:
-        parsed = _parse_agent_md(member_dir / "agent.md") or {}
-        _write_agent_md(
-            member_dir / "agent.md",
-            name=updates.get("name", parsed.get("name", "")),
-            description=updates.get("description", parsed.get("description", "")),
-            model=parsed.get("model"),
-            tools=parsed.get("tools"),
-            system_prompt=parsed.get("system_prompt", ""),
-        )
-        meta = _read_json(member_dir / "meta.json", {})
-        meta["updated_at"] = int(time.time() * 1000)
-        _write_json(member_dir / "meta.json", meta)
-
-        if "name" in updates:
-            if user_repo is None:
-                raise RuntimeError("user_repo is required to update member name")
-            user_repo.update(member_id, display_name=updates["name"])
-
-    if member_id != "__leon__" and user_repo is not None and agent_config_repo is not None:
-        user = user_repo.get_by_id(member_id)
-        if user is None or user.agent_config_id is None:
-            raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
-        config = agent_config_repo.get_config(user.agent_config_id)
-        if config is None:
-            raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
-        agent_config_repo.save_config(
-            user.agent_config_id,
-            {
-                **config,
-                "name": updates.get("name", config.get("name") or user.display_name),
-                "description": updates.get("description", config.get("description", "")),
-                "status": updates.get("status", config.get("status", "draft")),
-                "updated_at": int(time.time() * 1000),
-            },
-        )
+    if "name" in updates:
+        user_repo.update(member_id, display_name=updates["name"])
+    agent_config_repo.save_config(
+        user.agent_config_id,
+        {
+            **config,
+            "name": updates.get("name", config.get("name") or user.display_name),
+            "description": updates.get("description", config.get("description", "")),
+            "status": updates.get("status", config.get("status", "draft")),
+            "updated_at": int(time.time() * 1000),
+        },
+    )
 
     return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
@@ -600,96 +557,11 @@ def update_member_config(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
     user, _config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
-    if user is not None and _config is not None:
-        return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
-
-    member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+    if user is None or _config is None:
         return None
-
-    # prompt → agent.md body
-    if "prompt" in config_patch and config_patch["prompt"] is not None:
-        parsed = _parse_agent_md(member_dir / "agent.md") or {}
-        _write_agent_md(
-            member_dir / "agent.md",
-            name=parsed.get("name", ""),
-            description=parsed.get("description", ""),
-            model=parsed.get("model"),
-            tools=parsed.get("tools"),
-            system_prompt=config_patch["prompt"],
-        )
-
-    # rules → rules/ directory
-    if "rules" in config_patch and config_patch["rules"] is not None:
-        _write_rules(member_dir, config_patch["rules"])
-
-    # subAgents → agents/ directory
-    if "subAgents" in config_patch and config_patch["subAgents"] is not None:
-        _write_sub_agents(member_dir, config_patch["subAgents"])
-
-    # tools/skills → runtime.json
-    _write_runtime_resources(member_dir, config_patch)
-
-    # mcps → .mcp.json
-    if "mcps" in config_patch and config_patch["mcps"] is not None:
-        _write_mcps(member_dir, config_patch["mcps"])
-
-    # Update timestamp
-    meta = _read_json(member_dir / "meta.json", {})
-    meta["updated_at"] = int(time.time() * 1000)
-    _write_json(member_dir / "meta.json", meta)
-
-    # Dual-write full state to Supabase repo
-    if agent_config_repo:
-        if user_repo is None:
-            raise RuntimeError("user_repo is required when syncing member config to agent_config_repo")
-        user = user_repo.get_by_id(member_id)
-        if user is None or user.agent_config_id is None:
-            raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
-        try:
-            bundle = AgentLoader().load_bundle(member_dir)
-            _save_config_to_repo(
-                agent_config_repo,
-                user.agent_config_id,
-                agent_user_id=user.id,
-                name=bundle.agent.name,
-                description=bundle.agent.description,
-                model=bundle.agent.model,
-                tools=bundle.agent.tools,
-                system_prompt=bundle.agent.system_prompt,
-                status=bundle.meta.get("status", "draft"),
-                version=bundle.meta.get("version", "0.1.0"),
-                created_at=bundle.meta.get("created_at", 0),
-                updated_at=bundle.meta.get("updated_at", 0),
-                runtime={k: {"enabled": v.enabled, "desc": v.desc} for k, v in bundle.runtime.items()},
-                mcp={n: {"command": s.command, "args": s.args, "env": s.env, "disabled": s.disabled} for n, s in bundle.mcp.items()},
-            )
-            # Sync rules
-            for rule in bundle.rules:
-                agent_config_repo.save_rule(user.agent_config_id, f"{rule['name']}.md", rule.get("content", ""))
-            # Sync sub-agents
-            for agent_cfg in bundle.agents:
-                if agent_cfg.source_dir and agent_cfg.source_dir.resolve() == _SYSTEM_AGENTS_DIR:
-                    continue  # skip builtins
-                agent_config_repo.save_sub_agent(
-                    user.agent_config_id,
-                    agent_cfg.name,
-                    description=agent_cfg.description,
-                    model=agent_cfg.model,
-                    tools=agent_cfg.tools,
-                    system_prompt=agent_cfg.system_prompt,
-                )
-            # Sync skills
-            for skill in bundle.skills:
-                skill_path = Path(skill.get("path", ""))
-                skill_md = skill_path / "SKILL.md"
-                content = skill_md.read_text(encoding="utf-8") if skill_md.exists() else ""
-                agent_config_repo.save_skill(user.agent_config_id, skill["name"], content)
-        except Exception:
-            logger.warning("Failed to sync config to repo for member %s", member_id, exc_info=True)
-
-    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
 
 
 # ── Supabase repo dual-write helper ──
@@ -976,15 +848,11 @@ def _write_mcps(member_dir: Path, mcps: list[dict[str, Any]]) -> None:
 
 
 def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
     user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
-    if user is not None and config is not None:
-        current_version = config.get("version", "0.1.0")
-    else:
-        member_dir = MEMBERS_DIR / member_id
-        if not member_dir.is_dir():
-            return None
-        meta = _read_json(member_dir / "meta.json", {})
-        current_version = meta.get("version", "0.1.0")
+    if user is None or config is None:
+        return None
+    current_version = config.get("version", "0.1.0")
 
     parts = current_version.split(".")
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
@@ -997,22 +865,15 @@ def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = No
     next_version = f"{major}.{minor}.{patch}"
     updated_at = int(time.time() * 1000)
 
-    if user is None or config is None:
-        meta["version"] = next_version
-        meta["status"] = "active"
-        meta["updated_at"] = updated_at
-        _write_json(member_dir / "meta.json", meta)
-
-    if user is not None and config is not None:
-        agent_config_repo.save_config(
-            user.agent_config_id,
-            {
-                **config,
-                "version": next_version,
-                "status": "active",
-                "updated_at": updated_at,
-            },
-        )
+    agent_config_repo.save_config(
+        user.agent_config_id,
+        {
+            **config,
+            "version": next_version,
+            "status": "active",
+            "updated_at": updated_at,
+        },
+    )
 
     return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
@@ -1036,26 +897,22 @@ def _resolve_repo_backed_agent(
 def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> bool:
     if member_id == "__leon__":
         return False
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
     member_dir = MEMBERS_DIR / member_id
-    user = user_repo.get_by_id(member_id) if user_repo is not None else None
-    if not member_dir.is_dir() and user is None:
+    user = user_repo.get_by_id(member_id)
+    if user is None:
         return False
 
     # Delete from Supabase repo before removing filesystem
-    if agent_config_repo:
-        if user_repo is None:
-            raise RuntimeError("user_repo is required when deleting member config from agent_config_repo")
-        if user is None or user.agent_config_id is None:
-            raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
-        # @@@delete-member-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
-        agent_config_repo.delete_config(user.agent_config_id)
+    if user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
+    # @@@delete-member-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
+    agent_config_repo.delete_config(user.agent_config_id)
 
     if member_dir.is_dir():
         shutil.rmtree(member_dir)
 
     # Also remove from unified users table
-    if user_repo is None:
-        raise RuntimeError("user_repo is required to delete member")
     user_repo.delete(member_id)
 
     return True
