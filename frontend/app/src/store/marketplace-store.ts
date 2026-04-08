@@ -92,6 +92,11 @@ interface MarketplaceState {
   publishToMarketplace: (userId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<any>;
 }
 
+function isActiveMarketplaceRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/marketplace" || path.startsWith("/marketplace/");
+}
+
 async function hubApi<T = any>(path: string): Promise<T> {
   try {
     const res = await fetch(`${HUB_URL}/api/v1${path}`);
@@ -143,6 +148,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       const data = await hubApi<{ items: MarketplaceItemSummary[]; total: number }>(`/items?${params}`);
       set({ items: data.items, total: data.total });
     } catch (e) {
+      // @@@marketplace-route-teardown - explore fetches can resolve after the
+      // user already left /marketplace. Only log if the marketplace route is
+      // still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceRoute()) return;
       console.error("Failed to fetch marketplace items:", e);
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {

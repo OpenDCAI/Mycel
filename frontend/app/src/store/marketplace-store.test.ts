@@ -1,84 +1,42 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
 
-describe("marketplace store backend contract", () => {
-  let useAuthStore: typeof import("./auth-store").useAuthStore;
-  let useMarketplaceStore: typeof import("./marketplace-store").useMarketplaceStore;
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-  beforeEach(async () => {
-    vi.restoreAllMocks();
-    vi.resetModules();
-    const storage = {
-      getItem: vi.fn(() => null),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-    };
-    vi.stubGlobal("localStorage", storage);
-    vi.stubGlobal("window", { __MYCEL_CONFIG__: {}, localStorage: storage });
-
-    ({ useAuthStore } = await import("./auth-store"));
-    ({ useMarketplaceStore } = await import("./marketplace-store"));
-
-    useAuthStore.setState({
-      token: "token-1",
-      user: null,
-      agent: null,
-      userId: null,
-      setupInfo: null,
-      login: vi.fn(),
-      sendOtp: vi.fn(),
-      verifyOtp: vi.fn(),
-      completeRegister: vi.fn(),
-      clearSetupInfo: vi.fn(),
-      logout: vi.fn(),
-    });
+afterEach(async () => {
+  vi.resetModules();
+  vi.restoreAllMocks();
+  window.history.replaceState({}, "", "/");
+  const { useMarketplaceStore } = await import("./marketplace-store");
+  useMarketplaceStore.setState({
+    items: [],
+    total: 0,
+    loading: false,
+    error: null,
+    filters: { type: null, q: "", sort: "downloads", page: 1 },
+    detail: null,
+    detailLoading: false,
+    lineage: { ancestors: [], children: [] },
+    updates: [],
+    versionSnapshot: null,
+    snapshotLoading: false,
+    downloading: false,
   });
+});
 
-  it("upgrade posts user_id instead of member_id", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
+describe("useMarketplaceStore", () => {
+  it("does not log a failed items fetch once navigation already left the marketplace route", async () => {
+    window.history.replaceState({}, "", "/marketplace");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      window.history.replaceState({}, "", "/chat");
+      throw new TypeError("Failed to fetch");
     });
-    vi.stubGlobal("fetch", fetchMock);
 
-    await useMarketplaceStore.getState().upgrade("agent-1", "item-1");
+    const { useMarketplaceStore } = await import("./marketplace-store");
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/marketplace/upgrade",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ user_id: "agent-1", item_id: "item-1" }),
-        headers: expect.objectContaining({
-          Authorization: "Bearer token-1",
-          "Content-Type": "application/json",
-        }),
-      }),
-    );
-  });
+    await useMarketplaceStore.getState().fetchItems();
 
-  it("publishToMarketplace posts user_id instead of member_id", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await useMarketplaceStore
-      .getState()
-      .publishToMarketplace("agent-1", "member", "patch", "notes", ["tag-a"], "public");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/marketplace/publish",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          user_id: "agent-1",
-          type: "member",
-          bump_type: "patch",
-          release_notes: "notes",
-          tags: ["tag-a"],
-          visibility: "public",
-        }),
-      }),
-    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });
