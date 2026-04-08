@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MonitorRoutes } from "./routes";
@@ -417,5 +417,74 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Run an evaluation to populate the operator surface with persisted runtime truth.")).toBeInTheDocument();
     expect(screen.queryByText("Artifact Coverage")).not.toBeInTheDocument();
     expect(screen.queryByText("Artifacts")).not.toBeInTheDocument();
+  });
+
+  it("reads local provider files even when the resource session has no lease id", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "local",
+            name: "local",
+            description: "Local provider",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 8, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 20, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+            sessions: [
+              {
+                id: "session-1",
+                threadId: "thread-1",
+                agentName: "Local Agent",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+              },
+            ],
+          },
+        ],
+      },
+      "/api/settings/browse?path=~&include_files=true": {
+        current_path: "~",
+        parent_path: null,
+        items: [{ name: "notes.txt", path: "~/notes.txt", is_dir: false }],
+      },
+      "/api/settings/read?path=~%2Fnotes.txt": {
+        content: "hello from local sandbox",
+        truncated: false,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /local agent/i }));
+    fireEvent.click((await screen.findByText("notes.txt")).closest("button") as HTMLButtonElement);
+
+    expect(await screen.findByText("hello from local sandbox")).toBeInTheDocument();
   });
 });
