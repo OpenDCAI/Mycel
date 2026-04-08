@@ -93,6 +93,111 @@ def _try_get_user_id(request: Request) -> str | None:
         return None
 
 
+class _SettingsStorage:
+    def __init__(self, repo: Any | None, user_id: str | None) -> None:
+        self.repo = repo
+        self.user_id = user_id
+
+    @property
+    def repo_backed(self) -> bool:
+        return self.repo is not None and self.user_id is not None
+
+
+def _resolve_settings_storage(request: Request) -> _SettingsStorage:
+    repo = _get_settings_repo(request)
+    user_id = _try_get_user_id(request) if repo else None
+    return _SettingsStorage(repo, user_id)
+
+
+def _load_workspace_settings(storage: _SettingsStorage) -> WorkspaceSettings:
+    if storage.repo_backed:
+        row = storage.repo.get(storage.user_id)
+        if row is not None:
+            return WorkspaceSettings(
+                default_workspace=row.get("default_workspace"),
+                recent_workspaces=row.get("recent_workspaces") or [],
+                default_model=row.get("default_model") or "leon:large",
+            )
+    return load_settings()
+
+
+def _set_default_workspace(storage: _SettingsStorage, workspace: str) -> None:
+    if storage.repo_backed:
+        storage.repo.set_default_workspace(storage.user_id, workspace)
+        return
+    settings = load_settings()
+    settings.default_workspace = workspace
+    _remember_recent_workspace(settings, workspace)
+    save_settings(settings)
+
+
+def _add_recent_workspace(storage: _SettingsStorage, workspace: str) -> None:
+    if storage.repo_backed:
+        storage.repo.add_recent_workspace(storage.user_id, workspace)
+        return
+    settings = load_settings()
+    _remember_recent_workspace(settings, workspace)
+    save_settings(settings)
+
+
+def _set_default_model(storage: _SettingsStorage, model: str) -> None:
+    if storage.repo_backed:
+        storage.repo.set_default_model(storage.user_id, model)
+        return
+    settings = load_settings()
+    settings.default_model = model
+    save_settings(settings)
+
+
+def _load_models_data(storage: _SettingsStorage) -> dict[str, Any]:
+    return _load_models_for_user(storage.repo, storage.user_id)
+
+
+def _save_models_data(storage: _SettingsStorage, data: dict[str, Any]) -> None:
+    _save_models_for_user(storage.repo, storage.user_id, data)
+
+
+def _load_observation_data(storage: _SettingsStorage) -> dict[str, Any] | None:
+    if storage.repo_backed:
+        return storage.repo.get_observation_config(storage.user_id)
+    return _load_user_json("observation.json")
+
+
+def _save_observation_data(storage: _SettingsStorage, data: dict[str, Any]) -> None:
+    if storage.repo_backed:
+        storage.repo.set_observation_config(storage.user_id, data)
+        return
+    OBSERVATION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(OBSERVATION_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def _load_sandbox_configs(storage: _SettingsStorage) -> dict[str, Any] | None:
+    if storage.repo_backed:
+        return storage.repo.get_sandbox_configs(storage.user_id)
+    sandboxes: dict[str, Any] = {}
+    seen: set[Path] = set()
+    for root in user_home_read_candidates("sandboxes"):
+        if not root.exists():
+            continue
+        for f in root.glob("*.json"):
+            if f.resolve() in seen:
+                continue
+            seen.add(f.resolve())
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    sandboxes[f.stem] = json.load(fh)
+            except Exception:
+                sandboxes[f.stem] = {}
+    return sandboxes
+
+
+def _save_sandbox_configs(storage: _SettingsStorage, data: dict[str, Any]) -> None:
+    if not storage.repo_backed:
+        raise RuntimeError("sandbox config filesystem persistence stays route-local")
+    storage.repo.set_sandbox_configs(storage.user_id, data)
+
+
 def _load_models_for_user(repo, user_id: str | None) -> dict[str, Any]:
     """Load models config: Supabase first, filesystem fallback."""
     if repo and user_id:
@@ -165,25 +270,14 @@ class UserSettings(BaseModel):
 @router.get("")
 async def get_settings(request: Request) -> UserSettings:
     """Get combined settings (workspace + default_model from Supabase or preferences.json, models from models.json)."""
-    repo = _get_settings_repo(request)
-    user_id = _try_get_user_id(request) if repo else None
-
-    if repo and user_id:
-        row = repo.get(user_id)
-        ws = WorkspaceSettings(
-            default_workspace=row.get("default_workspace"),
-            recent_workspaces=row.get("recent_workspaces") or [],
-            default_model=row.get("default_model") or "leon:large",
-        )
-    else:
-        ws = load_settings()
-
+    storage = _resolve_settings_storage(request)
+    ws = _load_workspace_settings(storage)
     models = load_merged_models()
 
     # Build compat view
     mapping = {k: v.model for k, v in models.mapping.items()}
     providers = {k: ProviderConfig(api_key=v.api_key, base_url=v.base_url) for k, v in models.providers.items()}
-    raw = _load_models_for_user(repo, user_id)
+    raw = _load_models_data(storage)
     custom_config = raw.get("pool", {}).get("custom_config", {})
 
     return UserSettings(
@@ -260,14 +354,7 @@ async def set_default_workspace(
         not_dir_detail="Workspace path is not a directory",
     )
 
-    repo = _get_settings_repo(req)
-    if repo and user_id:
-        repo.set_default_workspace(user_id, workspace_str)
-    else:
-        settings = load_settings()
-        settings.default_workspace = workspace_str
-        _remember_recent_workspace(settings, workspace_str)
-        save_settings(settings)
+    _set_default_workspace(_resolve_settings_storage(req), workspace_str)
 
     return {"success": True, "workspace": workspace_str}
 
@@ -285,13 +372,7 @@ async def add_recent_workspace(
         not_dir_detail="Invalid workspace path",
     )
 
-    repo = _get_settings_repo(req)
-    if repo and user_id:
-        repo.add_recent_workspace(user_id, workspace_str)
-    else:
-        settings = load_settings()
-        _remember_recent_workspace(settings, workspace_str)
-        save_settings(settings)
+    _add_recent_workspace(_resolve_settings_storage(req), workspace_str)
 
     return {"success": True}
 
@@ -307,13 +388,7 @@ async def set_default_model(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     """Set default virtual model preference."""
-    repo = _get_settings_repo(req)
-    if repo and user_id:
-        repo.set_default_model(user_id, request.model)
-    else:
-        settings = load_settings()
-        settings.default_model = request.model
-        save_settings(settings)
+    _set_default_model(_resolve_settings_storage(req), request.model)
     return {"success": True, "default_model": request.model}
 
 
@@ -428,8 +503,8 @@ async def update_model_mapping(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     """Update virtual model mapping → models config."""
-    repo = _get_settings_repo(req)
-    data = _load_models_for_user(repo, user_id)
+    storage = _resolve_settings_storage(req)
+    data = _load_models_data(storage)
     mapping = data.get("mapping", {})
     for name, spec in request.mapping.items():
         if isinstance(spec, dict):
@@ -438,7 +513,7 @@ async def update_model_mapping(
             else:
                 mapping[name] = spec
     data["mapping"] = mapping
-    _save_models_for_user(repo, user_id, data)
+    _save_models_data(storage, data)
     return {"success": True, "model_mapping": request.mapping}
 
 
@@ -459,8 +534,8 @@ async def toggle_model(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     """Enable or disable a model."""
-    repo = _get_settings_repo(req)
-    data = _load_models_for_user(repo, user_id)
+    storage = _resolve_settings_storage(req)
+    data = _load_models_data(storage)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     enabled = pool.setdefault("enabled", [])
 
@@ -471,7 +546,7 @@ async def toggle_model(
         if request.model_id in enabled:
             enabled.remove(request.model_id)
 
-    _save_models_for_user(repo, user_id, data)
+    _save_models_data(storage, data)
     return {"success": True, "enabled_models": enabled}
 
 
@@ -489,8 +564,8 @@ async def add_custom_model(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     """Add a custom model + auto-enable."""
-    repo = _get_settings_repo(req)
-    data = _load_models_for_user(repo, user_id)
+    storage = _resolve_settings_storage(req)
+    data = _load_models_data(storage)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -513,7 +588,7 @@ async def add_custom_model(
             cfg["context_limit"] = request.context_limit
         custom_config[request.model_id] = cfg
 
-    _save_models_for_user(repo, user_id, data)
+    _save_models_data(storage, data)
     return {"success": True, "custom_models": custom, "enabled_models": enabled}
 
 
@@ -580,9 +655,8 @@ async def test_model(request: ModelTestRequest) -> dict[str, Any]:
 @router.delete("/models/custom")
 async def remove_custom_model(req: Request, model_id: str = Query(...)) -> dict[str, Any]:
     """Remove a custom model."""
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    data = _load_models_for_user(repo, user_id)
+    storage = _resolve_settings_storage(req)
+    data = _load_models_data(storage)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -598,7 +672,7 @@ async def remove_custom_model(req: Request, model_id: str = Query(...)) -> dict[
     custom_config = pool.get("custom_config", {})
     custom_config.pop(model_id, None)
 
-    _save_models_for_user(repo, user_id, data)
+    _save_models_data(storage, data)
     return {"success": True, "custom_models": custom}
 
 
@@ -612,9 +686,8 @@ class CustomModelConfigRequest(BaseModel):
 @router.post("/models/custom/config")
 async def update_custom_model_config(request: CustomModelConfigRequest, req: Request) -> dict[str, Any]:
     """Update based_on/context_limit/provider for a custom model."""
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    data = _load_models_for_user(repo, user_id)
+    storage = _resolve_settings_storage(req)
+    data = _load_models_data(storage)
     pool = data.setdefault("pool", {})
     custom_config = pool.setdefault("custom_config", {})
     cfg: dict[str, Any] = custom_config.get(request.model_id, {})
@@ -626,7 +699,7 @@ async def update_custom_model_config(request: CustomModelConfigRequest, req: Req
     if request.provider:
         custom_providers = pool.setdefault("custom_providers", {})
         custom_providers[request.model_id] = request.provider
-    _save_models_for_user(repo, user_id, data)
+    _save_models_data(storage, data)
     return {"success": True, "custom_config": custom_config}
 
 
@@ -648,8 +721,8 @@ async def update_provider(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     """Update provider config, then reload all agents."""
-    repo = _get_settings_repo(req)
-    data = _load_models_for_user(repo, user_id)
+    storage = _resolve_settings_storage(req)
+    data = _load_models_data(storage)
     providers = data.setdefault("providers", {})
     provider_data: dict[str, Any] = {}
     if request.api_key is not None:
@@ -657,7 +730,7 @@ async def update_provider(
     if request.base_url is not None:
         provider_data["base_url"] = request.base_url
     providers[request.provider] = provider_data
-    _save_models_for_user(repo, user_id, data)
+    _save_models_data(storage, data)
 
     # @@@reload-agents-on-key-change — hot-reload all cached agents so they pick up new API keys
     pool = getattr(req.app.state, "agent_pool", {})
@@ -694,12 +767,10 @@ class ObservationRequest(BaseModel):
 @router.get("/observation")
 async def get_observation_settings(req: Request) -> dict[str, Any]:
     """Get observation provider configuration."""
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        data = repo.get_observation_config(user_id)
-        if data is not None:
-            return data
+    storage = _resolve_settings_storage(req)
+    data = _load_observation_data(storage)
+    if data is not None:
+        return data
     from config.observation_loader import ObservationLoader
 
     config = ObservationLoader().load()
@@ -713,13 +784,8 @@ async def update_observation_settings(request: ObservationRequest, req: Request)
     New threads will pick up the active provider at creation time.
     Existing threads keep their locked provider — only credentials are read live.
     """
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-
-    if repo and user_id:
-        data = repo.get_observation_config(user_id) or {}
-    else:
-        data = _load_user_json("observation.json")
+    storage = _resolve_settings_storage(req)
+    data = _load_observation_data(storage) or {}
 
     data["active"] = request.active
     if request.langfuse is not None:
@@ -731,12 +797,7 @@ async def update_observation_settings(request: ObservationRequest, req: Request)
         existing.update(request.langsmith)
         data["langsmith"] = existing
 
-    if repo and user_id:
-        repo.set_observation_config(user_id, data)
-    else:
-        OBSERVATION_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(OBSERVATION_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+    _save_observation_data(storage, data)
 
     return {"success": True, "active": data.get("active")}
 
@@ -816,46 +877,23 @@ class SandboxConfigRequest(BaseModel):
 @router.get("/sandboxes")
 async def list_sandbox_configs(req: Request) -> dict[str, Any]:
     """List all sandbox configurations."""
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        data = repo.get_sandbox_configs(user_id)
-        if data is not None:
-            return {"sandboxes": data}
-    # Filesystem fallback
-    sandboxes: dict[str, Any] = {}
-    seen: set[Path] = set()
-    for root in user_home_read_candidates("sandboxes"):
-        if not root.exists():
-            continue
-        for f in root.glob("*.json"):
-            if f.resolve() in seen:
-                continue
-            seen.add(f.resolve())
-            try:
-                with open(f, encoding="utf-8") as fh:
-                    sandboxes[f.stem] = json.load(fh)
-            except Exception:
-                sandboxes[f.stem] = {}
-    return {"sandboxes": sandboxes}
+    data = _load_sandbox_configs(_resolve_settings_storage(req))
+    return {"sandboxes": data or {}}
 
 
 @router.post("/sandboxes")
 async def save_sandbox_config(request: SandboxConfigRequest, req: Request) -> dict[str, Any]:
     """Save a sandbox configuration."""
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-
     from sandbox.config import SandboxConfig
 
     try:
         cfg = SandboxConfig(**request.config)
-        if repo and user_id:
-            # Save to Supabase
-            existing = repo.get_sandbox_configs(user_id) or {}
+        storage = _resolve_settings_storage(req)
+        if storage.repo_backed:
+            existing = _load_sandbox_configs(storage) or {}
             existing[request.name] = cfg.model_dump()
-            repo.set_sandbox_configs(user_id, existing)
-            return {"success": True, "path": f"supabase://user_settings/{user_id}/sandbox_configs/{request.name}"}
+            _save_sandbox_configs(storage, existing)
+            return {"success": True, "path": f"supabase://user_settings/{storage.user_id}/sandbox_configs/{request.name}"}
         else:
             path = cfg.save(request.name)
             return {"success": True, "path": str(path)}
