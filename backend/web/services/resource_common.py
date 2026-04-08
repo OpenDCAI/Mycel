@@ -202,6 +202,9 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
         refs: dict[str, str] = {}
         for tid in unique:
             data = repo.get_by_id(tid)
+            # @@@thread-agent-ref-compat - keep this narrow read-side fallback until #259
+            # lands the first-class user_repo/agent runtime wiring. Do not expand member-shaped
+            # semantics beyond this compatibility seam inside the resource lane.
             agent_ref = str(data.get("agent_user_id") or data.get("member_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref

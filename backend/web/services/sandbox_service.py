@@ -87,6 +87,9 @@ def list_user_leases(
             thread = _thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
+            # @@@thread-agent-owner-compat - keep this read-side fallback narrow until #259
+            # lands user_repo/agent runtime ownership wiring. #260 must stay actor-first outward
+            # without widening runtime member joins inside the resource lane.
             actor_user_id = str(thread.get("agent_user_id") or thread.get("member_id") or "").strip()
             if not actor_user_id:
                 continue
