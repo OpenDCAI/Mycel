@@ -145,7 +145,7 @@ class _CommandWrapper(BaseExecutor):
             raise RuntimeError(f"Terminal {terminal_id} not found")
         from sandbox.terminal import terminal_from_row
 
-        terminal = terminal_from_row(terminal_row, self._manager.terminal_store.db_path)
+        terminal = terminal_from_row(terminal_row, self._manager.db_path)
         if terminal.thread_id != self._session.thread_id:
             raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}")
         lease = self._manager.get_lease(terminal.lease_id)

@@ -10,18 +10,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo
+from backend.web.core.storage_factory import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
+from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
 from sandbox.lease import lease_from_row
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
-from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 from storage.runtime import build_storage_container
 
 logger = logging.getLogger(__name__)
@@ -168,14 +166,14 @@ class SandboxManager:
         self._on_session_ready = on_session_ready
 
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-        self.terminal_store = SQLiteTerminalRepo(db_path=self.db_path)
-        self.lease_store = SQLiteLeaseRepo(db_path=self.db_path)
+        self.terminal_store = make_terminal_repo(db_path=self.db_path)
+        self.lease_store = make_lease_repo(db_path=self.db_path)
 
         self.session_manager = ChatSessionManager(
             provider=provider,
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
-            chat_session_repo=SQLiteChatSessionRepo(db_path=self.db_path),
+            chat_session_repo=make_chat_session_repo(db_path=self.db_path),
             terminal_repo=self.terminal_store,
             lease_repo=self.lease_store,
         )
@@ -192,12 +190,12 @@ class SandboxManager:
         row = self.lease_store.get(lease_id)
         if row is None:
             return None
-        return lease_from_row(row, self.lease_store.db_path)
+        return lease_from_row(row, self.db_path)
 
     def _create_lease(self, lease_id: str, provider_name: str, volume_id: str | None = None):
         """Create lease and return as domain object."""
         row = self.lease_store.create(lease_id, provider_name, volume_id=volume_id)
-        return lease_from_row(row, self.lease_store.db_path)
+        return lease_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
         """Public API: get active terminal as domain object."""
@@ -241,7 +239,7 @@ class SandboxManager:
 
         from sandbox.volume_source import HostVolume
 
-        now_str = datetime.now().isoformat()
+        now_str = utc_now_iso()
         volume_root = Path(os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))).expanduser().resolve()
         volume_root.mkdir(parents=True, exist_ok=True)
         source = HostVolume(volume_root / volume_id)
@@ -355,7 +353,7 @@ class SandboxManager:
     def _get_active_terminal(self, thread_id: str):
         row = self.terminal_store.get_active(thread_id)
         if row:
-            return terminal_from_row(row, self.terminal_store.db_path)
+            return terminal_from_row(row, self.db_path)
         thread_terminals = self.terminal_store.list_by_thread(thread_id)
         # @@@thread-pointer-consistency - If terminals exist but no active pointer, DB is inconsistent and must fail loudly.
         if thread_terminals:
@@ -370,7 +368,7 @@ class SandboxManager:
 
     def _get_thread_terminals(self, thread_id: str):
         rows = self.terminal_store.list_by_thread(thread_id)
-        return [terminal_from_row(row, self.terminal_store.db_path) for row in rows]
+        return [terminal_from_row(row, self.db_path) for row in rows]
 
     def _get_thread_lease(self, thread_id: str):
         terminals = self._get_thread_terminals(thread_id)
@@ -485,7 +483,7 @@ class SandboxManager:
                     lease_id=lease_id,
                     initial_cwd=initial_cwd,
                 ),
-                self.terminal_store.db_path,
+                self.db_path,
             )
         else:
             lease = self._get_lease(terminal.lease_id)
@@ -558,7 +556,7 @@ class SandboxManager:
             default_row = self.terminal_store.get_active(thread_id)
         if default_row is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
-        default_terminal = terminal_from_row(default_row, self.terminal_store.db_path)
+        default_terminal = terminal_from_row(default_row, self.db_path)
         lease = self._get_lease(default_terminal.lease_id)
         if lease is None:
             raise RuntimeError(f"Missing lease {default_terminal.lease_id} for thread {thread_id}")
@@ -573,7 +571,7 @@ class SandboxManager:
                 lease_id=lease.lease_id,
                 initial_cwd=initial_cwd,
             ),
-            self.terminal_store.db_path,
+            self.db_path,
         )
         # @@@async-terminal-inherit-state - non-blocking commands fork from default terminal cwd/env snapshot.
         terminal.update_state(
@@ -612,8 +610,8 @@ class SandboxManager:
         last_active_raw = session_row.get("last_active_at")
         if not started_at_raw or not last_active_raw:
             return False
-        started_at = datetime.fromisoformat(str(started_at_raw))
-        last_active_at = datetime.fromisoformat(str(last_active_raw))
+        started_at = parse_runtime_datetime(str(started_at_raw))
+        last_active_at = parse_runtime_datetime(str(last_active_raw))
         idle_ttl_sec = int(session_row.get("idle_ttl_sec") or 0)
         max_duration_sec = int(session_row.get("max_duration_sec") or 0)
         idle_elapsed = (now - last_active_at).total_seconds()
@@ -633,7 +631,7 @@ class SandboxManager:
         if self.provider.name == "local":
             return 0
 
-        now = datetime.now()
+        now = utc_now()
         count = 0
 
         active_rows = self.session_manager.list_active()
@@ -646,8 +644,8 @@ class SandboxManager:
             if not session_id or not thread_id or not started_at_raw or not last_active_raw:
                 continue
 
-            started_at = datetime.fromisoformat(str(started_at_raw))
-            last_active_at = datetime.fromisoformat(str(last_active_raw))
+            started_at = parse_runtime_datetime(str(started_at_raw))
+            last_active_at = parse_runtime_datetime(str(last_active_raw))
             idle_ttl_sec = int(row.get("idle_ttl_sec") or 0)
             max_duration_sec = int(row.get("max_duration_sec") or 0)
 
@@ -658,7 +656,7 @@ class SandboxManager:
 
             terminal_id = row.get("terminal_id")
             terminal_row = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
-            terminal = terminal_from_row(terminal_row, self.terminal_store.db_path) if terminal_row else None
+            terminal = terminal_from_row(terminal_row, self.db_path) if terminal_row else None
             lease = self._get_lease(terminal.lease_id) if terminal else None
             if lease and lease.provider_name != self.provider.name:
                 continue
@@ -820,7 +818,7 @@ class SandboxManager:
     def destroy_thread_resources(self, thread_id: str) -> bool:
         """Destroy physical resources and detach thread from terminal/lease records."""
         terminal_rows = self.terminal_store.list_by_thread(thread_id)
-        terminals = [terminal_from_row(r, self.terminal_store.db_path) for r in terminal_rows]
+        terminals = [terminal_from_row(r, self.db_path) for r in terminal_rows]
         if not terminals:
             return False
 

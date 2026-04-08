@@ -1,3 +1,6 @@
+from datetime import datetime
+from types import SimpleNamespace
+
 from sandbox.chat_session import ChatSession, ChatSessionPolicy
 from sandbox.lease import SandboxLease
 from sandbox.manager import (
@@ -63,6 +66,24 @@ class _FakeSessionRepo:
 
     def delete_session(self, session_id: str, *, reason: str = "closed") -> None:
         self.deletes.append((session_id, reason))
+
+
+class _RepoStub:
+    def close(self):
+        return None
+
+
+class _ActiveTerminalRepoStub(_RepoStub):
+    def get_active(self, _thread_id: str):
+        return {"terminal_id": "term-1", "lease_id": "lease-1", "cwd": "/workspace"}
+
+    def list_by_thread(self, _thread_id: str):
+        return [{"terminal_id": "term-1", "lease_id": "lease-1", "cwd": "/workspace"}]
+
+
+class _LeaseRowRepoStub(_RepoStub):
+    def get(self, _lease_id: str):
+        return {"lease_id": "lease-1", "provider_name": "daytona_selfhost"}
 
 
 class _FakeTerminal(AbstractTerminal):
@@ -195,3 +216,66 @@ def test_chat_session_close_uses_injected_repo():
 
     assert runtime.closed is True
     assert repo.deletes == [("sess-1", "closed")]
+
+
+def test_chat_session_is_expired_accepts_aware_supabase_timestamps():
+    aware = datetime.fromisoformat("2099-04-08T00:00:00+00:00")
+    session = ChatSession(
+        session_id="sess-1",
+        thread_id="thread-1",
+        terminal=_FakeTerminal(),
+        lease=_FakeLease(),
+        runtime=object(),
+        policy=ChatSessionPolicy(),
+        started_at=aware,
+        last_active_at=aware,
+        session_repo=_FakeSessionRepo(),
+    )
+
+    assert session.is_expired() is False
+
+
+def test_sandbox_manager_uses_strategy_aware_repos_under_supabase(monkeypatch):
+    import sandbox.manager as sandbox_manager_module
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr(sandbox_manager_module, "make_terminal_repo", lambda db_path=None: _RepoStub())
+    monkeypatch.setattr(sandbox_manager_module, "make_lease_repo", lambda db_path=None: _RepoStub())
+    monkeypatch.setattr(sandbox_manager_module, "make_chat_session_repo", lambda db_path=None: _RepoStub(), raising=False)
+
+    provider = SimpleNamespace(get_capability=lambda: SimpleNamespace(runtime_kind="local"))
+
+    manager = sandbox_manager_module.SandboxManager(provider=provider)
+
+    assert isinstance(manager.terminal_store, _RepoStub)
+    assert isinstance(manager.lease_store, _RepoStub)
+
+
+def test_sandbox_manager_uses_own_db_path_when_repo_has_no_db_path(monkeypatch, tmp_path):
+    import sandbox.manager as sandbox_manager_module
+
+    manager = object.__new__(sandbox_manager_module.SandboxManager)
+    manager.db_path = tmp_path / "sandbox.db"
+    manager.terminal_store = _ActiveTerminalRepoStub()
+    manager.lease_store = _LeaseRowRepoStub()
+
+    seen_terminal_db_paths = []
+    seen_lease_db_paths = []
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "terminal_from_row",
+        lambda row, db_path: seen_terminal_db_paths.append(db_path) or row,
+    )
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "lease_from_row",
+        lambda row, db_path: seen_lease_db_paths.append(db_path) or row,
+    )
+
+    terminal = manager._get_active_terminal("thread-1")
+    lease = manager._get_lease("lease-1")
+
+    assert terminal["terminal_id"] == "term-1"
+    assert lease["lease_id"] == "lease-1"
+    assert seen_terminal_db_paths == [manager.db_path]
+    assert seen_lease_db_paths == [manager.db_path]

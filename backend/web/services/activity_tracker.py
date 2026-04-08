@@ -4,7 +4,8 @@ Decouples activity sources (file uploads, API calls) from session management.
 """
 
 import logging
-from datetime import datetime
+
+from sandbox.clock import utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ def track_thread_activity(thread_id: str, activity_type: str = "activity") -> No
     """
     from backend.web.core.storage_factory import make_chat_session_repo
 
-    now = datetime.now().isoformat()
+    now = utc_now_iso()
     repo = make_chat_session_repo()
     try:
         repo.touch_thread_activity(thread_id, now)
