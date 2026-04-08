@@ -7,16 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.panel import (
+    AgentConfigPayload,
     BulkDeleteTasksRequest,
     BulkTaskStatusRequest,
+    CreateAgentRequest,
     CreateCronJobRequest,
-    CreateMemberRequest,
     CreateResourceRequest,
     CreateTaskRequest,
-    MemberConfigPayload,
-    PublishMemberRequest,
+    PublishAgentRequest,
+    UpdateAgentRequest,
     UpdateCronJobRequest,
-    UpdateMemberRequest,
     UpdateProfileRequest,
     UpdateResourceContentRequest,
     UpdateResourceRequest,
@@ -27,24 +27,24 @@ from backend.web.services import cron_job_service, library_service, member_servi
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
 
-def _get_owned_member_or_404(member_id: str, user_id: str, user_repo: Any) -> dict[str, Any]:
-    user = user_repo.get_by_id(member_id)
+def _get_owned_agent_or_404(agent_id: str, user_id: str, user_repo: Any) -> dict[str, Any]:
+    user = user_repo.get_by_id(agent_id)
     if user is None or user.type.value != "agent":
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     if user.owner_user_id != user_id:
         raise HTTPException(403, "Forbidden")
     return {"id": user.id}
 
 
-def _get_owned_member_or_404_with_config(member_id: str, user_id: str, user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
-    user = user_repo.get_by_id(member_id)
+def _get_owned_agent_or_404_with_config(agent_id: str, user_id: str, user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
+    user = user_repo.get_by_id(agent_id)
     if user is None or user.type.value != "agent":
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     if user.owner_user_id != user_id:
         raise HTTPException(403, "Forbidden")
-    item = member_service.get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    item = member_service.get_member(agent_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if not item:
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     return item
 
 
@@ -62,15 +62,15 @@ async def list_members(
     return {"items": items}
 
 
-@router.get("/agents/{member_id}")
+@router.get("/agents/{agent_id}")
 async def get_member(
-    member_id: str,
+    agent_id: str,
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     return await asyncio.to_thread(
-        _get_owned_member_or_404_with_config,
-        member_id,
+        _get_owned_agent_or_404_with_config,
+        agent_id,
         user_id,
         request.app.state.user_repo,
         getattr(request.app.state, "agent_config_repo", None),
@@ -79,7 +79,7 @@ async def get_member(
 
 @router.post("/agents")
 async def create_member(
-    req: CreateMemberRequest,
+    req: CreateAgentRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
@@ -95,93 +95,93 @@ async def create_member(
     )
 
 
-@router.put("/agents/{member_id}")
+@router.put("/agents/{agent_id}")
 async def update_member(
-    member_id: str,
-    req: UpdateMemberRequest,
+    agent_id: str,
+    req: UpdateAgentRequest,
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
+    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
     item = await asyncio.to_thread(
         member_service.update_member,
-        member_id,
+        agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
         **req.model_dump(),
     )
     if not item:
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     return item
 
 
-@router.put("/agents/{member_id}/config")
+@router.put("/agents/{agent_id}/config")
 async def update_member_config(
-    member_id: str,
-    req: MemberConfigPayload,
+    agent_id: str,
+    req: AgentConfigPayload,
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
+    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.update_member_config,
-        member_id,
+        agent_id,
         req.model_dump(),
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
     if not item:
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     return item
 
 
-@router.put("/agents/{member_id}/publish")
+@router.put("/agents/{agent_id}/publish")
 async def publish_member(
-    member_id: str,
-    req: PublishMemberRequest,
+    agent_id: str,
+    req: PublishAgentRequest,
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    if member_id == "__leon__":
-        raise HTTPException(403, "Cannot publish builtin member")
+    if agent_id == "__leon__":
+        raise HTTPException(403, "Cannot publish builtin agent")
     user_repo = request.app.state.user_repo
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
+    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.publish_member,
-        member_id,
+        agent_id,
         req.bump_type,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
     if not item:
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     return item
 
 
-@router.delete("/agents/{member_id}")
+@router.delete("/agents/{agent_id}")
 async def delete_member(
-    member_id: str,
+    agent_id: str,
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    if member_id == "__leon__":
-        raise HTTPException(403, "Cannot delete builtin member")
+    if agent_id == "__leon__":
+        raise HTTPException(403, "Cannot delete builtin agent")
     user_repo = request.app.state.user_repo
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
+    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     ok = await asyncio.to_thread(
         member_service.delete_member,
-        member_id,
+        agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
     if not ok:
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     return {"success": True}
 
 

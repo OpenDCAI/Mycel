@@ -1,4 +1,4 @@
-"""Pydantic models for panel API (Members, Tasks, Library, Profile)."""
+"""Pydantic models for panel API (Agents, Tasks, Library, Profile)."""
 
 import json
 from typing import Literal
@@ -22,10 +22,10 @@ def _check_json_template(v: str | None) -> str | None:
     return v
 
 
-# ── Members ──
+# ── Agents ──
 
 
-class MemberConfigPayload(BaseModel):
+class AgentConfigPayload(BaseModel):
     prompt: str | None = None
     rules: list[dict] | None = None
     tools: list[dict] | None = None
@@ -34,18 +34,18 @@ class MemberConfigPayload(BaseModel):
     subAgents: list[dict] | None = None  # noqa: N815
 
 
-class CreateMemberRequest(BaseModel):
+class CreateAgentRequest(BaseModel):
     name: str
     description: str = ""
 
 
-class UpdateMemberRequest(BaseModel):
+class UpdateAgentRequest(BaseModel):
     name: str | None = None
     description: str | None = None
     status: str | None = None
 
 
-class PublishMemberRequest(BaseModel):
+class PublishAgentRequest(BaseModel):
     bump_type: str = "patch"  # patch | minor | major
     notes: str = ""
 
@@ -149,11 +149,3 @@ class UpdateCronJobRequest(BaseModel):
     @classmethod
     def validate_task_template(cls, v: str | None) -> str | None:
         return _check_json_template(v)
-
-
-# ── Backward compatibility aliases ──
-
-StaffConfigPayload = MemberConfigPayload
-CreateStaffRequest = CreateMemberRequest
-UpdateStaffRequest = UpdateMemberRequest
-PublishStaffRequest = PublishMemberRequest

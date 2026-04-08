@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.web.models.panel import PublishMemberRequest, UpdateMemberRequest, UpdateProfileRequest
+from backend.web.models import panel as panel_models
+from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest, UpdateProfileRequest
 from backend.web.routers import panel as panel_router
 from backend.web.services import library_service, member_service, profile_service
 from storage.contracts import UserRow, UserType
@@ -19,14 +20,29 @@ def test_panel_router_exposes_agents_routes_not_members_routes():
     }
 
     assert ("/api/panel/agents", ("GET",)) in route_paths
-    assert ("/api/panel/agents/{member_id}", ("GET",)) in route_paths
+    assert ("/api/panel/agents/{agent_id}", ("GET",)) in route_paths
     assert ("/api/panel/agents", ("POST",)) in route_paths
-    assert ("/api/panel/agents/{member_id}", ("PUT",)) in route_paths
-    assert ("/api/panel/agents/{member_id}/config", ("PUT",)) in route_paths
-    assert ("/api/panel/agents/{member_id}/publish", ("PUT",)) in route_paths
-    assert ("/api/panel/agents/{member_id}", ("DELETE",)) in route_paths
+    assert ("/api/panel/agents/{agent_id}", ("PUT",)) in route_paths
+    assert ("/api/panel/agents/{agent_id}/config", ("PUT",)) in route_paths
+    assert ("/api/panel/agents/{agent_id}/publish", ("PUT",)) in route_paths
+    assert ("/api/panel/agents/{agent_id}", ("DELETE",)) in route_paths
     assert ("/api/panel/members", ("GET",)) not in route_paths
-    assert ("/api/panel/members/{member_id}", ("GET",)) not in route_paths
+    assert ("/api/panel/members/{agent_id}", ("GET",)) not in route_paths
+
+
+def test_panel_models_expose_agent_requests_not_member_or_staff_aliases():
+    assert hasattr(panel_models, "AgentConfigPayload")
+    assert hasattr(panel_models, "CreateAgentRequest")
+    assert hasattr(panel_models, "UpdateAgentRequest")
+    assert hasattr(panel_models, "PublishAgentRequest")
+    assert not hasattr(panel_models, "MemberConfigPayload")
+    assert not hasattr(panel_models, "CreateMemberRequest")
+    assert not hasattr(panel_models, "UpdateMemberRequest")
+    assert not hasattr(panel_models, "PublishMemberRequest")
+    assert not hasattr(panel_models, "StaffConfigPayload")
+    assert not hasattr(panel_models, "CreateStaffRequest")
+    assert not hasattr(panel_models, "UpdateStaffRequest")
+    assert not hasattr(panel_models, "PublishStaffRequest")
 
 
 @pytest.mark.asyncio
@@ -73,8 +89,8 @@ async def test_panel_members_uses_injected_user_repo_for_owner_scope(monkeypatch
     assert result["items"][0]["config"]["prompt"] == "hello"
 
 
-def test_owned_member_helper_returns_member_for_owner(monkeypatch: pytest.MonkeyPatch):
-    result = panel_router._get_owned_member_or_404(
+def test_owned_agent_helper_returns_agent_for_owner(monkeypatch: pytest.MonkeyPatch):
+    result = panel_router._get_owned_agent_or_404(
         "agent-1",
         "user-1",
         SimpleNamespace(
@@ -85,21 +101,21 @@ def test_owned_member_helper_returns_member_for_owner(monkeypatch: pytest.Monkey
     assert result == {"id": "agent-1"}
 
 
-def test_owned_member_helper_raises_404_for_missing_member(monkeypatch: pytest.MonkeyPatch):
+def test_owned_agent_helper_raises_404_for_missing_agent(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(member_service, "get_member", lambda _member_id: None)
 
     with pytest.raises(HTTPException) as excinfo:
-        panel_router._get_owned_member_or_404("missing", "user-1", SimpleNamespace(get_by_id=lambda _user_id: None))
+        panel_router._get_owned_agent_or_404("missing", "user-1", SimpleNamespace(get_by_id=lambda _user_id: None))
 
     assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == "Member not found"
+    assert excinfo.value.detail == "Agent not found"
 
 
-def test_owned_member_helper_raises_403_for_wrong_owner(monkeypatch: pytest.MonkeyPatch):
+def test_owned_agent_helper_raises_403_for_wrong_owner(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(member_service, "get_member", lambda _member_id: {"id": "agent-1"})
 
     with pytest.raises(HTTPException) as excinfo:
-        panel_router._get_owned_member_or_404(
+        panel_router._get_owned_agent_or_404(
             "agent-1",
             "user-1",
             SimpleNamespace(get_by_id=lambda _user_id: _agent_user(owner_user_id="user-2")),
@@ -116,13 +132,13 @@ async def test_update_member_route_returns_404_for_missing_member(monkeypatch: p
     with pytest.raises(HTTPException) as excinfo:
         await panel_router.update_member(
             "missing",
-            UpdateMemberRequest(name="new-name"),
+            UpdateAgentRequest(name="new-name"),
             request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=SimpleNamespace(get_by_id=lambda _user_id: None)))),
             user_id="user-1",
         )
 
     assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == "Member not found"
+    assert excinfo.value.detail == "Agent not found"
 
 
 @pytest.mark.asyncio
@@ -140,7 +156,7 @@ async def test_delete_member_route_keeps_builtin_guard_before_owner_lookup(monke
         )
 
     assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Cannot delete builtin member"
+    assert excinfo.value.detail == "Cannot delete builtin agent"
 
 
 @pytest.mark.asyncio
@@ -153,13 +169,13 @@ async def test_publish_member_route_keeps_builtin_guard_before_owner_lookup(monk
     with pytest.raises(HTTPException) as excinfo:
         await panel_router.publish_member(
             "__leon__",
-            PublishMemberRequest(),
+            PublishAgentRequest(),
             request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=SimpleNamespace()))),
             user_id="user-1",
         )
 
     assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Cannot publish builtin member"
+    assert excinfo.value.detail == "Cannot publish builtin agent"
 
 
 def test_profile_service_prefers_authenticated_member_over_config_defaults():
