@@ -298,6 +298,7 @@ def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id()
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: SimpleNamespace(session_id="sess-1"),
         delete=lambda session_id, reason: deleted_sessions.append((session_id, reason)),
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
     )
     deleted_terminals: list[str] = []
     deleted_sessions: list[tuple[str, str]] = []
@@ -321,9 +322,54 @@ def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id()
     assert manager.destroy_thread_resources("thread-1") is True
     assert manager.volume.download_calls == []
     assert manager.volume.cleared == ["thread-1"]
-    assert deleted_sessions == [("sess-1", "thread_deleted")]
+    assert deleted_sessions == [("thread-1", "thread_deleted")]
     assert deleted_terminals == ["term-1"]
     assert destroy_calls == ["lease-1"]
+    assert deleted_leases == ["lease-1"]
+
+
+def test_destroy_thread_resources_hard_deletes_thread_chat_sessions_before_terminal_delete():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.provider = SimpleNamespace(name="local")
+    manager.volume = _FakeVolume()
+    deleted_terminals: list[str] = []
+    delete_order: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "running"
+        volume_id = None
+
+        def get_instance(self):
+            return SimpleNamespace(instance_id="instance-1")
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}],
+        delete=lambda terminal_id: (delete_order.append(f"terminal:{terminal_id}"), deleted_terminals.append(terminal_id)),
+        list_all=lambda: [],
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: SimpleNamespace(session_id="sess-1"),
+        delete=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("soft delete should not be used")),
+        delete_thread=lambda thread_id, reason="thread_deleted": delete_order.append(f"thread:{thread_id}:{reason}"),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert delete_order == ["thread:thread-1:thread_deleted", "terminal:term-1"]
+    assert deleted_terminals == ["term-1"]
+    assert destroyed_leases == ["lease-1"]
     assert deleted_leases == ["lease-1"]
 
 

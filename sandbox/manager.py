@@ -836,10 +836,7 @@ class SandboxManager:
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 
-        for terminal in terminals:
-            session = self.session_manager.get(thread_id, terminal.terminal_id)
-            if session:
-                self.session_manager.delete(session.session_id, reason="thread_deleted")
+        self.session_manager.delete_thread(thread_id, reason="thread_deleted")
 
         for terminal in terminals:
             self.terminal_store.delete(terminal.terminal_id)
