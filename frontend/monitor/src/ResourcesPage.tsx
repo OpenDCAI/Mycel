@@ -411,6 +411,11 @@ function ProviderCard({
     ...provider.telemetry.running,
     used: runningCount,
   };
+  const showSandboxLevelCpuTruth =
+    provider.type !== "local" &&
+    runningCount > 0 &&
+    !showCpuMetric &&
+    provider.cardCpu.error === "CPU usage is per-sandbox, not a provider-level quota.";
   const showTelemetryGapTruth =
     provider.type !== "local" &&
     provider.status === "ready" &&
@@ -463,6 +468,9 @@ function ProviderCard({
 
       {showTelemetryGapTruth && (
         <div className="provider-card__truth">暂无 live telemetry</div>
+      )}
+      {showSandboxLevelCpuTruth && (
+        <div className="provider-card__truth">CPU 沙盒级</div>
       )}
 
       {capabilityList.length > 0 && (
