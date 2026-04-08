@@ -10,15 +10,19 @@ Turn monitor evaluation from a hardcoded `unavailable` placeholder into a truthf
 - `PR-D2/#265` already mounted `/evaluation` in the revived monitor shell.
 - `backend/web/services/monitor_service.py` already defines the target operator payload shape through `build_evaluation_operator_surface(...)`.
 - That same service currently hardcodes `get_monitor_evaluation_truth()` to `_evaluation_unavailable_surface()`.
-- The repo currently contains almost no runtime source reader that can supply:
-  - `status`
-  - `notes`
-  - `score_gate`
-  - `run_dir`
-  - `manifest_path`
-  - `eval_summary_path`
-  - `trace_summaries_path`
-  - thread materialization counts
+- The repo already persists completed eval runs through:
+  - `eval.storage.TrajectoryStore`
+  - `storage.container.StorageContainer.eval_repo()`
+  - `storage.providers.supabase.eval_repo.SupabaseEvalRepo`
+- `backend/web/services/streaming_service.py` already writes trajectories into that store after a run completes.
+- The persisted source currently carries:
+  - coarse run status
+  - timestamps
+  - thread id
+  - user message
+  - trajectory JSON
+  - tiered metrics rows
+- It does not currently carry the older manifest/log/thread-materialization fields that `build_evaluation_operator_surface(...)` was designed around.
 - Existing tests prove formatter behavior, not source discovery or runtime activation.
 
 ## Scope Check
@@ -68,15 +72,19 @@ Cons:
 
 Rejected.
 
-### 3. Filesystem/manifest-first activation
+### 3. Repo-backed persisted-truth activation
 
-Define a minimal runtime source contract in files, have the evaluation runner write it, and have monitor read it.
+Use the existing `TrajectoryStore -> eval_repo -> eval_runs/eval_metrics` path as the first truthful runtime source, and let monitor read the latest persisted run from there.
 
 Pros:
-- matches the existing operator payload expectations (`run_dir`, `manifest_path`, logs, summaries)
-- durable across process restarts
-- keeps monitor truth and runner writes loosely coupled
+- already exists on latest `dev`
+- stays in the same Supabase-backed storage world as the web runtime
+- avoids inventing a second source contract before proving the first one
 - allows a narrow first mergeable slice
+
+Cons:
+- current writes happen after run completion, so this does not expose live in-flight eval progress yet
+- does not carry legacy `run_dir / manifest / trace summary / thread-materialization` detail
 
 Recommended.
 
@@ -84,9 +92,9 @@ Recommended.
 
 `PR-D3` becomes a 3-step workstream:
 
-### PR-D3a: Runtime source contract + monitor truth hookup
+### PR-D3a: Persisted source truth hookup
 
-Introduce a narrow runtime source contract for “latest evaluation run” and make `get_monitor_evaluation_truth()` read it instead of hardcoding `unavailable`.
+Introduce a narrow reader for “latest persisted evaluation run” and make `get_monitor_evaluation_truth()` read it instead of hardcoding `unavailable`.
 
 This is the first mergeable slice.
 
@@ -108,70 +116,55 @@ This is explicitly later.
 
 ### Runtime source contract
 
-Use a small file-backed contract, rooted in a stable path under evaluation runtime storage.
+Use the existing persisted eval contract:
 
-Minimum fields:
+- `eval_runs`
+  - `id`
+  - `thread_id`
+  - `started_at`
+  - `finished_at`
+  - `status`
+  - `user_message`
+  - `trajectory_json`
+- `eval_metrics`
+  - tiered metric rows keyed by `run_id`
 
-- `status`
-- `notes`
-- `score`
-  - `score_gate`
-  - `publishable`
-  - `scored`
-  - `error_instances`
-  - `run_dir`
-  - `manifest_path`
-  - `eval_summary_path`
-  - `trace_summaries_path`
-- `threads`
-  - `total`
-  - `running`
-  - `done`
-- `updated_at`
-
-This contract should be sufficient to feed `build_evaluation_operator_surface(...)` without widening that formatter.
+`PR-D3a` only promises truthful consumption of what is already persisted there. It does not pretend the old manifest/log/thread-materialization fields still exist.
 
 ### Monitor hookup
 
 `get_monitor_evaluation_truth()` should:
 
-1. read the runtime source
-2. validate the minimum shape
-3. pass the extracted values into `build_evaluation_operator_surface(...)`
-4. return loud failure if the source is malformed
-5. return `unavailable` only when the runtime source is truly absent
+1. read the latest persisted run from the eval repo
+2. read that run's persisted metric rows
+3. normalize the coarse persisted status into the monitor payload shape
+4. fail loudly if repo reads or metric decoding break
+5. return an explicit idle/no-runs payload only when the source is wired but empty
 
-That keeps “no source” distinct from “broken source”.
+That keeps “no recorded runs yet” distinct from “broken source”.
 
 ### Failure semantics
 
-- source absent:
-  - explicit `unavailable`
-- source present but malformed:
+- eval source wired but no recorded runs:
+  - explicit `idle/no_recorded_runs`
+- repo or decoding failure:
   - loud error, not fake unavailable
-- source present and valid:
-  - real operator payload
+- persisted run present:
+  - real repo-backed operator payload, with legacy artifact/thread fields explicitly absent
 
 This is important because fake downgrades would hide actual activation bugs.
 
 ## PR-D3b Design
 
-Once `PR-D3a` defines the source contract, the runner side must write it.
+Once `PR-D3a` exposes repo-backed persisted truth, the runner side must evolve if we want live/in-flight operator truth.
 
-Write moments:
+Write moments for `PR-D3b`:
 
 - run bootstrapped
-- threads materialized / counts changed
-- score artifacts created
-- run completed
-- run failed early
+- in-flight progress changes
+- completion / failure
 
-The write path should stay minimal:
-
-- one canonical latest-run file or manifest
-- optional referenced artifact files
-
-Do not introduce extra UI or schema work in this slice.
+The write path should stay minimal, but it must stop waiting until terminal completion before persisting operator-relevant truth.
 
 ## PR-D3c Design
 
@@ -196,15 +189,15 @@ Monitor should not infer missing runtime semantics on its own. It should read, v
 
 ### Formatter reuse
 
-Do not redesign `build_evaluation_operator_surface(...)` unless a real source gap forces it.
+Do not redesign the whole operator surface to preserve an old artifact contract that current storage no longer writes.
 
-That formatter is already the most stable contract in this lane. Activation should feed it, not replace it.
+`PR-D3a` should surface repo-backed truth directly and honestly. Richer formatter reuse or artifact revival belongs to later slices if still justified.
 
 ## Testing
 
 ### PR-D3a
 
-- unit tests for source-absent, malformed-source, and valid-source cases
+- unit tests for no-runs and persisted-run cases
 - integration tests for `/api/monitor/evaluation` and `/api/monitor/dashboard`
 
 ### PR-D3b
@@ -220,9 +213,9 @@ That formatter is already the most stable contract in this lane. Activation shou
 
 ### In scope for PR-D3a
 
-- source contract
+- repo-backed persisted source hookup
 - monitor truth hookup
-- route-level truth upgrade from fake unavailable to real source-backed payload
+- route-level truth upgrade from fake unavailable to real persisted-source payload
 
 ### Out of scope for PR-D3a
 
@@ -235,8 +228,8 @@ That formatter is already the most stable contract in this lane. Activation shou
 
 ### PR-D3a
 
-- `get_monitor_evaluation_truth()` reads a real runtime source
-- source absent vs malformed vs valid are distinct
+- `get_monitor_evaluation_truth()` reads a real persisted source
+- no-runs vs persisted-run truth are distinct
 - route tests prove `/api/monitor/evaluation` is no longer hardcoded
 
 ### PR-D3b

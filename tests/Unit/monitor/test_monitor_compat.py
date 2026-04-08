@@ -273,13 +273,95 @@ def test_build_evaluation_operator_surface_marks_completed_with_errors():
     }
 
 
-def test_monitor_evaluation_truth_defaults_to_explicit_unavailable_surface():
-    payload = monitor_service.get_monitor_evaluation_truth()
+def test_evaluation_unavailable_surface_stays_explicit():
+    payload = monitor_service._evaluation_unavailable_surface()
 
     assert payload["status"] == "unavailable"
     assert payload["kind"] == "unavailable"
     assert payload["tone"] == "warning"
     assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
+    assert payload["artifact_summary"] == {
+        "present": 0,
+        "missing": 0,
+        "total": 0,
+    }
+    assert payload["raw_notes"] is None
+
+
+def test_monitor_evaluation_truth_reports_idle_when_repo_has_no_runs(monkeypatch):
+    class FakeStore:
+        def list_runs(self, thread_id=None, limit=50):
+            return []
+
+    monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
+
+    payload = monitor_service.get_monitor_evaluation_truth()
+
+    assert payload["status"] == "idle"
+    assert payload["kind"] == "no_recorded_runs"
+    assert payload["tone"] == "default"
+    assert payload["headline"] == "No persisted evaluation runs are available yet."
+    assert payload["artifact_summary"] == {
+        "present": 0,
+        "missing": 0,
+        "total": 0,
+    }
+    assert payload["facts"] == [{"label": "Status", "value": "idle"}]
+    assert payload["raw_notes"] is None
+
+
+def test_monitor_evaluation_truth_uses_latest_persisted_eval_run(monkeypatch):
+    class FakeStore:
+        def list_runs(self, thread_id=None, limit=50):
+            return [
+                {
+                    "id": "run-1",
+                    "thread_id": "thread-eval",
+                    "started_at": "2026-04-08T00:00:00Z",
+                    "finished_at": "2026-04-08T00:03:00Z",
+                    "status": "completed",
+                    "user_message": "solve the eval task",
+                }
+            ]
+
+        def get_metrics(self, run_id, tier=None):
+            assert run_id == "run-1"
+            return [
+                {
+                    "id": "metric-1",
+                    "tier": "system",
+                    "timestamp": "2026-04-08T00:03:01Z",
+                    "metrics": {
+                        "total_tokens": 123,
+                        "llm_call_count": 3,
+                        "tool_call_count": 2,
+                    },
+                },
+                {
+                    "id": "metric-2",
+                    "tier": "objective",
+                    "timestamp": "2026-04-08T00:03:02Z",
+                    "metrics": {
+                        "total_duration_ms": 4567.0,
+                    },
+                },
+            ]
+
+    monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
+
+    payload = monitor_service.get_monitor_evaluation_truth()
+
+    assert payload["status"] == "completed"
+    assert payload["kind"] == "completed_recorded"
+    assert payload["tone"] == "success"
+    assert payload["headline"] == "Latest persisted evaluation run completed successfully."
+    facts = {(item["label"], item["value"]) for item in payload["facts"]}
+    assert ("Run ID", "run-1") in facts
+    assert ("Thread ID", "thread-eval") in facts
+    assert ("Total tokens", "123") in facts
+    assert ("LLM calls", "3") in facts
+    assert ("Tool calls", "2") in facts
+    assert ("Duration (ms)", "4567") in facts
     assert payload["artifact_summary"] == {
         "present": 0,
         "missing": 0,
