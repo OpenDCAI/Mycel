@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from backend.web.routers import settings as settings_router
 
@@ -21,6 +25,14 @@ class _FakeSettingsRepo:
     def get_models_config(self, user_id: str):
         assert user_id == "user-1"
         return self.models_config
+
+    def get_observation_config(self, user_id: str):
+        assert user_id == "user-1"
+        return None
+
+    def get_sandbox_configs(self, user_id: str):
+        assert user_id == "user-1"
+        return None
 
 
 def _request(repo: _FakeSettingsRepo | None):
@@ -69,3 +81,40 @@ def test_load_models_data_falls_back_to_user_json_without_repo_context(monkeypat
     data = settings_router._load_models_data(storage)
 
     assert data == {"pool": {"enabled": ["fallback"]}}
+
+
+@pytest.mark.asyncio
+async def test_get_observation_settings_keeps_loader_fallback_when_repo_row_missing(monkeypatch):
+    req = _request(_FakeSettingsRepo())
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+
+    class _FakeObservationConfig:
+        def model_dump(self):
+            return {"active": "langfuse", "langfuse": {"public_key": "pk"}}
+
+    class _FakeObservationLoader:
+        def load(self):
+            return _FakeObservationConfig()
+
+    monkeypatch.setattr("config.observation_loader.ObservationLoader", _FakeObservationLoader)
+
+    result = await settings_router.get_observation_settings(req)
+
+    assert result == {"active": "langfuse", "langfuse": {"public_key": "pk"}}
+
+
+@pytest.mark.asyncio
+async def test_list_sandbox_configs_keeps_filesystem_fallback_when_repo_row_missing(
+    monkeypatch,
+    tmp_path: Path,
+):
+    req = _request(_FakeSettingsRepo())
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    sandboxes_dir = tmp_path / "sandboxes"
+    sandboxes_dir.mkdir()
+    (sandboxes_dir / "alpha.json").write_text(json.dumps({"provider": "local"}), encoding="utf-8")
+    monkeypatch.setattr(settings_router, "user_home_read_candidates", lambda *_parts: [sandboxes_dir])
+
+    result = await settings_router.list_sandbox_configs(req)
+
+    assert result == {"sandboxes": {"alpha": {"provider": "local"}}}

@@ -157,10 +157,16 @@ def _save_models_data(storage: _SettingsStorage, data: dict[str, Any]) -> None:
     _save_models_for_user(storage.repo, storage.user_id, data)
 
 
-def _load_observation_data(storage: _SettingsStorage) -> dict[str, Any] | None:
+def _load_observation_data(storage: _SettingsStorage, *, include_filesystem: bool = True) -> dict[str, Any] | None:
     if storage.repo_backed:
-        return storage.repo.get_observation_config(storage.user_id)
-    return _load_user_json("observation.json")
+        data = storage.repo.get_observation_config(storage.user_id)
+        if data is not None:
+            return data
+        if not include_filesystem:
+            return None
+    if include_filesystem:
+        return _load_user_json("observation.json")
+    return None
 
 
 def _save_observation_data(storage: _SettingsStorage, data: dict[str, Any]) -> None:
@@ -174,7 +180,9 @@ def _save_observation_data(storage: _SettingsStorage, data: dict[str, Any]) -> N
 
 def _load_sandbox_configs(storage: _SettingsStorage) -> dict[str, Any] | None:
     if storage.repo_backed:
-        return storage.repo.get_sandbox_configs(storage.user_id)
+        data = storage.repo.get_sandbox_configs(storage.user_id)
+        if data is not None:
+            return data
     sandboxes: dict[str, Any] = {}
     seen: set[Path] = set()
     for root in user_home_read_candidates("sandboxes"):
@@ -768,7 +776,7 @@ class ObservationRequest(BaseModel):
 async def get_observation_settings(req: Request) -> dict[str, Any]:
     """Get observation provider configuration."""
     storage = _resolve_settings_storage(req)
-    data = _load_observation_data(storage)
+    data = _load_observation_data(storage, include_filesystem=False)
     if data is not None:
         return data
     from config.observation_loader import ObservationLoader
