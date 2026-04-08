@@ -117,8 +117,7 @@ class SQLiteEvalRepo:
         trajectory_json: str,
     ) -> None:
         result = self._conn.execute(
-            "UPDATE eval_runs SET finished_at = ?, final_response = ?, status = ?, "
-            "run_tree_json = ?, trajectory_json = ? WHERE id = ?",
+            "UPDATE eval_runs SET finished_at = ?, final_response = ?, status = ?, run_tree_json = ?, trajectory_json = ? WHERE id = ?",
             (finished_at, final_response, status, run_tree_json, trajectory_json, run_id),
         )
         if result.rowcount != 1:
