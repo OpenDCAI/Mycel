@@ -5,6 +5,7 @@ Uses mock model to verify the full astream pipeline without real API calls.
 
 import json
 import os
+import sys
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -905,6 +906,76 @@ def test_leon_agent_chat_identity_prompt_resolves_thread_user_name_via_member() 
     assert "- Your name: Truffle" in prompt
     assert "- Your chat identity id: thread-user-3" in prompt
     assert "- Your owner: Owner 3 (human user_id: human-user-3)" in prompt
+
+
+def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from core.runtime.agent import LeonAgent
+    from core.runtime.registry import ToolRegistry
+
+    captured: dict[str, Any] = {}
+
+    class _NoopService:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class _NoopRegistry:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class _FakeChatToolService:
+        def __init__(self, *args, **kwargs) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.CronToolService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
+    monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
+    monkeypatch.setitem(sys.modules, "backend.taskboard.service", SimpleNamespace(TaskBoardService=_NoopService))
+    monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
+
+    agent = object.__new__(LeonAgent)
+    agent._sandbox = SimpleNamespace(name="local", fs=lambda: None, shell=lambda: None)
+    agent._tool_registry = ToolRegistry()
+    agent.workspace_root = str(tmp_path)
+    agent.model_name = "test-model"
+    agent._thread_repo = SimpleNamespace()
+    agent._user_repo = SimpleNamespace()
+    agent.queue_manager = SimpleNamespace()
+    agent._web_app = None
+    agent.allowed_file_extensions = []
+    agent.extra_allowed_paths = []
+    agent.enable_audit_log = False
+    agent.block_dangerous_commands = False
+    agent.block_network_commands = False
+    agent.verbose = False
+    agent._get_mcp_server_configs = lambda: {}
+    agent._chat_repos = {
+        "chat_identity_id": "thread-user-9",
+        "owner_id": "human-user-9",
+        "messaging_service": SimpleNamespace(),
+        "chat_member_repo": object(),
+        "messages_repo": object(),
+        "user_repo": SimpleNamespace(),
+        "relationship_repo": SimpleNamespace(),
+    }
+    cast(Any, agent).config = SimpleNamespace(
+        tools=SimpleNamespace(
+            filesystem=SimpleNamespace(enabled=False),
+            search=SimpleNamespace(enabled=False),
+            web=SimpleNamespace(enabled=False),
+            command=SimpleNamespace(enabled=False),
+        ),
+        skills=SimpleNamespace(enabled=False, paths=[], skills={}),
+    )
+
+    LeonAgent._init_services(agent)
+
+    assert captured["chat_identity_id"] == "thread-user-9"
+    assert captured["owner_id"] == "human-user-9"
+    assert "chat_member_repo" not in captured
+    assert "messages_repo" not in captured
 
 
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():

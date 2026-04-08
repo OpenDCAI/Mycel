@@ -262,6 +262,19 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     assert registry.get("list_chats") is not None
 
 
+def test_chat_tool_service_rejects_dead_repo_constructor_kwargs() -> None:
+    registry = ToolRegistry()
+
+    with pytest.raises(TypeError, match="chat_member_repo|messages_repo"):
+        ChatToolService(
+            registry=registry,
+            chat_identity_id="agent-user-1",
+            owner_id="owner-user-1",
+            messaging_service=SimpleNamespace(),
+            chat_member_repo=SimpleNamespace(),
+        )
+
+
 def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     published: list[dict[str, object]] = []
     service = MessagingService(
@@ -616,7 +629,6 @@ def test_chat_tool_send_accepts_thread_user_target_id() -> None:
         thread_repo=SimpleNamespace(
             get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
         ),
-        chat_member_repo=SimpleNamespace(is_member=lambda _chat_id, _user_id: True),
         messaging_service=SimpleNamespace(
             find_or_create_chat=lambda user_ids: {"id": "chat-1", "user_ids": user_ids},
             count_unread=lambda _chat_id, _user_id: 0,
