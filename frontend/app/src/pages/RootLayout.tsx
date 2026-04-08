@@ -187,7 +187,7 @@ function AuthenticatedLayout() {
         <main className="flex-1 overflow-hidden">
           {/* @@@outlet-no-route-key - thread switches should not remount the entire
               outlet tree; RootLayout route keys were re-triggering AppLayout
-              bootstrap fetches on every /threads/:memberId/:threadId hop. */}
+              bootstrap fetches on every /chat/hire/thread/:threadId hop. */}
           <div className="h-full animate-page-in"><Outlet /></div>
         </main>
 

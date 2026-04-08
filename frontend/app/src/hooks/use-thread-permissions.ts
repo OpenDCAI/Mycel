@@ -33,7 +33,7 @@ export interface ThreadPermissionsActions {
 
 function isActiveThreadRoute(threadId: string): boolean {
   const path = window.location.pathname.replace(/\/+$/, "");
-  return (path.startsWith("/threads/") || path.startsWith("/chat/hire/")) && path.endsWith(`/${encodeURIComponent(threadId)}`);
+  return path.startsWith("/chat/hire/thread/") && path.endsWith(`/${encodeURIComponent(threadId)}`);
 }
 
 export function useThreadPermissions(threadId: string | undefined): ThreadPermissionsState & ThreadPermissionsActions {
