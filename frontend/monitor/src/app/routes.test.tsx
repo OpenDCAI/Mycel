@@ -554,4 +554,53 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByText("当前 lease 没有 active runtime session，无法浏览文件。")).toBeInTheDocument();
   });
+
+  it("surfaces when a ready provider still has no live telemetry", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 0,
+          unavailable_providers: 0,
+          running_sessions: 0,
+        },
+        providers: [
+          {
+            id: "agentbay",
+            name: "agentbay",
+            description: "AgentBay cloud sandbox",
+            type: "cloud",
+            status: "ready",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 0, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: null, limit: null, unit: "%", source: "unknown", freshness: "stale" },
+              memory: { used: null, limit: null, unit: "GB", source: "unknown", freshness: "stale" },
+              disk: { used: null, limit: null, unit: "GB", source: "unknown", freshness: "stale" },
+            },
+            cardCpu: { used: null, limit: null, unit: "%", source: "unknown", freshness: "stale" },
+            sessions: [],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。")).toBeInTheDocument();
+  });
 });

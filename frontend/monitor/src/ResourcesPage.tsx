@@ -456,6 +456,13 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const isLocal = provider.type === "local";
   const showUnavailableBanner = provider.status === "unavailable";
   const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
+  const showTelemetryGapBanner =
+    !isLocal &&
+    provider.status === "ready" &&
+    runningCount === 0 &&
+    provider.telemetry.cpu.freshness === "stale" &&
+    provider.telemetry.memory.freshness === "stale" &&
+    provider.telemetry.disk.freshness === "stale";
 
   return (
     <>
@@ -496,6 +503,11 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
               // surface inspectable instead of hard-disabling the whole card.
               <div className="provider-warning-banner">
                 {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条关联 session，可继续检查。
+              </div>
+            )}
+            {showTelemetryGapBanner && (
+              <div className="provider-warning-banner">
+                当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。
               </div>
             )}
 
