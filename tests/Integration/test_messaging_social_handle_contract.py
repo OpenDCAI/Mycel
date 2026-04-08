@@ -49,9 +49,7 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     resolved = resolve_messaging_display_user(
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
-                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
-                if uid == "human-user-1"
-                else None
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
             )
         ),
         thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("thread bridge should not be used")),
@@ -606,6 +604,7 @@ def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
 
 def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> None:
     registry = ToolRegistry()
+
     def _send(*_args, **_kwargs):
         raise RuntimeError("Chat advanced after your last read. Call read_messages(chat_id='chat-1') first.")
 
