@@ -664,6 +664,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                   {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && (
                     <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
                   )}
+                  {missingLiveTelemetryRunningCount > 0 && (
+                    <InlineMetric label="无 live telemetry" value={String(missingLiveTelemetryRunningCount)} />
+                  )}
                   <InlineMetric label="CPU" value={formatMetricRange(provider.cardCpu)} />
                   <InlineMetric label="RAM" value={formatMetricRange(provider.telemetry.memory)} />
                   <InlineMetric label="Disk" value={formatMetricRange(provider.telemetry.disk)} />
