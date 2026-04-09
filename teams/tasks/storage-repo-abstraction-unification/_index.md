@@ -16,7 +16,7 @@ issue: 191
 - `storage_factory.py` 仍是 live production bridge
 - `CP01` 已完成：`task_service / cron_job_service` 默认路径已离开 `storage_factory.py`
 - `CP02` 已完成：`resource_service / resource_projection_service` 已离开 `storage_factory.py`
-- 当前 most-dangerous residual 已经收敛到 `sandbox_service.py`；`sandbox/manager.py` bridge 已在 `CP05d` 收回 `storage.runtime`
+- 当前 live production callsites 已全部离开 `storage_factory.py`；下一步只剩 `CP06` 删除文件并完成 closure proof
 
 ## 子任务
 
@@ -27,7 +27,7 @@ issue: 191
 | 02 | [Resource Surfaces Cut](subtask-02-resource-surfaces-cut.md) | 再收 `resource_service / resource_projection_service` | done |
 | 03 | [Monitor Operator Cut](subtask-03-monitor-operator-cut.md) | 单独收 `monitor_service` split-brain seam | done |
 | 04 | [Web Thread/File Helper Cut](subtask-04-web-thread-file-helper-cut.md) | `CP04a file/helper` + `CP04b helpers` 已完成，threads/webhooks 已转入 `CP05` | done |
-| 05 | [Sandbox Runtime Owner Cut](subtask-05-sandbox-runtime-owner-cut.md) | `CP05a webhooks` + `CP05b sandbox/lease` + `CP05c threads bootstrap` + `CP05d manager` 已完成，剩余 `sandbox_service.py` | in_progress |
+| 05 | [Sandbox Runtime Owner Cut](subtask-05-sandbox-runtime-owner-cut.md) | `CP05a webhooks` + `CP05b sandbox/lease` + `CP05c threads bootstrap` + `CP05d manager` + `CP05e sandbox_service` 已完成 | done |
 | 06 | [Factory Deletion And Closure Proof](subtask-06-factory-deletion-and-closure-proof.md) | 删除 `storage_factory.py` 并做 closure proof | open |
 
 ## 边界
