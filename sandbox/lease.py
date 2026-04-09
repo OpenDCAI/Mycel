@@ -571,6 +571,7 @@ class SQLiteLease(SandboxLease):
                 status="detached",
                 observed_at=utc_now_iso(),
             )
+            self.version = int(observed_row.get("version") or self.version)
             final_row = repo.persist_metadata(
                 lease_id=self.lease_id,
                 recipe_id=observed_row.get("recipe_id"),
@@ -584,6 +585,7 @@ class SQLiteLease(SandboxLease):
                 refresh_hint_at=None,
                 status="expired",
             )
+            self.version = int(final_row.get("version") or self.version)
             if instance_id:
                 event_repo.record(
                     provider_name=self.provider_name,

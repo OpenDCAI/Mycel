@@ -452,3 +452,42 @@ def test_destroy_instance_preserves_destroy_state_when_strategy_write_fails(monk
     assert call["status"] == "expired"
     assert call["last_error"] == "write boom"
     assert call["needs_refresh"] is True
+
+
+def test_destroy_instance_bumps_version_again_when_event_write_fails(monkeypatch):
+    repo = _FakeLeaseRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    class _EventFailRepo(_FakeProviderEventRepo):
+        def record(
+            self,
+            *,
+            provider_name: str,
+            instance_id: str,
+            event_type: str,
+            payload: dict[str, object],
+            matched_lease_id: str | None,
+        ) -> None:
+            if event_type == "intent.destroy":
+                raise RuntimeError("event boom")
+            super().record(
+                provider_name=provider_name,
+                instance_id=instance_id,
+                event_type=event_type,
+                payload=payload,
+                matched_lease_id=matched_lease_id,
+            )
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: _EventFailRepo())
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    with pytest.raises(RuntimeError, match="event boom"):
+        lease.destroy_instance(_FakeProvider(), source="api")
+
+    assert len(repo.persist_calls) == 2
+    assert repo.persist_calls[0]["version"] == 1
+    assert repo.persist_calls[-1]["version"] == 2
+    assert repo.persist_calls[-1]["desired_state"] == "destroyed"
+    assert repo.persist_calls[-1]["observed_state"] == "detached"

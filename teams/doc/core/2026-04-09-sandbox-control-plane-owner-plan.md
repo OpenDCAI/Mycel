@@ -272,6 +272,7 @@ completed fourth transition cut:
 - destroy path keeps lease-level lock + reload before mutation
 - destroy failures now reuse provider.error persistence/event parity
 - post-destroy strategy write failures still preserve destroy-state truth before error persistence
+- destroy error persistence also preserves the next version step after observe-status writes
 
 remaining wider transitions:
 - intent.pause / intent.resume

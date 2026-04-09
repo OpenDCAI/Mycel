@@ -169,6 +169,7 @@ created: 2026-04-09
   - 现在会复用 `_record_provider_error(..., source=f\"{source}.destroy\")`
   - 所以 `last_error / needs_refresh / provider.error` 也保持 parity
   - 即使 remote destroy 已成功、后置 strategy write 再失败，也会先保留 `destroyed / detached / expired` 的内存 truth，再把 error 落账
+  - error persistence 也会接住 `observe_status(...)` 之后的 version，避免吃掉 destroy 后续 error transition 的版本推进
 - 这刀当前没有碰：
   - `intent.pause`
   - `intent.resume`
