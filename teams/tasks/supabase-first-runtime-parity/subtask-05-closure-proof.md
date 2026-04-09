@@ -48,6 +48,17 @@ created: 2026-04-09
   - restart 后 `thread2` 仍能读到旧文件
   - restart 后 `thread2` 新写入并同步 `longevity-b975998d-t2.txt`，`thread1` 也能反向读到
   - cold start 初始 lease truth 一度表现为 `paused/version=4`，但在新一轮 thread activity 后收敛回 `running/version=6`
+- 真实 Daytona self-hosted 三线程共享 lease 压力 proof 已成立：
+  - `thread1 = m_dKjuBBLbR1bw-105`
+  - `thread2 = m_dKjuBBLbR1bw-106`
+  - `thread3 = m_dKjuBBLbR1bw-107`
+  - `lease_id = lease-135dd60b2aa1`
+  - 三个 thread 初始都绑定到同一个 detached lease
+  - 第 1 轮：`thread1` 上传 `three-thread-8dcd17a0-t1.txt`，public download 成功，附件消息触发 sync 后，`thread2` 和 `thread3` 都能从 `/home/daytona/files` 读到
+  - 第 2 轮：`thread2` 上传 `three-thread-8dcd17a0-t2.txt`，`thread1` 和 `thread3` 都能读到
+  - 第 3 轮：`thread3` 上传 `three-thread-8dcd17a0-t3.txt`，`thread1` 和 `thread2` 都能读到
+  - 最终远端 `/home/daytona/files` 列表稳定包含这 3 个文件
+  - 三边 lease truth 最终一致：同一个 `instance_id = 50d883e8-ba58-4f62-886a-52881a948ad0`，`desired_state=running / observed_state=running / version=19`
 
 ### 机制层验证
 
@@ -56,20 +67,23 @@ created: 2026-04-09
 - 这轮 proof 还压实了一个运行面前提：
   - fresh proof worktree 的 `.venv` 若只执行默认 `uv sync`，`daytona_sdk` 不会安装
   - 自托管 Daytona caller-proof 前需要先执行 `uv sync --extra daytona`
+  - backend web runtime 还会在 startup 阶段硬要求 `LEON_POSTGRES_URL`
+  - 本地若把 `LEON_POSTGRES_URL` 指向远端 host 的 `localhost:5432`，实际会打到 `supavisor` 并得到 `Tenant or user not found`
+  - 真实 caller-proof 需要直通 `supabase-db` 容器的裸 Postgres，而不是复用 Supavisor 口
 
 ### 当前未 closure 的原因
 
 proof 并没有只带来“都能跑”的结论，但先前 blocker 已经进 mainline，当前未 closure 的原因也随之变化：
 
 - [#396](https://github.com/OpenDCAI/Mycel/pull/396) 已经补齐 `SupabaseLeaseRepo.set_volume_id(...)`
-- shared lease / file roundtrip、pause / resume、destroy persistence 与 backend-restart longevity 虽已成立，但 closure 还缺更高压场景：
+- shared lease / file roundtrip、pause / resume、destroy persistence、backend-restart longevity 与三线程共享 lease 压力场景虽已成立，但 closure 还缺更高压场景：
   - 更脏的 dirty-state / long-idle / restart-after-idle path
   - 更高层 multi-agent stress scenario
 
 ## Ruling
 
 - `CP05` 已进入 `in_progress`
-- shared Daytona lease / file collaboration、pause / resume、destroy persistence 与 backend-restart longevity 已经从“机制层试跑”提升为 `真实产品验证`
+- shared Daytona lease / file collaboration、pause / resume、destroy persistence、backend-restart longevity 与三线程共享 lease 压力场景已从“机制层试跑”提升为 `真实产品验证`
 - 但 closure 仍然要等更高压 proof：
   1. 更脏的 Daytona self-hosted dirty-state / long-idle / restart-after-idle path
   2. 更高层 multi-agent pressure proof
