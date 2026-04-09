@@ -107,10 +107,53 @@ def test_session_delete_thread_defaults_to_runtime_container_when_strategy_missi
     manager.save_session("t-default")
 
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.setenv("LEON_SUPABASE_CLIENT_FACTORY", "tests.fake:create_client")
     monkeypatch.setattr("storage.session_manager.build_storage_container", lambda **kwargs: _FakeContainer())
 
     ok = manager.delete_thread("t-default")
 
     assert ok is True
     assert deleted == [("checkpoint", "t-default"), ("file_operation", "t-default")]
+    assert closed == ["checkpoint", "file_operation"]
+
+
+def test_session_delete_thread_keeps_local_db_when_strategy_missing_and_runtime_config_missing(monkeypatch, tmp_path):
+    deleted: list[tuple[str, str]] = []
+    closed: list[str] = []
+
+    class _FakeCheckpointRepo:
+        def __init__(self, *, db_path):
+            self.db_path = db_path
+
+        def delete_thread_data(self, thread_id: str) -> None:
+            deleted.append(("checkpoint", thread_id))
+
+        def close(self) -> None:
+            closed.append("checkpoint")
+
+    class _FakeFileOperationRepo:
+        def __init__(self, *, db_path):
+            self.db_path = db_path
+
+        def delete_thread_operations(self, thread_id: str) -> None:
+            deleted.append(("file_operation", thread_id))
+
+        def close(self) -> None:
+            closed.append("file_operation")
+
+    session_dir = tmp_path / ".leon"
+    session_dir.mkdir(parents=True)
+    manager = SessionManager(session_dir=session_dir)
+    manager.save_session("t-local")
+    manager.db_path.touch()
+
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr("storage.session_manager.SQLiteCheckpointRepo", _FakeCheckpointRepo)
+    monkeypatch.setattr("storage.session_manager.SQLiteFileOperationRepo", _FakeFileOperationRepo)
+
+    ok = manager.delete_thread("t-local")
+
+    assert ok is True
+    assert deleted == [("checkpoint", "t-local"), ("file_operation", "t-local")]
     assert closed == ["checkpoint", "file_operation"]

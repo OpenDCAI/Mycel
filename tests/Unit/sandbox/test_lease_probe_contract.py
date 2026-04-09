@@ -233,14 +233,23 @@ def test_sandbox_lease_no_longer_imports_storage_factory() -> None:
     assert "SQLiteLeaseRepo" not in lease_source
 
 
-def test_use_supabase_storage_defaults_true_when_strategy_missing(monkeypatch):
+def test_use_supabase_storage_defaults_true_when_strategy_missing_with_runtime_config(monkeypatch):
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.setenv("LEON_SUPABASE_CLIENT_FACTORY", "tests.fake:create_client")
 
     assert sandbox_lease._use_supabase_storage() is True
 
 
-def test_mark_needs_refresh_without_strategy_env_uses_strategy_repo(monkeypatch):
+def test_use_supabase_storage_defaults_false_when_strategy_missing_and_runtime_config_missing(monkeypatch):
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+
+    assert sandbox_lease._use_supabase_storage() is False
+
+
+def test_mark_needs_refresh_without_strategy_env_uses_strategy_repo_when_runtime_config_exists(monkeypatch):
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.setenv("LEON_SUPABASE_CLIENT_FACTORY", "tests.fake:create_client")
     repo = _FakeLeaseRepo()
     default_db = _bind_default_sandbox_db(monkeypatch)
     lease = lease_from_row(repo.get("lease-1"), default_db)
@@ -256,6 +265,37 @@ def test_mark_needs_refresh_without_strategy_env_uses_strategy_repo(monkeypatch)
     assert persisted["lease_id"] == "lease-1"
     assert persisted["needs_refresh"] is True
     assert persisted["refresh_hint_at"] == hint_at.isoformat()
+
+
+def test_mark_needs_refresh_without_strategy_env_keeps_local_sqlite_when_runtime_config_missing(monkeypatch):
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    default_db = _bind_default_sandbox_db(monkeypatch)
+    lease = lease_from_row(_FakeLeaseRepo().get("lease-1"), default_db)
+    hint_at = datetime.fromisoformat("2026-04-09T00:00:00+00:00")
+    seen_db_paths: list[Path] = []
+
+    class _Conn:
+        def execute(self, *_args, **_kwargs):
+            return None
+
+        def commit(self) -> None:
+            return None
+
+        def rollback(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "sandbox.lease._connect",
+        lambda db_path: seen_db_paths.append(db_path) or _Conn(),
+    )
+
+    lease.mark_needs_refresh(hint_at=hint_at)
+
+    assert seen_db_paths == [default_db]
 
 
 def test_ensure_active_instance_persists_strategy_lease_before_probe_failure(monkeypatch):

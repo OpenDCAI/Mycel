@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from storage.contracts import NotificationType, QueueItem, QueueRepo
-from storage.runtime import build_queue_repo, uses_supabase_storage
+from storage.runtime import build_queue_repo, uses_supabase_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class MessageQueueManager:
     def __init__(self, repo: QueueRepo | None = None, *, db_path: str | None = None) -> None:
         if repo is not None:
             self._repo = repo
-        elif db_path is None and uses_supabase_storage():
+        elif db_path is None and uses_supabase_runtime_defaults():
             self._repo = build_queue_repo()
         else:
             from storage.providers.sqlite.queue_repo import SQLiteQueueRepo

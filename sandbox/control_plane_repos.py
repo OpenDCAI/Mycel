@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.runtime import build_chat_session_repo, build_lease_repo, build_terminal_repo, uses_supabase_storage
+from storage.runtime import (
+    build_chat_session_repo,
+    build_lease_repo,
+    build_terminal_repo,
+    uses_supabase_runtime_defaults,
+)
 
 
 def resolve_sandbox_db_path(db_path: Path | None = None) -> Path:
@@ -11,7 +16,7 @@ def resolve_sandbox_db_path(db_path: Path | None = None) -> Path:
 
 
 def _use_strategy_control_plane_repo(db_path: Path | None = None) -> bool:
-    return uses_supabase_storage() and resolve_sandbox_db_path(db_path) == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return uses_supabase_runtime_defaults() and resolve_sandbox_db_path(db_path) == resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 
 def make_chat_session_repo(db_path: Path | None = None):

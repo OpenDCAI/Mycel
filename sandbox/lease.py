@@ -31,7 +31,7 @@ from sandbox.lifecycle import (
 from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import build_lease_repo as _build_strategy_lease_repo
 from storage.runtime import build_provider_event_repo as _build_strategy_provider_event_repo
-from storage.runtime import uses_supabase_storage
+from storage.runtime import uses_supabase_runtime_defaults
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -82,7 +82,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _use_supabase_storage(db_path: Path | None = None) -> bool:
-    return uses_supabase_storage() and resolve_sandbox_db_path(db_path) == resolve_sandbox_db_path()
+    return uses_supabase_runtime_defaults() and resolve_sandbox_db_path(db_path) == resolve_sandbox_db_path()
 
 
 def _make_lease_repo(db_path: Path | None = None):

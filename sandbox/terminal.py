@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
-from storage.runtime import build_terminal_repo, uses_supabase_storage
+from storage.runtime import build_terminal_repo, uses_supabase_runtime_defaults
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
@@ -44,7 +44,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _use_strategy_terminal(db_path: Path) -> bool:
-    return uses_supabase_storage() and db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return uses_supabase_runtime_defaults() and db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 
 @dataclass

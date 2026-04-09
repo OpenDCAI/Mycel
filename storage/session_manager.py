@@ -5,7 +5,7 @@ from pathlib import Path
 
 from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
 from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
-from storage.runtime import build_storage_container, uses_supabase_storage
+from storage.runtime import build_storage_container, uses_supabase_runtime_defaults
 
 
 class SessionManager:
@@ -56,7 +56,7 @@ class SessionManager:
                 data["last_thread_id"] = threads[0] if threads else None
             self.session_file.write_text(json.dumps(data, indent=2))
 
-        if uses_supabase_storage():
+        if uses_supabase_runtime_defaults():
             try:
                 container = build_storage_container()
 

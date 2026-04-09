@@ -20,7 +20,7 @@ from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.runtime import build_storage_container, uses_supabase_storage
+from storage.runtime import build_storage_container, uses_supabase_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def lookup_sandbox_for_thread(
     lease_repo: Any | None = None,
 ) -> str | None:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    uses_strategy_default_sandbox = uses_supabase_storage() and target_db == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    uses_strategy_default_sandbox = uses_supabase_runtime_defaults() and target_db == resolve_role_db_path(SQLiteDBRole.SANDBOX)
     if terminal_repo is None and lease_repo is None and not target_db.exists() and not uses_strategy_default_sandbox:
         return None
 

@@ -333,9 +333,7 @@ def test_create_leon_agent_supabase_defaults_wire_runtime_container(monkeypatch,
 
 
 @_patch_env_api_key()
-def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing(
-    monkeypatch, tmp_path, _patch_runtime_storage_container
-):
+def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing(monkeypatch, tmp_path, _patch_runtime_storage_container):
     from core.runtime.agent import create_leon_agent
 
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
