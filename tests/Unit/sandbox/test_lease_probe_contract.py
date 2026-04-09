@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -6,6 +7,7 @@ import pytest
 
 import sandbox.lease as sandbox_lease
 from sandbox.lease import lease_from_row
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 
 
 class _FakeProvider:
@@ -207,10 +209,33 @@ def test_sandbox_lease_no_longer_imports_storage_factory() -> None:
     assert "SQLiteLeaseRepo" not in lease_source
 
 
-def test_use_supabase_storage_defaults_true_when_strategy_missing(monkeypatch):
+def test_use_supabase_storage_defaults_false_when_strategy_missing(monkeypatch):
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
 
-    assert sandbox_lease._use_supabase_storage() is True
+    assert sandbox_lease._use_supabase_storage() is False
+
+
+def test_mark_needs_refresh_without_strategy_env_uses_local_sqlite(tmp_path, monkeypatch):
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    db_path = tmp_path / "sandbox.db"
+    repo = SQLiteLeaseRepo(db_path=db_path)
+    try:
+        row = repo.create(lease_id="lease-local", provider_name="local")
+    finally:
+        repo.close()
+
+    lease = lease_from_row(row, db_path)
+    hint_at = datetime.fromisoformat("2026-04-09T00:00:00+00:00")
+
+    lease.mark_needs_refresh(hint_at=hint_at)
+
+    verify_repo = SQLiteLeaseRepo(db_path=db_path)
+    try:
+        persisted = verify_repo.get("lease-local")
+    finally:
+        verify_repo.close()
+    assert persisted is not None
+    assert persisted["needs_refresh"] == 1
 
 
 def test_ensure_active_instance_persists_strategy_lease_before_probe_failure(monkeypatch):

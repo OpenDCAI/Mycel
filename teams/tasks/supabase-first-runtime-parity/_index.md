@@ -87,11 +87,14 @@ created: 2026-04-09
 ## Default Next Move
 
 - `CP04 Default Supabase Cut`
-  - 第一轮已完成：
+  - 第一轮 ruling 已压实：
     - `backend/web/services/monitor_service.py` 的缺省 strategy fallback 已从 sqlite 改成 supabase
-    - `sandbox/lease.py::_use_supabase_storage()` 的缺省 strategy fallback 已从 sqlite 改成 supabase
-    - 对应 unit tests 已补齐并通过
+    - `sandbox/lease.py::_use_supabase_storage()` 不能安全改成 supabase-first
+    - env 缺省时，`sandbox/control_plane_repos.py` / `sandbox/manager.py` 仍先落本地 sqlite lease truth
+    - 已补 regression，证明 `mark_needs_refresh()` 在缺省 env 下仍必须写回 sqlite
   - 当前 stopline：
-    - 这只说明“env 缺省时代码默认按 Supabase 解释”
+    - 这只说明 monitor read surface 已切到 Supabase-first
+    - 还不能说整个默认运行面已切完
     - 还不等于 boot/runtime closure proof 已完成
-  - 下一步如果继续，应在 `CP04` 里补更高层 default/dev contract proof，或直接转向 `CP05 Closure Proof`
+  - 下一步如果继续，应在 `CP04` 里补更高层 default/dev contract proof
+    - 重点核对 queue / summary / langgraph dev / sandbox control-plane 这些仍绕开 strategy 的默认启动旁路
