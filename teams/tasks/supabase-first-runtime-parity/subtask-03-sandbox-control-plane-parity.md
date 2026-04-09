@@ -61,6 +61,20 @@ created: 2026-04-09
   - lease-store construction 也已收口到 `sandbox.control_plane_repos`
 - 这说明 control-plane 的 sqlite repo construction 已经收口成单一 seam，但更深的 lease-store / sqlite connection contract 仍然存在
 
+## Next Ruling
+
+- `sandbox.lease.py` 当前剩余的 sqlite dependency 已不是 import 级别，而是 state-machine write 级别：
+  - `_connect`
+  - `_append_event`
+  - `_persist_snapshot`
+  - `_persist_lease_metadata`
+- 这些路径直接写：
+  - `sandbox_leases`
+  - `sandbox_instances`
+  - `lease_events`
+- 当前 `storage.providers.supabase.lease_repo.SupabaseLeaseRepo` 只覆盖了更窄的 CRUD / adopt / refresh 面，还没有承接这组 state-machine writes。
+- 因此下一刀如果继续，必须先回答是否要把 lease snapshot / event append contract 正式提升进 repo seam；这已经不是“继续清理 SQLite import”。
+
 ## Default Next Move
 
 - 优先判断 `sandbox/lease.py` 里 `connect_sqlite / _persist_snapshot / _persist_lease_metadata / _append_event` 这一组 state-machine writes

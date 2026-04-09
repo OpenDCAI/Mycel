@@ -91,4 +91,4 @@ created: 2026-04-09
   - 第一轮已完成：`sandbox_service.py` 不再 import sqlite kernel / 不再自己持有 `SANDBOX_DB_PATH`
   - 第二轮已完成：`sandbox.manager / sandbox.chat_session` 不再各自直接 import `SQLite*Repo`，而是共用 `sandbox.control_plane_repos`
   - 第三轮已完成：`sandbox.lease.py` 不再直接 import `SQLiteLeaseRepo`，lease-store construction 已接入 `sandbox.control_plane_repos`
-  - 下一步继续判断是否要收窄更深的 `connect_sqlite / sqlite state-machine writes`，而不是继续做表面 import 清理
+  - 当前 stopline 已压清：下一步如果继续，必须先扩 `lease snapshot / event append` repo contract；已经不再是表面 import 清理

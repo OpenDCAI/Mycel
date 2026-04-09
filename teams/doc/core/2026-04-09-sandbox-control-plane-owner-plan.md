@@ -139,3 +139,40 @@ Nominate one next move only:
 - or `sandbox.chat_session` storage-contract narrowing
 
 Do not combine them in the same implementation slice until the evidence says they are inseparable.
+
+### Task 5: Lease State-Machine Contract Ruling
+
+**Files:**
+- Read: `sandbox/lease.py`
+- Read: `storage/providers/supabase/lease_repo.py`
+- Modify: `teams/tasks/supabase-first-runtime-parity/subtask-03-sandbox-control-plane-parity.md`
+
+- [ ] **Step 1: Record the deeper residual**
+
+Document that after repo-construction cleanup, `sandbox/lease.py` still directly owns sqlite state-machine writes through:
+
+```python
+_connect(...)
+_append_event(...)
+_persist_snapshot(...)
+_persist_lease_metadata(...)
+```
+
+- [ ] **Step 2: Compare against the current Supabase repo**
+
+Record that `SupabaseLeaseRepo` currently covers only the narrower surface:
+
+```python
+get(...)
+create(...)
+adopt_instance(...)
+mark_needs_refresh(...)
+delete(...)
+list_*
+```
+
+and does not yet expose a lease snapshot / instance upsert / event append write contract.
+
+- [ ] **Step 3: Set the next stopline**
+
+State explicitly that the next implementation cut, if any, must start by extending the lease repo contract. It must not be framed as another “remove SQLite import” cleanup.
