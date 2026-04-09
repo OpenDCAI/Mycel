@@ -12,7 +12,7 @@ created: 2026-04-09
 
 ## 当前 mainline truth
 
-这张卡现在以 `origin/dev = df75922f54ed9a28443d8e80118fcc2027bf3b4f` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
+这张卡现在以 `origin/dev = b943583f7b067d90820105051a2be9ab0866b453` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
 
 当前 `dev` 已经完成的事实：
 
@@ -47,9 +47,20 @@ created: 2026-04-09
   - backend B 冷启动后，旧 `thread2` 仍能读到 restart 前的 remote file
   - `thread2` 在 restart 后继续上传并同步新文件，`thread1` 也能反向读到
   - cold start 初始 lease truth 一度表现为 `paused`，但在新一轮 thread activity 后收敛回 `running`
+- shared Daytona lease 的三线程压力 proof 已成立：
+  - `thread1 = m_dKjuBBLbR1bw-105`
+  - `thread2 = m_dKjuBBLbR1bw-106`
+  - `thread3 = m_dKjuBBLbR1bw-107`
+  - `lease_id = lease-135dd60b2aa1`
+  - 三轮 `upload -> public download -> attachment sync -> cross-thread remote read` 全部成功
+  - 远端 `/home/daytona/files` 最终稳定包含 3 个线程各自同步的文件
+  - 三边 lease truth 最终一致：同一个 `instance_id`，`desired_state=running / observed_state=running / version=19`
 - 这次 proof 还暴露出一个运行面前提：
   - fresh proof worktree 若只做默认 `uv sync`，`daytona_sdk` 不会进入 `.venv`
   - 自托管 Daytona caller-proof 需要先执行 `uv sync --extra daytona`
+  - fresh backend web caller-proof 还需要显式 `LEON_POSTGRES_URL`
+  - 远端 Supabase host `localhost:5432` 实际是 `supavisor`，不是裸 `supabase-db`
+  - 要让 backend web runtime 通过 checkpointer contract，本地需要直通 `supabase-db` 的 Postgres tunnel，而不是复用 Supavisor 口
 
 ## 当前 ruling
 
@@ -82,4 +93,4 @@ created: 2026-04-09
 
 - 在最新 `dev` 上继续更高强度 proof：
   - 更脏的 Daytona self-hosted 多线程 dirty-state / long-idle / restart-after-idle path
-  - 更高层 multi-agent stress scenario（例如多 agent 协议博弈）
+  - 更高层 multi-agent stress scenario（例如多 agent 协议博弈 / 斗地主类多回合场景）
