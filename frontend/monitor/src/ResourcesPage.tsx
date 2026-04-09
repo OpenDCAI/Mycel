@@ -356,6 +356,7 @@ export default function ResourcesPage() {
       }).length,
     0,
   );
+  const activeDriftCount = triage?.summary?.active_drift ?? 0;
   const detachedResidueCount = triage?.summary?.detached_residue ?? 0;
   const orphanCleanupCount = triage?.summary?.orphan_cleanup ?? 0;
   const refreshedAt = summary?.last_refreshed_at
@@ -426,6 +427,9 @@ export default function ResourcesPage() {
           )}
           {quotaOnlyRunningCount > 0 && (
             <div className="resources-summary-pill">{quotaOnlyRunningCount} 仅配额</div>
+          )}
+          {activeDriftCount > 0 && (
+            <div className="resources-summary-pill">{activeDriftCount} Active Drift</div>
           )}
           {detachedResidueCount > 0 && (
             <div className="resources-summary-pill">{detachedResidueCount} Detached Residue</div>
