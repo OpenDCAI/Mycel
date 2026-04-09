@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ from core.runtime.middleware.queue.middleware import SteeringMiddleware
 from core.runtime.registry import ToolRegistry
 from core.tools.command.bash.executor import BashExecutor
 from core.tools.command.service import CommandService
+from core.tools.command.zsh.executor import ZshExecutor
 from sandbox.thread_context import set_current_thread_id
 
 
@@ -66,6 +68,15 @@ def _require_bash_run(run: BackgroundRun) -> _BashBackgroundRun:
 def _require_running_task(run: BackgroundRun) -> _RunningTask:
     assert isinstance(run, _RunningTask)
     return run
+
+
+def _available_posix_background_executors() -> list[type]:
+    executors: list[type] = []
+    if shutil.which("bash") is not None:
+        executors.append(BashExecutor)
+    if shutil.which("zsh") is not None:
+        executors.append(ZshExecutor)
+    return executors
 
 
 class _SlowChildAgent:
@@ -200,6 +211,32 @@ def test_request_background_run_stop_kills_real_shell_command_tree(tmp_path):
         assert async_cmd.done is True
         assert async_cmd.exit_code not in (None, 0)
         assert "NEVER_BACKGROUND_CANCEL_TREE" not in "".join(async_cmd.stdout_buffer)
+
+    asyncio.run(run())
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="nested-shell cancel truth integration requires Unix-compatible shells",
+)
+@pytest.mark.parametrize("executor_cls", _available_posix_background_executors(), ids=lambda cls: cls.shell_name)
+def test_request_background_run_stop_prevents_nested_shell_late_write_side_effect(tmp_path, executor_cls):
+    async def run():
+        executor = executor_cls(default_cwd=str(tmp_path))
+        target = tmp_path / f"{executor_cls.shell_name}_cancel_nested_write.txt"
+        token = f"NESTED_CANCEL_{executor_cls.shell_name.upper()}"
+        inner = f"sleep 2; printf {shlex.quote(token)} > {shlex.quote(str(target))}"
+        command = f"sh -lc {shlex.quote(inner)}"
+        async_cmd = await executor.execute_async(command, cwd=str(tmp_path))
+        running = _BashBackgroundRun(async_cmd, command)
+
+        await request_background_run_stop(running)
+        await asyncio.sleep(2.5)
+
+        assert async_cmd.cancelled is True
+        assert async_cmd.done is True
+        assert async_cmd.exit_code not in (None, 0)
+        assert target.exists() is False
 
     asyncio.run(run())
 
