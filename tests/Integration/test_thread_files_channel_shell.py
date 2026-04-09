@@ -29,13 +29,6 @@ def test_helpers_no_longer_import_storage_factory() -> None:
     assert "storage.runtime" in helpers_source
 
 
-def test_helpers_no_longer_import_storage_factory() -> None:
-    helpers_source = Path("backend/web/utils/helpers.py").read_text()
-
-    assert "backend.web.core.storage_factory" not in helpers_source
-    assert "storage.runtime" in helpers_source
-
-
 @pytest.mark.asyncio
 async def test_call_channel_file_service_maps_value_error_to_400():
     def fake_method(*_args: object, **_kwargs: object):
