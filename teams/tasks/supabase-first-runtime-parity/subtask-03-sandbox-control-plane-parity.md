@@ -134,15 +134,35 @@ created: 2026-04-09
   - `intent.destroy`
   - `provider.error` 的 event-side parity
 
+## Latest Provider-Error Slice
+
+- 当前又补了一条更窄的 event parity：
+  - `_record_provider_error(..., source=...)`
+- 具体变化：
+  - `sandbox/lease.py` 在 `LEON_STORAGE_STRATEGY=supabase` 下，provider 异常不再只落 metadata
+  - 现在会同时通过 strategy `provider_event_repo` 记录一条 `provider.error`
+  - 这条 event 会带：
+    - `matched_lease_id`
+    - `instance_id`
+    - `payload.error`
+    - `payload.source`
+- 这刀当前覆盖到的 caller：
+  - `run.refresh`
+  - `run.refresh_locked`
+  - `read.status`
+- 这刀仍然没有碰：
+  - `intent.pause`
+  - `intent.resume`
+  - `intent.destroy`
+
 ## Default Next Move
 
 - 不直接改 `monitor_service.py`
 - 不继续追加底层 sqlite helper 清理
 - 下一刀如果继续，应在更宽的 transition 之间选一个：
-  - `provider.error` event-side parity
   - `intent.pause / intent.resume`
   - `intent.destroy`
-- 不要把三者混成一刀
+- 不要把剩下几条 transition 混成一刀
 
 ## Stopline
 

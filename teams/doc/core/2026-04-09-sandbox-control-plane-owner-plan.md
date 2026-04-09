@@ -249,7 +249,18 @@ completed second transition cut:
 - refresh_instance_status() supabase success path now uses strategy repos
 
 remaining wider transitions:
-- provider.error event parity
+- intent.pause / intent.resume
+- intent.destroy
+```
+
+Latest update after the provider-error slice:
+
+```text
+completed third transition cut:
+- _record_provider_error(..., source=...)
+- supabase strategy now records provider.error into provider_events
+
+remaining wider transitions:
 - intent.pause / intent.resume
 - intent.destroy
 ```

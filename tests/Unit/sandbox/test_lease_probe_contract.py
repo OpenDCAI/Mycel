@@ -225,10 +225,12 @@ def test_ensure_active_instance_persists_strategy_lease_before_probe_failure(mon
 
 def test_record_provider_error_persists_strategy_metadata(monkeypatch):
     repo = _FakeLeaseRepo()
+    event_repo = _FakeProviderEventRepo()
     lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
     monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
 
     lease._record_provider_error("provider boom")
 
@@ -239,6 +241,15 @@ def test_record_provider_error_persists_strategy_metadata(monkeypatch):
     assert call["needs_refresh"] is True
     assert call["status"] == "active"
     assert call["version"] == 1
+    assert event_repo.record_calls == [
+        {
+            "provider_name": "daytona_selfhost",
+            "instance_id": "inst-1",
+            "event_type": "provider.error",
+            "payload": {"error": "provider boom", "source": "provider"},
+            "matched_lease_id": "lease-1",
+        }
+    ]
 
 
 def test_refresh_instance_status_uses_strategy_observe_status_transition(monkeypatch):
@@ -263,6 +274,38 @@ def test_refresh_instance_status_uses_strategy_observe_status_transition(monkeyp
             "instance_id": "inst-1",
             "event_type": "observe.status",
             "payload": {"status": "running", "instance_id": "inst-1"},
+            "matched_lease_id": "lease-1",
+        }
+    ]
+
+
+def test_refresh_instance_status_records_strategy_provider_error_event(monkeypatch):
+    repo = _FakeLeaseRepo()
+    event_repo = _FakeProviderEventRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    class _FailingProvider(_FakeProvider):
+        def get_session_status(self, _instance_id: str) -> str:
+            raise RuntimeError("provider boom")
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    observed = lease.refresh_instance_status(_FailingProvider(), force=True)
+
+    assert observed == "running"
+    assert len(repo.persist_calls) == 1
+    call = repo.persist_calls[0]
+    assert call["last_error"] == "provider boom"
+    assert call["needs_refresh"] is True
+    assert event_repo.record_calls == [
+        {
+            "provider_name": "daytona_selfhost",
+            "instance_id": "inst-1",
+            "event_type": "provider.error",
+            "payload": {"error": "provider boom", "source": "read.status"},
             "matched_lease_id": "lease-1",
         }
     ]

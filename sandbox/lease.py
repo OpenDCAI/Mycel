@@ -481,7 +481,7 @@ class SQLiteLease(SandboxLease):
             if should_commit:
                 target.close()
 
-    def _record_provider_error(self, message: str) -> None:
+    def _record_provider_error(self, message: str, *, source: str = "provider") -> None:
         self.last_error = message[:500]
         self.needs_refresh = True
         self.refresh_hint_at = utc_now()
@@ -489,6 +489,7 @@ class SQLiteLease(SandboxLease):
         self.version += 1
         if _use_supabase_storage():
             repo = _make_lease_repo(self.db_path)
+            event_repo = _make_provider_event_repo()
             try:
                 row = repo.persist_metadata(
                     lease_id=self.lease_id,
@@ -503,7 +504,16 @@ class SQLiteLease(SandboxLease):
                     refresh_hint_at=self.refresh_hint_at.isoformat() if self.refresh_hint_at else None,
                     status=self.status,
                 )
+                if self._current_instance:
+                    event_repo.record(
+                        provider_name=self.provider_name,
+                        instance_id=self._current_instance.instance_id,
+                        event_type="provider.error",
+                        payload={"error": self.last_error, "source": source},
+                        matched_lease_id=self.lease_id,
+                    )
             finally:
+                event_repo.close()
                 repo.close()
             self._sync_from(lease_from_row(row, self.db_path))
             return
@@ -744,7 +754,7 @@ class SQLiteLease(SandboxLease):
             except RuntimeError:
                 raise
             except Exception as exc:
-                self._record_provider_error(str(exc))
+                self._record_provider_error(str(exc), source="run.refresh")
 
         with self._instance_lock():
             self._reload_from_storage()
@@ -782,7 +792,7 @@ class SQLiteLease(SandboxLease):
                 except RuntimeError:
                     raise
                 except Exception as exc:
-                    self._record_provider_error(str(exc))
+                    self._record_provider_error(str(exc), source="run.refresh_locked")
 
             self.status = "recovering"
             if not _use_supabase_storage():
@@ -877,7 +887,7 @@ class SQLiteLease(SandboxLease):
                 )
         except Exception as exc:
             if _use_supabase_storage():
-                self._record_provider_error(str(exc))
+                self._record_provider_error(str(exc), source="read.status")
             else:
                 self.apply(
                     provider,
