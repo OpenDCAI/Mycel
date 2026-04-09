@@ -17,7 +17,8 @@ created: 2026-04-09
 - [sandbox/resource_snapshot.py](/Users/lexicalmathical/worktrees/leonai--storage-lease-owner-cut/sandbox/resource_snapshot.py)
 - [backend/web/routers/threads.py](/Users/lexicalmathical/worktrees/leonai--storage-thread-sandbox-cut/backend/web/routers/threads.py)
 
-因为这些切口都满足：
+<<<<<<< HEAD
+因为这几刀都满足：
 
 - runtime-owned 语义明显
 - write set 足够窄
@@ -81,15 +82,14 @@ created: 2026-04-09
 
 ## 还没做
 
-`CP05` 还没有 closure。剩余更深的 runtime-owned 残留仍在：
+`CP05` 还没有 closure。剩余更深的 runtime-owned 残留现在只剩：
 
 - [sandbox/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-webhooks-lease-cut/sandbox/manager.py)
-- [backend/web/utils/helpers.py](/Users/lexicalmathical/worktrees/leonai--storage-webhooks-lease-cut/backend/web/utils/helpers.py)
 
 ## Stopline
 
 - 当前不直接碰 `sandbox/manager.py`
-- 当前不把 `helpers.py` 混进 `threads.py / sandbox/lease.py` 同一刀
+- 当前不把 `sandbox/manager.py` 和已完成的 `webhooks / sandbox/lease / threads` 三刀重新混成一锅
 - 当前不把 `sandbox/manager.py` 和更深的 runtime lifecycle 重写混进同一刀
 
 ## Hindsight
