@@ -268,7 +268,9 @@ Latest update after the destroy slice:
 
 ```text
 completed fourth transition cut:
-- intent.destroy success path now uses strategy repos under supabase
+- intent.destroy now uses strategy repos under supabase
+- destroy path keeps lease-level lock + reload before mutation
+- destroy failures now reuse provider.error persistence/event parity
 
 remaining wider transitions:
 - intent.pause / intent.resume

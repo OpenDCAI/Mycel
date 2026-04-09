@@ -893,7 +893,13 @@ class SQLiteLease(SandboxLease):
 
     def destroy_instance(self, provider: SandboxProvider, *, source: str = "api") -> None:
         if _use_supabase_storage():
-            self._destroy_via_strategy_repos(provider, source=source)
+            with self._instance_lock():
+                self._reload_from_storage()
+                try:
+                    self._destroy_via_strategy_repos(provider, source=source)
+                except Exception as exc:
+                    self._record_provider_error(str(exc), source=f"{source}.destroy")
+                    raise
             return
         self.apply(provider, event_type="intent.destroy", source=source)
 

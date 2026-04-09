@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -345,6 +346,71 @@ def test_destroy_instance_uses_strategy_destroy_transition(monkeypatch):
             "instance_id": "inst-1",
             "event_type": "intent.destroy",
             "payload": {"instance_id": "inst-1", "source": "api"},
+            "matched_lease_id": "lease-1",
+        }
+    ]
+
+
+def test_destroy_instance_strategy_path_reloads_under_lock(monkeypatch):
+    repo = _FakeLeaseRepo()
+    event_repo = _FakeProviderEventRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+    order: list[str] = []
+
+    class _OrderedProvider(_FakeProvider):
+        def destroy_session(self, _instance_id: str) -> bool:
+            order.append("provider.destroy")
+            return True
+
+    @contextmanager
+    def _fake_lock():
+        order.append("lock.enter")
+        try:
+            yield
+        finally:
+            order.append("lock.exit")
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+    monkeypatch.setattr(lease, "_instance_lock", lambda: _fake_lock())
+    monkeypatch.setattr(lease, "_reload_from_storage", lambda: order.append("reload"))
+
+    lease.destroy_instance(_OrderedProvider(), source="api")
+
+    assert order[:3] == ["lock.enter", "reload", "provider.destroy"]
+    assert order[-1] == "lock.exit"
+
+
+def test_destroy_instance_records_strategy_provider_error_on_failure(monkeypatch):
+    repo = _FakeLeaseRepo()
+    event_repo = _FakeProviderEventRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    class _FailingDestroyProvider(_FakeProvider):
+        def destroy_session(self, _instance_id: str) -> bool:
+            raise RuntimeError("provider boom")
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    with pytest.raises(RuntimeError, match="Failed to destroy lease lease-1: provider boom"):
+        lease.destroy_instance(_FailingDestroyProvider(), source="api")
+
+    assert len(repo.persist_calls) == 1
+    call = repo.persist_calls[0]
+    assert call["last_error"] == "Failed to destroy lease lease-1: provider boom"
+    assert call["needs_refresh"] is True
+    assert call["status"] == "active"
+    assert event_repo.record_calls == [
+        {
+            "provider_name": "daytona_selfhost",
+            "instance_id": "inst-1",
+            "event_type": "provider.error",
+            "payload": {"error": "Failed to destroy lease lease-1: provider boom", "source": "api.destroy"},
             "matched_lease_id": "lease-1",
         }
     ]

@@ -157,13 +157,17 @@ created: 2026-04-09
 
 ## Latest Destroy Slice
 
-- 当前又补了一条 success-path transition：
+- 当前又补了一条 transition：
   - `intent.destroy`
 - 具体变化：
   - `destroy_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下不再直接走本地 sqlite `apply(intent.destroy)`
-  - 现在会通过 strategy `lease_repo.observe_status(...)` 先落 detached/stopped truth
+  - 现在会在现有 `lease` object 上先走 `_instance_lock() + _reload_from_storage()`
+  - success path 会通过 strategy `lease_repo.observe_status(...)` 先落 detached/stopped truth
   - 然后通过 `persist_metadata(...)` 把 `desired_state=destroyed`、`status=expired` 收口
   - 同时通过 strategy `provider_event_repo` 记录 `intent.destroy`
+  - failure path 不再裸抛异常后结束
+  - 现在会复用 `_record_provider_error(..., source=f\"{source}.destroy\")`
+  - 所以 `last_error / needs_refresh / provider.error` 也保持 parity
 - 这刀当前没有碰：
   - `intent.pause`
   - `intent.resume`
