@@ -18,24 +18,27 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_recipient_thread_id(app: Any, recipient_id: str) -> str | None:
-    active_thread_id = _resolve_unique_active_thread_id(app, recipient_id)
+    thread = app.state.thread_repo.get_by_user_id(recipient_id)
+    active_thread_id = _resolve_unique_active_thread_id(app, recipient_id, thread)
     if active_thread_id is not None:
         return active_thread_id
-    thread = app.state.thread_repo.get_by_user_id(recipient_id)
     if thread is None:
         return None
     return thread["id"]
 
 
-def _resolve_unique_active_thread_id(app: Any, recipient_id: str) -> str | None:
+def _resolve_unique_active_thread_id(app: Any, recipient_id: str, thread: dict[str, Any] | None) -> str | None:
     thread_repo = getattr(app.state, "thread_repo", None)
     if thread_repo is None or not hasattr(thread_repo, "list_by_agent_user"):
+        return None
+    agent_user_id = str((thread or {}).get("agent_user_id") or recipient_id).strip()
+    if not agent_user_id:
         return None
 
     pool = getattr(app.state, "agent_pool", {}) or {}
     active_thread_ids: list[str] = []
-    for thread in thread_repo.list_by_agent_user(recipient_id):
-        thread_id = str(thread.get("id") or "").strip()
+    for candidate in thread_repo.list_by_agent_user(agent_user_id):
+        thread_id = str(candidate.get("id") or "").strip()
         if not thread_id:
             continue
         # @@@active-thread-delivery-precedence - fresh chat delivery should prefer the

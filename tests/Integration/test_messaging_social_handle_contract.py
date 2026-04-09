@@ -1175,13 +1175,13 @@ async def test_async_deliver_prefers_unique_active_child_thread_over_default_mai
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "thread-user-1"} if uid == "thread-user-1" else None,
+                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
                 list_by_agent_user=lambda uid: (
                     [
-                        {"id": "thread-main", "agent_user_id": "thread-user-1", "is_main": True, "branch_index": 0},
-                        {"id": "thread-child", "agent_user_id": "thread-user-1", "is_main": False, "branch_index": 1},
+                        {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
+                        {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
                     ]
-                    if uid == "thread-user-1"
+                    if uid == "agent-user-1"
                     else []
                 ),
             ),
