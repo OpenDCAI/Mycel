@@ -81,11 +81,21 @@ Mycel 配置存储在 `~/.leon/`：
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxx
-# 或使用 OpenAI 兼容格式：
-# OPENAI_API_KEY=your-key
-# OPENAI_BASE_URL=https://api.openai.com/v1
-# MODEL_NAME=gpt-4o
+OPENAI_API_KEY=your-key
+OPENAI_BASE_URL=https://api.openai.com/v1
+MODEL_NAME=claude-sonnet-4-5-20250929
+LEON_STORAGE_STRATEGY=supabase
+SUPABASE_PUBLIC_URL=http://localhost:54320
+SUPABASE_INTERNAL_URL=http://localhost:54320
+SUPABASE_AUTH_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=your-anon-key
+LEON_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+LEON_DB_SCHEMA=staging
+LEON_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
+
+当前 production/local web runtime 的文档化默认契约是 Supabase-first。`~/.leon/*.db` 下的 SQLite 文件即使仍然存在，也不应再被描述成默认启动路径。
 
 ## 启动服务
 
@@ -222,14 +232,11 @@ Daytona Proxy（端口 4000）必须从 Runner 可访问，文件操作依赖它
 
 ### 数据库
 
-Mycel 默认使用 SQLite。生产环境建议：
+文档化的默认存储路径是 Supabase 加 Postgres checkpointer。
 
-```bash
-# 定期备份
-cp ~/.leon/leon.db ~/.leon/leon.db.backup
-```
-
-多用户部署可能需要 PostgreSQL — 需要对存储层进行代码改动。
+- Supabase 承担 web/runtime 存储和认证
+- `LEON_POSTGRES_URL` 是 backend web runtime checkpointer 契约的必填项
+- `~/.leon/*.db` 下的 SQLite 文件应被视为 residual/local surface，而不是主要的生产数据库契约
 
 ### 安全
 

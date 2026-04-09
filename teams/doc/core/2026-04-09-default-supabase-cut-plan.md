@@ -16,6 +16,9 @@ Current narrow ruling:
   - web startup queue wiring must not silently fall back to `SQLiteQueueRepo`
   - generic `create_leon_agent()` must auto-build runtime storage container in Supabase mode
   - this also pulls summary persistence for `langgraph_app.py` back onto the runtime container seam
+- After the third pass, the ruling tightened again:
+  - documented startup/configuration text must also become Supabase-first
+  - `.env.example` alone is not enough if README / quickstart / deployment still imply sqlite-default
 
 First bounded slice:
 
@@ -37,6 +40,17 @@ Second bounded slice:
    - web lifespan queue manager uses runtime container queue repo
    - `create_leon_agent()` Supabase path wires runtime queue + summary repos
 
+Third bounded slice:
+
+1. Update `README.md` / `README.zh.md`
+   - add Supabase-first startup contract
+2. Update `docs/en/quickstart.mdx` / `docs/zh/quickstart.mdx`
+   - require Supabase + Postgres checkpointer in quickstart
+3. Update `docs/en/configuration.mdx` / `docs/zh/configuration.mdx`
+   - make first-run config explicitly Supabase-first
+4. Update `docs/en/deployment.mdx` / `docs/zh/deployment.mdx`
+   - remove sqlite-default wording from deployment/database guidance
+
 Evidence target:
 
 - focused unit tests for:
@@ -56,10 +70,10 @@ Stopline:
   - monitor read-surface default fallback is Supabase-first
   - lease default is still blocked by env-less sqlite control-plane ownership
   - web startup queue and generic agent startup queue/summary now consume runtime storage container in Supabase mode
+  - documented/default startup contract is also Supabase-first
 - we still cannot honestly say:
   - code-level defaults are uniformly Supabase-first
   - the full system has boot/runtime closure without SQLite
 - next move should be:
-  - broader default/dev contract proof
-  - especially README / quickstart / deployment / configuration docs
+  - `CP05 Closure Proof`
   - plus any env-less sandbox control-plane residual that still contradicts default Supabase

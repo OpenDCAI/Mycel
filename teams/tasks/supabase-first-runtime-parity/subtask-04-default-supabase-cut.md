@@ -1,6 +1,6 @@
 ---
 title: Default Supabase Cut
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -24,6 +24,9 @@ created: 2026-04-09
   - web startup 里的 `queue_manager` 也不能继续裸建 sqlite repo
   - generic `create_leon_agent()` 在 `LEON_STORAGE_STRATEGY=supabase` 下也必须自动接上 runtime storage container
   - 否则 queue / summary 会继续绕开 strategy，和 documented default contract 冲突
+- 第三轮实现后确认：
+  - documented/default contract 也必须同步到 Supabase-first
+  - 否则 README / quickstart / configuration / deployment 会继续把人引向过时的 sqlite-default 心智模型
 
 ## First Slice
 
@@ -52,6 +55,20 @@ created: 2026-04-09
   - README / quickstart / deployment / configuration 文档 truth
   - env-less sandbox control-plane sqlite ownership
 
+## Third Slice
+
+- 文档 truth realignment：
+  - `README.md` / `README.zh.md`
+  - `docs/en/quickstart.mdx` / `docs/zh/quickstart.mdx`
+  - `docs/en/configuration.mdx` / `docs/zh/configuration.mdx`
+  - `docs/en/deployment.mdx` / `docs/zh/deployment.mdx`
+- 这一刀只做一件事：
+  - 把 documented/default startup contract 明确写成 Supabase-first
+  - 不再把 sqlite 描述成 web/runtime 默认启动路径
+- 这刀仍不碰：
+  - sandbox control-plane 更深的 env-less sqlite residual
+  - `CP05` 的真实产品 closure proof
+
 ## Evidence
 
 - `机制层验证`
@@ -66,6 +83,11 @@ created: 2026-04-09
   - `uv run pytest -q tests/Integration/test_leon_agent.py -k 'create_leon_agent_supabase_defaults_wire_runtime_container or leon_agent_simple_run or leon_agent_ainit_pushes_late_checkpointer_into_memory_middleware'`
     - `3 passed, 33 deselected`
 - `源码/测试层辅助证据`
+  - `git diff --check`
+    - `exit 0`
+  - `rg -n 'LEON_STORAGE_STRATEGY=supabase|Supabase-first|默认.*Supabase|Supabase.*默认' README.md README.zh.md docs/en/quickstart.mdx docs/zh/quickstart.mdx docs/en/configuration.mdx docs/zh/configuration.mdx docs/en/deployment.mdx docs/zh/deployment.mdx`
+    - documented/default contract strings present in all targeted docs
+- `源码/测试层辅助证据`
   - `uv run ruff check backend/web/services/monitor_service.py sandbox/lease.py backend/web/core/lifespan.py core/runtime/agent.py tests/Unit/monitor/test_monitor_compat.py tests/Unit/sandbox/test_lease_probe_contract.py tests/Integration/test_storage_repo_abstraction_unification.py tests/Integration/test_leon_agent.py`
     - `All checks passed!`
   - `uv run python -m py_compile backend/web/services/monitor_service.py sandbox/lease.py backend/web/core/lifespan.py core/runtime/agent.py tests/Unit/monitor/test_monitor_compat.py tests/Unit/sandbox/test_lease_probe_contract.py tests/Integration/test_storage_repo_abstraction_unification.py tests/Integration/test_leon_agent.py`
@@ -78,13 +100,13 @@ created: 2026-04-09
   - `sandbox/lease.py` 的缺省 strategy fallback 还不能改
   - 否则会把 env-less sqlite control-plane 和 strategy lease repo 撕成 split-brain
   - web startup queue 和 generic agent startup queue/summary 已经接回 runtime storage container
+  - README / quickstart / configuration / deployment 的 documented default 也已经对齐到 Supabase-first
 - 这不等于：
   - 系统在“完全不依赖 SQLite”下已经 closure
   - boot/runtime proof 已完成
 - 下一步如果继续，应转向：
-  - 补 `CP04` 更高层的 default/dev contract proof
-  - 盘清 README / quickstart / deployment / configuration 的 documented truth
-  - 再决定 `CP05 Closure Proof` 的真实入口
+  - 进入 `CP05 Closure Proof`
+  - 正面验证在 Supabase contract 下关键运行路径可独立成立
 
 ## Stopline
 

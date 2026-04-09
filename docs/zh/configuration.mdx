@@ -42,7 +42,18 @@ Mycel 使用分层配置系统，三级合并：系统默认值 → 用户配置
 OPENAI_API_KEY=sk-xxx
 OPENAI_BASE_URL=https://api.openai.com/v1
 MODEL_NAME=claude-sonnet-4-5-20250929
+LEON_STORAGE_STRATEGY=supabase
+SUPABASE_PUBLIC_URL=http://localhost:54320
+SUPABASE_INTERNAL_URL=http://localhost:54320
+SUPABASE_AUTH_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=your-anon-key
+LEON_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+LEON_DB_SCHEMA=staging
+LEON_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
+
+当前默认存储契约是 Supabase-first。在文档化的 web/dev 启动路径里，如果缺少 `LEON_STORAGE_STRATEGY`，应视为配置不完整，而不是自动退回 SQLite。
 
 ## runtime.json
 

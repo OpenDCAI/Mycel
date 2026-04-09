@@ -11,6 +11,7 @@ keywords: [quickstart, install, setup, first agent]
 - Python 3.11+
 - Node.js 18+
 - An OpenAI-compatible API key (Anthropic, OpenAI, OpenRouter, etc.)
+- A reachable Supabase stack for storage/auth plus a Postgres checkpointer URL
 
 ## Install and run
 
@@ -30,6 +31,26 @@ keywords: [quickstart, install, setup, first agent]
     # Frontend
     cd frontend/app && npm install && cd ../..
     ```
+  </Step>
+
+  <Step title="Configure the default Supabase storage contract">
+    Copy `.env.example` into `.env` or `~/.leon/config.env`, then keep the storage strategy on Supabase:
+
+    ```env
+    LEON_STORAGE_STRATEGY=supabase
+    SUPABASE_PUBLIC_URL=http://localhost:54320
+    SUPABASE_INTERNAL_URL=http://localhost:54320
+    SUPABASE_AUTH_URL=http://127.0.0.1:54321
+    SUPABASE_ANON_KEY=your-anon-key
+    LEON_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+    SUPABASE_JWT_SECRET=your-jwt-secret
+    LEON_DB_SCHEMA=staging
+    LEON_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    ```
+
+    <Tip>
+      Mycel's current web/runtime mainline is Supabase-first. Do not treat SQLite as the default local startup contract.
+    </Tip>
   </Step>
 
   <Step title="Start services">

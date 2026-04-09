@@ -61,7 +61,25 @@ uv sync --extra daytona     # Daytona
 
 Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
 
-### 3. Start the services
+### 3. Configure the default Supabase storage contract
+
+Create `.env` or `~/.leon/config.env` from [.env.example](.env.example) and keep the storage strategy on Supabase:
+
+```env
+LEON_STORAGE_STRATEGY=supabase
+SUPABASE_PUBLIC_URL=http://localhost:54320
+SUPABASE_INTERNAL_URL=http://localhost:54320
+SUPABASE_AUTH_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=your-anon-key
+LEON_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+LEON_DB_SCHEMA=staging
+LEON_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+```
+
+For local dev, start your Supabase/tunnel endpoints first. Mycel's current web/runtime mainline is Supabase-first; SQLite should not be treated as the default startup contract.
+
+### 4. Start the services
 
 ```bash
 # Terminal 1: Backend
@@ -73,7 +91,7 @@ cd frontend/app && npm run dev
 # → http://localhost:5173
 ```
 
-### 4. Open and configure
+### 5. Open and configure
 
 1. Open **http://localhost:5173** in your browser
 2. **Register** an account

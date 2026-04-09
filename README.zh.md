@@ -61,7 +61,25 @@ uv sync --extra daytona     # Daytona
 
 Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.mdx)。
 
-### 3. 启动服务
+### 3. 配置默认的 Supabase 存储契约
+
+从 [.env.example](.env.example) 复制配置到 `.env` 或 `~/.leon/config.env`，并保持存储策略为 Supabase：
+
+```env
+LEON_STORAGE_STRATEGY=supabase
+SUPABASE_PUBLIC_URL=http://localhost:54320
+SUPABASE_INTERNAL_URL=http://localhost:54320
+SUPABASE_AUTH_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=your-anon-key
+LEON_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+LEON_DB_SCHEMA=staging
+LEON_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+```
+
+本地开发时先确保 Supabase / tunnel 端点已经启动。当前的 web/runtime 主线是 Supabase-first，不应再把 SQLite 当成默认启动契约。
+
+### 4. 启动服务
 
 ```bash
 # 终端 1：后端
@@ -73,7 +91,7 @@ cd frontend/app && npm run dev
 # → http://localhost:5173
 ```
 
-### 4. 打开并配置
+### 5. 打开并配置
 
 1. 浏览器打开 **http://localhost:5173**
 2. **注册**账号

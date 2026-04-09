@@ -52,7 +52,18 @@ Create `~/.leon/config.env`:
 OPENAI_API_KEY=sk-xxx
 OPENAI_BASE_URL=https://api.openai.com/v1
 MODEL_NAME=claude-sonnet-4-5-20250929
+LEON_STORAGE_STRATEGY=supabase
+SUPABASE_PUBLIC_URL=http://localhost:54320
+SUPABASE_INTERNAL_URL=http://localhost:54320
+SUPABASE_AUTH_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=your-anon-key
+LEON_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
+LEON_DB_SCHEMA=staging
+LEON_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
+
+The current default storage contract is Supabase-first. If `LEON_STORAGE_STRATEGY` is omitted in documented web/dev flows, treat that as incomplete configuration rather than a signal to fall back to SQLite.
 
 ## runtime.json
 

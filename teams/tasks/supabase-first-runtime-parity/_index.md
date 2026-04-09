@@ -62,7 +62,7 @@ created: 2026-04-09
 | 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | done |
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | done |
 | 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | done |
-| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | in_progress |
+| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | done |
 | 05 | [Closure Proof](subtask-05-closure-proof.md) | 真实证明系统在 Supabase 下可独立运行，SQLite 不再是隐含前提 | open |
 
 ## 边界
@@ -86,21 +86,13 @@ created: 2026-04-09
 
 ## Default Next Move
 
-- `CP04 Default Supabase Cut`
-  - 第一轮 ruling 已压实：
-    - `backend/web/services/monitor_service.py` 的缺省 strategy fallback 已从 sqlite 改成 supabase
-    - `sandbox/lease.py::_use_supabase_storage()` 不能安全改成 supabase-first
-    - env 缺省时，`sandbox/control_plane_repos.py` / `sandbox/manager.py` 仍先落本地 sqlite lease truth
-    - 已补 regression，证明 `mark_needs_refresh()` 在缺省 env 下仍必须写回 sqlite
-  - 第二轮 ruling 已压实：
-    - `backend/web/core/lifespan.py` 的 `queue_manager` 已改为消费 `storage_container.queue_repo()`
-    - `create_leon_agent()` 在 `LEON_STORAGE_STRATEGY=supabase` 下会自动接 runtime storage container
-    - `LeonAgent` 在有 runtime container 且未显式注入 queue manager 时，默认走 container queue repo
-    - generic agent / `langgraph_app.py` 的 summary persistence 因此也回到 runtime container
-  - 当前 stopline：
-    - 这只说明 monitor read surface 以及 default startup queue/summary wiring 已切到 Supabase-first
-    - 还不能说整个默认运行面已切完
-    - 还不等于 boot/runtime closure proof 已完成
-  - 下一步如果继续，应在 `CP04` 里补更高层 default/dev contract proof
-    - 重点核对 README / quickstart / deployment / configuration 的 documented truth
-    - 以及 env-less sandbox control-plane 这类仍未被证明可默认切到 Supabase 的 residual
+- `CP05 Closure Proof`
+  - `CP04` 已完成：
+    - monitor read fallback 已切到 Supabase-first
+    - startup queue / summary wiring 已接回 runtime storage container
+    - README / quickstart / configuration / deployment 的 documented default 已对齐
+  - 下一步要回答的已经不是“默认是什么”
+    - 而是关键运行路径在 Supabase contract 下是否真的独立成立
+  - 重点残余：
+    - env-less sandbox control-plane sqlite ownership
+    - 任何仍要求本地 sqlite truth 才能跑通的 closure blocker
