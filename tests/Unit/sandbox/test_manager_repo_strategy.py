@@ -238,6 +238,64 @@ def test_chat_session_close_uses_injected_repo():
     assert repo.deletes == [("sess-1", "closed")]
 
 
+def test_chat_session_touch_without_injected_repo_uses_control_plane_repo_seam(monkeypatch):
+    import sandbox.chat_session as chat_session_module
+
+    repo = _FakeSessionRepo()
+    monkeypatch.setattr(chat_session_module, "make_chat_session_repo", lambda db_path=None: repo)
+
+    session = ChatSession(
+        session_id="sess-1",
+        thread_id="thread-1",
+        terminal=_FakeTerminal(),
+        lease=_FakeLease(),
+        runtime=object(),
+        policy=ChatSessionPolicy(),
+        started_at=__import__("datetime").datetime.now(),
+        last_active_at=__import__("datetime").datetime.now(),
+    )
+
+    session.touch()
+
+    assert hasattr(chat_session_module, "_connect") is False
+    assert repo.touches
+    assert repo.touches[0][0] == "sess-1"
+
+
+def test_chat_session_close_without_injected_repo_uses_control_plane_repo_seam(monkeypatch):
+    import sandbox.chat_session as chat_session_module
+
+    class _Runtime:
+        def __init__(self):
+            self.closed = False
+
+        async def close(self):
+            self.closed = True
+
+    repo = _FakeSessionRepo()
+    monkeypatch.setattr(chat_session_module, "make_chat_session_repo", lambda db_path=None: repo)
+
+    runtime = _Runtime()
+    session = ChatSession(
+        session_id="sess-1",
+        thread_id="thread-1",
+        terminal=_FakeTerminal(),
+        lease=_FakeLease(),
+        runtime=runtime,
+        policy=ChatSessionPolicy(),
+        started_at=__import__("datetime").datetime.now(),
+        last_active_at=__import__("datetime").datetime.now(),
+    )
+
+    import asyncio
+
+    asyncio.run(session.close(reason="closed"))
+
+    assert hasattr(chat_session_module, "_connect") is False
+    assert runtime.closed is True
+    assert repo.deletes == [("sess-1", "closed")]
+
+
 def test_chat_session_is_expired_accepts_aware_supabase_timestamps():
     aware = datetime.fromisoformat("2099-04-08T00:00:00+00:00")
     session = ChatSession(
