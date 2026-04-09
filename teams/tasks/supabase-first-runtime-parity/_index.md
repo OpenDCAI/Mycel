@@ -90,6 +90,7 @@ created: 2026-04-09
   - `CP05a` 已完成第一条 caller proof：
     - 显式 `LEON_STORAGE_STRATEGY=supabase` 下，默认 sandbox control-plane repo construction 已切回 strategy seam
     - 显式自定义 `db_path` 仍保持 sqlite-owned
+    - env-less 时，默认 sandbox control-plane caller 仍保持 sqlite-owned
   - 下一步不要扩成“大而全 closure”
-    - 应继续核对 env-less sandbox control-plane residual
+    - 应继续核对 env-less sandbox control-plane residual 是否还能进一步收窄
     - 以及任何仍要求本地 sqlite truth 才能跑通的 default boot blocker

@@ -337,6 +337,64 @@ def test_sandbox_manager_keeps_custom_db_path_sqlite_owned_under_supabase(monkey
     assert manager.session_manager._repo.db_path == custom_db_path
 
 
+def test_sandbox_manager_keeps_default_sandbox_repos_sqlite_owned_when_strategy_missing(monkeypatch, tmp_path):
+    import sandbox.control_plane_repos as control_plane_repos_module
+    import sandbox.manager as sandbox_manager_module
+    import storage.providers.sqlite.chat_session_repo as sqlite_chat_session_repo_module
+    import storage.providers.sqlite.lease_repo as sqlite_lease_repo_module
+    import storage.providers.sqlite.terminal_repo as sqlite_terminal_repo_module
+
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    default_db = tmp_path / "sandbox.db"
+    monkeypatch.setattr(sandbox_manager_module, "resolve_role_db_path", lambda role, db_path=None: default_db)
+    monkeypatch.setattr(control_plane_repos_module, "resolve_role_db_path", lambda role, db_path=None: default_db)
+    monkeypatch.setattr(
+        control_plane_repos_module,
+        "build_terminal_repo",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("strategy terminal repo should not be used without env")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        control_plane_repos_module,
+        "build_lease_repo",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("strategy lease repo should not be used without env")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        control_plane_repos_module,
+        "build_chat_session_repo",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("strategy chat repo should not be used without env")),
+        raising=False,
+    )
+
+    class _SQLiteTerminalRepoStub(_RepoStub):
+        def __init__(self, *, db_path):
+            self.db_path = db_path
+
+    class _SQLiteLeaseRepoStub(_RepoStub):
+        def __init__(self, *, db_path):
+            self.db_path = db_path
+
+    class _SQLiteChatRepoStub(_RepoStub):
+        def __init__(self, *, db_path):
+            self.db_path = db_path
+
+    monkeypatch.setattr(sqlite_terminal_repo_module, "SQLiteTerminalRepo", _SQLiteTerminalRepoStub)
+    monkeypatch.setattr(sqlite_lease_repo_module, "SQLiteLeaseRepo", _SQLiteLeaseRepoStub)
+    monkeypatch.setattr(sqlite_chat_session_repo_module, "SQLiteChatSessionRepo", _SQLiteChatRepoStub)
+
+    provider = SimpleNamespace(get_capability=lambda: SimpleNamespace(runtime_kind="local"))
+
+    manager = sandbox_manager_module.SandboxManager(provider=provider)
+
+    assert isinstance(manager.terminal_store, _SQLiteTerminalRepoStub)
+    assert isinstance(manager.lease_store, _SQLiteLeaseRepoStub)
+    assert isinstance(manager.session_manager._repo, _SQLiteChatRepoStub)
+    assert manager.terminal_store.db_path == default_db
+    assert manager.lease_store.db_path == default_db
+    assert manager.session_manager._repo.db_path == default_db
+
+
 def test_sandbox_manager_uses_own_db_path_when_repo_has_no_db_path(monkeypatch, tmp_path):
     import sandbox.manager as sandbox_manager_module
 

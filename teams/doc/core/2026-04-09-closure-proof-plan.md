@@ -37,6 +37,8 @@ Stopline:
 - after this slice, we can honestly say:
   - explicit Supabase + default sandbox path no longer forces sqlite control-plane repo construction
   - custom `db_path` still preserves local sqlite semantics
+- after the follow-up proof, we can also honestly say:
+  - missing `LEON_STORAGE_STRATEGY` still keeps the default sandbox control-plane on sqlite truth
 - we still cannot honestly say:
   - env-less sandbox control-plane is closed
   - the whole system boots without SQLite
@@ -45,5 +47,5 @@ Stopline:
 Default next move:
 
 - continue `CP05` with the next narrow proof:
-  - env-less sandbox control-plane residual audit/proof
+  - env-less sandbox control-plane residual narrowing
   - or another concrete default-boot blocker if it appears first in caller-level evidence

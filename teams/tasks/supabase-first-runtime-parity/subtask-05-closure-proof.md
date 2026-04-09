@@ -45,6 +45,8 @@ created: 2026-04-09
 - `机制层验证`
   - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py tests/Unit/sandbox/test_sandbox_manager_volume_repo.py`
     - `29 passed`
+  - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py -k 'sandbox_manager_keeps_default_sandbox_repos_sqlite_owned_when_strategy_missing or sandbox_manager_uses_strategy_control_plane_repos_for_default_sandbox_db_under_supabase or sandbox_manager_keeps_custom_db_path_sqlite_owned_under_supabase'`
+    - `3 passed, 10 deselected`
   - `uv run pytest -q tests/Unit/sandbox/test_sandbox_manager_volume_repo.py`
     - 已包含在上一条 focused batch 中
 - `源码/测试层辅助证据`
@@ -60,6 +62,7 @@ created: 2026-04-09
 - 这刀只说明：
   - 显式 `LEON_STORAGE_STRATEGY=supabase` 下，默认 sandbox control-plane repo construction 已回到 strategy seam
   - 显式自定义 `db_path` 仍然保留本地 sqlite 语义
+  - env-less 时，默认 sandbox control-plane caller 仍然会走本地 sqlite repo truth
 - 这不等于：
   - env-less sandbox control-plane 已经切完
   - queue / summary / other residual 已完成 closure
