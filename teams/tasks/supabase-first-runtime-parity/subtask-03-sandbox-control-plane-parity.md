@@ -174,13 +174,42 @@ created: 2026-04-09
   - `intent.pause`
   - `intent.resume`
 
+## Latest Pause/Resume Slice
+
+- 当前又补了一条对偶 transition：
+  - `intent.pause`
+  - `intent.resume`
+- 具体变化：
+  - `pause_instance()` / `resume_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下不再落回本地 sqlite `apply(...)`
+  - 两者现在都会先走 `_instance_lock() + _reload_from_storage()`
+  - 然后共用同一个 strategy transition helper，而不是复制两套 repo/event 写法
+  - success path 会通过 strategy `lease_repo.observe_status(...)` + `persist_metadata(...)` 落 `paused/running` truth
+  - 同时通过 strategy `provider_event_repo` 记录 `intent.pause` / `intent.resume`
+  - failure path 会复用 `_record_provider_error(..., source=f"{source}.pause|resume")`
+  - 即使 post-write failure 发生在 event 写入之后，也会保留 pause-state truth，并保持后续 error transition 的 version bump
+
+## Current Stopline
+
+- 当前 bounded transition set 已经覆盖：
+  - `persist_metadata`
+  - `observe.status`
+  - `provider.error`
+  - `intent.destroy`
+  - `intent.pause`
+  - `intent.resume`
+- 所以 `CP03` 这条 control-plane transition lane 到这里应视为已完成当前授权边界
+- 下一步不该再在这张卡里追加新的 sqlite helper 清理
+- 如果继续，应切回更上层的：
+  - `CP04 Default Supabase Cut`
+  - 或新的 closure-proof / boot/runtime proof slice
+
 ## Default Next Move
 
 - 不直接改 `monitor_service.py`
-- 不继续追加底层 sqlite helper 清理
-- 下一刀如果继续，应在更宽的 transition 之间选一个：
-  - `intent.pause / intent.resume`
-- 不要把 pause / resume 再拆成无边界的大扫除；要么做成一个对偶 slice，要么先 park
+- 不继续在 `CP03` 里追加新的 sqlite helper 清理
+- 下一步如果继续，应离开这张卡：
+  - 进入 `CP04 Default Supabase Cut`
+  - 或转向更高层 closure proof
 
 ## Stopline
 

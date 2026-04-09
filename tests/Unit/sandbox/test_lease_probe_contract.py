@@ -11,7 +11,7 @@ class _FakeProvider:
     name = "daytona_selfhost"
 
     def get_capability(self):
-        return SimpleNamespace(supports_status_probe=True, can_destroy=True)
+        return SimpleNamespace(supports_status_probe=True, can_destroy=True, can_pause=True, can_resume=True)
 
     def create_session(self, context_id=None, thread_id=None):
         return SimpleNamespace(session_id="instance-created")
@@ -20,6 +20,12 @@ class _FakeProvider:
         return "running"
 
     def destroy_session(self, _instance_id: str) -> bool:
+        return True
+
+    def pause_session(self, _instance_id: str) -> bool:
+        return True
+
+    def resume_session(self, _instance_id: str) -> bool:
         return True
 
 
@@ -491,3 +497,125 @@ def test_destroy_instance_bumps_version_again_when_event_write_fails(monkeypatch
     assert repo.persist_calls[-1]["version"] == 2
     assert repo.persist_calls[-1]["desired_state"] == "destroyed"
     assert repo.persist_calls[-1]["observed_state"] == "detached"
+
+
+def test_pause_instance_uses_strategy_pause_transition(monkeypatch):
+    repo = _FakeLeaseRepo()
+    event_repo = _FakeProviderEventRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    lease.pause_instance(_FakeProvider(), source="api")
+
+    assert repo.observe_calls == [
+        {
+            "lease_id": "lease-1",
+            "status": "paused",
+            "observed_at": repo.observe_calls[0]["observed_at"],
+        }
+    ]
+    assert len(repo.persist_calls) == 1
+    persist = repo.persist_calls[0]
+    assert persist["desired_state"] == "paused"
+    assert persist["observed_state"] == "paused"
+    assert persist["status"] == "active"
+    assert persist["needs_refresh"] is False
+    assert event_repo.record_calls == [
+        {
+            "provider_name": "daytona_selfhost",
+            "instance_id": "inst-1",
+            "event_type": "intent.pause",
+            "payload": {"instance_id": "inst-1", "source": "api"},
+            "matched_lease_id": "lease-1",
+        }
+    ]
+
+
+def test_resume_instance_uses_strategy_resume_transition(monkeypatch):
+    repo = _FakeLeaseRepo()
+    repo._row = {
+        **repo._row,
+        "desired_state": "paused",
+        "observed_state": "paused",
+        "_instance": {
+            **repo._row["_instance"],
+            "status": "paused",
+        },
+    }
+    event_repo = _FakeProviderEventRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    lease.resume_instance(_FakeProvider(), source="api")
+
+    assert repo.observe_calls == [
+        {
+            "lease_id": "lease-1",
+            "status": "running",
+            "observed_at": repo.observe_calls[0]["observed_at"],
+        }
+    ]
+    assert len(repo.persist_calls) == 1
+    persist = repo.persist_calls[0]
+    assert persist["desired_state"] == "running"
+    assert persist["observed_state"] == "running"
+    assert persist["status"] == "active"
+    assert persist["needs_refresh"] is False
+    assert event_repo.record_calls == [
+        {
+            "provider_name": "daytona_selfhost",
+            "instance_id": "inst-1",
+            "event_type": "intent.resume",
+            "payload": {"instance_id": "inst-1", "source": "api"},
+            "matched_lease_id": "lease-1",
+        }
+    ]
+
+
+def test_pause_instance_preserves_paused_state_when_event_write_fails(monkeypatch):
+    repo = _FakeLeaseRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    class _EventFailRepo(_FakeProviderEventRepo):
+        def record(
+            self,
+            *,
+            provider_name: str,
+            instance_id: str,
+            event_type: str,
+            payload: dict[str, object],
+            matched_lease_id: str | None,
+        ) -> None:
+            if event_type == "intent.pause":
+                raise RuntimeError("event boom")
+            super().record(
+                provider_name=provider_name,
+                instance_id=instance_id,
+                event_type=event_type,
+                payload=payload,
+                matched_lease_id=matched_lease_id,
+            )
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: _EventFailRepo())
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    with pytest.raises(RuntimeError, match="event boom"):
+        lease.pause_instance(_FakeProvider(), source="api")
+
+    assert len(repo.persist_calls) == 2
+    assert repo.persist_calls[0]["version"] == 1
+    assert repo.persist_calls[-1]["version"] == 2
+    assert repo.persist_calls[-1]["desired_state"] == "paused"
+    assert repo.persist_calls[-1]["observed_state"] == "paused"
+    assert repo.persist_calls[-1]["last_error"] == "event boom"
+    assert repo.persist_calls[-1]["needs_refresh"] is True

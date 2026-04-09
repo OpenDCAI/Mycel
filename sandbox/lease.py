@@ -599,6 +599,74 @@ class SQLiteLease(SandboxLease):
             repo.close()
         self._sync_from(lease_from_row(final_row, self.db_path))
 
+    def _transition_instance_via_strategy_repos(
+        self,
+        provider: SandboxProvider,
+        *,
+        event_type: str,
+        source: str,
+        desired_state: str,
+        observed_state: str,
+        capability_name: str,
+        provider_method_name: str,
+    ) -> None:
+        capability = provider.get_capability()
+        if not getattr(capability, capability_name):
+            raise RuntimeError(f"Provider {provider.name} does not support {event_type.split('.')[-1]}")
+        if not self._current_instance:
+            raise RuntimeError(f"Lease {self.lease_id} has no instance to {event_type.split('.')[-1]}")
+
+        instance_id = self._current_instance.instance_id
+        provider_method = getattr(provider, provider_method_name)
+        try:
+            ok = provider_method(instance_id)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.lease_id}: {exc}") from exc
+        if not ok:
+            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.lease_id}")
+
+        self.desired_state = desired_state
+        self._set_observed_state(observed_state, reason=event_type)
+        self.status = "active"
+        self.last_error = None
+        self.needs_refresh = False
+        self.refresh_hint_at = None
+
+        repo = _make_lease_repo(self.db_path)
+        event_repo = _make_provider_event_repo()
+        try:
+            observed_row = repo.observe_status(
+                lease_id=self.lease_id,
+                status=observed_state,
+                observed_at=utc_now_iso(),
+            )
+            self.version = int(observed_row.get("version") or self.version)
+            final_row = repo.persist_metadata(
+                lease_id=self.lease_id,
+                recipe_id=observed_row.get("recipe_id"),
+                recipe_json=observed_row.get("recipe_json"),
+                desired_state=desired_state,
+                observed_state=observed_row.get("observed_state") or observed_state,
+                version=int(observed_row.get("version") or 0),
+                observed_at=observed_row.get("observed_at"),
+                last_error=None,
+                needs_refresh=False,
+                refresh_hint_at=None,
+                status="active",
+            )
+            self.version = int(final_row.get("version") or self.version)
+            event_repo.record(
+                provider_name=self.provider_name,
+                instance_id=instance_id,
+                event_type=event_type,
+                payload={"instance_id": instance_id, "source": source},
+                matched_lease_id=self.lease_id,
+            )
+        finally:
+            event_repo.close()
+            repo.close()
+        self._sync_from(lease_from_row(final_row, self.db_path))
+
     def _reload_from_storage(self) -> None:
         repo = _make_lease_repo(self.db_path)
         try:
@@ -912,10 +980,44 @@ class SQLiteLease(SandboxLease):
         self.apply(provider, event_type="intent.destroy", source=source)
 
     def pause_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool:
+        if _use_supabase_storage():
+            with self._instance_lock():
+                self._reload_from_storage()
+                try:
+                    self._transition_instance_via_strategy_repos(
+                        provider,
+                        event_type="intent.pause",
+                        source=source,
+                        desired_state="paused",
+                        observed_state="paused",
+                        capability_name="can_pause",
+                        provider_method_name="pause_session",
+                    )
+                except Exception as exc:
+                    self._record_provider_error(str(exc), source=f"{source}.pause")
+                    raise
+            return True
         self.apply(provider, event_type="intent.pause", source=source)
         return True
 
     def resume_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool:
+        if _use_supabase_storage():
+            with self._instance_lock():
+                self._reload_from_storage()
+                try:
+                    self._transition_instance_via_strategy_repos(
+                        provider,
+                        event_type="intent.resume",
+                        source=source,
+                        desired_state="running",
+                        observed_state="running",
+                        capability_name="can_resume",
+                        provider_method_name="resume_session",
+                    )
+                except Exception as exc:
+                    self._record_provider_error(str(exc), source=f"{source}.resume")
+                    raise
+            return True
         self.apply(provider, event_type="intent.resume", source=source)
         return True
 

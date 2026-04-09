@@ -278,6 +278,20 @@ remaining wider transitions:
 - intent.pause / intent.resume
 ```
 
+Latest update after the pause/resume slice:
+
+```text
+completed fifth transition cut:
+- intent.pause / intent.resume now use strategy repos under supabase
+- pause/resume keep lease-level lock + reload before mutation
+- pause/resume failures reuse provider.error persistence/event parity
+- post-write failures preserve pause-state truth and version parity
+
+current bounded stopline:
+- transition set for CP03 is complete
+- next work should move to CP04 / higher-level closure proof
+```
+
 - [ ] **Step 3: Record the transaction question**
 
 Make the plan explicit that SQLite currently gets atomicity from one local connection in:

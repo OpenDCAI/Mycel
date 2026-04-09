@@ -61,7 +61,7 @@ created: 2026-04-09
 | 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 固化 current `dev` 下所有仍依赖 SQLite 的 runtime/service/control-plane 路径 | in_progress |
 | 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | done |
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | done |
-| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | in_progress |
+| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | done |
 | 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | open |
 | 05 | [Closure Proof](subtask-05-closure-proof.md) | 真实证明系统在 Supabase 下可独立运行，SQLite 不再是隐含前提 | open |
 
@@ -94,5 +94,6 @@ created: 2026-04-09
   - 第四轮已完成：`LeaseRepo.persist_metadata(...)` 已补进 protocol / sqlite provider / supabase provider，且 `sandbox.lease.py:_record_provider_error()` 在 `LEON_STORAGE_STRATEGY=supabase` 下已改为通过 `storage.runtime.build_lease_repo(...)` 持久化 metadata，而不是继续落回本地 sqlite refresh flag
   - 第五轮已完成：`LeaseRepo.observe_status(...)` 已补进 protocol / sqlite provider / supabase provider，且 `SQLiteLease.refresh_instance_status()` 在 `LEON_STORAGE_STRATEGY=supabase` 下会通过 strategy lease repo + provider event repo 落 `observe.status` transition
   - 第六轮已完成：`provider.error` 的 strategy event parity 已补上；`_record_provider_error(..., source=...)` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会同时持久化 lease metadata 和 `provider_events`
-  - 第七轮已完成：`intent.destroy` 的 strategy success path 已补上；`destroy_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会通过 strategy lease repo + provider event repo 落 detached/expired truth，而不是继续走本地 sqlite `apply(intent.destroy)`
-  - 当前 stopline 已压清：下一步如果继续，只剩 `pause / resume` 这一组更宽 transition，而不是再回头做底层 sqlite helper 清理
+  - 第七轮已完成：`intent.destroy` 的 strategy path 已补上；`destroy_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会通过 strategy lease repo + provider event repo 落 detached/expired truth，并保留 destroy-side error/version parity
+  - 第八轮已完成：`intent.pause / intent.resume` 的 strategy path 已补上；`pause_instance()` / `resume_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会通过同一条 strategy transition helper 落 paused/running truth，并保留 failure-side provider.error / version parity
+  - `CP03` 当前授权边界已收口完成；下一步如果继续，应离开这张卡，进入 `CP04 Default Supabase Cut` 或更高层 closure proof
