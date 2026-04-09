@@ -12,7 +12,7 @@ created: 2026-04-09
 
 ## 当前 mainline truth
 
-这张卡现在以 `origin/dev = 4cec440a7144b58cf76fad23f89bb7d9a7fe50ad` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
+这张卡现在以 `origin/dev = df75922f54ed9a28443d8e80118fcc2027bf3b4f` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
 
 当前 `dev` 已经完成的事实：
 
@@ -38,6 +38,15 @@ created: 2026-04-09
   - resume 后 lease 回到 `running`
   - 同一 instance id 保持不变
   - pause 前同步进去的文件在 resume 后仍可跨线程读取
+- shared Daytona lease 的 destroy persistence proof 也已成立：
+  - `thread1` destroy 自己的 sandbox 后，surviving `thread2` 不再被一起拖进 destroyed lease
+  - `thread2` 仍保持 `desired_state=running / observed_state=running`
+  - destroy 前已同步的 remote file 在 destroy 后仍可继续读取
+- shared Daytona lease 的 backend-restart longevity proof 已成立：
+  - backend A 建立 shared lease 并同步 `thread1` 文件后完全退出
+  - backend B 冷启动后，旧 `thread2` 仍能读到 restart 前的 remote file
+  - `thread2` 在 restart 后继续上传并同步新文件，`thread1` 也能反向读到
+  - cold start 初始 lease truth 一度表现为 `paused`，但在新一轮 thread activity 后收敛回 `running`
 - 这次 proof 还暴露出一个运行面前提：
   - fresh proof worktree 若只做默认 `uv sync`，`daytona_sdk` 不会进入 `.venv`
   - 自托管 Daytona caller-proof 需要先执行 `uv sync --extra daytona`
@@ -47,7 +56,7 @@ created: 2026-04-09
 - `CP00` 已不该继续标 `in_progress`
 - `CP02` service surface parity 已基本收口
 - 当前 mainline 最大 residual 不再是 service 层，而是 sandbox control-plane 的剩余 contract gap
-- `CP05 Closure Proof` 已经拿到一轮强 caller-proof，但还不能诚实地宣称完成
+- `CP05 Closure Proof` 已经拿到多轮高强度 caller-proof，但还不能诚实地宣称完成
 
 ## 子任务
 
@@ -72,6 +81,5 @@ created: 2026-04-09
 ## 默认 next move
 
 - 在最新 `dev` 上继续更高强度 proof：
-  - destroy 后的 shared sandbox file persistence
-  - Daytona self-hosted 多线程 dirty-state path
+  - 更脏的 Daytona self-hosted 多线程 dirty-state / long-idle / restart-after-idle path
   - 更高层 multi-agent stress scenario（例如多 agent 协议博弈）

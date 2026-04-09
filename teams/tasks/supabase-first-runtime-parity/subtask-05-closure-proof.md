@@ -33,6 +33,21 @@ created: 2026-04-09
   - resume 后 lease 回到 `running`
   - 同一 instance id 持续复用
   - pause 前后 shared files 都能跨线程继续读取
+- 真实 Daytona self-hosted destroy persistence proof 已成立：
+  - `thread1 = m_dKjuBBLbR1bw-99`
+  - `thread2 = m_dKjuBBLbR1bw-100`
+  - `lease_id = lease-876d9e57240b`
+  - `DELETE /api/threads/{thread1}/sandbox -> 200`
+  - surviving `thread2` 在 destroy 后仍保持 `desired_state=running / observed_state=running`
+  - destroy 前已同步的 `remote file` 在 destroy 后仍继续可读
+- 真实 Daytona self-hosted backend-restart longevity proof 已成立：
+  - backend A 上建立 shared lease：`thread1 = m_dKjuBBLbR1bw-101`，`thread2 = m_dKjuBBLbR1bw-102`
+  - `lease_id = lease-20045fcfa4b3`
+  - restart 前 `thread2` 能读到 `thread1` 同步的 `longevity-d3a3d42d-t1.txt`
+  - backend A 完全退出后，backend B 冷启动
+  - restart 后 `thread2` 仍能读到旧文件
+  - restart 后 `thread2` 新写入并同步 `longevity-b975998d-t2.txt`，`thread1` 也能反向读到
+  - cold start 初始 lease truth 一度表现为 `paused/version=4`，但在新一轮 thread activity 后收敛回 `running/version=6`
 
 ### 机制层验证
 
@@ -47,19 +62,17 @@ created: 2026-04-09
 proof 并没有只带来“都能跑”的结论，但先前 blocker 已经进 mainline，当前未 closure 的原因也随之变化：
 
 - [#396](https://github.com/OpenDCAI/Mycel/pull/396) 已经补齐 `SupabaseLeaseRepo.set_volume_id(...)`
-- shared lease / file roundtrip 与 pause / resume persistence 虽已成立，但 closure 还缺更高压场景：
-  - destroy 后的文件持久性
-  - dirty state 下连续多轮 shared lease 协作
+- shared lease / file roundtrip、pause / resume、destroy persistence 与 backend-restart longevity 虽已成立，但 closure 还缺更高压场景：
+  - 更脏的 dirty-state / long-idle / restart-after-idle path
   - 更高层 multi-agent stress scenario
 
 ## Ruling
 
 - `CP05` 已进入 `in_progress`
-- shared Daytona lease / file collaboration 与 pause / resume persistence 已经从“机制层试跑”提升为 `真实产品验证`
+- shared Daytona lease / file collaboration、pause / resume、destroy persistence 与 backend-restart longevity 已经从“机制层试跑”提升为 `真实产品验证`
 - 但 closure 仍然要等更高压 proof：
-  1. destroy 后的 shared sandbox file persistence
-  2. Daytona self-hosted dirty-state / long-lifecycle path
-  3. 更高层 multi-agent pressure proof
+  1. 更脏的 Daytona self-hosted dirty-state / long-idle / restart-after-idle path
+  2. 更高层 multi-agent pressure proof
 
 ## 证据要求
 
