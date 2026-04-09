@@ -273,6 +273,21 @@ class SupabaseLeaseRepo:
         updated = q.rows(response, _REPO, "mark_needs_refresh")
         return len(updated) > 0
 
+    def set_volume_id(self, lease_id: str, volume_id: str) -> bool:
+        response = (
+            self._leases()
+            .update(
+                {
+                    "volume_id": volume_id,
+                    "updated_at": _utc_now_iso(),
+                }
+            )
+            .eq("lease_id", lease_id)
+            .execute()
+        )
+        updated = q.rows(response, _REPO, "set_volume_id")
+        return len(updated) > 0
+
     def delete(self, lease_id: str) -> None:
         self._instances().delete().eq("lease_id", lease_id).execute()
         self._leases().delete().eq("lease_id", lease_id).execute()
