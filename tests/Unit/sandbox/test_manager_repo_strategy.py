@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from sandbox.chat_session import ChatSession, ChatSessionPolicy
@@ -10,6 +11,15 @@ from sandbox.manager import (
     resolve_existing_lease_cwd,
 )
 from sandbox.terminal import AbstractTerminal, TerminalState
+
+
+def test_sandbox_manager_no_longer_imports_storage_factory() -> None:
+    manager_source = Path("sandbox/manager.py").read_text(encoding="utf-8")
+
+    assert "backend.web.core.storage_factory" not in manager_source
+    assert "SQLiteTerminalRepo" in manager_source
+    assert "SQLiteLeaseRepo" in manager_source
+    assert "SQLiteChatSessionRepo" in manager_source
 
 
 class _FakeTerminalRepo:
@@ -235,7 +245,7 @@ def test_chat_session_is_expired_accepts_aware_supabase_timestamps():
     assert session.is_expired() is False
 
 
-def test_sandbox_manager_uses_strategy_aware_repos_under_supabase(monkeypatch):
+def test_sandbox_manager_keeps_sandbox_repos_sqlite_owned_under_supabase(monkeypatch):
     import sandbox.manager as sandbox_manager_module
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
