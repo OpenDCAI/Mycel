@@ -1,6 +1,6 @@
 ---
 title: Supabase Boot Contract
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -149,6 +149,81 @@ current classification:
   - 提供 canonical `LEON_POSTGRES_URL`
   - 然后重跑 latest `dev` backend bringup
 
+## 第二轮 caller-proven 证据
+
+### 真实产品验证
+
+- local `ops/tunnel.sh` 当前只开：
+  - `54320 -> Kong`
+  - `54321 -> GoTrue`
+- 不开 Postgres，所以 `LEON_POSTGRES_URL` 的 local contract 还缺显式接入路径
+
+为避免和现有 tunnel 冲突，补了一条临时 SSH tunnel：
+
+- `127.0.0.1:15432 -> remote:5432`
+
+first probe:
+
+- DSN:
+  - `postgresql://postgres:<password>@127.0.0.1:15432/postgres`
+- result:
+  - `psycopg.OperationalError: FATAL: Tenant or user not found`
+
+second probe:
+
+- DSN:
+  - `postgresql://postgres.51440a93464db390:<password>@127.0.0.1:15432/postgres?sslmode=disable`
+- result:
+  - `SELECT 1 -> (1,)`
+
+latest `dev` backend bringup with:
+
+- `LEON_BACKEND_PORT=18080`
+- `LEON_POSTGRES_URL=postgresql://postgres.51440a93464db390:<password>@127.0.0.1:15432/postgres?sslmode=disable`
+- same Supabase auth/storage envs as first probe
+
+observed result:
+
+- `Started server process`
+- `Waiting for application startup.`
+- `Application startup complete.`
+
+so `postgres/checkpointer blocker` is no longer the first hard blocker once the DSN shape is correct.
+
+### 机制层验证
+
+- remote `/opt/supabase/repo/docker/.env` exposes:
+  - `POSTGRES_PASSWORD=...`
+  - `POSTGRES_DB=postgres`
+  - `POSTGRES_HOST=db`
+  - `POOLER_TENANT_ID=51440a93464db390`
+- `supabase-pooler` runtime env also confirms:
+  - `POSTGRES_PORT=5432`
+  - `POOLER_TENANT_ID=51440a93464db390`
+
+pooler log during the failed plain-username probe showed:
+
+- `Either external_id or sni_hostname must be provided`
+- `User not found: {:single, "postgres", nil}`
+
+which is consistent with the successful tenant-qualified username probe.
+
+### 当前 ruling（再次更新）
+
+- canonical local `LEON_POSTGRES_URL` contract is not “just any postgres DSN”
+- it must include:
+  - the local Postgres tunnel
+  - the Supavisor tenant-qualified username
+  - `sslmode=disable` for the localhost SSH-tunnel path
+
+current next blocker classification after Postgres is fixed:
+
+- no longer `postgres/checkpointer blocker`
+- next visible failures are `provider/runtime blocker`
+  - missing `e2b`
+  - missing `daytona_sdk`
+  - missing `agentbay`
+
 ## Stopline
 
 - 明确启动所需 env / repo / runtime 前提
@@ -157,3 +232,13 @@ current classification:
   - auth/bootstrap blocker
   - postgres/checkpointer blocker
   - provider/runtime blocker
+
+## Closure
+
+- `CP01` 已 caller-proven 收口：
+  - correct Supabase auth/storage envs 已确认
+  - canonical local `LEON_POSTGRES_URL` 形状已确认
+  - latest `dev` web runtime 已在 Supabase contract 下完成 startup
+- 当前剩余问题不再属于 boot contract 本身，而是：
+  - provider/runtime dependency availability
+  - service/control-plane/middleware parity
