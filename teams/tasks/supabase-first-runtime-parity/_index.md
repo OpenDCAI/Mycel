@@ -89,4 +89,5 @@ created: 2026-04-09
 - `CP03 Sandbox Control Plane Parity`
   - `CP02` 已收口：`backend/web/services` 里剩余 SQLite residual 只剩 `monitor_service.py` / `sandbox_service.py`，两者都已更像 control-plane seam
   - 第一轮已完成：`sandbox_service.py` 不再 import sqlite kernel / 不再自己持有 `SANDBOX_DB_PATH`
-  - 下一步继续收窄 `sandbox.manager / sandbox.chat_session` 这一组真正仍然持有 `sandbox.db` contract 的 control-plane core
+  - 第二轮已完成：`sandbox.manager / sandbox.chat_session` 不再各自直接 import `SQLite*Repo`，而是共用 `sandbox.control_plane_repos`
+  - 下一步继续收窄 `sandbox.lease.py` 这一层真正仍然直接持有 lease-store sqlite contract 的 core

@@ -17,9 +17,19 @@ def test_sandbox_manager_no_longer_imports_storage_factory() -> None:
     manager_source = Path("sandbox/manager.py").read_text(encoding="utf-8")
 
     assert "backend.web.core.storage_factory" not in manager_source
-    assert "SQLiteTerminalRepo" in manager_source
-    assert "SQLiteLeaseRepo" in manager_source
-    assert "SQLiteChatSessionRepo" in manager_source
+    assert "sandbox.control_plane_repos" in manager_source
+    assert "SQLiteTerminalRepo" not in manager_source
+    assert "SQLiteLeaseRepo" not in manager_source
+    assert "SQLiteChatSessionRepo" not in manager_source
+
+
+def test_chat_session_manager_uses_control_plane_repo_seam() -> None:
+    session_source = Path("sandbox/chat_session.py").read_text(encoding="utf-8")
+
+    assert "sandbox.control_plane_repos" in session_source
+    assert "SQLiteTerminalRepo" not in session_source
+    assert "SQLiteLeaseRepo" not in session_source
+    assert "SQLiteChatSessionRepo" not in session_source
 
 
 class _FakeTerminalRepo:

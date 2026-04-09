@@ -30,26 +30,32 @@ created: 2026-04-09
 - `机制层验证`
   - `uv run pytest -q tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py tests/Integration/test_sandbox_router_user_shell.py -k 'sandbox_service or list_user_leases or available_sandbox_types or sandbox_types'`
     - `7 passed, 2 deselected`
+  - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py tests/Unit/core/test_runtime.py -k 'chat_session or sandbox_manager or lookup_sandbox_for_thread or bind_thread_to_existing_lease or resolve_existing_lease_cwd'`
+    - `10 passed, 29 deselected`
 - `源码/测试层辅助证据`
   - `uv run ruff check backend/web/services/sandbox_service.py tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py tests/Integration/test_sandbox_router_user_shell.py`
     - `All checks passed!`
   - `uv run python -m py_compile backend/web/services/sandbox_service.py tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py tests/Integration/test_sandbox_router_user_shell.py`
     - `exit 0`
+  - `uv run ruff check sandbox/control_plane_repos.py sandbox/manager.py sandbox/chat_session.py tests/Unit/sandbox/test_manager_repo_strategy.py tests/Unit/core/test_runtime.py`
+    - `All checks passed!`
+  - `uv run python -m py_compile sandbox/control_plane_repos.py sandbox/manager.py sandbox/chat_session.py tests/Unit/sandbox/test_manager_repo_strategy.py tests/Unit/core/test_runtime.py`
+    - `exit 0`
 
 ## Remaining
 
-- `sandbox.manager.py` 仍直接构造：
-  - `SQLiteChatSessionRepo`
-  - `SQLiteLeaseRepo`
-  - `SQLiteTerminalRepo`
-- `sandbox.chat_session.py` 仍直接依赖 sqlite kernel / sqlite connection
-- 这说明 control-plane 的真实 fused core 在 `manager + chat_session + sandbox.db`，不是 `sandbox_service.py`
+- 第二轮已完成：
+  - `sandbox.manager.py`
+  - `sandbox.chat_session.py`
+  - 两者不再各自直接 import `SQLiteChatSessionRepo / SQLiteLeaseRepo / SQLiteTerminalRepo`
+  - 当前统一改走 `sandbox.control_plane_repos`
+- 这说明 control-plane 的 sqlite repo construction 已经收口成单一 seam，但更深的 lease-store / sqlite connection contract 仍然存在
 
 ## Default Next Move
 
-- 优先继续收窄 `sandbox/manager.py` 和 `sandbox/chat_session.py`
+- 优先继续收窄 `sandbox/lease.py`
 - 不直接改 `monitor_service.py`
-- 下一刀要先回答：`chat_session / lease / terminal` 哪部分是必须保留的 local runtime persistence，哪部分才该提升到 strategy/container seam
+- 下一刀要先回答：`sandbox.lease.py` 里哪些 lease-store contract 是真正必须保留的 local runtime persistence，哪些才该提升到 strategy/container seam
 
 ## Stopline
 
