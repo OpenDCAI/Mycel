@@ -66,6 +66,11 @@ class _FakeTable:
             if self.limit_value is not None:
                 rows = rows[: self.limit_value]
             return rows
+        if self.mode == "update":
+            for row in self.client.terminals:
+                if self._match(row):
+                    row.update(self.update_payload or {})
+            return []
         if self.mode == "delete":
             terminal_id = next((value for key, value in self.filters if key == "terminal_id"), None)
             if terminal_id is not None:
@@ -174,3 +179,35 @@ def test_supabase_terminal_repo_delete_updates_pointer_before_deleting_active_te
             "updated_at": client.pointers[0]["updated_at"],
         }
     ]
+
+
+def test_supabase_terminal_repo_persists_terminal_state() -> None:
+    client = _FakeClient(
+        terminals=[
+            {
+                "terminal_id": "term-1",
+                "thread_id": "thread-1",
+                "lease_id": "lease-1",
+                "cwd": "/workspace",
+                "env_delta_json": "{}",
+                "state_version": 0,
+                "created_at": 1,
+                "updated_at": 1,
+            }
+        ],
+        pointers=[],
+    )
+    repo = SupabaseTerminalRepo(client)
+
+    repo.persist_state(
+        terminal_id="term-1",
+        cwd="/workspace/next",
+        env_delta_json='{"PWD":"/workspace/next"}',
+        state_version=1,
+    )
+
+    row = client.terminals[0]
+    assert row["cwd"] == "/workspace/next"
+    assert row["env_delta_json"] == '{"PWD":"/workspace/next"}'
+    assert row["state_version"] == 1
+    assert row["updated_at"] != 1

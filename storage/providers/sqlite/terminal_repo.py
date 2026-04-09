@@ -321,6 +321,25 @@ class SQLiteTerminalRepo:
             "updated_at": now,
         }
 
+    def persist_state(
+        self,
+        *,
+        terminal_id: str,
+        cwd: str,
+        env_delta_json: str,
+        state_version: int,
+    ) -> None:
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE abstract_terminals
+                SET cwd = ?, env_delta_json = ?, state_version = ?, updated_at = ?
+                WHERE terminal_id = ?
+                """,
+                (cwd, env_delta_json, state_version, datetime.now().isoformat(), terminal_id),
+            )
+            self._conn.commit()
+
     def set_active(self, thread_id: str, terminal_id: str) -> None:
         now = datetime.now().isoformat()
         with self._lock:

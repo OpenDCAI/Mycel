@@ -178,6 +178,23 @@ class SupabaseTerminalRepo:
             "updated_at": now,
         }
 
+    def persist_state(
+        self,
+        *,
+        terminal_id: str,
+        cwd: str,
+        env_delta_json: str,
+        state_version: int,
+    ) -> None:
+        self._terminals().update(
+            {
+                "cwd": cwd,
+                "env_delta_json": env_delta_json,
+                "state_version": state_version,
+                "updated_at": _utc_now_iso(),
+            }
+        ).eq("terminal_id", terminal_id).execute()
+
     def set_active(self, thread_id: str, terminal_id: str) -> None:
         # Verify terminal exists and belongs to thread
         terminal = self.get_by_id(terminal_id)
