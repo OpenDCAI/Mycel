@@ -75,6 +75,24 @@ created: 2026-04-09
 - 当前 `storage.providers.supabase.lease_repo.SupabaseLeaseRepo` 只覆盖了更窄的 CRUD / adopt / refresh 面，还没有承接这组 state-machine writes。
 - 因此下一刀如果继续，必须先回答是否要把 lease snapshot / event append contract 正式提升进 repo seam；这已经不是“继续清理 SQLite import”。
 
+## Contract Gap
+
+- 当前 `storage/contracts.py::LeaseRepo` 只声明：
+  - `get`
+  - `create`
+  - `find_by_instance`
+  - `adopt_instance`
+  - `mark_needs_refresh`
+  - `delete`
+  - `list_all`
+  - `list_by_provider`
+- 但 `sandbox/lease.py` 的 state machine 仍然需要更深的 write surface：
+  - lease snapshot persistence
+  - detached / active instance row persistence
+  - lease event append
+  - metadata-only persistence on error paths
+- 所以下一刀如果继续，应该先扩 `LeaseRepo` contract，而不是再做 caller-level import cleanup。
+
 ## Default Next Move
 
 - 优先判断 `sandbox/lease.py` 里 `connect_sqlite / _persist_snapshot / _persist_lease_metadata / _append_event` 这一组 state-machine writes

@@ -176,3 +176,76 @@ and does not yet expose a lease snapshot / instance upsert / event append write 
 - [ ] **Step 3: Set the next stopline**
 
 State explicitly that the next implementation cut, if any, must start by extending the lease repo contract. It must not be framed as another “remove SQLite import” cleanup.
+
+### Task 6: Lease Repo Contract Extension Design
+
+**Files:**
+- Read: `storage/contracts.py`
+- Read: `storage/providers/sqlite/lease_repo.py`
+- Read: `storage/providers/supabase/lease_repo.py`
+- Modify: `teams/tasks/supabase-first-runtime-parity/subtask-03-sandbox-control-plane-parity.md`
+- Modify: `teams/doc/core/2026-04-09-sandbox-control-plane-owner-plan.md`
+
+- [ ] **Step 1: Record the exact protocol gap**
+
+Document that current `LeaseRepo` covers:
+
+```python
+get(...)
+create(...)
+find_by_instance(...)
+adopt_instance(...)
+mark_needs_refresh(...)
+delete(...)
+list_all(...)
+list_by_provider(...)
+```
+
+but `sandbox/lease.py` still needs a deeper write surface for:
+
+```python
+lease snapshot writes
+instance upsert / detached-instance updates
+lease event append
+lease metadata persistence on error paths
+```
+
+- [ ] **Step 2: Name the likely seam**
+
+Propose one explicit contract shape only, for example:
+
+```python
+persist_snapshot(...)
+append_event(...)
+persist_metadata(...)
+```
+
+or a single higher-level:
+
+```python
+apply_transition(...)
+```
+
+Do not implement both options. Pick one recommended shape and record why.
+
+- [ ] **Step 3: Record the transaction question**
+
+Make the plan explicit that SQLite currently gets atomicity from one local connection in:
+
+```python
+with _connect(self.db_path) as conn:
+    ...
+```
+
+so any Supabase-side contract extension must answer whether:
+- strict single-transaction parity is required
+- or best-effort ordered writes are acceptable for this lane
+
+- [ ] **Step 4: Keep the next move bounded**
+
+State that the next code slice, if authorized, should only:
+- extend `LeaseRepo` protocol
+- extend `SQLiteLeaseRepo` and `SupabaseLeaseRepo`
+- switch one narrow `sandbox/lease.py` write path to the new repo contract
+
+and must not try to migrate the entire lease state machine in one PR.
