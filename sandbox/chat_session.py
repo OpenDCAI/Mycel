@@ -9,7 +9,6 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,7 +22,7 @@ from sandbox.lifecycle import (
     assert_chat_session_transition,
     parse_chat_session_state,
 )
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 if TYPE_CHECKING:
     from sandbox.lease import SandboxLease
@@ -46,10 +45,6 @@ REQUIRED_CHAT_SESSION_COLUMNS = {
     "ended_at",
     "close_reason",
 }
-
-
-def _connect(db_path: Path) -> sqlite3.Connection:
-    return connect_sqlite(db_path)
 
 
 def _require_row_text(row: dict[str, object], key: str) -> str:
@@ -104,7 +99,7 @@ class ChatSession:
         self.ended_at = ended_at
         self.close_reason = close_reason
         self._db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-        self._session_repo = session_repo
+        self._session_repo = session_repo or make_chat_session_repo(db_path=self._db_path)
 
     def is_expired(self) -> bool:
         now = utc_now()
@@ -122,19 +117,7 @@ class ChatSession:
                 reason="touch",
             )
             self.status = "active"
-        if self._session_repo is not None:
-            self._session_repo.touch(self.session_id, last_active_at=now.isoformat(), status=self.status)
-            return
-        with _connect(self._db_path) as conn:
-            conn.execute(
-                """
-                UPDATE chat_sessions
-                SET last_active_at = ?, status = ?
-                WHERE chat_session_id = ?
-                """,
-                (now.isoformat(), self.status, self.session_id),
-            )
-            conn.commit()
+        self._session_repo.touch(self.session_id, last_active_at=now.isoformat(), status=self.status)
 
     async def close(self, reason: str = "closed") -> None:
         await self.runtime.close()
@@ -146,24 +129,7 @@ class ChatSession:
         self.status = "closed"
         self.ended_at = utc_now()
         self.close_reason = reason
-        if self._session_repo is not None:
-            self._session_repo.delete_session(self.session_id, reason=self.close_reason)
-            return
-        with _connect(self._db_path) as conn:
-            conn.execute(
-                """
-                UPDATE chat_sessions
-                SET status = ?, ended_at = ?, close_reason = ?
-                WHERE chat_session_id = ?
-                """,
-                (
-                    self.status,
-                    self.ended_at.isoformat(),
-                    self.close_reason,
-                    self.session_id,
-                ),
-            )
-            conn.commit()
+        self._session_repo.delete_session(self.session_id, reason=self.close_reason)
 
 
 class ChatSessionManager:
