@@ -19,6 +19,7 @@ class _FakeProvider:
 class _FakeLeaseRepo:
     def __init__(self) -> None:
         self.adopt_calls: list[tuple[str, str, str, str]] = []
+        self.persist_calls: list[dict[str, object]] = []
         self._row = {
             "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
@@ -69,6 +70,51 @@ class _FakeLeaseRepo:
         }
         return dict(self._row)
 
+    def persist_metadata(
+        self,
+        *,
+        lease_id: str,
+        recipe_id,
+        recipe_json,
+        desired_state: str,
+        observed_state: str,
+        version: int,
+        observed_at,
+        last_error,
+        needs_refresh: bool,
+        refresh_hint_at,
+        status: str,
+    ):
+        self.persist_calls.append(
+            {
+                "lease_id": lease_id,
+                "recipe_id": recipe_id,
+                "recipe_json": recipe_json,
+                "desired_state": desired_state,
+                "observed_state": observed_state,
+                "version": version,
+                "observed_at": observed_at,
+                "last_error": last_error,
+                "needs_refresh": needs_refresh,
+                "refresh_hint_at": refresh_hint_at,
+                "status": status,
+            }
+        )
+        self._row = {
+            **self._row,
+            "recipe_id": recipe_id,
+            "recipe_json": recipe_json,
+            "desired_state": desired_state,
+            "observed_state": observed_state,
+            "version": version,
+            "observed_at": observed_at,
+            "last_error": last_error,
+            "needs_refresh": int(needs_refresh),
+            "refresh_hint_at": refresh_hint_at,
+            "status": status,
+        }
+        return dict(self._row)
+
     def close(self) -> None:
         return None
 
@@ -99,3 +145,21 @@ def test_ensure_active_instance_persists_strategy_lease_before_probe_failure(mon
     assert repo.adopt_calls == [("lease-1", "daytona_selfhost", "instance-created", "running")]
     assert lease.get_instance() is not None
     assert lease.get_instance().instance_id == "instance-created"
+
+
+def test_record_provider_error_persists_strategy_metadata(monkeypatch):
+    repo = _FakeLeaseRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+
+    lease._record_provider_error("provider boom")
+
+    assert len(repo.persist_calls) == 1
+    call = repo.persist_calls[0]
+    assert call["lease_id"] == "lease-1"
+    assert call["last_error"] == "provider boom"
+    assert call["needs_refresh"] is True
+    assert call["status"] == "active"
+    assert call["version"] == 1

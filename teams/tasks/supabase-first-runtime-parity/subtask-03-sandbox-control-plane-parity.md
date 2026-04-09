@@ -43,9 +43,15 @@ created: 2026-04-09
     - `exit 0`
   - `uv run pytest -q tests/Unit/sandbox/test_lease_probe_contract.py tests/Unit/core/test_capability_async.py -k 'sandbox_lease or ensure_active_instance or local_sandbox_rebuilds_stale_closed_capability_before_execute_async'`
     - `3 passed, 5 deselected`
+  - `uv run pytest -q tests/Unit/storage/test_supabase_lease_repo.py tests/Unit/sandbox/test_lease_probe_contract.py tests/Unit/core/test_capability_async.py tests/Unit/core/test_runtime.py -k 'lease or sandbox_lease or local_sandbox_rebuilds_stale_closed_capability_before_execute_async or lookup_sandbox_for_thread or bind_thread_to_existing_lease or resolve_existing_lease_cwd'`
+    - `11 passed, 31 deselected`
   - `uv run ruff check sandbox/lease.py tests/Unit/sandbox/test_lease_probe_contract.py tests/Unit/core/test_capability_async.py`
     - `All checks passed!`
+  - `uv run ruff check storage/contracts.py storage/providers/sqlite/lease_repo.py storage/providers/supabase/lease_repo.py sandbox/lease.py tests/Unit/storage/test_supabase_lease_repo.py tests/Unit/sandbox/test_lease_probe_contract.py`
+    - `All checks passed!`
   - `uv run python -m py_compile sandbox/lease.py tests/Unit/sandbox/test_lease_probe_contract.py tests/Unit/core/test_capability_async.py`
+    - `exit 0`
+  - `uv run python -m py_compile storage/contracts.py storage/providers/sqlite/lease_repo.py storage/providers/supabase/lease_repo.py sandbox/lease.py tests/Unit/storage/test_supabase_lease_repo.py tests/Unit/sandbox/test_lease_probe_contract.py`
     - `exit 0`
 
 ## Remaining
@@ -59,6 +65,13 @@ created: 2026-04-09
   - `sandbox.lease.py`
   - 不再直接 import `SQLiteLeaseRepo`
   - lease-store construction 也已收口到 `sandbox.control_plane_repos`
+- 第四轮已完成：
+  - `storage/contracts.py::LeaseRepo`
+  - `storage/providers/sqlite/lease_repo.py`
+  - `storage/providers/supabase/lease_repo.py`
+  - `sandbox/lease.py:_record_provider_error()`
+  - 现已补入 `persist_metadata(...)` 写面
+  - 且 `sandbox.lease.py` 在 `LEON_STORAGE_STRATEGY=supabase` 下会通过 `storage.runtime.build_lease_repo(...)` 取 lease repo，而不再继续沿用本地 sqlite lease-store builder
 - 这说明 control-plane 的 sqlite repo construction 已经收口成单一 seam，但更深的 lease-store / sqlite connection contract 仍然存在
 
 ## Next Ruling
@@ -93,11 +106,25 @@ created: 2026-04-09
   - metadata-only persistence on error paths
 - 所以下一刀如果继续，应该先扩 `LeaseRepo` contract，而不是再做 caller-level import cleanup。
 
+## Latest Slice
+
+- 当前最小实现已经补了一条真实 contract：
+  - `LeaseRepo.persist_metadata(...)`
+- 这条 contract 当前只迁移了一个 caller：
+  - `SQLiteLease._record_provider_error()`
+- 这刀的作用不是“完成 lease parity”，而是把最明显的假 parity 收成真 parity：
+  - 之前 Supabase strategy 下这里只会写 `mark_needs_refresh`
+  - `last_error / version / observed_at / status` 等 metadata 并不会真正进入 strategy repo
+  - 现在这条路径已经会通过 strategy lease repo 持久化完整 metadata 并 reload row truth
+
 ## Default Next Move
 
-- 优先判断 `sandbox/lease.py` 里 `connect_sqlite / _persist_snapshot / _persist_lease_metadata / _append_event` 这一组 state-machine writes
 - 不直接改 `monitor_service.py`
-- 下一刀要先回答：这些 lease state-machine writes 哪些是真正必须保留的 local runtime persistence，哪些才该提升到 strategy/container seam
+- 不继续追加零碎 metadata/import 清理
+- 下一刀要先回答高层 `lease transition` contract，而不是继续暴露底层 sqlite plumbing
+- 推荐优先设计一个单一高层 seam，例如：
+  - `apply_transition(...)`
+  - 而不是直接把 `_persist_snapshot / _append_event / _persist_lease_metadata` 原样抬进 protocol
 
 ## Stopline
 

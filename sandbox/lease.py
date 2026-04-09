@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
-from sandbox.control_plane_repos import make_lease_repo as _make_lease_repo
+from sandbox.control_plane_repos import make_lease_repo as _make_sqlite_lease_repo
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.lifecycle import (
     LeaseInstanceState,
@@ -30,6 +30,7 @@ from sandbox.lifecycle import (
     parse_lease_instance_state,
 )
 from storage.providers.sqlite.kernel import connect_sqlite
+from storage.runtime import build_lease_repo as _build_strategy_lease_repo
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -81,6 +82,12 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 def _use_supabase_storage() -> bool:
     return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase"
+
+
+def _make_lease_repo(db_path: Path | None = None):
+    if _use_supabase_storage():
+        return _build_strategy_lease_repo()
+    return _make_sqlite_lease_repo(db_path)
 
 @dataclass
 class SandboxInstance:
@@ -473,13 +480,27 @@ class SQLiteLease(SandboxLease):
         self.last_error = message[:500]
         self.needs_refresh = True
         self.refresh_hint_at = utc_now()
+        self.observed_at = utc_now()
         self.version += 1
         if _use_supabase_storage():
             repo = _make_lease_repo(self.db_path)
             try:
-                repo.mark_needs_refresh(self.lease_id, hint_at=self.refresh_hint_at)
+                row = repo.persist_metadata(
+                    lease_id=self.lease_id,
+                    recipe_id=self.recipe_id,
+                    recipe_json=json.dumps(self.recipe, ensure_ascii=False) if self.recipe is not None else None,
+                    desired_state=self.desired_state,
+                    observed_state=self.observed_state,
+                    version=self.version,
+                    observed_at=self.observed_at.isoformat() if self.observed_at else None,
+                    last_error=self.last_error,
+                    needs_refresh=self.needs_refresh,
+                    refresh_hint_at=self.refresh_hint_at.isoformat() if self.refresh_hint_at else None,
+                    status=self.status,
+                )
             finally:
                 repo.close()
+            self._sync_from(lease_from_row(row, self.db_path))
             return
         self._persist_lease_metadata()
 

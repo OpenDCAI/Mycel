@@ -178,6 +178,41 @@ class SupabaseLeaseRepo:
 
         return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="adopt_instance")
 
+    def persist_metadata(
+        self,
+        *,
+        lease_id: str,
+        recipe_id: str | None,
+        recipe_json: str | None,
+        desired_state: str,
+        observed_state: str,
+        version: int,
+        observed_at: Any,
+        last_error: str | None,
+        needs_refresh: bool,
+        refresh_hint_at: Any = None,
+        status: str,
+    ) -> dict[str, Any]:
+        observed_at_value = observed_at.isoformat() if isinstance(observed_at, datetime) else observed_at
+        refresh_hint_value = refresh_hint_at.isoformat() if isinstance(refresh_hint_at, datetime) else refresh_hint_at
+        self._leases().update(
+            {
+                "recipe_id": recipe_id,
+                "recipe_json": recipe_json,
+                "desired_state": desired_state,
+                "observed_state": observed_state,
+                "instance_status": observed_state,
+                "version": version,
+                "observed_at": observed_at_value,
+                "last_error": last_error,
+                "needs_refresh": 1 if needs_refresh else 0,
+                "refresh_hint_at": refresh_hint_value,
+                "status": status,
+                "updated_at": _utc_now_iso(),
+            }
+        ).eq("lease_id", lease_id).execute()
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="persist_metadata")
+
     def mark_needs_refresh(self, lease_id: str, hint_at: Any = None) -> bool:
         from datetime import datetime as _dt
 

@@ -228,6 +228,18 @@ apply_transition(...)
 
 Do not implement both options. Pick one recommended shape and record why.
 
+Current ruling after the first metadata slice:
+
+```text
+completed first cut:
+- LeaseRepo.persist_metadata(...)
+- SQLiteLease._record_provider_error() now uses strategy lease repo under supabase
+
+remaining next cut:
+- prefer one higher-level apply_transition(...)
+- do not keep expanding raw sqlite helper methods one by one
+```
+
 - [ ] **Step 3: Record the transaction question**
 
 Make the plan explicit that SQLite currently gets atomicity from one local connection in:

@@ -136,3 +136,56 @@ def test_supabase_lease_repo_adopt_instance_persists_integer_refresh_flag():
     lease_row = tables["sandbox_leases"][0]
     assert lease_row["needs_refresh"] == 1
     assert type(lease_row["needs_refresh"]) is int
+
+
+def test_supabase_lease_repo_persist_metadata_updates_error_refresh_fields():
+    tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "local",
+                "recipe_id": None,
+                "workspace_key": None,
+                "recipe_json": None,
+                "current_instance_id": None,
+                "instance_created_at": None,
+                "desired_state": "running",
+                "observed_state": "detached",
+                "version": 0,
+                "observed_at": "2026-04-07T00:00:00+00:00",
+                "last_error": None,
+                "needs_refresh": 0,
+                "refresh_hint_at": None,
+                "status": "active",
+                "volume_id": None,
+                "created_at": "2026-04-07T00:00:00+00:00",
+                "updated_at": "2026-04-07T00:00:00+00:00",
+            }
+        ],
+        "sandbox_instances": [],
+    }
+    repo = SupabaseLeaseRepo(client=FakeSupabaseClient(tables=tables))
+
+    updated = repo.persist_metadata(
+        lease_id="lease-1",
+        recipe_id=None,
+        recipe_json=None,
+        desired_state="running",
+        observed_state="unknown",
+        version=3,
+        observed_at="2026-04-07T00:00:05+00:00",
+        last_error="provider boom",
+        needs_refresh=True,
+        refresh_hint_at="2026-04-07T00:00:06+00:00",
+        status="recovering",
+    )
+
+    lease_row = tables["sandbox_leases"][0]
+    assert updated["lease_id"] == "lease-1"
+    assert lease_row["observed_state"] == "unknown"
+    assert lease_row["version"] == 3
+    assert lease_row["last_error"] == "provider boom"
+    assert lease_row["needs_refresh"] == 1
+    assert type(lease_row["needs_refresh"]) is int
+    assert lease_row["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+    assert lease_row["status"] == "recovering"
