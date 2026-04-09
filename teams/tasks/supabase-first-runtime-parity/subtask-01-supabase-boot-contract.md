@@ -36,8 +36,67 @@ created: 2026-04-09
   - [core/runtime/middleware/queue/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/core/runtime/middleware/queue/manager.py)
   - [core/runtime/middleware/memory/summary_store.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/core/runtime/middleware/memory/summary_store.py)
   - [sandbox/chat_session.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/chat_session.py)
-  - [sandbox/lease.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/lease.py)
-  - [sandbox/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/manager.py)
+- [sandbox/lease.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/lease.py)
+- [sandbox/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/manager.py)
+
+## 第一轮 caller-proven 证据
+
+### 真实产品验证
+
+- authoritative base:
+  - `origin/dev = 48e44b22aea32570749c9715b20e9b78e4c72d60`
+- local tunnel truth:
+  - `127.0.0.1:54320 -> 401 Unauthorized`
+  - `127.0.0.1:54321/health -> 200`
+- local backend port:
+  - `8010` was free before probe
+
+probe shape:
+
+- started latest `dev` backend with:
+  - `LEON_STORAGE_STRATEGY=supabase`
+  - `LEON_DB_SCHEMA=staging`
+  - `SUPABASE_PUBLIC_URL=http://127.0.0.1:54320`
+  - `SUPABASE_AUTH_URL=http://127.0.0.1:54321`
+  - `SUPABASE_ANON_KEY=<mapped from remote .env ANON_KEY>`
+  - `SUPABASE_JWT_SECRET=<mapped from remote .env JWT_SECRET>`
+  - `LEON_SUPABASE_SERVICE_ROLE_KEY=<mapped from remote .env SERVICE_ROLE_KEY>`
+- intentionally did **not** provide `LEON_POSTGRES_URL`
+
+observed result:
+
+- uvicorn boot reaches:
+  - `Started server process`
+  - `Waiting for application startup.`
+- then fail-loud exits with:
+  - `RuntimeError: LEON_POSTGRES_URL is required for backend web runtime`
+
+current classification:
+
+- this first hard blocker is `postgres/checkpointer blocker`
+- not `SQLite blocker`
+- not `Supabase auth blocker`
+
+### 机制层验证
+
+- remote Supabase `.env` currently uses names:
+  - `ANON_KEY`
+  - `SERVICE_ROLE_KEY`
+  - `JWT_SECRET`
+- local backend code expects:
+  - `SUPABASE_ANON_KEY`
+  - `LEON_SUPABASE_SERVICE_ROLE_KEY`
+  - `SUPABASE_JWT_SECRET`
+- so current boot contract must explicitly include env-name mapping; otherwise an operator can have healthy remote Supabase secrets and still fail local bringup
+
+### 当前 ruling（更新）
+
+- latest `dev` already proves one important thing:
+  - web startup is fail-loud about missing Postgres checkpointer contract before any late request-time ambiguity
+- so the next narrowing question for `CP01` is no longer “does Supabase runtime basically boot?”
+- it is:
+  - where should `LEON_POSTGRES_URL` come from in the canonical local contract
+  - and after supplying it, what is the next real blocker, if any
 
 ### 当前 ruling
 
@@ -50,6 +109,45 @@ created: 2026-04-09
     - postgres/checkpointer
     - provider/runtime
 - 在这之前，不应该把任何 SQLite stopgap 误写成“启动本来就该依赖 SQLite”
+
+## 当前实现切口
+
+- `CP01` 的第一刀实现不是直接追所有 SQLite residual
+- 先修正当前 runtime entry 语义：
+  - `storage.runtime.build_storage_container(...)` 已存在
+  - `backend/web/core/lifespan.py` 仍直接 new `StorageContainer`
+- 所以第一刀要先让 web composition root 只走 runtime entry
+- 这样后续再推进 service/control-plane/middleware parity 时，正式入口才是单一的
+
+## 第一刀实现结果
+
+### 源码/测试层辅助证据
+
+- [backend/web/core/lifespan.py](/Users/lexicalmathical/worktrees/leonai--supabase-strategy-entry-alignment/backend/web/core/lifespan.py)
+  - 已不再直接 new `StorageContainer`
+  - 改为经由 `storage.runtime.build_storage_container(...)` 获取 runtime container
+- [tests/Unit/storage/test_runtime_builder_contract.py](/Users/lexicalmathical/worktrees/leonai--supabase-strategy-entry-alignment/tests/Unit/storage/test_runtime_builder_contract.py)
+  - 新增 `build_storage_container(...)` 保留显式 `public_supabase_client` 的 contract
+- [tests/Integration/test_storage_repo_abstraction_unification.py](/Users/lexicalmathical/worktrees/leonai--supabase-strategy-entry-alignment/tests/Integration/test_storage_repo_abstraction_unification.py)
+  - `lifespan` wiring test 已更新为 authoritative runtime entry path
+
+### 机制层验证
+
+- `uv run pytest -q tests/Unit/storage/test_runtime_builder_contract.py tests/Integration/test_storage_repo_abstraction_unification.py`
+  - `21 passed`
+- `uv run ruff check backend/web/core/lifespan.py storage/runtime.py tests/Unit/storage/test_runtime_builder_contract.py tests/Integration/test_storage_repo_abstraction_unification.py`
+  - `All checks passed!`
+- `uv run python -m py_compile backend/web/core/lifespan.py storage/runtime.py tests/Unit/storage/test_runtime_builder_contract.py tests/Integration/test_storage_repo_abstraction_unification.py`
+  - `exit 0`
+
+### 当前 ruling（再次更新）
+
+- 当前第一刀已经完成它该完成的事：
+  - web composition root 的 runtime container 入口已经单一化
+- 这不等于 Supabase parity 已完成
+- 下一合法动作仍然是回到 `CP01` 的 boot contract narrowing：
+  - 提供 canonical `LEON_POSTGRES_URL`
+  - 然后重跑 latest `dev` backend bringup
 
 ## Stopline
 

@@ -74,3 +74,31 @@ def test_build_panel_task_repo_uses_public_supabase_factory(monkeypatch: pytest.
         assert isinstance(repo, SupabasePanelTaskRepo)
     finally:
         repo.close()
+
+
+def test_build_storage_container_preserves_explicit_public_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakePanelTaskRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+        def close(self) -> None:
+            return None
+
+    runtime_client = _build_fake_supabase_client()
+    public_client = _build_fake_supabase_client()
+    monkeypatch.setattr(
+        "storage.providers.supabase.panel_task_repo.SupabasePanelTaskRepo",
+        _FakePanelTaskRepo,
+    )
+
+    repo = storage_runtime.build_storage_container(
+        supabase_client=runtime_client,
+        public_supabase_client=public_client,
+    ).panel_task_repo()
+    try:
+        assert isinstance(repo, _FakePanelTaskRepo)
+        assert captured["client"] is public_client
+    finally:
+        repo.close()

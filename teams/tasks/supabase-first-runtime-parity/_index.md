@@ -44,6 +44,15 @@ created: 2026-04-09
 - 第一轮 inventory 已经确认：
   - `backend/web/core/lifespan.py` 本身已经是 Supabase-first composition root
   - 当前主要残余集中在 file channel、sandbox control-plane、session/checkpoint side-store、queue/summary middleware
+- 第一刀 implementation slice 已收窄为：
+  - 不扩 provider parity write set
+  - 先把已有 `storage.runtime.build_storage_container(...)` 提升成 authoritative runtime entry
+  - 再让 `backend/web/core/lifespan.py` 改为只经由 runtime entry 取 container
+  - 目的不是新功能，而是先把 `StorageContainer` 与 `storage.runtime` 的语义对齐
+- 当前这刀已完成：
+  - `backend/web/core/lifespan.py` 已改为只经由 `storage.runtime.build_storage_container(...)` 获取 runtime container
+  - 对应 unit/integration contract tests 已补齐并通过
+  - SQLite residual 仍保持原边界，未在本刀扩写
 
 ## 子任务
 
@@ -74,3 +83,11 @@ created: 2026-04-09
 2. 默认本地/开发主线配置是 Supabase-first
 3. SQLite 不再是某些关键路径的隐含必需品
 4. 多数据库抽象仍保留，不把业务层写死成 Supabase-only
+
+## Default Next Move
+
+- `CP01b Postgres Checkpointer Contract Narrowing`
+  - 继续 caller-proven `Supabase Boot Contract`
+  - 找到 canonical `LEON_POSTGRES_URL` 来源
+  - 在提供该 contract 后重跑 latest `dev` backend bringup
+  - 只回答“下一个真实 blocker 是什么”，不提前扩到 service/control-plane parity

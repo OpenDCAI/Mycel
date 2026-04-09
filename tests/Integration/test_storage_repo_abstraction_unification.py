@@ -367,13 +367,13 @@ def test_storage_container_routes_agent_registry_repo_through_public_client(monk
 
 
 @pytest.mark.asyncio
-async def test_lifespan_wires_user_and_thread_repos_from_storage_container(
+async def test_lifespan_wires_user_and_thread_repos_from_storage_runtime_container(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     container = _FakeContainer()
     app = FastAPI()
     _install_lifespan_noop_dependencies(monkeypatch)
-    monkeypatch.setattr("storage.container.StorageContainer", lambda **_: container)
+    monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_: container)
 
     async with lifespan_module.lifespan(app):
         assert app.state.user_repo is container.user_repo_value
@@ -383,6 +383,7 @@ async def test_lifespan_wires_user_and_thread_repos_from_storage_container(
         assert app.state.chat_session_repo is container.chat_session_repo_value
         assert app.state.sandbox_volume_repo is container.sandbox_volume_repo_value
         assert app.state.panel_task_repo is container.panel_task_repo_value
+        assert app.state._storage_container is container
         assert not hasattr(app.state, "member_repo")
 
 

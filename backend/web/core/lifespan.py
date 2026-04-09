@@ -44,11 +44,14 @@ async def lifespan(app: FastAPI):
 
     # ---- Member-Chat repos + services ----
     from backend.web.core.supabase_factory import create_public_supabase_client, create_supabase_auth_client, create_supabase_client
-    from storage.container import StorageContainer
+    from storage.runtime import build_storage_container
 
     _supabase_client = create_supabase_client()
     _public_supabase_client = create_public_supabase_client()
-    storage_container = StorageContainer(supabase_client=_supabase_client, public_supabase_client=_public_supabase_client)
+    storage_container = build_storage_container(
+        supabase_client=_supabase_client,
+        public_supabase_client=_public_supabase_client,
+    )
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.lease_repo = storage_container.lease_repo()
