@@ -5,11 +5,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.web.core.storage_factory import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from sandbox.sync.state import SyncState
 from storage.container import StorageContainer
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.runtime import build_chat_session_repo as make_chat_session_repo
+from storage.runtime import build_lease_repo as make_lease_repo
 from storage.runtime import build_storage_container, build_thread_repo
+from storage.runtime import build_terminal_repo as make_terminal_repo
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 

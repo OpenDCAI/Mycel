@@ -1,6 +1,6 @@
 ---
 title: Web Thread/File Helper Cut
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -8,13 +8,13 @@ created: 2026-04-09
 
 ## 当前 ruling
 
-这张卡现在已经拆成两层：
+这张卡已经完成 closure，实际是两刀：
 
 - `CP04a file/helper slice`
   - [backend/web/services/activity_tracker.py](/Users/lexicalmathical/worktrees/leonai--storage-file-helper-cut/backend/web/services/activity_tracker.py)
   - [backend/web/services/file_channel_service.py](/Users/lexicalmathical/worktrees/leonai--storage-file-helper-cut/backend/web/services/file_channel_service.py)
-- 剩余 residual
-  - `backend/web/utils/helpers.py`
+- `CP04b helpers slice`
+  - [backend/web/utils/helpers.py](/Users/lexicalmathical/worktrees/leonai--storage-helpers-cut/backend/web/utils/helpers.py)
 
 `threads.py / webhooks.py` 这两块已经被重分流到 `CP05`，因为它们更像 runtime-owned lease/terminal seam，而不是普通 web helper seam。
 
@@ -29,32 +29,42 @@ created: 2026-04-09
 - 所以 `file_channel_service.py` 现在显式持有本地 sqlite `lease/terminal` constructor，而不是误接到 Supabase-only runtime builder
 - module-local `make_lease_repo / make_terminal_repo` 名字仍保留
 
+`CP04b` 已落地：
+
+- `helpers.py` 不再 import `backend.web.core.storage_factory`
+- `helpers.py` 改走 `storage.runtime.build_chat_session_repo(...)` / `build_lease_repo(...)` / `build_terminal_repo(...)`
+- `SANDBOX_DB_PATH`、timestamp helper、thread purge helper 的现有行为保持不变
+
 ## 证据
 
-- red:
-  - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py -k 'file_channel_and_activity_tracker_no_longer_import_storage_factory'`
-  - `1 failed, 5 deselected`
-- green:
-  - `uv run pytest -q tests/Unit/core/test_agent_pool.py -k 'creates_once_per_thread or ignores_unavailable_local_cwd or honors_fresh_local_thread_cwd_even_when_missing or prefers_repo_backed_runtime_startup_even_with_conflicting_legacy_member_shell or uses_thread_user_id_for_chat_identity'`
-  - `5 passed, 2 deselected`
-  - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py`
-  - `6 passed`
-  - `uv run ruff check backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py tests/Unit/core/test_agent_pool.py`
-  - `All checks passed!`
-  - `uv run python -m py_compile backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py tests/Unit/core/test_agent_pool.py`
-  - `exit 0`
-
-## 还没做
-
-这张卡还没有 closure。当前只剩一个 residual：
-
-- `helpers.py` 的 runtime/db-path helper seam
+- `CP04a`
+  - red:
+    - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py -k 'file_channel_and_activity_tracker_no_longer_import_storage_factory'`
+    - `1 failed, 5 deselected`
+  - green:
+    - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py`
+    - `6 passed`
+    - `uv run ruff check storage/runtime.py backend/web/services/activity_tracker.py backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py`
+    - `All checks passed!`
+    - `uv run python -m py_compile storage/runtime.py backend/web/services/activity_tracker.py backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py`
+    - `exit 0`
+- `CP04b`
+  - red:
+    - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py -k 'helpers_no_longer_import_storage_factory or file_channel_and_activity_tracker_no_longer_import_storage_factory'`
+    - `1 failed, 1 passed`
+  - green:
+    - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py`
+    - `7 passed`
+    - `uv run ruff check backend/web/utils/helpers.py tests/Integration/test_thread_files_channel_shell.py`
+    - `All checks passed!`
+    - `uv run python -m py_compile backend/web/utils/helpers.py tests/Integration/test_thread_files_channel_shell.py`
+    - `exit 0`
 
 ## Stopline
 
-- 当前不碰 `backend/web/utils/helpers.py`
-- 当前不把 `helpers.py` 和 `sandbox/manager.py` 混成一刀
-- 当前不把已经转入 `CP05` 的 `threads.py / webhooks.py` 再拉回这张卡
+- `CP04` 到这里已经 closure
+- 已经转入 `CP05` 的 `threads.py / webhooks.py` 不再回拉
+- 当前不把 `helpers.py` closure 假装成 `sandbox/manager.py` 的默认下一刀
 
 ### Hindsight
 
