@@ -1,6 +1,6 @@
 ---
 title: Sandbox Runtime Owner Cut
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -8,15 +8,15 @@ created: 2026-04-09
 
 ## 当前 ruling
 
-这张卡仍在实现期。目前已完成四刀：
+这张卡已经 closure。最终是五刀：
 
 - [backend/web/routers/webhooks.py](/Users/lexicalmathical/worktrees/leonai--storage-webhooks-lease-cut/backend/web/routers/webhooks.py)
 - [sandbox/lease.py](/Users/lexicalmathical/worktrees/leonai--storage-lease-owner-cut/sandbox/lease.py)
 - [sandbox/resource_snapshot.py](/Users/lexicalmathical/worktrees/leonai--storage-lease-owner-cut/sandbox/resource_snapshot.py)
 - [backend/web/routers/threads.py](/Users/lexicalmathical/worktrees/leonai--storage-thread-sandbox-cut/backend/web/routers/threads.py)
 - [sandbox/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-sandbox-manager-cut/sandbox/manager.py)
-
-<<<<<<< HEAD
+- [backend/web/services/sandbox_service.py](/Users/lexicalmathical/worktrees/leonai--storage-sandbox-service-cut/backend/web/services/sandbox_service.py)
+ 
 因为这几刀都满足：
 
 - runtime-owned 语义明显
@@ -38,6 +38,9 @@ created: 2026-04-09
 - `sandbox/manager.py` 不再 import `backend.web.core.storage_factory`
 - `sandbox/manager.py` 顶层 `make_chat_session_repo / make_lease_repo / make_terminal_repo` 保持 sqlite-owned constructor
 - 既有 monkeypatch 面继续保留，所以 manager strategy tests 不需要改调用协议
+- `sandbox_service.py` 不再 import `backend.web.core.storage_factory`
+- `sandbox_service.py` 的 monitor repo builder 改走 `storage.runtime.build_sandbox_monitor_repo(...)`
+- user-facing lease list behavior 不变，现有 `sandbox_user_leases` 与 provider availability 测试继续成立
 
 ## 证据
 
@@ -92,18 +95,22 @@ created: 2026-04-09
     - `All checks passed!`
     - `uv run python -m py_compile sandbox/manager.py tests/Unit/sandbox/test_manager_repo_strategy.py`
     - `exit 0`
-
-## 还没做
-
-`CP05` 还没有 closure。source scan 证明还存在一个 live production residual：
-
-- [sandbox_service.py](/Users/lexicalmathical/worktrees/leonai--storage-sandbox-manager-cut/backend/web/services/sandbox_service.py)
+- `CP05e`
+  - red:
+    - `uv run pytest -q tests/Unit/sandbox/test_sandbox_user_leases.py -k 'sandbox_service_no_longer_imports_storage_factory or list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents'`
+    - `1 failed, 1 passed`
+  - green:
+    - `uv run pytest -q tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py`
+    - `8 passed`
+    - `uv run ruff check backend/web/services/sandbox_service.py tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py`
+    - `All checks passed!`
+    - `uv run python -m py_compile backend/web/services/sandbox_service.py tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py`
+    - `exit 0`
 
 ## Stopline
 
-- 当前不把 `sandbox_service.py` 混进 `sandbox/manager.py` 同一刀
-- 当前不把 `CP05` 假装成已经 closure
-- `CP06` 删除 `storage_factory.py` 必须等最后这个 live callsite 收掉之后再进
+- `CP05` 到这里已经 closure
+- 下一步进入 `CP06`，处理 `storage_factory.py` 删除和 closure proof
 
 ## Hindsight
 
