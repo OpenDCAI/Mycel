@@ -12,7 +12,7 @@ created: 2026-04-09
 
 ## 当前 mainline truth
 
-这张卡现在以 `origin/dev = f0264bfdd1d204f1b0b24c924451c2097788e0c3` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
+这张卡现在以 `origin/dev = 4cec440a7144b58cf76fad23f89bb7d9a7fe50ad` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
 
 当前 `dev` 已经完成的事实：
 
@@ -23,20 +23,31 @@ created: 2026-04-09
 
 但这不等于 closure 已完成。
 
-2026-04-10 fresh audit 的关键事实是：
+2026-04-10 fresh audit / proof 的关键事实是：
 
 - 真实 backend bringup + auth + thread/sandbox API proof 已能成立
-- 真实 Daytona self-hosted 单 agent proof 暴露出一个仍未进 `dev` 的 CP03 blocker：
-  - `SandboxManager._ensure_thread_volume()` 依赖 `lease_store.set_volume_id(...)`
-  - `SupabaseLeaseRepo` 在 `dev` 里还缺这条合同
-  - 该 fix 已单独送审于 [#396](https://github.com/OpenDCAI/Mycel/pull/396)
+- [#396](https://github.com/OpenDCAI/Mycel/pull/396) 已进 mainline，`SupabaseLeaseRepo.set_volume_id(...)` contract gap 已补齐
+- shared Daytona lease / file collaboration 的真实产品级 proof 已成立：
+  - `thread1` 创建 `daytona_selfhost` 线程并拿到 lease
+  - `thread2` 通过 `lease_id` 绑定同一 lease
+  - `thread1` 上传附件并通过 `POST /api/threads/{thread_id}/messages` 触发 sync
+  - `thread2` 立刻在 `/home/daytona/files` 读到 `thread1` 的文件
+  - `thread2` 再上传自己的文件并触发 sync 后，`thread1` 也能反向读到
+- shared Daytona lease 的 pause / resume persistence proof 也已成立：
+  - pause 后 lease `desired_state/observed_state` 都转到 `paused`
+  - resume 后 lease 回到 `running`
+  - 同一 instance id 保持不变
+  - pause 前同步进去的文件在 resume 后仍可跨线程读取
+- 这次 proof 还暴露出一个运行面前提：
+  - fresh proof worktree 若只做默认 `uv sync`，`daytona_sdk` 不会进入 `.venv`
+  - 自托管 Daytona caller-proof 需要先执行 `uv sync --extra daytona`
 
 ## 当前 ruling
 
 - `CP00` 已不该继续标 `in_progress`
 - `CP02` service surface parity 已基本收口
 - 当前 mainline 最大 residual 不再是 service 层，而是 sandbox control-plane 的剩余 contract gap
-- `CP05 Closure Proof` 已经开始，但还不能诚实地宣称完成
+- `CP05 Closure Proof` 已经拿到一轮强 caller-proof，但还不能诚实地宣称完成
 
 ## 子任务
 
@@ -45,8 +56,8 @@ created: 2026-04-09
 | 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 用 current `dev` 重新分类 residual，去掉早期 stale inventory | done |
 | 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 验证 `LEON_STORAGE_STRATEGY=supabase` bringup 所需最小 contract，并记录真实 blocker 分类 | in_progress |
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | web/service 层 direct SQLite caller 收口 | done |
-| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | lease / terminal / chat-session / manager 的剩余 strategy contract gap | in_progress |
-| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 默认运行面与 env-less contract 的诚实边界 | in_progress |
+| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | lease / terminal / chat-session / manager 的剩余 strategy contract gap | done |
+| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 默认运行面与 env-less contract 的诚实边界 | done |
 | 05 | [Closure Proof](subtask-05-closure-proof.md) | 高强度 caller-proof：shared sandbox / Daytona / multi-agent | in_progress |
 
 ## 当前 stopline
@@ -60,8 +71,7 @@ created: 2026-04-09
 
 ## 默认 next move
 
-- 先合并或等价落下 [#396](https://github.com/OpenDCAI/Mycel/pull/396)
-- 然后在最新 `dev` 上重跑高强度 proof：
-  - shared sandbox file collaboration
-  - Daytona self-hosted agent path
-  - 更高层 multi-agent stress scenario
+- 在最新 `dev` 上继续更高强度 proof：
+  - destroy 后的 shared sandbox file persistence
+  - Daytona self-hosted 多线程 dirty-state path
+  - 更高层 multi-agent stress scenario（例如多 agent 协议博弈）
