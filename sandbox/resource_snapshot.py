@@ -102,19 +102,25 @@ def probe_and_upsert_for_instance(
         probe_error = "metrics unavailable"
 
     upsert = repo.upsert_lease_resource_snapshot if repo is not None else upsert_lease_resource_snapshot
-    upsert(
-        lease_id=lease_id,
-        provider_name=provider_name,
-        observed_state=observed_state,
-        probe_mode=probe_mode,
-        cpu_used=cpu_used,
-        cpu_limit=cpu_limit,
-        memory_used_mb=memory_used_mb,
-        memory_total_mb=memory_total_mb,
-        disk_used_gb=disk_used_gb,
-        disk_total_gb=disk_total_gb,
-        network_rx_kbps=network_rx_kbps,
-        network_tx_kbps=network_tx_kbps,
-        probe_error=probe_error,
-    )
+    try:
+        # @@@snapshot-write-nonblocking - runtime startup truth belongs to lease/session creation;
+        # snapshot persistence is auxiliary monitor data and must report write failure
+        # without turning local sandbox bringup into a Supabase-config contract.
+        upsert(
+            lease_id=lease_id,
+            provider_name=provider_name,
+            observed_state=observed_state,
+            probe_mode=probe_mode,
+            cpu_used=cpu_used,
+            cpu_limit=cpu_limit,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+            network_rx_kbps=network_rx_kbps,
+            network_tx_kbps=network_tx_kbps,
+            probe_error=probe_error,
+        )
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
     return {"ok": probe_error is None, "error": probe_error}
