@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import sandbox.lease as sandbox_lease
 from sandbox.lease import lease_from_row
 
 
@@ -204,6 +205,12 @@ def test_sandbox_lease_no_longer_imports_storage_factory() -> None:
     assert "backend.web.core.storage_factory" not in lease_source
     assert "sandbox.control_plane_repos" in lease_source
     assert "SQLiteLeaseRepo" not in lease_source
+
+
+def test_use_supabase_storage_defaults_true_when_strategy_missing(monkeypatch):
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+
+    assert sandbox_lease._use_supabase_storage() is True
 
 
 def test_ensure_active_instance_persists_strategy_lease_before_probe_failure(monkeypatch):

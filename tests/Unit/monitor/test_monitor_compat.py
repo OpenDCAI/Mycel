@@ -707,3 +707,22 @@ def test_runtime_health_snapshot_reports_supabase_storage_contract(monkeypatch):
         },
     }
     assert payload["sessions"] == {"total": 0, "providers": {}}
+
+
+def test_runtime_health_snapshot_defaults_to_supabase_when_strategy_missing(monkeypatch):
+    class FakeRepo:
+        def count_rows(self, table_names):
+            return {name: idx + 1 for idx, name in enumerate(table_names)}
+
+        def close(self):
+            return None
+
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
+    monkeypatch.setattr(monitor_service, "load_all_sessions", lambda _managers: [])
+
+    payload = monitor_service.runtime_health_snapshot()
+
+    assert payload["db"]["strategy"] == "supabase"

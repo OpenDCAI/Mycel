@@ -62,7 +62,7 @@ created: 2026-04-09
 | 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | done |
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | done |
 | 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | done |
-| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | open |
+| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | in_progress |
 | 05 | [Closure Proof](subtask-05-closure-proof.md) | 真实证明系统在 Supabase 下可独立运行，SQLite 不再是隐含前提 | open |
 
 ## 边界
@@ -86,14 +86,12 @@ created: 2026-04-09
 
 ## Default Next Move
 
-- `CP03 Sandbox Control Plane Parity`
-  - `CP02` 已收口：`backend/web/services` 里剩余 SQLite residual 只剩 `monitor_service.py` / `sandbox_service.py`，两者都已更像 control-plane seam
-  - 第一轮已完成：`sandbox_service.py` 不再 import sqlite kernel / 不再自己持有 `SANDBOX_DB_PATH`
-  - 第二轮已完成：`sandbox.manager / sandbox.chat_session` 不再各自直接 import `SQLite*Repo`，而是共用 `sandbox.control_plane_repos`
-  - 第三轮已完成：`sandbox.lease.py` 不再直接 import `SQLiteLeaseRepo`，lease-store construction 已接入 `sandbox.control_plane_repos`
-  - 第四轮已完成：`LeaseRepo.persist_metadata(...)` 已补进 protocol / sqlite provider / supabase provider，且 `sandbox.lease.py:_record_provider_error()` 在 `LEON_STORAGE_STRATEGY=supabase` 下已改为通过 `storage.runtime.build_lease_repo(...)` 持久化 metadata，而不是继续落回本地 sqlite refresh flag
-  - 第五轮已完成：`LeaseRepo.observe_status(...)` 已补进 protocol / sqlite provider / supabase provider，且 `SQLiteLease.refresh_instance_status()` 在 `LEON_STORAGE_STRATEGY=supabase` 下会通过 strategy lease repo + provider event repo 落 `observe.status` transition
-  - 第六轮已完成：`provider.error` 的 strategy event parity 已补上；`_record_provider_error(..., source=...)` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会同时持久化 lease metadata 和 `provider_events`
-  - 第七轮已完成：`intent.destroy` 的 strategy path 已补上；`destroy_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会通过 strategy lease repo + provider event repo 落 detached/expired truth，并保留 destroy-side error/version parity
-  - 第八轮已完成：`intent.pause / intent.resume` 的 strategy path 已补上；`pause_instance()` / `resume_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会通过同一条 strategy transition helper 落 paused/running truth，并保留 failure-side provider.error / version parity
-  - `CP03` 当前授权边界已收口完成；下一步如果继续，应离开这张卡，进入 `CP04 Default Supabase Cut` 或更高层 closure proof
+- `CP04 Default Supabase Cut`
+  - 第一轮已完成：
+    - `backend/web/services/monitor_service.py` 的缺省 strategy fallback 已从 sqlite 改成 supabase
+    - `sandbox/lease.py::_use_supabase_storage()` 的缺省 strategy fallback 已从 sqlite 改成 supabase
+    - 对应 unit tests 已补齐并通过
+  - 当前 stopline：
+    - 这只说明“env 缺省时代码默认按 Supabase 解释”
+    - 还不等于 boot/runtime closure proof 已完成
+  - 下一步如果继续，应在 `CP04` 里补更高层 default/dev contract proof，或直接转向 `CP05 Closure Proof`

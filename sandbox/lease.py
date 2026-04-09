@@ -82,7 +82,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _use_supabase_storage() -> bool:
-    return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase"
+    return os.getenv("LEON_STORAGE_STRATEGY", "supabase").strip().lower() == "supabase"
 
 
 def _make_lease_repo(db_path: Path | None = None):
