@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from storage.container import StorageContainer
@@ -198,6 +199,22 @@ def build_sandbox_monitor_repo(
     from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 
     return SupabaseSandboxMonitorRepo(client)
+
+
+def build_runtime_health_monitor_repo(
+    *,
+    db_path: str | Path | None = None,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+):
+    if current_storage_strategy() == "supabase":
+        return build_sandbox_monitor_repo(
+            supabase_client=supabase_client,
+            supabase_client_factory=supabase_client_factory,
+        )
+    from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+
+    return SQLiteSandboxMonitorRepo(db_path=db_path)
 
 
 def build_provider_event_repo(

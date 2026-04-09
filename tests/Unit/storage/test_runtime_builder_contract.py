@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from storage import runtime as storage_runtime
+from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 from storage.providers.supabase.chat_session_repo import SupabaseChatSessionRepo
 from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
 from storage.providers.supabase.panel_task_repo import SupabasePanelTaskRepo
@@ -37,6 +38,16 @@ def test_build_sandbox_monitor_repo_requires_runtime_config(monkeypatch: pytest.
 
     with pytest.raises(RuntimeError, match="missing runtime config"):
         storage_runtime.build_sandbox_monitor_repo()
+
+
+def test_build_runtime_health_monitor_repo_uses_sqlite_under_explicit_sqlite(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "sqlite")
+
+    repo = storage_runtime.build_runtime_health_monitor_repo(db_path=tmp_path / "sandbox.db")
+    try:
+        assert isinstance(repo, SQLiteSandboxMonitorRepo)
+    finally:
+        repo.close()
 
 
 @pytest.mark.parametrize(

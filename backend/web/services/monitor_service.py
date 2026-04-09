@@ -13,6 +13,7 @@ from eval.storage import TrajectoryStore
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import build_chat_session_repo as make_chat_session_repo
 from storage.runtime import build_lease_repo as make_lease_repo
+from storage.runtime import build_runtime_health_monitor_repo as make_runtime_health_monitor_repo
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import current_storage_strategy
 
@@ -1070,9 +1071,7 @@ def runtime_health_snapshot() -> dict[str, Any]:
         db_exists = db_path.exists()
         db_payload = {"path": str(db_path), "exists": db_exists, "counts": tables}
         if db_exists:
-            from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
-
-            repo = SQLiteSandboxMonitorRepo(db_path=db_path)
+            repo = make_runtime_health_monitor_repo(db_path=db_path)
             try:
                 tables = repo.count_rows(list(tables))
             finally:
