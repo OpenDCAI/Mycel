@@ -31,6 +31,7 @@ from sandbox.lifecycle import (
 )
 from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import build_lease_repo as _build_strategy_lease_repo
+from storage.runtime import build_provider_event_repo as _build_strategy_provider_event_repo
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -88,6 +89,10 @@ def _make_lease_repo(db_path: Path | None = None):
     if _use_supabase_storage():
         return _build_strategy_lease_repo()
     return _make_sqlite_lease_repo(db_path)
+
+
+def _make_provider_event_repo():
+    return _build_strategy_provider_event_repo()
 
 @dataclass
 class SandboxInstance:
@@ -504,6 +509,30 @@ class SQLiteLease(SandboxLease):
             return
         self._persist_lease_metadata()
 
+    def _observe_status_via_strategy_repo(self, raw_status: str, *, source: str) -> None:
+        observed = self._normalize_provider_state(raw_status)
+        instance_id = self._current_instance.instance_id if self._current_instance else ""
+        repo = _make_lease_repo(self.db_path)
+        event_repo = _make_provider_event_repo()
+        try:
+            row = repo.observe_status(
+                lease_id=self.lease_id,
+                status=observed,
+                observed_at=utc_now_iso(),
+            )
+            if instance_id:
+                event_repo.record(
+                    provider_name=self.provider_name,
+                    instance_id=instance_id,
+                    event_type="observe.status",
+                    payload={"status": observed, "instance_id": instance_id},
+                    matched_lease_id=self.lease_id,
+                )
+        finally:
+            event_repo.close()
+            repo.close()
+        self._sync_from(lease_from_row(row, self.db_path))
+
     def _reload_from_storage(self) -> None:
         repo = _make_lease_repo(self.db_path)
         try:
@@ -837,19 +866,25 @@ class SQLiteLease(SandboxLease):
 
         try:
             status = provider.get_session_status(self._current_instance.instance_id)
-            self.apply(
-                provider,
-                event_type="observe.status",
-                source="read.status",
-                payload={"status": status},
-            )
+            if _use_supabase_storage():
+                self._observe_status_via_strategy_repo(status, source="read.status")
+            else:
+                self.apply(
+                    provider,
+                    event_type="observe.status",
+                    source="read.status",
+                    payload={"status": status},
+                )
         except Exception as exc:
-            self.apply(
-                provider,
-                event_type="provider.error",
-                source="read.status",
-                payload={"error": str(exc)},
-            )
+            if _use_supabase_storage():
+                self._record_provider_error(str(exc))
+            else:
+                self.apply(
+                    provider,
+                    event_type="provider.error",
+                    source="read.status",
+                    payload={"error": str(exc)},
+                )
         return self.observed_state
 
     def mark_needs_refresh(self, hint_at: datetime | None = None) -> None:

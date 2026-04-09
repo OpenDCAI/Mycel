@@ -240,6 +240,20 @@ remaining next cut:
 - do not keep expanding raw sqlite helper methods one by one
 ```
 
+Latest update after the observe-status slice:
+
+```text
+completed second transition cut:
+- LeaseRepo.observe_status(...)
+- storage.runtime.build_provider_event_repo(...)
+- refresh_instance_status() supabase success path now uses strategy repos
+
+remaining wider transitions:
+- provider.error event parity
+- intent.pause / intent.resume
+- intent.destroy
+```
+
 - [ ] **Step 3: Record the transaction question**
 
 Make the plan explicit that SQLite currently gets atomicity from one local connection in:

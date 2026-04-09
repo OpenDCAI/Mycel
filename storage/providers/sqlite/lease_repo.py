@@ -242,6 +242,72 @@ class SQLiteLeaseRepo:
             raise RuntimeError(f"Failed to load adopted lease: {lease_id}")
         return adopted
 
+    def observe_status(
+        self,
+        *,
+        lease_id: str,
+        status: str,
+        observed_at: Any = None,
+    ) -> dict[str, Any]:
+        existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+        now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or datetime.now().isoformat())
+        normalized = parse_lease_instance_state(status).value
+        current_instance_id = existing.get("current_instance_id")
+
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE sandbox_leases
+                SET current_instance_id = ?,
+                    instance_created_at = ?,
+                    observed_state = ?,
+                    instance_status = ?,
+                    version = ?,
+                    observed_at = ?,
+                    last_error = ?,
+                    needs_refresh = ?,
+                    refresh_hint_at = ?,
+                    status = ?,
+                    updated_at = ?
+                WHERE lease_id = ?
+                """,
+                (
+                    None if normalized == "detached" else existing.get("current_instance_id"),
+                    None if normalized == "detached" else existing.get("instance_created_at"),
+                    normalized,
+                    normalized,
+                    int(existing.get("version") or 0) + 1,
+                    now,
+                    None,
+                    0,
+                    None,
+                    "expired" if normalized == "detached" else "active",
+                    datetime.now().isoformat(),
+                    lease_id,
+                ),
+            )
+            if current_instance_id:
+                if normalized == "detached":
+                    self._conn.execute(
+                        """
+                        UPDATE sandbox_instances
+                        SET status = ?, last_seen_at = ?
+                        WHERE instance_id = ?
+                        """,
+                        ("stopped", now, current_instance_id),
+                    )
+                else:
+                    self._conn.execute(
+                        """
+                        UPDATE sandbox_instances
+                        SET status = ?, last_seen_at = ?
+                        WHERE instance_id = ?
+                        """,
+                        (normalized, now, current_instance_id),
+                    )
+            self._conn.commit()
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+
     def persist_metadata(
         self,
         *,

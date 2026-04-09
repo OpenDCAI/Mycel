@@ -112,19 +112,37 @@ created: 2026-04-09
   - `LeaseRepo.persist_metadata(...)`
 - 这条 contract 当前只迁移了一个 caller：
   - `SQLiteLease._record_provider_error()`
-- 这刀的作用不是“完成 lease parity”，而是把最明显的假 parity 收成真 parity：
+  - 这刀的作用不是“完成 lease parity”，而是把最明显的假 parity 收成真 parity：
   - 之前 Supabase strategy 下这里只会写 `mark_needs_refresh`
   - `last_error / version / observed_at / status` 等 metadata 并不会真正进入 strategy repo
   - 现在这条路径已经会通过 strategy lease repo 持久化完整 metadata 并 reload row truth
 
+## Latest Transition Slice
+
+- 当前又补了一条更高层但仍然窄的 transition seam：
+  - `LeaseRepo.observe_status(...)`
+- 这条 seam 当前只承接：
+  - `refresh_instance_status()` 的 supabase success path
+- 具体变化：
+  - `storage.runtime.build_provider_event_repo(...)` 已补上
+  - `SQLiteLease.refresh_instance_status()` 在 `LEON_STORAGE_STRATEGY=supabase` 下不再调用本地 `apply(... observe.status ...)`
+  - 现在会通过 strategy lease repo 持久化 observed-state / instance-state 变化
+  - 同时通过 strategy provider event repo 记录 `provider_events`
+- 这刀没有碰：
+  - `intent.pause`
+  - `intent.resume`
+  - `intent.destroy`
+  - `provider.error` 的 event-side parity
+
 ## Default Next Move
 
 - 不直接改 `monitor_service.py`
-- 不继续追加零碎 metadata/import 清理
-- 下一刀要先回答高层 `lease transition` contract，而不是继续暴露底层 sqlite plumbing
-- 推荐优先设计一个单一高层 seam，例如：
-  - `apply_transition(...)`
-  - 而不是直接把 `_persist_snapshot / _append_event / _persist_lease_metadata` 原样抬进 protocol
+- 不继续追加底层 sqlite helper 清理
+- 下一刀如果继续，应在更宽的 transition 之间选一个：
+  - `provider.error` event-side parity
+  - `intent.pause / intent.resume`
+  - `intent.destroy`
+- 不要把三者混成一刀
 
 ## Stopline
 

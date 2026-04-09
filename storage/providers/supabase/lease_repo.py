@@ -178,6 +178,46 @@ class SupabaseLeaseRepo:
 
         return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="adopt_instance")
 
+    def observe_status(
+        self,
+        *,
+        lease_id: str,
+        status: str,
+        observed_at: Any = None,
+    ) -> dict[str, Any]:
+        from sandbox.lifecycle import parse_lease_instance_state
+
+        existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+        now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or _utc_now_iso())
+        normalized = parse_lease_instance_state(status).value
+        current_instance_id = existing.get("current_instance_id")
+
+        self._leases().update(
+            {
+                "current_instance_id": None if normalized == "detached" else existing.get("current_instance_id"),
+                "instance_created_at": None if normalized == "detached" else existing.get("instance_created_at"),
+                "observed_state": normalized,
+                "instance_status": normalized,
+                "version": int(existing.get("version") or 0) + 1,
+                "observed_at": now,
+                "last_error": None,
+                "needs_refresh": 0,
+                "refresh_hint_at": None,
+                "status": "expired" if normalized == "detached" else "active",
+                "updated_at": _utc_now_iso(),
+            }
+        ).eq("lease_id", lease_id).execute()
+
+        if current_instance_id:
+            self._instances().update(
+                {
+                    "status": "stopped" if normalized == "detached" else normalized,
+                    "last_seen_at": now,
+                }
+            ).eq("instance_id", current_instance_id).execute()
+
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+
     def persist_metadata(
         self,
         *,

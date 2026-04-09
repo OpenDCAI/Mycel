@@ -15,21 +15,25 @@ class _FakeProvider:
     def create_session(self, context_id=None, thread_id=None):
         return SimpleNamespace(session_id="instance-created")
 
+    def get_session_status(self, _instance_id: str) -> str:
+        return "running"
+
 
 class _FakeLeaseRepo:
     def __init__(self) -> None:
         self.adopt_calls: list[tuple[str, str, str, str]] = []
         self.persist_calls: list[dict[str, object]] = []
+        self.observe_calls: list[dict[str, object]] = []
         self._row = {
             "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
             "recipe_id": None,
             "recipe_json": None,
             "workspace_key": None,
-            "current_instance_id": None,
-            "instance_created_at": None,
+            "current_instance_id": "inst-1",
+            "instance_created_at": "2026-04-08T00:00:00+00:00",
             "desired_state": "running",
-            "observed_state": "detached",
+            "observed_state": "running",
             "version": 0,
             "observed_at": "2026-04-08T00:00:00+00:00",
             "last_error": None,
@@ -39,7 +43,14 @@ class _FakeLeaseRepo:
             "volume_id": None,
             "created_at": "2026-04-08T00:00:00+00:00",
             "updated_at": "2026-04-08T00:00:00+00:00",
-            "_instance": None,
+            "_instance": {
+                "instance_id": "inst-1",
+                "lease_id": "lease-1",
+                "provider_session_id": "inst-1",
+                "status": "running",
+                "created_at": "2026-04-08T00:00:00+00:00",
+                "last_seen_at": "2026-04-08T00:00:00+00:00",
+            },
         }
 
     def get(self, lease_id: str):
@@ -115,6 +126,64 @@ class _FakeLeaseRepo:
         }
         return dict(self._row)
 
+    def observe_status(
+        self,
+        *,
+        lease_id: str,
+        status: str,
+        observed_at,
+    ):
+        self.observe_calls.append(
+            {
+                "lease_id": lease_id,
+                "status": status,
+                "observed_at": observed_at,
+            }
+        )
+        self._row = {
+            **self._row,
+            "observed_state": status,
+            "version": int(self._row["version"]) + 1,
+            "observed_at": observed_at,
+            "last_error": None,
+            "needs_refresh": 0,
+            "refresh_hint_at": None,
+            "status": "active",
+            "_instance": {
+                **(self._row["_instance"] or {}),
+                "status": status,
+                "last_seen_at": observed_at,
+            },
+        }
+        return dict(self._row)
+
+    def close(self) -> None:
+        return None
+
+
+class _FakeProviderEventRepo:
+    def __init__(self) -> None:
+        self.record_calls: list[dict[str, object]] = []
+
+    def record(
+        self,
+        *,
+        provider_name: str,
+        instance_id: str,
+        event_type: str,
+        payload: dict[str, object],
+        matched_lease_id: str | None,
+    ) -> None:
+        self.record_calls.append(
+            {
+                "provider_name": provider_name,
+                "instance_id": instance_id,
+                "event_type": event_type,
+                "payload": payload,
+                "matched_lease_id": matched_lease_id,
+            }
+        )
+
     def close(self) -> None:
         return None
 
@@ -129,6 +198,13 @@ def test_sandbox_lease_no_longer_imports_storage_factory() -> None:
 
 def test_ensure_active_instance_persists_strategy_lease_before_probe_failure(monkeypatch):
     repo = _FakeLeaseRepo()
+    repo._row = {
+        **repo._row,
+        "current_instance_id": None,
+        "instance_created_at": None,
+        "observed_state": "detached",
+        "_instance": None,
+    }
     lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
@@ -163,3 +239,30 @@ def test_record_provider_error_persists_strategy_metadata(monkeypatch):
     assert call["needs_refresh"] is True
     assert call["status"] == "active"
     assert call["version"] == 1
+
+
+def test_refresh_instance_status_uses_strategy_observe_status_transition(monkeypatch):
+    repo = _FakeLeaseRepo()
+    event_repo = _FakeProviderEventRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    observed = lease.refresh_instance_status(_FakeProvider(), force=True)
+
+    assert observed == "running"
+    assert repo.observe_calls
+    assert repo.observe_calls[0]["lease_id"] == "lease-1"
+    assert repo.observe_calls[0]["status"] == "running"
+    assert event_repo.record_calls == [
+        {
+            "provider_name": "daytona_selfhost",
+            "instance_id": "inst-1",
+            "event_type": "observe.status",
+            "payload": {"status": "running", "instance_id": "inst-1"},
+            "matched_lease_id": "lease-1",
+        }
+    ]

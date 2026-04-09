@@ -6,6 +6,7 @@ from storage import runtime as storage_runtime
 from storage.providers.supabase.chat_session_repo import SupabaseChatSessionRepo
 from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
 from storage.providers.supabase.panel_task_repo import SupabasePanelTaskRepo
+from storage.providers.supabase.provider_event_repo import SupabaseProviderEventRepo
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from storage.providers.supabase.terminal_repo import SupabaseTerminalRepo
 from tests.fakes.supabase import FakeSupabaseClient
@@ -42,6 +43,7 @@ def test_build_sandbox_monitor_repo_requires_runtime_config(monkeypatch: pytest.
         ("build_lease_repo", SupabaseLeaseRepo),
         ("build_terminal_repo", SupabaseTerminalRepo),
         ("build_chat_session_repo", SupabaseChatSessionRepo),
+        ("build_provider_event_repo", SupabaseProviderEventRepo),
     ],
 )
 def test_runtime_repo_builders_use_supabase_factory(

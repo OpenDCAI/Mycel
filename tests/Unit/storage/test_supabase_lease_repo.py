@@ -189,3 +189,59 @@ def test_supabase_lease_repo_persist_metadata_updates_error_refresh_fields():
     assert type(lease_row["needs_refresh"]) is int
     assert lease_row["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
     assert lease_row["status"] == "recovering"
+
+
+def test_supabase_lease_repo_observe_status_detaches_instance_and_clears_refresh_fields():
+    tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "local",
+                "recipe_id": None,
+                "workspace_key": None,
+                "recipe_json": None,
+                "current_instance_id": "inst-1",
+                "instance_created_at": "2026-04-07T00:00:01+00:00",
+                "desired_state": "running",
+                "observed_state": "running",
+                "version": 0,
+                "observed_at": "2026-04-07T00:00:00+00:00",
+                "last_error": "old error",
+                "needs_refresh": 1,
+                "refresh_hint_at": "2026-04-07T00:00:02+00:00",
+                "status": "active",
+                "volume_id": None,
+                "created_at": "2026-04-07T00:00:00+00:00",
+                "updated_at": "2026-04-07T00:00:00+00:00",
+            }
+        ],
+        "sandbox_instances": [
+            {
+                "instance_id": "inst-1",
+                "lease_id": "lease-1",
+                "provider_session_id": "inst-1",
+                "status": "running",
+                "created_at": "2026-04-07T00:00:01+00:00",
+                "last_seen_at": "2026-04-07T00:00:01+00:00",
+            }
+        ],
+    }
+    repo = SupabaseLeaseRepo(client=FakeSupabaseClient(tables=tables))
+
+    updated = repo.observe_status(
+        lease_id="lease-1",
+        status="detached",
+        observed_at="2026-04-07T00:00:05+00:00",
+    )
+
+    lease_row = tables["sandbox_leases"][0]
+    instance_row = tables["sandbox_instances"][0]
+    assert updated["lease_id"] == "lease-1"
+    assert lease_row["current_instance_id"] is None
+    assert lease_row["observed_state"] == "detached"
+    assert lease_row["status"] == "expired"
+    assert lease_row["last_error"] is None
+    assert lease_row["needs_refresh"] == 0
+    assert type(lease_row["needs_refresh"]) is int
+    assert lease_row["version"] == 1
+    assert instance_row["status"] == "stopped"

@@ -92,4 +92,5 @@ created: 2026-04-09
   - 第二轮已完成：`sandbox.manager / sandbox.chat_session` 不再各自直接 import `SQLite*Repo`，而是共用 `sandbox.control_plane_repos`
   - 第三轮已完成：`sandbox.lease.py` 不再直接 import `SQLiteLeaseRepo`，lease-store construction 已接入 `sandbox.control_plane_repos`
   - 第四轮已完成：`LeaseRepo.persist_metadata(...)` 已补进 protocol / sqlite provider / supabase provider，且 `sandbox.lease.py:_record_provider_error()` 在 `LEON_STORAGE_STRATEGY=supabase` 下已改为通过 `storage.runtime.build_lease_repo(...)` 持久化 metadata，而不是继续落回本地 sqlite refresh flag
-  - 当前 stopline 已压清：下一步如果继续，应该直接回答更高层的 `lease transition` contract；已经不再适合继续追加零碎 metadata/import 清理
+  - 第五轮已完成：`LeaseRepo.observe_status(...)` 已补进 protocol / sqlite provider / supabase provider，且 `SQLiteLease.refresh_instance_status()` 在 `LEON_STORAGE_STRATEGY=supabase` 下会通过 strategy lease repo + provider event repo 落 `observe.status` transition
+  - 当前 stopline 已压清：下一步如果继续，才轮到 `pause / resume / destroy / provider.error` 这些更宽的 transition，而不是再回头做底层 sqlite helper 清理
