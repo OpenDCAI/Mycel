@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -11,6 +12,16 @@ from backend.web.main import app
 from backend.web.routers import monitor as monitor_router
 from backend.web.routers import resources as resources_router
 from backend.web.services import resource_projection_service, resource_service
+
+
+def test_resource_services_no_longer_import_storage_factory() -> None:
+    resource_service_source = inspect.getsource(resource_service)
+    projection_service_source = inspect.getsource(resource_projection_service)
+
+    assert "backend.web.core.storage_factory" not in resource_service_source
+    assert "backend.web.core.storage_factory" not in projection_service_source
+    assert "storage.runtime" in resource_service_source
+    assert "storage.runtime" in projection_service_source
 
 
 def test_resources_overview_route_exists() -> None:

@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.core.storage_factory import list_resource_snapshots, make_sandbox_monitor_repo
 from backend.web.services import resource_service, sandbox_service
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
@@ -24,6 +23,8 @@ from backend.web.services.sandbox_service import available_sandbox_types
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_lease_to_session_status
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
+from storage.runtime import list_resource_snapshots
 
 
 def _now_iso() -> str:
