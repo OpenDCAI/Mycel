@@ -7,11 +7,13 @@ Wake handlers notify the host when messages arrive for idle agents.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from collections.abc import Callable
 from pathlib import Path
 
 from storage.contracts import NotificationType, QueueItem, QueueRepo
+from storage.runtime import build_queue_repo
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,8 @@ class MessageQueueManager:
     def __init__(self, repo: QueueRepo | None = None, *, db_path: str | None = None) -> None:
         if repo is not None:
             self._repo = repo
+        elif db_path is None and os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase":
+            self._repo = build_queue_repo()
         else:
             from storage.providers.sqlite.queue_repo import SQLiteQueueRepo
 
