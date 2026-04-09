@@ -1,7 +1,6 @@
 """Focused runtime support tests for cleanup, fork, and state helpers."""
 
 import asyncio
-import signal
 from pathlib import Path
 from typing import Any, get_type_hints
 
@@ -233,7 +232,7 @@ def test_cleanup_registry_register_returns_deregister_handle():
     assert order == ["kept"]
 
 
-def test_cleanup_registry_installs_signal_handlers(monkeypatch):
+def test_cleanup_registry_does_not_install_process_signal_handlers(monkeypatch):
     registered = []
 
     class _FakeLoop:
@@ -244,8 +243,4 @@ def test_cleanup_registry_installs_signal_handlers(monkeypatch):
 
     CleanupRegistry()
 
-    expected = {signal.SIGINT, signal.SIGTERM}
-    if hasattr(signal, "SIGHUP"):
-        expected.add(signal.SIGHUP)
-
-    assert set(registered) == expected
+    assert registered == []
