@@ -843,13 +843,16 @@ class SandboxManager:
             self.terminal_store.delete(terminal.terminal_id)
 
         for lease_id in lease_ids:
+            # @@@shared-lease-destroy-boundary - destroying one thread must not tear down
+            # a lease that still has surviving terminals bound to it.
+            lease_in_use = any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all())
+            if lease_in_use:
+                continue
             lease = self._get_lease(lease_id)
             if not lease:
                 raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
             lease.destroy_instance(self.provider)
-            lease_in_use = any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all())
-            if not lease_in_use:
-                self.lease_store.delete(lease_id)
+            self.lease_store.delete(lease_id)
         return True
 
     def list_sessions(self) -> list[dict]:
