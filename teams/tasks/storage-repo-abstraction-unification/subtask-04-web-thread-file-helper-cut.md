@@ -15,8 +15,8 @@ created: 2026-04-09
   - [backend/web/services/file_channel_service.py](/Users/lexicalmathical/worktrees/leonai--storage-file-helper-cut/backend/web/services/file_channel_service.py)
 - 剩余 residual
   - `backend/web/utils/helpers.py`
-  - `backend/web/routers/threads.py`
-  - `backend/web/routers/webhooks.py`
+
+`threads.py / webhooks.py` 这两块已经被重分流到 `CP05`，因为它们更像 runtime-owned lease/terminal seam，而不是普通 web helper seam。
 
 ## 已完成事实
 
@@ -46,16 +46,17 @@ created: 2026-04-09
 
 ## 还没做
 
-这张卡还没有 closure。剩余更像下一刀的是：
+这张卡还没有 closure。当前只剩一个 residual：
 
 - `helpers.py` 的 runtime/db-path helper seam
-- `threads.py` / `webhooks.py` 的 lease/terminal helper seam
 
 ## Stopline
 
 - 当前不碰 `backend/web/utils/helpers.py`
-- 当前不碰 `backend/web/routers/threads.py`
-- 当前不碰 `backend/web/routers/webhooks.py`
-- hindsight:
-  - `no longer imports storage_factory` 不等于 `应该改走 storage.runtime`
-  - 如果代码本身就是 `sandbox.db` / `db_path` lookup owner，最小而诚实的落点仍然可能是本地 sqlite constructor
+- 当前不把 `helpers.py` 和 `sandbox/manager.py` 混成一刀
+- 当前不把已经转入 `CP05` 的 `threads.py / webhooks.py` 再拉回这张卡
+
+### Hindsight
+
+- `no longer imports storage_factory` 不等于 `应该改走 storage.runtime`
+- 如果代码本身就是 `sandbox.db` / `db_path` lookup owner，最小而诚实的落点仍然可能是本地 sqlite constructor

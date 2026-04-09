@@ -120,6 +120,12 @@ def _require_app_state(loop: QueryLoop) -> AppState:
     return app_state
 
 
+def test_threads_router_sandbox_bootstrap_no_longer_imports_storage_factory() -> None:
+    threads_source = Path("backend/web/routers/threads.py").read_text()
+
+    assert "from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo" not in threads_source
+
+
 def _require_await_kwargs(mock: AsyncMock) -> dict[str, Any]:
     await_args = mock.await_args
     assert await_args is not None
