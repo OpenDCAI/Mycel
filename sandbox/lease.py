@@ -11,7 +11,6 @@ State machine contract:
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import threading
 import uuid
@@ -32,6 +31,7 @@ from sandbox.lifecycle import (
 from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import build_lease_repo as _build_strategy_lease_repo
 from storage.runtime import build_provider_event_repo as _build_strategy_provider_event_repo
+from storage.runtime import uses_supabase_runtime_defaults
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -81,12 +81,12 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return connect_sqlite(db_path)
 
 
-def _use_supabase_storage() -> bool:
-    return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase"
+def _use_supabase_storage(db_path: Path | None = None) -> bool:
+    return uses_supabase_runtime_defaults() and resolve_sandbox_db_path(db_path) == resolve_sandbox_db_path()
 
 
 def _make_lease_repo(db_path: Path | None = None):
-    if _use_supabase_storage():
+    if _use_supabase_storage(db_path):
         return _build_strategy_lease_repo()
     return _make_sqlite_lease_repo(db_path)
 
@@ -488,7 +488,7 @@ class SQLiteLease(SandboxLease):
         self.refresh_hint_at = utc_now()
         self.observed_at = utc_now()
         self.version += 1
-        if _use_supabase_storage():
+        if _use_supabase_storage(self.db_path):
             repo = _make_lease_repo(self.db_path)
             event_repo = _make_provider_event_repo()
             try:
@@ -853,7 +853,7 @@ class SQLiteLease(SandboxLease):
                     return resolved
             try:
                 status = provider.get_session_status(self._current_instance.instance_id)
-                if _use_supabase_storage():
+                if _use_supabase_storage(self.db_path):
                     repo = _make_lease_repo(self.db_path)
                     try:
                         row = repo.adopt_instance(
@@ -891,7 +891,7 @@ class SQLiteLease(SandboxLease):
                         return resolved
                 try:
                     status = provider.get_session_status(self._current_instance.instance_id)
-                    if _use_supabase_storage():
+                    if _use_supabase_storage(self.db_path):
                         repo = _make_lease_repo(self.db_path)
                         try:
                             row = repo.adopt_instance(
@@ -920,7 +920,7 @@ class SQLiteLease(SandboxLease):
                     self._record_provider_error(str(exc), source="run.refresh_locked")
 
             self.status = "recovering"
-            if not _use_supabase_storage():
+            if not _use_supabase_storage(self.db_path):
                 self._persist_lease_metadata()
             from sandbox.thread_context import get_current_thread_id
 
@@ -932,7 +932,7 @@ class SQLiteLease(SandboxLease):
                 status="running",
                 created_at=utc_now(),
             )
-            if _use_supabase_storage():
+            if _use_supabase_storage(self.db_path):
                 repo = _make_lease_repo(self.db_path)
                 try:
                     row = repo.adopt_instance(
@@ -969,7 +969,7 @@ class SQLiteLease(SandboxLease):
             return self._current_instance
 
     def destroy_instance(self, provider: SandboxProvider, *, source: str = "api") -> None:
-        if _use_supabase_storage():
+        if _use_supabase_storage(self.db_path):
             with self._instance_lock():
                 self._reload_from_storage()
                 try:
@@ -981,7 +981,7 @@ class SQLiteLease(SandboxLease):
         self.apply(provider, event_type="intent.destroy", source=source)
 
     def pause_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool:
-        if _use_supabase_storage():
+        if _use_supabase_storage(self.db_path):
             with self._instance_lock():
                 self._reload_from_storage()
                 try:
@@ -1002,7 +1002,7 @@ class SQLiteLease(SandboxLease):
         return True
 
     def resume_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool:
-        if _use_supabase_storage():
+        if _use_supabase_storage(self.db_path):
             with self._instance_lock():
                 self._reload_from_storage()
                 try:
@@ -1044,7 +1044,7 @@ class SQLiteLease(SandboxLease):
 
         try:
             status = provider.get_session_status(self._current_instance.instance_id)
-            if _use_supabase_storage():
+            if _use_supabase_storage(self.db_path):
                 self._observe_status_via_strategy_repo(status, source="read.status")
             else:
                 self.apply(
@@ -1054,7 +1054,7 @@ class SQLiteLease(SandboxLease):
                     payload={"status": status},
                 )
         except Exception as exc:
-            if _use_supabase_storage():
+            if _use_supabase_storage(self.db_path):
                 self._record_provider_error(str(exc), source="read.status")
             else:
                 self.apply(
@@ -1069,7 +1069,7 @@ class SQLiteLease(SandboxLease):
         self.needs_refresh = True
         self.refresh_hint_at = hint_at or utc_now()
         self.version += 1
-        if _use_supabase_storage():
+        if _use_supabase_storage(self.db_path):
             repo = _make_lease_repo(self.db_path)
             try:
                 repo.mark_needs_refresh(self.lease_id, hint_at=self.refresh_hint_at)

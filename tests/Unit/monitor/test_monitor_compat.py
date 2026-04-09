@@ -14,15 +14,31 @@ def test_monitor_service_no_longer_imports_storage_factory_or_sqlite_repos() -> 
     assert "storage.runtime" in source
 
 
-def test_runtime_health_snapshot_defaults_to_sqlite_when_strategy_missing(monkeypatch) -> None:
+def test_runtime_health_snapshot_defaults_to_supabase_when_strategy_missing(monkeypatch) -> None:
+    class FakeRepo:
+        def count_rows(self, _tables):
+            return {
+                "chat_sessions": 0,
+                "sandbox_leases": 0,
+                "lease_events": 0,
+            }
+
+        def close(self):
+            return None
+
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
-    monkeypatch.delenv("SUPABASE_INTERNAL_URL", raising=False)
-    monkeypatch.delenv("SUPABASE_PUBLIC_URL", raising=False)
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
+    monkeypatch.setattr(monitor_service, "load_all_sessions", lambda _managers: [])
 
     payload = monitor_service.runtime_health_snapshot()
 
-    assert payload["db"]["path"].endswith("sandbox.db")
-    assert "strategy" not in payload["db"]
+    assert payload["db"]["strategy"] == "supabase"
+    assert payload["db"]["counts"] == {
+        "chat_sessions": 0,
+        "sandbox_leases": 0,
+        "lease_events": 0,
+    }
 
 
 def test_list_leases_exposes_semantic_groups_and_summary(monkeypatch):
@@ -720,14 +736,32 @@ def test_runtime_health_snapshot_reports_supabase_storage_contract(monkeypatch):
     assert payload["sessions"] == {"total": 0, "providers": {}}
 
 
-def test_runtime_health_snapshot_keeps_sqlite_contract_when_strategy_missing(monkeypatch, tmp_path):
+def test_runtime_health_snapshot_keeps_supabase_contract_when_strategy_missing(monkeypatch):
+    class FakeRepo:
+        def count_rows(self, _tables):
+            return {
+                "chat_sessions": 1,
+                "sandbox_leases": 2,
+                "lease_events": 3,
+            }
+
+        def close(self):
+            return None
+
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
-    monkeypatch.setattr(monitor_service, "resolve_role_db_path", lambda role: tmp_path / "sandbox.db")
+    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
     monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
     monkeypatch.setattr(monitor_service, "load_all_sessions", lambda _managers: [])
 
     payload = monitor_service.runtime_health_snapshot()
 
-    assert payload["db"]["path"].endswith("sandbox.db")
-    assert payload["db"]["exists"] is False
-    assert "strategy" not in payload["db"]
+    assert payload["db"] == {
+        "strategy": "supabase",
+        "schema": "staging",
+        "counts": {
+            "chat_sessions": 1,
+            "sandbox_leases": 2,
+            "lease_events": 3,
+        },
+    }

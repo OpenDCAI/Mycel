@@ -14,6 +14,7 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import build_chat_session_repo as make_chat_session_repo
 from storage.runtime import build_lease_repo as make_lease_repo
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
+from storage.runtime import current_storage_strategy
 
 
 # ---------------------------------------------------------------------------
@@ -1051,7 +1052,7 @@ def get_event(event_id: str) -> dict[str, Any]:
 def runtime_health_snapshot() -> dict[str, Any]:
     """Lightweight control-plane health snapshot."""
     tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0}
-    storage_strategy = str(os.getenv("LEON_STORAGE_STRATEGY") or "sqlite").strip().lower()
+    storage_strategy = current_storage_strategy()
 
     if storage_strategy == "supabase":
         repo = make_sandbox_monitor_repo()

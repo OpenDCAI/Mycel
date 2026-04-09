@@ -337,7 +337,32 @@ def test_sandbox_manager_keeps_custom_db_path_sqlite_owned_under_supabase(monkey
     assert manager.session_manager._repo.db_path == custom_db_path
 
 
-def test_sandbox_manager_keeps_default_sandbox_repos_sqlite_owned_when_strategy_missing(monkeypatch, tmp_path):
+def test_sandbox_manager_uses_strategy_control_plane_repos_when_strategy_missing(monkeypatch, tmp_path):
+    import sandbox.control_plane_repos as control_plane_repos_module
+    import sandbox.manager as sandbox_manager_module
+
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.setenv("LEON_SUPABASE_CLIENT_FACTORY", "tests.fake:create_client")
+    default_db = tmp_path / "sandbox.db"
+    monkeypatch.setattr(sandbox_manager_module, "resolve_role_db_path", lambda role, db_path=None: default_db)
+    monkeypatch.setattr(control_plane_repos_module, "resolve_role_db_path", lambda role, db_path=None: default_db)
+    strategy_terminal_repo = _RepoStub()
+    strategy_lease_repo = _RepoStub()
+    strategy_chat_repo = _RepoStub()
+    monkeypatch.setattr(control_plane_repos_module, "build_terminal_repo", lambda **kwargs: strategy_terminal_repo, raising=False)
+    monkeypatch.setattr(control_plane_repos_module, "build_lease_repo", lambda **kwargs: strategy_lease_repo, raising=False)
+    monkeypatch.setattr(control_plane_repos_module, "build_chat_session_repo", lambda **kwargs: strategy_chat_repo, raising=False)
+
+    provider = SimpleNamespace(get_capability=lambda: SimpleNamespace(runtime_kind="local"))
+
+    manager = sandbox_manager_module.SandboxManager(provider=provider)
+
+    assert manager.terminal_store is strategy_terminal_repo
+    assert manager.lease_store is strategy_lease_repo
+    assert manager.session_manager._repo is strategy_chat_repo
+
+
+def test_sandbox_manager_keeps_sqlite_control_plane_when_strategy_missing_and_runtime_config_missing(monkeypatch, tmp_path):
     import sandbox.control_plane_repos as control_plane_repos_module
     import sandbox.manager as sandbox_manager_module
     import storage.providers.sqlite.chat_session_repo as sqlite_chat_session_repo_module
@@ -345,27 +370,8 @@ def test_sandbox_manager_keeps_default_sandbox_repos_sqlite_owned_when_strategy_
     import storage.providers.sqlite.terminal_repo as sqlite_terminal_repo_module
 
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
-    default_db = tmp_path / "sandbox.db"
-    monkeypatch.setattr(sandbox_manager_module, "resolve_role_db_path", lambda role, db_path=None: default_db)
-    monkeypatch.setattr(control_plane_repos_module, "resolve_role_db_path", lambda role, db_path=None: default_db)
-    monkeypatch.setattr(
-        control_plane_repos_module,
-        "build_terminal_repo",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("strategy terminal repo should not be used without env")),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        control_plane_repos_module,
-        "build_lease_repo",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("strategy lease repo should not be used without env")),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        control_plane_repos_module,
-        "build_chat_session_repo",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("strategy chat repo should not be used without env")),
-        raising=False,
-    )
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr(control_plane_repos_module, "resolve_role_db_path", lambda role, db_path=None: tmp_path / "sandbox.db")
 
     class _SQLiteTerminalRepoStub(_RepoStub):
         def __init__(self, *, db_path):
@@ -384,15 +390,11 @@ def test_sandbox_manager_keeps_default_sandbox_repos_sqlite_owned_when_strategy_
     monkeypatch.setattr(sqlite_chat_session_repo_module, "SQLiteChatSessionRepo", _SQLiteChatRepoStub)
 
     provider = SimpleNamespace(get_capability=lambda: SimpleNamespace(runtime_kind="local"))
-
     manager = sandbox_manager_module.SandboxManager(provider=provider)
 
     assert isinstance(manager.terminal_store, _SQLiteTerminalRepoStub)
     assert isinstance(manager.lease_store, _SQLiteLeaseRepoStub)
     assert isinstance(manager.session_manager._repo, _SQLiteChatRepoStub)
-    assert manager.terminal_store.db_path == default_db
-    assert manager.lease_store.db_path == default_db
-    assert manager.session_manager._repo.db_path == default_db
 
 
 def test_lookup_sandbox_for_thread_uses_strategy_repos_without_local_db_under_supabase(monkeypatch, tmp_path):

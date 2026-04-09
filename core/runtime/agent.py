@@ -1782,11 +1782,10 @@ def create_leon_agent(
     """
     # Filter out kwargs that LeonAgent.__init__ doesn't accept (e.g. profile from CLI)
     import inspect as _inspect
-    import os as _os
 
-    if storage_container is None and _os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase":
-        from storage.runtime import build_storage_container
+    from storage.runtime import build_storage_container, uses_supabase_storage
 
+    if storage_container is None and uses_supabase_storage():
         storage_container = build_storage_container()
 
     _valid = set(_inspect.signature(LeonAgent.__init__).parameters) - {"self"}

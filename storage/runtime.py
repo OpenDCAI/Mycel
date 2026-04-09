@@ -12,6 +12,21 @@ from storage.container import StorageContainer
 _WEB_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_supabase_client"
 
 
+def current_storage_strategy() -> str:
+    return str(os.getenv("LEON_STORAGE_STRATEGY") or "supabase").strip().lower()
+
+
+def uses_supabase_storage() -> bool:
+    return current_storage_strategy() == "supabase"
+
+
+def uses_supabase_runtime_defaults() -> bool:
+    explicit_strategy = os.getenv("LEON_STORAGE_STRATEGY")
+    if explicit_strategy is not None:
+        return explicit_strategy.strip().lower() == "supabase"
+    return bool(os.getenv("LEON_SUPABASE_CLIENT_FACTORY"))
+
+
 def build_storage_container(
     *,
     supabase_client: Any | None = None,

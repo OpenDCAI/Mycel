@@ -1,12 +1,11 @@
 """Session management for agent thread persistence"""
 
 import json
-import os
 from pathlib import Path
 
 from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
 from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
-from storage.runtime import build_storage_container
+from storage.runtime import build_storage_container, uses_supabase_runtime_defaults
 
 
 class SessionManager:
@@ -57,7 +56,7 @@ class SessionManager:
                 data["last_thread_id"] = threads[0] if threads else None
             self.session_file.write_text(json.dumps(data, indent=2))
 
-        if os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase":
+        if uses_supabase_runtime_defaults():
             try:
                 container = build_storage_container()
 

@@ -332,6 +332,27 @@ def test_create_leon_agent_supabase_defaults_wire_runtime_container(monkeypatch,
         agent.close()
 
 
+@_patch_env_api_key()
+def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing(monkeypatch, tmp_path, _patch_runtime_storage_container):
+    from core.runtime.agent import create_leon_agent
+
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=_mock_model("queue wiring")),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+    ):
+        agent = create_leon_agent(workspace_root=str(tmp_path))
+
+    try:
+        assert agent.storage_container is _patch_runtime_storage_container
+        assert agent.queue_manager._repo is _patch_runtime_storage_container.queue_repo()
+        assert agent._memory_middleware.summary_store is not None
+        assert agent._memory_middleware.summary_store._repo is _patch_runtime_storage_container.summary_repo()
+    finally:
+        agent.close()
+
+
 # ---------------------------------------------------------------------------
 # Integration Tests
 # ---------------------------------------------------------------------------
@@ -339,10 +360,11 @@ def test_create_leon_agent_supabase_defaults_wire_runtime_container(monkeypatch,
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_simple_run(tmp_path):
+async def test_leon_agent_simple_run(monkeypatch, tmp_path):
     """LeonAgent with mock model: astream completes and yields chunks."""
     from core.runtime.agent import LeonAgent
 
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "sqlite")
     mock_model = _mock_model("Hello from integration test")
 
     with (
