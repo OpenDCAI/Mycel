@@ -36,7 +36,7 @@ created: 2026-04-09
 - `threads.py` 的 lease / terminal row bootstrap 改走 `storage.runtime.build_lease_repo(...)` 与 `build_terminal_repo(...)`
 - thread sandbox bootstrap 的 outward behavior 保持不变，local cwd contract 继续由现有 route test 固定
 - `sandbox/manager.py` 不再 import `backend.web.core.storage_factory`
-- `sandbox/manager.py` 顶层 `make_chat_session_repo / make_lease_repo / make_terminal_repo` 全部改走 `storage.runtime`
+- `sandbox/manager.py` 顶层 `make_chat_session_repo / make_lease_repo / make_terminal_repo` 保持 sqlite-owned constructor
 - 既有 monkeypatch 面继续保留，所以 manager strategy tests 不需要改调用协议
 
 ## 证据
@@ -83,7 +83,7 @@ created: 2026-04-09
     - `exit 0`
 - `CP05d`
   - red:
-    - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py -k 'sandbox_manager_no_longer_imports_storage_factory or sandbox_manager_uses_strategy_aware_repos_under_supabase'`
+    - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py -k 'sandbox_manager_no_longer_imports_storage_factory or sandbox_manager_keeps_sandbox_repos_sqlite_owned_under_supabase'`
     - `1 failed, 1 passed`
   - green:
     - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py`
@@ -109,3 +109,4 @@ created: 2026-04-09
 
 - `db_path` holder 离开 `storage_factory`，不自动意味着应该改走 `storage.runtime`
 - `sandbox/lease.py` 的 owner 是 runtime-local sqlite lease storage，不是 Supabase runtime builder
+- `sandbox/manager.py` 的 terminal / lease / chat-session root store 同样是 `sandbox.db` owner，不该被 issue `#191` 误拉成 Supabase runtime builder

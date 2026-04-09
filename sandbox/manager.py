@@ -18,13 +18,28 @@ from sandbox.lease import lease_from_row
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
+from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.runtime import build_chat_session_repo as make_chat_session_repo
-from storage.runtime import build_lease_repo as make_lease_repo
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 from storage.runtime import build_storage_container
-from storage.runtime import build_terminal_repo as make_terminal_repo
 
 logger = logging.getLogger(__name__)
+
+
+def make_chat_session_repo(db_path: Path | None = None):
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return SQLiteChatSessionRepo(db_path=target_db)
+
+
+def make_lease_repo(db_path: Path | None = None):
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return SQLiteLeaseRepo(db_path=target_db)
+
+
+def make_terminal_repo(db_path: Path | None = None):
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return SQLiteTerminalRepo(db_path=target_db)
 
 
 def resolve_provider_cwd(provider) -> str:
