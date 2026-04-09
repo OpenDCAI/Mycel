@@ -52,6 +52,31 @@ def test_build_runtime_health_monitor_repo_uses_sqlite_under_explicit_sqlite(mon
         repo.close()
 
 
+def test_build_runtime_health_monitor_repo_resolves_default_sqlite_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeSQLiteSandboxMonitorRepo:
+        def __init__(self, db_path=None) -> None:
+            captured["db_path"] = db_path
+
+        def close(self) -> None:
+            return None
+
+    resolved = tmp_path / "sandbox.db"
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "sqlite")
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(resolved))
+    monkeypatch.setattr(
+        "storage.providers.sqlite.sandbox_monitor_repo.SQLiteSandboxMonitorRepo",
+        _FakeSQLiteSandboxMonitorRepo,
+    )
+
+    repo = storage_runtime.build_runtime_health_monitor_repo()
+    try:
+        assert captured["db_path"] == resolved
+    finally:
+        repo.close()
+
+
 @pytest.mark.parametrize(
     ("builder_name", "repo_cls"),
     [

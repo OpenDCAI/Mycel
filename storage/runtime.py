@@ -201,6 +201,16 @@ def build_sandbox_monitor_repo(
     return SupabaseSandboxMonitorRepo(client)
 
 
+def resolve_runtime_health_monitor_db_path(*, db_path: str | Path | None = None) -> Path | None:
+    if current_storage_strategy() == "supabase":
+        return None
+    if db_path is not None:
+        return Path(db_path)
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
+    return resolve_role_db_path(SQLiteDBRole.SANDBOX)
+
+
 def build_runtime_health_monitor_repo(
     *,
     db_path: str | Path | None = None,
@@ -214,7 +224,7 @@ def build_runtime_health_monitor_repo(
         )
     from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 
-    return SQLiteSandboxMonitorRepo(db_path=db_path)
+    return SQLiteSandboxMonitorRepo(db_path=resolve_runtime_health_monitor_db_path(db_path=db_path))
 
 
 def build_provider_event_repo(

@@ -9,6 +9,7 @@ def test_monitor_service_no_longer_imports_storage_factory_or_sqlite_repos() -> 
     source = inspect.getsource(monitor_service)
 
     assert "backend.web.core.storage_factory" not in source
+    assert "storage.providers.sqlite.kernel" not in source
     assert "storage.providers.sqlite.chat_session_repo" not in source
     assert "storage.providers.sqlite.lease_repo" not in source
     assert "storage.providers.sqlite.sandbox_monitor_repo" not in source
@@ -784,7 +785,7 @@ def test_runtime_health_snapshot_reports_sqlite_contract_under_explicit_sqlite(m
     db_path.write_text("")
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "sqlite")
     monkeypatch.setattr(monitor_service, "make_runtime_health_monitor_repo", lambda db_path=None: FakeRepo())
-    monkeypatch.setattr(monitor_service, "resolve_role_db_path", lambda role: db_path)
+    monkeypatch.setattr(monitor_service, "resolve_runtime_health_monitor_db_path", lambda: db_path)
     monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
     monkeypatch.setattr(monitor_service, "load_all_sessions", lambda _managers: [])
 
@@ -799,3 +800,36 @@ def test_runtime_health_snapshot_reports_sqlite_contract_under_explicit_sqlite(m
             "lease_events": 6,
         },
     }
+
+
+def test_runtime_health_snapshot_sqlite_path_comes_from_runtime_builder(monkeypatch, tmp_path):
+    class FakeRepo:
+        def count_rows(self, _tables):
+            return {
+                "chat_sessions": 7,
+                "sandbox_leases": 8,
+                "lease_events": 9,
+            }
+
+        def close(self):
+            return None
+
+    db_path = tmp_path / "sandbox.db"
+    db_path.write_text("")
+    captured: dict[str, object] = {}
+
+    def _build_runtime_health_monitor_repo(*, db_path=None):
+        captured["db_path"] = db_path
+        return FakeRepo()
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "sqlite")
+    monkeypatch.setattr(monitor_service, "make_runtime_health_monitor_repo", _build_runtime_health_monitor_repo)
+    monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
+    monkeypatch.setattr(monitor_service, "load_all_sessions", lambda _managers: [])
+    monkeypatch.setattr(monitor_service, "os", __import__("os"))
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(db_path))
+
+    payload = monitor_service.runtime_health_snapshot()
+
+    assert captured["db_path"] is None
+    assert payload["db"]["path"] == str(db_path)
