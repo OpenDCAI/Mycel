@@ -168,6 +168,7 @@ created: 2026-04-09
   - failure path 不再裸抛异常后结束
   - 现在会复用 `_record_provider_error(..., source=f\"{source}.destroy\")`
   - 所以 `last_error / needs_refresh / provider.error` 也保持 parity
+  - 即使 remote destroy 已成功、后置 strategy write 再失败，也会先保留 `destroyed / detached / expired` 的内存 truth，再把 error 落账
 - 这刀当前没有碰：
   - `intent.pause`
   - `intent.resume`

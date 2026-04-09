@@ -556,6 +556,12 @@ class SQLiteLease(SandboxLease):
                 raise RuntimeError(f"Failed to destroy lease {self.lease_id}: {exc}") from exc
             if not ok:
                 raise RuntimeError(f"Failed to destroy lease {self.lease_id}")
+        self.desired_state = "destroyed"
+        self._set_observed_state("detached", reason="intent.destroy")
+        self.status = "expired"
+        self.last_error = None
+        self.needs_refresh = False
+        self.refresh_hint_at = None
 
         repo = _make_lease_repo(self.db_path)
         event_repo = _make_provider_event_repo()

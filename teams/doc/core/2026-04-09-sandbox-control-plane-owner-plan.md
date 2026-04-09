@@ -271,6 +271,7 @@ completed fourth transition cut:
 - intent.destroy now uses strategy repos under supabase
 - destroy path keeps lease-level lock + reload before mutation
 - destroy failures now reuse provider.error persistence/event parity
+- post-destroy strategy write failures still preserve destroy-state truth before error persistence
 
 remaining wider transitions:
 - intent.pause / intent.resume
