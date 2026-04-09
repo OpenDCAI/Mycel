@@ -491,10 +491,11 @@ def _create_thread_sandbox_resources(
     from datetime import datetime
 
     from backend.web.core.config import SANDBOX_VOLUME_ROOT
-    from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo
     from backend.web.utils.helpers import _get_container
     from sandbox.volume_source import HostVolume
     from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+    from storage.runtime import build_lease_repo as make_lease_repo
+    from storage.runtime import build_terminal_repo as make_terminal_repo
 
     sandbox_db = resolve_role_db_path(SQLiteDBRole.SANDBOX)
     now_str = datetime.now().isoformat()
