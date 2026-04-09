@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from sandbox.chat_session import ChatSession, ChatSessionPolicy
@@ -10,6 +11,13 @@ from sandbox.manager import (
     resolve_existing_lease_cwd,
 )
 from sandbox.terminal import AbstractTerminal, TerminalState
+
+
+def test_sandbox_manager_no_longer_imports_storage_factory() -> None:
+    manager_source = Path("sandbox/manager.py").read_text()
+
+    assert "backend.web.core.storage_factory" not in manager_source
+    assert "storage.runtime" in manager_source
 
 
 class _FakeTerminalRepo:

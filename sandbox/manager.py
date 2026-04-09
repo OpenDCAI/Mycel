@@ -10,7 +10,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from backend.web.core.storage_factory import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
@@ -20,7 +19,10 @@ from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.runtime import build_chat_session_repo as make_chat_session_repo
+from storage.runtime import build_lease_repo as make_lease_repo
 from storage.runtime import build_storage_container
+from storage.runtime import build_terminal_repo as make_terminal_repo
 
 logger = logging.getLogger(__name__)
 
