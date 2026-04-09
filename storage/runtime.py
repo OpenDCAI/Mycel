@@ -185,6 +185,19 @@ def build_sandbox_monitor_repo(
     return SupabaseSandboxMonitorRepo(client)
 
 
+def build_provider_event_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    ).provider_event_repo()
+
+
 def list_resource_snapshots(
     lease_ids: list[str],
     *,

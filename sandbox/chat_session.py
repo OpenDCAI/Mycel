@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
+from sandbox.control_plane_repos import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from sandbox.lifecycle import (
     ChatSessionState,
     assert_chat_session_transition,
@@ -184,9 +185,7 @@ class ChatSessionManager:
         if chat_session_repo:
             self._repo = chat_session_repo
         else:
-            from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
-
-            self._repo = SQLiteChatSessionRepo(db_path=db_path)
+            self._repo = make_chat_session_repo(db_path=self.db_path)
         self._terminal_repo = terminal_repo
         self._lease_repo = lease_repo
 
@@ -225,9 +224,7 @@ class ChatSessionManager:
             _term_repo = self._terminal_repo
             own_term_repo = _term_repo is None
             if _term_repo is None:
-                from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-
-                _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
+                _term_repo = make_terminal_repo(db_path=self.db_path)
             try:
                 _term_row = _term_repo.get_active(thread_id)
             finally:
@@ -257,9 +254,7 @@ class ChatSessionManager:
         _term_repo = self._terminal_repo
         own_term_repo = _term_repo is None
         if _term_repo is None:
-            from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-
-            _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
+            _term_repo = make_terminal_repo(db_path=self.db_path)
         try:
             _term_row = _term_repo.get_by_id(row["terminal_id"])
         finally:
@@ -269,9 +264,7 @@ class ChatSessionManager:
         _lease_repo = self._lease_repo
         own_lease_repo = _lease_repo is None
         if _lease_repo is None:
-            from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-
-            _lease_repo = SQLiteLeaseRepo(db_path=self.db_path)
+            _lease_repo = make_lease_repo(db_path=self.db_path)
         try:
             _lease_row = _lease_repo.get(row["lease_id"])
         finally:

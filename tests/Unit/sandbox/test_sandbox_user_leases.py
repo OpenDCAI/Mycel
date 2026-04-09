@@ -5,10 +5,12 @@ from backend.web.services import sandbox_service
 
 
 def test_sandbox_service_no_longer_imports_storage_factory() -> None:
-    service_source = Path("backend/web/services/sandbox_service.py").read_text()
+    service_source = Path("backend/web/services/sandbox_service.py").read_text(encoding="utf-8")
 
     assert "backend.web.core.storage_factory" not in service_source
     assert "storage.runtime" in service_source
+    assert "storage.providers.sqlite.kernel" not in service_source
+    assert "resolve_role_db_path" not in service_source
 
 
 class _FakeMonitorRepo:

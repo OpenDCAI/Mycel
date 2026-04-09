@@ -1,10 +1,12 @@
 """Session management for agent thread persistence"""
 
 import json
+import os
 from pathlib import Path
 
 from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
 from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
+from storage.runtime import build_storage_container
 
 
 class SessionManager:
@@ -54,6 +56,26 @@ class SessionManager:
             if data.get("last_thread_id") == thread_id:
                 data["last_thread_id"] = threads[0] if threads else None
             self.session_file.write_text(json.dumps(data, indent=2))
+
+        if os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase":
+            try:
+                container = build_storage_container()
+
+                repo = container.checkpoint_repo()
+                try:
+                    repo.delete_thread_data(thread_id)
+                finally:
+                    repo.close()
+
+                file_repo = container.file_operation_repo()
+                try:
+                    file_repo.delete_thread_operations(thread_id)
+                finally:
+                    file_repo.close()
+                return True
+            except Exception as e:
+                print(f"[SessionManager] Error deleting thread from storage container: {e}")
+                return False
 
         if self.db_path.exists():
             try:

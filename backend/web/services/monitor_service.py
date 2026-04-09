@@ -1069,7 +1069,9 @@ def runtime_health_snapshot() -> dict[str, Any]:
         db_exists = db_path.exists()
         db_payload = {"path": str(db_path), "exists": db_exists, "counts": tables}
         if db_exists:
-            repo = make_sandbox_monitor_repo()
+            from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+
+            repo = SQLiteSandboxMonitorRepo(db_path=db_path)
             try:
                 tables = repo.count_rows(list(tables))
             finally:
