@@ -124,6 +124,8 @@ def test_threads_router_sandbox_bootstrap_no_longer_imports_storage_factory() ->
     threads_source = Path("backend/web/routers/threads.py").read_text(encoding="utf-8")
 
     assert "from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo" not in threads_source
+    assert "resolve_role_db_path" not in threads_source
+    assert "sandbox.control_plane_repos" in threads_source
 
 
 def _require_await_kwargs(mock: AsyncMock) -> dict[str, Any]:

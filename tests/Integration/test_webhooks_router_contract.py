@@ -11,7 +11,9 @@ def test_webhooks_router_no_longer_imports_sqlite_lease_repo() -> None:
     source = inspect.getsource(webhooks)
 
     assert "storage.providers.sqlite.lease_repo" not in source
+    assert "storage.providers.sqlite.kernel" not in source
     assert "storage.runtime" in source
+    assert "sandbox.control_plane_repos" in source
 
 
 @pytest.mark.asyncio
@@ -67,5 +69,79 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
             "event_type": "provider.updated",
             "payload": {"instance_id": "inst-1", "event": "provider.updated"},
             "matched_lease_id": None,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lease(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    class _LeaseRepo:
+        def find_by_instance(self, *, provider_name: str, instance_id: str):
+            assert provider_name == "local"
+            assert instance_id == "inst-2"
+            return {"lease_id": "lease-1"}
+
+        def close(self) -> None:
+            return None
+
+    class _EventRepo:
+        def record(self, **_kwargs):
+            return None
+
+        def close(self) -> None:
+            return None
+
+    class _Container:
+        def provider_event_repo(self) -> _EventRepo:
+            return _EventRepo()
+
+    class _Lease:
+        lease_id = "lease-1"
+
+        def __init__(self) -> None:
+            self.applied: list[dict[str, object]] = []
+
+        def apply(self, provider, *, event_type: str, source: str, payload: dict[str, object]) -> None:
+            self.applied.append(
+                {
+                    "provider": provider,
+                    "event_type": event_type,
+                    "source": source,
+                    "payload": payload,
+                }
+            )
+
+    class _Manager:
+        def __init__(self) -> None:
+            self.provider = object()
+
+    expected_db_path = tmp_path / "sandbox.db"
+    lease = _Lease()
+
+    monkeypatch.setattr(webhooks, "resolve_sandbox_db_path", lambda: expected_db_path, raising=False)
+    monkeypatch.setattr(webhooks, "make_lease_repo", lambda: _LeaseRepo())
+    monkeypatch.setattr(webhooks, "_get_container", lambda: _Container())
+    monkeypatch.setattr(webhooks, "init_providers_and_managers", lambda: ({}, {"local": _Manager()}))
+
+    def _fake_lease_from_row(row, db_path):
+        assert row == {"lease_id": "lease-1"}
+        assert db_path == expected_db_path
+        return lease
+
+    monkeypatch.setattr(webhooks, "lease_from_row", _fake_lease_from_row)
+
+    payload = await webhooks.ingest_provider_webhook(
+        "local",
+        {"instance_id": "inst-2", "event": "provider.running"},
+    )
+
+    assert payload["matched"] is True
+    assert payload["lease_id"] == "lease-1"
+    assert lease.applied == [
+        {
+            "provider": lease.applied[0]["provider"],
+            "event_type": "observe.status",
+            "source": "webhook",
+            "payload": {"status": "running", "raw_event_type": "provider.running"},
         }
     ]

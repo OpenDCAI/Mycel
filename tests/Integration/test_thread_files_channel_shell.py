@@ -28,6 +28,8 @@ def test_helpers_no_longer_import_storage_factory() -> None:
 
     assert "backend.web.core.storage_factory" not in helpers_source
     assert "storage.runtime" in helpers_source
+    assert "resolve_role_db_path" not in helpers_source
+    assert "sandbox.control_plane_repos" in helpers_source
 
 
 @pytest.mark.asyncio
