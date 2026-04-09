@@ -9,7 +9,7 @@ from backend.web.services.sandbox_service import init_providers_and_managers
 from backend.web.utils.helpers import _get_container, extract_webhook_instance_id
 from sandbox.lease import lease_from_row
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.runtime import build_lease_repo as make_lease_repo
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
@@ -24,11 +24,11 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
         raise HTTPException(400, "Webhook payload missing instance/session id")
 
     event_type = str(payload.get("event") or payload.get("type") or "unknown")
-    lease_repo = SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
+    lease_repo = make_lease_repo()
     event_repo = _get_container().provider_event_repo()
     try:
         lease_row = await asyncio.to_thread(lease_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
-        lease = lease_from_row(lease_row, lease_repo.db_path) if lease_row else None
+        lease = lease_from_row(lease_row, SANDBOX_DB_PATH) if lease_row else None
         matched_lease_id = lease.lease_id if lease else None
 
         # @@@webhook-invalidation-only - Webhook is optimization only: persist event + mark lease stale.
