@@ -67,6 +67,33 @@ def build_tool_task_repo(
     ).tool_task_repo()
 
 
+def build_panel_task_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        public_supabase_client_factory="backend.web.core.supabase_factory:create_public_supabase_client",
+        **kwargs,
+    ).panel_task_repo()
+
+
+def build_cron_job_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    ).cron_job_repo()
+
+
 def build_agent_registry_repo(
     *,
     supabase_client: Any | None = None,

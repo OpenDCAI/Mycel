@@ -2,11 +2,11 @@
 
 from typing import Any
 
-from backend.web.core.storage_factory import make_panel_task_repo
+from storage.runtime import build_panel_task_repo
 
 
 def _repo() -> Any:
-    return make_panel_task_repo()
+    return build_panel_task_repo()
 
 
 def list_tasks(owner_user_id: str | None = None, repo: Any = None) -> list[dict[str, Any]]:

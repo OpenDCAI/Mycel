@@ -180,7 +180,7 @@ def test_task_service_prefers_injected_repos_over_storage_factory(monkeypatch: p
             seen["get"] = (task_id, owner_user_id)
             return {"id": task_id}
 
-    monkeypatch.setattr(task_service, "_repo", lambda: (_ for _ in ()).throw(AssertionError("unexpected storage factory repo")))
+    monkeypatch.setattr(task_service, "_repo", lambda: (_ for _ in ()).throw(AssertionError("unexpected runtime repo")))
     items = task_service.list_tasks(owner_user_id="user-1", repo=_FakeRepo())
     item = task_service.get_task("t-1", owner_user_id="user-1", repo=_FakeRepo())
 
@@ -236,7 +236,7 @@ def test_cron_job_service_prefers_injected_repo_over_storage_factory(monkeypatch
             seen["create"] = (name, cron_expression, fields)
             return {"id": "job-1", "name": name}
 
-    monkeypatch.setattr(cron_job_service, "_repo", lambda: (_ for _ in ()).throw(AssertionError("unexpected storage factory repo")))
+    monkeypatch.setattr(cron_job_service, "_repo", lambda: (_ for _ in ()).throw(AssertionError("unexpected runtime repo")))
 
     jobs = cron_job_service.list_cron_jobs(owner_user_id="user-1", repo=_FakeRepo())
     created = cron_job_service.create_cron_job(
@@ -250,6 +250,18 @@ def test_cron_job_service_prefers_injected_repo_over_storage_factory(monkeypatch
     assert jobs == [{"id": "job-1"}]
     assert seen["create"] == ("Nightly", "0 0 * * *", {"owner_user_id": "user-1"})
     assert created == {"id": "job-1", "name": "Nightly"}
+
+
+def test_panel_and_cron_services_no_longer_import_storage_factory() -> None:
+    import inspect
+
+    task_source = inspect.getsource(task_service)
+    cron_source = inspect.getsource(cron_job_service)
+
+    assert "backend.web.core.storage_factory" not in task_source
+    assert "backend.web.core.storage_factory" not in cron_source
+    assert "storage.runtime" in task_source
+    assert "storage.runtime" in cron_source
 
 
 @pytest.mark.asyncio
