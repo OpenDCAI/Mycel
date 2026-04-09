@@ -28,6 +28,7 @@ from sandbox.lifecycle import (
     parse_lease_instance_state,
 )
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -82,9 +83,8 @@ def _use_supabase_storage() -> bool:
 
 
 def _make_lease_repo(db_path: Path | None = None):
-    from backend.web.core.storage_factory import make_lease_repo
-
-    return make_lease_repo(db_path=db_path)
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return SQLiteLeaseRepo(db_path=target_db)
 
 
 @dataclass
