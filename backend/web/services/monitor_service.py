@@ -8,26 +8,17 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
 from eval.storage import TrajectoryStore
-from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.runtime import build_chat_session_repo as make_chat_session_repo
+from storage.runtime import build_lease_repo as make_lease_repo
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
+
 
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
 # ---------------------------------------------------------------------------
-
-
-def make_chat_session_repo() -> SQLiteChatSessionRepo:
-    return SQLiteChatSessionRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-
-
-def make_lease_repo() -> SQLiteLeaseRepo:
-    return SQLiteLeaseRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-
-
 def make_eval_store() -> TrajectoryStore:
     return TrajectoryStore()
 

@@ -94,6 +94,32 @@ def build_cron_job_repo(
     ).cron_job_repo()
 
 
+def build_lease_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    ).lease_repo()
+
+
+def build_chat_session_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    ).chat_session_repo()
+
+
 def build_agent_registry_repo(
     *,
     supabase_client: Any | None = None,
