@@ -2,11 +2,11 @@
 
 from typing import Any
 
-from backend.web.core.storage_factory import make_cron_job_repo
+from storage.runtime import build_cron_job_repo
 
 
 def _repo() -> Any:
-    return make_cron_job_repo()
+    return build_cron_job_repo()
 
 
 def list_cron_jobs(owner_user_id: str | None = None, repo: Any = None) -> list[dict[str, Any]]:
