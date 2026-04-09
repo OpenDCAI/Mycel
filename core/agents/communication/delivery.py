@@ -11,16 +11,47 @@ import functools
 import logging
 from typing import Any
 
+from core.runtime.middleware.monitor import AgentState
 from storage.contracts import UserRow
 
 logger = logging.getLogger(__name__)
 
 
 def _resolve_recipient_thread_id(app: Any, recipient_id: str) -> str | None:
+    active_thread_id = _resolve_unique_active_thread_id(app, recipient_id)
+    if active_thread_id is not None:
+        return active_thread_id
     thread = app.state.thread_repo.get_by_user_id(recipient_id)
     if thread is None:
         return None
     return thread["id"]
+
+
+def _resolve_unique_active_thread_id(app: Any, recipient_id: str) -> str | None:
+    thread_repo = getattr(app.state, "thread_repo", None)
+    if thread_repo is None or not hasattr(thread_repo, "list_by_agent_user"):
+        return None
+
+    pool = getattr(app.state, "agent_pool", {}) or {}
+    active_thread_ids: list[str] = []
+    for thread in thread_repo.list_by_agent_user(recipient_id):
+        thread_id = str(thread.get("id") or "").strip()
+        if not thread_id:
+            continue
+        # @@@active-thread-delivery-precedence - fresh chat delivery should prefer the
+        # recipient's unique active thread over a stale default-main thread with dirty history.
+        for pool_key, agent in pool.items():
+            if not str(pool_key).startswith(f"{thread_id}:"):
+                continue
+            runtime = getattr(agent, "runtime", None)
+            if getattr(runtime, "current_state", None) == AgentState.ACTIVE:
+                active_thread_ids.append(thread_id)
+                break
+
+    unique_active_thread_ids = list(dict.fromkeys(active_thread_ids))
+    if len(unique_active_thread_ids) == 1:
+        return unique_active_thread_ids[0]
+    return None
 
 
 def make_chat_delivery_fn(app: Any):

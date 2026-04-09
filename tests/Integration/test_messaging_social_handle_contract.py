@@ -7,6 +7,7 @@ import pytest
 
 from backend.web.utils.serializers import avatar_url
 from core.agents.communication import delivery as delivery_module
+from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope
 from messaging.delivery.actions import DeliveryAction
@@ -1152,3 +1153,62 @@ async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and
     assert started == [("thread-1", "chat-1", "thread-user-1")]
     assert unread_calls == [("chat-1", "thread-user-1")]
     assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
+
+
+@pytest.mark.asyncio
+async def test_async_deliver_prefers_unique_active_child_thread_over_default_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[tuple[str, str, str]] = []
+    unread_calls: list[tuple[str, str]] = []
+    enqueued: list[tuple[str, str, str | None, str | None]] = []
+
+    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
+        return SimpleNamespace(id=f"agent-for-{thread_id}")
+
+    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "core.runtime.middleware.queue.formatters.format_chat_notification",
+        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "thread-user-1"} if uid == "thread-user-1" else None,
+                list_by_agent_user=lambda uid: (
+                    [
+                        {"id": "thread-main", "agent_user_id": "thread-user-1", "is_main": True, "branch_index": 0},
+                        {"id": "thread-child", "agent_user_id": "thread-user-1", "is_main": False, "branch_index": 1},
+                    ]
+                    if uid == "thread-user-1"
+                    else []
+                ),
+            ),
+            agent_pool={
+                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
+                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
+            },
+            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
+            messaging_service=SimpleNamespace(count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or 3),
+            queue_manager=SimpleNamespace(
+                enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
+                    (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
+                )
+            ),
+        )
+    )
+
+    await delivery_module._async_deliver(
+        app,
+        "thread-user-1",
+        cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
+        "Human",
+        "chat-2",
+        "human-user-1",
+        signal="ping",
+    )
+
+    assert started == [("thread-child", "chat-2", "thread-user-1")]
+    assert unread_calls == [("chat-2", "thread-user-1")]
+    assert enqueued == [("Human|chat-2|3|ping", "thread-child", "human-user-1", "Human")]
