@@ -9,16 +9,16 @@ issue: 191
 
 # Storage Repo Abstraction Unification
 
-目标：把 `#191` 里仍残留的 `backend/web/core/storage_factory.py` 临时桥逐簇收回正式主线，让 repo 选择统一落在 `storage/contracts.py -> storage/container.py -> storage.runtime / explicit injection / runtime-owned sqlite owner`，而不是继续在 web/service/helper 边角各自 new provider。
+目标：把 `#191` 里仍残留的 `backend/web/core/storage_factory.py` 临时桥逐簇收回正式主线，让 issue 点名的 bypass repos 回到 `storage/contracts.py -> storage/container.py -> backend/web/core/lifespan.py / storage.runtime / explicit injection` 这条正式 composition root，而不是继续在 web/service/helper 边角各自 new provider。
 
 ## 当前 ruling
 
 - `CP01` 到 `CP06` 已全部实现
 - `backend/web/core/storage_factory.py` 已删除
 - fresh source scan 下只剩 negative assertions，不再有 live production/test imports
-- closure proof 也纠正了一个更准确的边界：
-  - `storage.runtime` 负责 Supabase/runtime builder seam
-  - `sandbox/lease.py` 与 `sandbox/manager.py` 这类 `db_path` holder，则保留 runtime-owned sqlite constructor seam
+- 这条任务的 closure 只证明 issue `#191` 这簇 bypass path 已回到正式 composition root
+- 它不自动证明整个 sandbox/control-plane 已达到“无需 SQLite 也能独立跑”的最终架构
+- `sandbox/lease.py` / `sandbox/manager.py` 这类 `db_path` caller 在本轮里只是为了删桥做最小收口；是否继续推进到完整 strategy/container 语义，不在 `#191` 的 closure 里宣称完成
 
 ## 子任务
 
@@ -37,4 +37,5 @@ issue: 191
 - 不继续给 `storage_factory.py` 添能力
 - 不把 `CP02` 和 `monitor_service` 混成一刀
 - 不顺手改 monitor/resource payload 语义
+- 不把 sandbox/control-plane stopgap 写成 `#191` 的最终架构胜利
 - 每一刀只搬一小簇 callsite，然后回到真实 proof

@@ -20,6 +20,16 @@ created: 2026-04-09
 
 所以 `CP06` 现在已经 closure：`storage_factory.py` 已删除，测试面已迁移/删除，fresh source scan 只剩 negative assertions，没有 live import。
 
+但这张卡的 closure 只证明：
+
+- issue `#191` 这簇 bypass path 已经不再依赖 `storage_factory.py`
+- 正式 composition root 重新成为主线
+
+它不应该被过度表述成：
+
+- “整个系统已经完全摆脱 SQLite”
+- 或 “sandbox/control-plane 已经天然达到 provider parity”
+
 ## 已完成事实
 
 - 删除 [backend/web/core/storage_factory.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/backend/web/core/storage_factory.py)
@@ -28,8 +38,8 @@ created: 2026-04-09
 - 更新 [tests/Integration/test_storage_repo_abstraction_unification.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/tests/Integration/test_storage_repo_abstraction_unification.py)，直接证明文件已删除且 runtime builders 仍成立
 - fresh source scan 结果表明 `backend/web/core/storage_factory` 只剩 negative assertions，不再有 live production/test imports
 - closure proof 过程中压出并修正了一条旧误判：
-  - `sandbox/lease.py` 和 `sandbox/manager.py` 的 `db_path` lifecycle 不该强行并入 Supabase-only `storage.runtime`
-  - 它们最终保留为 runtime-owned sqlite constructor seam
+  - `sandbox/lease.py` 和 `sandbox/manager.py` 的 `db_path` lifecycle 不能被粗暴并入当前 `storage.runtime`
+  - 这只说明当前 builder seam 不足以承接它们，不等于它们的最终架构目标永远停在 sqlite constructor
 
 ## 证据
 
@@ -52,3 +62,4 @@ created: 2026-04-09
 
 - `CP06` 到这里 closure
 - `#191` 的真实剩余动作不再是代码 slice，而是 stacked PR 审核/合并与最终 issue closure
+- 如果后续要追求“整个系统在 `LEON_STORAGE_STRATEGY=supabase` 下无需 SQLite 也能独立运行”，那是新的 architecture lane，不应伪装成 `#191` 已自然完成
