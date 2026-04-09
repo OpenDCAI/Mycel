@@ -63,7 +63,7 @@ created: 2026-04-09
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | done |
 | 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | done |
 | 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | done |
-| 05 | [Closure Proof](subtask-05-closure-proof.md) | 真实证明系统在 Supabase 下可独立运行，SQLite 不再是隐含前提 | open |
+| 05 | [Closure Proof](subtask-05-closure-proof.md) | 真实证明系统在 Supabase 下可独立运行，SQLite 不再是隐含前提 | in_progress |
 
 ## 边界
 
@@ -87,12 +87,9 @@ created: 2026-04-09
 ## Default Next Move
 
 - `CP05 Closure Proof`
-  - `CP04` 已完成：
-    - monitor read fallback 已切到 Supabase-first
-    - startup queue / summary wiring 已接回 runtime storage container
-    - README / quickstart / configuration / deployment 的 documented default 已对齐
-  - 下一步要回答的已经不是“默认是什么”
-    - 而是关键运行路径在 Supabase contract 下是否真的独立成立
-  - 重点残余：
-    - env-less sandbox control-plane sqlite ownership
-    - 任何仍要求本地 sqlite truth 才能跑通的 closure blocker
+  - `CP05a` 已完成第一条 caller proof：
+    - 显式 `LEON_STORAGE_STRATEGY=supabase` 下，默认 sandbox control-plane repo construction 已切回 strategy seam
+    - 显式自定义 `db_path` 仍保持 sqlite-owned
+  - 下一步不要扩成“大而全 closure”
+    - 应继续核对 env-less sandbox control-plane residual
+    - 以及任何仍要求本地 sqlite truth 才能跑通的 default boot blocker
