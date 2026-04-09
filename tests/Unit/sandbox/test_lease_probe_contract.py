@@ -74,9 +74,11 @@ class _FakeLeaseRepo:
 
 
 def test_sandbox_lease_no_longer_imports_storage_factory() -> None:
-    lease_source = Path("sandbox/lease.py").read_text()
+    lease_source = Path("sandbox/lease.py").read_text(encoding="utf-8")
 
     assert "backend.web.core.storage_factory" not in lease_source
+    assert "sandbox.control_plane_repos" in lease_source
+    assert "SQLiteLeaseRepo" not in lease_source
 
 
 def test_ensure_active_instance_persists_strategy_lease_before_probe_failure(monkeypatch):

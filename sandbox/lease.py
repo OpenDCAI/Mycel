@@ -22,13 +22,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
+from sandbox.control_plane_repos import make_lease_repo as _make_lease_repo
+from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.lifecycle import (
     LeaseInstanceState,
     assert_lease_instance_transition,
     parse_lease_instance_state,
 )
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.providers.sqlite.kernel import connect_sqlite
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -80,12 +81,6 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 def _use_supabase_storage() -> bool:
     return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase"
-
-
-def _make_lease_repo(db_path: Path | None = None):
-    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    return SQLiteLeaseRepo(db_path=target_db)
-
 
 @dataclass
 class SandboxInstance:
@@ -226,7 +221,7 @@ class SQLiteLease(SandboxLease):
             refresh_hint_at=refresh_hint_at,
             volume_id=volume_id,
         )
-        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self.db_path = resolve_sandbox_db_path(db_path)
         self._detached_instance: SandboxInstance | None = None
 
     def _instance_lock(self) -> threading.RLock:

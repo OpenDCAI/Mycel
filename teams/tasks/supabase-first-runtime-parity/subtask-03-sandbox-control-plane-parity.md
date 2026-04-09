@@ -41,6 +41,12 @@ created: 2026-04-09
     - `All checks passed!`
   - `uv run python -m py_compile sandbox/control_plane_repos.py sandbox/manager.py sandbox/chat_session.py tests/Unit/sandbox/test_manager_repo_strategy.py tests/Unit/core/test_runtime.py`
     - `exit 0`
+  - `uv run pytest -q tests/Unit/sandbox/test_lease_probe_contract.py tests/Unit/core/test_capability_async.py -k 'sandbox_lease or ensure_active_instance or local_sandbox_rebuilds_stale_closed_capability_before_execute_async'`
+    - `3 passed, 5 deselected`
+  - `uv run ruff check sandbox/lease.py tests/Unit/sandbox/test_lease_probe_contract.py tests/Unit/core/test_capability_async.py`
+    - `All checks passed!`
+  - `uv run python -m py_compile sandbox/lease.py tests/Unit/sandbox/test_lease_probe_contract.py tests/Unit/core/test_capability_async.py`
+    - `exit 0`
 
 ## Remaining
 
@@ -49,13 +55,17 @@ created: 2026-04-09
   - `sandbox.chat_session.py`
   - 两者不再各自直接 import `SQLiteChatSessionRepo / SQLiteLeaseRepo / SQLiteTerminalRepo`
   - 当前统一改走 `sandbox.control_plane_repos`
+- 第三轮已完成：
+  - `sandbox.lease.py`
+  - 不再直接 import `SQLiteLeaseRepo`
+  - lease-store construction 也已收口到 `sandbox.control_plane_repos`
 - 这说明 control-plane 的 sqlite repo construction 已经收口成单一 seam，但更深的 lease-store / sqlite connection contract 仍然存在
 
 ## Default Next Move
 
-- 优先继续收窄 `sandbox/lease.py`
+- 优先判断 `sandbox/lease.py` 里 `connect_sqlite / _persist_snapshot / _persist_lease_metadata / _append_event` 这一组 state-machine writes
 - 不直接改 `monitor_service.py`
-- 下一刀要先回答：`sandbox.lease.py` 里哪些 lease-store contract 是真正必须保留的 local runtime persistence，哪些才该提升到 strategy/container seam
+- 下一刀要先回答：这些 lease state-machine writes 哪些是真正必须保留的 local runtime persistence，哪些才该提升到 strategy/container seam
 
 ## Stopline
 
