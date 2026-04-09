@@ -11,6 +11,8 @@ import json
 import logging
 
 from backend.web.utils.helpers import _get_container
+from storage.runtime import build_lease_repo as make_lease_repo
+from storage.runtime import build_terminal_repo as make_terminal_repo
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,6 @@ def _resolve_volume_source(thread_id: str):
     This is the application-layer entry point. Uses sandbox-layer stores
     to walk: thread → terminal → lease → volume_id → sandbox_volumes.
     """
-    from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo
     from sandbox.volume_source import deserialize_volume_source
 
     terminal_repo = make_terminal_repo()

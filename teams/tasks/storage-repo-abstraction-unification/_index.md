@@ -16,7 +16,7 @@ issue: 191
 - `storage_factory.py` 仍是 live production bridge
 - `CP01` 已完成：`task_service / cron_job_service` 默认路径已离开 `storage_factory.py`
 - `CP02` 已完成：`resource_service / resource_projection_service` 已离开 `storage_factory.py`
-- 当前最危险 residual 是 `monitor_service` 的 split-brain correctness seam
+- 当前最危险 residual 已从 `monitor_service` 推进到 thread/file/webhook helper 与 runtime-owned helper 残留
 
 ## 子任务
 
@@ -26,7 +26,7 @@ issue: 191
 | 01 | [Web Service Injection Cut](subtask-01-web-service-injection-cut.md) | 先收 `task_service / cron_job_service` | done |
 | 02 | [Resource Surfaces Cut](subtask-02-resource-surfaces-cut.md) | 再收 `resource_service / resource_projection_service` | done |
 | 03 | [Monitor Operator Cut](subtask-03-monitor-operator-cut.md) | 单独收 `monitor_service` split-brain seam | done |
-| 04 | [Web Thread/File Helper Cut](subtask-04-web-thread-file-helper-cut.md) | 收 thread/file/webhook helpers | open |
+| 04 | [Web Thread/File Helper Cut](subtask-04-web-thread-file-helper-cut.md) | 先收 file/helper slice，再处理 threads/webhooks | in_progress |
 | 05 | [Sandbox Runtime Owner Cut](subtask-05-sandbox-runtime-owner-cut.md) | 最后处理 runtime-owned builder residuals | open |
 | 06 | [Factory Deletion And Closure Proof](subtask-06-factory-deletion-and-closure-proof.md) | 删除 `storage_factory.py` 并做 closure proof | open |
 
