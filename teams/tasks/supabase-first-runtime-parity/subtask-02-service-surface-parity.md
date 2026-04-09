@@ -1,6 +1,6 @@
 ---
 title: Service Surface Parity
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -28,8 +28,11 @@ created: 2026-04-09
 
 ## Remaining
 
-- service surface 里是否还存在其他 SQLite-only caller 尚未重新分类
-- 如果剩余 caller 已不再是 service seam，就应转入 `CP03 Sandbox Control Plane Parity`
+- 当前 `backend/web/services` 里的剩余 SQLite residual 只剩：
+  - `monitor_service.py`
+  - `sandbox_service.py`
+- 两者都已不再是单纯的 service repo construction seam，而更接近 sandbox/monitor control-plane owner
+- 所以下一阶段应转入 `CP03 Sandbox Control Plane Parity`
 
 ## Stopline
 

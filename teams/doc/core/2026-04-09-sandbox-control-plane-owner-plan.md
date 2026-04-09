@@ -1,0 +1,141 @@
+# Sandbox Control-Plane Owner Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Narrow the sandbox control-plane so `backend/web/services/sandbox_service.py` stops owning `sandbox.db` details, then continue toward true Supabase-first parity from the real fused core.
+
+**Architecture:** The first honest cut is not “make SandboxManager Supabase-backed” in one jump. It is to remove `sandbox_service` as an owner of sqlite-kernel details and push that ownership back into `SandboxManager`, then continue by isolating the still-fused `manager + chat_session + sandbox.db` contract.
+
+**Tech Stack:** Python, FastAPI service layer, sandbox runtime/control-plane code, pytest
+
+---
+
+### Task 1: Record the First CP03 Slice
+
+**Files:**
+- Modify: `teams/tasks/supabase-first-runtime-parity/_index.md`
+- Modify: `teams/tasks/supabase-first-runtime-parity/subtask-03-sandbox-control-plane-parity.md`
+- Create: `teams/doc/core/2026-04-09-sandbox-control-plane-owner-plan.md`
+
+- [ ] **Step 1: Record that `sandbox_service.py` is no longer the db-path owner**
+
+Note that the first `CP03` slice only moves `sandbox.db` ownership from `sandbox_service.py` down into `SandboxManager`; it does not claim provider parity is done.
+
+- [ ] **Step 2: Save the remaining fused core**
+
+Document that the remaining control-plane core still lives in:
+
+```text
+sandbox/manager.py
+sandbox/chat_session.py
+```
+
+and that `monitor_service.py` is not part of this first slice.
+
+### Task 2: Write the Failing Test for Service-Level Ownership
+
+**Files:**
+- Modify: `tests/Unit/sandbox/test_sandbox_user_leases.py`
+- Modify: `backend/web/services/sandbox_service.py`
+
+- [ ] **Step 1: Tighten the source-level contract**
+
+Change the existing source assertion test so it requires:
+
+```python
+service_source = Path("backend/web/services/sandbox_service.py").read_text(encoding="utf-8")
+assert "storage.providers.sqlite.kernel" not in service_source
+assert "resolve_role_db_path" not in service_source
+```
+
+- [ ] **Step 2: Run the focused test and watch it fail**
+
+Run:
+
+```bash
+uv run pytest -q tests/Unit/sandbox/test_sandbox_user_leases.py -k 'sandbox_service_no_longer_imports_storage_factory'
+```
+
+Expected:
+- fail because `sandbox_service.py` still imports sqlite kernel directly
+
+- [ ] **Step 3: Make the minimal production change**
+
+Update `backend/web/services/sandbox_service.py` so both manager construction sites become:
+
+```python
+SandboxManager(provider=p)
+```
+
+and remove:
+
+```python
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+SANDBOX_DB_PATH = ...
+```
+
+- [ ] **Step 4: Re-run the focused test to verify green**
+
+Run:
+
+```bash
+uv run pytest -q tests/Unit/sandbox/test_sandbox_user_leases.py -k 'sandbox_service_no_longer_imports_storage_factory'
+```
+
+Expected:
+- pass
+
+### Task 3: Run the Narrow Verification Cluster
+
+**Files:**
+- No additional file changes required
+
+- [ ] **Step 1: Verify service/user-lease/provider-availability behavior still holds**
+
+Run:
+
+```bash
+uv run pytest -q tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py tests/Integration/test_sandbox_router_user_shell.py -k 'sandbox_service or list_user_leases or available_sandbox_types or sandbox_types'
+```
+
+Expected:
+- selected tests pass
+
+- [ ] **Step 2: Run lint and compile checks**
+
+Run:
+
+```bash
+uv run ruff check backend/web/services/sandbox_service.py tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py tests/Integration/test_sandbox_router_user_shell.py
+uv run python -m py_compile backend/web/services/sandbox_service.py tests/Unit/sandbox/test_sandbox_user_leases.py tests/Unit/sandbox/test_sandbox_provider_availability.py tests/Integration/test_sandbox_router_user_shell.py
+```
+
+Expected:
+- `All checks passed!`
+- `exit 0`
+
+### Task 4: Narrow the Real Fused Core Before Another Implementation Cut
+
+**Files:**
+- Read: `sandbox/manager.py`
+- Read: `sandbox/chat_session.py`
+- Modify: `teams/tasks/supabase-first-runtime-parity/subtask-03-sandbox-control-plane-parity.md`
+
+- [ ] **Step 1: Record why `sandbox_service.py` was only the outer shell**
+
+Document that the still-fused owner boundary is:
+
+```text
+SandboxManager
+ChatSessionManager
+SQLite chat_session / lease / terminal repos
+connect_sqlite / sandbox.db contract
+```
+
+- [ ] **Step 2: Declare the next bounded slice**
+
+Nominate one next move only:
+- either `sandbox.manager` repo-construction narrowing
+- or `sandbox.chat_session` storage-contract narrowing
+
+Do not combine them in the same implementation slice until the evidence says they are inseparable.

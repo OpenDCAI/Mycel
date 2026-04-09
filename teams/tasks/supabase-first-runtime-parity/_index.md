@@ -60,8 +60,8 @@ created: 2026-04-09
 |---|--------|------|------|
 | 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 固化 current `dev` 下所有仍依赖 SQLite 的 runtime/service/control-plane 路径 | in_progress |
 | 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | done |
-| 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | in_progress |
-| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | open |
+| 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | done |
+| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | in_progress |
 | 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | open |
 | 05 | [Closure Proof](subtask-05-closure-proof.md) | 真实证明系统在 Supabase 下可独立运行，SQLite 不再是隐含前提 | open |
 
@@ -86,6 +86,7 @@ created: 2026-04-09
 
 ## Default Next Move
 
-- `CP02 Service Surface Parity`
-  - `file_channel_service.py` 这一刀已完成：service surface 不再直连 `SQLiteLeaseRepo` / `SQLiteTerminalRepo`
-  - 下一步继续盘 service surface residual，再决定是继续切 web/service caller，还是转入 `CP03 Sandbox Control Plane Parity`
+- `CP03 Sandbox Control Plane Parity`
+  - `CP02` 已收口：`backend/web/services` 里剩余 SQLite residual 只剩 `monitor_service.py` / `sandbox_service.py`，两者都已更像 control-plane seam
+  - 第一轮已完成：`sandbox_service.py` 不再 import sqlite kernel / 不再自己持有 `SANDBOX_DB_PATH`
+  - 下一步继续收窄 `sandbox.manager / sandbox.chat_session` 这一组真正仍然持有 `sandbox.db` contract 的 control-plane core
