@@ -25,7 +25,7 @@ issue: 191
 | 00 | [Current State & Stopline](subtask-00-current-state-and-stopline.md) | 固化 current `dev` 与 issue 的真实差距 | done |
 | 01 | [Web Service Injection Cut](subtask-01-web-service-injection-cut.md) | 先收 `task_service / cron_job_service` | done |
 | 02 | [Resource Surfaces Cut](subtask-02-resource-surfaces-cut.md) | 再收 `resource_service / resource_projection_service` | done |
-| 03 | [Monitor Operator Cut](subtask-03-monitor-operator-cut.md) | 单独收 `monitor_service` split-brain seam | open |
+| 03 | [Monitor Operator Cut](subtask-03-monitor-operator-cut.md) | 单独收 `monitor_service` split-brain seam | done |
 | 04 | [Web Thread/File Helper Cut](subtask-04-web-thread-file-helper-cut.md) | 收 thread/file/webhook helpers | open |
 | 05 | [Sandbox Runtime Owner Cut](subtask-05-sandbox-runtime-owner-cut.md) | 最后处理 runtime-owned builder residuals | open |
 | 06 | [Factory Deletion And Closure Proof](subtask-06-factory-deletion-and-closure-proof.md) | 删除 `storage_factory.py` 并做 closure proof | open |
@@ -36,4 +36,3 @@ issue: 191
 - 不把 `CP02` 和 `monitor_service` 混成一刀
 - 不顺手改 monitor/resource payload 语义
 - 每一刀只搬一小簇 callsite，然后回到真实 proof
-

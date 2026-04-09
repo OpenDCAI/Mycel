@@ -1,6 +1,17 @@
+import inspect
+
 import pytest
 
 from backend.web.services import monitor_service
+
+
+def test_monitor_service_no_longer_imports_storage_factory_or_sqlite_repos() -> None:
+    source = inspect.getsource(monitor_service)
+
+    assert "backend.web.core.storage_factory" not in source
+    assert "storage.providers.sqlite.chat_session_repo" not in source
+    assert "storage.providers.sqlite.lease_repo" not in source
+    assert "storage.runtime" in source
 
 
 def test_list_leases_exposes_semantic_groups_and_summary(monkeypatch):
