@@ -34,6 +34,18 @@ created: 2026-04-09
     - `SandboxManager(provider=...)` 在显式 Supabase + 默认 sandbox path 下，会用 strategy control-plane repos
     - `SandboxManager(provider=..., db_path=custom)` 在显式 Supabase 下仍保持本地 sqlite repo
 
+## Second Slice
+
+- `storage/session_manager.py`
+  - `delete_thread()` 在显式 `LEON_STORAGE_STRATEGY=supabase` 下不再要求本地 `leon.db` 存在
+  - 现在会通过 `storage.runtime.build_storage_container()` 取得：
+    - `checkpoint_repo()`
+    - `file_operation_repo()`
+- `tests/Unit/storage/test_session_file_operations_cleanup.py`
+  - 新增 caller-proof：
+    - 显式 Supabase 下 thread cleanup 走 runtime container
+    - env-less / sqlite 路径仍保持原有本地行为
+
 ## 证据要求
 
 - 真实产品验证
@@ -47,6 +59,8 @@ created: 2026-04-09
     - `29 passed`
   - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py -k 'sandbox_manager_keeps_default_sandbox_repos_sqlite_owned_when_strategy_missing or sandbox_manager_uses_strategy_control_plane_repos_for_default_sandbox_db_under_supabase or sandbox_manager_keeps_custom_db_path_sqlite_owned_under_supabase'`
     - `3 passed, 10 deselected`
+  - `uv run pytest -q tests/Unit/storage/test_session_file_operations_cleanup.py`
+    - `2 passed`
   - `uv run pytest -q tests/Unit/sandbox/test_sandbox_manager_volume_repo.py`
     - 已包含在上一条 focused batch 中
 - `源码/测试层辅助证据`
@@ -54,6 +68,10 @@ created: 2026-04-09
     - `All checks passed!`
   - `uv run python -m py_compile sandbox/control_plane_repos.py tests/Unit/sandbox/test_manager_repo_strategy.py`
     - `exit 0`
+  - `uv run ruff check storage/session_manager.py tests/Unit/storage/test_session_file_operations_cleanup.py`
+    - pending fresh run for this slice
+  - `uv run python -m py_compile storage/session_manager.py tests/Unit/storage/test_session_file_operations_cleanup.py`
+    - pending fresh run for this slice
   - `git diff --check`
     - `exit 0`
 
@@ -63,6 +81,7 @@ created: 2026-04-09
   - 显式 `LEON_STORAGE_STRATEGY=supabase` 下，默认 sandbox control-plane repo construction 已回到 strategy seam
   - 显式自定义 `db_path` 仍然保留本地 sqlite 语义
   - env-less 时，默认 sandbox control-plane caller 仍然会走本地 sqlite repo truth
+  - 显式 Supabase 下，`SessionManager.delete_thread()` 已不再被本地 `leon.db` existence gate 卡住
 - 这不等于：
   - env-less sandbox control-plane 已经切完
   - queue / summary / other residual 已完成 closure

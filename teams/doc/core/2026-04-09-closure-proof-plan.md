@@ -22,12 +22,25 @@ First bounded slice:
    - prove `SandboxManager(provider=...)` now gets strategy repos under explicit Supabase
    - prove `SandboxManager(provider=..., db_path=custom)` still gets sqlite repos
 
+Second bounded slice:
+
+1. `storage/session_manager.py`
+   - when `LEON_STORAGE_STRATEGY=supabase`, route thread cleanup through runtime container
+   - remove the local `leon.db.exists()` gate from the Supabase path
+2. `tests/Unit/storage/test_session_file_operations_cleanup.py`
+   - prove Supabase cleanup uses:
+     - `checkpoint_repo()`
+     - `file_operation_repo()`
+   - keep the sqlite local cleanup path pinned
+
 Evidence target:
 
 - focused control-plane caller proof:
   - `uv run pytest -q tests/Unit/sandbox/test_manager_repo_strategy.py`
 - adjacent manager regression guard:
   - `uv run pytest -q tests/Unit/sandbox/test_sandbox_manager_volume_repo.py`
+- focused session cleanup proof:
+  - `uv run pytest -q tests/Unit/storage/test_session_file_operations_cleanup.py`
 - source-level hygiene:
   - `uv run ruff check sandbox/control_plane_repos.py tests/Unit/sandbox/test_manager_repo_strategy.py`
   - `uv run python -m py_compile sandbox/control_plane_repos.py tests/Unit/sandbox/test_manager_repo_strategy.py`
@@ -39,6 +52,8 @@ Stopline:
   - custom `db_path` still preserves local sqlite semantics
 - after the follow-up proof, we can also honestly say:
   - missing `LEON_STORAGE_STRATEGY` still keeps the default sandbox control-plane on sqlite truth
+- after the second follow-up proof, we can also honestly say:
+  - explicit Supabase thread cleanup no longer depends on local `leon.db` existence
 - we still cannot honestly say:
   - env-less sandbox control-plane is closed
   - the whole system boots without SQLite
