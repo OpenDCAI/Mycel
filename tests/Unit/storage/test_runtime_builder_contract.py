@@ -5,6 +5,8 @@ import pytest
 from storage import runtime as storage_runtime
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 from storage.providers.supabase.chat_session_repo import SupabaseChatSessionRepo
+from storage.providers.supabase.checkpoint_repo import SupabaseCheckpointRepo
+from storage.providers.supabase.file_operation_repo import SupabaseFileOperationRepo
 from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
 from storage.providers.supabase.panel_task_repo import SupabasePanelTaskRepo
 from storage.providers.supabase.provider_event_repo import SupabaseProviderEventRepo
@@ -53,6 +55,8 @@ def test_build_runtime_health_monitor_repo_uses_sqlite_under_explicit_sqlite(mon
 @pytest.mark.parametrize(
     ("builder_name", "repo_cls"),
     [
+        ("build_checkpoint_repo", SupabaseCheckpointRepo),
+        ("build_file_operation_repo", SupabaseFileOperationRepo),
         ("build_lease_repo", SupabaseLeaseRepo),
         ("build_terminal_repo", SupabaseTerminalRepo),
         ("build_chat_session_repo", SupabaseChatSessionRepo),

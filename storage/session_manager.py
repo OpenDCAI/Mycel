@@ -3,9 +3,7 @@
 import json
 from pathlib import Path
 
-from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
-from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
-from storage.runtime import build_storage_container, uses_supabase_runtime_defaults
+from storage.runtime import build_checkpoint_repo, build_file_operation_repo, uses_supabase_runtime_defaults
 
 
 class SessionManager:
@@ -58,15 +56,13 @@ class SessionManager:
 
         if uses_supabase_runtime_defaults():
             try:
-                container = build_storage_container()
-
-                repo = container.checkpoint_repo()
+                repo = build_checkpoint_repo()
                 try:
                     repo.delete_thread_data(thread_id)
                 finally:
                     repo.close()
 
-                file_repo = container.file_operation_repo()
+                file_repo = build_file_operation_repo()
                 try:
                     file_repo.delete_thread_operations(thread_id)
                 finally:
@@ -78,6 +74,9 @@ class SessionManager:
 
         if self.db_path.exists():
             try:
+                from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
+                from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
+
                 repo = SQLiteCheckpointRepo(db_path=self.db_path)
                 try:
                     repo.delete_thread_data(thread_id)
