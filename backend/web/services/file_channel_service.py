@@ -11,10 +11,20 @@ import json
 import logging
 
 from backend.web.utils.helpers import _get_container
-from storage.runtime import build_lease_repo as make_lease_repo
-from storage.runtime import build_terminal_repo as make_terminal_repo
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 logger = logging.getLogger(__name__)
+SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+
+
+def make_terminal_repo():
+    return SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
+
+
+def make_lease_repo():
+    return SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
 
 
 def _resolve_volume_source(thread_id: str):

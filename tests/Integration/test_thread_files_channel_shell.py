@@ -18,7 +18,8 @@ def test_file_channel_and_activity_tracker_no_longer_import_storage_factory() ->
     assert "backend.web.core.storage_factory" not in activity_source
     assert "backend.web.core.storage_factory" not in file_channel_source
     assert "storage.runtime" in activity_source
-    assert "storage.runtime" in file_channel_source
+    assert "SQLiteTerminalRepo" in file_channel_source
+    assert "SQLiteLeaseRepo" in file_channel_source
 
 
 @pytest.mark.asyncio

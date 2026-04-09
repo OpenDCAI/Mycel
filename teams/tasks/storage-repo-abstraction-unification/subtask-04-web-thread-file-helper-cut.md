@@ -24,8 +24,10 @@ created: 2026-04-09
 
 - `activity_tracker.py` 不再 import `backend.web.core.storage_factory`
 - `file_channel_service.py` 不再 import `backend.web.core.storage_factory`
-- [storage/runtime.py](/Users/lexicalmathical/worktrees/leonai--storage-file-helper-cut/storage/runtime.py) 新增 `build_terminal_repo(...)`
-- module-local `make_chat_session_repo / make_lease_repo / make_terminal_repo` 名字仍保留
+- `file_channel_service.py` 最终没有保留 `storage.runtime` terminal/lease builder 路径
+- 因为 thread -> terminal -> lease 这条 file-channel lookup 仍然是 `sandbox.db` 的 `db_path` owner seam
+- 所以 `file_channel_service.py` 现在显式持有本地 sqlite `lease/terminal` constructor，而不是误接到 Supabase-only runtime builder
+- module-local `make_lease_repo / make_terminal_repo` 名字仍保留
 
 ## 证据
 
@@ -33,11 +35,13 @@ created: 2026-04-09
   - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py -k 'file_channel_and_activity_tracker_no_longer_import_storage_factory'`
   - `1 failed, 5 deselected`
 - green:
+  - `uv run pytest -q tests/Unit/core/test_agent_pool.py -k 'creates_once_per_thread or ignores_unavailable_local_cwd or honors_fresh_local_thread_cwd_even_when_missing or prefers_repo_backed_runtime_startup_even_with_conflicting_legacy_member_shell or uses_thread_user_id_for_chat_identity'`
+  - `5 passed, 2 deselected`
   - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py`
   - `6 passed`
-  - `uv run ruff check storage/runtime.py backend/web/services/activity_tracker.py backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py`
+  - `uv run ruff check backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py tests/Unit/core/test_agent_pool.py`
   - `All checks passed!`
-  - `uv run python -m py_compile storage/runtime.py backend/web/services/activity_tracker.py backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py`
+  - `uv run python -m py_compile backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py tests/Unit/core/test_agent_pool.py`
   - `exit 0`
 
 ## 还没做
@@ -52,3 +56,6 @@ created: 2026-04-09
 - 当前不碰 `backend/web/utils/helpers.py`
 - 当前不碰 `backend/web/routers/threads.py`
 - 当前不碰 `backend/web/routers/webhooks.py`
+- hindsight:
+  - `no longer imports storage_factory` 不等于 `应该改走 storage.runtime`
+  - 如果代码本身就是 `sandbox.db` / `db_path` lookup owner，最小而诚实的落点仍然可能是本地 sqlite constructor
