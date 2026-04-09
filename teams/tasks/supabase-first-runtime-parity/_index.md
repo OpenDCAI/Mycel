@@ -2,7 +2,7 @@
 title: Supabase-First Runtime Parity
 owner: fjj
 priority: P1
-status: open
+status: in_progress
 created: 2026-04-09
 ---
 
@@ -41,12 +41,15 @@ created: 2026-04-09
 - 这条 lane 不是 `#191` 的继续加码，而是 `#191` 之后的新主任务
 - 第一阶段不急着写实现，先把“哪些路径仍然 SQLite-only、哪些只是临时 stopgap、哪些已经 strategy-aware”分层盘清
 - 只有在分层完成后，才开最小 implementation slices
+- 第一轮 inventory 已经确认：
+  - `backend/web/core/lifespan.py` 本身已经是 Supabase-first composition root
+  - 当前主要残余集中在 file channel、sandbox control-plane、session/checkpoint side-store、queue/summary middleware
 
 ## 子任务
 
 | # | 子任务 | 说明 | 状态 |
 |---|--------|------|------|
-| 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 固化 current `dev` 下所有仍依赖 SQLite 的 runtime/service/control-plane 路径 | open |
+| 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 固化 current `dev` 下所有仍依赖 SQLite 的 runtime/service/control-plane 路径 | in_progress |
 | 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | open |
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | open |
 | 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | open |
