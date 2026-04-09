@@ -24,7 +24,8 @@ if TYPE_CHECKING:
 
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
 from sandbox.shell_output import normalize_pty_result
-from storage.providers.sqlite.kernel import connect_sqlite
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.runtime import uses_supabase_runtime_defaults
 
 if platform.system() == "Windows":
     pty = None
@@ -34,6 +35,10 @@ else:
     import select
 
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _uses_strategy_command_registry(db_path: Path | None) -> bool:
+    return db_path is not None and uses_supabase_runtime_defaults() and db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 
 def _require_select_module():
@@ -347,6 +352,14 @@ class PhysicalTerminalRuntime(ABC):
     def bind_command_repo(self, command_repo) -> None:
         self._command_repo = command_repo
 
+    def _require_command_repo(self):
+        if self._command_repo is not None:
+            return self._command_repo
+        db_path = getattr(self.terminal, "db_path", None)
+        if db_path and _uses_strategy_command_registry(Path(db_path)):
+            raise RuntimeError("strategy-backed terminal command registry requires a bound command repo")
+        return None
+
     def _db_path(self) -> Path:
         db_path = getattr(self.terminal, "db_path", None)
         if not db_path:
@@ -394,8 +407,9 @@ class PhysicalTerminalRuntime(ABC):
         if not stdout_chunks and not stderr_chunks:
             return
         created_at = datetime.now().isoformat()
-        if self._command_repo is not None:
-            self._command_repo.append_command_chunks(
+        command_repo = self._require_command_repo()
+        if command_repo is not None:
+            command_repo.append_command_chunks(
                 command_id=command_id,
                 stdout_chunks=stdout_chunks,
                 stderr_chunks=stderr_chunks,
@@ -441,8 +455,9 @@ class PhysicalTerminalRuntime(ABC):
     ) -> None:
         now = datetime.now().isoformat()
         finished_at = now if status in {"done", "cancelled", "failed"} else None
-        if self._command_repo is not None:
-            self._command_repo.upsert_command(
+        command_repo = self._require_command_repo()
+        if command_repo is not None:
+            command_repo.upsert_command(
                 command_id=command_id,
                 terminal_id=self.terminal.terminal_id,
                 chat_session_id=self.chat_session_id,
@@ -517,7 +532,7 @@ class PhysicalTerminalRuntime(ABC):
         if not force and now - last < self._stream_flush_interval_sec:
             return
         self._last_stream_flush_at[command_id] = now
-        if self._command_repo is not None:
+        if self._require_command_repo() is not None:
             self._append_unflushed_chunks(None, command_id=command_id, async_cmd=async_cmd)
             self._upsert_command_row(
                 command_id=command_id,
@@ -542,14 +557,15 @@ class PhysicalTerminalRuntime(ABC):
             conn.commit()
 
     def _load_command_from_db(self, command_id: str) -> AsyncCommand | None:
-        if self._command_repo is not None:
-            row = self._command_repo.get_command(command_id=command_id, terminal_id=self.terminal.terminal_id)
+        command_repo = self._require_command_repo()
+        if command_repo is not None:
+            row = command_repo.get_command(command_id=command_id, terminal_id=self.terminal.terminal_id)
             stdout_text = ""
             stderr_text = ""
             if row:
                 stdout_text = str(row.get("stdout") or "")
                 stderr_text = str(row.get("stderr") or "")
-                chunk_rows = self._command_repo.list_command_chunks(command_id=command_id)
+                chunk_rows = command_repo.list_command_chunks(command_id=command_id)
                 if chunk_rows:
                     stdout_chunks = [str(chunk.get("content") or "") for chunk in chunk_rows if chunk.get("stream") == "stdout"]
                     stderr_chunks = [str(chunk.get("content") or "") for chunk in chunk_rows if chunk.get("stream") == "stderr"]

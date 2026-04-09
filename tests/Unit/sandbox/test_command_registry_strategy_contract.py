@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+import sandbox.capability as capability_module
+import sandbox.runtime as runtime_module
 from sandbox.capability import SandboxCapability
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
 from sandbox.runtime import RemoteWrappedRuntime
@@ -187,3 +190,49 @@ async def test_command_wrapper_resolves_foreign_command_via_bound_command_repo_w
     status = await capability.command.get_status("cmd-foreign")
 
     assert status is expected
+
+
+def test_runtime_store_completed_result_requires_command_repo_for_strategy_default_terminal(monkeypatch):
+    canonical_db = Path("/tmp/strategy-sandbox.db")
+    monkeypatch.setattr(runtime_module, "uses_supabase_runtime_defaults", lambda: True, raising=False)
+    monkeypatch.setattr(runtime_module, "resolve_role_db_path", lambda role: canonical_db, raising=False)
+    monkeypatch.setattr(
+        runtime_module,
+        "connect_sqlite",
+        lambda db_path: (_ for _ in ()).throw(AssertionError(f"sqlite fallback hit for {db_path}")),
+    )
+
+    terminal = _FakeTerminal()
+    terminal.db_path = canonical_db
+    runtime = RemoteWrappedRuntime(terminal, SimpleNamespace(), SimpleNamespace())
+
+    with pytest.raises(RuntimeError, match="command repo"):
+        runtime.store_completed_result(
+            "cmd-1",
+            "echo hi",
+            "/tmp",
+            ExecuteResult(exit_code=0, stdout="ok", stderr=""),
+        )
+
+
+@pytest.mark.asyncio
+async def test_command_wrapper_requires_command_repo_for_strategy_default_lookup(monkeypatch):
+    canonical_db = Path("/tmp/strategy-sandbox.db")
+    monkeypatch.setattr(capability_module, "uses_supabase_runtime_defaults", lambda: True, raising=False)
+    monkeypatch.setattr(capability_module, "resolve_role_db_path", lambda role: canonical_db, raising=False)
+    monkeypatch.setattr(
+        capability_module,
+        "connect_sqlite",
+        lambda db_path: (_ for _ in ()).throw(AssertionError(f"sqlite fallback hit for {db_path}")),
+    )
+
+    session = SimpleNamespace(
+        thread_id="thread-1",
+        terminal=SimpleNamespace(terminal_id="term-1", db_path=canonical_db, get_state=lambda: SimpleNamespace(cwd="/tmp")),
+        runtime=_FakeRuntime(),
+        touch=lambda: None,
+    )
+    capability = SandboxCapability(session)
+
+    with pytest.raises(RuntimeError, match="command repo"):
+        await capability.command.get_status("cmd-missing")
