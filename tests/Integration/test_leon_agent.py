@@ -152,6 +152,19 @@ class _FakeSyncFileRepo:
         return removed
 
 
+class _FakeSummaryRepo:
+    def ensure_tables(self) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
+class _FakeControlPlaneRepo:
+    def close(self) -> None:
+        return None
+
+
 @pytest.fixture(autouse=True)
 def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
     class _FakeRuntimeContainer:
@@ -159,6 +172,11 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
             self._tool_task_repo = _FakeToolTaskRepo()
             self._agent_registry_repo = _FakeAgentRegistryRepo()
             self._sync_file_repo = _FakeSyncFileRepo()
+            self._queue_repo = object()
+            self._summary_repo = _FakeSummaryRepo()
+            self._terminal_repo = _FakeControlPlaneRepo()
+            self._lease_repo = _FakeControlPlaneRepo()
+            self._chat_session_repo = _FakeControlPlaneRepo()
 
         def tool_task_repo(self) -> _FakeToolTaskRepo:
             return self._tool_task_repo
@@ -168,6 +186,21 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
 
         def sync_file_repo(self) -> _FakeSyncFileRepo:
             return self._sync_file_repo
+
+        def queue_repo(self) -> object:
+            return self._queue_repo
+
+        def summary_repo(self) -> object:
+            return self._summary_repo
+
+        def terminal_repo(self) -> _FakeControlPlaneRepo:
+            return self._terminal_repo
+
+        def lease_repo(self) -> _FakeControlPlaneRepo:
+            return self._lease_repo
+
+        def chat_session_repo(self) -> _FakeControlPlaneRepo:
+            return self._chat_session_repo
 
     container = _FakeRuntimeContainer()
     monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_kwargs: container)
@@ -276,6 +309,27 @@ def test_leon_agent_destructor_does_not_reenable_skipped_sandbox_cleanup():
     LeonAgent.__del__(agent)
 
     agent._cleanup_sandbox.assert_not_called()
+
+
+@_patch_env_api_key()
+def test_create_leon_agent_supabase_defaults_wire_runtime_container(monkeypatch, tmp_path, _patch_runtime_storage_container):
+    from core.runtime.agent import create_leon_agent
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=_mock_model("queue wiring")),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+    ):
+        agent = create_leon_agent(workspace_root=str(tmp_path))
+
+    try:
+        assert agent.storage_container is _patch_runtime_storage_container
+        assert agent.queue_manager._repo is _patch_runtime_storage_container.queue_repo()
+        assert agent._memory_middleware.summary_store is not None
+        assert agent._memory_middleware.summary_store._repo is _patch_runtime_storage_container.summary_repo()
+    finally:
+        agent.close()
 
 
 # ---------------------------------------------------------------------------

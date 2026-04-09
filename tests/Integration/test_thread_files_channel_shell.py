@@ -18,8 +18,9 @@ def test_file_channel_and_activity_tracker_no_longer_import_storage_factory() ->
     assert "backend.web.core.storage_factory" not in activity_source
     assert "backend.web.core.storage_factory" not in file_channel_source
     assert "storage.runtime" in activity_source
-    assert "SQLiteTerminalRepo" in file_channel_source
-    assert "SQLiteLeaseRepo" in file_channel_source
+    assert "sandbox.control_plane_repos" in file_channel_source
+    assert "SQLiteTerminalRepo" not in file_channel_source
+    assert "SQLiteLeaseRepo" not in file_channel_source
 
 
 def test_helpers_no_longer_import_storage_factory() -> None:

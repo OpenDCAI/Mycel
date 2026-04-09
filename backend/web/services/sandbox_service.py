@@ -16,12 +16,9 @@ from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.models import map_lease_to_session_status
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 logger = logging.getLogger(__name__)
-
-SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 _SANDBOX_INVENTORY_LOCK = threading.Lock()
 _SANDBOX_INVENTORY: tuple[dict[str, Any], dict[str, Any]] | None = None
@@ -215,7 +212,7 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
         "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
     }
     if not SANDBOXES_DIR.exists():
-        managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
+        managers = {name: SandboxManager(provider=p) for name, p in providers.items()}
         return providers, managers
 
     for config_file in SANDBOXES_DIR.glob("*.json"):
@@ -280,7 +277,7 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
         except Exception:
             logger.exception("[sandbox] Failed to load %s", name)
 
-    managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
+    managers = {name: SandboxManager(provider=p) for name, p in providers.items()}
     return providers, managers
 
 

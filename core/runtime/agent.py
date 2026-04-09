@@ -192,10 +192,14 @@ class LeonAgent:
             permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
             verbose: Whether to output detailed logs (default False)
         """
+        runtime_storage = storage_container
+
         self.agent_id: str | None = None
         self.verbose = verbose
         self.extra_allowed_paths = extra_allowed_paths
-        self.queue_manager = queue_manager or MessageQueueManager()
+        self.queue_manager = queue_manager or (
+            MessageQueueManager(repo=runtime_storage.queue_repo()) if runtime_storage is not None else MessageQueueManager()
+        )
         self._chat_repos: dict | None = chat_repos
         self._thread_repo = thread_repo
         self._user_repo = user_repo
@@ -257,7 +261,7 @@ class LeonAgent:
         # Initialize workspace and configuration
         self.workspace_root = self._resolve_workspace_root()
         self._init_config_attributes()
-        self.storage_container: StorageContainer | None = storage_container
+        self.storage_container: StorageContainer | None = runtime_storage
         self._sandbox = self._init_sandbox(sandbox)
 
         # Override workspace_root for sandbox mode
@@ -1778,6 +1782,12 @@ def create_leon_agent(
     """
     # Filter out kwargs that LeonAgent.__init__ doesn't accept (e.g. profile from CLI)
     import inspect as _inspect
+    import os as _os
+
+    if storage_container is None and _os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase":
+        from storage.runtime import build_storage_container
+
+        storage_container = build_storage_container()
 
     _valid = set(_inspect.signature(LeonAgent.__init__).parameters) - {"self"}
     kwargs = {k: v for k, v in kwargs.items() if k in _valid}

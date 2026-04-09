@@ -242,6 +242,126 @@ class SQLiteLeaseRepo:
             raise RuntimeError(f"Failed to load adopted lease: {lease_id}")
         return adopted
 
+    def observe_status(
+        self,
+        *,
+        lease_id: str,
+        status: str,
+        observed_at: Any = None,
+    ) -> dict[str, Any]:
+        existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+        now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or datetime.now().isoformat())
+        normalized = parse_lease_instance_state(status).value
+        current_instance_id = existing.get("current_instance_id")
+
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE sandbox_leases
+                SET current_instance_id = ?,
+                    instance_created_at = ?,
+                    observed_state = ?,
+                    instance_status = ?,
+                    version = ?,
+                    observed_at = ?,
+                    last_error = ?,
+                    needs_refresh = ?,
+                    refresh_hint_at = ?,
+                    status = ?,
+                    updated_at = ?
+                WHERE lease_id = ?
+                """,
+                (
+                    None if normalized == "detached" else existing.get("current_instance_id"),
+                    None if normalized == "detached" else existing.get("instance_created_at"),
+                    normalized,
+                    normalized,
+                    int(existing.get("version") or 0) + 1,
+                    now,
+                    None,
+                    0,
+                    None,
+                    "expired" if normalized == "detached" else "active",
+                    datetime.now().isoformat(),
+                    lease_id,
+                ),
+            )
+            if current_instance_id:
+                if normalized == "detached":
+                    self._conn.execute(
+                        """
+                        UPDATE sandbox_instances
+                        SET status = ?, last_seen_at = ?
+                        WHERE instance_id = ?
+                        """,
+                        ("stopped", now, current_instance_id),
+                    )
+                else:
+                    self._conn.execute(
+                        """
+                        UPDATE sandbox_instances
+                        SET status = ?, last_seen_at = ?
+                        WHERE instance_id = ?
+                        """,
+                        (normalized, now, current_instance_id),
+                    )
+            self._conn.commit()
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+
+    def persist_metadata(
+        self,
+        *,
+        lease_id: str,
+        recipe_id: str | None,
+        recipe_json: str | None,
+        desired_state: str,
+        observed_state: str,
+        version: int,
+        observed_at: Any,
+        last_error: str | None,
+        needs_refresh: bool,
+        refresh_hint_at: Any = None,
+        status: str,
+    ) -> dict[str, Any]:
+        observed_at_value = observed_at.isoformat() if isinstance(observed_at, datetime) else observed_at
+        refresh_hint_value = refresh_hint_at.isoformat() if isinstance(refresh_hint_at, datetime) else refresh_hint_at
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE sandbox_leases
+                SET recipe_id = ?,
+                    recipe_json = ?,
+                    desired_state = ?,
+                    observed_state = ?,
+                    instance_status = ?,
+                    version = ?,
+                    observed_at = ?,
+                    last_error = ?,
+                    needs_refresh = ?,
+                    refresh_hint_at = ?,
+                    status = ?,
+                    updated_at = ?
+                WHERE lease_id = ?
+                """,
+                (
+                    recipe_id,
+                    recipe_json,
+                    desired_state,
+                    observed_state,
+                    observed_state,
+                    version,
+                    observed_at_value,
+                    last_error,
+                    1 if needs_refresh else 0,
+                    refresh_hint_value,
+                    status,
+                    datetime.now().isoformat(),
+                    lease_id,
+                ),
+            )
+            self._conn.commit()
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="persist_metadata")
+
     def mark_needs_refresh(self, lease_id: str, hint_at: datetime | None = None) -> bool:
         hinted_at = (hint_at or datetime.now()).isoformat()
         with self._lock:
