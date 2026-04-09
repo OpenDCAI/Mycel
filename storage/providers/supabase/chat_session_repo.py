@@ -282,14 +282,8 @@ class SupabaseChatSessionRepo:
         created_at: str,
     ) -> None:
         rows: list[dict[str, Any]] = []
-        rows.extend(
-            {"command_id": command_id, "stream": "stdout", "content": chunk, "created_at": created_at}
-            for chunk in stdout_chunks
-        )
-        rows.extend(
-            {"command_id": command_id, "stream": "stderr", "content": chunk, "created_at": created_at}
-            for chunk in stderr_chunks
-        )
+        rows.extend({"command_id": command_id, "stream": "stdout", "content": chunk, "created_at": created_at} for chunk in stdout_chunks)
+        rows.extend({"command_id": command_id, "stream": "stderr", "content": chunk, "created_at": created_at} for chunk in stderr_chunks)
         if rows:
             self._chunks().insert(rows).execute()
 
