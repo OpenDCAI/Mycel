@@ -10,13 +10,16 @@ class _FakeProvider:
     name = "daytona_selfhost"
 
     def get_capability(self):
-        return SimpleNamespace(supports_status_probe=True)
+        return SimpleNamespace(supports_status_probe=True, can_destroy=True)
 
     def create_session(self, context_id=None, thread_id=None):
         return SimpleNamespace(session_id="instance-created")
 
     def get_session_status(self, _instance_id: str) -> str:
         return "running"
+
+    def destroy_session(self, _instance_id: str) -> bool:
+        return True
 
 
 class _FakeLeaseRepo:
@@ -306,6 +309,42 @@ def test_refresh_instance_status_records_strategy_provider_error_event(monkeypat
             "instance_id": "inst-1",
             "event_type": "provider.error",
             "payload": {"error": "provider boom", "source": "read.status"},
+            "matched_lease_id": "lease-1",
+        }
+    ]
+
+
+def test_destroy_instance_uses_strategy_destroy_transition(monkeypatch):
+    repo = _FakeLeaseRepo()
+    event_repo = _FakeProviderEventRepo()
+    lease = lease_from_row(repo.get("lease-1"), Path("/tmp/fake-sandbox.db"))
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr("sandbox.lease._make_lease_repo", lambda db_path=None: repo)
+    monkeypatch.setattr("sandbox.lease._make_provider_event_repo", lambda: event_repo)
+    monkeypatch.setattr("sandbox.lease._connect", lambda _db_path: (_ for _ in ()).throw(AssertionError("should not touch sqlite")))
+
+    lease.destroy_instance(_FakeProvider(), source="api")
+
+    assert repo.observe_calls == [
+        {
+            "lease_id": "lease-1",
+            "status": "detached",
+            "observed_at": repo.observe_calls[0]["observed_at"],
+        }
+    ]
+    assert len(repo.persist_calls) == 1
+    persist = repo.persist_calls[0]
+    assert persist["desired_state"] == "destroyed"
+    assert persist["observed_state"] == "detached"
+    assert persist["status"] == "expired"
+    assert persist["needs_refresh"] is False
+    assert event_repo.record_calls == [
+        {
+            "provider_name": "daytona_selfhost",
+            "instance_id": "inst-1",
+            "event_type": "intent.destroy",
+            "payload": {"instance_id": "inst-1", "source": "api"},
             "matched_lease_id": "lease-1",
         }
     ]

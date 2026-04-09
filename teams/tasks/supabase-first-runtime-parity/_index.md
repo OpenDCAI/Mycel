@@ -94,4 +94,5 @@ created: 2026-04-09
   - 第四轮已完成：`LeaseRepo.persist_metadata(...)` 已补进 protocol / sqlite provider / supabase provider，且 `sandbox.lease.py:_record_provider_error()` 在 `LEON_STORAGE_STRATEGY=supabase` 下已改为通过 `storage.runtime.build_lease_repo(...)` 持久化 metadata，而不是继续落回本地 sqlite refresh flag
   - 第五轮已完成：`LeaseRepo.observe_status(...)` 已补进 protocol / sqlite provider / supabase provider，且 `SQLiteLease.refresh_instance_status()` 在 `LEON_STORAGE_STRATEGY=supabase` 下会通过 strategy lease repo + provider event repo 落 `observe.status` transition
   - 第六轮已完成：`provider.error` 的 strategy event parity 已补上；`_record_provider_error(..., source=...)` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会同时持久化 lease metadata 和 `provider_events`
-  - 当前 stopline 已压清：下一步如果继续，才轮到 `pause / resume / destroy` 这些更宽的 transition，而不是再回头做底层 sqlite helper 清理
+  - 第七轮已完成：`intent.destroy` 的 strategy success path 已补上；`destroy_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下现在会通过 strategy lease repo + provider event repo 落 detached/expired truth，而不是继续走本地 sqlite `apply(intent.destroy)`
+  - 当前 stopline 已压清：下一步如果继续，只剩 `pause / resume` 这一组更宽 transition，而不是再回头做底层 sqlite helper 清理

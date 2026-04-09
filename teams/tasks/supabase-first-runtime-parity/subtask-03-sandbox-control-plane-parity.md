@@ -155,14 +155,26 @@ created: 2026-04-09
   - `intent.resume`
   - `intent.destroy`
 
+## Latest Destroy Slice
+
+- 当前又补了一条 success-path transition：
+  - `intent.destroy`
+- 具体变化：
+  - `destroy_instance()` 在 `LEON_STORAGE_STRATEGY=supabase` 下不再直接走本地 sqlite `apply(intent.destroy)`
+  - 现在会通过 strategy `lease_repo.observe_status(...)` 先落 detached/stopped truth
+  - 然后通过 `persist_metadata(...)` 把 `desired_state=destroyed`、`status=expired` 收口
+  - 同时通过 strategy `provider_event_repo` 记录 `intent.destroy`
+- 这刀当前没有碰：
+  - `intent.pause`
+  - `intent.resume`
+
 ## Default Next Move
 
 - 不直接改 `monitor_service.py`
 - 不继续追加底层 sqlite helper 清理
 - 下一刀如果继续，应在更宽的 transition 之间选一个：
   - `intent.pause / intent.resume`
-  - `intent.destroy`
-- 不要把剩下几条 transition 混成一刀
+- 不要把 pause / resume 再拆成无边界的大扫除；要么做成一个对偶 slice，要么先 park
 
 ## Stopline
 

@@ -262,7 +262,16 @@ completed third transition cut:
 
 remaining wider transitions:
 - intent.pause / intent.resume
-- intent.destroy
+```
+
+Latest update after the destroy slice:
+
+```text
+completed fourth transition cut:
+- intent.destroy success path now uses strategy repos under supabase
+
+remaining wider transitions:
+- intent.pause / intent.resume
 ```
 
 - [ ] **Step 3: Record the transaction question**
