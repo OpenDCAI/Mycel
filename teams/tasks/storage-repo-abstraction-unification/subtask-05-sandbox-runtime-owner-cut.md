@@ -30,6 +30,7 @@ created: 2026-04-09
 - unmatched webhook 的 outward payload shape 保持不变
 - `sandbox/lease.py` 不再 import `backend.web.core.storage_factory`
 - `sandbox/lease.py:_make_lease_repo()` 保持 runtime-owned sqlite constructor
+- `sandbox/lease.py` 现在把 `db_path` 明确收回 lease 自己的 sqlite owner，而不是把 `db_path` 误交给 Supabase-only runtime builder
 - `_make_lease_repo(db_path=None)` 的 monkeypatch surface 继续保留，没有顺手改 lease contract
 - `sandbox/resource_snapshot.py` 不再让 snapshot write failure 反向变成 local runtime bringup contract
 - `threads.py:_create_thread_sandbox_resources()` 不再 import `backend.web.core.storage_factory`
@@ -37,6 +38,7 @@ created: 2026-04-09
 - thread sandbox bootstrap 的 outward behavior 保持不变，local cwd contract 继续由现有 route test 固定
 - `sandbox/manager.py` 不再 import `backend.web.core.storage_factory`
 - `sandbox/manager.py` 顶层 `make_chat_session_repo / make_lease_repo / make_terminal_repo` 保持 sqlite-owned constructor
+- `sandbox/manager.py` 现在把 `db_path` 明确收回 manager 自己的 sqlite owner，而不是把本地 sandbox.db 生命周期误交给 Supabase-only runtime builder
 - 既有 monkeypatch 面继续保留，所以 manager strategy tests 不需要改调用协议
 - `sandbox_service.py` 不再 import `backend.web.core.storage_factory`
 - `sandbox_service.py` 的 monitor repo builder 改走 `storage.runtime.build_sandbox_monitor_repo(...)`

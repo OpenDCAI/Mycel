@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -13,10 +14,12 @@ from sandbox import resource_snapshot as resource_snapshot_module
 from sandbox.sync.state import SyncState
 from storage import runtime as storage_runtime
 from storage.container import StorageContainer
+from tests.fakes.supabase import FakeSupabaseClient
 
 
-class _FakeSupabaseClient:
-    pass
+class _FakeSupabaseClient(FakeSupabaseClient):
+    def __init__(self) -> None:
+        super().__init__(tables={})
 
 
 class _FakeRepo:
@@ -298,16 +301,7 @@ def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest
         _FakeMonitorRepo,
     )
 
-    from backend.web.core import storage_factory
-
-    supabase_cache_clear = getattr(storage_factory._supabase_client, "cache_clear", None)
-    if callable(supabase_cache_clear):
-        supabase_cache_clear()
-    cache_clear = getattr(storage_factory.make_sandbox_monitor_repo, "cache_clear", None)
-    if callable(cache_clear):
-        cache_clear()
-
-    repo = storage_factory.make_sandbox_monitor_repo()
+    repo = storage_runtime.build_sandbox_monitor_repo()
     try:
         assert isinstance(repo, _FakeMonitorRepo)
         assert captured["client"] is fake_client
@@ -326,6 +320,7 @@ def test_make_panel_task_repo_uses_public_supabase_factory(monkeypatch: pytest.M
             return None
 
     fake_client = _FakeSupabaseClient()
+    runtime_client = _FakeSupabaseClient()
     monkeypatch.setattr(
         "backend.web.core.supabase_factory.create_public_supabase_client",
         lambda: fake_client,
@@ -335,13 +330,7 @@ def test_make_panel_task_repo_uses_public_supabase_factory(monkeypatch: pytest.M
         _FakePanelTaskRepo,
     )
 
-    from backend.web.core import storage_factory
-
-    cache_clear = getattr(storage_factory.make_panel_task_repo, "cache_clear", None)
-    if callable(cache_clear):
-        cache_clear()
-
-    repo = storage_factory.make_panel_task_repo()
+    repo = storage_runtime.build_panel_task_repo(supabase_client=runtime_client)
     try:
         assert isinstance(repo, _FakePanelTaskRepo)
         assert captured["client"] is fake_client
@@ -450,10 +439,6 @@ def test_resource_snapshot_helpers_default_to_storage_runtime_container(monkeypa
 
     container = _FakeRuntimeContainer()
 
-    monkeypatch.setattr(
-        "backend.web.core.storage_factory.list_resource_snapshots",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory resource list")),
-    )
     monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_kwargs: container)
 
     resource_snapshot_module.upsert_lease_resource_snapshot(
@@ -473,6 +458,10 @@ def test_resource_snapshot_helpers_default_to_storage_runtime_container(monkeypa
         }
     ]
     assert snapshots == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
+
+
+def test_storage_factory_module_is_deleted() -> None:
+    assert not Path("backend/web/core/storage_factory.py").exists()
 
 
 def test_build_resource_snapshot_repo_defaults_to_web_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:

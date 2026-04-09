@@ -601,7 +601,7 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
 
 
 def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
-    from backend.web.core import storage_factory
+    from storage import runtime as storage_runtime
 
     class _FakeSupabaseClient:
         def table(self, _name: str):
@@ -613,11 +613,7 @@ def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
         lambda: _FakeSupabaseClient(),
     )
 
-    cache_clear = getattr(cast(Any, storage_factory._supabase_client), "cache_clear", None)
-    if callable(cache_clear):
-        cache_clear()
-
-    repo = storage_factory.make_sandbox_monitor_repo()
+    repo = storage_runtime.build_sandbox_monitor_repo()
     try:
         assert repo.__class__.__name__ == "SupabaseSandboxMonitorRepo"
     finally:
