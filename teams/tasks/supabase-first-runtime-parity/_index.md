@@ -50,7 +50,7 @@ created: 2026-04-09
 | # | 子任务 | 说明 | 状态 |
 |---|--------|------|------|
 | 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 固化 current `dev` 下所有仍依赖 SQLite 的 runtime/service/control-plane 路径 | in_progress |
-| 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | open |
+| 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | in_progress |
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | open |
 | 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | open |
 | 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | open |
