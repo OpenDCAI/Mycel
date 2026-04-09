@@ -2,7 +2,7 @@
 title: Storage Repo Abstraction Unification
 owner: fjj
 priority: P1
-status: open
+status: done
 created: 2026-04-09
 issue: 191
 ---
@@ -19,6 +19,8 @@ issue: 191
 - 这条任务的 closure 只证明 issue `#191` 这簇 bypass path 已回到正式 composition root
 - 它不自动证明整个 sandbox/control-plane 已达到“无需 SQLite 也能独立跑”的最终架构
 - `sandbox/lease.py` / `sandbox/manager.py` 这类 `db_path` caller 在本轮里只是为了删桥做最小收口；是否继续推进到完整 strategy/container 语义，不在 `#191` 的 closure 里宣称完成
+- `#373` 已 merged：
+  - merge commit: `48e44b22aea32570749c9715b20e9b78e4c72d60`
 
 ## 子任务
 
@@ -39,3 +41,9 @@ issue: 191
 - 不顺手改 monitor/resource payload 语义
 - 不把 sandbox/control-plane stopgap 写成 `#191` 的最终架构胜利
 - 每一刀只搬一小簇 callsite，然后回到真实 proof
+
+## Checkpoint hindsight
+
+- `删桥` 和 `全域 provider parity` 不是同一条任务
+- `#191` 的诚实 closure 是：issue 点名的 bypass repos 重新回到正式 composition root
+- 如果目标升级成“系统可在 `LEON_STORAGE_STRATEGY=supabase` 下独立运行、默认即 Supabase”，那必须单独立新 lane，不能在 `#191` 的 closure 里偷换完成
