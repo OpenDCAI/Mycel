@@ -11,7 +11,6 @@ Architecture:
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -19,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
-from storage.runtime import build_terminal_repo
+from storage.runtime import build_terminal_repo, uses_supabase_storage
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
@@ -45,9 +44,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _use_strategy_terminal(db_path: Path) -> bool:
-    return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase" and db_path == resolve_role_db_path(
-        SQLiteDBRole.SANDBOX
-    )
+    return uses_supabase_storage() and db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 
 @dataclass

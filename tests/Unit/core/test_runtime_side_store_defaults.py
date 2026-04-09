@@ -35,6 +35,20 @@ def test_message_queue_manager_uses_runtime_repo_under_explicit_supabase(monkeyp
     assert manager._repo is fake_repo
 
 
+def test_message_queue_manager_defaults_to_runtime_repo_when_strategy_missing(monkeypatch) -> None:
+    fake_repo = _FakeQueueRepo()
+
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.setattr(
+        "core.runtime.middleware.queue.manager.build_queue_repo",
+        lambda **_kwargs: fake_repo,
+    )
+
+    manager = MessageQueueManager()
+
+    assert manager._repo is fake_repo
+
+
 def test_message_queue_manager_explicit_db_path_keeps_sqlite_under_supabase(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
 
@@ -50,6 +64,20 @@ def test_summary_store_uses_runtime_repo_under_explicit_supabase(monkeypatch) ->
     fake_repo = _FakeSummaryRepo()
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr(
+        "core.runtime.middleware.memory.summary_store.build_summary_repo",
+        lambda **_kwargs: fake_repo,
+    )
+
+    store = SummaryStore()
+
+    assert store._repo is fake_repo
+
+
+def test_summary_store_defaults_to_runtime_repo_when_strategy_missing(monkeypatch) -> None:
+    fake_repo = _FakeSummaryRepo()
+
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
     monkeypatch.setattr(
         "core.runtime.middleware.memory.summary_store.build_summary_repo",
         lambda **_kwargs: fake_repo,

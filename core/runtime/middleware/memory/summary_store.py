@@ -13,7 +13,6 @@ Architecture:
 from __future__ import annotations
 
 import logging
-import os
 import sqlite3
 import time
 import uuid
@@ -25,7 +24,7 @@ from typing import Any
 from storage.contracts import SummaryRepo, SummaryRow
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
-from storage.runtime import build_summary_repo
+from storage.runtime import build_summary_repo, uses_supabase_storage
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ class SummaryStore:
         self._repo: SummaryRepo
         if summary_repo is not None:
             self._repo = summary_repo
-        elif db_path is None and os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower() == "supabase":
+        elif db_path is None and uses_supabase_storage():
             # @@@explicit-db-path-wins - an explicit local path is an operator choice,
             # so only path-less construction is allowed to switch to runtime storage.
             self._repo = build_summary_repo()
