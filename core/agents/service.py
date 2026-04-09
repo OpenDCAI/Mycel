@@ -1034,10 +1034,11 @@ class AgentService:
                     )
                     if hasattr(agent, "_agent_service") and hasattr(agent._agent_service, "cleanup_background_runs"):
                         await agent._agent_service.cleanup_background_runs()
-                    # @@@web-child-persistence - web child threads are user-visible
-                    # thread surfaces. Closing the LeonAgent here marks runtime
-                    # terminated and drops its live/checkpoint bridge right after
-                    # completion, so the child tab collapses to an empty shell.
+                    # @@@web-child-close-owner - web child threads stay visible
+                    # via their persisted thread/task surface, not by keeping
+                    # this LeonAgent instance alive forever. The live bridge
+                    # owns the eventual close after it finishes harvesting the
+                    # child run result.
                     if self._web_app is None:
                         # @@@subagent-sandbox-close-skip - Child agents can share the
                         # parent's lease; closing the child sandbox here can pause the

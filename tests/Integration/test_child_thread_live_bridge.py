@@ -90,6 +90,12 @@ class _BlockingChildAgent:
     def __init__(self) -> None:
         self.runtime = _FakeRuntime()
         self.agent = _BlockingChildGraph()
+        self.closed = False
+        self.close_kwargs: dict[str, object] = {}
+
+    def close(self, **kwargs) -> None:
+        self.closed = True
+        self.close_kwargs = kwargs
 
 
 def _make_request(app: SimpleNamespace) -> Request:
@@ -239,6 +245,70 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
     result = await task
 
     assert result == "CHILD_DONE"
+
+
+@pytest.mark.asyncio
+async def test_run_child_thread_live_closes_and_detaches_completed_child_agent_without_losing_read_surface(monkeypatch):
+    child_thread_id = "subagent-live-detach"
+    agent = _BlockingChildAgent()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            queue_manager=MessageQueueManager(),
+            _event_loop=asyncio.get_running_loop(),
+            thread_event_buffers={},
+            thread_tasks={},
+            thread_last_active={},
+            agent_pool={},
+            thread_sandbox={child_thread_id: "local"},
+            thread_cwd={},
+            thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"model": "gpt-live"} if thread_id == child_thread_id else None),
+        )
+    )
+
+    task = asyncio.create_task(
+        run_child_thread_live(
+            agent,
+            child_thread_id,
+            "child prompt",
+            app,
+            input_messages=[HumanMessage(content="child prompt")],
+        )
+    )
+    await agent.agent.started.wait()
+    agent.agent.release.set()
+
+    result = await task
+
+    rebuilt_runtime = _FakeRuntime()
+    rebuilt_agent = SimpleNamespace(
+        runtime=rebuilt_runtime,
+        agent=SimpleNamespace(
+            aget_state=AsyncMock(
+                return_value=SimpleNamespace(
+                    values={
+                        "messages": [
+                            HumanMessage(content="child prompt"),
+                            AIMessage(content="CHILD_DONE"),
+                        ]
+                    }
+                )
+            )
+        ),
+    )
+    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=rebuilt_agent))
+
+    detail = await threads_router.get_thread_messages(child_thread_id, user_id="owner-1", app=app)
+    runtime = await threads_router.get_thread_runtime(child_thread_id, stream=False, user_id="owner-1", app=app)
+
+    assert result == "CHILD_DONE"
+    assert agent.closed is True
+    assert agent.close_kwargs == {"cleanup_sandbox": False}
+    assert f"{child_thread_id}:local" not in app.state.agent_pool
+    assert detail["entries"][0]["role"] == "user"
+    assert detail["entries"][0]["content"] == "child prompt"
+    assert detail["entries"][1]["role"] == "assistant"
+    assert runtime["state"]["state"] == "idle"
 
 
 @pytest.mark.asyncio

@@ -1497,52 +1497,59 @@ async def run_child_thread_live(
     from backend.web.utils.serializers import extract_text_content
 
     sandbox_type = resolve_thread_sandbox(app, thread_id)
-    app.state.agent_pool[f"{thread_id}:{sandbox_type}"] = agent
+    pool_key = f"{thread_id}:{sandbox_type}"
+    app.state.agent_pool[pool_key] = agent
     thread_buf = get_or_create_thread_buffer(app, thread_id)
     error_cursor = thread_buf.total_count
     _ensure_thread_handlers(agent, thread_id, app)
     if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
         raise RuntimeError(f"Child thread {thread_id} could not transition to active")
+    try:
+        start_agent_run(
+            agent,
+            thread_id,
+            message,
+            app,
+            input_messages=input_messages,
+        )
+        task = app.state.thread_tasks[thread_id]
+        result = await task
+        recent_events, _ = await thread_buf.read_with_timeout(error_cursor, timeout=0.01)
+        if recent_events:
+            # @@@child-live-error-surfacing - child live runs can emit an error event
+            # and still return an empty string from _run_agent_to_buffer(); treat that
+            # as a real child failure instead of laundering it into fake completion.
+            for event in recent_events:
+                if event.get("event") != "error":
+                    continue
+                try:
+                    payload = json.loads(event.get("data", "{}"))
+                except (json.JSONDecodeError, TypeError):
+                    payload = {}
+                error_text = payload.get("error") if isinstance(payload, dict) else None
+                raise RuntimeError(error_text or f"Child thread {thread_id} failed")
+        if isinstance(result, str) and result.strip():
+            return result.strip()
 
-    start_agent_run(
-        agent,
-        thread_id,
-        message,
-        app,
-        input_messages=input_messages,
-    )
-    task = app.state.thread_tasks[thread_id]
-    result = await task
-    recent_events, _ = await thread_buf.read_with_timeout(error_cursor, timeout=0.01)
-    if recent_events:
-        # @@@child-live-error-surfacing - child live runs can emit an error event
-        # and still return an empty string from _run_agent_to_buffer(); treat that
-        # as a real child failure instead of laundering it into fake completion.
-        for event in recent_events:
-            if event.get("event") != "error":
-                continue
-            try:
-                payload = json.loads(event.get("data", "{}"))
-            except (json.JSONDecodeError, TypeError):
-                payload = {}
-            error_text = payload.get("error") if isinstance(payload, dict) else None
-            raise RuntimeError(error_text or f"Child thread {thread_id} failed")
-    if isinstance(result, str) and result.strip():
-        return result.strip()
-
-    state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
-    values = getattr(state, "values", {}) if state else {}
-    messages = values.get("messages", []) if isinstance(values, dict) else []
-    visible_ai = [
-        extract_text_content(getattr(msg, "content", "")).strip()
-        for msg in messages
-        if msg.__class__.__name__ == "AIMessage" and extract_text_content(getattr(msg, "content", "")).strip()
-    ]
-    runtime_status = agent.runtime.get_status_dict() if hasattr(agent, "runtime") and hasattr(agent.runtime, "get_status_dict") else {}
-    runtime_calls = runtime_status.get("calls") if isinstance(runtime_status, dict) else None
-    if not visible_ai and runtime_calls == 0:
-        raise RuntimeError(f"Child thread {thread_id} failed before first model call")
-    return "\n".join(visible_ai) if visible_ai else "(Agent completed with no text output)"
+        state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        values = getattr(state, "values", {}) if state else {}
+        messages = values.get("messages", []) if isinstance(values, dict) else []
+        visible_ai = [
+            extract_text_content(getattr(msg, "content", "")).strip()
+            for msg in messages
+            if msg.__class__.__name__ == "AIMessage" and extract_text_content(getattr(msg, "content", "")).strip()
+        ]
+        runtime_status = agent.runtime.get_status_dict() if hasattr(agent, "runtime") and hasattr(agent.runtime, "get_status_dict") else {}
+        runtime_calls = runtime_status.get("calls") if isinstance(runtime_status, dict) else None
+        if not visible_ai and runtime_calls == 0:
+            raise RuntimeError(f"Child thread {thread_id} failed before first model call")
+        return "\n".join(visible_ai) if visible_ai else "(Agent completed with no text output)"
+    finally:
+        # @@@child-run-complete-owner - completed web child runs keep their
+        # thread surface via checkpoint/display rebuild, not by pinning a live
+        # LeonAgent instance in agent_pool until process shutdown.
+        app.state.agent_pool.pop(pool_key, None)
+        agent.close(cleanup_sandbox=False)
 
 
 # ---------------------------------------------------------------------------
