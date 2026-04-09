@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
 from backend.web.services.resource_common import empty_capabilities, resolve_provider_name
@@ -14,6 +13,7 @@ from backend.web.services.resource_common import resolve_instance_capabilities a
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.resource_snapshot import ensure_resource_snapshot_table, probe_and_upsert_for_instance, upsert_lease_resource_snapshot
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 
 def get_provider_display_contract(config_name: str) -> dict[str, Any]:

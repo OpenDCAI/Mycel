@@ -135,6 +135,35 @@ def build_resource_snapshot_repo(
     ).resource_snapshot_repo()
 
 
+def build_sandbox_monitor_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+):
+    client = _resolve_supabase_client(supabase_client, supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY)
+    from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
+
+    return SupabaseSandboxMonitorRepo(client)
+
+
+def list_resource_snapshots(
+    lease_ids: list[str],
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    repo = build_resource_snapshot_repo(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    )
+    try:
+        return repo.list_snapshots_by_lease_ids(lease_ids)
+    finally:
+        repo.close()
+
+
 def _resolve_supabase_client(
     client: Any | None = None,
     factory_ref: str | None = None,
