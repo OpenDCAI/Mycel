@@ -6,56 +6,42 @@ created: 2026-04-09
 
 # Supabase Boot Contract
 
-目标：定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需的最小 contract，不再把 SQLite 当成隐含前提。
+目标：定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需的最小 contract，并把失败精确分类，而不是继续把所有 bringup 问题糊成“还是依赖 SQLite”。
 
-## 第一轮事实
+## Fresh audit facts
 
-### 已经存在的 Supabase-first 启动骨架
+2026-04-10 的真实 bringup / API proof 已经拿到这些事实：
 
-- [backend/web/core/lifespan.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/backend/web/core/lifespan.py)
-  - 启动前先强制检查：
-    - `LEON_POSTGRES_URL`
-  - 再直接创建：
-    - `create_supabase_client()`
-    - `create_public_supabase_client()`
-  - 然后用 [storage/container.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/storage/container.py) 把 repo 注入到 `app.state`
-- [backend/web/core/supabase_factory.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/backend/web/core/supabase_factory.py)
-  - 当前明确要求：
-    - `SUPABASE_INTERNAL_URL` 或 `SUPABASE_PUBLIC_URL`
-    - `LEON_SUPABASE_SERVICE_ROLE_KEY`
-    - `SUPABASE_ANON_KEY`
-    - `SUPABASE_AUTH_URL`（可选，未给则回退到 Supabase URL）
-- [storage/container.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/storage/container.py)
-  - 当前已经是 `Supabase-only` composition root
-  - 不再做 sqlite/supabase 二选一
+- 只要给出完整 Supabase runtime env + tenant-aware `LEON_POSTGRES_URL`，backend 可以真实启动
+- 登录与基础 API caller-proof 已成立：
+  - `POST /api/auth/login`
+  - `GET /api/threads`
+  - `GET /api/sandbox/leases/mine`
+  - `GET /api/sandbox/types`
+- 这说明 boot contract 已经不再停留在“理论上应该可以”
 
-### 当前 boot contract 仍未完全闭环的原因
+## 当前 blocker 分类
 
-- 虽然 web composition root 已是 Supabase-first，但系统里仍有一批 side-store / control-plane caller 会把运行面重新拖回 SQLite：
-  - [storage/session_manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/storage/session_manager.py)
-  - [core/runtime/middleware/queue/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/core/runtime/middleware/queue/manager.py)
-  - [core/runtime/middleware/memory/summary_store.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/core/runtime/middleware/memory/summary_store.py)
-  - [sandbox/chat_session.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/chat_session.py)
-  - [sandbox/lease.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/lease.py)
-  - [sandbox/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/manager.py)
+当前未 closure 的部分，不应再归因到 boot root 本身：
 
-### 当前 ruling
+- code / contract blocker
+  - sandbox control-plane strategy path 仍缺 `LeaseRepo.set_volume_id(...)`
+  - 已单独送审于 [#396](https://github.com/OpenDCAI/Mycel/pull/396)
+- provider / runtime blocker
+  - Daytona self-hosted provider proof仍需持续回放
+- auth / bootstrap blocker
+  - 当前不再是主 blocker
+- postgres / checkpointer blocker
+  - tenant-aware DSN 是 bringup 前提，不能再沿用旧 `postgres@127.0.0.1:5432` 假设
 
-- `Supabase Boot Contract` 不是“设计上应该用 Supabase”这种泛话
-- 它必须最后落成 caller-proven truth：
-  - 在 `LEON_STORAGE_STRATEGY=supabase` 下，系统能独立 bringup
-  - 若失败，要明确失败属于：
-    - code/contract
-    - auth/bootstrap
-    - postgres/checkpointer
-    - provider/runtime
-- 在这之前，不应该把任何 SQLite stopgap 误写成“启动本来就该依赖 SQLite”
+## 当前 ruling
 
-## Stopline
+- `lifespan` 和 runtime storage builder 已足够支持 Supabase bringup
+- `CP01` 还不能关，因为高层 provider path 仍会把真实 blocker 暴露出来
+- 但它也不该继续写成“刚开始定义 contract”
 
-- 明确启动所需 env / repo / runtime 前提
-- caller-proven 区分：
-  - code/contract blocker
-  - auth/bootstrap blocker
-  - postgres/checkpointer blocker
-  - provider/runtime blocker
+## Default next move
+
+- 合并 [#396](https://github.com/OpenDCAI/Mycel/pull/396) 后
+- 用同一套真实 env 再跑一轮 backend + Daytona agent proof
+- 若失败，再继续按 blocker 分类推进，而不是回退成 broad inventory

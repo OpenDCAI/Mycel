@@ -1,85 +1,49 @@
 ---
 title: Current State Inventory
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
 # Current State Inventory
 
-目标：固化 current `dev` 下所有仍依赖 SQLite、或仅在 SQLite 语义下成立的 runtime/service/control-plane 路径，避免后续“凭印象推进”。
+目标：给 `origin/dev = f0264bfdd1d204f1b0b24c924451c2097788e0c3` 做一次诚实 inventory，避免后续继续按 2026-04-09 的旧 worktree 结论推进。
 
-## 关注点
+## 当前结论
 
-- 直接 import `storage.providers.sqlite.*` 的 production path
-- 依赖 `sandbox.db` / `db_path` 的 caller
-- `LEON_STORAGE_STRATEGY=supabase` 下仍会退化到 SQLite 的路径
-- 默认配置仍非 Supabase-first 的入口
+### 已经对齐到 strategy/container seam 的部分
 
-## 第一轮 inventory 结论
+- [backend/web/core/lifespan.py](backend/web/core/lifespan.py)
+- [backend/web/services/file_channel_service.py](backend/web/services/file_channel_service.py)
+- [backend/web/services/monitor_service.py](backend/web/services/monitor_service.py)
+- [backend/web/utils/helpers.py](backend/web/utils/helpers.py)
+- [backend/web/routers/webhooks.py](backend/web/routers/webhooks.py)
+- [backend/web/routers/threads.py](backend/web/routers/threads.py)
+- [sandbox/control_plane_repos.py](sandbox/control_plane_repos.py)
+- [storage/runtime.py](storage/runtime.py)
 
-### 已经对齐到 Supabase-first 的部分
+### 仍然保留 SQLite 的部分，但并不都算 blocker
 
-- [backend/web/core/lifespan.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/backend/web/core/lifespan.py)
-  - 当前 authoritative web composition root 已经直接创建 Supabase client
-  - 再通过 [storage/container.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/storage/container.py) 注入：
-    - `user_repo`
-    - `thread_repo`
-    - `lease_repo`
-    - `terminal_repo`
-    - `chat_session_repo`
-    - `sandbox_volume_repo`
-    - `panel_task_repo`
-    - `cron_job_repo`
-- 这说明“默认 composition root 应该是 Supabase-first”已经有真实骨架，不是从零开始
+- [core/runtime/middleware/queue/manager.py](core/runtime/middleware/queue/manager.py)
+- [core/runtime/middleware/memory/summary_store.py](core/runtime/middleware/memory/summary_store.py)
+- [storage/session_manager.py](storage/session_manager.py)
+- [sandbox/runtime.py](sandbox/runtime.py)
+- [sandbox/capability.py](sandbox/capability.py)
+- [sandbox/terminal.py](sandbox/terminal.py)
 
-### 当前最明显的 SQLite-only 残余
+这些路径里有一部分是“显式本地 `db_path` 合同保留”，不应再被误记成同级 residual。
 
-#### 1. File channel / volume lookup
+### 当前最值钱的真实 residual
 
-- [backend/web/services/file_channel_service.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/backend/web/services/file_channel_service.py)
-  - 直接 import:
-    - `SQLiteLeaseRepo`
-    - `SQLiteTerminalRepo`
-  - 通过 `SANDBOX_DB_PATH` 读取 thread -> terminal -> lease -> volume_id 链
+- sandbox control-plane 在 strategy path 下仍有 contract gap
+- fresh audit 直接打出来的是：
+  - [sandbox/manager.py](sandbox/manager.py) 依赖 `lease_store.set_volume_id(...)`
+  - `dev` 上的 [storage/providers/supabase/lease_repo.py](storage/providers/supabase/lease_repo.py) 尚未实现这条合同
 
-#### 2. Sandbox control-plane
+## Inventory ruling
 
-- [sandbox/chat_session.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/chat_session.py)
-  - 直接 new:
-    - `SQLiteChatSessionRepo`
-    - `SQLiteTerminalRepo`
-    - `SQLiteLeaseRepo`
-- [sandbox/lease.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/lease.py)
-  - `_make_lease_repo()` 直接返回 `SQLiteLeaseRepo`
-- [sandbox/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/manager.py)
-  - 顶层 `make_chat_session_repo / make_lease_repo / make_terminal_repo` 都直接返回 SQLite repo
-
-#### 3. Session/checkpoint side-store
-
-- [storage/session_manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/storage/session_manager.py)
-  - 仍直接依赖：
-    - `SQLiteCheckpointRepo`
-    - `SQLiteFileOperationRepo`
-
-#### 4. Runtime middleware side stores
-
-- [core/runtime/middleware/queue/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/core/runtime/middleware/queue/manager.py)
-  - 仍直接 new `SQLiteQueueRepo`
-- [core/runtime/middleware/memory/summary_store.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/core/runtime/middleware/memory/summary_store.py)
-  - 仍直接 new `SQLiteSummaryRepo`
-
-### 当前 ruling
-
-- `#191` 已完成的是“抽象层/旧桥 closure”
-- 新 lane 的核心不是再删桥，而是把这些仍然 SQLite-only 的运行路径继续推到 provider-parity
-- 第一刀不该先碰整个 sandbox 架构
-- 最自然的切分是：
-  1. `service surface`
-  2. `control-plane`
-  3. `side-store / middleware`
-  4. `default Supabase boot contract`
-
-## Stopline
-
-- 给出按 owner/seam 分层的残余清单
-- 明确哪些是 service surface，哪些是 sandbox control-plane，哪些是 boot/default contract
+- 早期“service surface / control-plane / side-store / default cut”这套分层仍然有效
+- 但 current `dev` 上真正优先级最高的 residual 已经不是 broad service surface
+- 当前应该把注意力集中到：
+  1. sandbox control-plane contract gap
+  2. closure proof 质量
+  3. default/env-less contract 的诚实边界

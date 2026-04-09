@@ -8,69 +8,60 @@ created: 2026-04-09
 
 # Supabase-First Runtime Parity
 
-目标：把当前仍然直接依赖 SQLite、或只在 SQLite 语义下成立的运行路径，继续推进到 `LEON_STORAGE_STRATEGY=supabase` 可独立运行的状态，并把默认运行面收成 Supabase-first，而不是继续让系统名义上支持多数据库、实际上某些关键路径仍然隐含依赖 SQLite。
+目标：把运行时主线收成“Supabase 是 canonical strategy，SQLite 只保留为显式本地 `db_path` 合同”，并用真实 caller-proof 区分哪些 checkpoint 已经闭环，哪些还只是局部对齐。
 
-## 背景
+## 当前 mainline truth
 
-`#191` 已完成的是抽象层 closure：
+这张卡现在以 `origin/dev = f0264bfdd1d204f1b0b24c924451c2097788e0c3` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
 
-- `storage_factory.py` 已删除
-- issue 点名的 bypass repos 已回到正式 composition root
+当前 `dev` 已经完成的事实：
 
-但这不等于系统已经达到下一层目标：
+- web/service composition root 已经回到 [backend/web/core/lifespan.py](backend/web/core/lifespan.py) + [storage/runtime.py](storage/runtime.py)
+- `file_channel / helpers / webhooks / threads / monitor` 这些 service surface 已不再直接 new SQLite repos
+- sandbox control-plane 已收口到 [sandbox/control_plane_repos.py](sandbox/control_plane_repos.py)
+- queue / summary / session cleanup / command registry / terminal state 这些 runtime seam 已有 strategy-aware path
 
-- `LEON_STORAGE_STRATEGY=supabase` 下无需 SQLite 也能独立运行
-- 默认配置就是 Supabase
-- storage abstraction 不再被局部 SQLite 直连打穿
+但这不等于 closure 已完成。
 
-当前 `origin/dev` 仍然能看到一批 SQLite 直接依赖或 SQLite-only 语义：
+2026-04-10 fresh audit 的关键事实是：
 
-- [backend/web/services/file_channel_service.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/backend/web/services/file_channel_service.py)
-- [sandbox/chat_session.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/chat_session.py)
-- [sandbox/lease.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/lease.py)
-- [sandbox/manager.py](/Users/lexicalmathical/worktrees/leonai--storage-factory-deletion-cut/sandbox/manager.py)
-
-用户已明确重新钉死最终 invariant：
-
-- 系统最终必须可以只靠 Supabase 跑起来
-- 默认配置应该就是 Supabase
-- 同时保留多数据库抽象
+- 真实 backend bringup + auth + thread/sandbox API proof 已能成立
+- 真实 Daytona self-hosted 单 agent proof 暴露出一个仍未进 `dev` 的 CP03 blocker：
+  - `SandboxManager._ensure_thread_volume()` 依赖 `lease_store.set_volume_id(...)`
+  - `SupabaseLeaseRepo` 在 `dev` 里还缺这条合同
+  - 该 fix 已单独送审于 [#396](https://github.com/OpenDCAI/Mycel/pull/396)
 
 ## 当前 ruling
 
-- 这条 lane 不是 `#191` 的继续加码，而是 `#191` 之后的新主任务
-- 第一阶段不急着写实现，先把“哪些路径仍然 SQLite-only、哪些只是临时 stopgap、哪些已经 strategy-aware”分层盘清
-- 只有在分层完成后，才开最小 implementation slices
-- 第一轮 inventory 已经确认：
-  - `backend/web/core/lifespan.py` 本身已经是 Supabase-first composition root
-  - 当前主要残余集中在 file channel、sandbox control-plane、session/checkpoint side-store、queue/summary middleware
+- `CP00` 已不该继续标 `in_progress`
+- `CP02` service surface parity 已基本收口
+- 当前 mainline 最大 residual 不再是 service 层，而是 sandbox control-plane 的剩余 contract gap
+- `CP05 Closure Proof` 已经开始，但还不能诚实地宣称完成
 
 ## 子任务
 
 | # | 子任务 | 说明 | 状态 |
 |---|--------|------|------|
-| 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 固化 current `dev` 下所有仍依赖 SQLite 的 runtime/service/control-plane 路径 | in_progress |
-| 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 定义并验证 `LEON_STORAGE_STRATEGY=supabase` 下系统独立启动所需最小 contract | in_progress |
-| 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | 收 web/service 层仍然 SQLite-only 的路径 | open |
-| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | 收 sandbox lease/terminal/chat-session/manager 等 control-plane seam | open |
-| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 把默认运行面收成 Supabase-first | open |
-| 05 | [Closure Proof](subtask-05-closure-proof.md) | 真实证明系统在 Supabase 下可独立运行，SQLite 不再是隐含前提 | open |
+| 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 用 current `dev` 重新分类 residual，去掉早期 stale inventory | done |
+| 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 验证 `LEON_STORAGE_STRATEGY=supabase` bringup 所需最小 contract，并记录真实 blocker 分类 | in_progress |
+| 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | web/service 层 direct SQLite caller 收口 | done |
+| 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | lease / terminal / chat-session / manager 的剩余 strategy contract gap | in_progress |
+| 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 默认运行面与 env-less contract 的诚实边界 | in_progress |
+| 05 | [Closure Proof](subtask-05-closure-proof.md) | 高强度 caller-proof：shared sandbox / Daytona / multi-agent | in_progress |
 
-## 边界
+## 当前 stopline
 
-- 不把这条 lane 伪装成 `#191` 的自然尾巴
-- 不靠“保留 SQLite stopgap”来假装 provider parity
-- 不一上来重写整个 sandbox/runtime 架构
-- 每一刀都要显式区分：
-  - 真实产品验证
-  - 机制层验证
-  - 源码/测试层辅助证据
-
-## Stopline
-
-这条任务 closure 的标准是：
+这张卡现在不能靠“代码里 SQLite 痕迹变少了”来 closure。真正 stopline 仍然是：
 
 1. `LEON_STORAGE_STRATEGY=supabase` 下关键运行路径可独立成立
-2. 默认本地/开发主线配置是 Supabase-first
-3. SQLite 不再是某些关键路径的隐含必需品
-4. 多数据库抽象仍保留，不把业务层写死成 Supabase-only
+2. 默认本地/开发主线是 Supabase-first，或至少 ledger 明确写清 env-less 的诚实边界
+3. SQLite 不再是关键 caller 的隐含必需品
+4. closure 由真实产品验证 / 机制层验证 / 源码测试辅助证据共同支撑，而不是只靠局部单测
+
+## 默认 next move
+
+- 先合并或等价落下 [#396](https://github.com/OpenDCAI/Mycel/pull/396)
+- 然后在最新 `dev` 上重跑高强度 proof：
+  - shared sandbox file collaboration
+  - Daytona self-hosted agent path
+  - 更高层 multi-agent stress scenario
