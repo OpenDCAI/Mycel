@@ -6,6 +6,7 @@ Decouples activity sources (file uploads, API calls) from session management.
 import logging
 
 from sandbox.clock import utc_now_iso
+from storage.runtime import build_chat_session_repo as make_chat_session_repo
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,6 @@ def track_thread_activity(thread_id: str, activity_type: str = "activity") -> No
     # to bump last_active_at to prevent idle reaper from pausing during file uploads.
     # Does NOT change session status — preserves paused/active state as-is.
     """
-    from backend.web.core.storage_factory import make_chat_session_repo
-
     now = utc_now_iso()
     repo = make_chat_session_repo()
     try:

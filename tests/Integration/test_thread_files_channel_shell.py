@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,18 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from backend.web.routers import thread_files as thread_files_router
+from backend.web.services import activity_tracker, file_channel_service
+
+
+def test_file_channel_and_activity_tracker_no_longer_import_storage_factory() -> None:
+    activity_source = inspect.getsource(activity_tracker)
+    file_channel_source = inspect.getsource(file_channel_service)
+
+    assert "backend.web.core.storage_factory" not in activity_source
+    assert "backend.web.core.storage_factory" not in file_channel_source
+    assert "storage.runtime" in activity_source
+    assert "SQLiteTerminalRepo" in file_channel_source
+    assert "SQLiteLeaseRepo" in file_channel_source
 
 
 @pytest.mark.asyncio

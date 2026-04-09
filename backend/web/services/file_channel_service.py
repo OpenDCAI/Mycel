@@ -11,8 +11,20 @@ import json
 import logging
 
 from backend.web.utils.helpers import _get_container
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 logger = logging.getLogger(__name__)
+SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+
+
+def make_terminal_repo():
+    return SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
+
+
+def make_lease_repo():
+    return SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
 
 
 def _resolve_volume_source(thread_id: str):
@@ -21,7 +33,6 @@ def _resolve_volume_source(thread_id: str):
     This is the application-layer entry point. Uses sandbox-layer stores
     to walk: thread → terminal → lease → volume_id → sandbox_volumes.
     """
-    from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo
     from sandbox.volume_source import deserialize_volume_source
 
     terminal_repo = make_terminal_repo()
