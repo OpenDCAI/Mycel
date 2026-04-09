@@ -1,12 +1,35 @@
 ---
 title: Service Surface Parity
-status: open
+status: in_progress
 created: 2026-04-09
 ---
 
 # Service Surface Parity
 
 目标：收 web/service 层仍然 SQLite-only 的路径，让 service surface 在 `LEON_STORAGE_STRATEGY=supabase` 下不再隐含依赖 SQLite。
+
+## Current Slice
+
+- `backend/web/services/file_channel_service.py`
+  - 不再直接 import `SQLiteLeaseRepo` / `SQLiteTerminalRepo`
+  - 改为通过 `storage.runtime.build_lease_repo(...)` / `build_terminal_repo(...)` 取 repo
+  - `_resolve_volume_source(...)` 的 lease -> terminal -> sandbox volume 逻辑保持不变
+
+## Evidence
+
+- `机制层验证`
+  - `uv run pytest -q tests/Integration/test_thread_files_channel_shell.py`
+    - `7 passed`
+- `源码/测试层辅助证据`
+  - `uv run ruff check backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py`
+    - `All checks passed!`
+  - `uv run python -m py_compile backend/web/services/file_channel_service.py tests/Integration/test_thread_files_channel_shell.py`
+    - `exit 0`
+
+## Remaining
+
+- service surface 里是否还存在其他 SQLite-only caller 尚未重新分类
+- 如果剩余 caller 已不再是 service seam，就应转入 `CP03 Sandbox Control Plane Parity`
 
 ## Stopline
 
