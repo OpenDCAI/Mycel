@@ -1539,9 +1539,7 @@ async def run_child_thread_live(
             for msg in messages
             if msg.__class__.__name__ == "AIMessage" and extract_text_content(getattr(msg, "content", "")).strip()
         ]
-        runtime_status = (
-            agent.runtime.get_status_dict() if hasattr(agent, "runtime") and hasattr(agent.runtime, "get_status_dict") else {}
-        )
+        runtime_status = agent.runtime.get_status_dict() if hasattr(agent, "runtime") and hasattr(agent.runtime, "get_status_dict") else {}
         runtime_calls = runtime_status.get("calls") if isinstance(runtime_status, dict) else None
         if not visible_ai and runtime_calls == 0:
             raise RuntimeError(f"Child thread {thread_id} failed before first model call")
