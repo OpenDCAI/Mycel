@@ -190,7 +190,7 @@ async def lifespan(app: FastAPI):
         # Cleanup: close all agents
         for agent in app.state.agent_pool.values():
             try:
-                agent.close()
+                agent.close(cleanup_sandbox=False)
             except Exception as e:
                 print(f"[web] Agent cleanup error: {e}")
 

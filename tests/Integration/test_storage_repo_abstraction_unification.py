@@ -392,6 +392,29 @@ async def test_lifespan_wires_user_and_thread_repos_from_storage_runtime_contain
         assert not hasattr(app.state, "member_repo")
 
 
+@pytest.mark.asyncio
+async def test_lifespan_shutdown_closes_agents_without_sandbox_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _RecordingAgent:
+        def __init__(self) -> None:
+            self.cleanup_flags: list[bool] = []
+
+        def close(self, *, cleanup_sandbox: bool = True) -> None:
+            self.cleanup_flags.append(cleanup_sandbox)
+
+    container = _FakeContainer()
+    app = FastAPI()
+    _install_lifespan_noop_dependencies(monkeypatch)
+    monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_: container)
+    agent = _RecordingAgent()
+
+    async with lifespan_module.lifespan(app):
+        app.state.agent_pool["thread-1:daytona_selfhost"] = agent
+
+    assert agent.cleanup_flags == [False]
+
+
 def test_runtime_services_default_to_storage_runtime_container(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     class _FakeRuntimeContainer:
         def __init__(self) -> None:
