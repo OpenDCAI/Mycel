@@ -295,6 +295,7 @@ class ChatSessionManager:
             session_repo=self._repo,
         )
         session.runtime.bind_session(session.session_id)
+        session.runtime.bind_command_repo(self._repo)
         if session.is_expired():
             self.delete(session.session_id, reason="expired")
             return None
@@ -348,6 +349,7 @@ class ChatSessionManager:
             session_repo=self._repo,
         )
         session.runtime.bind_session(session.session_id)
+        session.runtime.bind_command_repo(self._repo)
         self._live_sessions[terminal.terminal_id] = session
         return session
 

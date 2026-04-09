@@ -390,6 +390,140 @@ class SQLiteChatSessionRepo:
             )
             self._conn.commit()
 
+    def upsert_command(
+        self,
+        *,
+        command_id: str,
+        terminal_id: str,
+        chat_session_id: str | None,
+        command_line: str,
+        cwd: str,
+        status: str,
+        stdout: str,
+        stderr: str,
+        exit_code: int | None,
+        updated_at: str,
+        finished_at: str | None,
+        created_at: str | None = None,
+    ) -> None:
+        with self._lock:
+            existing = self._conn.execute(
+                "SELECT command_id, created_at FROM terminal_commands WHERE command_id = ?",
+                (command_id,),
+            ).fetchone()
+            if existing:
+                self._conn.execute(
+                    """
+                    UPDATE terminal_commands
+                    SET status = ?,
+                        stdout = ?,
+                        stderr = ?,
+                        exit_code = ?,
+                        updated_at = ?,
+                        finished_at = ?
+                    WHERE command_id = ?
+                    """,
+                    (status, stdout, stderr, exit_code, updated_at, finished_at, command_id),
+                )
+            else:
+                self._conn.execute(
+                    """
+                    INSERT INTO terminal_commands (
+                        command_id, terminal_id, chat_session_id, command_line, cwd, status,
+                        stdout, stderr, exit_code, created_at, updated_at, finished_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        command_id,
+                        terminal_id,
+                        chat_session_id,
+                        command_line,
+                        cwd,
+                        status,
+                        stdout,
+                        stderr,
+                        exit_code,
+                        created_at or updated_at,
+                        updated_at,
+                        finished_at,
+                    ),
+                )
+            self._conn.commit()
+
+    def append_command_chunks(
+        self,
+        *,
+        command_id: str,
+        stdout_chunks: list[str],
+        stderr_chunks: list[str],
+        created_at: str,
+    ) -> None:
+        if not stdout_chunks and not stderr_chunks:
+            return
+        with self._lock:
+            if stdout_chunks:
+                self._conn.executemany(
+                    """
+                    INSERT INTO terminal_command_chunks (command_id, stream, content, created_at)
+                    VALUES (?, 'stdout', ?, ?)
+                    """,
+                    [(command_id, chunk, created_at) for chunk in stdout_chunks],
+                )
+            if stderr_chunks:
+                self._conn.executemany(
+                    """
+                    INSERT INTO terminal_command_chunks (command_id, stream, content, created_at)
+                    VALUES (?, 'stderr', ?, ?)
+                    """,
+                    [(command_id, chunk, created_at) for chunk in stderr_chunks],
+                )
+            self._conn.commit()
+
+    def get_command(self, *, command_id: str, terminal_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            self._conn.row_factory = sqlite3.Row
+            row = self._conn.execute(
+                """
+                SELECT command_id, terminal_id, chat_session_id, command_line, cwd, status, stdout, stderr, exit_code,
+                       created_at, updated_at, finished_at
+                FROM terminal_commands
+                WHERE command_id = ? AND terminal_id = ?
+                """,
+                (command_id, terminal_id),
+            ).fetchone()
+            self._conn.row_factory = None
+            return dict(row) if row else None
+
+    def list_command_chunks(self, *, command_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            self._conn.row_factory = sqlite3.Row
+            rows = self._conn.execute(
+                """
+                SELECT stream, content
+                FROM terminal_command_chunks
+                WHERE command_id = ?
+                ORDER BY chunk_id ASC
+                """,
+                (command_id,),
+            ).fetchall()
+            self._conn.row_factory = None
+            return [dict(row) for row in rows]
+
+    def find_command_terminal_id(self, *, command_id: str, thread_id: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT tc.terminal_id
+                FROM terminal_commands tc
+                JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
+                WHERE tc.command_id = ? AND at.thread_id = ?
+                LIMIT 1
+                """,
+                (command_id, thread_id),
+            ).fetchone()
+            return str(row[0]) if row else None
+
     def delete_session(self, session_id: str, *, reason: str = "closed") -> None:
         with self._lock:
             self._conn.execute(
