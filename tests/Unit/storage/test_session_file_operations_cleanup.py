@@ -35,7 +35,7 @@ def test_session_delete_thread_cleans_file_operations(monkeypatch, tmp_path):
     assert n_other == 1
 
 
-def test_session_delete_thread_uses_runtime_container_under_supabase(monkeypatch, tmp_path):
+def test_session_delete_thread_uses_runtime_repo_builders_under_supabase(monkeypatch, tmp_path):
     deleted: list[tuple[str, str]] = []
     closed: list[str] = []
 
@@ -53,20 +53,14 @@ def test_session_delete_thread_uses_runtime_container_under_supabase(monkeypatch
         def close(self) -> None:
             closed.append("file_operation")
 
-    class _FakeContainer:
-        def checkpoint_repo(self):
-            return _FakeCheckpointRepo()
-
-        def file_operation_repo(self):
-            return _FakeFileOperationRepo()
-
     session_dir = tmp_path / ".leon"
     session_dir.mkdir(parents=True)
     manager = SessionManager(session_dir=session_dir)
     manager.save_session("t-supabase")
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
-    monkeypatch.setattr("storage.session_manager.build_storage_container", lambda **kwargs: _FakeContainer())
+    monkeypatch.setattr("storage.session_manager.build_checkpoint_repo", lambda **kwargs: _FakeCheckpointRepo())
+    monkeypatch.setattr("storage.session_manager.build_file_operation_repo", lambda **kwargs: _FakeFileOperationRepo())
 
     ok = manager.delete_thread("t-supabase")
 
@@ -76,7 +70,7 @@ def test_session_delete_thread_uses_runtime_container_under_supabase(monkeypatch
     assert manager.db_path == Path(session_dir / "leon.db")
 
 
-def test_session_delete_thread_defaults_to_runtime_container_when_strategy_missing(monkeypatch, tmp_path):
+def test_session_delete_thread_uses_runtime_repo_builders_under_explicit_supabase(monkeypatch, tmp_path):
     deleted: list[tuple[str, str]] = []
     closed: list[str] = []
 
@@ -94,12 +88,47 @@ def test_session_delete_thread_defaults_to_runtime_container_when_strategy_missi
         def close(self) -> None:
             closed.append("file_operation")
 
-    class _FakeContainer:
-        def checkpoint_repo(self):
-            return _FakeCheckpointRepo()
+    session_dir = tmp_path / ".leon"
+    session_dir.mkdir(parents=True)
+    manager = SessionManager(session_dir=session_dir)
+    manager.save_session("t-supabase-builders")
 
-        def file_operation_repo(self):
-            return _FakeFileOperationRepo()
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr(
+        "storage.session_manager.build_checkpoint_repo",
+        lambda **_kwargs: _FakeCheckpointRepo(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "storage.session_manager.build_file_operation_repo",
+        lambda **_kwargs: _FakeFileOperationRepo(),
+        raising=False,
+    )
+
+    ok = manager.delete_thread("t-supabase-builders")
+
+    assert ok is True
+    assert deleted == [("checkpoint", "t-supabase-builders"), ("file_operation", "t-supabase-builders")]
+    assert closed == ["checkpoint", "file_operation"]
+
+
+def test_session_delete_thread_defaults_to_runtime_repo_builders_when_strategy_missing(monkeypatch, tmp_path):
+    deleted: list[tuple[str, str]] = []
+    closed: list[str] = []
+
+    class _FakeCheckpointRepo:
+        def delete_thread_data(self, thread_id: str) -> None:
+            deleted.append(("checkpoint", thread_id))
+
+        def close(self) -> None:
+            closed.append("checkpoint")
+
+    class _FakeFileOperationRepo:
+        def delete_thread_operations(self, thread_id: str) -> None:
+            deleted.append(("file_operation", thread_id))
+
+        def close(self) -> None:
+            closed.append("file_operation")
 
     session_dir = tmp_path / ".leon"
     session_dir.mkdir(parents=True)
@@ -108,7 +137,8 @@ def test_session_delete_thread_defaults_to_runtime_container_when_strategy_missi
 
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
     monkeypatch.setenv("LEON_SUPABASE_CLIENT_FACTORY", "tests.fake:create_client")
-    monkeypatch.setattr("storage.session_manager.build_storage_container", lambda **kwargs: _FakeContainer())
+    monkeypatch.setattr("storage.session_manager.build_checkpoint_repo", lambda **kwargs: _FakeCheckpointRepo())
+    monkeypatch.setattr("storage.session_manager.build_file_operation_repo", lambda **kwargs: _FakeFileOperationRepo())
 
     ok = manager.delete_thread("t-default")
 
@@ -149,8 +179,8 @@ def test_session_delete_thread_keeps_local_db_when_strategy_missing_and_runtime_
 
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
     monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
-    monkeypatch.setattr("storage.session_manager.SQLiteCheckpointRepo", _FakeCheckpointRepo)
-    monkeypatch.setattr("storage.session_manager.SQLiteFileOperationRepo", _FakeFileOperationRepo)
+    monkeypatch.setattr("storage.providers.sqlite.checkpoint_repo.SQLiteCheckpointRepo", _FakeCheckpointRepo)
+    monkeypatch.setattr("storage.providers.sqlite.file_operation_repo.SQLiteFileOperationRepo", _FakeFileOperationRepo)
 
     ok = manager.delete_thread("t-local")
 
