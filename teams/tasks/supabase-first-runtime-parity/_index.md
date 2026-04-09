@@ -92,9 +92,15 @@ created: 2026-04-09
     - `sandbox/lease.py::_use_supabase_storage()` 不能安全改成 supabase-first
     - env 缺省时，`sandbox/control_plane_repos.py` / `sandbox/manager.py` 仍先落本地 sqlite lease truth
     - 已补 regression，证明 `mark_needs_refresh()` 在缺省 env 下仍必须写回 sqlite
+  - 第二轮 ruling 已压实：
+    - `backend/web/core/lifespan.py` 的 `queue_manager` 已改为消费 `storage_container.queue_repo()`
+    - `create_leon_agent()` 在 `LEON_STORAGE_STRATEGY=supabase` 下会自动接 runtime storage container
+    - `LeonAgent` 在有 runtime container 且未显式注入 queue manager 时，默认走 container queue repo
+    - generic agent / `langgraph_app.py` 的 summary persistence 因此也回到 runtime container
   - 当前 stopline：
-    - 这只说明 monitor read surface 已切到 Supabase-first
+    - 这只说明 monitor read surface 以及 default startup queue/summary wiring 已切到 Supabase-first
     - 还不能说整个默认运行面已切完
     - 还不等于 boot/runtime closure proof 已完成
   - 下一步如果继续，应在 `CP04` 里补更高层 default/dev contract proof
-    - 重点核对 queue / summary / langgraph dev / sandbox control-plane 这些仍绕开 strategy 的默认启动旁路
+    - 重点核对 README / quickstart / deployment / configuration 的 documented truth
+    - 以及 env-less sandbox control-plane 这类仍未被证明可默认切到 Supabase 的 residual

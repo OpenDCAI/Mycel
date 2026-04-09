@@ -132,7 +132,7 @@ async def lifespan(app: FastAPI):
     app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
 
     # ---- Existing state ----
-    app.state.queue_manager = MessageQueueManager()
+    app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
     app.state.agent_pool = cast(dict[str, Any], {})
     app.state.thread_sandbox = cast(dict[str, str], {})
     app.state.thread_cwd = cast(dict[str, str], {})

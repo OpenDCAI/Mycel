@@ -34,6 +34,7 @@ class _FakeContainer:
         self.lease_repo_value = _FakeRepo()
         self.terminal_repo_value = _FakeRepo()
         self.chat_session_repo_value = _FakeRepo()
+        self.queue_repo_value = _FakeRepo()
         self.sandbox_volume_repo_value = _FakeRepo()
         self.thread_launch_pref_repo_value = _FakeRepo()
         self.recipe_repo_value = _FakeRepo()
@@ -58,6 +59,9 @@ class _FakeContainer:
 
     def chat_session_repo(self) -> _FakeRepo:
         return self.chat_session_repo_value
+
+    def queue_repo(self) -> _FakeRepo:
+        return self.queue_repo_value
 
     def sandbox_volume_repo(self) -> _FakeRepo:
         return self.sandbox_volume_repo_value
@@ -381,6 +385,7 @@ async def test_lifespan_wires_user_and_thread_repos_from_storage_runtime_contain
         assert app.state.lease_repo is container.lease_repo_value
         assert app.state.terminal_repo is container.terminal_repo_value
         assert app.state.chat_session_repo is container.chat_session_repo_value
+        assert app.state.queue_manager._repo is container.queue_repo_value
         assert app.state.sandbox_volume_repo is container.sandbox_volume_repo_value
         assert app.state.panel_task_repo is container.panel_task_repo_value
         assert app.state._storage_container is container
