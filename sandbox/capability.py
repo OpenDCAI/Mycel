@@ -118,6 +118,11 @@ class _CommandWrapper(BaseExecutor):
         return await bg_session.runtime.start_command(wrapped, work_dir)
 
     def _lookup_command_terminal_id(self, command_id: str) -> str | None:
+        command_repo = getattr(self._session, "_session_repo", None)
+        if command_repo is not None:
+            terminal_id = command_repo.find_command_terminal_id(command_id=command_id, thread_id=self._session.thread_id)
+            if terminal_id is not None:
+                return terminal_id
         if self._db_path is None:
             return None
         with connect_sqlite(self._db_path) as conn:

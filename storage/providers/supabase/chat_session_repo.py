@@ -229,6 +229,122 @@ class SupabaseChatSessionRepo:
             "status", "paused"
         ).execute()
 
+    def upsert_command(
+        self,
+        *,
+        command_id: str,
+        terminal_id: str,
+        chat_session_id: str | None,
+        command_line: str,
+        cwd: str,
+        status: str,
+        stdout: str,
+        stderr: str,
+        exit_code: int | None,
+        updated_at: str,
+        finished_at: str | None,
+        created_at: str | None = None,
+    ) -> None:
+        existing = q.rows(
+            q.limit(self._commands().select("command_id").eq("command_id", command_id), 1, _REPO, "upsert_command").execute(),
+            _REPO,
+            "upsert_command",
+        )
+        payload = {
+            "terminal_id": terminal_id,
+            "chat_session_id": chat_session_id,
+            "command_line": command_line,
+            "cwd": cwd,
+            "status": status,
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": exit_code,
+            "updated_at": updated_at,
+            "finished_at": finished_at,
+        }
+        if existing:
+            self._commands().update(payload).eq("command_id", command_id).execute()
+            return
+        self._commands().insert(
+            {
+                "command_id": command_id,
+                "created_at": created_at or updated_at,
+                **payload,
+            }
+        ).execute()
+
+    def append_command_chunks(
+        self,
+        *,
+        command_id: str,
+        stdout_chunks: list[str],
+        stderr_chunks: list[str],
+        created_at: str,
+    ) -> None:
+        rows: list[dict[str, Any]] = []
+        rows.extend(
+            {"command_id": command_id, "stream": "stdout", "content": chunk, "created_at": created_at}
+            for chunk in stdout_chunks
+        )
+        rows.extend(
+            {"command_id": command_id, "stream": "stderr", "content": chunk, "created_at": created_at}
+            for chunk in stderr_chunks
+        )
+        if rows:
+            self._chunks().insert(rows).execute()
+
+    def get_command(self, *, command_id: str, terminal_id: str) -> dict[str, Any] | None:
+        rows = q.rows(
+            q.limit(
+                self._commands()
+                .select(
+                    "command_id,terminal_id,chat_session_id,command_line,cwd,status,stdout,stderr,exit_code,created_at,updated_at,finished_at"
+                )
+                .eq("command_id", command_id)
+                .eq("terminal_id", terminal_id),
+                1,
+                _REPO,
+                "get_command",
+            ).execute(),
+            _REPO,
+            "get_command",
+        )
+        return dict(rows[0]) if rows else None
+
+    def list_command_chunks(self, *, command_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(row)
+            for row in q.rows(
+                q.order(
+                    self._chunks().select("stream,content").eq("command_id", command_id),
+                    "chunk_id",
+                    desc=False,
+                    repo=_REPO,
+                    operation="list_command_chunks",
+                ).execute(),
+                _REPO,
+                "list_command_chunks",
+            )
+        ]
+
+    def find_command_terminal_id(self, *, command_id: str, thread_id: str) -> str | None:
+        rows = q.rows(
+            q.limit(
+                self._client.table(_COMMANDS_TABLE)
+                .select("terminal_id, abstract_terminals!inner(thread_id)")
+                .eq("command_id", command_id)
+                .eq("abstract_terminals.thread_id", thread_id),
+                1,
+                _REPO,
+                "find_command_terminal_id",
+            ).execute(),
+            _REPO,
+            "find_command_terminal_id",
+        )
+        if not rows:
+            return None
+        return str(rows[0]["terminal_id"])
+
     def delete_session(self, session_id: str, *, reason: str = "closed") -> None:
         self._sessions().update({"status": "closed", "ended_at": _utc_now_iso(), "close_reason": reason}).eq(
             "chat_session_id", session_id

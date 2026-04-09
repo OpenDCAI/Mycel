@@ -339,9 +339,13 @@ class PhysicalTerminalRuntime(ABC):
         self._persisted_stderr_chunk_count: dict[str, int] = {}
         self._chunk_table_available: bool | None = None
         self._running_output_tail_limit = 4096
+        self._command_repo = None
 
     def bind_session(self, session_id: str) -> None:
         self.chat_session_id = session_id
+
+    def bind_command_repo(self, command_repo) -> None:
+        self._command_repo = command_repo
 
     def _db_path(self) -> Path:
         db_path = getattr(self.terminal, "db_path", None)
@@ -378,13 +382,11 @@ class PhysicalTerminalRuntime(ABC):
 
     def _append_unflushed_chunks(
         self,
-        conn: sqlite3.Connection,
+        conn: sqlite3.Connection | None,
         *,
         command_id: str,
         async_cmd: AsyncCommand,
     ) -> None:
-        if not self._has_chunk_table(conn):
-            return
         stdout_start = self._persisted_stdout_chunk_count.get(command_id, 0)
         stderr_start = self._persisted_stderr_chunk_count.get(command_id, 0)
         stdout_chunks = async_cmd.stdout_buffer[stdout_start:]
@@ -392,6 +394,20 @@ class PhysicalTerminalRuntime(ABC):
         if not stdout_chunks and not stderr_chunks:
             return
         created_at = datetime.now().isoformat()
+        if self._command_repo is not None:
+            self._command_repo.append_command_chunks(
+                command_id=command_id,
+                stdout_chunks=stdout_chunks,
+                stderr_chunks=stderr_chunks,
+                created_at=created_at,
+            )
+            if stdout_chunks:
+                self._persisted_stdout_chunk_count[command_id] = stdout_start + len(stdout_chunks)
+            if stderr_chunks:
+                self._persisted_stderr_chunk_count[command_id] = stderr_start + len(stderr_chunks)
+            return
+        if conn is None or not self._has_chunk_table(conn):
+            return
         if stdout_chunks:
             conn.executemany(
                 """
@@ -424,6 +440,23 @@ class PhysicalTerminalRuntime(ABC):
         conn: sqlite3.Connection | None = None,
     ) -> None:
         now = datetime.now().isoformat()
+        finished_at = now if status in {"done", "cancelled", "failed"} else None
+        if self._command_repo is not None:
+            self._command_repo.upsert_command(
+                command_id=command_id,
+                terminal_id=self.terminal.terminal_id,
+                chat_session_id=self.chat_session_id,
+                command_line=command_line,
+                cwd=cwd,
+                status=status,
+                stdout=stdout or "",
+                stderr=stderr or "",
+                exit_code=exit_code,
+                updated_at=now,
+                finished_at=finished_at,
+                created_at=now,
+            )
+            return
         should_commit = conn is None
         target = conn or self._connect()
         try:
@@ -466,7 +499,7 @@ class PhysicalTerminalRuntime(ABC):
                         exit_code,
                         now,
                         now,
-                        now if status in {"done", "cancelled", "failed"} else None,
+                        finished_at,
                     ),
                 )
             if should_commit:
@@ -484,6 +517,17 @@ class PhysicalTerminalRuntime(ABC):
         if not force and now - last < self._stream_flush_interval_sec:
             return
         self._last_stream_flush_at[command_id] = now
+        if self._command_repo is not None:
+            self._append_unflushed_chunks(None, command_id=command_id, async_cmd=async_cmd)
+            self._upsert_command_row(
+                command_id=command_id,
+                command_line=async_cmd.command_line,
+                cwd=async_cmd.cwd,
+                status="running",
+                stdout=self._tail_output(async_cmd.stdout_buffer, max_chars=self._running_output_tail_limit),
+                stderr=self._tail_output(async_cmd.stderr_buffer, max_chars=self._running_output_tail_limit),
+            )
+            return
         with self._connect() as conn:
             self._append_unflushed_chunks(conn, command_id=command_id, async_cmd=async_cmd)
             self._upsert_command_row(
@@ -498,6 +542,40 @@ class PhysicalTerminalRuntime(ABC):
             conn.commit()
 
     def _load_command_from_db(self, command_id: str) -> AsyncCommand | None:
+        if self._command_repo is not None:
+            row = self._command_repo.get_command(command_id=command_id, terminal_id=self.terminal.terminal_id)
+            stdout_text = ""
+            stderr_text = ""
+            if row:
+                stdout_text = str(row.get("stdout") or "")
+                stderr_text = str(row.get("stderr") or "")
+                chunk_rows = self._command_repo.list_command_chunks(command_id=command_id)
+                if chunk_rows:
+                    stdout_chunks = [str(chunk.get("content") or "") for chunk in chunk_rows if chunk.get("stream") == "stdout"]
+                    stderr_chunks = [str(chunk.get("content") or "") for chunk in chunk_rows if chunk.get("stream") == "stderr"]
+                    chunk_stdout = "".join(stdout_chunks)
+                    chunk_stderr = "".join(stderr_chunks)
+                    if row["status"] in {"done", "cancelled", "failed"}:
+                        if len(chunk_stdout) >= len(stdout_text):
+                            stdout_text = chunk_stdout
+                        if len(chunk_stderr) >= len(stderr_text):
+                            stderr_text = chunk_stderr
+                    else:
+                        stdout_text = chunk_stdout
+                        stderr_text = chunk_stderr
+            if not row:
+                return None
+            async_cmd = AsyncCommand(
+                command_id=row["command_id"],
+                command_line=row["command_line"],
+                cwd=row["cwd"],
+                stdout_buffer=[stdout_text],
+                stderr_buffer=[stderr_text],
+                exit_code=row["exit_code"],
+                done=row["status"] in {"done", "cancelled", "failed"},
+            )
+            self._commands[command_id] = async_cmd
+            return async_cmd
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
