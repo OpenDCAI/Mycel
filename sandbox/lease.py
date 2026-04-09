@@ -82,9 +82,9 @@ def _use_supabase_storage() -> bool:
 
 
 def _make_lease_repo(db_path: Path | None = None):
-    from backend.web.core.storage_factory import make_lease_repo
+    from storage.runtime import build_lease_repo
 
-    return make_lease_repo(db_path=db_path)
+    return build_lease_repo(db_path=db_path)
 
 
 @dataclass
