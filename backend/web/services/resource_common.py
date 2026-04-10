@@ -203,8 +203,10 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
         own_repo = True
     try:
         refs: dict[str, str] = {}
-        for tid in unique:
-            data = repo.get_by_id(tid)
+        for data in repo.list_by_ids(unique):
+            tid = str(data.get("id") or "").strip()
+            if not tid:
+                continue
             agent_ref = str(data.get("agent_user_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref

@@ -8,6 +8,13 @@ class _FakeThreadRepo:
     def get_by_id(self, thread_id: str):
         return self._rows.get(thread_id)
 
+    def list_by_ids(self, thread_ids: list[str]):
+        return [
+            {"id": thread_id, **row}
+            for thread_id, row in self._rows.items()
+            if thread_id in set(thread_ids)
+        ]
+
     def close(self):
         pass
 
@@ -34,6 +41,30 @@ def test_thread_owners_resolves_member_metadata_from_runtime_storage():
     owners = resource_common.thread_owners(
         ["thread-1", "thread-2"],
         thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
+        user_repo=_FakeUserRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
+    )
+
+    assert owners == {
+        "thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"},
+        "thread-2": {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None},
+    }
+
+
+def test_thread_owners_prefers_batch_thread_lookup() -> None:
+    class _BatchOnlyThreadRepo:
+        def list_by_ids(self, thread_ids: list[str]):
+            assert thread_ids == ["thread-1", "thread-2"]
+            return [{"id": "thread-1", "agent_user_id": "agent-1"}]
+
+        def get_by_id(self, _thread_id: str):
+            raise AssertionError("unexpected per-thread lookup")
+
+        def close(self):
+            pass
+
+    owners = resource_common.thread_owners(
+        ["thread-1", "thread-2"],
+        thread_repo=_BatchOnlyThreadRepo(),
         user_repo=_FakeUserRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
     )
 

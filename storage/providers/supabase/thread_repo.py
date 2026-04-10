@@ -83,6 +83,24 @@ class SupabaseThreadRepo:
             return None
         return _to_dict(rows[0])
 
+    def list_by_ids(self, thread_ids: list[str]) -> list[dict[str, Any]]:
+        ordered_ids: list[str] = []
+        seen: set[str] = set()
+        for thread_id in thread_ids:
+            normalized = str(thread_id or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered_ids.append(normalized)
+        if not ordered_ids:
+            return []
+        select = ", ".join(_COLS)
+        response = q.in_(self._t().select(select), "id", ordered_ids, _REPO, "list_by_ids").execute()
+        rows = q.rows(response, _REPO, "list_by_ids")
+        normalized_rows = [_to_dict(row) for row in rows]
+        indexed = {row["id"]: row for row in normalized_rows}
+        return [indexed[thread_id] for thread_id in ordered_ids if thread_id in indexed]
+
     def get_by_user_id(self, user_id: str) -> dict[str, Any] | None:
         select = ", ".join(_COLS)
         # @@@agent-user-thread-lookup - social/user-facing lookups must resolve to the
