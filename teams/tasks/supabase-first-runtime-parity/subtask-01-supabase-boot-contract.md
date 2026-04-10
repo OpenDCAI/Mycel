@@ -20,9 +20,9 @@ created: 2026-04-09
   - `GET /api/sandbox/types`
 - 这说明 boot contract 已经不再停留在“理论上应该可以”
 
-## 当前 blocker 分类
+## Former blocker 分类
 
-当前未 closure 的部分，已经不再归因到 boot root 本身，并且其中关键 code gap 也已经进 mainline：
+当时未 closure 的部分，已经不再归因到 boot root 本身，并且其中关键 code gap 也已经进 mainline：
 
 - code / contract blocker
   - sandbox control-plane strategy path 仍缺 `LeaseRepo.set_volume_id(...)`
@@ -37,7 +37,7 @@ created: 2026-04-09
 ## 当前 ruling
 
 - `lifespan` 和 runtime storage builder 已足够支持 Supabase bringup
-- 高层 provider path 的真实问题已经被拆分并收进后续 checkpoint / proof，不再构成 `CP01` 本身的未 closure 理由
+- 高层 provider path 的真实问题已经被拆分并收进后续 checkpoint / proof，不再构成 `CP01` 本身的未完成理由
 - `CP01` 到这里可以关卡
 
 ## Closure note

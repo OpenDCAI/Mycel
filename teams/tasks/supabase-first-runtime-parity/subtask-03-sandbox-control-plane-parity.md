@@ -30,7 +30,7 @@ created: 2026-04-09
 - 但 `CP03` 还没 closure
 - 当前 stopline 落在一个明确、狭窄、可验证的 contract hole 上
 
-## Current next slice
+## Former next slice
 
 - [#396](https://github.com/OpenDCAI/Mycel/pull/396)
   - 为 `LeaseRepo` 补 `set_volume_id(...)`
