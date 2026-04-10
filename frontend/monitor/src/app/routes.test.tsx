@@ -14,22 +14,14 @@ beforeEach(() => {
     new Response(
       JSON.stringify({
         snapshot_at: "2026-04-08T00:00:00Z",
-        resources_summary: {
-          running_sessions: 0,
-          active_providers: 0,
-          unavailable_providers: 0,
-        },
         infra: {
           providers_active: 0,
           providers_unavailable: 0,
           leases_total: 0,
           leases_diverged: 0,
           leases_orphan: 0,
-          leases_healthy: 0,
         },
         workload: {
-          db_sessions_total: 0,
-          provider_sessions_total: 0,
           running_sessions: 0,
           evaluations_running: 0,
         },
@@ -103,22 +95,14 @@ describe("MonitorRoutes", () => {
     mockRoutePayloads({
       "/dashboard": {
         snapshot_at: "2026-04-08T00:00:00Z",
-        resources_summary: {
-          running_sessions: 4,
-          active_providers: 2,
-          unavailable_providers: 1,
-        },
         infra: {
           providers_active: 2,
           providers_unavailable: 1,
           leases_total: 3,
           leases_diverged: 1,
           leases_orphan: 0,
-          leases_healthy: 2,
         },
         workload: {
-          db_sessions_total: 7,
-          provider_sessions_total: 4,
           running_sessions: 4,
           evaluations_running: 1,
         },

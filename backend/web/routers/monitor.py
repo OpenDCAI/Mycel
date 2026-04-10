@@ -45,22 +45,17 @@ def dashboard_snapshot():
 
     resource_summary = resources.get("summary") or {}
     lease_summary = leases.get("summary") or {}
-    provider_sessions_total = sum(len(provider.get("sessions") or []) for provider in resources.get("providers") or [])
 
     return {
         "snapshot_at": health.get("snapshot_at"),
-        "resources_summary": resource_summary,
         "infra": {
             "providers_active": int(resource_summary.get("active_providers") or 0),
             "providers_unavailable": int(resource_summary.get("unavailable_providers") or 0),
             "leases_total": int(lease_summary.get("total") or leases.get("count") or 0),
             "leases_diverged": int(lease_summary.get("diverged") or 0) + int(lease_summary.get("orphan_diverged") or 0),
             "leases_orphan": int(lease_summary.get("orphan") or 0) + int(lease_summary.get("orphan_diverged") or 0),
-            "leases_healthy": int(lease_summary.get("healthy") or 0),
         },
         "workload": {
-            "db_sessions_total": int(((health.get("db") or {}).get("counts") or {}).get("chat_sessions") or 0),
-            "provider_sessions_total": provider_sessions_total,
             "running_sessions": int(resource_summary.get("running_sessions") or 0),
             "evaluations_running": int(evaluation["evaluations_running"]),
         },

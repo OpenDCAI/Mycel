@@ -235,10 +235,13 @@ def test_monitor_dashboard_route_smoke(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert "snapshot_at" in payload
-    assert "resources_summary" in payload
     assert "infra" in payload
     assert "workload" in payload
     assert "latest_evaluation" in payload
+    assert "resources_summary" not in payload
+    assert "leases_healthy" not in payload["infra"]
+    assert "db_sessions_total" not in payload["workload"]
+    assert "provider_sessions_total" not in payload["workload"]
 
 
 def test_monitor_leases_route_exposes_summary_and_groups(monkeypatch):
