@@ -316,10 +316,7 @@ def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[
     metrics_by_tier = {str(row.get("tier") or "").strip().lower(): row.get("metrics") or {} for row in metrics_rows}
     system_metrics = metrics_by_tier.get("system") or {}
     objective_metrics = metrics_by_tier.get("objective") or {}
-    facts = [
-        {"label": "Status", "value": status},
-        {"label": "Metric Tiers", "value": str(len(metrics_rows))},
-    ]
+    facts = [{"label": "Metric Tiers", "value": str(len(metrics_rows))}]
     user_message = str(run.get("user_message") or "").strip()
     total_tokens = system_metrics.get("total_tokens")
     if total_tokens is not None:

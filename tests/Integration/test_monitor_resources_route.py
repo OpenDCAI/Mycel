@@ -551,6 +551,7 @@ def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
         "finished_at": "2026-04-08T00:03:00Z",
     }
     fact_labels = [fact["label"] for fact in evaluation_payload["facts"]]
+    assert "Status" not in fact_labels
     assert "Thread ID" not in fact_labels
     assert "Run ID" not in fact_labels
     assert "Started At" not in fact_labels
