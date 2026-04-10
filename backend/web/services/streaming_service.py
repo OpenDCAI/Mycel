@@ -139,16 +139,9 @@ async def write_cancellation_markers(
         get_next_version = getattr(checkpointer, "get_next_version", None)
         # @@@checkpoint-version-contract - LangGraph saver versions are opaque monotonic ids,
         # not plain ints. Cancellation writes must advance them through the saver contract.
-        if callable(get_next_version):
-            next_message_version = get_next_version(current_versions.get("messages"), None)
-        else:
-            current_message_version = current_versions.get("messages")
-            if current_message_version is None:
-                next_message_version = 1
-            elif isinstance(current_message_version, int):
-                next_message_version = current_message_version + 1
-            else:
-                next_message_version = int(str(current_message_version).split(".")[0]) + 1
+        if not callable(get_next_version):
+            raise RuntimeError("Checkpointer missing get_next_version; cannot write cancellation markers honestly")
+        next_message_version = get_next_version(current_versions.get("messages"), None)
         new_versions = {"messages": next_message_version}
         new_checkpoint["channel_versions"] = {**current_versions, **new_versions}
         new_checkpoint["updated_channels"] = list(new_versions)
