@@ -14,6 +14,41 @@ class _BrokenSandboxInstancesClient(FakeSupabaseClient):
         return super().table(table_name)
 
 
+class _CountResponse:
+    def __init__(self, count: int) -> None:
+        self.data = []
+        self.count = count
+
+
+class _CountQuery:
+    def __init__(self, count: int) -> None:
+        self._count = count
+
+    def select(self, _columns: str, **_kwargs):
+        return self
+
+    def limit(self, _value: int):
+        return self
+
+    def execute(self):
+        return _CountResponse(self._count)
+
+
+class _CountClient:
+    def __init__(self, counts: dict[str, int]) -> None:
+        self._counts = counts
+
+    def table(self, table_name: str):
+        return _CountQuery(self._counts[table_name])
+
+
+class _BrokenCountClient(_CountClient):
+    def table(self, table_name: str):
+        if table_name == "sandbox_leases":
+            raise RuntimeError("count exploded")
+        return super().table(table_name)
+
+
 def _bootstrap_monitor_db(db_path):
     conn = sqlite3.connect(db_path)
     try:
@@ -508,6 +543,31 @@ def test_supabase_list_probe_targets_fails_loudly_when_instance_lookup_breaks() 
 
     with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
         repo.list_probe_targets()
+
+
+def test_supabase_count_rows_returns_exact_counts() -> None:
+    repo = SupabaseSandboxMonitorRepo(
+        _CountClient(
+            {
+                "chat_sessions": 3,
+                "sandbox_leases": 5,
+                "provider_events": 7,
+            }
+        )
+    )
+
+    assert repo.count_rows(["chat_sessions", "sandbox_leases", "provider_events"]) == {
+        "chat_sessions": 3,
+        "sandbox_leases": 5,
+        "provider_events": 7,
+    }
+
+
+def test_supabase_count_rows_fails_loudly_when_count_query_breaks() -> None:
+    repo = SupabaseSandboxMonitorRepo(_BrokenCountClient({"chat_sessions": 3, "sandbox_leases": 5}))
+
+    with pytest.raises(RuntimeError, match="count exploded"):
+        repo.count_rows(["chat_sessions", "sandbox_leases"])
 
 
 def test_supabase_list_sessions_with_leases_matches_sqlite_terminal_and_recent_session_fallback(tmp_path):

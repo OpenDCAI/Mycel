@@ -328,11 +328,8 @@ class SupabaseSandboxMonitorRepo:
     def count_rows(self, table_names: list[str]) -> dict[str, int]:
         counts: dict[str, int] = {}
         for table_name in table_names:
-            try:
-                resp = self._client.table(table_name).select("*", count="exact").limit(0).execute()
-                counts[table_name] = getattr(resp, "count", 0) or 0
-            except Exception:
-                counts[table_name] = 0
+            resp = self._client.table(table_name).select("*", count="exact").limit(0).execute()
+            counts[table_name] = getattr(resp, "count", 0) or 0
         return counts
 
     def list_sessions_with_leases(self) -> list[dict]:
