@@ -773,9 +773,14 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByRole("heading", { name: "Operation op-1" })).toBeInTheDocument();
     expect(screen.getByRole("link", { current: "page", name: /leases/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("heading", { name: "Operation Truth" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Target" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Result Truth" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Event Timeline" })).toBeInTheDocument();
     expect(screen.getByText("Destroy flow started")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
     expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
+    expect(screen.getByRole("link", { name: "daytona" })).toHaveAttribute("href", "/providers/daytona");
   });
 
   it("renders provider detail under the resources surface", async () => {
