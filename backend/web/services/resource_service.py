@@ -71,10 +71,7 @@ def build_resource_session_payload(
     return payload
 
 
-def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
-    """Browse the filesystem of a sandbox lease via its provider."""
-    from pathlib import PurePosixPath
-
+def _resolve_sandbox_provider(lease_id: str) -> tuple[Any, str]:
     repo = make_sandbox_monitor_repo()
     try:
         lease = repo.query_lease(lease_id)
@@ -88,13 +85,20 @@ def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
     provider_name = str(lease.get("provider_name") or "").strip()
     if not provider_name:
         raise RuntimeError("Lease has no provider")
-
     if not instance_id:
         raise RuntimeError("No active instance for this lease — sandbox may be destroyed or paused")
 
     provider = build_provider_from_config_name(provider_name)
     if provider is None:
         raise RuntimeError(f"Could not initialize provider: {provider_name}")
+    return provider, instance_id
+
+
+def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
+    """Browse the filesystem of a sandbox lease via its provider."""
+    from pathlib import PurePosixPath
+
+    provider, instance_id = _resolve_sandbox_provider(lease_id)
 
     try:
         entries = provider.list_dir(instance_id, path)
@@ -125,26 +129,7 @@ _READ_MAX_BYTES = 100 * 1024
 
 def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
     """Read a file from a sandbox lease via its provider."""
-    repo = make_sandbox_monitor_repo()
-    try:
-        lease = repo.query_lease(lease_id)
-        instance_id = repo.query_lease_instance_id(lease_id)
-    finally:
-        repo.close()
-
-    if not lease:
-        raise KeyError(f"Lease not found: {lease_id}")
-
-    provider_name = str(lease.get("provider_name") or "").strip()
-    if not provider_name:
-        raise RuntimeError("Lease has no provider")
-
-    if not instance_id:
-        raise RuntimeError("No active instance for this lease — sandbox may be destroyed or paused")
-
-    provider = build_provider_from_config_name(provider_name)
-    if provider is None:
-        raise RuntimeError(f"Could not initialize provider: {provider_name}")
+    provider, instance_id = _resolve_sandbox_provider(lease_id)
 
     try:
         content = provider.read_file(instance_id, path)
