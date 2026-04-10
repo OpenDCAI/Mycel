@@ -7,7 +7,7 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
+from backend.web.services.sandbox_service import init_providers_and_managers
 from eval.storage import TrajectoryStore
 from storage.runtime import (
     build_chat_session_repo as make_chat_session_repo,
@@ -771,20 +771,31 @@ def cleanup_resource_leases(
 
 
 def runtime_health_snapshot() -> dict[str, Any]:
-    """Control-plane health snapshot with provider session scan."""
+    """Control-plane health snapshot with batch session counts."""
     db_payload = runtime_health_summary()["db"]
+    repo = make_runtime_health_monitor_repo()
+    try:
+        rows = repo.list_sessions_with_leases()
+    finally:
+        repo.close()
 
-    _, managers = init_providers_and_managers()
-    sessions = load_all_sessions(managers)
     provider_counts: dict[str, int] = {}
-    for session in sessions:
-        provider = str(session.get("provider") or "unknown")
+    seen_runtime_sessions: set[str] = set()
+    for row in rows:
+        lease_id = str(row.get("lease_id") or "").strip()
+        session_id = str(row.get("session_id") or "").strip()
+        thread_id = str(row.get("thread_id") or "").strip()
+        runtime_identity = lease_id or session_id or thread_id
+        if not runtime_identity or runtime_identity in seen_runtime_sessions:
+            continue
+        seen_runtime_sessions.add(runtime_identity)
+        provider = str(row.get("provider") or "unknown")
         provider_counts[provider] = provider_counts.get(provider, 0) + 1
 
     return {
         "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "db": db_payload,
-        "sessions": {"total": len(sessions), "providers": provider_counts},
+        "sessions": {"total": len(seen_runtime_sessions), "providers": provider_counts},
     }
 
 
