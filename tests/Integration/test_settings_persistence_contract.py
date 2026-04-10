@@ -350,26 +350,6 @@ async def test_list_sandbox_configs_does_not_import_filesystem_when_repo_row_mis
     assert result == {"sandboxes": {}}
 
 
-@pytest.mark.asyncio
-async def test_update_observation_settings_does_not_import_filesystem_when_repo_row_missing(monkeypatch):
-    repo = _FakeSettingsRepo()
-    req = _request(repo)
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
-    monkeypatch.setattr(
-        settings_router,
-        "_load_user_json",
-        lambda *_parts: {"active": "legacy", "langfuse": {"public_key": "legacy-pk"}},
-    )
-
-    result = await settings_router.update_observation_settings(
-        settings_router.ObservationRequest(active="langsmith"),
-        req,
-    )
-
-    assert result == {"success": True, "active": "langsmith"}
-    assert repo.saved_observation == {"active": "langsmith"}
-
-
 def test_update_observation_settings_route_does_not_import_filesystem_when_repo_row_missing(monkeypatch):
     repo = _FakeSettingsRepo()
     monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
@@ -385,31 +365,6 @@ def test_update_observation_settings_route_does_not_import_filesystem_when_repo_
     assert response.status_code == 200
     assert response.json() == {"success": True, "active": "langsmith"}
     assert repo.saved_observation == {"active": "langsmith"}
-
-
-@pytest.mark.asyncio
-async def test_save_sandbox_config_does_not_import_filesystem_when_repo_row_missing(
-    monkeypatch,
-    tmp_path: Path,
-):
-    repo = _FakeSettingsRepo()
-    req = _request(repo)
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
-    sandboxes_dir = tmp_path / "sandboxes"
-    sandboxes_dir.mkdir()
-    (sandboxes_dir / "alpha.json").write_text(json.dumps({"provider": "local"}), encoding="utf-8")
-    monkeypatch.setattr(settings_router, "user_home_read_candidates", lambda *_parts: [sandboxes_dir])
-
-    result = await settings_router.save_sandbox_config(
-        settings_router.SandboxConfigRequest(name="beta", config={"provider": "local"}),
-        req,
-    )
-
-    assert result == {"success": True, "path": "supabase://user_settings/user-1/sandbox_configs/beta"}
-    assert "alpha" not in repo.saved_sandboxes
-    assert repo.saved_sandboxes["beta"]["provider"] == "local"
-    assert repo.saved_sandboxes["beta"]["name"] == "local"
-    assert repo.saved_sandboxes["beta"]["on_exit"] == "pause"
 
 
 def test_save_sandbox_config_route_does_not_import_filesystem_when_repo_row_missing(
