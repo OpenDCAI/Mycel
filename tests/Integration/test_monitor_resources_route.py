@@ -262,6 +262,59 @@ def test_monitor_lease_detail_route_exposes_structured_operator_truth(monkeypatc
     assert payload["sessions"] == [{"chat_session_id": "cs-1", "thread_id": "thread-1", "status": "active"}]
     assert payload["triage"] == {"category": "healthy_capacity", "title": "Healthy Capacity"}
 
+
+def test_monitor_lease_cleanup_route_returns_operation_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "request_monitor_lease_cleanup",
+        lambda lease_id: {
+            "accepted": True,
+            "message": "Lease cleanup completed.",
+            "operation": {
+                "operation_id": "op-1",
+                "kind": "lease_cleanup",
+                "target_type": "lease",
+                "target_id": lease_id,
+                "status": "succeeded",
+            },
+            "current_truth": {"lease_id": lease_id, "triage_category": "orphan_cleanup"},
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.post("/api/monitor/leases/lease-1/cleanup")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["accepted"] is True
+    assert payload["operation"]["kind"] == "lease_cleanup"
+    assert payload["operation"]["target_type"] == "lease"
+    assert payload["operation"]["target_id"] == "lease-1"
+
+
+def test_monitor_operation_detail_route_reads_operation_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_operation_detail",
+        lambda operation_id: {
+            "operation": {
+                "operation_id": operation_id,
+                "kind": "lease_cleanup",
+                "status": "succeeded",
+                "summary": "Lease cleanup completed",
+            },
+            "target": {"target_type": "lease", "target_id": "lease-1"},
+            "result_truth": {"runtime_state_after": None},
+            "events": [{"status": "succeeded", "message": "Lease cleanup completed"}],
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/operations/op-1")
+
+    assert response.status_code == 200
+    assert response.json()["operation"]["operation_id"] == "op-1"
+
 def test_monitor_lease_detail_route_maps_missing_lease_to_404(monkeypatch):
     monkeypatch.setattr(
         monitor_service,

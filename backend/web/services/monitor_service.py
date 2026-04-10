@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from backend.web.services import monitor_operation_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from eval.storage import TrajectoryStore
 from storage.runtime import (
@@ -508,6 +509,13 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
             }
             for item in sessions
         ],
+        "cleanup": monitor_operation_service.build_lease_cleanup_truth(
+            lease_id=str(lease.get("lease_id") or lease_id),
+            triage=triage,
+            provider_name=provider_name,
+            runtime_session_id=runtime_session_id,
+            threads=threads,
+        ),
     }
 
 
@@ -589,6 +597,14 @@ def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         "summary": summary,
         "sessions": sessions,
     }
+
+
+def request_monitor_lease_cleanup(lease_id: str) -> dict[str, Any]:
+    return monitor_operation_service.request_lease_cleanup(get_monitor_lease_detail(lease_id))
+
+
+def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
+    return monitor_operation_service.get_operation_detail(operation_id)
 
 
 # ---------------------------------------------------------------------------

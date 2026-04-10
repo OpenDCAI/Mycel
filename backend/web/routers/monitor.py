@@ -41,6 +41,22 @@ def lease_detail_snapshot(lease_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.post("/leases/{lease_id}/cleanup")
+def lease_cleanup_action(lease_id: str):
+    try:
+        return monitor_service.request_monitor_lease_cleanup(lease_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/operations/{operation_id}")
+def operation_detail_snapshot(operation_id: str):
+    try:
+        return monitor_service.get_monitor_operation_detail(operation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/runtimes/{runtime_session_id}")
 def runtime_detail_snapshot(runtime_session_id: str):
     try:
