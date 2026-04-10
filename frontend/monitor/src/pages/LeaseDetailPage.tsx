@@ -239,17 +239,45 @@ export default function LeaseDetailPage() {
       </section>
       <section className="surface-section">
         <h2>Relations</h2>
-        <div className="info-grid">
-          <div>
-            <strong>Provider</strong>
-            <span>
+        <h3>Object Links</h3>
+        <div className="surface-grid">
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Provider</p>
+            <p className="surface-card__value surface-card__value--compact">
               {leaseData.provider?.id ? (
                 <Link to={`/providers/${leaseData.provider.id}`}>{leaseData.provider.name ?? leaseData.provider.id}</Link>
               ) : (
                 leaseData.provider?.name ?? leaseData.lease.provider_name ?? "-"
               )}
-            </span>
-          </div>
+            </p>
+            <p className="surface-card__body">Provider surface and capacity truth.</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Runtime</p>
+            <p className="surface-card__value surface-card__value--compact">
+              {leaseData.runtime?.runtime_session_id ? (
+                <Link to={`/runtimes/${leaseData.runtime.runtime_session_id}`}>{leaseData.runtime.runtime_session_id}</Link>
+              ) : (
+                "-"
+              )}
+            </p>
+            <p className="surface-card__body">Live sandbox/runtime session for this lease.</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Thread</p>
+            <p className="surface-card__value surface-card__value--compact">
+              {threads[0]?.thread_id ? <Link to={`/threads/${threads[0].thread_id}`}>{threads[0].thread_id}</Link> : "No related thread"}
+            </p>
+            <p className="surface-card__body">Primary thread currently linked to this lease.</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Session</p>
+            <p className="surface-card__value surface-card__value--compact">{latestSession?.chat_session_id ?? "No recorded session"}</p>
+            <p className="surface-card__body">Most recent chat session observed for this lease.</p>
+          </article>
+        </div>
+        <h3>Context</h3>
+        <div className="info-grid">
           <div>
             <strong>Updated</strong>
             <span>{leaseData.lease.updated_ago ?? leaseData.lease.updated_at ?? "-"}</span>
@@ -263,26 +291,6 @@ export default function LeaseDetailPage() {
           <div>
             <strong>Last error</strong>
             <span>{leaseData.lease.last_error ?? "-"}</span>
-          </div>
-          <div>
-            <strong>Runtime</strong>
-            <span>
-              {leaseData.runtime?.runtime_session_id ? (
-                <Link to={`/runtimes/${leaseData.runtime.runtime_session_id}`}>{leaseData.runtime.runtime_session_id}</Link>
-              ) : (
-                "-"
-              )}
-            </span>
-          </div>
-          <div>
-            <strong>Thread</strong>
-            <span>
-              {threads[0]?.thread_id ? <Link to={`/threads/${threads[0].thread_id}`}>{threads[0].thread_id}</Link> : "No related thread"}
-            </span>
-          </div>
-          <div>
-            <strong>Session</strong>
-            <span>{latestSession?.chat_session_id ?? "No recorded session"}</span>
           </div>
           <div>
             <strong>Session status</strong>
