@@ -254,6 +254,16 @@ function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
     .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4));
 }
 
+function defaultProviderStatusFilter(groups: LeaseGroup[]): LeaseGroup["status"] | "all" {
+  if (groups.some((group) => group.status === "running")) {
+    return "running";
+  }
+  if (groups.some((group) => group.status === "paused")) {
+    return "paused";
+  }
+  return "all";
+}
+
 export default function ResourcesPage() {
   const [providers, setProviders] = React.useState<ProviderInfo[]>([]);
   const [selectedId, setSelectedId] = React.useState("");
@@ -603,8 +613,8 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
 
   React.useEffect(() => {
-    setStatusFilter("all");
-  }, [provider.id]);
+    setStatusFilter(defaultProviderStatusFilter(groups));
+  }, [groups, provider.id]);
 
   return (
     <>

@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MonitorRoutes } from "./routes";
@@ -2869,6 +2869,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(await screen.findByRole("button", { name: "已结束 1" }));
     const sandboxCard = await screen.findByRole("button", { name: /agent 2/i });
     expect(within(sandboxCard).getByText("历史残留")).toBeInTheDocument();
   });
@@ -2973,8 +2974,10 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByText("Running Agent")).toBeInTheDocument();
-    expect(screen.getByText("Paused Agent")).toBeInTheDocument();
-    expect(screen.getByText("Stopped Agent")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Paused Agent")).not.toBeInTheDocument();
+      expect(screen.queryByText("Stopped Agent")).not.toBeInTheDocument();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "已暂停 1" }));
 
@@ -2987,5 +2990,86 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Running Agent")).toBeInTheDocument();
     expect(screen.getByText("Paused Agent")).toBeInTheDocument();
     expect(screen.getByText("Stopped Agent")).toBeInTheDocument();
+  });
+
+  it("defaults provider detail to live sandboxes before historical residue", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "local",
+            name: "local",
+            description: "Local runtime",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+              memory: { used: 5, limit: 32, unit: "GB", source: "direct", freshness: "live" },
+              disk: { used: 40, limit: 100, unit: "GB", source: "direct", freshness: "live" },
+            },
+            cardCpu: { used: 12, limit: null, unit: "%", source: "direct", freshness: "live" },
+            sessions: [
+              {
+                id: "running-1",
+                leaseId: "lease-running",
+                threadId: "thread-running",
+                runtimeSessionId: "runtime-1",
+                agentName: "Running Agent",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 12,
+                  memory: 5,
+                  memoryLimit: 32,
+                  disk: 40,
+                  diskLimit: 100,
+                  networkIn: null,
+                  networkOut: null,
+                },
+              },
+              {
+                id: "stopped-1",
+                leaseId: "lease-stopped",
+                threadId: "thread-stopped",
+                agentName: "Stopped Agent",
+                status: "stopped",
+                startedAt: "2026-04-06T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Running Agent")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Stopped Agent")).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "运行中 1" })).toHaveClass("provider-filter-chip--active");
   });
 });
