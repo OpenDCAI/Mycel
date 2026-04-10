@@ -36,7 +36,7 @@ def leases_snapshot():
 def dashboard_snapshot():
     resources = get_resource_overview_snapshot()
     leases = monitor_service.list_leases()
-    evaluation = monitor_service.get_monitor_evaluation_dashboard_summary()
+    evaluation = monitor_service.build_monitor_evaluation_dashboard_summary(monitor_service.get_monitor_evaluation_truth())
 
     resource_summary = resources.get("summary") or {}
     lease_summary = leases.get("summary") or {}

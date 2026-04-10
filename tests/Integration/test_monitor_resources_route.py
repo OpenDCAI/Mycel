@@ -32,16 +32,28 @@ def _stub_monitor_leases(monkeypatch):
 
 
 def _stub_monitor_evaluation_summary(monkeypatch):
+    evaluation_truth = {
+        "status": "idle",
+        "kind": "no_recorded_runs",
+        "tone": "default",
+        "headline": "No persisted evaluation runs are available yet.",
+        "summary": "Evaluation storage is wired, but there are no recorded runs to report yet.",
+        "facts": [{"label": "Status", "value": "idle"}],
+        "artifacts": [],
+        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
+        "next_steps": ["Run an evaluation to populate the operator surface with persisted runtime truth."],
+        "raw_notes": None,
+    }
     payload = {
         "evaluations_running": 0,
         "latest_evaluation": {
-            "status": "idle",
-            "kind": "no_recorded_runs",
-            "tone": "default",
-            "headline": "No persisted evaluation runs are available yet.",
+            "status": evaluation_truth["status"],
+            "kind": evaluation_truth["kind"],
+            "tone": evaluation_truth["tone"],
+            "headline": evaluation_truth["headline"],
         },
     }
-    monkeypatch.setattr(monitor.monitor_service, "get_monitor_evaluation_dashboard_summary", lambda: payload)
+    monkeypatch.setattr(monitor.monitor_service, "get_monitor_evaluation_truth", lambda: evaluation_truth)
     return payload
 
 
@@ -318,15 +330,12 @@ def test_monitor_dashboard_route_derives_evaluation_summary_from_service(monkeyp
     _stub_monitor_leases(monkeypatch)
     monkeypatch.setattr(
         monitor_service,
-        "get_monitor_evaluation_dashboard_summary",
+        "get_monitor_evaluation_truth",
         lambda: {
-            "evaluations_running": 1,
-            "latest_evaluation": {
-                "status": "running",
-                "kind": "running_active",
-                "tone": "default",
-                "headline": "Evaluation is actively running.",
-            },
+            "status": "running",
+            "kind": "running_active",
+            "tone": "default",
+            "headline": "Evaluation is actively running.",
         },
     )
 

@@ -400,21 +400,6 @@ def build_evaluation_operator_surface(
     }
 
 
-def _evaluation_unavailable_surface() -> dict[str, Any]:
-    return {
-        "status": "unavailable",
-        "kind": "unavailable",
-        "tone": "warning",
-        "headline": "Evaluation operator truth is not wired in this runtime yet.",
-        "summary": "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
-        "facts": [{"label": "Status", "value": "unavailable"}],
-        "artifacts": [],
-        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "next_steps": ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
-        "raw_notes": None,
-    }
-
-
 def _evaluation_no_runs_surface() -> dict[str, Any]:
     return {
         "status": "idle",
@@ -534,10 +519,6 @@ def build_monitor_evaluation_dashboard_summary(payload: dict[str, Any]) -> dict[
             "headline": payload.get("headline"),
         },
     }
-
-
-def get_monitor_evaluation_dashboard_summary() -> dict[str, Any]:
-    return build_monitor_evaluation_dashboard_summary(get_monitor_evaluation_truth())
 
 
 def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
