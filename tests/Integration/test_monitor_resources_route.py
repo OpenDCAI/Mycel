@@ -378,15 +378,23 @@ def test_monitor_runtime_detail_route_exposes_structured_operator_truth(monkeypa
 
 
 def test_monitor_thread_detail_route_exposes_structured_operator_truth(monkeypatch):
-    monkeypatch.setattr(
-        monitor_service,
-        "get_monitor_thread_detail",
-        lambda app, thread_id: {
+    async def _thread_detail(_app, thread_id):
+        return {
             "thread": {"id": thread_id, "agent_user_id": "agent-1"},
             "owner": {"agent_user_id": "agent-1", "agent_name": "Toad"},
             "summary": {"thread_id": thread_id, "lease_id": "lease-1"},
             "sessions": [{"chat_session_id": "cs-1", "lease_id": "lease-1"}],
-        },
+            "trajectory": {
+                "run_id": "run-1",
+                "conversation": [{"role": "human", "text": "hello"}],
+                "events": [{"seq": 1, "event_type": "tool_call", "actor": "tool", "summary": "terminal"}],
+            },
+        }
+
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_thread_detail",
+        _thread_detail,
     )
 
     with TestClient(_build_monitor_test_app()) as client:
@@ -398,6 +406,11 @@ def test_monitor_thread_detail_route_exposes_structured_operator_truth(monkeypat
         "owner": {"agent_user_id": "agent-1", "agent_name": "Toad"},
         "summary": {"thread_id": "thread-1", "lease_id": "lease-1"},
         "sessions": [{"chat_session_id": "cs-1", "lease_id": "lease-1"}],
+        "trajectory": {
+            "run_id": "run-1",
+            "conversation": [{"role": "human", "text": "hello"}],
+            "events": [{"seq": 1, "event_type": "tool_call", "actor": "tool", "summary": "terminal"}],
+        },
     }
 
 
@@ -412,10 +425,13 @@ def test_monitor_provider_runtime_and_thread_detail_routes_map_missing_rows_to_4
         "get_monitor_runtime_detail",
         lambda runtime_session_id: (_ for _ in ()).throw(KeyError(f"Runtime not found: {runtime_session_id}")),
     )
+    async def _missing_thread(_app, thread_id):
+        raise KeyError(f"Thread not found: {thread_id}")
+
     monkeypatch.setattr(
         monitor_service,
         "get_monitor_thread_detail",
-        lambda app, thread_id: (_ for _ in ()).throw(KeyError(f"Thread not found: {thread_id}")),
+        _missing_thread,
     )
 
     with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:

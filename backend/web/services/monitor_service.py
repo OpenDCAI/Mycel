@@ -566,7 +566,9 @@ def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
     raise KeyError(f"Runtime not found: {runtime_session_id}")
 
 
-def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
+async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
+    from backend.web.services.monitor_trace_service import build_monitor_thread_trajectory
+
     thread_repo = getattr(app.state, "thread_repo", None)
     if thread_repo is None:
         raise RuntimeError("thread_repo is required for monitor thread detail")
@@ -596,6 +598,7 @@ def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         "owner": _normalize_thread_owner(owners.get(thread_id)),
         "summary": summary,
         "sessions": sessions,
+        "trajectory": await build_monitor_thread_trajectory(app, thread_id),
     }
 
 

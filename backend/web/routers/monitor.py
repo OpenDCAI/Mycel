@@ -66,9 +66,9 @@ def runtime_detail_snapshot(runtime_session_id: str):
 
 
 @router.get("/threads/{thread_id}")
-def thread_detail_snapshot(request: Request, thread_id: str):
+async def thread_detail_snapshot(request: Request, thread_id: str):
     try:
-        return monitor_service.get_monitor_thread_detail(request.app, thread_id)
+        return await monitor_service.get_monitor_thread_detail(request.app, thread_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

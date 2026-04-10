@@ -1,6 +1,7 @@
 import subprocess
 import sys
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -219,6 +220,75 @@ def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):
         monitor_service.get_monitor_lease_detail("lease-404")
 
 
+@pytest.mark.asyncio
+async def test_get_monitor_thread_detail_exposes_trajectory_truth(monkeypatch):
+    class FakeThreadRepo:
+        def get_by_id(self, thread_id):
+            return {
+                "id": thread_id,
+                "thread_id": thread_id,
+                "title": "Investigate sandbox drift",
+                "status": "active",
+            }
+
+    class FakeMonitorRepo:
+        def query_thread_summary(self, thread_id):
+            return {
+                "provider_name": "daytona",
+                "lease_id": "lease-1",
+                "current_instance_id": "runtime-1",
+                "desired_state": "running",
+                "observed_state": "running",
+            }
+
+        def query_thread_sessions(self, thread_id):
+            return [{"chat_session_id": "session-1", "status": "active"}]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
+    monkeypatch.setattr(
+        monitor_service,
+        "_thread_owners",
+        lambda *_args, **_kwargs: {
+            "thread-1": {
+                "user_id": "user-1",
+                "display_name": "Ada",
+                "email": "ada@example.com",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
+        AsyncMock(
+            return_value={
+                "run_id": "run-1",
+                "conversation": [
+                    {"role": "human", "text": "Please inspect the sandbox drift."},
+                    {"role": "tool_call", "tool": "terminal", "args": "{'cmd': 'pwd'}"},
+                    {"role": "tool_result", "tool": "terminal", "text": "/workspace"},
+                    {"role": "assistant", "text": "The sandbox is healthy now."},
+                ],
+                "events": [
+                    {"seq": 1, "event_type": "tool_call", "actor": "tool", "summary": "terminal"},
+                    {"seq": 2, "event_type": "status", "actor": "runtime", "summary": "state=active calls=1"},
+                ],
+            }
+        ),
+    )
+
+    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=object()))
+
+    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
+
+    assert payload["thread"]["thread_id"] == "thread-1"
+    assert payload["owner"]["display_name"] == "Ada"
+    assert payload["trajectory"]["run_id"] == "run-1"
+    assert payload["trajectory"]["conversation"][0]["role"] == "human"
+    assert payload["trajectory"]["events"][0]["event_type"] == "tool_call"
+
+
 def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():
     result = subprocess.run(
         [sys.executable, "-c", "import backend.web.main"],
@@ -230,7 +300,8 @@ def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():
     assert result.returncode == 0, result.stderr
 
 
-def test_get_monitor_thread_detail_derives_summary_from_session_truth_when_repo_summary_missing(monkeypatch):
+@pytest.mark.asyncio
+async def test_get_monitor_thread_detail_derives_summary_from_session_truth_when_repo_summary_missing(monkeypatch):
     class FakeThreadRepo:
         def get_by_id(self, thread_id):
             return {"id": thread_id, "status": "active"}
@@ -264,10 +335,14 @@ def test_get_monitor_thread_detail_derives_summary_from_session_truth_when_repo_
         "_thread_owners",
         lambda _thread_ids, **_kwargs: {"thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad"}},
     )
+    monkeypatch.setattr(
+        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
+        AsyncMock(return_value={"run_id": None, "conversation": [], "events": []}),
+    )
 
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
 
-    payload = monitor_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["summary"] == {
         "provider_name": "daytona",
@@ -278,7 +353,8 @@ def test_get_monitor_thread_detail_derives_summary_from_session_truth_when_repo_
     }
 
 
-def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(monkeypatch):
+@pytest.mark.asyncio
+async def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(monkeypatch):
     class FakeThreadRepo:
         def get_by_id(self, thread_id):
             return {"id": thread_id, "status": "active"}
@@ -301,10 +377,14 @@ def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(monkeypat
             "thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"}
         },
     )
+    monkeypatch.setattr(
+        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
+        AsyncMock(return_value={"run_id": None, "conversation": [], "events": []}),
+    )
 
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
 
-    payload = monitor_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["owner"] == {
         "user_id": "agent-1",
@@ -314,7 +394,8 @@ def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(monkeypat
     }
 
 
-def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(monkeypatch):
+@pytest.mark.asyncio
+async def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(monkeypatch):
     class FakeThreadRepo:
         def get_by_id(self, thread_id):
             return {"id": thread_id, "title": "Investigate drift", "status": "active"}
@@ -331,10 +412,14 @@ def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(monkeypa
 
     monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
     monkeypatch.setattr(monitor_service, "_thread_owners", lambda *_args, **_kwargs: {"thread-1": None})
+    monkeypatch.setattr(
+        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
+        AsyncMock(return_value={"run_id": None, "conversation": [], "events": []}),
+    )
 
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
 
-    payload = monitor_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["thread"] == {
         "id": "thread-1",

@@ -950,74 +950,14 @@ async def get_thread_history(
         limit: Max messages to return, from the end (default 20)
         truncate: Truncate content to this many chars (default 300, 0 = no limit)
     """
-    from backend.web.utils.serializers import extract_text_content
+    from backend.web.services.thread_history_service import get_thread_history_payload
 
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-    set_current_thread_id(thread_id)
-    config = {"configurable": {"thread_id": thread_id}}
-    state = await agent.agent.aget_state(config)
-
-    values = getattr(state, "values", {}) if state else {}
-    all_messages = values.get("messages", []) if isinstance(values, dict) else []
-    total = len(all_messages)
-    messages = all_messages[-limit:] if limit > 0 else all_messages
-
-    def _trunc(text: str) -> str:
-        if truncate > 0 and len(text) > truncate:
-            return text[:truncate] + f"…[+{len(text) - truncate}]"
-        return text
-
-    def _expand(msg: Any) -> list[dict[str, Any]]:
-        """Expand one LangChain message into 1-N flat entries.
-
-        AIMessage with tool_calls → N tool_call entries (one per call),
-        then the text content (if any) as an assistant entry.
-        ToolMessage → one tool_result entry.
-        HumanMessage → one human entry.
-        """
-        cls = msg.__class__.__name__
-        if cls == "HumanMessage":
-            metadata = getattr(msg, "metadata", {}) or {}
-            if metadata.get("source") == "internal":
-                return []
-            if metadata.get("source") == "system":
-                return [{"role": "notification", "text": _trunc(extract_text_content(msg.content))}]
-            return [{"role": "human", "text": _trunc(extract_text_content(msg.content))}]
-        if cls == "AIMessage":
-            entries: list[dict] = []
-            for c in getattr(msg, "tool_calls", []):
-                entries.append(
-                    {
-                        "role": "tool_call",
-                        "tool": c["name"],
-                        "args": str(c.get("args", {}))[:200],
-                    }
-                )
-            text = extract_text_content(msg.content)
-            if text:
-                entries.append({"role": "assistant", "text": _trunc(text)})
-            return entries
-        if cls == "ToolMessage":
-            return [
-                {
-                    "role": "tool_result",
-                    "tool": getattr(msg, "name", "?"),
-                    "text": _trunc(extract_text_content(msg.content)),
-                }
-            ]
-        return [{"role": "system", "text": _trunc(extract_text_content(msg.content))}]
-
-    flat: list[dict] = []
-    for m in messages:
-        flat.extend(_expand(m))
-
-    return {
-        "thread_id": thread_id,
-        "total": total,
-        "showing": len(messages),
-        "messages": flat,
-    }
+    return await get_thread_history_payload(
+        app=app,
+        thread_id=thread_id,
+        limit=limit,
+        truncate=truncate,
+    )
 
 
 @router.get("/{thread_id}/permissions")

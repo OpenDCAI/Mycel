@@ -1066,6 +1066,19 @@ describe("MonitorRoutes", () => {
           observed_state: "running",
         },
         sessions: [{ chat_session_id: "session-1", status: "active" }],
+        trajectory: {
+          run_id: "run-1",
+          conversation: [
+            { role: "human", text: "Please inspect the sandbox drift." },
+            { role: "tool_call", tool: "terminal", args: "{'cmd': 'pwd'}" },
+            { role: "tool_result", tool: "terminal", text: "/workspace" },
+            { role: "assistant", text: "The sandbox is healthy now." },
+          ],
+          events: [
+            { seq: 1, event_type: "tool_call", actor: "tool", summary: "terminal" },
+            { seq: 2, event_type: "status", actor: "runtime", summary: "state=active calls=1" },
+          ],
+        },
       },
     });
 
@@ -1080,6 +1093,15 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "daytona" })).toHaveAttribute("href", "/providers/daytona");
     expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
     expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
+    expect(screen.getByRole("heading", { name: "Trajectory" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Conversation Ledger" })).toBeInTheDocument();
+    expect(screen.getByText("Please inspect the sandbox drift.")).toBeInTheDocument();
+    expect(screen.getByText("The sandbox is healthy now.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Run Event Timeline" }));
+
+    expect(screen.getByText("tool_call")).toBeInTheDocument();
+    expect(screen.getByText("state=active calls=1")).toBeInTheDocument();
   });
 
   it("renders evaluation as a truthful operator surface", async () => {
