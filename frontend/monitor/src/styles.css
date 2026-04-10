@@ -6,7 +6,7 @@
 
 body {
   font-family: "Instrument Sans", "Avenir Next", "Segoe UI", sans-serif;
-  background: linear-gradient(180deg, #f4f1e8 0%, #ece6d7 100%);
+  background: #f4efe6;
   color: #221f1a;
   line-height: 1.6;
 }
@@ -25,9 +25,7 @@ body {
   gap: 1.75rem;
   padding: 2rem 1.25rem 1.5rem;
   border-right: 1px solid rgba(58, 47, 28, 0.14);
-  background:
-    linear-gradient(180deg, rgba(255, 250, 240, 0.96), rgba(246, 238, 222, 0.9)),
-    linear-gradient(180deg, #f8f4e8, #ece4d2);
+  background: rgba(248, 244, 236, 0.96);
   transition: width 140ms ease, padding 140ms ease;
 }
 
@@ -57,7 +55,7 @@ body {
   height: 2rem;
   border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 252, 245, 0.92);
   color: #332a20;
   cursor: pointer;
 }
@@ -107,7 +105,7 @@ body {
   border-radius: 16px;
   color: #332a20;
   text-decoration: none;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 252, 245, 0.62);
   transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
 }
 
@@ -139,13 +137,13 @@ body {
 .monitor-sidebar__link:hover {
   transform: translateX(1px);
   border-color: rgba(150, 95, 28, 0.18);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 252, 245, 0.92);
 }
 
 .monitor-sidebar__link[aria-current="page"] {
   border-color: rgba(150, 95, 28, 0.35);
-  background: linear-gradient(180deg, rgba(255, 247, 230, 0.98), rgba(248, 236, 205, 0.96));
-  box-shadow: 0 10px 22px rgba(101, 72, 32, 0.08);
+  background: rgba(255, 249, 238, 0.98);
+  box-shadow: 0 8px 18px rgba(101, 72, 32, 0.05);
 }
 
 .monitor-sidebar__link-eyebrow {
@@ -164,6 +162,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  background: rgba(244, 239, 230, 0.72);
 }
 
 .monitor-shell__header {
@@ -172,6 +171,9 @@ body {
   gap: 1rem;
   align-items: flex-end;
   padding: 1.5rem 2rem 1rem;
+  border-bottom: 1px solid rgba(81, 59, 29, 0.08);
+  background: rgba(244, 239, 230, 0.86);
+  backdrop-filter: blur(8px);
 }
 
 .monitor-shell__title {
@@ -243,8 +245,8 @@ h2 {
   padding: 1rem 1.1rem;
   border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 16px;
-  background: rgba(255, 252, 245, 0.82);
-  box-shadow: 0 12px 30px rgba(82, 59, 27, 0.06);
+  background: rgba(255, 252, 247, 0.92);
+  box-shadow: 0 8px 18px rgba(82, 59, 27, 0.04);
 }
 
 .lease-triage-card {
@@ -706,8 +708,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .resources-error-card {
   border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 18px;
-  background: rgba(255, 252, 245, 0.9);
-  box-shadow: 0 12px 30px rgba(82, 59, 27, 0.06);
+  background: rgba(255, 252, 247, 0.94);
+  box-shadow: 0 10px 24px rgba(82, 59, 27, 0.045);
 }
 
 .provider-card {
@@ -721,12 +723,12 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-card:hover {
   transform: translateY(-1px);
   border-color: rgba(146, 88, 45, 0.26);
-  box-shadow: 0 16px 34px rgba(82, 59, 27, 0.09);
+  box-shadow: 0 12px 26px rgba(82, 59, 27, 0.06);
 }
 
 .provider-card--selected {
   border-color: rgba(146, 88, 45, 0.45);
-  box-shadow: 0 0 0 1px rgba(146, 88, 45, 0.18), 0 18px 38px rgba(82, 59, 27, 0.1);
+  box-shadow: 0 0 0 1px rgba(146, 88, 45, 0.14), 0 12px 28px rgba(82, 59, 27, 0.065);
 }
 
 .provider-card--unavailable {
@@ -778,6 +780,9 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   justify-content: center;
   gap: 0.85rem;
   margin: 1rem 0 0.9rem;
+  padding: 0.8rem 0.75rem;
+  border-radius: 16px;
+  background: rgba(246, 240, 230, 0.82);
 }
 
 .provider-card__unavailable {
@@ -820,7 +825,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin: 0 auto;
   border-radius: 999px;
   border: 1px solid rgba(81, 59, 29, 0.12);
-  background: rgba(255, 248, 235, 0.88);
+  background: rgba(255, 252, 247, 0.98);
   font-weight: 700;
   font-family: "SF Mono", Monaco, monospace;
 }
@@ -860,6 +865,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-card__footer {
   font-size: 0.76rem;
   color: #776a5b;
+  padding-top: 0.7rem;
+  border-top: 1px dashed rgba(81, 59, 29, 0.14);
 }
 
 .provider-card__truth {
@@ -872,7 +879,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin-top: 0.8rem;
+  margin-top: 0.75rem;
 }
 
 .provider-capability-icon {
@@ -886,7 +893,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .provider-capability-icon--enabled {
-  background: rgba(255, 248, 235, 0.92);
+  background: rgba(248, 243, 234, 0.94);
   color: #392d22;
 }
 
@@ -896,7 +903,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .provider-detail-card {
-  padding: 1.4rem;
+  padding: 1.35rem;
 }
 
 .provider-detail__title-row {
@@ -947,6 +954,9 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-detail__meta a {
   padding: 0.35rem 0.7rem;
   text-decoration: none;
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.86);
 }
 
 .provider-warning-banner,
@@ -1026,7 +1036,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .sandbox-card:hover {
   transform: translateY(-1px);
   border-color: rgba(146, 88, 45, 0.26);
-  box-shadow: 0 16px 34px rgba(82, 59, 27, 0.09);
+  box-shadow: 0 12px 24px rgba(82, 59, 27, 0.06);
 }
 
 .sandbox-card--running {
@@ -1039,7 +1049,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .sandbox-card--stopped {
   border-left: 3px solid #78808f;
-  opacity: 0.5;
+  opacity: 0.68;
 }
 
 .sandbox-card--destroying {
@@ -1083,7 +1093,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin-left: -0.35rem;
   border-radius: 999px;
   border: 2px solid rgba(255, 252, 245, 0.9);
-  background: linear-gradient(180deg, #e6d7bf, #d8c5a4);
+  background: #e8ddca;
   color: #392d22;
   font-size: 0.65rem;
   font-weight: 700;
@@ -1102,7 +1112,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .sandbox-avatar--count {
-  background: #e9dfcf;
+  background: #eee6da;
   color: #776a5b;
 }
 
@@ -1141,8 +1151,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   display: flex;
   justify-content: flex-end;
   padding: 0;
-  background: rgba(57, 45, 34, 0.18);
-  backdrop-filter: blur(4px);
+  background: rgba(57, 45, 34, 0.12);
+  backdrop-filter: blur(3px);
   z-index: 50;
 }
 
@@ -1155,8 +1165,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   padding: 0;
   border-left: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 0;
-  background: linear-gradient(180deg, rgba(255, 252, 245, 0.98), rgba(248, 243, 233, 0.98));
-  box-shadow: -20px 0 64px rgba(82, 59, 27, 0.12);
+  background: rgba(255, 252, 247, 0.99);
+  box-shadow: -16px 0 42px rgba(82, 59, 27, 0.08);
 }
 
 .sandbox-modal__close,
@@ -1187,7 +1197,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   align-items: center;
   padding: 0.8rem 0.95rem;
   border-radius: 14px;
-  background: rgba(255, 248, 235, 0.72);
+  background: rgba(248, 243, 234, 0.72);
   border: 1px solid rgba(81, 59, 29, 0.12);
 }
 
@@ -1219,7 +1229,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   padding: 0.8rem 0.9rem;
   border-radius: 14px;
   border: 1px solid rgba(81, 59, 29, 0.12);
-  background: rgba(255, 248, 235, 0.72);
+  background: rgba(248, 243, 234, 0.72);
 }
 
 .sandbox-metric-block__label {
@@ -1256,7 +1266,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   min-height: 320px;
   border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 16px;
-  background: rgba(255, 252, 245, 0.72);
+  background: rgba(255, 252, 247, 0.92);
   overflow: hidden;
 }
 

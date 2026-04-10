@@ -32,7 +32,7 @@ export function MonitorNav({
             <span aria-hidden="true">{collapsed ? "›" : "‹"}</span>
           </button>
         </div>
-        {!collapsed && <p>Current monitor routes, unified under one console shell.</p>}
+        {!collapsed && <p>Resource truth, lease workbench, and evaluation.</p>}
       </div>
 
       <div className="monitor-sidebar__group">

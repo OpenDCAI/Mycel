@@ -286,68 +286,17 @@ export default function ResourcesPage() {
     (total, provider) => total + provider.sessions.filter((session) => session.status === "running").length,
     0,
   );
-  const runtimeUnboundUsageCount = providers.reduce(
+  const pausedSessionCount = providers.reduce(
     (total, provider) =>
-      total +
-      provider.sessions.filter((session) => {
-        const metrics = session.metrics;
-        return (
-          session.status === "running" &&
-          provider.type !== "local" &&
-          !session.runtimeSessionId &&
-          metrics != null &&
-          (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-        );
-      }).length,
+      total + provider.sessions.filter((session) => session.status === "paused").length,
     0,
   );
-  const runtimeUnboundRunningCount = providers.reduce(
+  const stoppedSessionCount = providers.reduce(
     (total, provider) =>
-      total +
-      provider.sessions.filter(
-        (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
-      ).length,
+      total + provider.sessions.filter((session) => session.status === "stopped").length,
     0,
   );
-  const liveUsageRunningCount = providers.reduce(
-    (total, provider) =>
-      total +
-      provider.sessions.filter((session) => {
-        const metrics = session.metrics;
-        return (
-          session.status === "running" &&
-          metrics != null &&
-          (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-        );
-      }).length,
-    0,
-  );
-  const missingLiveTelemetryRunningCount = runningSessionCount - liveUsageRunningCount;
-  const readyWithoutLiveTelemetryCount = providers.filter(
-    (provider) =>
-      provider.type !== "local" &&
-      provider.status === "ready" &&
-      provider.sessions.length === 0 &&
-      provider.telemetry.cpu.freshness === "stale" &&
-      provider.telemetry.memory.freshness === "stale" &&
-      provider.telemetry.disk.freshness === "stale",
-  ).length;
-  const quotaOnlyRunningCount = providers.reduce(
-    (total, provider) =>
-      total +
-      provider.sessions.filter((session) => {
-        const metrics = session.metrics;
-        return (
-          session.status === "running" &&
-          metrics != null &&
-          metrics.memory == null &&
-          metrics.disk == null &&
-          (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-          Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
-        );
-      }).length,
-    0,
-  );
+  const leaseGroupCount = providers.reduce((total, provider) => total + groupByLease(provider.sessions).length, 0);
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -391,25 +340,10 @@ export default function ResourcesPage() {
             <span className="resources-summary-dot resources-summary-dot--ok" />
             {summary?.active_providers ?? 0} 活跃 provider
           </div>
-          <div className="resources-summary-pill">{runningSessionCount} 运行会话</div>
-          {liveUsageRunningCount > 0 && liveUsageRunningCount < runningSessionCount && (
-            <div className="resources-summary-pill">{liveUsageRunningCount} 有用量</div>
-          )}
-          {runtimeUnboundUsageCount > 0 && (
-            <div className="resources-summary-pill">{runtimeUnboundUsageCount} 无 runtime有用量</div>
-          )}
-          {missingLiveTelemetryRunningCount > 0 && (
-            <div className="resources-summary-pill">{missingLiveTelemetryRunningCount} 指标缺失</div>
-          )}
-          {runtimeUnboundRunningCount > 0 && (
-            <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
-          )}
-          {readyWithoutLiveTelemetryCount > 0 && (
-            <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 暂无沙盒指标</div>
-          )}
-          {quotaOnlyRunningCount > 0 && (
-            <div className="resources-summary-pill">{quotaOnlyRunningCount} 仅配额</div>
-          )}
+          <div className="resources-summary-pill">{leaseGroupCount} 沙盒</div>
+          <div className="resources-summary-pill">{runningSessionCount} 运行中</div>
+          {pausedSessionCount > 0 && <div className="resources-summary-pill">{pausedSessionCount} 已暂停</div>}
+          {stoppedSessionCount > 0 && <div className="resources-summary-pill">{stoppedSessionCount} 已结束</div>}
           <div className="resources-summary-pill">
             <span
               className={[
@@ -457,65 +391,18 @@ function ProviderCard({
   onSelect: () => void;
 }) {
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
-  const runtimeUnboundUsageCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      !session.runtimeSessionId &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
   const runtimeUnboundRunningCount = provider.sessions.filter(
     (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
   ).length;
-  const liveUsageRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
-  const runtimeBoundTelemetryGapCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    const hasLiveUsage = metrics != null && (metrics.cpu != null || metrics.memory != null || metrics.disk != null);
-    const isQuotaOnly =
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError);
-    return session.status === "running" && Boolean(session.runtimeSessionId) && !hasLiveUsage && !isQuotaOnly;
-  }).length;
-  const quotaOnlyRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
-    );
-  }).length;
   const detachedResidueCount = provider.sessions.filter(
     (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
   ).length;
-  const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const runningMetric = {
     ...provider.telemetry.running,
     used: runningCount,
   };
-  const showTelemetryGapTruth =
-    provider.type !== "local" &&
-    provider.status === "ready" &&
-    runningCount === 0 &&
-    provider.telemetry.cpu.freshness === "stale" &&
-    provider.telemetry.memory.freshness === "stale" &&
-    provider.telemetry.disk.freshness === "stale";
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
@@ -558,20 +445,11 @@ function ProviderCard({
 
       <div className="provider-card__footer">
         <span>{runningCount} 占用中</span>
-        {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && <span>{liveUsageRunningCount} 有用量</span>}
-        {missingLiveTelemetryRunningCount > 0 && <span>{missingLiveTelemetryRunningCount} 指标缺失</span>}
-        {runtimeBoundTelemetryGapCount > 0 && <span>{runtimeBoundTelemetryGapCount} 有 runtime 但无指标</span>}
-        {runtimeUnboundUsageCount > 0 && <span>{runtimeUnboundUsageCount} 无 runtime有用量</span>}
-        {quotaOnlyRunningCount > 0 && <span>{quotaOnlyRunningCount} 仅配额</span>}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
         {detachedResidueCount > 0 && <span>{detachedResidueCount} Detached Residue</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
       </div>
-
-      {showTelemetryGapTruth && (
-        <div className="provider-card__truth">暂无沙盒指标</div>
-      )}
 
       <CapabilityStrip capabilities={provider.capabilities} />
     </button>
@@ -602,61 +480,14 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const detachedResidueCount = provider.sessions.filter(
     (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
   ).length;
-  const runtimeUnboundUsageCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      !session.runtimeSessionId &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
   const runtimeUnboundRunningCount = provider.sessions.filter(
     (session) => session.status === "running" && !session.runtimeSessionId,
   ).length;
-  const quotaOnlyRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
-    );
-  }).length;
-  const liveUsageRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
-  const runtimeBoundTelemetryGapCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    const hasLiveUsage = metrics != null && (metrics.cpu != null || metrics.memory != null || metrics.disk != null);
-    const isQuotaOnly =
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError);
-    return session.status === "running" && Boolean(session.runtimeSessionId) && !hasLiveUsage && !isQuotaOnly;
-  }).length;
-  const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const isLocal = provider.type === "local";
   const showUnavailableBanner = provider.status === "unavailable";
   const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
-  const showTelemetryGapBanner =
-    !isLocal &&
-    provider.status === "ready" &&
-    runningCount === 0 &&
-    provider.telemetry.cpu.freshness === "stale" &&
-    provider.telemetry.memory.freshness === "stale" &&
-    provider.telemetry.disk.freshness === "stale";
 
   return (
     <>
@@ -702,49 +533,17 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                 {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条关联 session，可继续检查。
               </div>
             )}
-            {showTelemetryGapBanner && (
-              <div className="provider-warning-banner">
-                当前 provider 暂无可展示的 CPU / RAM / Disk 指标。
-              </div>
-            )}
 
             <div className="provider-detail__overview">
-              {isLocal ? (
-                <div className="provider-inline-metrics">
-                  <InlineMetric label="运行中" value={String(runningCount)} />
-                  {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && (
-                    <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
-                  )}
-                  {missingLiveTelemetryRunningCount > 0 && (
-                    <InlineMetric label="指标缺失" value={String(missingLiveTelemetryRunningCount)} />
-                  )}
-                  {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
-                  <InlineMetric label="CPU" value={formatMetricRange(provider.cardCpu)} />
-                  <InlineMetric label="RAM" value={formatMetricRange(provider.telemetry.memory)} />
-                  <InlineMetric label="Disk" value={formatMetricRange(provider.telemetry.disk)} />
-                </div>
-              ) : (
-                <div className="provider-inline-metrics">
-                  <InlineMetric label="运行中" value={String(runningCount)} />
-                  {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && (
-                    <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
-                  )}
-                  {missingLiveTelemetryRunningCount > 0 && (
-                    <InlineMetric label="指标缺失" value={String(missingLiveTelemetryRunningCount)} />
-                  )}
-                  {runtimeBoundTelemetryGapCount > 0 && (
-                    <InlineMetric label="有 runtime 但无指标" value={String(runtimeBoundTelemetryGapCount)} />
-                  )}
-                  {runtimeUnboundUsageCount > 0 && (
-                    <InlineMetric label="无 runtime有用量" value={String(runtimeUnboundUsageCount)} />
-                  )}
-                  {runtimeUnboundRunningCount > 0 && <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />}
-                  {quotaOnlyRunningCount > 0 && <InlineMetric label="仅配额" value={String(quotaOnlyRunningCount)} />}
-                  <InlineMetric label="已暂停" value={String(pausedCount)} />
-                  {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
-                  <InlineMetric label="已结束" value={String(stoppedCount)} />
-                </div>
-              )}
+              <div className="provider-inline-metrics">
+                <InlineMetric label="运行中" value={String(runningCount)} />
+                {pausedCount > 0 && <InlineMetric label="已暂停" value={String(pausedCount)} />}
+                {stoppedCount > 0 && <InlineMetric label="已结束" value={String(stoppedCount)} />}
+                {runtimeUnboundRunningCount > 0 && !isLocal && (
+                  <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />
+                )}
+                {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
+              </div>
             </div>
 
             <div className="provider-section">
@@ -963,7 +762,7 @@ function SandboxCard({
         )}
         {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">Disk 仅配额</div>}
         {showDetachedResidueTruth && <div className="sandbox-card__warning">Detached Residue</div>}
-        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">指标缺失</div>}
+        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">指标暂缺</div>}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
@@ -1006,9 +805,11 @@ function SandboxInspector({
 
   if (!group) return null;
   const browserUnavailableReason =
-    providerType !== "local" && group.leaseId && !group.sessions.some((session) => Boolean(session.runtimeSessionId))
-      ? "当前 lease 没有 active runtime session，无法浏览文件。"
-      : null;
+    group.status === "paused"
+      ? "沙盒已暂停，恢复运行后才能浏览文件。"
+      : providerType !== "local" && group.leaseId && !group.sessions.some((session) => Boolean(session.runtimeSessionId))
+        ? "当前 lease 没有 active runtime session，无法浏览文件。"
+        : null;
 
   return (
     <div className="sandbox-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
@@ -1182,12 +983,12 @@ function MonitorFileBrowser({
   );
 
   React.useEffect(() => {
-    if (disabled) return;
+    if (disabled || unavailableReason) return;
     void loadPath(defaultPath);
     setSelectedFile(null);
     setFileContent(null);
     setFileError(null);
-  }, [defaultPath, disabled, loadPath]);
+  }, [defaultPath, disabled, loadPath, unavailableReason]);
 
   const loadFile = React.useCallback(
     async (path: string) => {
