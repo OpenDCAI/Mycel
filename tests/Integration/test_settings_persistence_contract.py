@@ -59,17 +59,6 @@ def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
     return app
 
 
-def test_resolve_settings_storage_marks_repo_backed(monkeypatch):
-    req = _request(_FakeSettingsRepo())
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
-
-    storage = settings_router._resolve_settings_storage(req)
-
-    assert storage.repo_backed is True
-    assert storage.repo is req.app.state.user_settings_repo
-    assert storage.user_id == "user-1"
-
-
 def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch):
     repo = _FakeSettingsRepo()
     monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")

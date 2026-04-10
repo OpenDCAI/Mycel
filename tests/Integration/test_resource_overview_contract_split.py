@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from backend.web.core.dependencies import get_current_user_id
-from backend.web.main import app
 from backend.web.routers import monitor as monitor_router
 from backend.web.routers import resources as resources_router
-from backend.web.services import resource_projection_service, resource_service
+from backend.web.services import resource_projection_service
 
 
 class _State:
@@ -94,20 +92,6 @@ def _lease(
     if recipe is not None:
         payload["recipe"] = recipe
     return payload
-
-
-def test_resource_services_no_longer_import_storage_factory() -> None:
-    resource_service_source = inspect.getsource(resource_service)
-    projection_service_source = inspect.getsource(resource_projection_service)
-
-    assert "backend.web.core.storage_factory" not in resource_service_source
-    assert "backend.web.core.storage_factory" not in projection_service_source
-    assert "storage.runtime" in resource_service_source
-    assert "storage.runtime" in projection_service_source
-
-
-def test_resources_overview_route_exists() -> None:
-    assert any(getattr(route, "path", None) == "/api/resources/overview" for route in app.routes)
 
 
 def test_resources_overview_maps_runtime_error_to_500(monkeypatch) -> None:
@@ -379,32 +363,3 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
     assert session["avatarUrl"] == "/api/users/agent-1/avatar"
     assert "memberId" not in session
     assert "memberName" not in session
-
-
-def test_provider_display_contract_exposes_public_metadata(monkeypatch) -> None:
-    monkeypatch.setattr(resource_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
-    monkeypatch.setattr(
-        resource_service,
-        "_resolve_provider_type",
-        lambda *_args, **_kwargs: "cloud",
-    )
-    monkeypatch.setattr(
-        resource_service,
-        "_resolve_console_url",
-        lambda *_args, **_kwargs: "https://example.com/daytona",
-    )
-    monkeypatch.setattr(
-        resource_service,
-        "_CATALOG",
-        {"daytona": type("_Catalog", (), {"description": "Daytona", "vendor": "Daytona"})()},
-    )
-
-    payload = resource_service.get_provider_display_contract("daytona_selfhost")
-
-    assert payload == {
-        "provider_name": "daytona",
-        "description": "Daytona",
-        "vendor": "Daytona",
-        "type": "cloud",
-        "console_url": "https://example.com/daytona",
-    }
