@@ -27,11 +27,6 @@ def clear_resource_overview_cache() -> None:
         global _snapshot_cache
         _snapshot_cache = None
 
-
-def clear_monitor_resource_overview_cache() -> None:
-    clear_resource_overview_cache()
-
-
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -111,7 +106,6 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
         payload = resource_projection_service.list_resource_providers()
         payload = _attach_monitor_triage(payload)
         _validate_resource_overview_payload(payload)
-        payload = _attach_monitor_triage(payload)
         duration_ms = (time.perf_counter() - started) * 1000
         payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
         with _snapshot_lock:
@@ -132,12 +126,6 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
         with _snapshot_lock:
             _snapshot_cache = copy.deepcopy(degraded)
         return degraded
-
-
-def refresh_monitor_resource_overview_sync() -> dict[str, Any]:
-    return refresh_resource_overview_sync()
-
-
 def get_resource_overview_snapshot() -> dict[str, Any]:
     """Return cached snapshot; perform one synchronous refresh on cold start."""
     with _snapshot_lock:
@@ -152,11 +140,6 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
         return cached
     # @@@cold-start-cache-fill - route fallback fills cache once to keep first call deterministic.
     return refresh_resource_overview_sync()
-
-
-def get_monitor_resource_overview_snapshot() -> dict[str, Any]:
-    return get_resource_overview_snapshot()
-
 
 async def resource_overview_refresh_loop() -> None:
     """Continuously refresh resource overview snapshot."""
@@ -185,7 +168,3 @@ async def resource_overview_refresh_loop() -> None:
             print("[monitor] resource refresh loop timeout")
         except Exception as exc:
             print(f"[monitor] resource refresh loop error: {exc}")
-
-
-async def monitor_resource_overview_refresh_loop() -> None:
-    await resource_overview_refresh_loop()

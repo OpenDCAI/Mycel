@@ -77,8 +77,8 @@ def _stub_monitor_resource_snapshot(monkeypatch):
         },
     }
 
-    monkeypatch.setattr(monitor, "get_monitor_resource_overview_snapshot", lambda: snapshot)
-    monkeypatch.setattr(monitor, "refresh_monitor_resource_overview_sync", lambda: snapshot)
+    monkeypatch.setattr(monitor, "get_resource_overview_snapshot", lambda: snapshot)
+    monkeypatch.setattr(monitor, "refresh_resource_overview_sync", lambda: snapshot)
     monkeypatch.setattr(resource_service, "refresh_resource_snapshots", lambda: {"probed": 0, "errors": 0})
     return snapshot
 
@@ -150,7 +150,7 @@ def test_monitor_resources_refresh_route_probes_before_refresh(monkeypatch):
         return snapshot
 
     monkeypatch.setattr(resource_service, "refresh_resource_snapshots", _probe)
-    monkeypatch.setattr(monitor, "refresh_monitor_resource_overview_sync", _refresh)
+    monkeypatch.setattr(monitor, "refresh_resource_overview_sync", _refresh)
 
     with TestClient(_build_monitor_test_app()) as client:
         response = client.post("/api/monitor/resources/refresh")

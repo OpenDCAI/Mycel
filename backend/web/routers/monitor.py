@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from backend.web.services import monitor_service, resource_service
 from backend.web.services.resource_cache import (
-    get_monitor_resource_overview_snapshot,
-    refresh_monitor_resource_overview_sync,
+    get_resource_overview_snapshot,
+    refresh_resource_overview_sync,
 )
 
 router = APIRouter(prefix="/api/monitor")
@@ -24,7 +24,7 @@ def _refresh_monitor_resources_sync():
     # @@@manual-resource-refresh-must-probe - the operator-facing refresh button must fetch new
     # sandbox metrics first; recomputing the overview alone just re-labels stale snapshots.
     resource_service.refresh_resource_snapshots()
-    return refresh_monitor_resource_overview_sync()
+    return refresh_resource_overview_sync()
 
 
 @router.get("/leases")
@@ -34,7 +34,7 @@ def leases_snapshot():
 
 @router.get("/dashboard")
 def dashboard_snapshot():
-    resources = get_monitor_resource_overview_snapshot()
+    resources = get_resource_overview_snapshot()
     leases = monitor_service.list_leases()
     evaluation = monitor_service.get_monitor_evaluation_dashboard_summary()
 
@@ -65,7 +65,7 @@ def evaluation_snapshot():
 
 @router.get("/resources")
 def resources_overview():
-    return get_monitor_resource_overview_snapshot()
+    return get_resource_overview_snapshot()
 
 
 @router.post("/resources/refresh")
