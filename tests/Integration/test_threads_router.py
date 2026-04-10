@@ -483,9 +483,10 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
     with (
         patch.object(
             threads_router.sandbox_service,
-            "list_user_leases",
-            return_value=[{"lease_id": "lease-1", "provider_name": "local", "recipe": None}],
+            "resolve_owned_lease",
+            return_value={"lease_id": "lease-1", "provider_name": "local", "recipe": None},
         ),
+        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused") as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
@@ -658,9 +659,10 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
     with (
         patch.object(
             threads_router.sandbox_service,
-            "list_user_leases",
-            return_value=[{"lease_id": "lease-1", "provider_name": "daytona", "recipe": None}],
+            "resolve_owned_lease",
+            return_value={"lease_id": "lease-1", "provider_name": "daytona", "recipe": None},
         ),
+        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None),
     ):
         result = await threads_router.create_thread(payload, "owner-1", app)

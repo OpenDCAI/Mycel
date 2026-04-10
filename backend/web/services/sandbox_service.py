@@ -132,6 +132,79 @@ def list_user_leases(
         monitor_repo.close()
 
 
+def resolve_owned_lease(
+    user_id: str,
+    lease_id: str,
+    *,
+    thread_repo: Any = None,
+    user_repo: Any = None,
+) -> dict[str, Any] | None:
+    monitor_repo = make_sandbox_monitor_repo()
+    if thread_repo is None or user_repo is None:
+        raise RuntimeError("thread_repo and user_repo are required for resolve_owned_lease")
+    _thread_repo = thread_repo
+    _user_repo = user_repo
+    try:
+        lease = monitor_repo.query_lease(lease_id)
+        if lease is None:
+            return None
+        if not _is_user_visible_lease_state(lease):
+            return None
+
+        thread_ids: list[str] = []
+        agents: list[dict[str, Any]] = []
+        for row in monitor_repo.query_lease_threads(lease_id):
+            thread_id = str(row.get("thread_id") or "").strip()
+            if not _is_user_visible_lease_thread(thread_id) or thread_id in thread_ids:
+                continue
+            thread = _thread_repo.get_by_id(thread_id)
+            if thread is None:
+                continue
+            agent_user_id = str(thread.get("agent_user_id") or "").strip()
+            if not agent_user_id:
+                continue
+            agent_user = _user_repo.get_by_id(agent_user_id)
+            if agent_user is None or agent_user.owner_user_id != user_id:
+                continue
+            thread_ids.append(thread_id)
+            agents.append(
+                {
+                    "thread_id": thread_id,
+                    "agent_user_id": agent_user_id,
+                    "agent_name": agent_user.display_name,
+                    "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
+                }
+            )
+        if not thread_ids:
+            return None
+
+        provider_name = str(lease.get("provider_name") or "local")
+        provider_type = provider_type_from_name(provider_name)
+        if lease.get("recipe_json"):
+            import json
+
+            recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe_json"])))
+        else:
+            recipe_snapshot = normalize_recipe_snapshot(provider_type)
+
+        result = dict(lease)
+        result["lease_id"] = lease_id
+        result["provider_name"] = provider_name
+        result["thread_ids"] = thread_ids
+        result["agents"] = agents
+        result["recipe_id"] = recipe_snapshot["id"] or result.get("recipe_id") or default_recipe_id(provider_type)
+        result["recipe"] = recipe_snapshot
+        result["recipe_name"] = recipe_snapshot["name"]
+        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None)
+        if callable(query_lease_instance_id):
+            runtime_session_id = query_lease_instance_id(lease_id)
+            if runtime_session_id:
+                result["runtime_session_id"] = runtime_session_id
+        return result
+    finally:
+        monitor_repo.close()
+
+
 def _is_user_visible_lease_thread(thread_id: str | None) -> bool:
     raw = str(thread_id or "").strip()
     if not raw:

@@ -277,17 +277,11 @@ def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
     if payload.lease_id:
-        owned_lease = next(
-            (
-                lease
-                for lease in sandbox_service.list_user_leases(
-                    owner_user_id,
-                    thread_repo=app.state.thread_repo,
-                    user_repo=app.state.user_repo,
-                )
-                if lease["lease_id"] == payload.lease_id
-            ),
-            None,
+        owned_lease = sandbox_service.resolve_owned_lease(
+            owner_user_id,
+            payload.lease_id,
+            thread_repo=app.state.thread_repo,
+            user_repo=app.state.user_repo,
         )
         if owned_lease is not None:
             sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
@@ -565,17 +559,11 @@ def _create_owned_thread(
     selected_lease_id = payload.lease_id
     owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
-        owned_lease = next(
-            (
-                lease
-                for lease in sandbox_service.list_user_leases(
-                    owner_user_id,
-                    thread_repo=app.state.thread_repo,
-                    user_repo=app.state.user_repo,
-                )
-                if lease["lease_id"] == selected_lease_id
-            ),
-            None,
+        owned_lease = sandbox_service.resolve_owned_lease(
+            owner_user_id,
+            selected_lease_id,
+            thread_repo=app.state.thread_repo,
+            user_repo=app.state.user_repo,
         )
         if owned_lease is None:
             raise HTTPException(403, "Lease not authorized")
