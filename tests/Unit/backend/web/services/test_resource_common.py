@@ -11,11 +11,7 @@ class _FakeThreadRepo:
         return self._rows.get(thread_id)
 
     def list_by_ids(self, thread_ids: list[str]):
-        return [
-            {"id": thread_id, **row}
-            for thread_id, row in self._rows.items()
-            if thread_id in set(thread_ids)
-        ]
+        return [{"id": thread_id, **row} for thread_id, row in self._rows.items() if thread_id in set(thread_ids)]
 
     def close(self):
         pass
@@ -80,6 +76,7 @@ def test_thread_owners_prefers_batch_thread_lookup() -> None:
         "thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"},
         "thread-2": {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None},
     }
+
 
 @pytest.mark.parametrize(
     ("thread_repo", "user_repo", "message"),

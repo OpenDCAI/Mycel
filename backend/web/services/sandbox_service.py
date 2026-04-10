@@ -58,15 +58,8 @@ def list_user_leases(
     _user_repo = user_repo
     own_repos = False
     try:
-        threads_by_id = {
-            str(thread.get("id") or ""): thread
-            for thread in _thread_repo.list_by_owner_user_id(user_id)
-            if thread.get("id")
-        }
-        users_by_id = {
-            str(user.id): user
-            for user in _user_repo.list_by_owner_user_id(user_id)
-        }
+        threads_by_id = {str(thread.get("id") or ""): thread for thread in _thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
+        users_by_id = {str(user.id): user for user in _user_repo.list_by_owner_user_id(user_id)}
         rows = monitor_repo.list_leases_with_threads()
         query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None) if include_runtime_session_id else None
         grouped: dict[str, dict[str, Any]] = {}

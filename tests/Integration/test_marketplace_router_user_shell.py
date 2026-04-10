@@ -16,7 +16,9 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
     monkeypatch.setattr(marketplace_router.marketplace_client, "publish", lambda **kwargs: seen.update(kwargs) or {"ok": True})
     monkeypatch.setattr(
         "backend.web.services.profile_service.get_profile",
-        lambda user=None: (_ for _ in ()).throw(AssertionError("config profile fallback not allowed")) if user is None else {"name": user.display_name},
+        lambda user=None: (
+            (_ for _ in ()).throw(AssertionError("config profile fallback not allowed")) if user is None else {"name": user.display_name}
+        ),
     )
 
     user_repo = SimpleNamespace(

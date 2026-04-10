@@ -31,11 +31,7 @@ class _FakeThreadRepo:
         return self._rows.get(thread_id)
 
     def list_by_ids(self, thread_ids: list[str]):
-        return [
-            {"id": thread_id, **row}
-            for thread_id, row in self._rows.items()
-            if thread_id in set(thread_ids)
-        ]
+        return [{"id": thread_id, **row} for thread_id, row in self._rows.items() if thread_id in set(thread_ids)]
 
     def close(self):
         pass
@@ -419,10 +415,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
     _patch_daytona_projection(
         monkeypatch,
         repo,
-        lambda thread_ids: {
-            tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None}
-            for tid in thread_ids
-        },
+        lambda thread_ids: {tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids},
     )
 
     payload = resource_projection_service.list_resource_providers()

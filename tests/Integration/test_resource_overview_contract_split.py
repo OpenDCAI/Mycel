@@ -31,10 +31,7 @@ class _FakeMonitorRepo:
 
     def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
         self.batch_calls.append(list(lease_ids))
-        return {
-            lease_id: self._runtime_session_ids.get(lease_id)
-            for lease_id in lease_ids
-        }
+        return {lease_id: self._runtime_session_ids.get(lease_id) for lease_id in lease_ids}
 
     def close(self) -> None:
         return None

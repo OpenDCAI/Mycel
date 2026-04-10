@@ -587,10 +587,13 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
             get_by_id=lambda thread_id: rows.get(thread_id),
         ),
         terminal_repo=SimpleNamespace(
-            summarize_threads=lambda thread_ids: summarize_calls.append(list(thread_ids)) or {
-                "main-thread": {"active_terminal_id": "term-main", "latest_terminal_id": "term-main"},
-                "child-thread": {"active_terminal_id": "term-child", "latest_terminal_id": "term-child"},
-            },
+            summarize_threads=lambda thread_ids: (
+                summarize_calls.append(list(thread_ids))
+                or {
+                    "main-thread": {"active_terminal_id": "term-main", "latest_terminal_id": "term-main"},
+                    "child-thread": {"active_terminal_id": "term-child", "latest_terminal_id": "term-child"},
+                }
+            ),
             get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("should not use per-thread get_active")),
             list_by_thread=lambda _thread_id: (_ for _ in ()).throw(AssertionError("should not use per-thread list_by_thread")),
             set_active=lambda _thread_id, _terminal_id: (_ for _ in ()).throw(AssertionError("should not repair ready threads")),

@@ -32,12 +32,7 @@ def _lease_row(
 
 
 def _single_agent_repos(*thread_ids: str):
-    thread_repo = _FakeThreadRepo(
-        {
-            thread_id: {"agent_user_id": "agent-1", "owner_user_id": "owner-1"}
-            for thread_id in thread_ids
-        }
-    )
+    thread_repo = _FakeThreadRepo({thread_id: {"agent_user_id": "agent-1", "owner_user_id": "owner-1"} for thread_id in thread_ids})
     user_repo = _FakeUserRepo(
         {
             "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),

@@ -204,7 +204,9 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
             get_provider=lambda _provider_name: SimpleNamespace(api_key="repo-key", base_url="https://repo.example"),
         ),
     )
-    monkeypatch.setattr(settings_router, "load_merged_models", lambda: (_ for _ in ()).throw(AssertionError("filesystem loader not allowed")))
+    monkeypatch.setattr(
+        settings_router, "load_merged_models", lambda: (_ for _ in ()).throw(AssertionError("filesystem loader not allowed"))
+    )
     monkeypatch.setattr(settings_router, "load_models", lambda: (_ for _ in ()).throw(AssertionError("filesystem models not allowed")))
     monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
 

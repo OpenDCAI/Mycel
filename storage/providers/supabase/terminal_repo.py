@@ -104,15 +104,14 @@ class SupabaseTerminalRepo:
         )
 
         summary: dict[str, dict[str, str | None]] = {
-            thread_id: {"active_terminal_id": None, "latest_terminal_id": None}
-            for thread_id in normalized_ids
+            thread_id: {"active_terminal_id": None, "latest_terminal_id": None} for thread_id in normalized_ids
         }
         for row in pointer_rows:
             thread_id = str(row.get("thread_id") or "").strip()
             if thread_id:
-                summary.setdefault(thread_id, {"active_terminal_id": None, "latest_terminal_id": None})[
-                    "active_terminal_id"
-                ] = str(row.get("active_terminal_id") or "").strip() or None
+                summary.setdefault(thread_id, {"active_terminal_id": None, "latest_terminal_id": None})["active_terminal_id"] = (
+                    str(row.get("active_terminal_id") or "").strip() or None
+                )
         for row in terminal_rows:
             thread_id = str(row.get("thread_id") or "").strip()
             terminal_id = str(row.get("terminal_id") or "").strip()
