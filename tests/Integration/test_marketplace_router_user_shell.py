@@ -16,7 +16,7 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
     monkeypatch.setattr(marketplace_router.marketplace_client, "publish", lambda **kwargs: seen.update(kwargs) or {"ok": True})
     monkeypatch.setattr(
         "backend.web.services.profile_service.get_profile",
-        lambda user=None: {"name": user.display_name if user is not None else "wrong-source"},
+        lambda user=None: (_ for _ in ()).throw(AssertionError("config profile fallback not allowed")) if user is None else {"name": user.display_name},
     )
 
     user_repo = SimpleNamespace(
@@ -47,44 +47,6 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
     assert seen["publisher_username"] == "owner-name"
     assert seen["user_repo"] is user_repo
     assert seen["agent_config_repo"] is agent_config_repo
-
-
-@pytest.mark.asyncio
-async def test_publish_to_marketplace_does_not_fall_back_to_config_profile(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: dict[str, object] = {}
-
-    monkeypatch.setattr(marketplace_router.marketplace_client, "publish", lambda **kwargs: seen.update(kwargs) or {"ok": True})
-    monkeypatch.setattr(
-        "backend.web.services.profile_service.get_profile",
-        lambda user=None: (_ for _ in ()).throw(AssertionError("config profile fallback not allowed")) if user is None else {"name": user.display_name},
-    )
-
-    user_repo = SimpleNamespace(
-        get_by_id=lambda user_id: (
-            SimpleNamespace(id=user_id, owner_user_id="owner-1")
-            if user_id == "agent-1"
-            else SimpleNamespace(id=user_id, display_name="owner-name", email="owner@example.com")
-            if user_id == "owner-1"
-            else None
-        )
-    )
-    request = SimpleNamespace(
-        app=SimpleNamespace(
-            state=SimpleNamespace(
-                user_repo=user_repo,
-                agent_config_repo=SimpleNamespace(),
-            )
-        )
-    )
-
-    result = await marketplace_router.publish_to_marketplace(
-        req=PublishToMarketplaceRequest(user_id="agent-1"),
-        user_id="owner-1",
-        request=request,
-    )
-
-    assert result == {"ok": True}
-    assert seen["publisher_username"] == "owner-name"
 
 
 @pytest.mark.asyncio
