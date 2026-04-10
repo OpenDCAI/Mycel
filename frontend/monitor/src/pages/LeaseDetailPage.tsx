@@ -98,6 +98,7 @@ export default function LeaseDetailPage() {
   const recentOperations = (cleanup.recent_operations ?? []).filter(
     (operation) => operation.operation_id !== cleanup.operation?.operation_id,
   );
+  const latestSession = sessions[0] ?? null;
 
   async function startCleanup() {
     setCleanupPending(true);
@@ -265,59 +266,21 @@ export default function LeaseDetailPage() {
               )}
             </span>
           </div>
+          <div>
+            <strong>Thread</strong>
+            <span>
+              {threads[0]?.thread_id ? <Link to={`/threads/${threads[0].thread_id}`}>{threads[0].thread_id}</Link> : "No related thread"}
+            </span>
+          </div>
+          <div>
+            <strong>Session</strong>
+            <span>{latestSession?.chat_session_id ?? "No recorded session"}</span>
+          </div>
+          <div>
+            <strong>Session status</strong>
+            <span>{latestSession?.status ?? "-"}</span>
+          </div>
         </div>
-      </section>
-      <section className="surface-section">
-        <h2>Threads</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Thread</th>
-            </tr>
-          </thead>
-          <tbody>
-            {threads.length > 0 ? (
-              threads.map((thread) => (
-                <tr key={thread.thread_id ?? "missing-thread"}>
-                  <td className="mono">
-                    {thread.thread_id ? <Link to={`/threads/${thread.thread_id}`}>{thread.thread_id}</Link> : "-"}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td>No related threads.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-      <section className="surface-section">
-        <h2>Sessions</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Session</th>
-              <th>Thread</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sessions.length > 0 ? (
-              sessions.map((session) => (
-                <tr key={session.chat_session_id ?? "missing-session"}>
-                  <td className="mono">{session.chat_session_id ?? "-"}</td>
-                  <td className="mono">{session.thread_id ?? "-"}</td>
-                  <td>{session.status ?? "-"}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={3}>No recorded sessions.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </section>
     </div>
   );

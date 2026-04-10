@@ -512,6 +512,68 @@ describe("MonitorRoutes", () => {
     expect(screen.getAllByText("runtime-1")).toHaveLength(1);
   });
 
+  it("keeps lease detail relations compact instead of splitting threads and sessions into separate tables", async () => {
+    mockRoutePayloads({
+      "/leases/lease-1": {
+        lease: {
+          lease_id: "lease-1",
+          provider_name: "daytona",
+          desired_state: "running",
+          observed_state: "detached",
+          updated_at: "2026-04-08T00:00:00Z",
+          updated_ago: "1m ago",
+          last_error: null,
+          badge: {
+            color: "yellow",
+            observed: "detached",
+            desired: "running",
+            text: "detached -> running",
+          },
+        },
+        triage: {
+          category: "detached_residue",
+          title: "Detached Residue",
+          description: "Lease is detached residue and can enter managed cleanup.",
+          tone: "danger",
+        },
+        provider: {
+          id: "daytona",
+          name: "daytona",
+        },
+        runtime: {
+          runtime_session_id: "runtime-1",
+        },
+        threads: [{ thread_id: "thread-1" }],
+        sessions: [{ chat_session_id: "session-1", thread_id: "thread-1", status: "active" }],
+        cleanup: {
+          allowed: true,
+          recommended_action: "lease_cleanup",
+          reason: "Lease is detached residue and can enter managed cleanup.",
+          operation: null,
+          recent_operations: [],
+        },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases/lease-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Threads" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Sessions" })).not.toBeInTheDocument();
+    const relationsHeading = screen.getByRole("heading", { name: "Relations" });
+    const relationsSection = relationsHeading.closest("section");
+    if (!relationsSection) {
+      throw new Error("Expected lease detail relations section");
+    }
+    expect(within(relationsSection).getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
+    expect(within(relationsSection).getByText("session-1")).toBeInTheDocument();
+    expect(within(relationsSection).getByText("active")).toBeInTheDocument();
+  });
+
   it("renders a lease cleanup panel with action and operation history", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : String(input.url);
