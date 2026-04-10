@@ -81,6 +81,17 @@ def _derive_thread_summary_from_sessions(sessions: list[dict[str, Any]]) -> dict
     return summary if any(value is not None for value in summary.values()) else None
 
 
+def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
+    if owner is None:
+        return None
+    return {
+        "user_id": owner.get("user_id") or owner.get("agent_user_id"),
+        "display_name": owner.get("display_name") or owner.get("agent_name"),
+        "email": owner.get("email"),
+        "avatar_url": owner.get("avatar_url"),
+    }
+
+
 LEASE_SEMANTIC_ORDER = [
     "orphan_diverged",
     "diverged",
@@ -567,7 +578,7 @@ def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
 
     return {
         "thread": thread,
-        "owner": owners.get(thread_id),
+        "owner": _normalize_thread_owner(owners.get(thread_id)),
         "summary": summary,
         "sessions": sessions,
     }
