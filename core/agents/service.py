@@ -407,7 +407,24 @@ def _background_run_running_message(running: BackgroundRun) -> str:
     return "Command is still running." if isinstance(running, _BashBackgroundRun) else "Agent is still running."
 
 
-def _background_run_result_status(result: str | None) -> str:
+def _background_run_result(running: BackgroundRun) -> str | None:
+    result = running.get_result()
+    if not _background_run_cancelled(running):
+        return result
+
+    cmd = getattr(running, "_cmd", None)
+    stdout = "".join(getattr(cmd, "stdout_buffer", []) or [])
+    if stdout:
+        # @@@cancelled-run-result-honesty - cancelled bash runs may have partial
+        # stdout, but they must still surface cancellation explicitly instead of
+        # looking like a clean completion.
+        return f"{stdout}\n[stderr]\nCommand cancelled"
+    return "Command cancelled"
+
+
+def _background_run_result_status(running: BackgroundRun, result: str | None) -> str:
+    if _background_run_cancelled(running):
+        return "cancelled"
     return "error" if (result and result.startswith("<tool_use_error>")) else "completed"
 
 
@@ -1130,11 +1147,11 @@ class AgentService:
                     ensure_ascii=False,
                 )
 
-            result = running.get_result()
+            result = _background_run_result(running)
             return json.dumps(
                 {
                     "task_id": task_id,
-                    "status": _background_run_result_status(result),
+                    "status": _background_run_result_status(running, result),
                     "result": result,
                 },
                 ensure_ascii=False,
@@ -1162,11 +1179,11 @@ class AgentService:
                 ensure_ascii=False,
             )
 
-        result = running.get_result()
+        result = _background_run_result(running)
         return json.dumps(
             {
                 "task_id": task_id,
-                "status": _background_run_result_status(result),
+                "status": _background_run_result_status(running, result),
                 "result": result,
             },
             ensure_ascii=False,

@@ -1839,6 +1839,14 @@ async def test_cancel_task_route_marks_bash_run_cancelled_and_forces_process_sto
     assert async_cmd.done is True
     assert async_cmd.exit_code == -9
     assert threads_router._serialize_background_run("cmd-cancel-route", run, include_result=False)["status"] == "cancelled"
+    assert threads_router._serialize_background_run("cmd-cancel-route", run, include_result=True) == {
+        "task_id": "cmd-cancel-route",
+        "task_type": "bash",
+        "status": "cancelled",
+        "command_line": "sleep 30; echo NEVER",
+        "result": "Command cancelled",
+        "text": "Command cancelled",
+    }
 
 
 @pytest.mark.asyncio

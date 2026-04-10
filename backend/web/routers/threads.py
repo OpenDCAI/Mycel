@@ -53,7 +53,7 @@ from backend.web.services.thread_state_service import (
 )
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
-from core.agents.service import _background_run_cancelled, request_background_run_stop
+from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_lease
@@ -1407,7 +1407,7 @@ def _background_run_type(run: Any) -> str:
 
 def _serialize_background_run(task_id: str, run: Any, *, include_result: bool) -> dict[str, Any]:
     run_type = _background_run_type(run)
-    result_text = run.get_result() if include_result and run.is_done else None
+    result_text = _background_run_result(run) if include_result and run.is_done else None
     if _background_run_cancelled(run):
         status = "cancelled"
     else:
