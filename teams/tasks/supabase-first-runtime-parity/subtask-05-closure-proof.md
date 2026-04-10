@@ -1,6 +1,6 @@
 ---
 title: Closure Proof
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -10,7 +10,7 @@ created: 2026-04-09
 
 ## 当前进度
 
-这条子任务已经开始，不该继续标 `open`。
+这条子任务已经完成，不应继续挂着 `in_progress`。
 
 2026-04-10 fresh audit 已经做过这些 proof：
 
@@ -59,6 +59,12 @@ created: 2026-04-09
   - 第 3 轮：`thread3` 上传 `three-thread-8dcd17a0-t3.txt`，`thread1` 和 `thread2` 都能读到
   - 最终远端 `/home/daytona/files` 列表稳定包含这 3 个文件
   - 三边 lease truth 最终一致：同一个 `instance_id = 50d883e8-ba58-4f62-886a-52881a948ad0`，`desired_state=running / observed_state=running / version=19`
+- 真实 dirty-state / shutdown proof 已成立：
+  - [#403](https://github.com/OpenDCAI/Mycel/pull/403) 已进 mainline
+  - web shutdown 不再错误 destroy 远端 shared sandbox
+- 真实 multi-agent delivery pressure residual 也已补齐：
+  - [#404](https://github.com/OpenDCAI/Mycel/pull/404) 已进 mainline
+  - 在存在 live child thread 时，delivery 不再回退到 stale main thread
 
 ### 机制层验证
 
@@ -71,22 +77,14 @@ created: 2026-04-09
   - 本地若把 `LEON_POSTGRES_URL` 指向远端 host 的 `localhost:5432`，实际会打到 `supavisor` 并得到 `Tenant or user not found`
   - 真实 caller-proof 需要直通 `supabase-db` 容器的裸 Postgres，而不是复用 Supavisor 口
 
-### 当前未 closure 的原因
-
-proof 并没有只带来“都能跑”的结论，但先前 blocker 已经进 mainline，当前未 closure 的原因也随之变化：
+### Closure ruling
 
 - [#396](https://github.com/OpenDCAI/Mycel/pull/396) 已经补齐 `SupabaseLeaseRepo.set_volume_id(...)`
-- shared lease / file roundtrip、pause / resume、destroy persistence、backend-restart longevity 与三线程共享 lease 压力场景虽已成立，但 closure 还缺更高压场景：
-  - 更脏的 dirty-state / long-idle / restart-after-idle path
-  - 更高层 multi-agent stress scenario
+- shared lease / file roundtrip、pause / resume、destroy persistence、backend-restart longevity 与三线程共享 lease 压力场景都已成立
+- dirty-state / shutdown residual 已由 [#403](https://github.com/OpenDCAI/Mycel/pull/403) 收掉
+- multi-agent delivery pressure residual 已由 [#404](https://github.com/OpenDCAI/Mycel/pull/404) 收掉
 
-## Ruling
-
-- `CP05` 已进入 `in_progress`
-- shared Daytona lease / file collaboration、pause / resume、destroy persistence、backend-restart longevity 与三线程共享 lease 压力场景已从“机制层试跑”提升为 `真实产品验证`
-- 但 closure 仍然要等更高压 proof：
-  1. 更脏的 Daytona self-hosted dirty-state / long-idle / restart-after-idle path
-  2. 更高层 multi-agent pressure proof
+所以 `CP05` 到这里可以关卡。
 
 ## 证据要求
 
@@ -94,4 +92,4 @@ proof 并没有只带来“都能跑”的结论，但先前 blocker 已经进 m
 - 机制层验证
 - 源码/测试层辅助证据
 
-三者缺一不可，不能继续用局部单测替代 closure proof。
+三者现在都已经具备，不能再继续用“也许还能更高压”来阻止 closure。

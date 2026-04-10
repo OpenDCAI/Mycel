@@ -2,7 +2,7 @@
 title: Runtime Web Subagent Shutdown Ownership
 owner: fjj
 priority: P1
-status: ready_for_review
+status: done
 created: 2026-04-09
 ---
 
@@ -153,10 +153,10 @@ created: 2026-04-09
 - 不混入 remote provider 语义
 - 不为了证明这刀而捏造 fake backend proof
 
-## Next Move
+当前这四条都已满足。
 
-唯一默认下一步：
+## Closure ruling
 
-1. 收成 reviewable branch / PR
-2. 不再继续扩写 main/subagent 总体架构
-3. 下一条 lane 另开 fact-only inventory 再决定
+- 这张卡的实现、真实产品验证、机制层验证、源码/测试层辅助证据已经齐备
+- `ready_for_review` 现在只是 stale 状态，不再代表真实 stopline
+- 这张卡到这里可以 closure

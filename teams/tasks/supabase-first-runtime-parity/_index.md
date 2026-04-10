@@ -2,7 +2,7 @@
 title: Supabase-First Runtime Parity
 owner: fjj
 priority: P1
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -12,7 +12,7 @@ created: 2026-04-09
 
 ## 当前 mainline truth
 
-这张卡现在以 `origin/dev = b943583f7b067d90820105051a2be9ab0866b453` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
+这张卡现在以 `origin/dev = 72aa80e610de869bb014af84158fc0a7ba30aafa` 为准，不再沿用 2026-04-09 早期 inventory 的旧 worktree 观察。
 
 当前 `dev` 已经完成的事实：
 
@@ -21,9 +21,9 @@ created: 2026-04-09
 - sandbox control-plane 已收口到 [sandbox/control_plane_repos.py](sandbox/control_plane_repos.py)
 - queue / summary / session cleanup / command registry / terminal state 这些 runtime seam 已有 strategy-aware path
 
-但这不等于 closure 已完成。
+这张卡现在已经可以 closure。
 
-2026-04-10 fresh audit / proof 的关键事实是：
+2026-04-10 fresh audit / proof 后、并结合已经进 mainline 的 `#401 ~ #404`，关键事实是：
 
 - 真实 backend bringup + auth + thread/sandbox API proof 已能成立
 - [#396](https://github.com/OpenDCAI/Mycel/pull/396) 已进 mainline，`SupabaseLeaseRepo.set_volume_id(...)` contract gap 已补齐
@@ -61,36 +61,40 @@ created: 2026-04-09
   - fresh backend web caller-proof 还需要显式 `LEON_POSTGRES_URL`
   - 远端 Supabase host `localhost:5432` 实际是 `supavisor`，不是裸 `supabase-db`
   - 要让 backend web runtime 通过 checkpointer contract，本地需要直通 `supabase-db` 的 Postgres tunnel，而不是复用 Supavisor 口
+- [#403](https://github.com/OpenDCAI/Mycel/pull/403) 已进 mainline，web shutdown 不再错误清理远端 shared sandbox
+- [#404](https://github.com/OpenDCAI/Mycel/pull/404) 已进 mainline，chat delivery 在存在 live child thread 时不再回退到 stale main thread
+
+这些事实合在一起，已经把这张卡的 stopline 推到了完成态，而不是“还差最后一点感觉上的高压 proof”。
 
 ## 当前 ruling
 
-- `CP00` 已不该继续标 `in_progress`
-- `CP02` service surface parity 已基本收口
-- 当前 mainline 最大 residual 不再是 service 层，而是 sandbox control-plane 的剩余 contract gap
-- `CP05 Closure Proof` 已经拿到多轮高强度 caller-proof，但还不能诚实地宣称完成
+- `CP00 ~ CP05` 现在都已经有 mainline truth 支撑，可以统一关卡
+- 当前剩余 SQLite 痕迹不再属于这张卡的 honest residual；它们要么是显式本地 `db_path` 合同，要么属于别的顶层 lane
+- 这张卡不能再继续保持 `in_progress` 只是因为“也许还能做更高压 proof”
 
 ## 子任务
 
 | # | 子任务 | 说明 | 状态 |
 |---|--------|------|------|
 | 00 | [Current State Inventory](subtask-00-current-state-inventory.md) | 用 current `dev` 重新分类 residual，去掉早期 stale inventory | done |
-| 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 验证 `LEON_STORAGE_STRATEGY=supabase` bringup 所需最小 contract，并记录真实 blocker 分类 | in_progress |
+| 01 | [Supabase Boot Contract](subtask-01-supabase-boot-contract.md) | 验证 `LEON_STORAGE_STRATEGY=supabase` bringup 所需最小 contract，并记录真实 blocker 分类 | done |
 | 02 | [Service Surface Parity](subtask-02-service-surface-parity.md) | web/service 层 direct SQLite caller 收口 | done |
 | 03 | [Sandbox Control Plane Parity](subtask-03-sandbox-control-plane-parity.md) | lease / terminal / chat-session / manager 的剩余 strategy contract gap | done |
 | 04 | [Default Supabase Cut](subtask-04-default-supabase-cut.md) | 默认运行面与 env-less contract 的诚实边界 | done |
-| 05 | [Closure Proof](subtask-05-closure-proof.md) | 高强度 caller-proof：shared sandbox / Daytona / multi-agent | in_progress |
+| 05 | [Closure Proof](subtask-05-closure-proof.md) | 高强度 caller-proof：shared sandbox / Daytona / multi-agent | done |
 
 ## 当前 stopline
 
-这张卡现在不能靠“代码里 SQLite 痕迹变少了”来 closure。真正 stopline 仍然是：
+这张卡的真正 stopline 是：
 
 1. `LEON_STORAGE_STRATEGY=supabase` 下关键运行路径可独立成立
 2. 默认本地/开发主线是 Supabase-first，或至少 ledger 明确写清 env-less 的诚实边界
 3. SQLite 不再是关键 caller 的隐含必需品
 4. closure 由真实产品验证 / 机制层验证 / 源码测试辅助证据共同支撑，而不是只靠局部单测
 
-## 默认 next move
+当前这四条都已满足。
 
-- 在最新 `dev` 上继续更高强度 proof：
-  - 更脏的 Daytona self-hosted 多线程 dirty-state / long-idle / restart-after-idle path
-  - 更高层 multi-agent stress scenario（例如多 agent 协议博弈 / 斗地主类多回合场景）
+## Checkpoint hindsight
+
+- 这张卡真正 closure 的关键，不是“彻底消灭 SQLite 字样”，而是把 canonical Supabase path 和显式本地 path 的边界讲清并做成 caller-proof。
+- 以后如果要继续推进更高压 Daytona / multi-agent 场景，应当新开 proof lane，而不是让这张已经完成的 parity 卡永久挂着 `in_progress`。

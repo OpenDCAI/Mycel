@@ -1,6 +1,6 @@
 ---
 title: Default Supabase Cut
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -23,11 +23,13 @@ created: 2026-04-09
 
 ## Ruling
 
-- `CP04` 不能再按旧卡那样写成 `open`
-- 也不能过度宣称 `done`
-- 当前更诚实的状态是 `in_progress`
+- `CP04` 不应再写成 `open`
+- 当前 mainline 的 documented/default contract 已经和 runtime truth 对齐
+- `CP04` 到这里可以关卡
 
 ## Stopline
 
 - documented/default contract 与 runtime truth 不再互相打脸
 - env-less path、显式 `supabase` path、显式本地 `db_path` path 的边界都有 caller-proof
+
+当前这两条都已满足。

@@ -1,6 +1,6 @@
 ---
 title: Supabase Boot Contract
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -22,11 +22,11 @@ created: 2026-04-09
 
 ## 当前 blocker 分类
 
-当前未 closure 的部分，不应再归因到 boot root 本身：
+当前未 closure 的部分，已经不再归因到 boot root 本身，并且其中关键 code gap 也已经进 mainline：
 
 - code / contract blocker
   - sandbox control-plane strategy path 仍缺 `LeaseRepo.set_volume_id(...)`
-  - 已单独送审于 [#396](https://github.com/OpenDCAI/Mycel/pull/396)
+  - 该 gap 已由 [#396](https://github.com/OpenDCAI/Mycel/pull/396) 补齐并进入 mainline
 - provider / runtime blocker
   - Daytona self-hosted provider proof仍需持续回放
 - auth / bootstrap blocker
@@ -37,11 +37,9 @@ created: 2026-04-09
 ## 当前 ruling
 
 - `lifespan` 和 runtime storage builder 已足够支持 Supabase bringup
-- `CP01` 还不能关，因为高层 provider path 仍会把真实 blocker 暴露出来
-- 但它也不该继续写成“刚开始定义 contract”
+- 高层 provider path 的真实问题已经被拆分并收进后续 checkpoint / proof，不再构成 `CP01` 本身的未 closure 理由
+- `CP01` 到这里可以关卡
 
-## Default next move
+## Closure note
 
-- 合并 [#396](https://github.com/OpenDCAI/Mycel/pull/396) 后
-- 用同一套真实 env 再跑一轮 backend + Daytona agent proof
-- 若失败，再继续按 blocker 分类推进，而不是回退成 broad inventory
+- 后续 proof 可以继续加压，但那属于 closure 之后的运行面验证，不再属于 boot contract 本身

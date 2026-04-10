@@ -1,6 +1,6 @@
 ---
 title: Sandbox Control Plane Parity
-status: in_progress
+status: done
 created: 2026-04-09
 ---
 
@@ -24,7 +24,7 @@ created: 2026-04-09
 - [sandbox/manager.py](sandbox/manager.py) 的 `_ensure_thread_volume()` 会调用 `lease_store.set_volume_id(...)`
 - 但 `dev` 上的 [storage/providers/supabase/lease_repo.py](storage/providers/supabase/lease_repo.py) 还没有这条实现
 
-这说明：
+这说明当时：
 
 - control-plane 大面已经收过
 - 但 `CP03` 还没 closure
@@ -39,5 +39,6 @@ created: 2026-04-09
 
 ## Ruling
 
-- `CP03` 继续保持 `in_progress`
-- 合并 [#396](https://github.com/OpenDCAI/Mycel/pull/396) 后，需要重跑高强度 provider proof，而不是只看单测
+- [#396](https://github.com/OpenDCAI/Mycel/pull/396) 现已进入 mainline
+- shared Daytona lease / file collaboration、pause / resume、destroy persistence、backend restart longevity 与三线程压力 proof 都已经成立
+- `CP03` 到这里可以关卡
