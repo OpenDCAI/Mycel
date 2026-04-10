@@ -67,6 +67,20 @@ def _thread_ref(thread_id: str | None) -> dict[str, Any]:
     }
 
 
+def _derive_thread_summary_from_sessions(sessions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not sessions:
+        return None
+    latest = sessions[0]
+    summary = {
+        "provider_name": latest.get("provider_name"),
+        "lease_id": latest.get("lease_id"),
+        "current_instance_id": latest.get("current_instance_id"),
+        "desired_state": latest.get("desired_state"),
+        "observed_state": latest.get("observed_state"),
+    }
+    return summary if any(value is not None for value in summary.values()) else None
+
+
 LEASE_SEMANTIC_ORDER = [
     "orphan_diverged",
     "diverged",
@@ -541,6 +555,9 @@ def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         sessions = repo.query_thread_sessions(thread_id)
     finally:
         repo.close()
+
+    if summary is None:
+        summary = _derive_thread_summary_from_sessions(sessions)
 
     owners = _thread_owners(
         [thread_id],

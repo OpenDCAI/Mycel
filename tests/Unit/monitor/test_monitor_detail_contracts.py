@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -98,3 +99,51 @@ def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_get_monitor_thread_detail_derives_summary_from_session_truth_when_repo_summary_missing(monkeypatch):
+    class FakeThreadRepo:
+        def get_by_id(self, thread_id):
+            return {"id": thread_id, "status": "active"}
+
+    class FakeMonitorRepo:
+        def query_thread_summary(self, thread_id):
+            return None
+
+        def query_thread_sessions(self, thread_id):
+            return [
+                {
+                    "chat_session_id": "sess-1",
+                    "status": "closed",
+                    "lease_id": "lease-1",
+                    "provider_name": "daytona",
+                    "desired_state": "paused",
+                    "observed_state": "paused",
+                    "current_instance_id": "runtime-1",
+                    "started_at": "2026-04-08T00:00:00Z",
+                    "ended_at": "2026-04-08T01:00:00Z",
+                    "close_reason": "expired",
+                }
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
+    monkeypatch.setattr(
+        monitor_service,
+        "_thread_owners",
+        lambda _thread_ids, **_kwargs: {"thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad"}},
+    )
+
+    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
+
+    payload = monitor_service.get_monitor_thread_detail(app, "thread-1")
+
+    assert payload["summary"] == {
+        "provider_name": "daytona",
+        "lease_id": "lease-1",
+        "current_instance_id": "runtime-1",
+        "desired_state": "paused",
+        "observed_state": "paused",
+    }
