@@ -9,6 +9,7 @@ import OperationDetailPage from "../pages/OperationDetailPage";
 import ProviderDetailPage from "../pages/ProviderDetailPage";
 import RuntimeDetailPage from "../pages/RuntimeDetailPage";
 import ThreadDetailPage from "../pages/ThreadDetailPage";
+import ThreadsPage from "../pages/ThreadsPage";
 import { MonitorShell } from "./MonitorShell";
 
 export function MonitorRoutes() {
@@ -23,6 +24,7 @@ export function MonitorRoutes() {
         <Route path="/leases/:leaseId" element={<LeaseDetailPage />} />
         <Route path="/operations/:operationId" element={<OperationDetailPage />} />
         <Route path="/runtimes/:runtimeSessionId" element={<RuntimeDetailPage />} />
+        <Route path="/threads" element={<ThreadsPage />} />
         <Route path="/threads/:threadId" element={<ThreadDetailPage />} />
         <Route path="/evaluation" element={<EvaluationPage />} />
       </Routes>

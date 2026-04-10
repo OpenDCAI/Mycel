@@ -149,7 +149,7 @@ export default function ThreadDetailPage() {
           <div>
             <strong>Surface</strong>
             <span>
-              <Link to="/leases">Leases</Link>
+              <Link to="/threads">Threads</Link>
             </span>
           </div>
         </div>

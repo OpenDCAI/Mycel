@@ -414,6 +414,38 @@ def test_monitor_thread_detail_route_exposes_structured_operator_truth(monkeypat
     }
 
 
+def test_monitor_threads_route_exposes_thread_workbench(monkeypatch):
+    expected = {
+        "threads": [
+            {
+                "thread_id": "thread-1",
+                "sandbox": "daytona",
+                "agent_name": "Planner",
+                "agent_user_id": "member-1",
+                "branch_index": 0,
+                "sidebar_label": "Main",
+                "avatar_url": "/api/entities/member-1/avatar",
+                "is_main": True,
+                "running": True,
+                "updated_at": "2026-04-10T12:00:00Z",
+            }
+        ]
+    }
+    monkeypatch.setattr(monitor_service, "list_monitor_threads", lambda _app, _user_id: expected)
+
+    app = _build_monitor_test_app()
+    app.dependency_overrides[monitor.get_current_user_id] = lambda: "owner-1"
+
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/monitor/threads")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+
 def test_monitor_provider_runtime_and_thread_detail_routes_map_missing_rows_to_404(monkeypatch):
     monkeypatch.setattr(
         monitor_service,
@@ -450,7 +482,6 @@ def test_monitor_removed_forensic_routes_return_404():
     with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
         health_response = client.get("/api/monitor/health")
         thread_response = client.get("/api/monitor/thread/thread-404")
-        threads_response = client.get("/api/monitor/threads")
         lease_response = client.get("/api/monitor/lease/lease-404")
         diverged_response = client.get("/api/monitor/diverged")
         events_response = client.get("/api/monitor/events", params={"limit": 25})
@@ -458,7 +489,6 @@ def test_monitor_removed_forensic_routes_return_404():
 
     assert health_response.status_code == 404
     assert thread_response.status_code == 404
-    assert threads_response.status_code == 404
     assert lease_response.status_code == 404
     assert diverged_response.status_code == 404
     assert events_response.status_code == 404
@@ -468,20 +498,19 @@ def test_monitor_removed_forensic_routes_return_404():
 def test_monitor_evaluation_route_exposes_operator_truth(monkeypatch):
     monkeypatch.setattr(
         monitor_service,
-        "get_monitor_evaluation_truth",
+        "get_monitor_evaluation_workbench",
         lambda: {
-            "status": "unavailable",
-            "kind": "unavailable",
-            "tone": "warning",
-            "headline": "Evaluation operator truth is not wired in this runtime yet.",
-            "summary": "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
-            "source": {"kind": "unavailable", "label": "Unavailable"},
-            "subject": {"thread_id": None, "run_id": None, "user_message": None},
-            "facts": [{"label": "Status", "value": "unavailable"}],
-            "artifacts": [],
-            "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-            "limitations": ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
-            "raw_notes": None,
+            "headline": "Evaluation Workbench",
+            "summary": "No persisted evaluation runs are available yet.",
+            "overview": {
+                "total_runs": 0,
+                "running_runs": 0,
+                "completed_runs": 0,
+                "failed_runs": 0,
+            },
+            "runs": [],
+            "selected_run": None,
+            "limitations": ["Run an evaluation to populate the workbench with persisted runtime truth."],
         },
     )
 
@@ -490,15 +519,19 @@ def test_monitor_evaluation_route_exposes_operator_truth(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "unavailable"
-    assert payload["kind"] == "unavailable"
-    assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
-    assert payload["source"] == {"kind": "unavailable", "label": "Unavailable"}
-    assert payload["subject"] == {"thread_id": None, "run_id": None, "user_message": None}
-    assert payload["artifact_summary"] == {"present": 0, "missing": 0, "total": 0}
+    assert payload["headline"] == "Evaluation Workbench"
+    assert payload["summary"] == "No persisted evaluation runs are available yet."
+    assert payload["overview"] == {
+        "total_runs": 0,
+        "running_runs": 0,
+        "completed_runs": 0,
+        "failed_runs": 0,
+    }
+    assert payload["runs"] == []
+    assert payload["selected_run"] is None
 
 
-def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
+def test_monitor_evaluation_route_exposes_recent_persisted_runs(monkeypatch):
     class FakeStore:
         def list_runs(self, thread_id=None, limit=50):
             return [
@@ -509,22 +542,45 @@ def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
                     "finished_at": "2026-04-08T00:03:00Z",
                     "status": "completed",
                     "user_message": "solve the eval task",
+                },
+                {
+                    "id": "run-2",
+                    "thread_id": "thread-eval-2",
+                    "started_at": "2026-04-09T00:00:00Z",
+                    "finished_at": None,
+                    "status": "running",
+                    "user_message": "keep the benchmark running",
                 }
             ]
 
         def get_metrics(self, run_id, tier=None):
-            return [
-                {
-                    "id": "metric-1",
-                    "tier": "system",
-                    "timestamp": "2026-04-08T00:03:01Z",
-                    "metrics": {
-                        "total_tokens": 123,
-                        "llm_call_count": 3,
-                        "tool_call_count": 2,
-                    },
-                }
-            ]
+            metrics = {
+                "run-1": [
+                    {
+                        "id": "metric-1",
+                        "tier": "system",
+                        "timestamp": "2026-04-08T00:03:01Z",
+                        "metrics": {
+                            "total_tokens": 123,
+                            "llm_call_count": 3,
+                            "tool_call_count": 2,
+                        },
+                    }
+                ],
+                "run-2": [
+                    {
+                        "id": "metric-2",
+                        "tier": "system",
+                        "timestamp": "2026-04-09T00:03:01Z",
+                        "metrics": {
+                            "total_tokens": 456,
+                            "llm_call_count": 5,
+                            "tool_call_count": 4,
+                        },
+                    }
+                ],
+            }
+            return metrics[run_id]
 
     monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
     _stub_monitor_resource_snapshot(monkeypatch)
@@ -536,27 +592,28 @@ def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
 
     assert evaluation_response.status_code == 200
     evaluation_payload = evaluation_response.json()
-    assert evaluation_payload["status"] == "completed"
-    assert evaluation_payload["kind"] == "completed_recorded"
-    assert evaluation_payload["headline"] == "Latest persisted evaluation run completed successfully."
-    assert evaluation_payload["source"] == {
-        "kind": "persisted_latest_run",
-        "label": "Latest Persisted Run",
+    assert evaluation_payload["headline"] == "Evaluation Workbench"
+    assert evaluation_payload["overview"] == {
+        "total_runs": 2,
+        "running_runs": 1,
+        "completed_runs": 1,
+        "failed_runs": 0,
     }
-    assert evaluation_payload["subject"] == {
-        "thread_id": "thread-eval",
+    assert [run["run_id"] for run in evaluation_payload["runs"]] == ["run-1", "run-2"]
+    assert evaluation_payload["selected_run"] == {
         "run_id": "run-1",
-        "user_message": "solve the eval task",
+        "thread_id": "thread-eval",
+        "status": "completed",
         "started_at": "2026-04-08T00:00:00Z",
         "finished_at": "2026-04-08T00:03:00Z",
+        "user_message": "solve the eval task",
+        "facts": [
+            {"label": "Metric Tiers", "value": "1"},
+            {"label": "Total tokens", "value": "123"},
+            {"label": "LLM calls", "value": "3"},
+            {"label": "Tool calls", "value": "2"},
+        ],
     }
-    fact_labels = [fact["label"] for fact in evaluation_payload["facts"]]
-    assert "Status" not in fact_labels
-    assert "Thread ID" not in fact_labels
-    assert "Run ID" not in fact_labels
-    assert "Started At" not in fact_labels
-    assert "Finished At" not in fact_labels
-    assert "User Message" not in fact_labels
     assert dashboard_response.status_code == 200
     dashboard_payload = dashboard_response.json()
     assert dashboard_payload["workload"]["evaluations_running"] == 0

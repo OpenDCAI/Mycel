@@ -732,12 +732,7 @@ async def save_default_thread_config(
     return {"ok": True}
 
 
-@router.get("")
-async def list_threads(
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """List threads owned by the current user."""
+def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
     from core.runtime.middleware.monitor import AgentState
 
     raw = app.state.thread_repo.list_by_owner_user_id(user_id)
@@ -752,12 +747,10 @@ async def list_threads(
         if _is_internal_child_thread(tid):
             continue
         sandbox_type = t.get("sandbox_type", "local")
-        # Check if agent is currently running — pool key is "{thread_id}:{sandbox_type}"
         running = False
         agent = pool.get(f"{tid}:{sandbox_type}")
         if agent and hasattr(agent, "runtime"):
             running = agent.runtime.current_state == AgentState.ACTIVE
-        # last_active from in-memory tracking (run start/done)
         last_active = app.state.thread_last_active.get(tid)
         from datetime import datetime
 
@@ -781,6 +774,15 @@ async def list_threads(
             }
         )
     return {"threads": threads}
+
+
+@router.get("")
+async def list_threads(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """List threads owned by the current user."""
+    return build_owner_thread_workbench(app, user_id)
 
 
 @router.get("/{thread_id}")

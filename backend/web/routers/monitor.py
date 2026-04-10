@@ -1,9 +1,11 @@
 """Monitor router."""
 
 import asyncio
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.services import monitor_service, resource_service
 from backend.web.services.resource_cache import (
     get_resource_overview_snapshot,
@@ -23,6 +25,14 @@ def _refresh_monitor_resources_sync():
 @router.get("/leases")
 def leases_snapshot():
     return monitor_service.list_leases()
+
+
+@router.get("/threads")
+def threads_snapshot(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+):
+    return monitor_service.list_monitor_threads(app, user_id)
 
 
 @router.get("/providers/{provider_id}")
@@ -101,7 +111,7 @@ def dashboard_snapshot():
 
 @router.get("/evaluation")
 def evaluation_snapshot():
-    return monitor_service.get_monitor_evaluation_truth()
+    return monitor_service.get_monitor_evaluation_workbench()
 
 
 @router.get("/resources")

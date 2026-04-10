@@ -66,6 +66,7 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /resources/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /leases/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /threads/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toBeInTheDocument();
   });
 
@@ -1074,7 +1075,7 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByRole("heading", { name: "Thread thread-1" })).toBeInTheDocument();
     expect(screen.getByText("Surface")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Leases" })).toHaveAttribute("href", "/leases");
+    expect(screen.getByRole("link", { name: "Threads" })).toHaveAttribute("href", "/threads");
 
     threadView.unmount();
 
@@ -1089,7 +1090,7 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "Leases" })).toHaveAttribute("href", "/leases");
   });
 
-  it("renders thread detail under the leases surface", async () => {
+  it("renders thread detail under the threads surface", async () => {
     mockRoutePayloads({
       "/threads/thread-1": {
         thread: {
@@ -1132,7 +1133,7 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Thread thread-1" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { current: "page", name: /leases/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { current: "page", name: /threads/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "daytona" })).toHaveAttribute("href", "/providers/daytona");
     expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
     expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
@@ -1147,34 +1148,96 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("state=active calls=1")).toBeInTheDocument();
   });
 
-  it("renders evaluation as a truthful operator surface", async () => {
+  it("renders a threads workbench under a dedicated threads surface", async () => {
+    mockRoutePayloads({
+      "/threads": {
+        threads: [
+          {
+            thread_id: "thread-1",
+            sandbox: "daytona",
+            agent_name: "Planner",
+            agent_user_id: "member-1",
+            branch_index: 0,
+            sidebar_label: "Main",
+            avatar_url: null,
+            is_main: true,
+            running: true,
+            updated_at: "2026-04-10T12:00:00Z",
+          },
+          {
+            thread_id: "thread-2",
+            sandbox: "local",
+            agent_name: "Toad",
+            agent_user_id: "member-2",
+            branch_index: 1,
+            sidebar_label: "Branch 1",
+            avatar_url: null,
+            is_main: false,
+            running: false,
+            updated_at: null,
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/threads"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Threads" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /threads/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Thread Workbench")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
+    expect(screen.getByText("Planner")).toBeInTheDocument();
+    expect(screen.getByText("daytona")).toBeInTheDocument();
+    expect(screen.getByText("Main")).toBeInTheDocument();
+    expect(screen.getByText("running")).toBeInTheDocument();
+  });
+
+  it("renders evaluation as a recent-runs workbench", async () => {
     mockRoutePayloads({
       "/evaluation": {
-        status: "idle",
-        kind: "no_recorded_runs",
-        tone: "default",
-        headline: "No persisted evaluation runs are available yet.",
-        summary: "Evaluation storage is wired, but there are no recorded runs to report yet.",
-        source: {
-          kind: "persisted_latest_run",
-          label: "Latest Persisted Run",
+        headline: "Evaluation Workbench",
+        summary: "Recent persisted evaluation runs and their runtime truth.",
+        overview: {
+          total_runs: 2,
+          running_runs: 1,
+          completed_runs: 1,
+          failed_runs: 0,
         },
-        subject: {
-          thread_id: "thread-eval",
+        runs: [
+          {
+            run_id: "run-1",
+            thread_id: "thread-eval",
+            status: "completed",
+            started_at: "2026-04-08T00:00:00Z",
+            finished_at: "2026-04-08T00:03:00Z",
+            user_message: "leave a hello note",
+          },
+          {
+            run_id: "run-2",
+            thread_id: "thread-eval-2",
+            status: "running",
+            started_at: "2026-04-09T00:00:00Z",
+            finished_at: null,
+            user_message: "keep running",
+          },
+        ],
+        selected_run: {
           run_id: "run-1",
-          user_message: "leave a hello note",
+          thread_id: "thread-eval",
+          status: "completed",
           started_at: "2026-04-08T00:00:00Z",
           finished_at: "2026-04-08T00:03:00Z",
+          user_message: "leave a hello note",
+          facts: [
+            { label: "Metric Tiers", value: "1" },
+            { label: "Total tokens", value: "123" },
+          ],
         },
-        facts: [{ label: "Status", value: "idle" }],
-        artifacts: [],
-        artifact_summary: {
-          present: 0,
-          missing: 0,
-          total: 0,
-        },
-        limitations: ["This page is showing the latest persisted evaluation run, not a live event stream."],
-        raw_notes: null,
+        limitations: ["Launch/config is not restored yet; this workbench is read-only for now."],
       },
     });
 
@@ -1186,15 +1249,16 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByText("No persisted evaluation runs are available yet.")).toBeInTheDocument();
-    expect(screen.getByText("Latest Persisted Run")).toBeInTheDocument();
-    expect(screen.getByText("Run Subject")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "thread-eval" })).toHaveAttribute("href", "/threads/thread-eval");
-    expect(screen.getByText("Operator Facts")).toBeInTheDocument();
-    expect(screen.getByText("Truth Boundary")).toBeInTheDocument();
-    expect(screen.getByText("This page is showing the latest persisted evaluation run, not a live event stream.")).toBeInTheDocument();
-    expect(screen.queryByText("Artifact Coverage")).not.toBeInTheDocument();
-    expect(screen.queryByText("Artifacts")).not.toBeInTheDocument();
+    expect(screen.getByText("Evaluation Workbench")).toBeInTheDocument();
+    expect(screen.getByText("Recent Runs")).toBeInTheDocument();
+    expect(screen.getByText("Current Run")).toBeInTheDocument();
+    expect(screen.getAllByText("run-1").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "thread-eval" }).every((link) => link.getAttribute("href") === "/threads/thread-eval")).toBe(true);
+    expect(screen.getByText("Run Facts")).toBeInTheDocument();
+    expect(screen.getByText("Workbench Boundary")).toBeInTheDocument();
+    expect(screen.getByText("Launch/config is not restored yet; this workbench is read-only for now.")).toBeInTheDocument();
+    expect(screen.queryByText("Operator Truth")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current Summary")).not.toBeInTheDocument();
   });
 
   it("reads local provider files even when the resource session has no lease id", async () => {

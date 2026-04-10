@@ -20,6 +20,12 @@ def make_eval_store() -> TrajectoryStore:
     return TrajectoryStore()
 
 
+def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
+    from backend.web.routers.threads import build_owner_thread_workbench
+
+    return build_owner_thread_workbench(app, user_id)
+
+
 def get_resource_overview_snapshot() -> dict[str, Any]:
     from backend.web.services.resource_cache import get_resource_overview_snapshot as _get_resource_overview_snapshot
 
@@ -370,6 +376,86 @@ def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[
             "Legacy manifest, artifact, and thread-materialization detail are not wired in this slice.",
         ],
         "raw_notes": None,
+    }
+
+
+def _build_monitor_evaluation_run_fact_rows(metrics_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+    metrics_by_tier = {str(row.get("tier") or "").strip().lower(): row.get("metrics") or {} for row in metrics_rows}
+    system_metrics = metrics_by_tier.get("system") or {}
+    objective_metrics = metrics_by_tier.get("objective") or {}
+    facts = [{"label": "Metric Tiers", "value": str(len(metrics_rows))}]
+    total_tokens = system_metrics.get("total_tokens")
+    if total_tokens is not None:
+        facts.append({"label": "Total tokens", "value": str(total_tokens)})
+    llm_call_count = system_metrics.get("llm_call_count")
+    if llm_call_count is not None:
+        facts.append({"label": "LLM calls", "value": str(llm_call_count)})
+    tool_call_count = system_metrics.get("tool_call_count")
+    if tool_call_count is not None:
+        facts.append({"label": "Tool calls", "value": str(tool_call_count)})
+    total_duration_ms = objective_metrics.get("total_duration_ms")
+    if total_duration_ms is not None:
+        duration_value = int(total_duration_ms) if float(total_duration_ms).is_integer() else total_duration_ms
+        facts.append({"label": "Duration (ms)", "value": str(duration_value)})
+    return facts
+
+
+def _build_monitor_evaluation_run_row(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "run_id": str(run.get("id") or "") or None,
+        "thread_id": str(run.get("thread_id") or "") or None,
+        "status": str(run.get("status") or "") or None,
+        "started_at": str(run.get("started_at") or "") or None,
+        "finished_at": str(run.get("finished_at") or "") or None,
+        "user_message": str(run.get("user_message") or "") or None,
+        "facts": _build_monitor_evaluation_run_fact_rows(metrics_rows),
+    }
+
+
+def get_monitor_evaluation_workbench() -> dict[str, Any]:
+    store = make_eval_store()
+    runs = store.list_runs(limit=25)
+    if not runs:
+        return {
+            "headline": "Evaluation Workbench",
+            "summary": "No persisted evaluation runs are available yet.",
+            "overview": {
+                "total_runs": 0,
+                "running_runs": 0,
+                "completed_runs": 0,
+                "failed_runs": 0,
+            },
+            "runs": [],
+            "selected_run": None,
+            "limitations": ["Run an evaluation to populate the workbench with persisted runtime truth."],
+        }
+
+    run_rows = []
+    running_runs = 0
+    completed_runs = 0
+    failed_runs = 0
+    for run in runs:
+        status = str(run.get("status") or "").strip().lower()
+        if status == "running":
+            running_runs += 1
+        elif status == "completed":
+            completed_runs += 1
+        elif status in {"error", "failed", "cancelled"}:
+            failed_runs += 1
+        run_rows.append(_build_monitor_evaluation_run_row(run, store.get_metrics(str(run.get("id") or ""))))
+
+    return {
+        "headline": "Evaluation Workbench",
+        "summary": "Recent persisted evaluation runs and their runtime truth.",
+        "overview": {
+            "total_runs": len(run_rows),
+            "running_runs": running_runs,
+            "completed_runs": completed_runs,
+            "failed_runs": failed_runs,
+        },
+        "runs": run_rows,
+        "selected_run": run_rows[0],
+        "limitations": ["Launch/config is not restored yet; this workbench is read-only for now."],
     }
 
 
