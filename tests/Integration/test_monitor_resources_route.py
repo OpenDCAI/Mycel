@@ -550,6 +550,12 @@ def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
         "started_at": "2026-04-08T00:00:00Z",
         "finished_at": "2026-04-08T00:03:00Z",
     }
+    fact_labels = [fact["label"] for fact in evaluation_payload["facts"]]
+    assert "Thread ID" not in fact_labels
+    assert "Run ID" not in fact_labels
+    assert "Started At" not in fact_labels
+    assert "Finished At" not in fact_labels
+    assert "User Message" not in fact_labels
     assert dashboard_response.status_code == 200
     dashboard_payload = dashboard_response.json()
     assert dashboard_payload["workload"]["evaluations_running"] == 0

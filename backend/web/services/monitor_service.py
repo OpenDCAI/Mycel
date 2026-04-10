@@ -318,15 +318,9 @@ def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[
     objective_metrics = metrics_by_tier.get("objective") or {}
     facts = [
         {"label": "Status", "value": status},
-        {"label": "Run ID", "value": str(run.get("id") or "-")},
-        {"label": "Thread ID", "value": str(run.get("thread_id") or "-")},
-        {"label": "Started At", "value": str(run.get("started_at") or "-")},
-        {"label": "Finished At", "value": str(run.get("finished_at") or "-")},
         {"label": "Metric Tiers", "value": str(len(metrics_rows))},
     ]
     user_message = str(run.get("user_message") or "").strip()
-    if user_message:
-        facts.append({"label": "User Message", "value": user_message})
     total_tokens = system_metrics.get("total_tokens")
     if total_tokens is not None:
         facts.append({"label": "Total tokens", "value": str(total_tokens)})
