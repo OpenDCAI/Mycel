@@ -43,7 +43,8 @@ async def publish_to_marketplace(
 
     from backend.web.services.profile_service import get_profile
 
-    profile = await asyncio.to_thread(get_profile)
+    publisher_user = user_repo.get_by_id(user_id)
+    profile = await asyncio.to_thread(get_profile, publisher_user)
     username = profile.get("name", "anonymous")
 
     result = await asyncio.to_thread(

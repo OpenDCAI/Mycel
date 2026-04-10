@@ -118,6 +118,7 @@ def _load_workspace_settings(storage: _SettingsStorage) -> WorkspaceSettings:
                 recent_workspaces=row.get("recent_workspaces") or [],
                 default_model=row.get("default_model") or "leon:large",
             )
+        return WorkspaceSettings()
     return load_settings()
 
 

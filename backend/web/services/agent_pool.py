@@ -119,10 +119,11 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         if not model_name:
             user_settings_repo = getattr(app_obj.state, "user_settings_repo", None)
             owner_user_id = getattr(agent_user, "owner_user_id", None) if agent_user is not None else None
-            if user_settings_repo is not None and owner_user_id:
+            repo_backed_owner_settings = user_settings_repo is not None and owner_user_id is not None
+            if repo_backed_owner_settings:
                 settings_row = user_settings_repo.get(owner_user_id) or {}
                 model_name = settings_row.get("default_model")
-            if not model_name:
+            if not model_name and not repo_backed_owner_settings:
                 from backend.web.routers.settings import load_settings as load_preferences
 
                 prefs = load_preferences()

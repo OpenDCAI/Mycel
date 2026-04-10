@@ -82,6 +82,29 @@ def test_load_workspace_settings_prefers_repo_row(monkeypatch):
     assert settings.default_model == "openai:gpt-5.4"
 
 
+def test_load_workspace_settings_does_not_import_preferences_when_repo_row_missing(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.workspace_row = None
+    req = _request(repo)
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "_load_user_json",
+        lambda *_parts: {
+            "default_workspace": "/filesystem/ws",
+            "recent_workspaces": ["/filesystem/ws"],
+            "default_model": "filesystem:model",
+        },
+    )
+
+    storage = settings_router._resolve_settings_storage(req)
+    settings = settings_router._load_workspace_settings(storage)
+
+    assert settings.default_workspace is None
+    assert settings.recent_workspaces == []
+    assert settings.default_model == "leon:large"
+
+
 def test_load_models_data_prefers_repo_models_config(monkeypatch):
     req = _request(_FakeSettingsRepo())
     monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
@@ -142,6 +165,38 @@ def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch
         "custom_config": {},
         "providers": {"openai": {"api_key": None, "base_url": "https://api.openai.com"}},
     }
+
+
+def test_get_settings_route_does_not_import_preferences_when_repo_row_missing(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.workspace_row = None
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "_load_user_json",
+        lambda *_parts: {
+            "default_workspace": "/filesystem/ws",
+            "recent_workspaces": ["/filesystem/ws"],
+            "default_model": "filesystem:model",
+        },
+    )
+    monkeypatch.setattr(
+        settings_router,
+        "_load_merged_models_for_storage",
+        lambda _storage: SimpleNamespace(
+            mapping={},
+            providers={},
+            pool=SimpleNamespace(enabled=[], custom=[]),
+        ),
+    )
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.get("/api/settings")
+
+    assert response.status_code == 200
+    assert response.json()["default_workspace"] is None
+    assert response.json()["recent_workspaces"] == []
+    assert response.json()["default_model"] == "leon:large"
 
 
 def test_get_settings_route_merges_repo_backed_model_pool_over_filesystem_loader(monkeypatch):

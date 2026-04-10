@@ -411,3 +411,55 @@ async def test_get_or_create_agent_prefers_repo_backed_default_model(monkeypatch
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-8")
 
     assert captured["model_name"] == "repo-default-model"
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_does_not_import_preferences_when_repo_default_model_missing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["model_name"] = kwargs.get("model_name")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-9")
+    monkeypatch.setattr(
+        "backend.web.routers.settings.load_settings",
+        lambda: (_ for _ in ()).throw(AssertionError("filesystem preferences not allowed")),
+    )
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-9",
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-9", agent_config_id="cfg-9")
+
+    class _UserSettingsRepo:
+        def get(self, user_id: str):
+            assert user_id == "owner-9"
+            return None
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            user_settings_repo=_UserSettingsRepo(),
+            agent_config_repo=SimpleNamespace(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-9")
+
+    assert captured["model_name"] is None
