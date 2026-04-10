@@ -67,20 +67,24 @@ def _operations_for_target(target_type: str, target_id: str) -> list[dict[str, A
         return [dict(_OPERATIONS[operation_id]) for operation_id in ids if operation_id in _OPERATIONS]
 
 
+def _has_active_sessions(sessions: list[dict[str, Any]]) -> bool:
+    return any(str(item.get("status") or "").strip().lower() == "active" for item in sessions)
+
+
 def build_lease_cleanup_truth(
     *,
     lease_id: str,
     triage: dict[str, Any] | None,
     provider_name: str | None,
     runtime_session_id: str | None,
-    threads: list[dict[str, Any]],
+    sessions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     category = str((triage or {}).get("category") or "").strip()
-    has_threads = any(str(item.get("thread_id") or "").strip() for item in threads)
+    has_active_sessions = _has_active_sessions(sessions)
     provider = str(provider_name or "").strip()
     runtime = str(runtime_session_id or "").strip()
 
-    if has_threads:
+    if has_active_sessions:
         allowed = False
         reason = "Lease still has active thread bindings and cannot enter managed cleanup."
     elif not provider:
@@ -121,7 +125,7 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         triage=lease_detail.get("triage"),
         provider_name=str(provider.get("id") or lease.get("provider_name") or ""),
         runtime_session_id=str(runtime.get("runtime_session_id") or ""),
-        threads=threads,
+        sessions=lease_detail.get("sessions") or [],
     )
 
     lease_id = str(lease.get("lease_id") or "")

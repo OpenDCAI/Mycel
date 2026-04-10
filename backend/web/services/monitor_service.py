@@ -514,7 +514,7 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
             triage=triage,
             provider_name=provider_name,
             runtime_session_id=runtime_session_id,
-            threads=threads,
+            sessions=sessions,
         ),
     }
 

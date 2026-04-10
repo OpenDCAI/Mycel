@@ -114,6 +114,45 @@ def test_get_monitor_lease_detail_exposes_cleanup_truth(monkeypatch):
     }
 
 
+def test_get_monitor_lease_detail_allows_detached_residue_cleanup_without_active_sessions(monkeypatch):
+    class FakeRepo:
+        def query_lease(self, lease_id):
+            return {
+                "lease_id": lease_id,
+                "provider_name": "daytona",
+                "desired_state": "running",
+                "observed_state": "detached",
+                "updated_at": "2026-04-08T00:00:00Z",
+                "current_instance_id": "runtime-1",
+                "last_error": None,
+            }
+
+        def query_lease_threads(self, lease_id):
+            return [{"thread_id": "thread-historical"}]
+
+        def query_lease_sessions(self, lease_id):
+            return []
+
+        def query_lease_instance_id(self, lease_id):
+            return "runtime-1"
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+
+    payload = monitor_service.get_monitor_lease_detail("lease-1")
+
+    assert payload["triage"]["category"] == "detached_residue"
+    assert payload["cleanup"] == {
+        "allowed": True,
+        "recommended_action": "lease_cleanup",
+        "reason": "Lease is detached residue and can enter managed cleanup.",
+        "operation": None,
+        "recent_operations": [],
+    }
+
+
 def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):
     class FakeRepo:
         def query_lease(self, lease_id):
