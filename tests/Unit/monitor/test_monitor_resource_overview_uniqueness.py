@@ -30,6 +30,13 @@ class _FakeThreadRepo:
     def get_by_id(self, thread_id: str):
         return self._rows.get(thread_id)
 
+    def list_by_ids(self, thread_ids: list[str]):
+        return [
+            {"id": thread_id, **row}
+            for thread_id, row in self._rows.items()
+            if thread_id in set(thread_ids)
+        ]
+
     def close(self):
         pass
 
@@ -50,6 +57,24 @@ class _FakeUserRepo:
 
     def close(self):
         pass
+
+
+def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: repo)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: console_url)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
+    )
+    monkeypatch.setattr(resource_projection_service, "_thread_owners", owners)
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
 
 def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch):
@@ -292,25 +317,11 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
         },
     ]
 
-    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
-    monkeypatch.setattr(
-        resource_projection_service,
-        "available_sandbox_types",
-        lambda: [{"name": "daytona_selfhost", "available": True}],
-    )
-    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
-    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        resource_projection_service,
-        "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
-    )
-    monkeypatch.setattr(
-        resource_projection_service,
-        "_thread_owners",
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows),
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
     payload = resource_projection_service.list_resource_providers()
     sessions = payload["providers"][0]["sessions"]
@@ -343,26 +354,9 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
         },
     ]
 
-    monkeypatch.setattr(
-        resource_projection_service,
-        "make_sandbox_monitor_repo",
-        lambda: _FakeRepo(rows, instance_ids={"lease-remote": "provider-session-1"}),
-    )
-    monkeypatch.setattr(
-        resource_projection_service,
-        "available_sandbox_types",
-        lambda: [{"name": "daytona_selfhost", "available": True}],
-    )
-    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
-    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: "https://example.com/daytona")
-    monkeypatch.setattr(
-        resource_projection_service,
-        "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
-    )
-    monkeypatch.setattr(
-        resource_projection_service,
-        "_thread_owners",
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows, instance_ids={"lease-remote": "provider-session-1"}),
         lambda thread_ids: {
             tid: {
                 "agent_user_id": "agent-remote",
@@ -371,8 +365,8 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
             }
             for tid in thread_ids
         },
+        console_url="https://example.com/daytona",
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
     payload = resource_projection_service.list_resource_providers()
     provider = payload["providers"][0]
@@ -422,28 +416,14 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
             return super().query_lease_instance_ids(lease_ids)
 
     repo = _BatchOnlyRepo()
-    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: repo)
-    monkeypatch.setattr(
-        resource_projection_service,
-        "available_sandbox_types",
-        lambda: [{"name": "daytona_selfhost", "available": True}],
-    )
-    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
-    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        resource_projection_service,
-        "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
-    )
-    monkeypatch.setattr(
-        resource_projection_service,
-        "_thread_owners",
+    _patch_daytona_projection(
+        monkeypatch,
+        repo,
         lambda thread_ids: {
             tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None}
             for tid in thread_ids
         },
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
     payload = resource_projection_service.list_resource_providers()
     sessions = payload["providers"][0]["sessions"]
