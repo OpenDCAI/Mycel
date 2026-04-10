@@ -212,6 +212,52 @@ def test_get_available_models_route_prefers_repo_backed_model_pool(monkeypatch):
     assert "fs-custom" not in model_ids
 
 
+def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {
+        "providers": {"openai": {"api_key": "repo-key", "base_url": "https://repo.example"}},
+        "pool": {"custom_providers": {"repo-custom": "openai"}},
+    }
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "_load_merged_models_for_storage",
+        lambda _storage: SimpleNamespace(
+            active=SimpleNamespace(provider=None),
+            resolve_model=lambda _model_id: ("repo-custom", {}),
+            get_provider=lambda _provider_name: SimpleNamespace(api_key="repo-key", base_url="https://repo.example"),
+        ),
+    )
+    monkeypatch.setattr(settings_router, "load_merged_models", lambda: (_ for _ in ()).throw(AssertionError("filesystem loader not allowed")))
+    monkeypatch.setattr(settings_router, "load_models", lambda: (_ for _ in ()).throw(AssertionError("filesystem models not allowed")))
+    monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
+
+    captured: dict[str, object] = {}
+
+    class _FakeModel:
+        async def ainvoke(self, _prompt):
+            return SimpleNamespace(content="ok")
+
+    def _fake_init_chat_model(model_name: str, **kwargs):
+        captured["model"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeModel()
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post("/api/settings/models/test", json={"model_id": "repo-custom"})
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert captured["model"] == "repo-custom"
+    assert captured["kwargs"] == {
+        "model_provider": "openai",
+        "api_key": "repo-key",
+        "base_url": "https://repo.example/v1",
+    }
+
+
 @pytest.mark.asyncio
 async def test_get_observation_settings_keeps_loader_fallback_when_repo_row_missing(monkeypatch):
     req = _request(_FakeSettingsRepo())

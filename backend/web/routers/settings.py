@@ -619,18 +619,19 @@ class ModelTestRequest(BaseModel):
 
 
 @router.post("/models/test")
-async def test_model(request: ModelTestRequest) -> dict[str, Any]:
+async def test_model(request: ModelTestRequest, req: Request) -> dict[str, Any]:
     """Test if a model is reachable by sending a minimal request."""
     import asyncio
 
-    mc = load_merged_models()
+    storage = _resolve_settings_storage(req)
+    mc = _load_merged_models_for_storage(storage)
 
     # Resolve virtual model
     resolved, overrides = mc.resolve_model(request.model_id)
     provider_name = overrides.get("model_provider") or (mc.active.provider if mc.active else None)
 
     # Check custom_providers mapping
-    data = load_models()
+    data = _load_models_data(storage)
     custom_providers = data.get("pool", {}).get("custom_providers", {})
     if request.model_id in custom_providers:
         provider_name = custom_providers[request.model_id]
