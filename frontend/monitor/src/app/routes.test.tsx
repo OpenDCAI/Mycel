@@ -1695,7 +1695,6 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByText("3 运行中")).toBeInTheDocument();
-    expect(screen.queryByText("1 运行中")).not.toBeInTheDocument();
   });
 
   it("surfaces when provider-card cpu is only meaningful at the sandbox level", async () => {
@@ -2549,7 +2548,7 @@ describe("MonitorRoutes", () => {
     expect(within(providerCard).getByText("1 历史残留")).toBeInTheDocument();
   });
 
-  it("keeps provider card activity in one compact status line", async () => {
+  it("keeps provider card activity in one compact runtime-state line", async () => {
     mockRoutePayloads({
       "/resources": {
         summary: {
@@ -2649,7 +2648,7 @@ describe("MonitorRoutes", () => {
     );
 
     const providerCard = await screen.findByRole("button", { name: /daytona_selfhost/i });
-    expect(within(providerCard).getByText("1 占用中 · 1 暂停 · 1 已结束")).toBeInTheDocument();
+    expect(within(providerCard).getByText("1 运行中 · 1 已暂停 · 1 已结束")).toBeInTheDocument();
   });
 
   it("keeps provider cards focused on one running-sandbox stat", async () => {

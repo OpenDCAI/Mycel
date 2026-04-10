@@ -487,8 +487,8 @@ function ProviderCard({
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
   const sessionSummary = [
-    `${runningCount} 占用中`,
-    pausedCount > 0 ? `${pausedCount} 暂停` : null,
+    `${runningCount} 运行中`,
+    pausedCount > 0 ? `${pausedCount} 已暂停` : null,
     stoppedCount > 0 ? `${stoppedCount} 已结束` : null,
   ]
     .filter(Boolean)
