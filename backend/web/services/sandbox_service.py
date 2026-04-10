@@ -49,6 +49,7 @@ def list_user_leases(
     user_repo: Any = None,
     main_db_path: str | Path | None = None,
     sandbox_db_path: str | Path | None = None,
+    include_runtime_session_id: bool = False,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
     if thread_repo is None or user_repo is None:
@@ -67,13 +68,19 @@ def list_user_leases(
             for user in _user_repo.list_by_owner_user_id(user_id)
         }
         rows = monitor_repo.list_leases_with_threads()
-        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None)
+        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None) if include_runtime_session_id else None
         grouped: dict[str, dict[str, Any]] = {}
+        runtime_session_ids: dict[str, str | None] = {}
         for row in rows:
             lease_id = str(row.get("lease_id") or "").strip()
             if not lease_id:
                 continue
-            runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
+            runtime_session_id = runtime_session_ids.get(lease_id)
+            if lease_id not in runtime_session_ids:
+                runtime_session_id = str(row.get("current_instance_id") or "").strip() or None
+                if runtime_session_id is None and callable(query_lease_instance_id):
+                    runtime_session_id = query_lease_instance_id(lease_id)
+                runtime_session_ids[lease_id] = runtime_session_id
             group = grouped.setdefault(
                 lease_id,
                 {
@@ -89,7 +96,7 @@ def list_user_leases(
                     "agents": [],
                 },
             )
-            if runtime_session_id and not group.get("runtime_session_id"):
+            if include_runtime_session_id and runtime_session_id and not group.get("runtime_session_id"):
                 group["runtime_session_id"] = runtime_session_id
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id in group["thread_ids"]:

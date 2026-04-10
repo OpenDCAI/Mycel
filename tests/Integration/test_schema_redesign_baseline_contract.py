@@ -27,17 +27,25 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
             return None
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo())
-    thread_repo = SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "agent_user_id": "agent-1"})
+    thread_repo = SimpleNamespace(
+        list_by_owner_user_id=lambda owner_user_id: (
+            [{"id": "thread-1", "agent_user_id": "agent-1", "owner_user_id": owner_user_id}]
+            if owner_user_id == "owner-1"
+            else []
+        )
+    )
     user_repo = SimpleNamespace(
-        get_by_id=lambda user_id: (
-            SimpleNamespace(
-                id=user_id,
-                display_name="Morel",
-                avatar="avatars/morel.png",
-                owner_user_id="owner-1",
-            )
-            if user_id == "agent-1"
-            else None
+        list_by_owner_user_id=lambda owner_user_id: (
+            [
+                SimpleNamespace(
+                    id="agent-1",
+                    display_name="Morel",
+                    avatar="avatars/morel.png",
+                    owner_user_id=owner_user_id,
+                )
+            ]
+            if owner_user_id == "owner-1"
+            else []
         )
     )
 

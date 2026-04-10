@@ -17,11 +17,13 @@ class _FakeMonitorRepo:
     def __init__(self, rows, instance_ids=None):
         self._rows = rows
         self._instance_ids = instance_ids or {}
+        self.instance_id_calls: list[str] = []
 
     def list_leases_with_threads(self):
         return list(self._rows)
 
     def query_lease_instance_id(self, lease_id: str):
+        self.instance_id_calls.append(lease_id)
         return self._instance_ids.get(lease_id)
 
     def query_lease(self, lease_id: str):
@@ -280,6 +282,97 @@ def test_list_user_leases_uses_owner_bulk_repo_surfaces(monkeypatch):
     assert user_repo.list_by_owner_calls == ["owner-1"]
 
 
+def test_list_user_leases_only_queries_runtime_session_id_once_per_lease(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/tmp/app",
+            "thread_id": "thread-a",
+        },
+        {
+            "lease_id": "lease-1",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:01Z",
+            "cwd": "/tmp/app",
+            "thread_id": "thread-b",
+        },
+    ]
+    monitor_repo = _FakeMonitorRepo(rows, instance_ids={"lease-1": "provider-session-1"})
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "thread-b": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+        }
+    )
+    user_repo = _FakeUserRepo(
+        {
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+        include_runtime_session_id=True,
+    )
+
+    assert leases[0]["runtime_session_id"] == "provider-session-1"
+    assert monitor_repo.instance_id_calls == ["lease-1"]
+
+
+def test_list_user_leases_prefers_current_instance_id_without_extra_probe(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "recipe_id": "daytona:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "current_instance_id": "provider-session-inline",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/home/daytona/files/app",
+            "thread_id": "thread-parent",
+        },
+    ]
+    monitor_repo = _FakeMonitorRepo(rows, instance_ids={"lease-1": "provider-session-probed"})
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-parent": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+        }
+    )
+    user_repo = _FakeUserRepo(
+        {
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+        include_runtime_session_id=True,
+    )
+
+    assert leases[0]["runtime_session_id"] == "provider-session-inline"
+    assert monitor_repo.instance_id_calls == []
+
+
 def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
     rows = [
         {
@@ -311,9 +404,44 @@ def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
         "owner-1",
         thread_repo=thread_repo,
         user_repo=user_repo,
+        include_runtime_session_id=True,
     )
 
     assert leases[0]["runtime_session_id"] == "provider-session-1"
+
+
+def test_list_user_leases_skips_runtime_session_probe_by_default(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "recipe_id": "daytona:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/home/daytona/files/app",
+            "thread_id": "thread-parent",
+        },
+    ]
+    monitor_repo = _FakeMonitorRepo(rows, instance_ids={"lease-1": "provider-session-1"})
+    thread_repo = _FakeThreadRepo({"thread-parent": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"}})
+    user_repo = _FakeUserRepo(
+        {
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert "runtime_session_id" not in leases[0]
+    assert monitor_repo.instance_id_calls == []
 
 
 def test_resolve_owned_lease_filters_to_single_authorized_lease(monkeypatch):

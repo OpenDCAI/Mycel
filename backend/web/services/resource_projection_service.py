@@ -114,6 +114,7 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
         owner_user_id,
         thread_repo=thread_repo,
         user_repo=user_repo,
+        include_runtime_session_id=True,
     )
 
     leases_by_provider: dict[str, list[dict[str, Any]]] = {}
