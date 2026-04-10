@@ -1,3 +1,5 @@
+import pytest
+
 from backend.web.services import resource_common
 
 
@@ -37,10 +39,16 @@ class _FakeUserRepo:
         pass
 
 
-def test_thread_owners_resolves_member_metadata_from_runtime_storage():
+@pytest.mark.parametrize(
+    ("thread_repo", "expected_thread_ids"),
+    [
+        (_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}), ["thread-1", "thread-2"]),
+    ],
+)
+def test_thread_owners_resolve_runtime_storage_metadata(thread_repo, expected_thread_ids):
     owners = resource_common.thread_owners(
-        ["thread-1", "thread-2"],
-        thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
+        expected_thread_ids,
+        thread_repo=thread_repo,
         user_repo=_FakeUserRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
     )
 
@@ -73,45 +81,43 @@ def test_thread_owners_prefers_batch_thread_lookup() -> None:
         "thread-2": {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None},
     }
 
-
-def test_thread_owners_fails_loudly_when_thread_repo_breaks() -> None:
-    class _BrokenThreadRepo:
-        def list_by_ids(self, _thread_ids: list[str]):
-            raise RuntimeError("thread repo offline")
-
-        def close(self):
-            pass
-
-    try:
+@pytest.mark.parametrize(
+    ("thread_repo", "user_repo", "message"),
+    [
+        (
+            type(
+                "_BrokenThreadRepo",
+                (),
+                {
+                    "list_by_ids": lambda self, _thread_ids: (_ for _ in ()).throw(RuntimeError("thread repo offline")),
+                    "close": lambda self: None,
+                },
+            )(),
+            _FakeUserRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
+            "thread repo offline",
+        ),
+        (
+            _FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
+            type(
+                "_BrokenUserRepo",
+                (),
+                {
+                    "list_all": lambda self: (_ for _ in ()).throw(RuntimeError("user repo offline")),
+                    "close": lambda self: None,
+                },
+            )(),
+            "user repo offline",
+        ),
+    ],
+    ids=["thread-repo", "user-repo"],
+)
+def test_thread_owners_fail_loudly_on_repo_errors(thread_repo, user_repo, message) -> None:
+    with pytest.raises(RuntimeError, match=message):
         resource_common.thread_owners(
             ["thread-1"],
-            thread_repo=_BrokenThreadRepo(),
-            user_repo=_FakeUserRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
+            thread_repo=thread_repo,
+            user_repo=user_repo,
         )
-    except RuntimeError as exc:
-        assert str(exc) == "thread repo offline"
-    else:
-        raise AssertionError("expected thread repo failure to propagate")
-
-
-def test_thread_owners_fails_loudly_when_user_repo_breaks() -> None:
-    class _BrokenUserRepo:
-        def list_all(self):
-            raise RuntimeError("user repo offline")
-
-        def close(self):
-            pass
-
-    try:
-        resource_common.thread_owners(
-            ["thread-1"],
-            thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
-            user_repo=_BrokenUserRepo(),
-        )
-    except RuntimeError as exc:
-        assert str(exc) == "user repo offline"
-    else:
-        raise AssertionError("expected user repo failure to propagate")
 
 
 def test_metric_adds_error_only_when_present():

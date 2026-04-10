@@ -166,43 +166,6 @@ def test_list_sessions_with_leases_keeps_raw_newest_terminal_truth(tmp_path):
     assert all(row["lease_id"] == "lease-1" for row in rows)
 
 
-def test_query_threads_accepts_optional_thread_filter(tmp_path):
-    db_path = tmp_path / "sandbox.db"
-    _bootstrap_monitor_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute(
-            """
-            INSERT INTO sandbox_leases (
-                lease_id, provider_name, desired_state, observed_state, current_instance_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("lease-1", "local", "running", "running", "instance-1", "2026-04-05T10:00:00", "2026-04-05T10:00:00"),
-        )
-        conn.executemany(
-            """
-            INSERT INTO chat_sessions (chat_session_id, thread_id, lease_id, status, started_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            [
-                ("sess-1", "thread-1", "lease-1", "active", "2026-04-05T10:00:00"),
-                ("sess-2", "thread-2", "lease-1", "active", "2026-04-05T10:05:00"),
-            ],
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-    repo = SQLiteSandboxMonitorRepo(db_path=db_path)
-    try:
-        rows = repo.query_threads(thread_id="thread-2")
-    finally:
-        repo.close()
-
-    assert [row["thread_id"] for row in rows] == ["thread-2"]
-
-
 def test_supabase_query_threads_accepts_optional_thread_filter_matches_sqlite(tmp_path):
     db_path = tmp_path / "sandbox.db"
     _bootstrap_monitor_db(db_path)
@@ -236,6 +199,8 @@ def test_supabase_query_threads_accepts_optional_thread_filter_matches_sqlite(tm
         sqlite_rows = sqlite_repo.query_threads(thread_id="thread-2")
     finally:
         sqlite_repo.close()
+
+    assert [row["thread_id"] for row in sqlite_rows] == ["thread-2"]
 
     supabase_tables = {
         "sandbox_leases": [
