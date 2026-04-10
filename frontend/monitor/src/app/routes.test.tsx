@@ -189,6 +189,55 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
   });
 
+  it("renders lease detail under the leases surface", async () => {
+    mockRoutePayloads({
+      "/leases/lease-1": {
+        lease: {
+          lease_id: "lease-1",
+          provider_name: "daytona",
+          desired_state: "running",
+          observed_state: "running",
+          updated_at: "2026-04-08T00:00:00Z",
+          updated_ago: "1m ago",
+          last_error: null,
+          badge: {
+            color: "green",
+            observed: "running",
+            desired: "running",
+            text: "running",
+          },
+        },
+        triage: {
+          category: "healthy_capacity",
+          title: "Healthy Capacity",
+          description: "Lease is converged and ready.",
+          tone: "success",
+        },
+        provider: {
+          id: "daytona",
+          name: "daytona",
+        },
+        runtime: {
+          runtime_session_id: "runtime-1",
+        },
+        threads: [{ thread_id: "thread-1" }],
+        sessions: [{ chat_session_id: "session-1", thread_id: "thread-1", status: "active" }],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases/lease-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /leases/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Healthy Capacity")).toBeInTheDocument();
+    expect(screen.getByText("runtime-1")).toBeInTheDocument();
+    expect(screen.getAllByText("thread-1").length).toBeGreaterThan(0);
+  });
+
   it("renders evaluation as a truthful operator surface", async () => {
     mockRoutePayloads({
       "/evaluation": {

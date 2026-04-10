@@ -2,7 +2,7 @@
 
 import asyncio
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from backend.web.services import monitor_service, resource_service
 from backend.web.services.resource_cache import (
@@ -25,10 +25,34 @@ def leases_snapshot():
     return monitor_service.list_leases()
 
 
+@router.get("/providers/{provider_id}")
+def provider_detail_snapshot(provider_id: str):
+    try:
+        return monitor_service.get_monitor_provider_detail(provider_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/leases/{lease_id}")
 def lease_detail_snapshot(lease_id: str):
     try:
         return monitor_service.get_monitor_lease_detail(lease_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/runtimes/{runtime_session_id}")
+def runtime_detail_snapshot(runtime_session_id: str):
+    try:
+        return monitor_service.get_monitor_runtime_detail(runtime_session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/threads/{thread_id}")
+def thread_detail_snapshot(request: Request, thread_id: str):
+    try:
+        return monitor_service.get_monitor_thread_detail(request.app, thread_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

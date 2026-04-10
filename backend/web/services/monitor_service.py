@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from backend.web.services.resource_cache import get_resource_overview_snapshot
+from backend.web.services.resource_common import thread_owners as _thread_owners
 from eval.storage import TrajectoryStore
 from storage.runtime import (
     build_sandbox_monitor_repo as make_sandbox_monitor_repo,
@@ -469,6 +471,83 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
             }
             for item in sessions
         ],
+    }
+
+
+def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
+    snapshot = get_resource_overview_snapshot()
+    providers = snapshot.get("providers") or []
+    provider = next((item for item in providers if str(item.get("id") or "") == provider_id), None)
+    if provider is None:
+        raise KeyError(f"Provider not found: {provider_id}")
+
+    sessions = provider.get("sessions") or []
+    lease_ids = sorted({str(item.get("leaseId") or "").strip() for item in sessions if str(item.get("leaseId") or "").strip()})
+    thread_ids = sorted({str(item.get("threadId") or "").strip() for item in sessions if str(item.get("threadId") or "").strip()})
+    runtime_session_ids = sorted(
+        {
+            str(item.get("runtimeSessionId") or "").strip()
+            for item in sessions
+            if str(item.get("runtimeSessionId") or "").strip()
+        }
+    )
+
+    return {
+        "provider": provider,
+        "lease_ids": lease_ids,
+        "thread_ids": thread_ids,
+        "runtime_session_ids": runtime_session_ids,
+    }
+
+
+def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
+    snapshot = get_resource_overview_snapshot()
+    for provider in snapshot.get("providers") or []:
+        for session in provider.get("sessions") or []:
+            current = str(session.get("runtimeSessionId") or "").strip()
+            if current != runtime_session_id:
+                continue
+            return {
+                "provider": {
+                    "id": provider.get("id"),
+                    "name": provider.get("name"),
+                    "status": provider.get("status"),
+                    "consoleUrl": provider.get("consoleUrl"),
+                },
+                "runtime": session,
+                "lease_id": session.get("leaseId"),
+                "thread_id": session.get("threadId"),
+            }
+    raise KeyError(f"Runtime not found: {runtime_session_id}")
+
+
+def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
+    thread_repo = getattr(app.state, "thread_repo", None)
+    if thread_repo is None:
+        raise RuntimeError("thread_repo is required for monitor thread detail")
+
+    thread = thread_repo.get_by_id(thread_id)
+    if thread is None:
+        raise KeyError(f"Thread not found: {thread_id}")
+
+    repo = make_sandbox_monitor_repo()
+    try:
+        summary = repo.query_thread_summary(thread_id)
+        sessions = repo.query_thread_sessions(thread_id)
+    finally:
+        repo.close()
+
+    owners = _thread_owners(
+        [thread_id],
+        user_repo=getattr(app.state, "user_repo", None),
+        thread_repo=thread_repo,
+    )
+
+    return {
+        "thread": thread,
+        "owner": owners.get(thread_id),
+        "summary": summary,
+        "sessions": sessions,
     }
 
 

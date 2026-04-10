@@ -276,6 +276,107 @@ def test_monitor_lease_detail_route_maps_missing_lease_to_404(monkeypatch):
     assert "Lease not found: lease-404" in response.text
 
 
+def test_monitor_provider_detail_route_exposes_structured_operator_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_provider_detail",
+        lambda provider_id: {
+            "provider": {"id": provider_id, "name": "daytona"},
+            "lease_ids": ["lease-1"],
+            "thread_ids": ["thread-1"],
+            "runtime_session_ids": ["runtime-1"],
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/providers/daytona")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": {"id": "daytona", "name": "daytona"},
+        "lease_ids": ["lease-1"],
+        "thread_ids": ["thread-1"],
+        "runtime_session_ids": ["runtime-1"],
+    }
+
+
+def test_monitor_runtime_detail_route_exposes_structured_operator_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_runtime_detail",
+        lambda runtime_session_id: {
+            "provider": {"id": "daytona"},
+            "runtime": {"runtimeSessionId": runtime_session_id, "status": "running"},
+            "lease_id": "lease-1",
+            "thread_id": "thread-1",
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/runtimes/runtime-1")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": {"id": "daytona"},
+        "runtime": {"runtimeSessionId": "runtime-1", "status": "running"},
+        "lease_id": "lease-1",
+        "thread_id": "thread-1",
+    }
+
+
+def test_monitor_thread_detail_route_exposes_structured_operator_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_thread_detail",
+        lambda app, thread_id: {
+            "thread": {"id": thread_id, "agent_user_id": "agent-1"},
+            "owner": {"agent_user_id": "agent-1", "agent_name": "Toad"},
+            "summary": {"thread_id": thread_id, "lease_id": "lease-1"},
+            "sessions": [{"chat_session_id": "cs-1", "lease_id": "lease-1"}],
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/threads/thread-1")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "thread": {"id": "thread-1", "agent_user_id": "agent-1"},
+        "owner": {"agent_user_id": "agent-1", "agent_name": "Toad"},
+        "summary": {"thread_id": "thread-1", "lease_id": "lease-1"},
+        "sessions": [{"chat_session_id": "cs-1", "lease_id": "lease-1"}],
+    }
+
+
+def test_monitor_provider_runtime_and_thread_detail_routes_map_missing_rows_to_404(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_provider_detail",
+        lambda provider_id: (_ for _ in ()).throw(KeyError(f"Provider not found: {provider_id}")),
+    )
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_runtime_detail",
+        lambda runtime_session_id: (_ for _ in ()).throw(KeyError(f"Runtime not found: {runtime_session_id}")),
+    )
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_thread_detail",
+        lambda app, thread_id: (_ for _ in ()).throw(KeyError(f"Thread not found: {thread_id}")),
+    )
+
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        provider_response = client.get("/api/monitor/providers/ghost")
+        runtime_response = client.get("/api/monitor/runtimes/runtime-404")
+        thread_response = client.get("/api/monitor/threads/thread-404")
+
+    assert provider_response.status_code == 404
+    assert "Provider not found: ghost" in provider_response.text
+    assert runtime_response.status_code == 404
+    assert "Runtime not found: runtime-404" in runtime_response.text
+    assert thread_response.status_code == 404
+    assert "Thread not found: thread-404" in thread_response.text
+
 def test_monitor_removed_forensic_routes_return_404():
     with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
         health_response = client.get("/api/monitor/health")

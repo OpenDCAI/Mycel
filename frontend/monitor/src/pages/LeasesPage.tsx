@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import ErrorState from "../components/ErrorState";
 import StateBadge from "../components/StateBadge";
 import { useMonitorData } from "../app/fetch";
@@ -73,7 +75,9 @@ export default function LeasesPage() {
         <tbody>
           {data.items.map((item: any) => (
             <tr key={item.lease_id}>
-              <td className="mono">{item.lease_id}</td>
+              <td className="mono">
+                <Link to={`/leases/${item.lease_id}`}>{item.lease_id}</Link>
+              </td>
               <td>{item.provider}</td>
               <td className="mono">{item.instance_id?.slice(0, 12) || "-"}</td>
               <td>
