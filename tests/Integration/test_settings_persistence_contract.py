@@ -102,13 +102,26 @@ def test_load_models_data_falls_back_to_user_json_without_repo_context(monkeypat
     assert data == {"pool": {"enabled": ["fallback"]}}
 
 
+def test_load_models_data_does_not_import_user_json_when_repo_row_missing(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = None
+    req = _request(repo)
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(settings_router, "_load_user_json", lambda *_parts: {"pool": {"enabled": ["fallback"]}})
+
+    storage = settings_router._resolve_settings_storage(req)
+    data = settings_router._load_models_data(storage)
+
+    assert data == {}
+
+
 def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch):
     repo = _FakeSettingsRepo()
     monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
     monkeypatch.setattr(
         settings_router,
-        "load_merged_models",
-        lambda: SimpleNamespace(
+        "_load_merged_models_for_storage",
+        lambda _storage: SimpleNamespace(
             mapping={"default": SimpleNamespace(model="openai:gpt-5.4")},
             providers={"openai": SimpleNamespace(api_key=None, base_url="https://api.openai.com")},
             pool=SimpleNamespace(enabled=["openai:gpt-5.4"], custom=[]),
@@ -129,6 +142,37 @@ def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch
         "custom_config": {},
         "providers": {"openai": {"api_key": None, "base_url": "https://api.openai.com"}},
     }
+
+
+def test_get_settings_route_merges_repo_backed_model_pool_over_filesystem_loader(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {
+        "providers": {"openai": {"api_key": "repo-key", "base_url": "https://repo.example"}},
+        "pool": {
+            "enabled": ["repo-model"],
+            "custom": ["repo-custom"],
+            "custom_config": {"repo-custom": {"based_on": "gpt-4o"}},
+        },
+    }
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "load_merged_models",
+        lambda: SimpleNamespace(
+            mapping={"default": SimpleNamespace(model="fs-model")},
+            providers={"openai": SimpleNamespace(api_key="fs-key", base_url="https://fs.example")},
+            pool=SimpleNamespace(enabled=["fs-model"], custom=["fs-custom"]),
+        ),
+    )
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.get("/api/settings")
+
+    assert response.status_code == 200
+    assert response.json()["enabled_models"] == ["repo-model"]
+    assert response.json()["custom_models"] == ["repo-custom"]
+    assert response.json()["custom_config"] == {"repo-custom": {"based_on": "gpt-4o"}}
+    assert response.json()["providers"] == {"openai": {"api_key": "repo-key", "base_url": "https://repo.example"}}
 
 
 @pytest.mark.asyncio
@@ -152,7 +196,7 @@ async def test_get_observation_settings_keeps_loader_fallback_when_repo_row_miss
 
 
 @pytest.mark.asyncio
-async def test_list_sandbox_configs_keeps_filesystem_fallback_when_repo_row_missing(
+async def test_list_sandbox_configs_does_not_import_filesystem_when_repo_row_missing(
     monkeypatch,
     tmp_path: Path,
 ):
@@ -165,7 +209,7 @@ async def test_list_sandbox_configs_keeps_filesystem_fallback_when_repo_row_miss
 
     result = await settings_router.list_sandbox_configs(req)
 
-    assert result == {"sandboxes": {"alpha": {"provider": "local"}}}
+    assert result == {"sandboxes": {}}
 
 
 @pytest.mark.asyncio

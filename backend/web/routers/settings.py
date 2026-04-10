@@ -181,8 +181,7 @@ def _save_observation_data(storage: _SettingsStorage, data: dict[str, Any]) -> N
 def _load_sandbox_configs(storage: _SettingsStorage) -> dict[str, Any] | None:
     if storage.repo_backed:
         data = storage.repo.get_sandbox_configs(storage.user_id)
-        if data is not None:
-            return data
+        return data or {}
     sandboxes: dict[str, Any] = {}
     seen: set[Path] = set()
     for root in user_home_read_candidates("sandboxes"):
@@ -207,11 +206,10 @@ def _save_sandbox_configs(storage: _SettingsStorage, data: dict[str, Any]) -> No
 
 
 def _load_models_for_user(repo, user_id: str | None) -> dict[str, Any]:
-    """Load models config: Supabase first, filesystem fallback."""
+    """Load models config from the active persistence contract."""
     if repo and user_id:
         data = repo.get_models_config(user_id)
-        if data is not None:
-            return data
+        return data or {}
     return _load_user_json("models.json")
 
 
@@ -238,6 +236,21 @@ def load_models() -> dict[str, Any]:
 def load_merged_models() -> ModelsConfig:
     """Load fully merged ModelsConfig (system + user)."""
     return ModelsLoader().load()
+
+
+def _load_merged_models_for_storage(storage: _SettingsStorage) -> ModelsConfig:
+    if not storage.repo_backed:
+        return load_merged_models()
+
+    loader = ModelsLoader()
+    # @@@repo-backed-model-merge - repo-backed user settings must override filesystem user models, but still preserve system defaults.
+    system = loader._load_json(loader._system_dir / "models.json")
+    merged = loader._merge(system, _load_models_data(storage))
+    merged = loader._merge(merged, loader._load_project())
+    merged = loader._expand_env_vars(merged)
+    merged["catalog"] = system.get("catalog", [])
+    merged["virtual_models"] = system.get("virtual_models", [])
+    return ModelsConfig(**merged)
 
 
 def _load_user_json(*parts: str) -> dict[str, Any]:
@@ -280,7 +293,7 @@ async def get_settings(request: Request) -> UserSettings:
     """Get combined settings (workspace + default_model from Supabase or preferences.json, models from models.json)."""
     storage = _resolve_settings_storage(request)
     ws = _load_workspace_settings(storage)
-    models = load_merged_models()
+    models = _load_merged_models_for_storage(storage)
 
     # Build compat view
     mapping = {k: v.model for k, v in models.mapping.items()}
