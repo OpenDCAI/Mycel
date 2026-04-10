@@ -80,9 +80,9 @@ export default function ThreadDetailPage() {
             </span>
           </div>
           <div>
-            <strong>Leases</strong>
+            <strong>Surface</strong>
             <span>
-              <Link to="/leases">Back to leases</Link>
+              <Link to="/leases">Leases</Link>
             </span>
           </div>
         </div>

@@ -545,6 +545,115 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
   });
 
+  it("uses a consistent surface backlink label across hidden detail pages", async () => {
+    mockRoutePayloads({
+      "/runtimes/runtime-1": {
+        provider: {
+          id: "daytona",
+          name: "daytona",
+          status: "active",
+          consoleUrl: "https://console.example/runtime-1",
+        },
+        runtime: {
+          runtimeSessionId: "runtime-1",
+          status: "running",
+          threadId: "thread-1",
+          leaseId: "lease-1",
+          agentName: "Planner",
+          webUrl: "https://sandbox.example/runtime-1",
+        },
+        lease_id: "lease-1",
+        thread_id: "thread-1",
+      },
+      "/threads/thread-1": {
+        thread: {
+          id: "thread-1",
+          thread_id: "thread-1",
+          title: "Investigate sandbox drift",
+          status: "active",
+        },
+        owner: {
+          user_id: "user-1",
+          display_name: "Ada",
+        },
+        summary: {
+          provider_name: "daytona",
+          lease_id: "lease-1",
+          current_instance_id: "runtime-1",
+          desired_state: "running",
+          observed_state: "running",
+        },
+        sessions: [{ chat_session_id: "session-1", status: "active" }],
+      },
+      "/leases/lease-1": {
+        lease: {
+          lease_id: "lease-1",
+          provider_name: "daytona",
+          desired_state: "running",
+          observed_state: "running",
+          updated_at: "2026-04-08T00:00:00Z",
+          updated_ago: "1m ago",
+          last_error: null,
+          badge: {
+            color: "green",
+            observed: "running",
+            desired: "running",
+            text: "running",
+          },
+        },
+        triage: {
+          category: "healthy_capacity",
+          title: "Healthy Capacity",
+          description: "Lease is converged and ready.",
+          tone: "success",
+        },
+        provider: {
+          id: "daytona",
+          name: "daytona",
+        },
+        runtime: {
+          runtime_session_id: "runtime-1",
+        },
+        threads: [{ thread_id: "thread-1" }],
+        sessions: [{ chat_session_id: "session-1", thread_id: "thread-1", status: "active" }],
+      },
+    });
+
+    const runtimeView = render(
+      <MemoryRouter initialEntries={["/runtimes/runtime-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Runtime runtime-1" })).toBeInTheDocument();
+    expect(screen.getByText("Surface")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Resources" })).toHaveAttribute("href", "/resources");
+
+    runtimeView.unmount();
+
+    const threadView = render(
+      <MemoryRouter initialEntries={["/threads/thread-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Thread thread-1" })).toBeInTheDocument();
+    expect(screen.getByText("Surface")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Leases" })).toHaveAttribute("href", "/leases");
+
+    threadView.unmount();
+
+    render(
+      <MemoryRouter initialEntries={["/leases/lease-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
+    expect(screen.getByText("Surface")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Leases" })).toHaveAttribute("href", "/leases");
+  });
+
   it("renders thread detail under the leases surface", async () => {
     mockRoutePayloads({
       "/threads/thread-1": {

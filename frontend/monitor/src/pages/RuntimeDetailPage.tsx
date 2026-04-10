@@ -59,9 +59,9 @@ export default function RuntimeDetailPage() {
             <span>{threadId ? <Link to={`/threads/${threadId}`}>{threadId}</Link> : "-"}</span>
           </div>
           <div>
-            <strong>Resources</strong>
+            <strong>Surface</strong>
             <span>
-              <Link to="/resources">Back to resources</Link>
+              <Link to="/resources">Resources</Link>
             </span>
           </div>
           <div>

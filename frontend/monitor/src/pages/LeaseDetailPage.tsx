@@ -84,9 +84,9 @@ export default function LeaseDetailPage() {
             <span>{data.lease.updated_ago ?? data.lease.updated_at ?? "-"}</span>
           </div>
           <div>
-            <strong>Lease list</strong>
+            <strong>Surface</strong>
             <span>
-              <Link to="/leases">Back to leases</Link>
+              <Link to="/leases">Leases</Link>
             </span>
           </div>
           <div>
