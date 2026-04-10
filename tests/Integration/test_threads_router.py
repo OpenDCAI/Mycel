@@ -550,6 +550,9 @@ async def test_list_threads_hides_internal_subagent_threads():
             get_by_id=lambda thread_id: rows.get(thread_id),
         ),
         terminal_repo=SimpleNamespace(
+            summarize_threads=lambda thread_ids: {
+                thread_id: {"active_terminal_id": "term-1", "latest_terminal_id": "term-1"} for thread_id in thread_ids
+            },
             get_active=lambda _thread_id: {"terminal_id": "term-1"},
             list_by_thread=lambda _thread_id: [{"terminal_id": "term-1"}],
             set_active=lambda _thread_id, _terminal_id: None,
@@ -646,6 +649,13 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
             delete=_delete,
         ),
         terminal_repo=SimpleNamespace(
+            summarize_threads=lambda thread_ids: {
+                thread_id: {
+                    "active_terminal_id": f"term-{thread_id}" if thread_id == "healthy-thread" else None,
+                    "latest_terminal_id": "term-healthy" if thread_id == "healthy-thread" else None,
+                }
+                for thread_id in thread_ids
+            },
             get_active=lambda thread_id: {"terminal_id": f"term-{thread_id}"} if thread_id == "healthy-thread" else None,
             list_by_thread=lambda thread_id: [] if thread_id == "broken-thread" else [{"terminal_id": "term-healthy"}],
             set_active=lambda _thread_id, _terminal_id: None,

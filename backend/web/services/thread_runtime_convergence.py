@@ -73,7 +73,7 @@ def summarize_owner_thread_runtime(app: Any, thread_ids: list[str]) -> dict[str,
 
     summarize_threads = getattr(terminal_repo, "summarize_threads", None)
     if not callable(summarize_threads):
-        return {}
+        raise RuntimeError("terminal_repo must support summarize_threads for owner runtime convergence")
 
     summary = summarize_threads(thread_ids)
     states: dict[str, str] = {}
