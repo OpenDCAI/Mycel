@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from backend.web.services.resource_cache import get_resource_overview_snapshot
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from eval.storage import TrajectoryStore
 from storage.runtime import (
@@ -18,6 +17,12 @@ from storage.runtime import (
 # ---------------------------------------------------------------------------
 def make_eval_store() -> TrajectoryStore:
     return TrajectoryStore()
+
+
+def get_resource_overview_snapshot() -> dict[str, Any]:
+    from backend.web.services.resource_cache import get_resource_overview_snapshot as _get_resource_overview_snapshot
+
+    return _get_resource_overview_snapshot()
 
 
 def _format_time_ago(iso_timestamp: str | None) -> str:

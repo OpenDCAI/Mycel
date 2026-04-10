@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import pytest
 
 from backend.web.services import monitor_service
@@ -84,3 +87,14 @@ def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):
 
     with pytest.raises(KeyError, match="Lease not found: lease-404"):
         monitor_service.get_monitor_lease_detail("lease-404")
+
+
+def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():
+    result = subprocess.run(
+        [sys.executable, "-c", "import backend.web.main"],
+        capture_output=True,
+        text=True,
+        cwd=".",
+    )
+
+    assert result.returncode == 0, result.stderr
