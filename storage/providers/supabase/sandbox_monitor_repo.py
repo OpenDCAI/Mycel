@@ -486,3 +486,48 @@ class SupabaseSandboxMonitorRepo:
             val = str(lease.get("current_instance_id") or "").strip()
             return val or None
         return None
+
+    def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
+        ordered_ids = [str(lease_id or "").strip() for lease_id in lease_ids if str(lease_id or "").strip()]
+        if not ordered_ids:
+            return {}
+
+        instance_map: dict[str, str | None] = {lease_id: None for lease_id in ordered_ids}
+        instances = q.rows(
+            q.in_(
+                self._client.table("sandbox_instances").select("lease_id,provider_session_id"),
+                "lease_id",
+                ordered_ids,
+                _REPO,
+                "query_lease_instance_ids instances",
+            ).execute(),
+            _REPO,
+            "query_lease_instance_ids instances",
+        )
+        for row in instances:
+            lease_id = str(row.get("lease_id") or "").strip()
+            provider_session_id = str(row.get("provider_session_id") or "").strip()
+            if lease_id and provider_session_id:
+                instance_map[lease_id] = provider_session_id
+
+        missing_ids = [lease_id for lease_id, instance_id in instance_map.items() if not instance_id]
+        if not missing_ids:
+            return instance_map
+
+        leases = q.rows(
+            q.in_(
+                self._client.table("sandbox_leases").select("lease_id,current_instance_id"),
+                "lease_id",
+                missing_ids,
+                _REPO,
+                "query_lease_instance_ids leases",
+            ).execute(),
+            _REPO,
+            "query_lease_instance_ids leases",
+        )
+        for row in leases:
+            lease_id = str(row.get("lease_id") or "").strip()
+            current_instance_id = str(row.get("current_instance_id") or "").strip()
+            if lease_id and current_instance_id:
+                instance_map[lease_id] = current_instance_id
+        return instance_map

@@ -209,13 +209,17 @@ def test_user_resource_projection_only_backfills_remote_runtime_ids(monkeypatch)
 
     class _FakeMonitorRepo:
         def __init__(self) -> None:
-            self.calls: list[str] = []
+            self.batch_calls: list[list[str]] = []
 
         def query_lease_instance_id(self, lease_id: str) -> str | None:
-            self.calls.append(lease_id)
-            if lease_id == "lease-remote":
-                return "provider-session-remote"
-            raise AssertionError(f"unexpected runtime-session probe: {lease_id}")
+            raise AssertionError(f"unexpected per-lease runtime-session probe: {lease_id}")
+
+        def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
+            self.batch_calls.append(list(lease_ids))
+            return {
+                "lease-local": None,
+                "lease-remote": "provider-session-remote",
+            }
 
         def close(self) -> None:
             return None
@@ -271,7 +275,85 @@ def test_user_resource_projection_only_backfills_remote_runtime_ids(monkeypatch)
     providers = {item["id"]: item for item in payload["providers"]}
     assert "runtimeSessionId" not in providers["local"]["sessions"][0]
     assert providers["daytona_selfhost"]["sessions"][0]["runtimeSessionId"] == "provider-session-remote"
-    assert monitor_repo.calls == ["lease-remote"]
+    assert monitor_repo.batch_calls == [["lease-local", "lease-remote"]]
+
+
+def test_user_resource_projection_uses_batch_runtime_backfill_for_remote_leases(monkeypatch) -> None:
+    class _State:
+        thread_repo = object()
+        user_repo = object()
+
+    class _App:
+        state = _State()
+
+    class _FakeMonitorRepo:
+        def __init__(self) -> None:
+            self.batch_calls: list[list[str]] = []
+
+        def query_lease_instance_id(self, lease_id: str) -> str | None:
+            raise AssertionError(f"unexpected per-lease runtime-session probe: {lease_id}")
+
+        def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
+            self.batch_calls.append(list(lease_ids))
+            return {
+                "lease-remote-a": "provider-session-a",
+                "lease-remote-b": "provider-session-b",
+            }
+
+        def close(self) -> None:
+            return None
+
+    monitor_repo = _FakeMonitorRepo()
+
+    monkeypatch.setattr(
+        resource_projection_service.sandbox_service,
+        "list_user_leases",
+        lambda owner_user_id, **kwargs: [
+            {
+                "lease_id": "lease-remote-a",
+                "provider_name": "daytona_selfhost",
+                "thread_ids": ["thread-a"],
+                "agents": [{"agent_user_id": "agent-a", "agent_name": "A", "avatar_url": None}],
+                "observed_state": "detached",
+                "desired_state": "running",
+                "created_at": "2026-04-07T10:00:00Z",
+            },
+            {
+                "lease_id": "lease-remote-b",
+                "provider_name": "daytona_selfhost",
+                "thread_ids": ["thread-b"],
+                "agents": [{"agent_user_id": "agent-b", "agent_name": "B", "avatar_url": None}],
+                "observed_state": "detached",
+                "desired_state": "running",
+                "created_at": "2026-04-07T10:00:01Z",
+            },
+        ],
+    )
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_display_contract",
+        lambda *_args, **_kwargs: {
+            "provider_name": "daytona",
+            "description": "daytona",
+            "vendor": "daytona",
+            "type": "cloud",
+            "console_url": None,
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_capability_contract",
+        lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), None),
+        raising=False,
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    sessions = payload["providers"][0]["sessions"]
+    assert [session["runtimeSessionId"] for session in sessions] == ["provider-session-a", "provider-session-b"]
+    assert monitor_repo.batch_calls == [["lease-remote-a", "lease-remote-b"]]
 
 
 def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch) -> None:

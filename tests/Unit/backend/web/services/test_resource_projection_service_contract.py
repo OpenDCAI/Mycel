@@ -15,6 +15,9 @@ class _FakeRepo:
     def query_lease_instance_id(self, lease_id: str):
         return self._instance_ids.get(lease_id)
 
+    def query_lease_instance_ids(self, lease_ids: list[str]):
+        return {lease_id: self._instance_ids.get(lease_id) for lease_id in lease_ids}
+
     def close(self):
         pass
 
