@@ -40,9 +40,18 @@ class _FakeMonitorRepo:
 class _FakeThreadRepo:
     def __init__(self, rows):
         self._rows = rows
+        self.list_by_owner_calls: list[str] = []
 
     def get_by_id(self, thread_id: str):
         return self._rows.get(thread_id)
+
+    def list_by_owner_user_id(self, owner_user_id: str):
+        self.list_by_owner_calls.append(owner_user_id)
+        result = []
+        for thread_id, row in self._rows.items():
+            if row.get("owner_user_id") == owner_user_id:
+                result.append({"id": thread_id, **row})
+        return result
 
     def close(self):
         pass
@@ -51,9 +60,14 @@ class _FakeThreadRepo:
 class _FakeUserRepo:
     def __init__(self, rows):
         self._rows = rows
+        self.list_by_owner_calls: list[str] = []
 
     def get_by_id(self, user_id: str):
         return self._rows.get(user_id)
+
+    def list_by_owner_user_id(self, owner_user_id: str):
+        self.list_by_owner_calls.append(owner_user_id)
+        return [row for row in self._rows.values() if getattr(row, "owner_user_id", None) == owner_user_id]
 
     def close(self):
         pass
@@ -86,8 +100,8 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
     ]
     thread_repo = _FakeThreadRepo(
         {
-            "thread-parent": {"agent_user_id": "agent-1"},
-            "subagent-deadbeef": {"agent_user_id": "agent-1"},
+            "thread-parent": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "subagent-deadbeef": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
         }
     )
     user_repo = _FakeUserRepo(
@@ -171,8 +185,8 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
     ]
     thread_repo = _FakeThreadRepo(
         {
-            "thread-a": {"agent_user_id": "agent-1"},
-            "thread-b": {"agent_user_id": "agent-1"},
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "thread-b": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
         }
     )
     user_repo = _FakeUserRepo(
@@ -206,6 +220,66 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
     ]
 
 
+def test_list_user_leases_uses_owner_bulk_repo_surfaces(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/tmp/app",
+            "thread_id": "thread-a",
+        },
+        {
+            "lease_id": "lease-2",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:01:00Z",
+            "cwd": "/tmp/app2",
+            "thread_id": "thread-b",
+        },
+    ]
+
+    class _BulkOnlyThreadRepo(_FakeThreadRepo):
+        def get_by_id(self, thread_id: str):
+            raise AssertionError(f"unexpected per-thread lookup: {thread_id}")
+
+    class _BulkOnlyUserRepo(_FakeUserRepo):
+        def get_by_id(self, user_id: str):
+            raise AssertionError(f"unexpected per-user lookup: {user_id}")
+
+    thread_repo = _BulkOnlyThreadRepo(
+        {
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "thread-b": {"agent_user_id": "agent-2", "owner_user_id": "owner-1"},
+        }
+    )
+    user_repo = _BulkOnlyUserRepo(
+        {
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-2": SimpleNamespace(id="agent-2", display_name="Toad", avatar=None, owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert [lease["lease_id"] for lease in leases] == ["lease-1", "lease-2"]
+    assert thread_repo.list_by_owner_calls == ["owner-1"]
+    assert user_repo.list_by_owner_calls == ["owner-1"]
+
+
 def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
     rows = [
         {
@@ -220,7 +294,7 @@ def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
             "thread_id": "thread-parent",
         },
     ]
-    thread_repo = _FakeThreadRepo({"thread-parent": {"agent_user_id": "agent-1"}})
+    thread_repo = _FakeThreadRepo({"thread-parent": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"}})
     user_repo = _FakeUserRepo(
         {
             "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
@@ -383,10 +457,10 @@ def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch
     ]
     thread_repo = _FakeThreadRepo(
         {
-            "thread-running": {"agent_user_id": "agent-1"},
-            "thread-paused": {"agent_user_id": "agent-1"},
-            "thread-detached": {"agent_user_id": "agent-1"},
-            "thread-destroying": {"agent_user_id": "agent-1"},
+            "thread-running": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "thread-paused": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "thread-detached": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "thread-destroying": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
         }
     )
     user_repo = _FakeUserRepo(

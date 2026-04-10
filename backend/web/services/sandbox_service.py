@@ -57,6 +57,15 @@ def list_user_leases(
     _user_repo = user_repo
     own_repos = False
     try:
+        threads_by_id = {
+            str(thread.get("id") or ""): thread
+            for thread in _thread_repo.list_by_owner_user_id(user_id)
+            if thread.get("id")
+        }
+        users_by_id = {
+            str(user.id): user
+            for user in _user_repo.list_by_owner_user_id(user_id)
+        }
         rows = monitor_repo.list_leases_with_threads()
         query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None)
         grouped: dict[str, dict[str, Any]] = {}
@@ -85,14 +94,14 @@ def list_user_leases(
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id in group["thread_ids"]:
                 continue
-            thread = _thread_repo.get_by_id(thread_id)
+            thread = threads_by_id.get(thread_id)
             if thread is None:
                 continue
             agent_user_id = str(thread.get("agent_user_id") or "").strip()
             if not agent_user_id:
                 continue
-            agent_user = _user_repo.get_by_id(agent_user_id)
-            if agent_user is None or agent_user.owner_user_id != user_id:
+            agent_user = users_by_id.get(agent_user_id)
+            if agent_user is None:
                 continue
             group["thread_ids"].append(thread_id)
             group["agents"].append(
