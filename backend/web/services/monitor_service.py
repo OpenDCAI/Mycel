@@ -415,6 +415,63 @@ def list_leases() -> dict[str, Any]:
         repo.close()
 
 
+def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        lease = repo.query_lease(lease_id)
+        if lease is None:
+            raise KeyError(f"Lease not found: {lease_id}")
+
+        threads = repo.query_lease_threads(lease_id)
+        sessions = repo.query_lease_sessions(lease_id)
+        runtime_session_id = repo.query_lease_instance_id(lease_id)
+    finally:
+        repo.close()
+
+    badge = _make_badge(lease.get("desired_state"), lease.get("observed_state"))
+    triage = _classify_lease_triage(
+        thread_id=threads[0]["thread_id"] if threads else None,
+        badge=badge,
+        observed_state=lease.get("observed_state"),
+        desired_state=lease.get("desired_state"),
+        updated_at=lease.get("updated_at"),
+    )
+    provider_name = str(lease.get("provider_name") or "").strip()
+
+    return {
+        "lease": {
+            "lease_id": str(lease.get("lease_id") or lease_id),
+            "provider_name": provider_name,
+            "desired_state": lease.get("desired_state"),
+            "observed_state": lease.get("observed_state"),
+            "current_instance_id": lease.get("current_instance_id"),
+            "updated_at": lease.get("updated_at"),
+            "last_error": lease.get("last_error"),
+            "badge": badge,
+        },
+        "triage": triage,
+        "provider": {
+            "id": provider_name,
+            "name": provider_name,
+        },
+        "runtime": {
+            "runtime_session_id": runtime_session_id,
+        },
+        "threads": [{"thread_id": str(item.get("thread_id") or "")} for item in threads if item.get("thread_id")],
+        "sessions": [
+            {
+                "chat_session_id": item.get("chat_session_id"),
+                "thread_id": item.get("thread_id"),
+                "status": item.get("status"),
+                "started_at": item.get("started_at"),
+                "ended_at": item.get("ended_at"),
+                "close_reason": item.get("close_reason"),
+            }
+            for item in sessions
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Public API: diagnostics
 # ---------------------------------------------------------------------------

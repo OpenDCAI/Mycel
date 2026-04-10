@@ -25,6 +25,14 @@ def leases_snapshot():
     return monitor_service.list_leases()
 
 
+@router.get("/leases/{lease_id}")
+def lease_detail_snapshot(lease_id: str):
+    try:
+        return monitor_service.get_monitor_lease_detail(lease_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/dashboard")
 def dashboard_snapshot():
     resources = get_resource_overview_snapshot()

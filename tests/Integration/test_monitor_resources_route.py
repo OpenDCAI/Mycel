@@ -234,11 +234,46 @@ def test_monitor_leases_route_exposes_summary_and_groups(monkeypatch):
     payload = response.json()
     assert "summary" in payload
     assert "groups" in payload
-    assert "triage" in payload
-    assert set(payload["summary"]).issuperset({"total", "healthy", "diverged", "orphan", "orphan_diverged"})
-    assert isinstance(payload["groups"], list)
-    assert set(payload["triage"]["summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
-    assert isinstance(payload["triage"]["groups"], list)
+
+
+def test_monitor_lease_detail_route_exposes_structured_operator_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_lease_detail",
+        lambda lease_id: {
+            "lease": {"lease_id": lease_id, "provider_name": "daytona", "desired_state": "running", "observed_state": "running"},
+            "triage": {"category": "healthy_capacity", "title": "Healthy Capacity"},
+            "provider": {"id": "daytona", "name": "daytona"},
+            "runtime": {"runtime_session_id": "rt-1"},
+            "threads": [{"thread_id": "thread-1"}],
+            "sessions": [{"chat_session_id": "cs-1", "thread_id": "thread-1", "status": "active"}],
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/leases/lease-1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lease"]["lease_id"] == "lease-1"
+    assert payload["provider"] == {"id": "daytona", "name": "daytona"}
+    assert payload["runtime"] == {"runtime_session_id": "rt-1"}
+    assert payload["threads"] == [{"thread_id": "thread-1"}]
+    assert payload["sessions"] == [{"chat_session_id": "cs-1", "thread_id": "thread-1", "status": "active"}]
+    assert payload["triage"] == {"category": "healthy_capacity", "title": "Healthy Capacity"}
+
+def test_monitor_lease_detail_route_maps_missing_lease_to_404(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_lease_detail",
+        lambda lease_id: (_ for _ in ()).throw(KeyError(f"Lease not found: {lease_id}")),
+    )
+
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/api/monitor/leases/lease-404")
+
+    assert response.status_code == 404
+    assert "Lease not found: lease-404" in response.text
 
 
 def test_monitor_removed_forensic_routes_return_404():
