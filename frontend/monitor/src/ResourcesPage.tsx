@@ -80,6 +80,24 @@ interface LeaseGroup {
   metrics: SessionMetrics | null;
 }
 
+const AGENT_FALLBACK_COLORS = [
+  "#dbeafe:#1d4ed8",
+  "#dcfce7:#15803d",
+  "#f3e8ff:#7e22ce",
+  "#ffedd5:#c2410c",
+  "#fce7f3:#be185d",
+  "#ccfbf1:#0f766e",
+] as const;
+
+function avatarColor(name: string): { backgroundColor: string; color: string } {
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) {
+    hash = (hash * 31 + name.charCodeAt(index)) | 0;
+  }
+  const [backgroundColor, color] = AGENT_FALLBACK_COLORS[Math.abs(hash) % AGENT_FALLBACK_COLORS.length].split(":");
+  return { backgroundColor, color };
+}
+
 function formatNumber(value: number | null | undefined, nullText: string = "--"): string {
   if (value == null) {
     return nullText;
@@ -164,6 +182,40 @@ function initials(name: string): string {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("")
     .slice(0, 2);
+}
+
+function MonitorAvatar({
+  name,
+  avatarUrl,
+  size = "sm",
+  count,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  size?: "sm" | "lg";
+  count?: number;
+}) {
+  if (typeof count === "number") {
+    return (
+      <div className="sandbox-avatar sandbox-avatar--count" aria-label={`${count} more agents`}>
+        +{count}
+      </div>
+    );
+  }
+
+  const sizeClass = size === "lg" ? "sandbox-avatar--lg" : "";
+  const fallbackStyle = avatarColor(name || "?");
+
+  return (
+    <div
+      className={["sandbox-avatar", sizeClass].join(" ").trim()}
+      title={name || "未绑定"}
+      aria-label={`${name || "未绑定"} avatar`}
+      style={!avatarUrl ? fallbackStyle : undefined}
+    >
+      {avatarUrl ? <img src={avatarUrl} alt="" /> : initials(name || "未绑定")}
+    </div>
+  );
 }
 
 const PROVIDER_TYPE_GLYPH = {
@@ -816,11 +868,13 @@ function SandboxCard({
         <div className="sandbox-card__agent-row">
           <div className="sandbox-card__avatar-stack">
             {group.sessions.slice(0, 3).map((session) => (
-              <div key={session.id} className="sandbox-avatar" title={session.agentName || "未绑定"}>
-                {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.agentName || "未绑定")}
-              </div>
+              <MonitorAvatar
+                key={session.id}
+                name={session.agentName || "未绑定"}
+                avatarUrl={session.avatarUrl}
+              />
             ))}
-            {group.sessions.length > 3 && <div className="sandbox-avatar sandbox-avatar--count">+{group.sessions.length - 3}</div>}
+            {group.sessions.length > 3 && <MonitorAvatar name="" count={group.sessions.length - 3} />}
           </div>
           <div className="sandbox-card__names">{names}</div>
         </div>
@@ -902,26 +956,28 @@ function SandboxInspector({
             {group.sessions.map((session) => (
               <div key={session.id} className="sandbox-session-row">
                 <div className="sandbox-session-row__identity">
-                  <div className="sandbox-avatar sandbox-avatar--lg" title={session.agentName || "未绑定"}>
-                    {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.agentName || "未绑定")}
-                  </div>
-                    <div>
-                      <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
+                  <MonitorAvatar
+                    name={session.agentName || "未绑定"}
+                    avatarUrl={session.avatarUrl}
+                    size="lg"
+                  />
+                  <div>
+                    <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
+                    <div className="sandbox-session-row__meta">
+                      <Link className="sandbox-link" to={`/threads/${session.threadId}`}>
+                        {session.threadId}
+                      </Link>
+                    </div>
+                    {session.runtimeSessionId && (
                       <div className="sandbox-session-row__meta">
-                        <Link className="sandbox-link" to={`/threads/${session.threadId}`}>
-                          {session.threadId}
+                        runtime{" "}
+                        <Link className="sandbox-link" to={`/runtimes/${session.runtimeSessionId}`}>
+                          {session.runtimeSessionId}
                         </Link>
                       </div>
-                      {session.runtimeSessionId && (
-                        <div className="sandbox-session-row__meta">
-                          runtime{" "}
-                          <Link className="sandbox-link" to={`/runtimes/${session.runtimeSessionId}`}>
-                            {session.runtimeSessionId}
-                          </Link>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
+                </div>
                 <div className="sandbox-session-row__status">
                   <span className={`provider-status-dot provider-status-dot--${session.status}`} />
                   <span>{STATUS_LABEL[session.status]}</span>
