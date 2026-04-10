@@ -17,6 +17,7 @@ from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.models import map_lease_to_session_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
+from storage.runtime import build_storage_container
 
 logger = logging.getLogger(__name__)
 
@@ -522,7 +523,9 @@ def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any
 
     # @@@lease-destroy-seam - detached residue may have no visible live session,
     # so cleanup must target the lease state machine directly rather than session lookup.
-    lease.destroy_instance(manager.provider, source="api")
+    _prune_stale_lease_terminals(manager, lease_id)
+    if not manager.destroy_lease_resources(lease_id):
+        raise RuntimeError(f"Lease not found: {lease_id}")
     return {
         "ok": True,
         "action": "destroy",
@@ -530,6 +533,30 @@ def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any
         "provider": provider_name,
         "mode": "manager_lease",
     }
+
+
+def _prune_stale_lease_terminals(manager: Any, lease_id: str, *, thread_repo: Any | None = None) -> None:
+    own_thread_repo = thread_repo is None
+    _thread_repo = thread_repo or build_storage_container().thread_repo()
+    try:
+        for row in list(manager.terminal_store.list_all()):
+            if str(row.get("lease_id") or "") != lease_id:
+                continue
+            thread_id = str(row.get("thread_id") or "").strip()
+            if thread_id and not is_virtual_thread_id(thread_id) and _thread_repo.get_by_id(thread_id) is not None:
+                continue
+            terminal_id = str(row.get("terminal_id") or "").strip()
+            if not terminal_id:
+                raise RuntimeError(f"Lease {lease_id} has terminal row without terminal_id")
+            # @@@lease-cleanup-stale-terminal-prune - detached residue can keep dead terminal
+            # pointers long after the owning thread row is gone; drop only those stale pointers
+            # before enforcing the remaining bound-terminal guard.
+            if thread_id and not is_virtual_thread_id(thread_id):
+                manager.session_manager.delete_thread(thread_id, reason="stale_terminal_pruned")
+            manager.terminal_store.delete(terminal_id)
+    finally:
+        if own_thread_repo and hasattr(_thread_repo, "close"):
+            _thread_repo.close()
 
 
 def get_session_metrics(session_id: str, provider_hint: str | None = None) -> dict[str, Any]:

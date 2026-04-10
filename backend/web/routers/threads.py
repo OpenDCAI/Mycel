@@ -827,16 +827,7 @@ async def delete_thread(
             agent.runtime.unbind_thread()
         # Unregister wake handler
         app.state.queue_manager.unregister_wake(thread_id)
-        # Clean up volume BEFORE destroying lease/terminal (destroy deletes those records)
-        try:
-            source = get_file_channel_source(thread_id)
-            source.cleanup()
-        except ValueError:
-            pass  # No volume to clean up
-        try:
-            await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
-        except Exception as exc:
-            logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
+        await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (member-chat addition)
         app.state.thread_repo.delete(thread_id)

@@ -749,6 +749,36 @@ async def test_stream_thread_events_requires_token():
 
 
 @pytest.mark.asyncio
+async def test_delete_thread_route_does_not_delete_thread_row_when_resource_destroy_fails():
+    deleted_db: list[str] = []
+    deleted_rows: list[str] = []
+    app = _make_threads_app(
+        thread_repo=SimpleNamespace(delete=lambda thread_id: deleted_rows.append(thread_id)),
+        agent_pool={},
+        queue_manager=SimpleNamespace(unregister_wake=lambda _thread_id: None, clear_all=lambda _thread_id: None),
+        thread_sandbox={},
+        thread_cwd={},
+        thread_event_buffers={},
+    )
+
+    with (
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="daytona_selfhost"),
+        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
+        patch.object(threads_router, "delete_thread_in_db", side_effect=lambda thread_id: deleted_db.append(thread_id)),
+        patch.object(
+            threads_router,
+            "destroy_thread_resources_sync",
+            side_effect=RuntimeError("volume still attached to provider sandbox"),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="volume still attached to provider sandbox"):
+            await threads_router.delete_thread("thread-1", user_id="owner-1", app=app)
+
+    assert deleted_db == []
+    assert deleted_rows == []
+
+
+@pytest.mark.asyncio
 async def test_stream_thread_events_verifies_token_before_owner_check():
     auth_service = _FakeAuthService()
     thread_repo = SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "member-1"})

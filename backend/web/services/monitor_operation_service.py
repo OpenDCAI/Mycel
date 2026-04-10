@@ -82,7 +82,6 @@ def build_lease_cleanup_truth(
     category = str((triage or {}).get("category") or "").strip()
     has_active_sessions = _has_active_sessions(sessions)
     provider = str(provider_name or "").strip()
-    runtime = str(runtime_session_id or "").strip()
 
     if has_active_sessions:
         allowed = False
@@ -90,9 +89,6 @@ def build_lease_cleanup_truth(
     elif not provider:
         allowed = False
         reason = "Lease has no provider and cannot enter managed cleanup."
-    elif not runtime:
-        allowed = False
-        reason = "Lease has no runtime session to destroy."
     elif category not in _ALLOWED_LEASE_CLEANUP_TRIAGE:
         allowed = False
         reason = "Lease is not in a managed cleanup state."

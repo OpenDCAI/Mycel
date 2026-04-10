@@ -100,6 +100,16 @@ def _normalize_monitor_thread(thread: dict[str, Any], fallback_thread_id: str) -
     }
 
 
+def _live_thread_ids(thread_ids: list[str]) -> set[str]:
+    unique = sorted({str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()})
+    if not unique:
+        return set()
+    # @@@monitor-live-thread-truth - monitor triage must validate terminal pointers against live
+    # thread rows, otherwise stale abstract_terminals residue gets misclassified as healthy.
+    owners = _thread_owners(unique)
+    return {thread_id for thread_id in unique if (owners.get(thread_id) or {}).get("agent_user_id")}
+
+
 LEASE_SEMANTIC_ORDER = [
     "orphan_diverged",
     "diverged",
@@ -387,11 +397,15 @@ def build_monitor_evaluation_dashboard_summary(payload: dict[str, Any]) -> dict[
 
 
 def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    live_threads = _live_thread_ids([str(row.get("thread_id") or "").strip() for row in rows])
     items = []
     for row in rows:
+        thread_id = str(row.get("thread_id") or "").strip() or None
+        if thread_id not in live_threads:
+            thread_id = None
         badge = _make_badge(row["desired_state"], row["observed_state"])
         triage = _classify_lease_triage(
-            thread_id=row["thread_id"],
+            thread_id=thread_id,
             badge=badge,
             observed_state=row["observed_state"],
             desired_state=row["desired_state"],
@@ -402,9 +416,9 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "lease_id": row["lease_id"],
                 "provider": row["provider_name"],
                 "instance_id": row["current_instance_id"],
-                "thread": _thread_ref(row["thread_id"]),
+                "thread": _thread_ref(thread_id),
                 "state_badge": badge,
-                "semantics": _classify_lease_semantics(thread_id=row["thread_id"], badge=badge),
+                "semantics": _classify_lease_semantics(thread_id=thread_id, badge=badge),
                 "triage": triage,
                 "error": row["last_error"],
                 "updated_at": row["updated_at"],
@@ -484,9 +498,12 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
     finally:
         repo.close()
 
+    raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
+    live_threads = _live_thread_ids(raw_thread_ids)
+    live_thread_refs = [{"thread_id": thread_id} for thread_id in raw_thread_ids if thread_id in live_threads]
     badge = _make_badge(lease.get("desired_state"), lease.get("observed_state"))
     triage = _classify_lease_triage(
-        thread_id=threads[0]["thread_id"] if threads else None,
+        thread_id=live_thread_refs[0]["thread_id"] if live_thread_refs else None,
         badge=badge,
         observed_state=lease.get("observed_state"),
         desired_state=lease.get("desired_state"),
@@ -513,7 +530,7 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
         "runtime": {
             "runtime_session_id": runtime_session_id,
         },
-        "threads": [{"thread_id": str(item.get("thread_id") or "")} for item in threads if item.get("thread_id")],
+        "threads": live_thread_refs,
         "sessions": [
             {
                 "chat_session_id": item.get("chat_session_id"),
