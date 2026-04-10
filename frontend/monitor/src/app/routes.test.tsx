@@ -671,6 +671,11 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cleanup" })).toBeInTheDocument();
     expect(screen.getByText("Lease is orphan cleanup residue and can enter managed cleanup.")).toBeInTheDocument();
+    expect(screen.getByText("Decision")).toBeInTheDocument();
+    expect(screen.getByText("Current Operation")).toBeInTheDocument();
+    expect(screen.getByText("Action Lane")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Recent Operations" })).toBeInTheDocument();
+    expect(screen.getByText("Managed cleanup ready")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start lease cleanup" })).toBeEnabled();
     expect(screen.getByRole("link", { name: "op-1" })).toHaveAttribute("href", "/operations/op-1");
 

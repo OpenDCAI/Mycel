@@ -214,6 +214,11 @@ h2 {
   color: #241d14;
 }
 
+.surface-card__value--compact {
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
 .surface-card__body {
   margin-top: 0.5rem;
   color: #5c5145;
@@ -506,6 +511,96 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .monitor-action-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.cleanup-grid {
+  align-items: stretch;
+}
+
+.cleanup-current-op {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.cleanup-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cleanup-status--ok {
+  background: rgba(35, 124, 74, 0.12);
+  color: #1e7d4b;
+}
+
+.cleanup-status--warning {
+  background: rgba(180, 121, 18, 0.12);
+  color: #9d6508;
+}
+
+.cleanup-status--danger {
+  background: rgba(187, 62, 46, 0.12);
+  color: #bb3e2e;
+}
+
+.cleanup-status--muted {
+  background: rgba(114, 102, 88, 0.12);
+  color: #5c5145;
+}
+
+.cleanup-operation-link {
+  color: #92582d;
+  text-decoration: none;
+}
+
+.cleanup-operation-link:hover {
+  text-decoration: underline;
+}
+
+.cleanup-ledger {
+  margin-top: 1rem;
+}
+
+.cleanup-ledger h3 {
+  font-size: 1rem;
+  margin-bottom: 0.85rem;
+  color: #2f261d;
+}
+
+.cleanup-ledger__list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.cleanup-ledger__item {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 252, 245, 0.82);
+  box-shadow: 0 12px 30px rgba(82, 59, 27, 0.06);
+}
+
+.cleanup-ledger__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cleanup-ledger__summary,
+.cleanup-ledger__empty {
+  color: #5c5145;
 }
 
 .resources-summary-dot,

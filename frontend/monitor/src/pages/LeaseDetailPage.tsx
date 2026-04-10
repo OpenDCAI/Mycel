@@ -73,6 +73,14 @@ type LeaseCleanupActionPayload = {
   } | null;
 };
 
+const CLEANUP_STATUS_CLASS_BY_STATUS: Record<string, string> = {
+  pending: "cleanup-status cleanup-status--warning",
+  running: "cleanup-status cleanup-status--warning",
+  succeeded: "cleanup-status cleanup-status--ok",
+  failed: "cleanup-status cleanup-status--danger",
+  rejected: "cleanup-status cleanup-status--danger",
+};
+
 export default function LeaseDetailPage() {
   const params = useParams<{ leaseId: string }>();
   const leaseId = params.leaseId ?? "";
@@ -99,6 +107,16 @@ export default function LeaseDetailPage() {
     (operation) => operation.operation_id !== cleanup.operation?.operation_id,
   );
   const latestSession = sessions[0] ?? null;
+  const cleanupDecision = cleanup.allowed ? "Managed cleanup ready" : "Cleanup blocked";
+  const cleanupActionSummary = cleanup.recommended_action ?? "No managed action";
+  const cleanupActionHint = cleanup.allowed
+    ? "This lease can enter the managed destroy flow."
+    : "This lease cannot enter the managed flow until operator truth changes.";
+  const cleanupOperationStatus = cleanup.operation?.status ?? "idle";
+  const cleanupOperationSummary = cleanup.operation?.summary ?? "No active cleanup operation.";
+  const cleanupOperationClass = CLEANUP_STATUS_CLASS_BY_STATUS[cleanupOperationStatus] ?? "cleanup-status cleanup-status--muted";
+  const cleanupFeedbackMessage =
+    cleanupMessage && cleanupMessage !== cleanupOperationSummary ? cleanupMessage : null;
 
   async function startCleanup() {
     setCleanupPending(true);
@@ -156,78 +174,68 @@ export default function LeaseDetailPage() {
       </section>
       <section className="surface-section">
         <h2>Cleanup</h2>
-        <div className="info-grid">
-          <div>
-            <strong>Eligibility</strong>
-            <span>{cleanup.allowed ? "Ready for managed cleanup" : "Cleanup blocked"}</span>
-          </div>
-          <div>
-            <strong>Recommended action</strong>
-            <span>{cleanup.recommended_action ?? "-"}</span>
-          </div>
-          <div>
-            <strong>Latest operation</strong>
-            <span>
+        <p className="description">{cleanup.reason ?? "Managed cleanup truth for this lease."}</p>
+        <div className="surface-grid cleanup-grid">
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Decision</p>
+            <p className="surface-card__value surface-card__value--compact">{cleanupDecision}</p>
+            <p className="surface-card__body">{cleanupActionSummary}</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Current Operation</p>
+            <div className="cleanup-current-op">
+              <span className={cleanupOperationClass}>{cleanupOperationStatus}</span>
               {cleanup.operation?.operation_id ? (
-                <Link to={`/operations/${cleanup.operation.operation_id}`}>{cleanup.operation.operation_id}</Link>
-              ) : (
-                "-"
-              )}
-            </span>
-          </div>
-          <div>
-            <strong>Status</strong>
-            <span>{cleanup.operation?.status ?? "-"}</span>
-          </div>
-          <div>
-            <strong>Reason</strong>
-            <span>{cleanup.reason ?? "-"}</span>
-          </div>
-          <div>
-            <strong>Action</strong>
-            <span>
-              <button
-                type="button"
-                className="monitor-action-button"
-                disabled={!cleanup.allowed || cleanupPending}
-                onClick={() => void startCleanup()}
-              >
-                Start lease cleanup
-              </button>
-            </span>
-          </div>
+                <Link to={`/operations/${cleanup.operation.operation_id}`} className="cleanup-operation-link">
+                  {cleanup.operation.operation_id}
+                </Link>
+              ) : null}
+            </div>
+            <p className="surface-card__body">{cleanupOperationSummary}</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Action Lane</p>
+            <button
+              type="button"
+              className="monitor-action-button"
+              disabled={!cleanup.allowed || cleanupPending}
+              onClick={() => void startCleanup()}
+            >
+              Start lease cleanup
+            </button>
+            <p className="surface-card__body">{cleanupActionHint}</p>
+          </article>
         </div>
-        {cleanupMessage ? <p className="description">{cleanupMessage}</p> : null}
-        <table>
-          <thead>
-            <tr>
-              <th>Operation</th>
-              <th>Status</th>
-              <th>Summary</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentOperations.length > 0 ? (
-              recentOperations.map((operation) => (
-                <tr key={operation.operation_id ?? "missing-operation"}>
-                  <td className="mono">
-                    {operation.operation_id ? (
-                      <Link to={`/operations/${operation.operation_id}`}>{operation.operation_id}</Link>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td>{operation.status ?? "-"}</td>
-                  <td>{operation.summary ?? "-"}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={3}>No recorded cleanup operations.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {cleanupFeedbackMessage ? <p className="description">{cleanupFeedbackMessage}</p> : null}
+        <div className="cleanup-ledger">
+          <h3>Recent Operations</h3>
+          {recentOperations.length > 0 ? (
+            <div className="cleanup-ledger__list">
+              {recentOperations.map((operation) => {
+                const operationStatus = operation.status ?? "unknown";
+                const operationClass =
+                  CLEANUP_STATUS_CLASS_BY_STATUS[operationStatus] ?? "cleanup-status cleanup-status--muted";
+                return (
+                  <article className="cleanup-ledger__item" key={operation.operation_id ?? "missing-operation"}>
+                    <div className="cleanup-ledger__header">
+                      <span className={operationClass}>{operationStatus}</span>
+                      {operation.operation_id ? (
+                        <Link to={`/operations/${operation.operation_id}`} className="cleanup-operation-link mono">
+                          {operation.operation_id}
+                        </Link>
+                      ) : (
+                        <span className="mono">-</span>
+                      )}
+                    </div>
+                    <p className="cleanup-ledger__summary">{operation.summary ?? "-"}</p>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="cleanup-ledger__empty">No recorded cleanup operations.</p>
+          )}
+        </div>
       </section>
       <section className="surface-section">
         <h2>Relations</h2>
