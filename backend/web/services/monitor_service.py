@@ -771,7 +771,25 @@ def cleanup_resource_leases(
 
 
 def runtime_health_snapshot() -> dict[str, Any]:
-    """Lightweight control-plane health snapshot."""
+    """Control-plane health snapshot with provider session scan."""
+    db_payload = runtime_health_summary()["db"]
+
+    _, managers = init_providers_and_managers()
+    sessions = load_all_sessions(managers)
+    provider_counts: dict[str, int] = {}
+    for session in sessions:
+        provider = str(session.get("provider") or "unknown")
+        provider_counts[provider] = provider_counts.get(provider, 0) + 1
+
+    return {
+        "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "db": db_payload,
+        "sessions": {"total": len(sessions), "providers": provider_counts},
+    }
+
+
+def runtime_health_summary() -> dict[str, Any]:
+    """Lightweight control-plane health snapshot without provider session scan."""
     tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "events": 0}
     storage_strategy = current_storage_strategy()
 
@@ -814,15 +832,7 @@ def runtime_health_snapshot() -> dict[str, Any]:
             tables = {logical_name: int(raw_counts.get(table_name) or 0) for logical_name, table_name in table_names.items()}
             db_payload["counts"] = tables
 
-    _, managers = init_providers_and_managers()
-    sessions = load_all_sessions(managers)
-    provider_counts: dict[str, int] = {}
-    for session in sessions:
-        provider = str(session.get("provider") or "unknown")
-        provider_counts[provider] = provider_counts.get(provider, 0) + 1
-
     return {
         "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "db": db_payload,
-        "sessions": {"total": len(sessions), "providers": provider_counts},
     }

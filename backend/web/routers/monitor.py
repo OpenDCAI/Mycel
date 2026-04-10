@@ -38,13 +38,14 @@ def leases_snapshot():
 
 @router.get("/dashboard")
 def dashboard_snapshot():
-    health = monitor_service.runtime_health_snapshot()
+    health = monitor_service.runtime_health_summary()
     resources = get_monitor_resource_overview_snapshot()
     leases = monitor_service.list_leases()
     evaluation = monitor_service.get_monitor_evaluation_dashboard_summary()
 
     resource_summary = resources.get("summary") or {}
     lease_summary = leases.get("summary") or {}
+    provider_sessions_total = sum(len(provider.get("sessions") or []) for provider in resources.get("providers") or [])
 
     return {
         "snapshot_at": health.get("snapshot_at"),
@@ -59,7 +60,7 @@ def dashboard_snapshot():
         },
         "workload": {
             "db_sessions_total": int(((health.get("db") or {}).get("counts") or {}).get("chat_sessions") or 0),
-            "provider_sessions_total": int(((health.get("sessions") or {}).get("total")) or 0),
+            "provider_sessions_total": provider_sessions_total,
             "running_sessions": int(resource_summary.get("running_sessions") or 0),
             "evaluations_running": int(evaluation["evaluations_running"]),
         },

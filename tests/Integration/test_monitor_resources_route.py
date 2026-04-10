@@ -20,6 +20,19 @@ def _stub_monitor_health(monkeypatch):
     return payload
 
 
+def _stub_monitor_health_summary(monkeypatch):
+    payload = {
+        "snapshot_at": "2026-04-07T00:00:00Z",
+        "db": {
+            "strategy": "supabase",
+            "schema": "staging",
+            "counts": {"chat_sessions": 0, "sandbox_leases": 0, "events": 0},
+        },
+    }
+    monkeypatch.setattr(monitor.monitor_service, "runtime_health_summary", lambda: payload, raising=False)
+    return payload
+
+
 def _stub_monitor_leases(monkeypatch):
     payload = {
         "summary": {
@@ -207,9 +220,14 @@ def test_monitor_health_route_smoke(monkeypatch):
 
 def test_monitor_dashboard_route_smoke(monkeypatch):
     _stub_monitor_resource_snapshot(monkeypatch)
-    _stub_monitor_health(monkeypatch)
+    _stub_monitor_health_summary(monkeypatch)
     _stub_monitor_leases(monkeypatch)
     _stub_monitor_evaluation_summary(monkeypatch)
+    monkeypatch.setattr(
+        monitor.monitor_service,
+        "runtime_health_snapshot",
+        lambda: (_ for _ in ()).throw(AssertionError("dashboard must not call runtime_health_snapshot")),
+    )
 
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/dashboard")
@@ -315,7 +333,7 @@ def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
 
     monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
     _stub_monitor_resource_snapshot(monkeypatch)
-    _stub_monitor_health(monkeypatch)
+    _stub_monitor_health_summary(monkeypatch)
     _stub_monitor_leases(monkeypatch)
 
     with TestClient(_build_monitor_test_app()) as client:
@@ -340,7 +358,7 @@ def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
 
 def test_monitor_dashboard_route_derives_evaluation_summary_from_service(monkeypatch):
     _stub_monitor_resource_snapshot(monkeypatch)
-    _stub_monitor_health(monkeypatch)
+    _stub_monitor_health_summary(monkeypatch)
     _stub_monitor_leases(monkeypatch)
     monkeypatch.setattr(
         monitor_service,
