@@ -325,6 +325,52 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
   });
 
+  it("keeps lease detail runtime truth in relations instead of repeating it in the operator summary", async () => {
+    mockRoutePayloads({
+      "/leases/lease-1": {
+        lease: {
+          lease_id: "lease-1",
+          provider_name: "daytona",
+          desired_state: "running",
+          observed_state: "running",
+          updated_at: "2026-04-08T00:00:00Z",
+          updated_ago: "1m ago",
+          last_error: null,
+          badge: {
+            color: "green",
+            observed: "running",
+            desired: "running",
+            text: "running",
+          },
+        },
+        triage: {
+          category: "healthy_capacity",
+          title: "Healthy Capacity",
+          description: "Lease is converged and ready.",
+          tone: "success",
+        },
+        provider: {
+          id: "daytona",
+          name: "daytona",
+        },
+        runtime: {
+          runtime_session_id: "runtime-1",
+        },
+        threads: [{ thread_id: "thread-1" }],
+        sessions: [{ chat_session_id: "session-1", thread_id: "thread-1", status: "active" }],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases/lease-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
+    expect(screen.getAllByText("runtime-1")).toHaveLength(1);
+  });
+
   it("renders provider detail under the resources surface", async () => {
     mockRoutePayloads({
       "/providers/daytona": {

@@ -67,10 +67,6 @@ export default function LeaseDetailPage() {
             <p className="surface-card__eyebrow">Triage</p>
             <p className="surface-card__value">{data.triage?.title ?? "-"}</p>
           </article>
-          <article className="surface-card">
-            <p className="surface-card__eyebrow">Runtime</p>
-            <p className="surface-card__value mono">{data.runtime?.runtime_session_id ?? "-"}</p>
-          </article>
         </div>
       </section>
       <section className="surface-section">
