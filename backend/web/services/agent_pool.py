@@ -110,13 +110,23 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                     app_obj.state.thread_cwd.pop(thread_id, None)
                     logger.warning("Ignoring unavailable local cwd for thread %s: %s", thread_id, cwd)
 
-        # Look up model for this thread (threads table → preferences default)
+        user_repo = getattr(app_obj.state, "user_repo", None)
+        agent_user_id = thread_data.get("agent_user_id") if thread_data else None
+        agent_user = user_repo.get_by_id(agent_user_id) if agent_user_id and user_repo is not None else None
+
+        # Look up model for this thread (thread override → repo-backed user settings → local preferences)
         model_name = thread_data.get("model") if thread_data else None
         if not model_name:
-            from backend.web.routers.settings import load_settings as load_preferences
+            user_settings_repo = getattr(app_obj.state, "user_settings_repo", None)
+            owner_user_id = getattr(agent_user, "owner_user_id", None) if agent_user is not None else None
+            if user_settings_repo is not None and owner_user_id:
+                settings_row = user_settings_repo.get(owner_user_id) or {}
+                model_name = settings_row.get("default_model")
+            if not model_name:
+                from backend.web.routers.settings import load_settings as load_preferences
 
-            prefs = load_preferences()
-            model_name = prefs.default_model
+                prefs = load_preferences()
+                model_name = prefs.default_model
 
         # @@@agent-vs-member - thread_config.agent stores a member ID (e.g. "__leon__") for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
@@ -124,12 +134,10 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         bundle_dir = None
         agent_config_id = None
         agent_config_repo = getattr(app_obj.state, "agent_config_repo", None)
-        agent_user = None
         if thread_data and thread_data.get("agent_user_id"):
-            user_repo = getattr(app_obj.state, "user_repo", None)
             if user_repo is None:
                 raise RuntimeError(f"user_repo is required to resolve agent_config_id for thread {thread_id}")
-            agent_user = user_repo.get_by_id(thread_data["agent_user_id"])
+            agent_user = agent_user or user_repo.get_by_id(thread_data["agent_user_id"])
             if agent_user is None or getattr(agent_user, "agent_config_id", None) is None:
                 raise RuntimeError(f"thread.agent_user_id is missing agent_config_id for runtime startup: {thread_id}")
             agent_config_id = agent_user.agent_config_id
@@ -137,7 +145,6 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None
         if hasattr(app_obj.state, "user_repo") and thread_data:
-            user_repo = app_obj.state.user_repo
             agent_user_id = thread_data.get("agent_user_id")
             if not agent_user_id:
                 raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
