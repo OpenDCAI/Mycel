@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import ErrorState from "../components/ErrorState";
 import { useMonitorData } from "../app/fetch";
 
@@ -26,9 +28,27 @@ export default function DashboardPage() {
   if (!data) return <div>Loading...</div>;
 
   const surfaces = [
-    { label: "Running Sessions", value: data.workload.running_sessions },
-    { label: "Evaluations Running", value: data.workload.evaluations_running },
-    { label: "Tracked Leases", value: data.infra.leases_total },
+    { label: "Running Sessions", value: data.workload.running_sessions, to: "/resources" },
+    { label: "Evaluations Running", value: data.workload.evaluations_running, to: "/evaluation" },
+    { label: "Tracked Leases", value: data.infra.leases_total, to: "/leases" },
+  ];
+
+  const operatorLinks = [
+    {
+      label: "Provider Coverage",
+      body: `${data.infra.providers_active} active providers, ${data.infra.providers_unavailable} unavailable.`,
+      to: "/resources",
+    },
+    {
+      label: "Lease Drift",
+      body: `${data.infra.leases_diverged} diverged leases, ${data.infra.leases_orphan} orphan leases.`,
+      to: "/leases",
+    },
+    {
+      label: "Latest Evaluation",
+      body: data.latest_evaluation.headline,
+      to: "/evaluation",
+    },
   ];
 
   return (
@@ -39,34 +59,22 @@ export default function DashboardPage() {
         <h2>Runtime Surfaces</h2>
         <div className="surface-grid">
           {surfaces.map((surface) => (
-            <article className="surface-card" key={surface.label}>
+            <Link className="surface-card" key={surface.label} to={surface.to}>
               <p className="surface-card__eyebrow">{surface.label}</p>
               <p className="surface-card__value">{surface.value}</p>
-            </article>
+            </Link>
           ))}
         </div>
       </section>
       <section className="surface-section">
         <h2>Operator Attention</h2>
         <div className="surface-grid">
-          <article className="surface-card" key="providers">
-            <p className="surface-card__eyebrow">Provider Coverage</p>
-            <p className="surface-card__body">
-              {data.infra.providers_active} active providers, {data.infra.providers_unavailable} unavailable.
-            </p>
-          </article>
-          <article className="surface-card" key="leases">
-            <p className="surface-card__eyebrow">Lease Drift</p>
-            <p className="surface-card__body">
-              {data.infra.leases_diverged} diverged leases, {data.infra.leases_orphan} orphan leases.
-            </p>
-          </article>
-          <article className="surface-card" key="evaluation">
-            <p className="surface-card__eyebrow">Latest Evaluation</p>
-            <p className="surface-card__body">
-              {data.latest_evaluation.headline}
-            </p>
-          </article>
+          {operatorLinks.map((item) => (
+            <Link className="surface-card" key={item.label} to={item.to}>
+              <p className="surface-card__eyebrow">{item.label}</p>
+              <p className="surface-card__body">{item.body}</p>
+            </Link>
+          ))}
         </div>
       </section>
     </div>

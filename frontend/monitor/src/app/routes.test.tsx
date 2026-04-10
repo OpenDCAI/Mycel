@@ -130,6 +130,44 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Evaluation run is actively recording new metrics.")).toBeInTheDocument();
   });
 
+  it("routes dashboard cards to their owning surfaces", async () => {
+    mockRoutePayloads({
+      "/dashboard": {
+        snapshot_at: "2026-04-08T00:00:00Z",
+        infra: {
+          providers_active: 2,
+          providers_unavailable: 1,
+          leases_total: 3,
+          leases_diverged: 1,
+          leases_orphan: 2,
+        },
+        workload: {
+          running_sessions: 4,
+          evaluations_running: 1,
+        },
+        latest_evaluation: {
+          status: "running",
+          kind: "running_recorded",
+          tone: "warning",
+          headline: "Evaluation run is actively recording new metrics.",
+        },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /running sessions/i })).toHaveAttribute("href", "/resources");
+    expect(screen.getByRole("link", { name: /tracked leases/i })).toHaveAttribute("href", "/leases");
+    expect(screen.getByRole("link", { name: /provider coverage/i })).toHaveAttribute("href", "/resources");
+    expect(screen.getByRole("link", { name: /lease drift/i })).toHaveAttribute("href", "/leases");
+    expect(screen.getByRole("link", { name: /latest evaluation/i })).toHaveAttribute("href", "/evaluation");
+  });
+
   it("renders leases with a triage summary before the raw table", async () => {
     mockRoutePayloads({
       "/leases": {
