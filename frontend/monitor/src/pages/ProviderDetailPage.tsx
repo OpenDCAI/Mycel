@@ -40,16 +40,12 @@ export default function ProviderDetailPage() {
         <h2>Relations</h2>
         <div className="info-grid">
           <div>
-            <strong>Leases</strong>
-            <span>{leases.length}</span>
+            <strong>Type</strong>
+            <span>{provider.type ?? "-"}</span>
           </div>
           <div>
-            <strong>Runtimes</strong>
-            <span>{runtimes.length}</span>
-          </div>
-          <div>
-            <strong>Threads</strong>
-            <span>{threads.length}</span>
+            <strong>Status</strong>
+            <span>{provider.status ?? "-"}</span>
           </div>
           <div>
             <strong>Resources</strong>

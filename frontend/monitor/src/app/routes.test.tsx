@@ -355,6 +355,40 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
   });
 
+  it("keeps provider detail relations focused on provider truth instead of repeating object counts", async () => {
+    mockRoutePayloads({
+      "/providers/daytona": {
+        provider: {
+          id: "daytona",
+          name: "daytona",
+          description: "Self-hosted Daytona",
+          type: "cloud",
+          status: "active",
+          sessions: [],
+        },
+        lease_ids: ["lease-1", "lease-2"],
+        thread_ids: ["thread-1"],
+        runtime_session_ids: ["runtime-1"],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/providers/daytona"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Provider daytona" })).toBeInTheDocument();
+    const relationsHeading = screen.getByRole("heading", { name: "Relations" });
+    const relationsSection = relationsHeading.closest("section");
+    if (!relationsSection) {
+      throw new Error("Expected provider detail relations section");
+    }
+    expect(within(relationsSection).queryByText("Leases")).not.toBeInTheDocument();
+    expect(within(relationsSection).queryByText("Runtimes")).not.toBeInTheDocument();
+    expect(within(relationsSection).queryByText("Threads")).not.toBeInTheDocument();
+  });
+
   it("renders runtime detail under the resources surface", async () => {
     mockRoutePayloads({
       "/runtimes/runtime-1": {
