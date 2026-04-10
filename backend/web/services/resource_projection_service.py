@@ -230,11 +230,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
         if not lease_id:
             continue
 
-        try:
-            thread_rows = repo.query_lease_threads(lease_id)
-        except Exception:
-            thread_rows = []
-
+        thread_rows = repo.query_lease_threads(lease_id)
         preferred_thread_id = next(
             (str(item.get("thread_id") or "").strip() for item in thread_rows if _is_resource_visible_thread(item.get("thread_id"))),
             "",

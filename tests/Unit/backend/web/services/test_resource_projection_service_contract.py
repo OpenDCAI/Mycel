@@ -1,3 +1,5 @@
+import pytest
+
 from backend.web.services import resource_projection_service
 
 
@@ -56,6 +58,44 @@ def test_list_resource_providers_keeps_local_card_without_host_metrics(monkeypat
     assert isinstance(local["cardCpu"], dict)
     assert local["cardCpu"]["used"] is None
     assert local["cardCpu"]["limit"] is None
+
+
+def test_list_resource_providers_fails_loudly_when_lease_thread_lookup_breaks(monkeypatch):
+    class _BrokenLeaseThreadRepo(_FakeRepo):
+        def query_lease_threads(self, lease_id: str):
+            raise RuntimeError(f"lease thread lookup failed: {lease_id}")
+
+    rows = [
+        {
+            "provider": "local",
+            "session_id": "subagent-thread-only",
+            "thread_id": "subagent-1",
+            "lease_id": "lease-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _BrokenLeaseThreadRepo(rows))
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "local", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "local")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (_caps(metrics=False), None),
+    )
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
+    monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda _thread_ids: {})
+    monkeypatch.setattr(resource_projection_service.LocalSessionProvider, "get_metrics", lambda self, _session_id: None)
+
+    with pytest.raises(RuntimeError, match=r"lease thread lookup failed: lease-1"):
+        resource_projection_service.list_resource_providers()
 
 
 def test_list_resource_providers_keeps_unavailable_remote_card_with_reason(monkeypatch):
