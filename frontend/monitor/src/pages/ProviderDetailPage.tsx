@@ -33,9 +33,7 @@ export default function ProviderDetailPage() {
   return (
     <div className="page">
       <h1>{`Provider ${provider.name ?? provider.id ?? providerId}`}</h1>
-      <p className="description">
-        {provider.description ?? "Provider operator truth"} · {provider.type ?? "-"} · {provider.status ?? "-"}
-      </p>
+      <p className="description">{provider.description ?? "Provider operator truth"}</p>
       <section className="surface-section">
         <h2>Relations</h2>
         <div className="info-grid">

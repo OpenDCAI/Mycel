@@ -435,6 +435,34 @@ describe("MonitorRoutes", () => {
     expect(within(relationsSection).queryByText("Threads")).not.toBeInTheDocument();
   });
 
+  it("keeps provider detail description focused on description instead of repeating type and status", async () => {
+    mockRoutePayloads({
+      "/providers/daytona": {
+        provider: {
+          id: "daytona",
+          name: "daytona",
+          description: "Self-hosted Daytona",
+          type: "cloud",
+          status: "active",
+          sessions: [],
+        },
+        lease_ids: ["lease-1"],
+        thread_ids: ["thread-1"],
+        runtime_session_ids: ["runtime-1"],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/providers/daytona"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Provider daytona" })).toBeInTheDocument();
+    expect(screen.getByText("Self-hosted Daytona")).toBeInTheDocument();
+    expect(screen.queryByText("Self-hosted Daytona · cloud · active")).not.toBeInTheDocument();
+  });
+
   it("renders runtime detail under the resources surface", async () => {
     mockRoutePayloads({
       "/runtimes/runtime-1": {
