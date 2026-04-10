@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 import {
   browseMonitorSandbox,
@@ -720,6 +721,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
           </div>
           <div className="provider-detail__meta">
             <span>{PROVIDER_TYPE_LABEL[provider.type]}</span>
+            <Link to={`/providers/${provider.id}`} aria-label={`${provider.name} detail`}>
+              详情
+            </Link>
             {provider.consoleUrl && (
               <a href={provider.consoleUrl} target="_blank" rel="noreferrer">
                 控制台
@@ -970,16 +974,23 @@ function SandboxInspector({
                   <div className="sandbox-avatar sandbox-avatar--lg" title={session.agentName || "未绑定"}>
                     {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.agentName || "未绑定")}
                   </div>
-                  <div>
-                    <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
-                    <span className="sandbox-link">
-                      {session.threadId}
-                    </span>
-                    {session.runtimeSessionId && (
-                      <div className="sandbox-session-row__meta">runtime {session.runtimeSessionId}</div>
-                    )}
+                    <div>
+                      <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
+                      <div className="sandbox-session-row__meta">
+                        <Link className="sandbox-link" to={`/threads/${session.threadId}`}>
+                          {session.threadId}
+                        </Link>
+                      </div>
+                      {session.runtimeSessionId && (
+                        <div className="sandbox-session-row__meta">
+                          runtime{" "}
+                          <Link className="sandbox-link" to={`/runtimes/${session.runtimeSessionId}`}>
+                            {session.runtimeSessionId}
+                          </Link>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
                 <div className="sandbox-session-row__status">
                   <span className={`provider-status-dot provider-status-dot--${session.status}`} />
                   <span>{STATUS_LABEL[session.status]}</span>
@@ -1013,7 +1024,11 @@ function SandboxInspector({
         <div className="sandbox-modal__section sandbox-modal__section--fill">
           <div className="sandbox-modal__section-header">
             <h4>文件</h4>
-            {group.leaseId ? <span className="sandbox-link">{group.leaseId}</span> : null}
+            {group.leaseId ? (
+              <Link className="sandbox-link" to={`/leases/${group.leaseId}`}>
+                {group.leaseId}
+              </Link>
+            ) : null}
           </div>
           <MonitorFileBrowser
             leaseId={group.leaseId}

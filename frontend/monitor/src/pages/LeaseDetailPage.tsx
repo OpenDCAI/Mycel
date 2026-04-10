@@ -78,7 +78,13 @@ export default function LeaseDetailPage() {
         <div className="info-grid">
           <div>
             <strong>Provider</strong>
-            <span>{data.provider?.name ?? data.lease.provider_name ?? "-"}</span>
+            <span>
+              {data.provider?.id ? (
+                <Link to={`/providers/${data.provider.id}`}>{data.provider.name ?? data.provider.id}</Link>
+              ) : (
+                data.provider?.name ?? data.lease.provider_name ?? "-"
+              )}
+            </span>
           </div>
           <div>
             <strong>Updated</strong>
@@ -94,6 +100,16 @@ export default function LeaseDetailPage() {
             <strong>Last error</strong>
             <span>{data.lease.last_error ?? "-"}</span>
           </div>
+          <div>
+            <strong>Runtime</strong>
+            <span>
+              {data.runtime?.runtime_session_id ? (
+                <Link to={`/runtimes/${data.runtime.runtime_session_id}`}>{data.runtime.runtime_session_id}</Link>
+              ) : (
+                "-"
+              )}
+            </span>
+          </div>
         </div>
       </section>
       <section className="surface-section">
@@ -108,7 +124,9 @@ export default function LeaseDetailPage() {
             {threads.length > 0 ? (
               threads.map((thread) => (
                 <tr key={thread.thread_id ?? "missing-thread"}>
-                  <td className="mono">{thread.thread_id ?? "-"}</td>
+                  <td className="mono">
+                    {thread.thread_id ? <Link to={`/threads/${thread.thread_id}`}>{thread.thread_id}</Link> : "-"}
+                  </td>
                 </tr>
               ))
             ) : (

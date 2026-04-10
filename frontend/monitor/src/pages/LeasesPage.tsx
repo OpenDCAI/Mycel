@@ -78,11 +78,15 @@ export default function LeasesPage() {
               <td className="mono">
                 <Link to={`/leases/${item.lease_id}`}>{item.lease_id}</Link>
               </td>
-              <td>{item.provider}</td>
-              <td className="mono">{item.instance_id?.slice(0, 12) || "-"}</td>
+              <td>{item.provider ? <Link to={`/providers/${item.provider}`}>{item.provider}</Link> : "-"}</td>
+              <td className="mono">
+                {item.instance_id ? <Link to={`/runtimes/${item.instance_id}`}>{item.instance_id.slice(0, 12)}</Link> : "-"}
+              </td>
               <td>
                 {item.thread.thread_id ? (
-                  <span className="mono">{item.thread.thread_id.slice(0, 8)}</span>
+                  <Link className="mono" to={`/threads/${item.thread.thread_id}`}>
+                    {item.thread.thread_id.slice(0, 8)}
+                  </Link>
                 ) : (
                   <span className="orphan">orphan</span>
                 )}

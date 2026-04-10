@@ -234,8 +234,157 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
     expect(screen.getByRole("link", { current: "page", name: /leases/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("Healthy Capacity")).toBeInTheDocument();
-    expect(screen.getByText("runtime-1")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "runtime-1" })).toBeInTheDocument();
     expect(screen.getAllByText("thread-1").length).toBeGreaterThan(0);
+  });
+
+  it("links lease relations into the hidden detail routes", async () => {
+    mockRoutePayloads({
+      "/leases/lease-1": {
+        lease: {
+          lease_id: "lease-1",
+          provider_name: "daytona",
+          desired_state: "running",
+          observed_state: "running",
+          updated_at: "2026-04-08T00:00:00Z",
+          updated_ago: "1m ago",
+          last_error: null,
+          badge: {
+            color: "green",
+            observed: "running",
+            desired: "running",
+            text: "running",
+          },
+        },
+        triage: {
+          category: "healthy_capacity",
+          title: "Healthy Capacity",
+          description: "Lease is converged and ready.",
+          tone: "success",
+        },
+        provider: {
+          id: "daytona",
+          name: "daytona",
+        },
+        runtime: {
+          runtime_session_id: "runtime-1",
+        },
+        threads: [{ thread_id: "thread-1" }],
+        sessions: [{ chat_session_id: "session-1", thread_id: "thread-1", status: "active" }],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases/lease-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "daytona" })).toHaveAttribute("href", "/providers/daytona");
+    expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
+    expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
+  });
+
+  it("renders provider detail under the resources surface", async () => {
+    mockRoutePayloads({
+      "/providers/daytona": {
+        provider: {
+          id: "daytona",
+          name: "daytona",
+          description: "Self-hosted Daytona",
+          type: "cloud",
+          status: "active",
+          sessions: [],
+        },
+        lease_ids: ["lease-1", "lease-2"],
+        thread_ids: ["thread-1"],
+        runtime_session_ids: ["runtime-1"],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/providers/daytona"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Provider daytona" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /resources/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
+    expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
+    expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
+  });
+
+  it("renders runtime detail under the resources surface", async () => {
+    mockRoutePayloads({
+      "/runtimes/runtime-1": {
+        provider: {
+          id: "daytona",
+          name: "daytona",
+          status: "active",
+          consoleUrl: "https://console.example/runtime-1",
+        },
+        runtime: {
+          runtimeSessionId: "runtime-1",
+          status: "running",
+          threadId: "thread-1",
+          leaseId: "lease-1",
+          agentName: "Planner",
+          webUrl: "https://sandbox.example/runtime-1",
+        },
+        lease_id: "lease-1",
+        thread_id: "thread-1",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/runtimes/runtime-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Runtime runtime-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /resources/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "daytona" })).toHaveAttribute("href", "/providers/daytona");
+    expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
+    expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
+  });
+
+  it("renders thread detail under the leases surface", async () => {
+    mockRoutePayloads({
+      "/threads/thread-1": {
+        thread: {
+          id: "thread-1",
+          title: "Investigate sandbox drift",
+          status: "active",
+        },
+        owner: {
+          user_id: "user-1",
+          display_name: "Ada",
+        },
+        summary: {
+          provider_name: "daytona",
+          lease_id: "lease-1",
+          current_instance_id: "runtime-1",
+          desired_state: "running",
+          observed_state: "running",
+        },
+        sessions: [{ chat_session_id: "session-1", status: "active" }],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/threads/thread-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Thread thread-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /leases/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "daytona" })).toHaveAttribute("href", "/providers/daytona");
+    expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
+    expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
   });
 
   it("renders evaluation as a truthful operator surface", async () => {
@@ -341,6 +490,85 @@ describe("MonitorRoutes", () => {
     fireEvent.click((await screen.findByText("notes.txt")).closest("button") as HTMLButtonElement);
 
     expect(await screen.findByText("hello from local sandbox")).toBeInTheDocument();
+  });
+
+  it("links resource objects into the hidden detail routes", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "daytona",
+            name: "daytona",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: true,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+            sessions: [
+              {
+                id: "lease-1:thread-1",
+                leaseId: "lease-1",
+                runtimeSessionId: "runtime-1",
+                threadId: "thread-1",
+                agentName: "Planner",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 1.5,
+                  memory: 1,
+                  memoryLimit: 4,
+                  disk: 2,
+                  diskLimit: 10,
+                  networkIn: null,
+                  networkOut: null,
+                  webUrl: "https://sandbox.example/runtime-1",
+                },
+              },
+            ],
+          },
+        ],
+      },
+      "/sandbox/lease-1/browse?path=%2F": {
+        current_path: "/",
+        parent_path: null,
+        items: [],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "daytona detail" })).toHaveAttribute("href", "/providers/daytona");
+    fireEvent.click(await screen.findByRole("button", { name: /planner/i }));
+    expect(await screen.findByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
+    expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
+    expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
   });
 
   it("does not pretend a remote lease is browsable when runtime session binding is missing", async () => {
