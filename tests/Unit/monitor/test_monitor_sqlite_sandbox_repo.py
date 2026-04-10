@@ -49,6 +49,19 @@ class _BrokenCountClient(_CountClient):
         return super().table(table_name)
 
 
+def _broken_instance_lookup_repo(*, include_updated_at: bool) -> SupabaseSandboxMonitorRepo:
+    row = {
+        "lease_id": "lease-1",
+        "provider_name": "daytona_selfhost",
+        "desired_state": "running",
+        "observed_state": "detached",
+        "current_instance_id": "instance-fallback",
+    }
+    if include_updated_at:
+        row["updated_at"] = "2026-04-05T10:10:00"
+    return SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient({"sandbox_leases": [row]}))
+
+
 def _bootstrap_monitor_db(db_path):
     conn = sqlite3.connect(db_path)
     try:
@@ -502,47 +515,19 @@ def test_supabase_list_probe_targets_prefers_provider_session_id_matches_sqlite(
     assert supabase_rows == sqlite_rows
 
 
-def test_supabase_query_lease_instance_id_fails_loudly_when_instance_lookup_breaks() -> None:
-    repo = SupabaseSandboxMonitorRepo(
-        _BrokenSandboxInstancesClient(
-            {
-                "sandbox_leases": [
-                    {
-                        "lease_id": "lease-1",
-                        "provider_name": "daytona_selfhost",
-                        "desired_state": "running",
-                        "observed_state": "detached",
-                        "current_instance_id": "instance-fallback",
-                    }
-                ]
-            }
-        )
-    )
+@pytest.mark.parametrize(
+    ("include_updated_at", "caller"),
+    [
+        (False, lambda repo: repo.query_lease_instance_id("lease-1")),
+        (True, lambda repo: repo.list_probe_targets()),
+    ],
+    ids=["query-lease-instance-id", "list-probe-targets"],
+)
+def test_supabase_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
+    repo = _broken_instance_lookup_repo(include_updated_at=include_updated_at)
 
     with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
-        repo.query_lease_instance_id("lease-1")
-
-
-def test_supabase_list_probe_targets_fails_loudly_when_instance_lookup_breaks() -> None:
-    repo = SupabaseSandboxMonitorRepo(
-        _BrokenSandboxInstancesClient(
-            {
-                "sandbox_leases": [
-                    {
-                        "lease_id": "lease-1",
-                        "provider_name": "daytona_selfhost",
-                        "desired_state": "running",
-                        "observed_state": "detached",
-                        "current_instance_id": "instance-fallback",
-                        "updated_at": "2026-04-05T10:10:00",
-                    }
-                ]
-            }
-        )
-    )
-
-    with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
-        repo.list_probe_targets()
+        caller(repo)
 
 
 def test_supabase_count_rows_returns_exact_counts() -> None:
