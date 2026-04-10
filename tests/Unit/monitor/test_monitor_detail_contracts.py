@@ -183,3 +183,33 @@ def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(monkeypat
         "email": None,
         "avatar_url": "/api/users/agent-1/avatar",
     }
+
+
+def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(monkeypatch):
+    class FakeThreadRepo:
+        def get_by_id(self, thread_id):
+            return {"id": thread_id, "title": "Investigate drift", "status": "active"}
+
+    class FakeMonitorRepo:
+        def query_thread_summary(self, thread_id):
+            return None
+
+        def query_thread_sessions(self, thread_id):
+            return []
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
+    monkeypatch.setattr(monitor_service, "_thread_owners", lambda *_args, **_kwargs: {"thread-1": None})
+
+    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
+
+    payload = monitor_service.get_monitor_thread_detail(app, "thread-1")
+
+    assert payload["thread"] == {
+        "id": "thread-1",
+        "thread_id": "thread-1",
+        "title": "Investigate drift",
+        "status": "active",
+    }

@@ -92,6 +92,13 @@ def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | No
     }
 
 
+def _normalize_monitor_thread(thread: dict[str, Any], fallback_thread_id: str) -> dict[str, Any]:
+    return {
+        **thread,
+        "thread_id": thread.get("thread_id") or thread.get("id") or fallback_thread_id,
+    }
+
+
 LEASE_SEMANTIC_ORDER = [
     "orphan_diverged",
     "diverged",
@@ -577,7 +584,7 @@ def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
     )
 
     return {
-        "thread": thread,
+        "thread": _normalize_monitor_thread(thread, thread_id),
         "owner": _normalize_thread_owner(owners.get(thread_id)),
         "summary": summary,
         "sessions": sessions,

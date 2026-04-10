@@ -28,10 +28,6 @@ type ThreadDetailPayload = {
   }> | null;
 };
 
-function resolveThreadId(thread: ThreadDetailPayload["thread"], fallback: string): string {
-  return String(thread?.thread_id || thread?.id || fallback);
-}
-
 export default function ThreadDetailPage() {
   const params = useParams<{ threadId: string }>();
   const threadId = params.threadId ?? "";
@@ -42,12 +38,11 @@ export default function ThreadDetailPage() {
 
   const summary = data.summary ?? {};
   const owner = data.owner ?? {};
-  const resolvedThreadId = resolveThreadId(data.thread, threadId);
   const sessions = data.sessions ?? [];
 
   return (
     <div className="page">
-      <h1>{`Thread ${resolvedThreadId}`}</h1>
+      <h1>{`Thread ${data.thread?.thread_id ?? threadId}`}</h1>
       <p className="description">
         {data.thread?.title ?? "Operator thread truth"} · {data.thread?.status ?? "-"}
       </p>
