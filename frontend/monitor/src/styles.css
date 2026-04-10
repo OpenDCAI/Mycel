@@ -249,6 +249,27 @@ h2 {
   text-transform: uppercase;
 }
 
+.lease-topology {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 210px;
+}
+
+.lease-topology__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.lease-topology__label {
+  flex: 0 0 3.7rem;
+  color: #8a7765;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* Tables */
 table {
   width: 100%;

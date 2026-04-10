@@ -230,6 +230,10 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Total: 1")).toBeInTheDocument();
     expect(screen.queryByText("Tracked Leases")).not.toBeInTheDocument();
     expect(screen.getByText("Lease Workbench")).toBeInTheDocument();
+    expect(screen.getByText("Topology")).toBeInTheDocument();
+    expect(screen.queryByText("Provider")).not.toBeInTheDocument();
+    expect(screen.queryByText("Instance ID")).not.toBeInTheDocument();
+    expect(screen.queryByText("Thread")).not.toBeInTheDocument();
   });
 
   it("filters the lease table by triage card selection", async () => {

@@ -96,10 +96,8 @@ export default function LeasesPage() {
         <thead>
           <tr>
             <th>Lease ID</th>
-            <th>Provider</th>
+            <th>Topology</th>
             <th>Triage</th>
-            <th>Instance ID</th>
-            <th>Thread</th>
             <th>State</th>
             <th>Updated</th>
             <th>Error</th>
@@ -111,21 +109,36 @@ export default function LeasesPage() {
               <td className="mono">
                 <Link to={`/leases/${item.lease_id}`}>{item.lease_id}</Link>
               </td>
-              <td>{item.provider ? <Link to={`/providers/${item.provider}`}>{item.provider}</Link> : "-"}</td>
+              <td>
+                <div className="lease-topology">
+                  <div className="lease-topology__row">
+                    <span className="lease-topology__label">provider</span>
+                    {item.provider ? <Link to={`/providers/${item.provider}`}>{item.provider}</Link> : <span>-</span>}
+                  </div>
+                  <div className="lease-topology__row">
+                    <span className="lease-topology__label">runtime</span>
+                    {item.instance_id ? (
+                      <Link className="mono" to={`/runtimes/${item.instance_id}`}>
+                        {item.instance_id.slice(0, 12)}
+                      </Link>
+                    ) : (
+                      <span>-</span>
+                    )}
+                  </div>
+                  <div className="lease-topology__row">
+                    <span className="lease-topology__label">thread</span>
+                    {item.thread.thread_id ? (
+                      <Link className="mono" to={`/threads/${item.thread.thread_id}`}>
+                        {item.thread.thread_id.slice(0, 8)}
+                      </Link>
+                    ) : (
+                      <span className="orphan">orphan</span>
+                    )}
+                  </div>
+                </div>
+              </td>
               <td>
                 <span className="lease-triage-chip">{item.triage?.title ?? "-"}</span>
-              </td>
-              <td className="mono">
-                {item.instance_id ? <Link to={`/runtimes/${item.instance_id}`}>{item.instance_id.slice(0, 12)}</Link> : "-"}
-              </td>
-              <td>
-                {item.thread.thread_id ? (
-                  <Link className="mono" to={`/threads/${item.thread.thread_id}`}>
-                    {item.thread.thread_id.slice(0, 8)}
-                  </Link>
-                ) : (
-                  <span className="orphan">orphan</span>
-                )}
               </td>
               <td>
                 <StateBadge badge={item.state_badge} />
