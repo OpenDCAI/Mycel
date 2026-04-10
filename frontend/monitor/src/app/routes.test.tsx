@@ -1385,7 +1385,8 @@ describe("MonitorRoutes", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /planner/i }));
 
-    expect(await screen.findByText("指标")).toBeInTheDocument();
+    expect(await screen.findByText("实时指标")).toBeInTheDocument();
+    expect(screen.getByText("工作区文件")).toBeInTheDocument();
     expect(screen.getByText("CPU")).toBeInTheDocument();
     expect(screen.getByText("RAM")).toBeInTheDocument();
     expect(screen.getByText("Disk")).toBeInTheDocument();
@@ -1447,9 +1448,9 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("button", { name: /daytona_selfhost/i })).toHaveTextContent("1 无 runtime");
-    expect(await screen.findByText("无 active runtime")).toBeInTheDocument();
-    const runtimeGapLabel = screen.getByText("无 runtime");
+    expect(await screen.findByRole("button", { name: /daytona_selfhost/i })).toHaveTextContent("1 未连上沙盒");
+    expect(await screen.findByText("未连上运行时")).toBeInTheDocument();
+    const runtimeGapLabel = screen.getByText("未连上沙盒");
     expect(runtimeGapLabel).toBeInTheDocument();
     expect(within(runtimeGapLabel.parentElement as HTMLElement).getByText("1")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /remote agent/i }));
@@ -1778,7 +1779,7 @@ describe("MonitorRoutes", () => {
       throw new Error("Expected remote sandbox card");
     }
     fireEvent.click(sandboxCard);
-    expect(await screen.findByText("指标")).toBeInTheDocument();
+    expect(await screen.findByText("实时指标")).toBeInTheDocument();
     expect(screen.getByText("CPU")).toBeInTheDocument();
   });
 
@@ -1864,7 +1865,7 @@ describe("MonitorRoutes", () => {
       throw new Error("Expected remote sandbox card");
     }
     fireEvent.click(sandboxCard);
-    expect(await screen.findByText("指标")).toBeInTheDocument();
+    expect(await screen.findByText("实时指标")).toBeInTheDocument();
     expect(screen.getByText("RAM")).toBeInTheDocument();
     expect(screen.getByText("Disk")).toBeInTheDocument();
     expect(screen.getByText("1GB")).toBeInTheDocument();
@@ -2115,7 +2116,80 @@ describe("MonitorRoutes", () => {
     );
 
     const sandboxCard = await screen.findByRole("button", { name: /remote agent/i });
-    expect(within(sandboxCard).getByText("Disk 仅配额")).toBeInTheDocument();
+    expect(within(sandboxCard).getByText("仅有磁盘配额")).toBeInTheDocument();
+  });
+
+  it("speaks plainly when a running sandbox has not reported live metrics yet", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "daytona_selfhost",
+            name: "daytona_selfhost",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: {
+              used: null,
+              limit: null,
+              unit: "%",
+              source: "unknown",
+              freshness: "live",
+              error: "CPU usage is per-sandbox, not a provider-level quota.",
+            },
+            sessions: [
+              {
+                id: "lease-1:thread-1",
+                leaseId: "lease-1",
+                threadId: "thread-1",
+                runtimeSessionId: "runtime-1",
+                agentName: "Remote Agent",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+        ],
+      },
+      "/sandbox/lease-1/browse?path=%2F": {
+        current_path: "/",
+        parent_path: null,
+        items: [],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    const sandboxCard = await screen.findByRole("button", { name: /remote agent/i });
+    expect(within(sandboxCard).getByText("等待运行中的沙盒上报指标")).toBeInTheDocument();
   });
 
 
@@ -2197,7 +2271,7 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
-    expect(screen.queryByText("38 Detached Residue")).not.toBeInTheDocument();
+    expect(screen.queryByText("38 历史残留")).not.toBeInTheDocument();
   });
 
   it("keeps orphan cleanup out of the resources summary strip", async () => {
@@ -2382,7 +2456,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    const detailLabel = (await screen.findAllByText("Detached Residue")).find((node) =>
+    const detailLabel = (await screen.findAllByText("历史残留")).find((node) =>
       node.classList.contains("inline-metric__label"),
     );
     expect(detailLabel).toBeDefined();
@@ -2471,7 +2545,7 @@ describe("MonitorRoutes", () => {
     if (!providerCard) {
       throw new Error("Expected provider card");
     }
-    expect(within(providerCard).getByText("1 Detached Residue")).toBeInTheDocument();
+    expect(within(providerCard).getByText("1 历史残留")).toBeInTheDocument();
   });
 
   it("surfaces detached residue directly on the sandbox card", async () => {
@@ -2549,6 +2623,6 @@ describe("MonitorRoutes", () => {
     );
 
     const sandboxCard = await screen.findByRole("button", { name: /agent 2/i });
-    expect(within(sandboxCard).getByText("Detached Residue")).toBeInTheDocument();
+    expect(within(sandboxCard).getByText("历史残留")).toBeInTheDocument();
   });
 });

@@ -975,8 +975,10 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-card__capability-strip {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.75rem;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(81, 59, 29, 0.08);
 }
 
 .provider-capability-icon {
@@ -985,17 +987,18 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   justify-content: center;
   width: 1.55rem;
   height: 1.55rem;
-  border-radius: 10px;
-  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 12px;
+  border: 1px solid rgba(81, 59, 29, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .provider-capability-icon--enabled {
-  background: rgba(248, 243, 234, 0.94);
+  background: rgba(255, 252, 247, 0.96);
   color: #392d22;
 }
 
 .provider-capability-icon--disabled {
-  background: rgba(240, 235, 226, 0.72);
+  background: rgba(242, 237, 229, 0.9);
   color: #b6aa9c;
 }
 
@@ -1123,11 +1126,12 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .sandbox-card {
-  padding: 0.95rem;
+  padding: 1rem 1rem 0.95rem;
   text-align: left;
   color: inherit;
   cursor: pointer;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+  background: rgba(255, 252, 247, 0.98);
 }
 
 .sandbox-card:hover {
@@ -1155,17 +1159,19 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .sandbox-card__body {
   margin: 0.75rem 0;
+  display: grid;
+  gap: 0.55rem;
 }
 
 .sandbox-card__warning {
   display: inline-flex;
-  margin: 0.7rem 0 0.15rem;
-  padding: 0.18rem 0.55rem;
+  margin: 0.15rem 0 0;
+  padding: 0.25rem 0.6rem;
   border: 1px solid rgba(245, 185, 66, 0.32);
   border-radius: 999px;
   background: rgba(245, 185, 66, 0.08);
   color: #92582d;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   letter-spacing: 0.04em;
 }
 
@@ -1229,12 +1235,15 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .sandbox-card__thread-list {
   display: grid;
   gap: 0.2rem;
+  padding-top: 0.1rem;
 }
 
 .sandbox-card__metrics {
   margin-top: 0.7rem;
   font-size: 0.78rem;
   color: #5c5145;
+  padding-top: 0.8rem;
+  border-top: 1px dashed rgba(81, 59, 29, 0.12);
 }
 
 .sandbox-card__lease {
@@ -1247,23 +1256,23 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  padding: 0;
-  background: rgba(57, 45, 34, 0.12);
-  backdrop-filter: blur(3px);
+  padding: 1rem 1rem 1rem 2rem;
+  background: rgba(57, 45, 34, 0.08);
+  backdrop-filter: blur(6px);
   z-index: 50;
 }
 
 .sandbox-modal {
-  width: min(520px, 100%);
-  height: 100vh;
+  width: min(620px, 100%);
+  height: calc(100vh - 2rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 0;
-  border-left: 1px solid rgba(81, 59, 29, 0.12);
-  border-radius: 0;
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 24px;
   background: rgba(255, 252, 247, 0.99);
-  box-shadow: -16px 0 42px rgba(82, 59, 27, 0.08);
+  box-shadow: 0 24px 54px rgba(82, 59, 27, 0.12);
 }
 
 .sandbox-modal__close,
@@ -1294,7 +1303,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   align-items: center;
   padding: 0.8rem 0.95rem;
   border-radius: 14px;
-  background: rgba(248, 243, 234, 0.72);
+  background: rgba(248, 243, 234, 0.64);
   border: 1px solid rgba(81, 59, 29, 0.12);
 }
 
@@ -1326,7 +1335,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   padding: 0.8rem 0.9rem;
   border-radius: 14px;
   border: 1px solid rgba(81, 59, 29, 0.12);
-  background: rgba(248, 243, 234, 0.72);
+  background: rgba(248, 243, 234, 0.64);
 }
 
 .sandbox-metric-block__label {
@@ -1363,7 +1372,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   min-height: 320px;
   border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 16px;
-  background: rgba(255, 252, 247, 0.92);
+  background: rgba(255, 252, 247, 0.96);
   overflow: hidden;
 }
 
@@ -1404,10 +1413,17 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   padding: 0.6rem 0.75rem;
   text-align: left;
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.file-browser__item:hover {
+  border-color: rgba(146, 88, 45, 0.2);
+  background: rgba(248, 243, 234, 0.72);
 }
 
 .file-browser__item--selected {
   border-color: rgba(146, 88, 45, 0.35);
+  background: rgba(255, 246, 232, 0.9);
 }
 
 .file-browser__content {
@@ -1526,5 +1542,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
   .sandbox-modal {
     width: 100%;
+    height: 100vh;
+    border-radius: 0;
   }
 }

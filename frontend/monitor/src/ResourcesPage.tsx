@@ -445,8 +445,8 @@ function ProviderCard({
 
       <div className="provider-card__footer">
         <span>{runningCount} 占用中</span>
-        {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
-        {detachedResidueCount > 0 && <span>{detachedResidueCount} Detached Residue</span>}
+        {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 未连上沙盒</span>}
+        {detachedResidueCount > 0 && <span>{detachedResidueCount} 历史残留</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
       </div>
@@ -540,9 +540,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                 {pausedCount > 0 && <InlineMetric label="已暂停" value={String(pausedCount)} />}
                 {stoppedCount > 0 && <InlineMetric label="已结束" value={String(stoppedCount)} />}
                 {runtimeUnboundRunningCount > 0 && !isLocal && (
-                  <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />
+                  <InlineMetric label="未连上沙盒" value={String(runtimeUnboundRunningCount)} />
                 )}
-                {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
+                {detachedResidueCount > 0 && <InlineMetric label="历史残留" value={String(detachedResidueCount)} />}
               </div>
             </div>
 
@@ -758,11 +758,11 @@ function SandboxCard({
           // @@@running-card-without-runtime - a persisted lease row can still say `running`
           // after the live runtime session disappears; the card has to surface that drift
           // before the operator drills into a guaranteed-failing file browser.
-          <div className="sandbox-card__warning">无 active runtime</div>
+          <div className="sandbox-card__warning">未连上运行时</div>
         )}
-        {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">Disk 仅配额</div>}
-        {showDetachedResidueTruth && <div className="sandbox-card__warning">Detached Residue</div>}
-        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">指标暂缺</div>}
+        {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">仅有磁盘配额</div>}
+        {showDetachedResidueTruth && <div className="sandbox-card__warning">历史残留</div>}
+        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">等待运行中的沙盒上报指标</div>}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
@@ -863,7 +863,7 @@ function SandboxInspector({
 
         {group.metrics && (
           <div className="sandbox-modal__section">
-            <h4>指标</h4>
+            <h4>实时指标</h4>
             <div className="sandbox-metric-grid">
               <MetricBlock label="CPU" value={formatMetric(group.metrics.cpu, "%")} />
               <MetricBlock
@@ -884,7 +884,7 @@ function SandboxInspector({
 
         <div className="sandbox-modal__section sandbox-modal__section--fill">
           <div className="sandbox-modal__section-header">
-            <h4>文件</h4>
+            <h4>工作区文件</h4>
             {group.leaseId ? (
               <Link className="sandbox-link" to={`/leases/${group.leaseId}`}>
                 {group.leaseId}
