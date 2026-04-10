@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from typing import Any
 
@@ -68,18 +67,6 @@ def _thread_ref(thread_id: str | None) -> dict[str, Any]:
     }
 
 
-def _lease_ref(
-    lease_id: str | None,
-    provider: str | None,
-    instance_id: str | None = None,
-) -> dict[str, Any]:
-    return {
-        "lease_id": lease_id,
-        "provider": provider,
-        "instance_id": instance_id,
-    }
-
-
 LEASE_SEMANTIC_ORDER = [
     "orphan_diverged",
     "diverged",
@@ -106,15 +93,6 @@ LEASE_SEMANTIC_META = {
     },
 }
 
-
-EVAL_NOTE_KEYS = [
-    "runner",
-    "rc",
-    "sandbox",
-    "run_dir",
-    "stdout_log",
-    "stderr_log",
-]
 
 LEASE_TRIAGE_ORDER = [
     "active_drift",
@@ -252,152 +230,6 @@ def _triage_category_for_row(row: dict[str, Any]) -> str:
         updated_at=row.get("updated_at"),
     )
     return str(triage["category"])
-
-
-def _extract_eval_note_value(notes: str, key: str) -> str | None:
-    match = re.search(rf"(?:^|[ |]){re.escape(key)}=([^ ]+)", notes)
-    if not match:
-        return None
-    return match.group(1).strip()
-
-
-def build_evaluation_operator_surface(
-    *,
-    status: str,
-    notes: str,
-    score: dict[str, Any],
-    threads_total: int,
-    threads_running: int,
-    threads_done: int,
-) -> dict[str, Any]:
-    extracted = {key: _extract_eval_note_value(notes, key) for key in EVAL_NOTE_KEYS}
-    rc_text = extracted.get("rc")
-    try:
-        rc = int(rc_text) if rc_text is not None else None
-    except ValueError:
-        rc = None
-
-    scored = bool(score.get("scored"))
-    score_gate = str(score.get("score_gate") or "provisional")
-    artifacts = [
-        {
-            "label": "Run directory",
-            "path": score.get("run_dir") or extracted.get("run_dir"),
-        },
-        {"label": "Run manifest", "path": score.get("manifest_path")},
-        {"label": "STDOUT log", "path": extracted.get("stdout_log")},
-        {"label": "STDERR log", "path": extracted.get("stderr_log")},
-        {"label": "Eval summary", "path": score.get("eval_summary_path")},
-        {"label": "Trace summaries", "path": score.get("trace_summaries_path")},
-    ]
-    artifacts = [
-        {
-            **item,
-            "status": "present" if item["path"] else "missing",
-        }
-        for item in artifacts
-    ]
-    artifact_summary = {
-        "present": sum(1 for item in artifacts if item["status"] == "present"),
-        "missing": sum(1 for item in artifacts if item["status"] == "missing"),
-        "total": len(artifacts),
-    }
-
-    facts = [
-        {"label": "Status", "value": status},
-        {"label": "Score gate", "value": score_gate},
-        {"label": "Threads materialized", "value": str(threads_total)},
-        {"label": "Threads running", "value": str(threads_running)},
-        {"label": "Threads done", "value": str(threads_done)},
-    ]
-    runner = extracted.get("runner")
-    if runner:
-        facts.append({"label": "Runner", "value": runner})
-    if rc is not None:
-        facts.append({"label": "Exit code", "value": str(rc)})
-
-    kind = "collecting_runtime_evidence"
-    tone = "default"
-    headline = "Evaluation is still collecting runtime evidence."
-    summary = "Use the artifacts below to inspect progress and confirm whether thread rows are materializing."
-    next_steps = [
-        "Open the run manifest to confirm the slice payload and output directory.",
-        "Inspect stdout/stderr before assuming the run is healthy.",
-    ]
-
-    if status == "provisional" and not scored:
-        kind = "provisional_waiting_for_summary"
-        tone = "warning"
-        headline = "Evaluation is provisional. Final score is blocked."
-        summary = "This run has not produced the final eval summary yet, so publishable scoring is intentionally withheld."
-        next_steps = [
-            "Check whether eval_summary_path is still missing because the run is ongoing or because the runner exited early.",
-            "Use stdout/stderr logs to confirm whether the solve phase actually started.",
-        ]
-
-    if rc is not None and rc != 0 and threads_total == 0:
-        kind = "bootstrap_failure"
-        tone = "danger"
-        headline = "Runner exited before evaluation threads materialized."
-        summary = "Treat this as a bootstrap failure, not as an empty successful run. No evaluation thread rows were created."
-        next_steps = [
-            "Inspect STDERR first to find the failing bootstrap step.",
-            "Use the run manifest and stdout log to confirm whether the slice was prepared before exit.",
-            "Re-run only after the failing dependency or model configuration is understood.",
-        ]
-    elif status == "running" and threads_total == 0 and threads_running > 0:
-        kind = "running_waiting_for_threads"
-        tone = "default"
-        headline = "Evaluation is actively running while thread rows catch up."
-        summary = (
-            "The runner is alive, but thread rows have not materialized yet. Treat this as an ingestion lag window, not as an empty run."
-        )
-        next_steps = [
-            "Refresh after the first thread row materializes.",
-            "Use stdout/stderr to confirm the solve loop is still advancing.",
-        ]
-    elif status == "running":
-        kind = "running_active"
-        tone = "default"
-        headline = "Evaluation is actively running."
-        summary = "Thread rows and traces may lag behind the runner. Use live progress and logs before declaring drift."
-        next_steps = [
-            "Refresh after new thread rows materialize.",
-            "Inspect traces only after the first active thread appears.",
-        ]
-    elif status == "completed_with_errors" and scored:
-        kind = "completed_with_errors"
-        tone = "warning"
-        headline = "Evaluation completed with recorded errors."
-        summary = (
-            "Some thread rows reached completion, but at least one instance recorded an error. Treat this as reviewable but not clean."
-        )
-        next_steps = [
-            "Inspect error-bearing threads before comparing this run against cleaner baselines.",
-            "Use eval summary and trace summaries to isolate failing instances.",
-        ]
-    elif status == "completed" and scored:
-        kind = "completed_publishable"
-        tone = "success"
-        headline = "Evaluation finished with a publishable score surface."
-        summary = "Score artifacts are present. Use the thread table to drill into trace-level evidence."
-        next_steps = [
-            "Open threads with low-quality traces and inspect tool-call detail.",
-            "Use the eval summary and trace summaries to compare runs.",
-        ]
-
-    return {
-        "status": status,
-        "kind": kind,
-        "tone": tone,
-        "headline": headline,
-        "summary": summary,
-        "facts": facts,
-        "artifacts": artifacts,
-        "artifact_summary": artifact_summary,
-        "next_steps": next_steps,
-        "raw_notes": notes,
-    }
 
 
 def _evaluation_no_runs_surface() -> dict[str, Any]:
