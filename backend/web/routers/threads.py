@@ -44,7 +44,7 @@ from backend.web.services.thread_launch_config_service import (
     save_last_successful_config,
 )
 from backend.web.services.thread_naming import sidebar_label
-from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime
+from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
@@ -742,10 +742,11 @@ async def list_threads(
 
     raw = app.state.thread_repo.list_by_owner_user_id(user_id)
     pool = app.state.agent_pool
+    runtime_states = summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
     threads = []
     for t in raw:
         tid = t["id"]
-        runtime_state = converge_owner_thread_runtime(app, tid)
+        runtime_state = runtime_states.get(tid) or converge_owner_thread_runtime(app, tid)
         if runtime_state in {"missing", "purged"}:
             continue
         if _is_internal_child_thread(tid):
