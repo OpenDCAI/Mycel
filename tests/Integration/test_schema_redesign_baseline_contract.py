@@ -120,6 +120,11 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
         lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), None),
         raising=False,
     )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "make_sandbox_monitor_repo",
+        lambda: SimpleNamespace(query_lease_instance_ids=lambda _lease_ids: {}, close=lambda: None),
+    )
 
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 

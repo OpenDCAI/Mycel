@@ -4,6 +4,7 @@ import pytest
 
 from backend.web.services import sandbox_service
 
+
 def _lease_row(
     lease_id: str,
     thread_id: str,
@@ -123,7 +124,7 @@ class _FakeUserRepo:
 
 
 @pytest.mark.parametrize(
-    ("rows", "thread_ids", "expected_thread_ids", "expected_agents"),
+    ("rows", "thread_ids", "expected_thread_ids", "expected_agents", "expected_recipe_id"),
     [
         (
             [
@@ -140,6 +141,7 @@ class _FakeUserRepo:
                     "avatar_url": "/api/users/agent-1/avatar",
                 }
             ],
+            "daytona:default",
         ),
         (
             [
@@ -162,11 +164,19 @@ class _FakeUserRepo:
                     "avatar_url": "/api/users/agent-1/avatar",
                 },
             ],
+            "local:default",
         ),
     ],
     ids=["hide-subagent-threads", "keep-distinct-visible-threads"],
 )
-def test_list_user_leases_visible_thread_contract(monkeypatch, rows, thread_ids, expected_thread_ids, expected_agents):
+def test_list_user_leases_visible_thread_contract(
+    monkeypatch,
+    rows,
+    thread_ids,
+    expected_thread_ids,
+    expected_agents,
+    expected_recipe_id,
+):
     thread_repo, user_repo = _single_agent_repos(*thread_ids)
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
@@ -182,7 +192,7 @@ def test_list_user_leases_visible_thread_contract(monkeypatch, rows, thread_ids,
     assert lease["lease_id"] == "lease-1"
     assert lease["thread_ids"] == expected_thread_ids
     assert lease["agents"] == expected_agents
-    _assert_daytona_recipe(lease)
+    assert lease["recipe_id"] == expected_recipe_id
 
 
 def test_list_user_leases_uses_owner_bulk_repo_surfaces(monkeypatch):
