@@ -180,7 +180,6 @@ export default function ResourcesPage() {
   const [providers, setProviders] = React.useState<ProviderInfo[]>([]);
   const [selectedId, setSelectedId] = React.useState("");
   const [summary, setSummary] = React.useState<ResourceOverviewResponse["summary"] | null>(null);
-  const [triage, setTriage] = React.useState<ResourceOverviewResponse["triage"] | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -188,7 +187,6 @@ export default function ResourcesPage() {
   const applyPayload = React.useCallback((payload: ResourceOverviewResponse) => {
     setProviders(payload.providers);
     setSummary(payload.summary);
-    setTriage(payload.triage ?? null);
     setSelectedId((previous) => {
       if (payload.providers.some((provider) => provider.id === previous)) {
         return previous;
@@ -356,9 +354,6 @@ export default function ResourcesPage() {
       }).length,
     0,
   );
-  const activeDriftCount = triage?.summary?.active_drift ?? 0;
-  const detachedResidueCount = triage?.summary?.detached_residue ?? 0;
-  const orphanCleanupCount = triage?.summary?.orphan_cleanup ?? 0;
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -427,15 +422,6 @@ export default function ResourcesPage() {
           )}
           {quotaOnlyRunningCount > 0 && (
             <div className="resources-summary-pill">{quotaOnlyRunningCount} 仅配额</div>
-          )}
-          {activeDriftCount > 0 && (
-            <div className="resources-summary-pill">{activeDriftCount} Active Drift</div>
-          )}
-          {detachedResidueCount > 0 && (
-            <div className="resources-summary-pill">{detachedResidueCount} Detached Residue</div>
-          )}
-          {orphanCleanupCount > 0 && (
-            <div className="resources-summary-pill">{orphanCleanupCount} Orphan Cleanup</div>
           )}
           <div className="resources-summary-pill">
             <span

@@ -3240,7 +3240,7 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByText("当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。")).toBeInTheDocument();
   });
 
-  it("surfaces detached residue in the resources summary strip", async () => {
+  it("keeps detached residue out of the resources summary strip", async () => {
     mockRoutePayloads({
       "/resources": {
         summary: {
@@ -3309,10 +3309,11 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("38 Detached Residue")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.queryByText("38 Detached Residue")).not.toBeInTheDocument();
   });
 
-  it("surfaces orphan cleanup in the resources summary strip", async () => {
+  it("keeps orphan cleanup out of the resources summary strip", async () => {
     mockRoutePayloads({
       "/resources": {
         summary: {
@@ -3363,10 +3364,11 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("3 Orphan Cleanup")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.queryByText("3 Orphan Cleanup")).not.toBeInTheDocument();
   });
 
-  it("surfaces active drift in the resources summary strip", async () => {
+  it("keeps active drift out of the resources summary strip", async () => {
     mockRoutePayloads({
       "/resources": {
         summary: {
@@ -3417,7 +3419,8 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("2 Active Drift")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.queryByText("2 Active Drift")).not.toBeInTheDocument();
   });
 
   it("surfaces detached residue in the provider detail overview", async () => {
