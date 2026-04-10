@@ -122,21 +122,37 @@ def _query_runtime_session_ids(repo: Any, lease_ids: list[str]) -> dict[str, str
     return query_lease_instance_ids(ordered_ids)
 
 
+def _load_runtime_session_ids(lease_ids: list[str]) -> dict[str, str | None]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        return _query_runtime_session_ids(repo, lease_ids)
+    finally:
+        repo.close()
+
+
+def _load_visible_resource_runtime() -> tuple[list[dict[str, Any]], dict[str, str | None], dict[str, dict[str, Any]]]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        sessions = _project_user_visible_resource_sessions(repo, repo.list_sessions_with_leases())
+        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
+    finally:
+        repo.close()
+
+    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
+    return sessions, runtime_session_ids, snapshot_by_lease
+
+
 def _backfill_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
     pending_leases = [lease for lease in leases if not str(lease.get("runtime_session_id") or "").strip()]
     if not pending_leases:
         return
 
-    repo = make_sandbox_monitor_repo()
-    try:
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(lease.get("lease_id") or "") for lease in pending_leases])
-        for lease in pending_leases:
-            lease_id = str(lease.get("lease_id") or "").strip()
-            runtime_session_id = runtime_session_ids.get(lease_id)
-            if runtime_session_id:
-                lease["runtime_session_id"] = runtime_session_id
-    finally:
-        repo.close()
+    runtime_session_ids = _load_runtime_session_ids([str(lease.get("lease_id") or "") for lease in pending_leases])
+    for lease in pending_leases:
+        lease_id = str(lease.get("lease_id") or "").strip()
+        runtime_session_id = runtime_session_ids.get(lease_id)
+        if runtime_session_id:
+            lease["runtime_session_id"] = runtime_session_id
 
 
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
@@ -247,13 +263,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
 
 
 def list_resource_providers() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        raw_sessions = repo.list_sessions_with_leases()
-        sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
-    finally:
-        repo.close()
+    sessions, runtime_session_ids, snapshot_by_lease = _load_visible_resource_runtime()
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for session in sessions:
@@ -261,7 +271,6 @@ def list_resource_providers() -> dict[str, Any]:
         grouped.setdefault(provider_instance, []).append(session)
 
     owners = _thread_owners([str(session["thread_id"]) for session in sessions if session.get("thread_id")])
-    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
 
     providers: list[dict[str, Any]] = []
     for item in available_sandbox_types():
@@ -364,15 +373,7 @@ def list_resource_providers() -> dict[str, Any]:
 
 
 def visible_resource_session_stats() -> dict[str, dict[str, int]]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        raw_sessions = repo.list_sessions_with_leases()
-        sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
-    finally:
-        repo.close()
-
-    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
+    sessions, runtime_session_ids, snapshot_by_lease = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_session_ids: set[str] = set()
     seen_running_leases: set[tuple[str, str]] = set()
