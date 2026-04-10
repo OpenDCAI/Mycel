@@ -175,6 +175,43 @@ def test_get_settings_route_merges_repo_backed_model_pool_over_filesystem_loader
     assert response.json()["providers"] == {"openai": {"api_key": "repo-key", "base_url": "https://repo.example"}}
 
 
+def test_get_available_models_route_prefers_repo_backed_model_pool(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {
+        "pool": {
+            "enabled": ["repo-custom"],
+            "custom": ["repo-custom"],
+            "custom_providers": {"repo-custom": "openai"},
+        }
+    }
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "load_merged_models",
+        lambda: SimpleNamespace(
+            pool=SimpleNamespace(enabled=["fs-custom"], custom=["fs-custom"]),
+            virtual_models=[],
+        ),
+    )
+    monkeypatch.setattr(settings_router, "load_models", lambda: {"pool": {"custom_providers": {"fs-custom": "anthropic"}}})
+    monkeypatch.setattr(
+        settings_router,
+        "_load_merged_models_for_storage",
+        lambda _storage: SimpleNamespace(
+            pool=SimpleNamespace(enabled=["repo-custom"], custom=["repo-custom"]),
+            virtual_models=[],
+        ),
+    )
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.get("/api/settings/available-models")
+
+    assert response.status_code == 200
+    model_ids = {item["id"] for item in response.json()["models"]}
+    assert "repo-custom" in model_ids
+    assert "fs-custom" not in model_ids
+
+
 @pytest.mark.asyncio
 async def test_get_observation_settings_keeps_loader_fallback_when_repo_row_missing(monkeypatch):
     req = _request(_FakeSettingsRepo())

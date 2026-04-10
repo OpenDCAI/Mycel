@@ -451,7 +451,7 @@ async def update_model_config(request: ModelConfigRequest, req: Request) -> dict
 
 
 @router.get("/available-models")
-async def get_available_models() -> dict[str, Any]:
+async def get_available_models(req: Request) -> dict[str, Any]:
     """Get all available models and virtual models from models.json."""
     models_file = Path(__file__).parent.parent.parent.parent / "core" / "runtime" / "middleware" / "monitor" / "models.json"
 
@@ -486,8 +486,9 @@ async def get_available_models() -> dict[str, Any]:
         pricing_ids = seen
 
         # Merge custom + orphaned enabled models
-        mc = load_merged_models()
-        data = load_models()
+        storage = _resolve_settings_storage(req)
+        mc = _load_merged_models_for_storage(storage)
+        data = _load_models_data(storage)
         custom_providers = data.get("pool", {}).get("custom_providers", {})
         extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - pricing_ids)
         for mid in sorted(extra_ids):
