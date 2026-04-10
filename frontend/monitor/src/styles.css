@@ -6,9 +6,7 @@
 
 body {
   font-family: "Instrument Sans", "Avenir Next", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(200, 226, 255, 0.45), transparent 28%),
-    linear-gradient(180deg, #f4f1e8 0%, #ece6d7 100%);
+  background: linear-gradient(180deg, #f4f1e8 0%, #ece6d7 100%);
   color: #221f1a;
   line-height: 1.6;
 }
