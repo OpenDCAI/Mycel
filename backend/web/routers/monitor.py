@@ -27,10 +27,6 @@ def _refresh_monitor_resources_sync():
     return refresh_monitor_resource_overview_sync()
 
 
-@router.get("/health")
-def health_snapshot():
-    return monitor_service.runtime_health_snapshot()
-
 @router.get("/leases")
 def leases_snapshot():
     return monitor_service.list_leases()

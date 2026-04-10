@@ -770,35 +770,6 @@ def cleanup_resource_leases(
 # ---------------------------------------------------------------------------
 
 
-def runtime_health_snapshot() -> dict[str, Any]:
-    """Control-plane health snapshot with batch session counts."""
-    db_payload = runtime_health_summary()["db"]
-    repo = make_runtime_health_monitor_repo()
-    try:
-        rows = repo.list_sessions_with_leases()
-    finally:
-        repo.close()
-
-    provider_counts: dict[str, int] = {}
-    seen_runtime_sessions: set[str] = set()
-    for row in rows:
-        lease_id = str(row.get("lease_id") or "").strip()
-        session_id = str(row.get("session_id") or "").strip()
-        thread_id = str(row.get("thread_id") or "").strip()
-        runtime_identity = lease_id or session_id or thread_id
-        if not runtime_identity or runtime_identity in seen_runtime_sessions:
-            continue
-        seen_runtime_sessions.add(runtime_identity)
-        provider = str(row.get("provider") or "unknown")
-        provider_counts[provider] = provider_counts.get(provider, 0) + 1
-
-    return {
-        "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "db": db_payload,
-        "sessions": {"total": len(seen_runtime_sessions), "providers": provider_counts},
-    }
-
-
 def runtime_health_summary() -> dict[str, Any]:
     """Lightweight control-plane health snapshot without provider session scan."""
     tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "events": 0}

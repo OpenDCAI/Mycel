@@ -6,20 +6,6 @@ from backend.web.routers import monitor, resources
 from backend.web.services import monitor_service, resource_service
 
 
-def _stub_monitor_health(monkeypatch):
-    payload = {
-        "snapshot_at": "2026-04-07T00:00:00Z",
-        "db": {
-            "strategy": "supabase",
-            "schema": "staging",
-            "counts": {"chat_sessions": 0, "sandbox_leases": 0, "events": 0},
-        },
-        "sessions": {"total": 0, "providers": {}},
-    }
-    monkeypatch.setattr(monitor.monitor_service, "runtime_health_snapshot", lambda: payload)
-    return payload
-
-
 def _stub_monitor_health_summary(monkeypatch):
     payload = {
         "snapshot_at": "2026-04-07T00:00:00Z",
@@ -205,30 +191,11 @@ def test_monitor_and_product_resource_routes_coexist_intentionally(monkeypatch):
     assert product_response.status_code == 200
 
 
-def test_monitor_health_route_smoke(monkeypatch):
-    _stub_monitor_health(monkeypatch)
-
-    with TestClient(_build_monitor_test_app()) as client:
-        response = client.get("/api/monitor/health")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert "snapshot_at" in payload
-    assert "db" in payload
-    assert "sessions" in payload
-
-
 def test_monitor_dashboard_route_smoke(monkeypatch):
     _stub_monitor_resource_snapshot(monkeypatch)
     _stub_monitor_health_summary(monkeypatch)
     _stub_monitor_leases(monkeypatch)
     _stub_monitor_evaluation_summary(monkeypatch)
-    monkeypatch.setattr(
-        monitor.monitor_service,
-        "runtime_health_snapshot",
-        lambda: (_ for _ in ()).throw(AssertionError("dashboard must not call runtime_health_snapshot")),
-    )
-
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/dashboard")
 
@@ -262,6 +229,7 @@ def test_monitor_leases_route_exposes_summary_and_groups(monkeypatch):
 
 def test_monitor_removed_forensic_routes_return_404():
     with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        health_response = client.get("/api/monitor/health")
         thread_response = client.get("/api/monitor/thread/thread-404")
         threads_response = client.get("/api/monitor/threads")
         lease_response = client.get("/api/monitor/lease/lease-404")
@@ -269,6 +237,7 @@ def test_monitor_removed_forensic_routes_return_404():
         events_response = client.get("/api/monitor/events", params={"limit": 25})
         event_response = client.get("/api/monitor/event/event-404")
 
+    assert health_response.status_code == 404
     assert thread_response.status_code == 404
     assert threads_response.status_code == 404
     assert lease_response.status_code == 404
