@@ -1,5 +1,15 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import {
+  Activity,
+  Camera,
+  Cpu,
+  FolderOpen,
+  Globe,
+  HardDrive,
+  Terminal,
+  Webhook,
+} from "lucide-react";
 
 import {
   browseMonitorSandbox,
@@ -22,6 +32,28 @@ const PROVIDER_TYPE_LABEL = {
   cloud: "云端",
   container: "容器",
 } as const;
+
+const CAPABILITY_LABELS: Record<keyof ProviderCapabilities, string> = {
+  filesystem: "文件",
+  terminal: "终端",
+  metrics: "指标",
+  screenshot: "截屏",
+  web: "Web",
+  process: "进程",
+  hooks: "Hook",
+  mount: "挂载",
+};
+
+const CAPABILITY_ICON_MAP: Record<keyof ProviderCapabilities, React.ElementType> = {
+  filesystem: FolderOpen,
+  terminal: Terminal,
+  metrics: Activity,
+  screenshot: Camera,
+  web: Globe,
+  process: Cpu,
+  hooks: Webhook,
+  mount: HardDrive,
+};
 
 const STATUS_LABEL = {
   active: "活跃",
@@ -699,17 +731,19 @@ function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabilities 
     <div className="provider-card__capability-strip">
       {keys.map((key) => {
         const enabled = capabilities[key];
+        const Icon = CAPABILITY_ICON_MAP[key];
         return (
           <span
             key={key}
             role="img"
             aria-label={`${key} ${enabled ? "enabled" : "unavailable"}`}
+            title={CAPABILITY_LABELS[key]}
             className={[
               "provider-capability-icon",
               enabled ? "provider-capability-icon--enabled" : "provider-capability-icon--disabled",
             ].join(" ")}
           >
-            <CapabilityGlyph kind={key} />
+            <Icon className="provider-capability-svg" aria-hidden="true" />
           </span>
         );
       })}
@@ -718,88 +752,6 @@ function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabilities 
       </span>
     </div>
   );
-}
-
-function CapabilityGlyph({ kind }: { kind: keyof ProviderCapabilities }) {
-  const common = {
-    viewBox: "0 0 16 16",
-    width: 12,
-    height: 12,
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.4,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
-
-  switch (kind) {
-    case "filesystem":
-      return (
-        <svg {...common}>
-          <path d="M2.5 5h4l1.4 1.6H13.5v5.9H2.5z" />
-          <path d="M2.5 5V3.8h3.2L7 5" />
-        </svg>
-      );
-    case "terminal":
-      return (
-        <svg {...common}>
-          <path d="M3 4.2 6 7 3 9.8" />
-          <path d="M7.8 10.2h5.2" />
-        </svg>
-      );
-    case "metrics":
-      return (
-        <svg {...common}>
-          <path d="M3 11.5V8.8" />
-          <path d="M8 11.5V5.8" />
-          <path d="M13 11.5V3.8" />
-        </svg>
-      );
-    case "screenshot":
-      return (
-        <svg {...common}>
-          <rect x="2.5" y="4.2" width="11" height="7.6" rx="1.4" />
-          <path d="M6 4.2 6.8 3h2.4l.8 1.2" />
-          <circle cx="8" cy="8" r="2" />
-        </svg>
-      );
-    case "web":
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="5.2" />
-          <path d="M2.8 8h10.4" />
-          <path d="M8 2.8c1.6 1.4 2.5 3.2 2.5 5.2S9.6 11.8 8 13.2C6.4 11.8 5.5 10 5.5 8s.9-3.8 2.5-5.2Z" />
-        </svg>
-      );
-    case "process":
-      return (
-        <svg {...common}>
-          <rect x="3" y="3.4" width="10" height="9.2" rx="1.4" />
-          <path d="M6 6.2h4" />
-          <path d="M6 9.4h4" />
-        </svg>
-      );
-    case "hooks":
-      return (
-        <svg {...common}>
-          <path d="M5 5.2a2 2 0 1 1 2-2" />
-          <path d="M11 10.8a2 2 0 1 1-2 2" />
-          <path d="M7 3.2v4.6a2.2 2.2 0 0 0 2.2 2.2H11" />
-        </svg>
-      );
-    case "mount":
-      return (
-        <svg {...common}>
-          <path d="M3 4.5h10" />
-          <path d="M4.2 7.2h7.6" />
-          <path d="M5.3 9.9h5.4" />
-          <path d="M6.4 12.6h3.2" />
-        </svg>
-      );
-    default:
-      return null;
-  }
 }
 
 function InlineMetric({ label, value }: { label: string; value: string }) {
