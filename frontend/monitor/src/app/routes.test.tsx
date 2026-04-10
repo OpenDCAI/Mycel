@@ -91,6 +91,18 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: /leases/i })).toHaveAttribute("aria-current", "page");
   });
 
+  it("lets the operator collapse the monitor sidebar", () => {
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+
+    expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
+  });
+
   it("renders dashboard as a switchboard surface", async () => {
     mockRoutePayloads({
       "/dashboard": {
@@ -996,7 +1008,7 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByRole("heading", { name: "Runtime runtime-1" })).toBeInTheDocument();
     expect(screen.getByText("Surface")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Resources" })).toHaveAttribute("href", "/resources");
+    expect(screen.getAllByRole("link", { name: "Resources" }).some((link) => link.getAttribute("href") === "/resources")).toBe(true);
 
     runtimeView.unmount();
 
@@ -1242,6 +1254,94 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
     expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
     expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
+  });
+
+  it("keeps provider cards provider-scoped and moves concrete metrics into sandbox detail", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "daytona",
+            name: "daytona",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: true,
+              process: false,
+              hooks: false,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+            sessions: [
+              {
+                id: "lease-1:thread-1",
+                leaseId: "lease-1",
+                runtimeSessionId: "runtime-1",
+                threadId: "thread-1",
+                agentName: "Planner",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 1.5,
+                  memory: 1,
+                  memoryLimit: 4,
+                  disk: 2,
+                  diskLimit: 10,
+                  networkIn: null,
+                  networkOut: null,
+                  webUrl: "https://sandbox.example/runtime-1",
+                },
+              },
+            ],
+          },
+        ],
+      },
+      "/sandbox/lease-1/browse?path=%2F": {
+        current_path: "/",
+        parent_path: null,
+        items: [],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    const providerCard = await screen.findByRole("button", { name: /daytona/i });
+    expect(within(providerCard).getByText("运行数")).toBeInTheDocument();
+    expect(within(providerCard).queryByText("CPU")).not.toBeInTheDocument();
+    expect(within(providerCard).queryByText("RAM")).not.toBeInTheDocument();
+    expect(within(providerCard).queryByText("Disk")).not.toBeInTheDocument();
+    expect(within(providerCard).queryByText("FS")).not.toBeInTheDocument();
+    expect(within(providerCard).getByLabelText("filesystem enabled")).toBeInTheDocument();
+    expect(within(providerCard).getByLabelText("terminal enabled")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: /planner/i }));
+
+    expect(await screen.findByText("指标")).toBeInTheDocument();
+    expect(screen.getByText("CPU")).toBeInTheDocument();
+    expect(screen.getByText("RAM")).toBeInTheDocument();
+    expect(screen.getByText("Disk")).toBeInTheDocument();
   });
 
   it("does not pretend a remote lease is browsable when runtime session binding is missing", async () => {
@@ -1567,7 +1667,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("2 实时指标未知")).toBeInTheDocument();
+    expect(await screen.findByText("2 暂无沙盒指标")).toBeInTheDocument();
   });
 
   it("uses live session rows as the provider-card running truth when telemetry count lags", async () => {
@@ -1789,7 +1889,15 @@ describe("MonitorRoutes", () => {
                 agentName: "Remote Agent",
                 status: "running",
                 startedAt: "2026-04-08T00:00:00Z",
-                metrics: null,
+                metrics: {
+                  cpu: 1.5,
+                  memory: null,
+                  memoryLimit: null,
+                  disk: null,
+                  diskLimit: null,
+                  networkIn: null,
+                  networkOut: null,
+                },
               },
             ],
           },
@@ -1804,11 +1912,20 @@ describe("MonitorRoutes", () => {
     );
 
     const providerCard = await screen.findByRole("button", { name: /daytona_selfhost/i });
-    expect(within(providerCard).getByText("CPU 沙盒级")).toBeInTheDocument();
+    expect(within(providerCard).queryByText("CPU 沙盒级")).not.toBeInTheDocument();
     expect(within(providerCard).queryByText("CPU")).not.toBeInTheDocument();
+    const sandboxCard = (await screen.findAllByRole("button", { name: /remote agent/i })).find((element) =>
+      element.className.includes("sandbox-card"),
+    );
+    if (!sandboxCard) {
+      throw new Error("Expected remote sandbox card");
+    }
+    fireEvent.click(sandboxCard);
+    expect(await screen.findByText("指标")).toBeInTheDocument();
+    expect(screen.getByText("CPU")).toBeInTheDocument();
   });
 
-  it("surfaces live memory and disk telemetry on the provider card when present", async () => {
+  it("keeps live memory and disk telemetry inside the sandbox detail when present", async () => {
     mockRoutePayloads({
       "/resources": {
         summary: {
@@ -1858,7 +1975,15 @@ describe("MonitorRoutes", () => {
                 agentName: "Remote Agent",
                 status: "running",
                 startedAt: "2026-04-08T00:00:00Z",
-                metrics: null,
+                metrics: {
+                  cpu: null,
+                  memory: 1,
+                  memoryLimit: 4,
+                  disk: 2,
+                  diskLimit: 10,
+                  networkIn: null,
+                  networkOut: null,
+                },
               },
             ],
           },
@@ -1873,10 +1998,20 @@ describe("MonitorRoutes", () => {
     );
 
     const providerCard = await screen.findByRole("button", { name: /daytona_selfhost/i });
-    expect(within(providerCard).getByText("RAM")).toBeInTheDocument();
-    expect(within(providerCard).getByText("Disk")).toBeInTheDocument();
-    expect(within(providerCard).getByText("1GB")).toBeInTheDocument();
-    expect(within(providerCard).getByText("2GB")).toBeInTheDocument();
+    expect(within(providerCard).queryByText("RAM")).not.toBeInTheDocument();
+    expect(within(providerCard).queryByText("Disk")).not.toBeInTheDocument();
+    const sandboxCard = (await screen.findAllByRole("button", { name: /remote agent/i })).find((element) =>
+      element.className.includes("sandbox-card"),
+    );
+    if (!sandboxCard) {
+      throw new Error("Expected remote sandbox card");
+    }
+    fireEvent.click(sandboxCard);
+    expect(await screen.findByText("指标")).toBeInTheDocument();
+    expect(screen.getByText("RAM")).toBeInTheDocument();
+    expect(screen.getByText("Disk")).toBeInTheDocument();
+    expect(screen.getByText("1GB")).toBeInTheDocument();
+    expect(screen.getByText("2GB")).toBeInTheDocument();
   });
 
   it("surfaces provider-card live usage coverage when only part of the running sandboxes report usage", async () => {
@@ -3908,9 +4043,9 @@ describe("MonitorRoutes", () => {
     );
 
     const providerCard = await screen.findByRole("button", { name: /agentbay/i });
-    expect(within(providerCard).getByText("实时指标暂缺")).toBeInTheDocument();
+    expect(within(providerCard).getByText("暂无沙盒指标")).toBeInTheDocument();
     fireEvent.click(providerCard);
-    expect(await screen.findByText("当前 provider 尚未接入实时指标，CPU / RAM / Disk 仍是未知状态。")).toBeInTheDocument();
+    expect(await screen.findByText("当前 provider 暂无可展示的 CPU / RAM / Disk 指标。")).toBeInTheDocument();
   });
 
   it("keeps detached residue out of the resources summary strip", async () => {

@@ -134,17 +134,11 @@ function initials(name: string): string {
     .slice(0, 2);
 }
 
-function capabilityTags(capabilities: ProviderCapabilities): string[] {
-  const labels: Array<[keyof ProviderCapabilities, string]> = [
-    ["filesystem", "FS"],
-    ["terminal", "TERM"],
-    ["metrics", "METRIC"],
-    ["web", "WEB"],
-    ["screenshot", "SHOT"],
-    ["mount", "MOUNT"],
-  ];
-  return labels.filter(([key]) => capabilities[key]).map(([, label]) => label);
-}
+const PROVIDER_TYPE_GLYPH = {
+  local: "◉",
+  cloud: "☁",
+  container: "▣",
+} as const;
 
 function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
   const map = new Map<string, ResourceSession[]>();
@@ -411,7 +405,7 @@ export default function ResourcesPage() {
             <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
           )}
           {readyWithoutLiveTelemetryCount > 0 && (
-            <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 实时指标未知</div>
+            <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 暂无沙盒指标</div>
           )}
           {quotaOnlyRunningCount > 0 && (
             <div className="resources-summary-pill">{quotaOnlyRunningCount} 仅配额</div>
@@ -511,19 +505,10 @@ function ProviderCard({
   const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
-  const capabilityList = capabilityTags(provider.capabilities);
-  const showCpuMetric = provider.cardCpu.used != null || provider.cardCpu.limit != null;
-  const showMemoryMetric = provider.telemetry.memory.used != null || provider.telemetry.memory.limit != null;
-  const showDiskMetric = provider.telemetry.disk.used != null || provider.telemetry.disk.limit != null;
   const runningMetric = {
     ...provider.telemetry.running,
     used: runningCount,
   };
-  const showSandboxLevelCpuTruth =
-    provider.type !== "local" &&
-    runningCount > 0 &&
-    !showCpuMetric &&
-    provider.cardCpu.error === "CPU usage is per-sandbox, not a provider-level quota.";
   const showTelemetryGapTruth =
     provider.type !== "local" &&
     provider.status === "ready" &&
@@ -545,12 +530,17 @@ function ProviderCard({
       ].join(" ")}
       onClick={onSelect}
     >
-      <div className="provider-card__header">
-        <div className="provider-card__title">
-          <span className={`provider-status-dot provider-status-dot--${provider.status}`} />
-          <span>{provider.name}</span>
-        </div>
-        <span className="provider-card__kind">{PROVIDER_TYPE_LABEL[provider.type]}</span>
+        <div className="provider-card__header">
+          <div className="provider-card__title">
+            <span className={`provider-status-dot provider-status-dot--${provider.status}`} />
+            <span>{provider.name}</span>
+          </div>
+        <span className="provider-card__kind">
+          <span className="provider-card__type-glyph" aria-hidden="true">
+            {PROVIDER_TYPE_GLYPH[provider.type]}
+          </span>
+          {PROVIDER_TYPE_LABEL[provider.type]}
+        </span>
       </div>
 
       {provider.status === "unavailable" ? (
@@ -563,9 +553,6 @@ function ProviderCard({
       ) : (
         <div className="provider-card__metric-row">
           <MetricOrb label="运行数" metric={runningMetric} />
-          {showCpuMetric && <MetricOrb label="CPU" metric={provider.cardCpu} />}
-          {showMemoryMetric && <MetricOrb label="RAM" metric={provider.telemetry.memory} />}
-          {showDiskMetric && <MetricOrb label="Disk" metric={provider.telemetry.disk} />}
         </div>
       )}
 
@@ -583,21 +570,10 @@ function ProviderCard({
       </div>
 
       {showTelemetryGapTruth && (
-        <div className="provider-card__truth">实时指标暂缺</div>
-      )}
-      {showSandboxLevelCpuTruth && (
-        <div className="provider-card__truth">CPU 沙盒级</div>
+        <div className="provider-card__truth">暂无沙盒指标</div>
       )}
 
-      {capabilityList.length > 0 && (
-        <div className="provider-card__capabilities">
-          {capabilityList.map((capability) => (
-            <span key={capability} className="provider-capability-chip">
-              {capability}
-            </span>
-          ))}
-        </div>
-      )}
+      <CapabilityStrip capabilities={provider.capabilities} />
     </button>
   );
 }
@@ -728,7 +704,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
             )}
             {showTelemetryGapBanner && (
               <div className="provider-warning-banner">
-                当前 provider 尚未接入实时指标，CPU / RAM / Disk 仍是未知状态。
+                当前 provider 暂无可展示的 CPU / RAM / Disk 指标。
               </div>
             )}
 
@@ -802,6 +778,111 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
       />
     </>
   );
+}
+
+function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabilities }) {
+  return (
+    <div className="provider-card__capability-strip">
+      {(Object.keys(capabilities) as Array<keyof ProviderCapabilities>).map((key) => {
+        const enabled = capabilities[key];
+        return (
+          <span
+            key={key}
+            role="img"
+            aria-label={`${key} ${enabled ? "enabled" : "unavailable"}`}
+            className={[
+              "provider-capability-icon",
+              enabled ? "provider-capability-icon--enabled" : "provider-capability-icon--disabled",
+            ].join(" ")}
+          >
+            <CapabilityGlyph kind={key} />
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function CapabilityGlyph({ kind }: { kind: keyof ProviderCapabilities }) {
+  const common = {
+    viewBox: "0 0 16 16",
+    width: 12,
+    height: 12,
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.4,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (kind) {
+    case "filesystem":
+      return (
+        <svg {...common}>
+          <path d="M2.5 5h4l1.4 1.6H13.5v5.9H2.5z" />
+          <path d="M2.5 5V3.8h3.2L7 5" />
+        </svg>
+      );
+    case "terminal":
+      return (
+        <svg {...common}>
+          <path d="M3 4.2 6 7 3 9.8" />
+          <path d="M7.8 10.2h5.2" />
+        </svg>
+      );
+    case "metrics":
+      return (
+        <svg {...common}>
+          <path d="M3 11.5V8.8" />
+          <path d="M8 11.5V5.8" />
+          <path d="M13 11.5V3.8" />
+        </svg>
+      );
+    case "screenshot":
+      return (
+        <svg {...common}>
+          <rect x="2.5" y="4.2" width="11" height="7.6" rx="1.4" />
+          <path d="M6 4.2 6.8 3h2.4l.8 1.2" />
+          <circle cx="8" cy="8" r="2" />
+        </svg>
+      );
+    case "web":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="5.2" />
+          <path d="M2.8 8h10.4" />
+          <path d="M8 2.8c1.6 1.4 2.5 3.2 2.5 5.2S9.6 11.8 8 13.2C6.4 11.8 5.5 10 5.5 8s.9-3.8 2.5-5.2Z" />
+        </svg>
+      );
+    case "process":
+      return (
+        <svg {...common}>
+          <rect x="3" y="3.4" width="10" height="9.2" rx="1.4" />
+          <path d="M6 6.2h4" />
+          <path d="M6 9.4h4" />
+        </svg>
+      );
+    case "hooks":
+      return (
+        <svg {...common}>
+          <path d="M5 5.2a2 2 0 1 1 2-2" />
+          <path d="M11 10.8a2 2 0 1 1-2 2" />
+          <path d="M7 3.2v4.6a2.2 2.2 0 0 0 2.2 2.2H11" />
+        </svg>
+      );
+    case "mount":
+      return (
+        <svg {...common}>
+          <path d="M3 4.5h10" />
+          <path d="M4.2 7.2h7.6" />
+          <path d="M5.3 9.9h5.4" />
+          <path d="M6.4 12.6h3.2" />
+        </svg>
+      );
+    default:
+      return null;
+  }
 }
 
 function InlineMetric({ label, value }: { label: string; value: string }) {
