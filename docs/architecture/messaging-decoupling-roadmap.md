@@ -8,17 +8,26 @@ This roadmap is intentionally scoped as a long-lived implementation lane, not a 
 
 Current campaign status:
 
-1. Slice 1 resolver baseline is landed on this lane via `6b8afffd`, introducing `messaging.display_user.resolve_messaging_display_user(...)` and cutting `MessagingService` over to the canonical resolver.
-2. The next bounded cut is also landed on this lane via `668894eb`, cutting `backend/web/routers/messaging.py` over to that same canonical resolver for its participant/display shell.
-3. The final follow-up `1c036453` is formatting-only and keeps the live PR green without widening scope.
+1. Slice 1 resolver baseline landed via `6b8afffd`, introducing `messaging.display_user.resolve_messaging_display_user(...)` and cutting `MessagingService` over to the canonical resolver.
+2. The router-side follow-up landed via `668894eb`, cutting `backend/web/routers/messaging.py` over to that same canonical resolver for its participant/display shell.
+3. Visit-chat summary ownership landed via `f6310f7d`, moving visit-chat summary assembly into `MessagingService.list_chats_for_user(...)`.
+4. Chat-detail ownership landed via `518598af`, making `MessagingService.get_chat_detail(...)` the canonical owner for visit-chat detail assembly.
+5. Tool facade cutover landed via `9a9e493e`, so `ChatToolService` no longer talks directly to chat-member/message repos for live messaging operations.
+6. `1c036453` is formatting-only and keeps the lane green without widening scope.
+
+Current mainline ruling:
+
+- This lane is no longer an active refactor campaign. The bounded slices above are landed on current mainline truth.
+- The lane is now parked, not in-progress-by-inertia.
+- Later branch-only follow-ups like `e230f275`, `c725e144`, `c4fc0d6b`, `c7ca7405`, `ee6374fd`, and `f8485886` are **not** part of current mainline truth and must not be treated as landed closure.
 
 Current parking rule:
 
-- `chat_tool_service.py` remains deferred
-- `backend/web/routers/conversations.py` remains deferred
+- later `chat_tool_service.py` ownership cleanup remains deferred
 - delivery policy changes remain deferred
 - frontend/sidebar work remains deferred
 - future slices still require explicit bounded assignment rather than inertia from this roadmap
+- if this lane is resumed, start from current mainline code, not from stale branch assumptions
 
 ## Why This Exists
 
@@ -31,34 +40,56 @@ The current codebase already treats `messaging/` as a bounded domain:
 
 But the ownership is still split across multiple surfaces.
 
-### Current split ownership
+### Original ownership split this lane was created to fix
 
 1. Canonical social/display resolution is duplicated.
 
 - `messaging/service.py` owns `_resolve_display_user()`
 - `messaging/tools/chat_tool_service.py` owns another `_resolve_display_user()`
-- `backend/web/routers/conversations.py` owns a third `_resolve_display_user()`
+- `backend/web/routers/messaging.py` used to own another resolver shell before `668894eb`
 
 2. Conversation read-model ownership is split.
 
-- `MessagingService.list_chats_for_user()` already assembles chat summaries
-- `backend/web/routers/conversations.py` rebuilds visit-chat title/avatar/unread data again
+- `MessagingService.list_chats_for_user()` already wanted to assemble chat summaries
+- `backend/web/routers/conversations.py` used to rebuild visit-chat title/avatar/unread data again before `f6310f7d`
 
 3. Runtime chat tools bypass the messaging domain.
 
 - `ChatToolService` consumes `MessagingService`
-- but also talks directly to chat-member/message/thread repos
+- but used to also talk directly to chat-member/message repos before `9a9e493e`
 
 4. The domain still depends on web presentation glue.
 
 - `messaging/service.py` imports `backend.web.utils.serializers.avatar_url`
 - so the top-level domain is still coupled to web serialization concerns
 
-These are not style issues. They are ownership failures: more than one live surface is acting like the source of truth.
+These are not style issues. They are ownership failures: more than one live surface was acting like the source of truth.
+
+### Current residual ownership split on mainline
+
+1. Canonical social/display resolution is still duplicated between:
+
+- `messaging/service.py`
+- `messaging/tools/chat_tool_service.py`
+
+2. Visit-chat summary ownership is no longer split.
+
+- `MessagingService.list_chats_for_user()` now owns visit-chat summary assembly
+- `backend/web/routers/conversations.py` only merges that visit projection with hire-thread rows
+
+3. Runtime chat tools no longer bypass message/chat-member storage repos directly.
+
+- `ChatToolService` now routes live messaging reads/sends/search through `MessagingService`
+- but it still keeps a local display-user bridge instead of fully delegating that identity shell
+
+4. The domain still depends on web presentation glue.
+
+- `messaging/service.py` still imports `backend.web.utils.serializers.avatar_url`
+- so the final domain/web boundary cleanup is still deferred
 
 ## Design Principles
 
-This roadmap follows the same principles recorded in [AGENTS.md](/Users/lexicalmathical/worktrees/leonai--messaging-decouple-placeholder/AGENTS.md) and mined from `Vibe-Skills`:
+This roadmap follows the same principles recorded in [AGENTS.md](../../AGENTS.md) and mined from `Vibe-Skills`:
 
 1. Single source of truth
 2. Ownership split and boundary clarity
@@ -96,13 +127,14 @@ It should not own message history storage queries, chat membership queries, or i
 
 Create one canonical resolver inside `messaging/` for `social_user_id -> display user`.
 
-Current lane status: partially landed.
+Current lane status: partially landed on mainline.
 
 This slice should delete duplicated resolver logic from:
 
 - `messaging/service.py` @ landed on this lane in `6b8afffd`
-- `messaging/tools/chat_tool_service.py`
-- `backend/web/routers/conversations.py`
+- `backend/web/routers/messaging.py` @ landed on this lane in `668894eb`
+- `messaging/tools/chat_tool_service.py` @ still deferred on current mainline
+- `backend/web/routers/conversations.py` @ not a direct owner of messaging display resolution on current mainline
 
 Stopline:
 
@@ -123,7 +155,7 @@ Make `MessagingService` the sole owner of visit-chat summary assembly:
 
 Then make `backend/web/routers/conversations.py` consume that projection instead of rebuilding it.
 
-Current lane status: not started. The smaller router participant/display shell cut in `668894eb` is intentionally earlier and narrower than this ownership surgery.
+Current lane status: landed on mainline via `f6310f7d`.
 
 Stopline:
 
@@ -135,10 +167,10 @@ Stopline:
 
 Narrow `ChatToolService` so it consumes a messaging facade instead of talking directly to:
 
-- chat-member repo
-- messages repo
-- thread repo
-- duplicated identity lookup
+- chat-member repo @ landed via `9a9e493e`
+- messages repo @ landed via `9a9e493e`
+- thread repo @ still partially retained for local display-user bridging
+- duplicated identity lookup @ still partially retained on current mainline
 
 Stopline:
 
@@ -149,6 +181,8 @@ Stopline:
 ### Slice 4: Domain/web boundary cleanup
 
 After the above slices land, remove residual web-specific serialization leakage from `messaging/`, especially direct dependence on `backend.web.utils.serializers.avatar_url`.
+
+Current lane status: not started on mainline.
 
 Stopline:
 
@@ -178,14 +212,11 @@ Do not justify the refactor with helper-only tests that merely prove delegation.
 
 ## Current File Hotspots
 
-- [service.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/messaging/service.py#L58)
-- [service.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/messaging/service.py#L170)
-- [chat_tool_service.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/messaging/tools/chat_tool_service.py#L111)
-- [chat_tool_service.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/messaging/tools/chat_tool_service.py#L143)
-- [chat_tool_service.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/messaging/tools/chat_tool_service.py#L215)
-- [conversations.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/backend/web/routers/conversations.py#L25)
-- [conversations.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/backend/web/routers/conversations.py#L97)
-- [lifespan.py](/Users/lexicalmathical/worktrees/leonai--dev-feature/backend/web/core/lifespan.py#L82)
+- [messaging/service.py](../../messaging/service.py)
+- [messaging/tools/chat_tool_service.py](../../messaging/tools/chat_tool_service.py)
+- [backend/web/routers/messaging.py](../../backend/web/routers/messaging.py)
+- [backend/web/routers/conversations.py](../../backend/web/routers/conversations.py)
+- [backend/web/core/lifespan.py](../../backend/web/core/lifespan.py)
 
 ## Placeholder PR Contract
 
@@ -207,3 +238,28 @@ This branch is no longer a pure docs-only shell. It is now a bounded implementat
 - no opportunistic tests or cleanup hitchhiking
 - no parallel “helper roadmap” or scratchpad documents inside the repo
 - future implementation still resumes only when the principal assigns a different bounded cut
+
+## Current Truth Snapshot
+
+This roadmap should be read as a parked checkpoint ledger, not as an active TODO list.
+
+What is already true on current mainline:
+
+- `MessagingService` owns canonical messaging display-user resolution.
+- `backend/web/routers/messaging.py` uses that canonical resolver instead of a router-local duplicate.
+- `MessagingService.list_chats_for_user(...)` owns visit-chat summary assembly consumed by `backend/web/routers/conversations.py`.
+- `MessagingService.get_chat_detail(...)` owns visit-chat detail assembly.
+- `ChatToolService` routes live messaging reads/sends/search through `MessagingService` instead of direct chat/message repo calls.
+
+What is intentionally still not true on current mainline:
+
+- `ChatToolService` still keeps a local `_resolve_display_user(...)` bridge.
+- `messaging/service.py` still imports `avatar_url` from web serialization glue.
+- delivery policy redesign is not part of this lane.
+- frontend/sidebar work is not part of this lane.
+
+If memory is lost later, the correct reading is:
+
+- this lane produced bounded ownership cuts and then parked cleanly
+- it is not waiting on a hidden “final sweep”
+- any future resume must start from the residuals listed above, not from stale branch names or placeholder wording
