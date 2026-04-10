@@ -1,7 +1,7 @@
 import React from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { postMonitorData, useMonitorData } from "../app/fetch";
+import { fetchAPI, postMonitorData, type MonitorFetchError, useMonitorData } from "../app/fetch";
 import ErrorState from "../components/ErrorState";
 import StateBadge from "../components/StateBadge";
 
@@ -84,6 +84,7 @@ const CLEANUP_STATUS_CLASS_BY_STATUS: Record<string, string> = {
 export default function LeaseDetailPage() {
   const params = useParams<{ leaseId: string }>();
   const leaseId = params.leaseId ?? "";
+  const navigate = useNavigate();
   const { data, error } = useMonitorData<LeaseDetailPayload>(`/leases/${leaseId}`);
   const [leaseData, setLeaseData] = React.useState<LeaseDetailPayload | null>(null);
   const [cleanupMessage, setCleanupMessage] = React.useState<string | null>(null);
@@ -123,33 +124,21 @@ export default function LeaseDetailPage() {
     try {
       const result = await postMonitorData<LeaseCleanupActionPayload>(`/leases/${leaseId}/cleanup`);
       setCleanupMessage(result.message ?? null);
-      setLeaseData((current) => {
-        if (!current) return current;
-        const nextOperation = result.operation
-          ? {
-              operation_id: result.operation.operation_id ?? null,
-              kind: result.operation.kind ?? null,
-              status: result.operation.status ?? null,
-              summary: result.operation.summary ?? result.message ?? null,
-            }
-          : null;
-        const nextRecent = nextOperation
-          ? [
-              nextOperation,
-              ...(current.cleanup?.recent_operations ?? []).filter(
-                (item) => item.operation_id !== nextOperation.operation_id,
-              ),
-            ]
-          : current.cleanup?.recent_operations ?? [];
-        return {
-          ...current,
-          cleanup: {
-            ...current.cleanup,
-            operation: nextOperation,
-            recent_operations: nextRecent,
-          },
-        };
-      });
+      if (result.accepted && result.operation?.status === "succeeded" && result.operation.operation_id) {
+        navigate(`/operations/${result.operation.operation_id}`);
+        return;
+      }
+      try {
+        const refreshed = await fetchAPI<LeaseDetailPayload>(`/leases/${leaseId}`);
+        setLeaseData(refreshed);
+      } catch (err: unknown) {
+        const fetchError = err as MonitorFetchError;
+        if (fetchError?.status === 404 && result.operation?.operation_id) {
+          navigate(`/operations/${result.operation.operation_id}`);
+          return;
+        }
+        throw err;
+      }
     } finally {
       setCleanupPending(false);
     }

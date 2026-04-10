@@ -651,67 +651,76 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "thread-1" })).toHaveAttribute("href", "/threads/thread-1");
   });
 
-  it("renders a lease cleanup panel with action and operation history", async () => {
+  it("redirects to operation detail when cleanup removes the lease", async () => {
+    let leaseDetailReads = 0;
+
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : String(input.url);
       const method =
         init?.method ?? (typeof input === "object" && input !== null && "method" in input ? String(input.method) : "GET");
 
       if (url.endsWith("/leases/lease-1") && method === "GET") {
-        return new Response(
-          JSON.stringify({
-            lease: {
-              lease_id: "lease-1",
-              provider_name: "daytona",
-              desired_state: "running",
-              observed_state: "detached",
-              updated_at: "2026-04-08T00:00:00Z",
-              updated_ago: "1m ago",
-              last_error: null,
-              badge: {
-                color: "yellow",
-                observed: "detached",
-                desired: "running",
-                text: "detached -> running",
+        leaseDetailReads += 1;
+        if (leaseDetailReads === 1) {
+          return new Response(
+            JSON.stringify({
+              lease: {
+                lease_id: "lease-1",
+                provider_name: "daytona",
+                desired_state: "running",
+                observed_state: "detached",
+                updated_at: "2026-04-08T00:00:00Z",
+                updated_ago: "1m ago",
+                last_error: null,
+                badge: {
+                  color: "yellow",
+                  observed: "detached",
+                  desired: "running",
+                  text: "detached -> running",
+                },
               },
-            },
-            triage: {
-              category: "orphan_cleanup",
-              title: "Orphan Cleanup",
-              description: "Lease lost its active thread binding.",
-              tone: "warning",
-            },
-            provider: {
-              id: "daytona",
-              name: "daytona",
-            },
-            runtime: {
-              runtime_session_id: "runtime-1",
-            },
-            threads: [],
-            sessions: [],
-            cleanup: {
-              allowed: true,
-              recommended_action: "lease_cleanup",
-              reason: "Lease is orphan cleanup residue and can enter managed cleanup.",
-              operation: {
-                operation_id: "op-1",
-                kind: "lease_cleanup",
-                status: "running",
-                summary: "Destroy flow started",
+              triage: {
+                category: "orphan_cleanup",
+                title: "Orphan Cleanup",
+                description: "Lease lost its active thread binding.",
+                tone: "warning",
               },
-              recent_operations: [
-                {
+              provider: {
+                id: "daytona",
+                name: "daytona",
+              },
+              runtime: {
+                runtime_session_id: "runtime-1",
+              },
+              threads: [],
+              sessions: [],
+              cleanup: {
+                allowed: true,
+                recommended_action: "lease_cleanup",
+                reason: "Lease is orphan cleanup residue and can enter managed cleanup.",
+                operation: {
                   operation_id: "op-1",
                   kind: "lease_cleanup",
                   status: "running",
                   summary: "Destroy flow started",
                 },
-              ],
-            },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
+                recent_operations: [
+                  {
+                    operation_id: "op-1",
+                    kind: "lease_cleanup",
+                    status: "running",
+                    summary: "Destroy flow started",
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ detail: "Lease lease-1 not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       if (url.endsWith("/leases/lease-1/cleanup") && method === "POST") {
@@ -731,6 +740,39 @@ describe("MonitorRoutes", () => {
               lease_id: "lease-1",
               triage_category: "orphan_cleanup",
             },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/operations/op-2") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            operation: {
+              operation_id: "op-2",
+              kind: "lease_cleanup",
+              status: "succeeded",
+              summary: "Lease cleanup completed.",
+              reason: "Lease is orphan cleanup residue and can enter managed cleanup.",
+            },
+            target: {
+              target_type: "lease",
+              target_id: "lease-1",
+              provider_id: "daytona",
+              runtime_session_id: "runtime-1",
+              thread_ids: [],
+            },
+            result_truth: {
+              lease_state_before: "detached",
+              lease_state_after: null,
+              runtime_state_after: null,
+              thread_state_after: null,
+            },
+            events: [
+              { at: "2026-04-10T10:00:00Z", status: "pending", message: "Cleanup queued" },
+              { at: "2026-04-10T10:00:05Z", status: "running", message: "Destroy flow started" },
+              { at: "2026-04-10T10:00:06Z", status: "succeeded", message: "Lease cleanup completed." },
+            ],
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -758,8 +800,9 @@ describe("MonitorRoutes", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start lease cleanup" }));
 
-    expect(await screen.findByText("Lease cleanup completed.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "op-2" })).toHaveAttribute("href", "/operations/op-2");
+    expect(await screen.findByRole("heading", { name: "Operation op-2" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Lease lease-1" })).not.toBeInTheDocument();
+    expect(screen.getByText("Lease cleanup completed.")).toBeInTheDocument();
   });
 
   it("renders operation detail under the leases surface", async () => {
