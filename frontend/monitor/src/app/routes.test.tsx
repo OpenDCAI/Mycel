@@ -277,6 +277,53 @@ describe("MonitorRoutes", () => {
     expect(screen.getAllByText("thread-1").length).toBeGreaterThan(0);
   });
 
+  it("keeps lease detail description focused on triage prose instead of repeating provider and state", async () => {
+    mockRoutePayloads({
+      "/leases/lease-1": {
+        lease: {
+          lease_id: "lease-1",
+          provider_name: "daytona",
+          desired_state: "running",
+          observed_state: "running",
+          updated_at: "2026-04-08T00:00:00Z",
+          updated_ago: "1m ago",
+          last_error: null,
+          badge: {
+            color: "green",
+            observed: "running",
+            desired: "running",
+            text: "running",
+          },
+        },
+        triage: {
+          category: "healthy_capacity",
+          title: "Healthy Capacity",
+          description: "Lease is converged and ready.",
+          tone: "success",
+        },
+        provider: {
+          id: "daytona",
+          name: "daytona",
+        },
+        runtime: {
+          runtime_session_id: "runtime-1",
+        },
+        threads: [{ thread_id: "thread-1" }],
+        sessions: [{ chat_session_id: "session-1", thread_id: "thread-1", status: "active" }],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases/lease-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
+    expect(screen.getByText("Lease is converged and ready.")).toBeInTheDocument();
+    expect(screen.queryByText("Provider daytona · observed running · desired running")).not.toBeInTheDocument();
+  });
+
   it("links lease relations into the hidden detail routes", async () => {
     mockRoutePayloads({
       "/leases/lease-1": {

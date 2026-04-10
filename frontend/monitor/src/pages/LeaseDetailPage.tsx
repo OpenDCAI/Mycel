@@ -52,10 +52,7 @@ export default function LeaseDetailPage() {
   return (
     <div className="page">
       <h1>{`Lease ${data.lease.lease_id}`}</h1>
-      <p className="description">
-        Provider {data.provider?.name ?? data.lease.provider_name ?? "-"} · observed {data.lease.observed_state ?? "-"} · desired{" "}
-        {data.lease.desired_state ?? "-"}
-      </p>
+      <p className="description">{data.triage?.description ?? "Lease operator truth"}</p>
       <section className="surface-section">
         <h2>Operator Truth</h2>
         <div className="surface-grid">
