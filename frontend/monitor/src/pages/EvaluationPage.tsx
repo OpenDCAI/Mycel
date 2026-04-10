@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import ErrorState from "../components/ErrorState";
 import { useMonitorData } from "../app/fetch";
 
@@ -6,6 +8,17 @@ type EvaluationPayload = {
   kind?: string | null;
   headline?: string | null;
   summary?: string | null;
+  source?: {
+    kind?: string | null;
+    label?: string | null;
+  } | null;
+  subject?: {
+    thread_id?: string | null;
+    run_id?: string | null;
+    user_message?: string | null;
+    started_at?: string | null;
+    finished_at?: string | null;
+  } | null;
   facts?: Array<{ label?: string | null; value?: string | null }>;
   artifacts?: Array<{ label?: string | null; path?: string | null; status?: string | null }>;
   artifact_summary?: {
@@ -13,7 +26,7 @@ type EvaluationPayload = {
     missing?: number | null;
     total?: number | null;
   } | null;
-  next_steps?: string[] | null;
+  limitations?: string[] | null;
   raw_notes?: string | null;
 };
 
@@ -23,10 +36,12 @@ export default function EvaluationPage() {
   if (error) return <ErrorState title="Evaluation" error={error} />;
   if (!data) return <div>Loading...</div>;
 
+  const source = data.source ?? {};
+  const subject = data.subject ?? {};
   const facts = data.facts ?? [];
   const artifacts = data.artifacts ?? [];
   const summary = data.artifact_summary ?? {};
-  const nextSteps = data.next_steps ?? [];
+  const limitations = data.limitations ?? [];
   const hasArtifactSignal = artifacts.length > 0 || (summary.total ?? 0) > 0;
 
   return (
@@ -44,6 +59,35 @@ export default function EvaluationPage() {
             <p className="surface-card__eyebrow">Kind</p>
             <p className="surface-card__value">{data.kind ?? "-"}</p>
           </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Source</p>
+            <p className="surface-card__value">{source.label ?? "-"}</p>
+          </article>
+        </div>
+      </section>
+      <section className="surface-section">
+        <h2>Run Subject</h2>
+        <div className="info-grid">
+          <div>
+            <strong>Thread</strong>
+            {subject.thread_id ? <Link to={`/threads/${subject.thread_id}`}>{subject.thread_id}</Link> : <span>-</span>}
+          </div>
+          <div>
+            <strong>Run ID</strong>
+            <span className="mono">{subject.run_id ?? "-"}</span>
+          </div>
+          <div>
+            <strong>Started At</strong>
+            <span>{subject.started_at ?? "-"}</span>
+          </div>
+          <div>
+            <strong>Finished At</strong>
+            <span>{subject.finished_at ?? "-"}</span>
+          </div>
+          <div>
+            <strong>User Message</strong>
+            <span>{subject.user_message ?? "-"}</span>
+          </div>
         </div>
       </section>
       <section className="surface-section">
@@ -109,14 +153,16 @@ export default function EvaluationPage() {
           </table>
         </section>
       ) : null}
-      <section className="surface-section">
-        <h2>Next Steps</h2>
-        <ol className="surface-list">
-          {nextSteps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </section>
+      {limitations.length > 0 ? (
+        <section className="surface-section">
+          <h2>Truth Boundary</h2>
+          <ul className="surface-list">
+            {limitations.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {data.raw_notes ? (
         <section className="surface-section">
           <h2>Raw Notes</h2>

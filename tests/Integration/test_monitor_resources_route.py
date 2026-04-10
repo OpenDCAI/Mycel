@@ -475,10 +475,12 @@ def test_monitor_evaluation_route_exposes_operator_truth(monkeypatch):
             "tone": "warning",
             "headline": "Evaluation operator truth is not wired in this runtime yet.",
             "summary": "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
+            "source": {"kind": "unavailable", "label": "Unavailable"},
+            "subject": {"thread_id": None, "run_id": None, "user_message": None},
             "facts": [{"label": "Status", "value": "unavailable"}],
             "artifacts": [],
             "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-            "next_steps": ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
+            "limitations": ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
             "raw_notes": None,
         },
     )
@@ -491,6 +493,8 @@ def test_monitor_evaluation_route_exposes_operator_truth(monkeypatch):
     assert payload["status"] == "unavailable"
     assert payload["kind"] == "unavailable"
     assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
+    assert payload["source"] == {"kind": "unavailable", "label": "Unavailable"}
+    assert payload["subject"] == {"thread_id": None, "run_id": None, "user_message": None}
     assert payload["artifact_summary"] == {"present": 0, "missing": 0, "total": 0}
 
 
@@ -535,6 +539,17 @@ def test_monitor_evaluation_route_exposes_latest_persisted_run(monkeypatch):
     assert evaluation_payload["status"] == "completed"
     assert evaluation_payload["kind"] == "completed_recorded"
     assert evaluation_payload["headline"] == "Latest persisted evaluation run completed successfully."
+    assert evaluation_payload["source"] == {
+        "kind": "persisted_latest_run",
+        "label": "Latest Persisted Run",
+    }
+    assert evaluation_payload["subject"] == {
+        "thread_id": "thread-eval",
+        "run_id": "run-1",
+        "user_message": "solve the eval task",
+        "started_at": "2026-04-08T00:00:00Z",
+        "finished_at": "2026-04-08T00:03:00Z",
+    }
     assert dashboard_response.status_code == 200
     dashboard_payload = dashboard_response.json()
     assert dashboard_payload["workload"]["evaluations_running"] == 0

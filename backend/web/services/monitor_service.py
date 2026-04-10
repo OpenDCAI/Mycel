@@ -256,10 +256,24 @@ def _evaluation_no_runs_surface() -> dict[str, Any]:
         "tone": "default",
         "headline": "No persisted evaluation runs are available yet.",
         "summary": "Evaluation storage is wired, but there are no recorded runs to report yet.",
+        "source": {
+            "kind": "unavailable",
+            "label": "Unavailable",
+        },
+        "subject": {
+            "thread_id": None,
+            "run_id": None,
+            "user_message": None,
+            "started_at": None,
+            "finished_at": None,
+        },
         "facts": [{"label": "Status", "value": "idle"}],
         "artifacts": [],
         "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "next_steps": ["Run an evaluation to populate the operator surface with persisted runtime truth."],
+        "limitations": [
+            "This page is showing the latest persisted evaluation run, not a live event stream.",
+            "Run an evaluation to populate the operator surface with persisted runtime truth.",
+        ],
         "raw_notes": None,
     }
 
@@ -336,12 +350,23 @@ def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[
             "Monitor is reading the latest persisted eval run from eval_runs/eval_metrics. "
             "Legacy manifest, artifact, and thread-materialization detail are not wired in this slice."
         ),
+        "source": {
+            "kind": "persisted_latest_run",
+            "label": "Latest Persisted Run",
+        },
+        "subject": {
+            "thread_id": str(run.get("thread_id") or "") or None,
+            "run_id": str(run.get("id") or "") or None,
+            "user_message": user_message or None,
+            "started_at": str(run.get("started_at") or "") or None,
+            "finished_at": str(run.get("finished_at") or "") or None,
+        },
         "facts": facts,
         "artifacts": [],
         "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "next_steps": [
-            "Use the persisted run and metric facts here as the current source of truth.",
-            "Restore richer artifact and thread drilldown in later evaluation runtime slices if still needed.",
+        "limitations": [
+            "This page is showing the latest persisted evaluation run, not a live event stream.",
+            "Legacy manifest, artifact, and thread-materialization detail are not wired in this slice.",
         ],
         "raw_notes": None,
     }

@@ -1112,6 +1112,17 @@ describe("MonitorRoutes", () => {
         tone: "default",
         headline: "No persisted evaluation runs are available yet.",
         summary: "Evaluation storage is wired, but there are no recorded runs to report yet.",
+        source: {
+          kind: "persisted_latest_run",
+          label: "Latest Persisted Run",
+        },
+        subject: {
+          thread_id: "thread-eval",
+          run_id: "run-1",
+          user_message: "leave a hello note",
+          started_at: "2026-04-08T00:00:00Z",
+          finished_at: "2026-04-08T00:03:00Z",
+        },
         facts: [{ label: "Status", value: "idle" }],
         artifacts: [],
         artifact_summary: {
@@ -1119,7 +1130,7 @@ describe("MonitorRoutes", () => {
           missing: 0,
           total: 0,
         },
-        next_steps: ["Run an evaluation to populate the operator surface with persisted runtime truth."],
+        limitations: ["This page is showing the latest persisted evaluation run, not a live event stream."],
         raw_notes: null,
       },
     });
@@ -1133,9 +1144,12 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("No persisted evaluation runs are available yet.")).toBeInTheDocument();
+    expect(screen.getByText("Latest Persisted Run")).toBeInTheDocument();
+    expect(screen.getByText("Run Subject")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "thread-eval" })).toHaveAttribute("href", "/threads/thread-eval");
     expect(screen.getByText("Operator Facts")).toBeInTheDocument();
-    expect(screen.getByText("Next Steps")).toBeInTheDocument();
-    expect(screen.getByText("Run an evaluation to populate the operator surface with persisted runtime truth.")).toBeInTheDocument();
+    expect(screen.getByText("Truth Boundary")).toBeInTheDocument();
+    expect(screen.getByText("This page is showing the latest persisted evaluation run, not a live event stream.")).toBeInTheDocument();
     expect(screen.queryByText("Artifact Coverage")).not.toBeInTheDocument();
     expect(screen.queryByText("Artifacts")).not.toBeInTheDocument();
   });
