@@ -211,8 +211,6 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
             if agent_ref:
                 refs[tid] = agent_ref
         return refs
-    except Exception:
-        return {}
     finally:
         if own_repo:
             repo.close()
@@ -234,8 +232,6 @@ def member_meta_map(user_repo: Any = None) -> dict[str, dict[str, str | None]]:
             for user in users
             if user.id and user.display_name
         }
-    except Exception:
-        return {}
     finally:
         if own_repo:
             repo.close()

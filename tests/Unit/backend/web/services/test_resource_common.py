@@ -74,6 +74,46 @@ def test_thread_owners_prefers_batch_thread_lookup() -> None:
     }
 
 
+def test_thread_owners_fails_loudly_when_thread_repo_breaks() -> None:
+    class _BrokenThreadRepo:
+        def list_by_ids(self, _thread_ids: list[str]):
+            raise RuntimeError("thread repo offline")
+
+        def close(self):
+            pass
+
+    try:
+        resource_common.thread_owners(
+            ["thread-1"],
+            thread_repo=_BrokenThreadRepo(),
+            user_repo=_FakeUserRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "thread repo offline"
+    else:
+        raise AssertionError("expected thread repo failure to propagate")
+
+
+def test_thread_owners_fails_loudly_when_user_repo_breaks() -> None:
+    class _BrokenUserRepo:
+        def list_all(self):
+            raise RuntimeError("user repo offline")
+
+        def close(self):
+            pass
+
+    try:
+        resource_common.thread_owners(
+            ["thread-1"],
+            thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
+            user_repo=_BrokenUserRepo(),
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "user repo offline"
+    else:
+        raise AssertionError("expected user repo failure to propagate")
+
+
 def test_metric_adds_error_only_when_present():
     assert resource_common.metric(1, 2, "%", "api", "live") == {
         "used": 1,
