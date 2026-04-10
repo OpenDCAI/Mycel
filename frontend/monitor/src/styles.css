@@ -1128,6 +1128,33 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin-bottom: 0.85rem;
 }
 
+.provider-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.provider-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 252, 245, 0.92);
+  color: #5c5145;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.provider-filter-chip--active {
+  border-color: rgba(143, 93, 47, 0.35);
+  background: rgba(255, 247, 230, 0.96);
+  color: #6f421b;
+}
+
 .sandbox-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

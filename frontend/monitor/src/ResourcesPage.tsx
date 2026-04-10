@@ -475,7 +475,28 @@ function MetricOrb({ label, metric }: { label: string; metric: UsageMetric }) {
 
 function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
+  const [statusFilter, setStatusFilter] = React.useState<LeaseGroup["status"] | "all">("all");
   const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
+  const filteredGroups = React.useMemo(
+    () => (statusFilter === "all" ? groups : groups.filter((group) => group.status === statusFilter)),
+    [groups, statusFilter],
+  );
+  const groupCounts = React.useMemo(
+    () =>
+      groups.reduce(
+        (counts, group) => {
+          counts[group.status] += 1;
+          return counts;
+        },
+        {
+          running: 0,
+          paused: 0,
+          stopped: 0,
+          destroying: 0,
+        } satisfies Record<LeaseGroup["status"], number>,
+      ),
+    [groups],
+  );
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
   const detachedResidueCount = provider.sessions.filter(
     (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
@@ -488,6 +509,10 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const isLocal = provider.type === "local";
   const showUnavailableBanner = provider.status === "unavailable";
   const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
+
+  React.useEffect(() => {
+    setStatusFilter("all");
+  }, [provider.id]);
 
   return (
     <>
@@ -549,13 +574,77 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
             <div className="provider-section">
               <div className="provider-section__header">
                 <h3>沙盒</h3>
-                <span>{groups.length} 组</span>
+                <span>{filteredGroups.length} / {groups.length} 组</span>
               </div>
+              {groups.length > 0 && (
+                <div className="provider-filter-row" role="group" aria-label="Sandbox status filters">
+                  <button
+                    type="button"
+                    className={[
+                      "provider-filter-chip",
+                      statusFilter === "all" ? "provider-filter-chip--active" : "",
+                    ].join(" ")}
+                    onClick={() => setStatusFilter("all")}
+                  >
+                    全部 {groups.length}
+                  </button>
+                  {groupCounts.running > 0 && (
+                    <button
+                      type="button"
+                      className={[
+                        "provider-filter-chip",
+                        statusFilter === "running" ? "provider-filter-chip--active" : "",
+                      ].join(" ")}
+                      onClick={() => setStatusFilter("running")}
+                    >
+                      运行中 {groupCounts.running}
+                    </button>
+                  )}
+                  {groupCounts.paused > 0 && (
+                    <button
+                      type="button"
+                      className={[
+                        "provider-filter-chip",
+                        statusFilter === "paused" ? "provider-filter-chip--active" : "",
+                      ].join(" ")}
+                      onClick={() => setStatusFilter("paused")}
+                    >
+                      已暂停 {groupCounts.paused}
+                    </button>
+                  )}
+                  {groupCounts.stopped > 0 && (
+                    <button
+                      type="button"
+                      className={[
+                        "provider-filter-chip",
+                        statusFilter === "stopped" ? "provider-filter-chip--active" : "",
+                      ].join(" ")}
+                      onClick={() => setStatusFilter("stopped")}
+                    >
+                      已结束 {groupCounts.stopped}
+                    </button>
+                  )}
+                  {groupCounts.destroying > 0 && (
+                    <button
+                      type="button"
+                      className={[
+                        "provider-filter-chip",
+                        statusFilter === "destroying" ? "provider-filter-chip--active" : "",
+                      ].join(" ")}
+                      onClick={() => setStatusFilter("destroying")}
+                    >
+                      销毁中 {groupCounts.destroying}
+                    </button>
+                  )}
+                </div>
+              )}
               {groups.length === 0 ? (
                 <p className="provider-empty-state">暂无沙盒</p>
+              ) : filteredGroups.length === 0 ? (
+                <p className="provider-empty-state">当前筛选下暂无沙盒</p>
               ) : (
                 <div className="sandbox-grid">
-                  {groups.map((group) => (
+                  {filteredGroups.map((group) => (
                     <SandboxCard
                       key={group.leaseId || group.sessions.map((session) => session.id).join("|")}
                       group={group}
