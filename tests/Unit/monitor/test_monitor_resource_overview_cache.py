@@ -57,7 +57,7 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
     assert cached["triage"]["groups"][0]["key"] == "detached_residue"
 
 
-def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatch):
+def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypatch):
     cache.clear_resource_overview_cache()
     monkeypatch.setattr(
         cache.resource_projection_service,
@@ -90,11 +90,23 @@ def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatc
         raise RuntimeError("probe failed")
 
     monkeypatch.setattr(cache.resource_projection_service, "list_resource_providers", _raise)
-    degraded = cache.refresh_resource_overview_sync()
-    assert degraded["providers"][0]["id"] == "docker"
-    assert degraded["summary"]["refresh_status"] == "error"
-    assert degraded["summary"]["refresh_error"] == "probe failed"
-    assert degraded["triage"]["groups"][0]["key"] == "orphan_cleanup"
+    try:
+        cache.refresh_resource_overview_sync()
+    except RuntimeError as exc:
+        assert str(exc) == "probe failed"
+    else:
+        raise AssertionError("refresh_resource_overview_sync should fail loudly")
+
+    monkeypatch.setattr(
+        cache.resource_projection_service,
+        "visible_resource_session_stats",
+        lambda: {"docker": {"sessions": 0, "running": 0}},
+    )
+    cached = cache.get_resource_overview_snapshot()
+    assert cached["providers"][0]["id"] == "docker"
+    assert cached["summary"]["refresh_status"] == "ok"
+    assert cached["summary"]["refresh_error"] is None
+    assert cached["triage"]["groups"][0]["key"] == "orphan_cleanup"
 
 
 def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkeypatch):

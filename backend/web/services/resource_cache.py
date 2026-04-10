@@ -27,6 +27,7 @@ def clear_resource_overview_cache() -> None:
         global _snapshot_cache
         _snapshot_cache = None
 
+
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -102,30 +103,16 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     """Refresh cached overview snapshot and return latest payload."""
     global _snapshot_cache
     started = time.perf_counter()
-    try:
-        payload = resource_projection_service.list_resource_providers()
-        payload = _attach_monitor_triage(payload)
-        _validate_resource_overview_payload(payload)
-        duration_ms = (time.perf_counter() - started) * 1000
-        payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
-        with _snapshot_lock:
-            _snapshot_cache = copy.deepcopy(payload)
-        return payload
-    except Exception as exc:
-        if isinstance(exc, ResourceOverviewContractError):
-            # @@@resource-contract-fails-loudly - bad product DTOs must 500 immediately instead of
-            # serving stale cached cards that hide the backend contract break from the app frontend.
-            raise
-        duration_ms = (time.perf_counter() - started) * 1000
-        error = str(exc)
-        with _snapshot_lock:
-            cached = copy.deepcopy(_snapshot_cache)
-        if cached is None:
-            raise
-        degraded = _with_refresh_metadata(cached, duration_ms=duration_ms, status="error", error=error)
-        with _snapshot_lock:
-            _snapshot_cache = copy.deepcopy(degraded)
-        return degraded
+    payload = resource_projection_service.list_resource_providers()
+    payload = _attach_monitor_triage(payload)
+    _validate_resource_overview_payload(payload)
+    duration_ms = (time.perf_counter() - started) * 1000
+    payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
+    with _snapshot_lock:
+        _snapshot_cache = copy.deepcopy(payload)
+    return payload
+
+
 def get_resource_overview_snapshot() -> dict[str, Any]:
     """Return cached snapshot; perform one synchronous refresh on cold start."""
     with _snapshot_lock:
@@ -140,6 +127,7 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
         return cached
     # @@@cold-start-cache-fill - route fallback fills cache once to keep first call deterministic.
     return refresh_resource_overview_sync()
+
 
 async def resource_overview_refresh_loop() -> None:
     """Continuously refresh resource overview snapshot."""
