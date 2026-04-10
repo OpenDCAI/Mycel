@@ -509,6 +509,29 @@ def mutate_sandbox_session(
     }
 
 
+def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any]:
+    """Destroy a lease through the manager-owned lease state machine."""
+    _, managers = init_providers_and_managers()
+    manager = managers.get(provider_name)
+    if manager is None:
+        raise RuntimeError(f"Provider manager unavailable: {provider_name}")
+
+    lease = manager.get_lease(lease_id)
+    if lease is None:
+        raise RuntimeError(f"Lease not found: {lease_id}")
+
+    # @@@lease-destroy-seam - detached residue may have no visible live session,
+    # so cleanup must target the lease state machine directly rather than session lookup.
+    lease.destroy_instance(manager.provider, source="api")
+    return {
+        "ok": True,
+        "action": "destroy",
+        "lease_id": lease_id,
+        "provider": provider_name,
+        "mode": "manager_lease",
+    }
+
+
 def get_session_metrics(session_id: str, provider_hint: str | None = None) -> dict[str, Any]:
     """Load one session's provider metrics through the current manager inventory."""
     _, managers = init_providers_and_managers()

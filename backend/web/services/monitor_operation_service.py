@@ -159,15 +159,15 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     )
     _append_event(operation, status="running", message="Destroy flow started")
 
-    from backend.web.services.sandbox_service import mutate_sandbox_session
+    from backend.web.services.sandbox_service import destroy_sandbox_lease
 
     try:
-        result = mutate_sandbox_session(session_id=runtime_session_id, action="destroy", provider_hint=provider_name)
+        result = destroy_sandbox_lease(lease_id=lease_id, provider_name=provider_name)
     except Exception as exc:
         operation["result_truth"] = {
             "lease_state_before": lease.get("observed_state"),
             "lease_state_after": lease.get("observed_state"),
-            "runtime_state_after": runtime_session_id or None,
+            "runtime_state_after": str(runtime.get("runtime_session_id") or "").strip() or None,
             "thread_state_after": thread_ids or None,
         }
         _append_event(operation, status="failed", message=str(exc))

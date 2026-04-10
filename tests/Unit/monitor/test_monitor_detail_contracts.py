@@ -153,6 +153,58 @@ def test_get_monitor_lease_detail_allows_detached_residue_cleanup_without_active
     }
 
 
+def test_request_monitor_lease_cleanup_uses_lease_destroy_for_detached_residue(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    class FakeRepo:
+        def query_lease(self, lease_id):
+            return {
+                "lease_id": lease_id,
+                "provider_name": "daytona",
+                "desired_state": "running",
+                "observed_state": "detached",
+                "updated_at": "2026-04-08T00:00:00Z",
+                "current_instance_id": None,
+                "last_error": None,
+            }
+
+        def query_lease_threads(self, lease_id):
+            return [{"thread_id": "thread-historical"}]
+
+        def query_lease_sessions(self, lease_id):
+            return []
+
+        def query_lease_instance_id(self, lease_id):
+            return "runtime-1"
+
+        def close(self):
+            return None
+
+    def _destroy_sandbox_lease(*, lease_id: str, provider_name: str):
+        calls.append((lease_id, provider_name))
+        return {
+            "ok": True,
+            "action": "destroy",
+            "lease_id": lease_id,
+            "provider": provider_name,
+            "mode": "manager_lease",
+        }
+
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        _destroy_sandbox_lease,
+        raising=False,
+    )
+
+    payload = monitor_service.request_monitor_lease_cleanup("lease-1")
+
+    assert payload["accepted"] is True
+    assert payload["message"] == "Lease cleanup completed."
+    assert payload["operation"]["kind"] == "lease_cleanup"
+    assert calls == [("lease-1", "daytona")]
+
+
 def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):
     class FakeRepo:
         def query_lease(self, lease_id):
