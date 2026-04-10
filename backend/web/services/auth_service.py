@@ -274,8 +274,7 @@ class AuthService:
                 try:
                     from backend.web.routers.entities import process_and_save_avatar
 
-                    avatar_path = process_and_save_avatar(src_avatar, agent_id)
-                    self._users.update(agent_id, avatar=avatar_path, updated_at=now)
+                    process_and_save_avatar(src_avatar, agent_id)
                 except Exception as e:
                     logger.warning("Avatar copy failed for %s: %s", agent_def["name"], e)
             if i == 0:

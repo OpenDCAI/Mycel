@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.web.routers import entities as entities_router
+from backend.web.utils import serializers
 
 
 class _FakeUploadFile:
@@ -69,6 +70,16 @@ def test_avatar_mutation_routes_use_user_id_path_param():
     assert ("/api/users/{user_id}/avatar", ("PUT",)) in route_paths
     assert ("/api/users/{user_id}/avatar", ("DELETE",)) in route_paths
     assert all(not path.startswith("/api/members/") for path, _methods in route_paths)
+
+
+def test_avatar_url_uses_local_file_truth_when_db_avatar_is_null(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    avatar_dir = tmp_path / "avatars"
+    avatar_dir.mkdir()
+    (avatar_dir / "agent-1.png").write_bytes(b"png")
+    monkeypatch.setattr(serializers, "avatars_dir", lambda: avatar_dir)
+
+    assert serializers.avatar_url("agent-1", False) == "/api/users/agent-1/avatar"
+    assert serializers.avatar_url("agent-2", False) is None
 
 
 @pytest.mark.asyncio
@@ -137,4 +148,5 @@ async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
     assert seen[1] == ("save", (b"png-bytes", "agent-1"))
     assert seen[2][0] == "update"
     assert seen[2][1][0] == "agent-1"
-    assert seen[2][1][1]["avatar"] == "avatars/agent-1.png"
+    assert "avatar" not in seen[2][1][1]
+    assert seen[2][1][1]["updated_at"] == pytest.approx(seen[2][1][1]["updated_at"], rel=0, abs=5)

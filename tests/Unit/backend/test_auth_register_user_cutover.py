@@ -31,6 +31,7 @@ class _FakeUserRepo:
     def __init__(self) -> None:
         self.rows: dict[str, UserRow] = {}
         self.created: list[UserRow] = []
+        self.updated: list[tuple[str, dict[str, object]]] = []
 
     def create(self, row: UserRow) -> None:
         self.created.append(row)
@@ -43,6 +44,7 @@ class _FakeUserRepo:
         return [row for row in self.rows.values() if row.owner_user_id == owner_user_id]
 
     def update(self, user_id: str, **fields) -> None:
+        self.updated.append((user_id, fields))
         row = self.rows[user_id]
         self.rows[user_id] = row.model_copy(update=fields)
 
@@ -98,6 +100,7 @@ def test_complete_register_creates_human_and_owned_agent_users(monkeypatch: pyte
     assert all(agent.agent_config_id for agent in owned_agents)
     assert [saved[0] for saved in agent_config_repo.saved] == [agent.agent_config_id for agent in owned_agents]
     assert [saved[1]["agent_user_id"] for saved in agent_config_repo.saved] == [agent.id for agent in owned_agents]
+    assert user_repo.updated == []
     assert invite_codes.used == [("invite-1", "user-1")]
 
 

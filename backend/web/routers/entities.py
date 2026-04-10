@@ -118,11 +118,11 @@ async def upload_avatar(
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(400, f"File too large (max {MAX_UPLOAD_BYTES // 1024 // 1024}MB)")
     try:
-        avatar_path = process_and_save_avatar(data, user_id)
+        process_and_save_avatar(data, user_id)
     except Exception as e:
         logger.error(f"Avatar processing failed for {user_id}: {e}")
         raise HTTPException(400, f"Invalid image: {e}")
-    repo.update(user_id, avatar=avatar_path, updated_at=time.time())
+    repo.update(user_id, updated_at=time.time())
     return {"status": "ok", "avatar": f"avatars/{user_id}.png"}
 
 
