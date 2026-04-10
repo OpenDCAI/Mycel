@@ -392,13 +392,6 @@ export default function ResourcesPage() {
   return (
     <div className="page resources-shell">
       <header className="resources-hero">
-        <div>
-          <p className="resources-eyebrow">Global Resource Surface</p>
-          <h1>Resources</h1>
-          <p className="resources-hero-copy">
-            沿用旧资源页的卡片式布局，但直接接到 monitor 的全局资源面。这里看 provider 级概览，再下钻到 lease/sandbox。
-          </p>
-        </div>
         <div className="resources-summary-strip">
           <div className="resources-summary-pill">
             <span className="resources-summary-dot resources-summary-dot--ok" />
@@ -412,13 +405,13 @@ export default function ResourcesPage() {
             <div className="resources-summary-pill">{runtimeUnboundUsageCount} 无 runtime有用量</div>
           )}
           {missingLiveTelemetryRunningCount > 0 && (
-            <div className="resources-summary-pill">{missingLiveTelemetryRunningCount} 无 live telemetry</div>
+            <div className="resources-summary-pill">{missingLiveTelemetryRunningCount} 指标缺失</div>
           )}
           {runtimeUnboundRunningCount > 0 && (
             <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
           )}
           {readyWithoutLiveTelemetryCount > 0 && (
-            <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 遥测未知</div>
+            <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 实时指标未知</div>
           )}
           {quotaOnlyRunningCount > 0 && (
             <div className="resources-summary-pill">{quotaOnlyRunningCount} 仅配额</div>
@@ -579,8 +572,8 @@ function ProviderCard({
       <div className="provider-card__footer">
         <span>{runningCount} 占用中</span>
         {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && <span>{liveUsageRunningCount} 有用量</span>}
-        {missingLiveTelemetryRunningCount > 0 && <span>{missingLiveTelemetryRunningCount} 无 live telemetry</span>}
-        {runtimeBoundTelemetryGapCount > 0 && <span>{runtimeBoundTelemetryGapCount} 有 runtime无遥测</span>}
+        {missingLiveTelemetryRunningCount > 0 && <span>{missingLiveTelemetryRunningCount} 指标缺失</span>}
+        {runtimeBoundTelemetryGapCount > 0 && <span>{runtimeBoundTelemetryGapCount} 有 runtime 但无指标</span>}
         {runtimeUnboundUsageCount > 0 && <span>{runtimeUnboundUsageCount} 无 runtime有用量</span>}
         {quotaOnlyRunningCount > 0 && <span>{quotaOnlyRunningCount} 仅配额</span>}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
@@ -590,7 +583,7 @@ function ProviderCard({
       </div>
 
       {showTelemetryGapTruth && (
-        <div className="provider-card__truth">暂无 live telemetry</div>
+        <div className="provider-card__truth">实时指标暂缺</div>
       )}
       {showSandboxLevelCpuTruth && (
         <div className="provider-card__truth">CPU 沙盒级</div>
@@ -735,7 +728,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
             )}
             {showTelemetryGapBanner && (
               <div className="provider-warning-banner">
-                当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。
+                当前 provider 尚未接入实时指标，CPU / RAM / Disk 仍是未知状态。
               </div>
             )}
 
@@ -747,7 +740,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                     <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
                   )}
                   {missingLiveTelemetryRunningCount > 0 && (
-                    <InlineMetric label="无 live telemetry" value={String(missingLiveTelemetryRunningCount)} />
+                    <InlineMetric label="指标缺失" value={String(missingLiveTelemetryRunningCount)} />
                   )}
                   {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
                   <InlineMetric label="CPU" value={formatMetricRange(provider.cardCpu)} />
@@ -761,10 +754,10 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                     <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
                   )}
                   {missingLiveTelemetryRunningCount > 0 && (
-                    <InlineMetric label="无 live telemetry" value={String(missingLiveTelemetryRunningCount)} />
+                    <InlineMetric label="指标缺失" value={String(missingLiveTelemetryRunningCount)} />
                   )}
                   {runtimeBoundTelemetryGapCount > 0 && (
-                    <InlineMetric label="有 runtime无遥测" value={String(runtimeBoundTelemetryGapCount)} />
+                    <InlineMetric label="有 runtime 但无指标" value={String(runtimeBoundTelemetryGapCount)} />
                   )}
                   {runtimeUnboundUsageCount > 0 && (
                     <InlineMetric label="无 runtime有用量" value={String(runtimeUnboundUsageCount)} />
@@ -780,7 +773,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
 
             <div className="provider-section">
               <div className="provider-section__header">
-                <h3>Sandboxes</h3>
+                <h3>沙盒</h3>
                 <span>{groups.length} 组</span>
               </div>
               {groups.length === 0 ? (
@@ -889,7 +882,7 @@ function SandboxCard({
         )}
         {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">Disk 仅配额</div>}
         {showDetachedResidueTruth && <div className="sandbox-card__warning">Detached Residue</div>}
-        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">无 live telemetry</div>}
+        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">指标缺失</div>}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
@@ -952,7 +945,7 @@ function SandboxInspector({
         </div>
 
         <div className="sandbox-modal__section">
-          <h4>Agent</h4>
+            <h4>成员</h4>
           <div className="sandbox-session-list">
             {group.sessions.map((session) => (
               <div key={session.id} className="sandbox-session-row">

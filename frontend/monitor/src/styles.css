@@ -446,41 +446,21 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .resources-hero {
   display: flex;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: 1.5rem 1.75rem;
-  border: 1px solid #2a2a2a;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 18px;
-  background:
-    radial-gradient(circle at top right, rgba(74, 158, 255, 0.18), transparent 26%),
-    linear-gradient(180deg, rgba(28, 30, 35, 0.96), rgba(16, 17, 20, 0.98));
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
-}
-
-.resources-eyebrow {
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #7c8aa5;
-}
-
-.resources-hero h1 {
-  margin-bottom: 0.5rem;
-}
-
-.resources-hero-copy {
-  max-width: 780px;
-  color: #aab2c4;
+  background: rgba(255, 252, 245, 0.88);
+  box-shadow: 0 14px 34px rgba(82, 59, 27, 0.06);
 }
 
 .resources-summary-strip {
   display: flex;
   flex-wrap: wrap;
-  align-content: flex-start;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: flex-start;
   gap: 0.75rem;
-  min-width: 300px;
 }
 
 .resources-summary-pill,
@@ -488,10 +468,10 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-capability-chip,
 .provider-detail__meta a,
 .resources-action-button {
-  border: 1px solid #323743;
+  border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 999px;
-  background: rgba(22, 24, 30, 0.88);
-  color: #eaf0ff;
+  background: rgba(255, 252, 245, 0.92);
+  color: #392d22;
 }
 
 .resources-summary-pill,
@@ -665,10 +645,10 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-detail-card,
 .sandbox-card,
 .resources-error-card {
-  border: 1px solid #2a2f3b;
+  border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(21, 23, 28, 0.98), rgba(13, 14, 18, 0.98));
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
+  background: rgba(255, 252, 245, 0.9);
+  box-shadow: 0 12px 30px rgba(82, 59, 27, 0.06);
 }
 
 .provider-card {
@@ -681,17 +661,17 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .provider-card:hover {
   transform: translateY(-1px);
-  border-color: #4a9eff55;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  border-color: rgba(146, 88, 45, 0.26);
+  box-shadow: 0 16px 34px rgba(82, 59, 27, 0.09);
 }
 
 .provider-card--selected {
-  border-color: #4a9eff;
-  box-shadow: 0 0 0 1px rgba(74, 158, 255, 0.4), 0 18px 38px rgba(0, 0, 0, 0.3);
+  border-color: rgba(146, 88, 45, 0.45);
+  box-shadow: 0 0 0 1px rgba(146, 88, 45, 0.18), 0 18px 38px rgba(82, 59, 27, 0.1);
 }
 
 .provider-card--unavailable {
-  border-color: #5a2a2a;
+  border-color: rgba(187, 62, 46, 0.28);
 }
 
 .provider-card__header,
@@ -719,7 +699,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .sandbox-modal__eyebrow,
 .sandbox-card__thread,
 .sandbox-card__lease {
-  color: #8f98aa;
+  color: #776a5b;
   font-size: 0.78rem;
 }
 
@@ -738,13 +718,13 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin: 1rem 0 0.9rem;
   padding: 0.9rem 0.8rem;
   border-radius: 16px;
-  border: 1px solid rgba(249, 112, 102, 0.18);
-  background: rgba(249, 112, 102, 0.08);
+  border: 1px solid rgba(187, 62, 46, 0.18);
+  background: rgba(187, 62, 46, 0.06);
   text-align: center;
 }
 
 .provider-card__unavailable-label {
-  color: #ffd4cf;
+  color: #bb3e2e;
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -752,7 +732,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .provider-card__unavailable-reason {
-  color: #c3cad7;
+  color: #5c5145;
   font-size: 0.75rem;
   line-height: 1.45;
 }
@@ -769,8 +749,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   height: 3.4rem;
   margin: 0 auto;
   border-radius: 999px;
-  border: 1px solid #3b4252;
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  background: rgba(255, 248, 235, 0.88);
   font-weight: 700;
   font-family: "SF Mono", Monaco, monospace;
 }
@@ -783,7 +763,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-empty-state,
 .file-browser__empty,
 .file-browser__note {
-  color: #8f98aa;
+  color: #776a5b;
 }
 
 .metric-orb__label {
@@ -811,7 +791,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-card__footer,
 .provider-card__capabilities {
   font-size: 0.76rem;
-  color: #8f98aa;
+  color: #776a5b;
 }
 
 .provider-card__capabilities {
@@ -821,7 +801,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-card__truth {
   margin-top: 0.8rem;
   font-size: 0.76rem;
-  color: #f4cf83;
+  color: #92582d;
 }
 
 .provider-capability-chip {
@@ -853,23 +833,23 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .provider-detail__status--active {
-  background: rgba(50, 213, 131, 0.16);
-  color: #7be1a6;
+  background: rgba(35, 124, 74, 0.12);
+  color: #1e7d4b;
 }
 
 .provider-detail__status--ready {
-  background: rgba(120, 128, 143, 0.16);
-  color: #b5bdcc;
+  background: rgba(114, 102, 88, 0.12);
+  color: #5c5145;
 }
 
 .provider-detail__status--unavailable {
-  background: rgba(249, 112, 102, 0.16);
-  color: #ff8c83;
+  background: rgba(187, 62, 46, 0.12);
+  color: #bb3e2e;
 }
 
 .provider-detail__description {
   margin-top: 0.45rem;
-  color: #aab2c4;
+  color: #5c5145;
 }
 
 .provider-detail__meta {
@@ -894,7 +874,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-warning-banner {
   border: 1px solid rgba(245, 185, 66, 0.3);
   background: rgba(245, 185, 66, 0.08);
-  color: #f4cf83;
+  color: #92582d;
 }
 
 .provider-unavailable-panel {
@@ -960,8 +940,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .sandbox-card:hover {
   transform: translateY(-1px);
-  border-color: #4a9eff55;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  border-color: rgba(146, 88, 45, 0.26);
+  box-shadow: 0 16px 34px rgba(82, 59, 27, 0.09);
 }
 
 .sandbox-card--running {
@@ -992,7 +972,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   border: 1px solid rgba(245, 185, 66, 0.32);
   border-radius: 999px;
   background: rgba(245, 185, 66, 0.08);
-  color: #f4cf83;
+  color: #92582d;
   font-size: 0.68rem;
   letter-spacing: 0.04em;
 }
@@ -1017,9 +997,9 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   height: 1.7rem;
   margin-left: -0.35rem;
   border-radius: 999px;
-  border: 2px solid #15171c;
-  background: linear-gradient(180deg, #3a4250, #252a34);
-  color: #eaf0ff;
+  border: 2px solid rgba(255, 252, 245, 0.9);
+  background: linear-gradient(180deg, #e6d7bf, #d8c5a4);
+  color: #392d22;
   font-size: 0.65rem;
   font-weight: 700;
   overflow: hidden;
@@ -1037,8 +1017,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .sandbox-avatar--count {
-  background: #222733;
-  color: #9ea8bd;
+  background: #e9dfcf;
+  color: #776a5b;
 }
 
 .sandbox-avatar--lg {
@@ -1062,7 +1042,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .sandbox-card__metrics {
   margin-top: 0.7rem;
   font-size: 0.78rem;
-  color: #b8c2d5;
+  color: #5c5145;
 }
 
 .sandbox-card__lease {
@@ -1076,8 +1056,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   display: flex;
   justify-content: flex-end;
   padding: 0;
-  background: rgba(0, 0, 0, 0.74);
-  backdrop-filter: blur(6px);
+  background: rgba(57, 45, 34, 0.18);
+  backdrop-filter: blur(4px);
   z-index: 50;
 }
 
@@ -1088,19 +1068,19 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   flex-direction: column;
   overflow: hidden;
   padding: 0;
-  border-left: 1px solid #2c3340;
+  border-left: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 0;
-  background: linear-gradient(180deg, rgba(20, 22, 27, 0.98), rgba(12, 13, 17, 0.98));
-  box-shadow: -20px 0 64px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, rgba(255, 252, 245, 0.98), rgba(248, 243, 233, 0.98));
+  box-shadow: -20px 0 64px rgba(82, 59, 27, 0.12);
 }
 
 .sandbox-modal__close,
 .file-browser__item,
 .file-browser__pathbar button {
-  border: 1px solid #323743;
+  border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 12px;
-  background: rgba(24, 27, 34, 0.92);
-  color: #eaf0ff;
+  background: rgba(255, 252, 245, 0.92);
+  color: #30271d;
 }
 
 .sandbox-modal__close,
@@ -1122,8 +1102,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   align-items: center;
   padding: 0.8rem 0.95rem;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid #2c3340;
+  background: rgba(255, 248, 235, 0.72);
+  border: 1px solid rgba(81, 59, 29, 0.12);
 }
 
 .sandbox-session-row__name {
@@ -1131,13 +1111,13 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .sandbox-session-row__status {
-  color: #8f98aa;
+  color: #776a5b;
   font-size: 0.78rem;
   flex-shrink: 0;
 }
 
 .sandbox-link {
-  color: #74b0ff;
+  color: #92582d;
   text-decoration: none;
 }
 
@@ -1153,8 +1133,8 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   min-width: 150px;
   padding: 0.8rem 0.9rem;
   border-radius: 14px;
-  border: 1px solid #2c3340;
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  background: rgba(255, 248, 235, 0.72);
 }
 
 .sandbox-metric-block__label {
@@ -1170,13 +1150,13 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .sandbox-metric-block__sub {
-  color: #8f98aa;
+  color: #776a5b;
   font-weight: 400;
 }
 
 .sandbox-metric-block__note {
   margin-top: 0.45rem;
-  color: #8f98aa;
+  color: #776a5b;
   font-size: 0.72rem;
   line-height: 1.45;
 }
@@ -1189,9 +1169,9 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .file-browser__column {
   min-height: 320px;
-  border: 1px solid #2c3340;
+  border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 252, 245, 0.72);
   overflow: hidden;
 }
 
@@ -1202,20 +1182,20 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .file-browser__pathbar {
   padding: 0.7rem 0.8rem;
-  border-bottom: 1px solid #2c3340;
+  border-bottom: 1px solid rgba(81, 59, 29, 0.12);
 }
 
 .file-browser__pathbar strong {
   flex: 1;
   font-family: "SF Mono", Monaco, monospace;
   font-size: 0.78rem;
-  color: #dbe6ff;
+  color: #30271d;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .file-browser__pathbar span {
-  color: #8f98aa;
+  color: #776a5b;
   font-size: 0.72rem;
 }
 
@@ -1235,7 +1215,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .file-browser__item--selected {
-  border-color: #4a9eff;
+  border-color: rgba(146, 88, 45, 0.35);
 }
 
 .file-browser__content {
@@ -1253,11 +1233,11 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .file-browser__content--empty,
 .file-browser__empty {
-  color: #8f98aa;
+  color: #776a5b;
 }
 
 .file-browser__error {
-  color: #ff8c83;
+  color: #bb3e2e;
 }
 
 .file-browser__error-stack {
@@ -1269,16 +1249,16 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .file-browser__retry {
   width: fit-content;
   padding: 0.45rem 0.8rem;
-  border: 1px solid #3c4454;
+  border: 1px solid rgba(81, 59, 29, 0.12);
   border-radius: 0.65rem;
-  background: transparent;
-  color: #dbe6ff;
+  background: rgba(255, 252, 245, 0.92);
+  color: #30271d;
   cursor: pointer;
 }
 
 .resources-refresh-error {
   margin-top: 0.8rem;
-  color: #ffbf7a;
+  color: #92582d;
   font-family: "SF Mono", Monaco, monospace;
   font-size: 0.78rem;
   word-break: break-word;
@@ -1291,7 +1271,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .resources-error-card p,
 .resources-empty-text {
-  color: #aab2c4;
+  color: #5c5145;
 }
 
 .sandbox-modal__header,
@@ -1300,7 +1280,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .sandbox-modal__header {
-  border-bottom: 1px solid #2c3340;
+  border-bottom: 1px solid rgba(81, 59, 29, 0.12);
   flex-shrink: 0;
 }
 

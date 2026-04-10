@@ -1236,6 +1236,7 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.queryByText("Global Resource Surface")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "daytona detail" })).toHaveAttribute("href", "/providers/daytona");
     fireEvent.click(await screen.findByRole("button", { name: /planner/i }));
     expect(await screen.findByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
@@ -1566,7 +1567,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("2 遥测未知")).toBeInTheDocument();
+    expect(await screen.findByText("2 实时指标未知")).toBeInTheDocument();
   });
 
   it("uses live session rows as the provider-card running truth when telemetry count lags", async () => {
@@ -2071,7 +2072,7 @@ describe("MonitorRoutes", () => {
     );
 
     const providerCard = await screen.findByRole("button", { name: /daytona_selfhost/i });
-    expect(within(providerCard).getByText("2 无 live telemetry")).toBeInTheDocument();
+    expect(within(providerCard).getByText("2 指标缺失")).toBeInTheDocument();
   });
 
   it("surfaces runtime-bound telemetry gap on the provider card", async () => {
@@ -2169,7 +2170,7 @@ describe("MonitorRoutes", () => {
     );
 
     const providerCard = await screen.findByRole("button", { name: /daytona_selfhost/i });
-    expect(within(providerCard).getByText("2 有 runtime无遥测")).toBeInTheDocument();
+    expect(within(providerCard).getByText("2 有 runtime 但无指标")).toBeInTheDocument();
   });
 
   it("surfaces runtime-unbound usage overlap on the provider card", async () => {
@@ -2751,7 +2752,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    const summaryPills = await screen.findAllByText("3 无 live telemetry");
+    const summaryPills = await screen.findAllByText("3 指标缺失");
     expect(summaryPills[0]).toHaveClass("resources-summary-pill");
   });
 
@@ -2979,7 +2980,7 @@ describe("MonitorRoutes", () => {
     );
 
     const sandboxCard = await screen.findByRole("button", { name: /remote agent/i });
-    expect(within(sandboxCard).getByText("无 live telemetry")).toBeInTheDocument();
+    expect(within(sandboxCard).getByText("指标缺失")).toBeInTheDocument();
   });
 
   it("surfaces quota-only disk truth directly on the sandbox card", async () => {
@@ -3457,7 +3458,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    const detailLabel = (await screen.findAllByText("无 live telemetry")).find((node) =>
+    const detailLabel = (await screen.findAllByText("指标缺失")).find((node) =>
       node.classList.contains("inline-metric__label"),
     );
     expect(detailLabel).toBeDefined();
@@ -3561,7 +3562,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    const detailLabel = (await screen.findAllByText("有 runtime无遥测")).find((node) =>
+    const detailLabel = (await screen.findAllByText("有 runtime 但无指标")).find((node) =>
       node.classList.contains("inline-metric__label"),
     );
     expect(detailLabel).toBeDefined();
@@ -3850,7 +3851,7 @@ describe("MonitorRoutes", () => {
       </MemoryRouter>,
     );
 
-    const detailLabel = (await screen.findAllByText("无 live telemetry")).find((node) =>
+    const detailLabel = (await screen.findAllByText("指标缺失")).find((node) =>
       node.classList.contains("inline-metric__label"),
     );
     expect(detailLabel).toBeDefined();
@@ -3907,9 +3908,9 @@ describe("MonitorRoutes", () => {
     );
 
     const providerCard = await screen.findByRole("button", { name: /agentbay/i });
-    expect(within(providerCard).getByText("暂无 live telemetry")).toBeInTheDocument();
+    expect(within(providerCard).getByText("实时指标暂缺")).toBeInTheDocument();
     fireEvent.click(providerCard);
-    expect(await screen.findByText("当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。")).toBeInTheDocument();
+    expect(await screen.findByText("当前 provider 尚未接入实时指标，CPU / RAM / Disk 仍是未知状态。")).toBeInTheDocument();
   });
 
   it("keeps detached residue out of the resources summary strip", async () => {
