@@ -34,7 +34,6 @@ def leases_snapshot():
 
 @router.get("/dashboard")
 def dashboard_snapshot():
-    health = monitor_service.runtime_health_summary()
     resources = get_monitor_resource_overview_snapshot()
     leases = monitor_service.list_leases()
     evaluation = monitor_service.get_monitor_evaluation_dashboard_summary()
@@ -43,7 +42,7 @@ def dashboard_snapshot():
     lease_summary = leases.get("summary") or {}
 
     return {
-        "snapshot_at": health.get("snapshot_at"),
+        "snapshot_at": resource_summary.get("snapshot_at"),
         "infra": {
             "providers_active": int(resource_summary.get("active_providers") or 0),
             "providers_unavailable": int(resource_summary.get("unavailable_providers") or 0),

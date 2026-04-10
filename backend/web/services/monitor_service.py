@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from backend.web.services.sandbox_service import init_providers_and_managers
@@ -16,14 +15,7 @@ from storage.runtime import (
     build_lease_repo as make_lease_repo,
 )
 from storage.runtime import (
-    build_runtime_health_monitor_repo as make_runtime_health_monitor_repo,
-)
-from storage.runtime import (
     build_sandbox_monitor_repo as make_sandbox_monitor_repo,
-)
-from storage.runtime import (
-    current_storage_strategy,
-    resolve_runtime_health_monitor_db_path,
 )
 
 
@@ -768,53 +760,3 @@ def cleanup_resource_leases(
 # ---------------------------------------------------------------------------
 # Public API: diagnostics
 # ---------------------------------------------------------------------------
-
-
-def runtime_health_summary() -> dict[str, Any]:
-    """Lightweight control-plane health snapshot without provider session scan."""
-    tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "events": 0}
-    storage_strategy = current_storage_strategy()
-
-    if storage_strategy == "supabase":
-        # @@@monitor-health-logical-counts - the API exposes logical control-plane counts, not provider-specific
-        # physical table names. Supabase stores run events; SQLite still stores lease events.
-        table_names = {
-            "chat_sessions": "chat_sessions",
-            "sandbox_leases": "sandbox_leases",
-            "events": "run_events",
-        }
-        repo = make_sandbox_monitor_repo()
-        try:
-            raw_counts = repo.count_rows(list(table_names.values()))
-        finally:
-            repo.close()
-        tables = {logical_name: int(raw_counts.get(table_name) or 0) for logical_name, table_name in table_names.items()}
-        db_payload: dict[str, Any] = {
-            "strategy": "supabase",
-            "schema": str(os.getenv("LEON_DB_SCHEMA") or "public"),
-            "counts": tables,
-        }
-    else:
-        db_path = resolve_runtime_health_monitor_db_path()
-        if db_path is None:
-            raise RuntimeError("sqlite runtime health snapshot requires a sandbox db path")
-        db_exists = db_path.exists()
-        db_payload = {"path": str(db_path), "exists": db_exists, "counts": tables}
-        if db_exists:
-            table_names = {
-                "chat_sessions": "chat_sessions",
-                "sandbox_leases": "sandbox_leases",
-                "events": "lease_events",
-            }
-            repo = make_runtime_health_monitor_repo()
-            try:
-                raw_counts = repo.count_rows(list(table_names.values()))
-            finally:
-                repo.close()
-            tables = {logical_name: int(raw_counts.get(table_name) or 0) for logical_name, table_name in table_names.items()}
-            db_payload["counts"] = tables
-
-    return {
-        "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "db": db_payload,
-    }
