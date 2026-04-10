@@ -391,14 +391,14 @@ function ProviderCard({
   onSelect: () => void;
 }) {
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
+  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const runtimeUnboundRunningCount = provider.sessions.filter(
     (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
   ).length;
   const detachedResidueCount = provider.sessions.filter(
     (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
   ).length;
-  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
-  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const runningMetric = {
     ...provider.telemetry.running,
     used: runningCount,
@@ -406,6 +406,16 @@ function ProviderCard({
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
+  const sessionSummary = [
+    `${runningCount} 占用中`,
+    pausedCount > 0 ? `${pausedCount} 暂停` : null,
+    stoppedCount > 0 ? `${stoppedCount} 已结束` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const sessionDots = [...provider.sessions]
+    .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4))
+    .slice(0, 5);
 
   return (
     <button
@@ -444,11 +454,24 @@ function ProviderCard({
       )}
 
       <div className="provider-card__footer">
-        <span>{runningCount} 占用中</span>
+        {provider.sessions.length > 0 && (
+          <div className="provider-card__activity">
+            <div className="provider-card__session-dots" aria-hidden="true">
+              {sessionDots.map((session) => (
+                <span
+                  key={session.id}
+                  className={[
+                    "provider-card__session-dot",
+                    `provider-card__session-dot--${session.status}`,
+                  ].join(" ")}
+                />
+              ))}
+            </div>
+            <span>{sessionSummary}</span>
+          </div>
+        )}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 未连上沙盒</span>}
         {detachedResidueCount > 0 && <span>{detachedResidueCount} 历史残留</span>}
-        {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
-        {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
       </div>
 
       <CapabilityStrip capabilities={provider.capabilities} />

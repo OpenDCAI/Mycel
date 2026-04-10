@@ -2549,6 +2549,109 @@ describe("MonitorRoutes", () => {
     expect(within(providerCard).getByText("1 历史残留")).toBeInTheDocument();
   });
 
+  it("keeps provider card activity in one compact status line", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "daytona_selfhost",
+            name: "daytona_selfhost",
+            description: "Self-hosted Daytona",
+            type: "cloud",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: true,
+              mount: true,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 1.5, limit: null, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 4, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 10, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: {
+              used: null,
+              limit: null,
+              unit: "%",
+              source: "unknown",
+              freshness: "live",
+              error: "CPU usage is per-sandbox, not a provider-level quota.",
+            },
+            sessions: [
+              {
+                id: "running-1",
+                leaseId: "lease-running",
+                threadId: "thread-running",
+                runtimeSessionId: "runtime-running",
+                agentName: "Running Agent",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+                metrics: {
+                  cpu: 1.5,
+                  memory: 1,
+                  memoryLimit: 4,
+                  disk: 2,
+                  diskLimit: 10,
+                  networkIn: null,
+                  networkOut: null,
+                },
+              },
+              {
+                id: "paused-1",
+                leaseId: "lease-paused",
+                threadId: "thread-paused",
+                runtimeSessionId: "runtime-paused",
+                agentName: "Paused Agent",
+                status: "paused",
+                startedAt: "2026-04-07T00:00:00Z",
+                metrics: {
+                  cpu: 0.5,
+                  memory: 0.5,
+                  memoryLimit: 1,
+                  disk: 0.2,
+                  diskLimit: 3,
+                  networkIn: null,
+                  networkOut: null,
+                },
+              },
+              {
+                id: "stopped-1",
+                leaseId: "lease-stopped",
+                threadId: "thread-stopped",
+                agentName: "Stopped Agent",
+                status: "stopped",
+                startedAt: "2026-04-06T00:00:00Z",
+                metrics: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    const providerCard = await screen.findByRole("button", { name: /daytona_selfhost/i });
+    expect(within(providerCard).getByText("1 占用中 · 1 暂停 · 1 已结束")).toBeInTheDocument();
+  });
+
   it("surfaces detached residue directly on the sandbox card", async () => {
     mockRoutePayloads({
       "/resources": {

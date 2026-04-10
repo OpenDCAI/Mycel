@@ -960,10 +960,47 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .provider-card__footer {
+  flex-direction: column;
+  align-items: flex-start;
   font-size: 0.76rem;
   color: #776a5b;
   padding-top: 0.7rem;
   border-top: 1px dashed rgba(81, 59, 29, 0.14);
+}
+
+.provider-card__activity {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.provider-card__session-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.provider-card__session-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(81, 59, 29, 0.16);
+}
+
+.provider-card__session-dot--running {
+  background: #32d583;
+}
+
+.provider-card__session-dot--paused {
+  background: #f5b942;
+}
+
+.provider-card__session-dot--stopped {
+  background: #cbbba7;
+}
+
+.provider-card__session-dot--destroying {
+  background: #f97066;
 }
 
 .provider-card__truth {
