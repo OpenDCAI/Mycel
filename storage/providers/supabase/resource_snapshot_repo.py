@@ -28,7 +28,7 @@ def upsert_lease_resource_snapshot(
     client: Any = None,
 ) -> None:
     if client is None:
-        return
+        raise RuntimeError("upsert_lease_resource_snapshot requires a client")
     now = _now_iso()
     client.table("lease_resource_snapshots").upsert(
         {
@@ -55,7 +55,9 @@ def list_snapshots_by_lease_ids(
     lease_ids: list[str],
     client: Any = None,
 ) -> dict[str, dict[str, Any]]:
-    if client is None or not lease_ids:
+    if client is None:
+        raise RuntimeError("list_snapshots_by_lease_ids requires a client")
+    if not lease_ids:
         return {}
     unique_ids = sorted({lid for lid in lease_ids if lid})
     if not unique_ids:
