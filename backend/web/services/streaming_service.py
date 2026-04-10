@@ -39,13 +39,16 @@ def _log_captured_exception(message: str, err: BaseException) -> None:
     )
 
 
-def _resolve_run_event_repo(agent: Any) -> RunEventRepo | None:
+def _resolve_run_event_repo(agent: Any) -> RunEventRepo:
     storage_container = getattr(agent, "storage_container", None)
     if storage_container is None:
-        return None
+        raise RuntimeError("streaming_service requires agent.storage_container.run_event_repo()")
 
     # @@@runtime-storage-consumer - runtime run lifecycle must consume injected storage container, not assignment-only wiring.
-    return storage_container.run_event_repo()
+    run_event_repo = getattr(storage_container, "run_event_repo", None)
+    if not callable(run_event_repo):
+        raise RuntimeError("streaming_service requires agent.storage_container.run_event_repo()")
+    return run_event_repo()
 
 
 def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any:

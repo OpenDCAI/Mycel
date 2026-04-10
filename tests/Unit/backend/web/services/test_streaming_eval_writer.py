@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.streaming_service import _run_agent_to_buffer, write_cancellation_markers
+from backend.web.services.streaming_service import _resolve_run_event_repo, _run_agent_to_buffer, write_cancellation_markers
 from core.runtime.middleware.monitor import AgentState
 from eval.models import RunTrajectory
 
@@ -146,6 +146,10 @@ class _VersionedCheckpointSaver:
         self.saved_versions = new_versions
 
 
+def _fake_storage_container() -> SimpleNamespace:
+    return SimpleNamespace(run_event_repo=lambda: SimpleNamespace(close=lambda: None))
+
+
 def _make_app() -> SimpleNamespace:
     return SimpleNamespace(
         state=SimpleNamespace(
@@ -185,7 +189,7 @@ async def test_run_agent_to_buffer_persists_running_then_completed_eval_row(monk
     agent = SimpleNamespace(
         agent=_FakeGraphAgent(expected_run_id="run-123"),
         runtime=_FakeRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
 
     result = await _run_agent_to_buffer(
@@ -212,6 +216,17 @@ async def test_run_agent_to_buffer_persists_running_then_completed_eval_row(monk
     assert [call["tier"] for call in _FakeTrajectoryStore.metric_calls] == ["system", "objective"]
 
 
+def test_resolve_run_event_repo_requires_storage_container_run_event_repo() -> None:
+    agent = SimpleNamespace(
+        agent=_FakeGraphAgent(expected_run_id="run-123"),
+        runtime=_FakeRuntime(),
+        storage_container=None,
+    )
+
+    with pytest.raises(RuntimeError, match="storage_container.run_event_repo"):
+        _resolve_run_event_repo(agent)
+
+
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_finalizes_same_eval_row_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeTrajectoryStore.reset()
@@ -220,7 +235,7 @@ async def test_run_agent_to_buffer_finalizes_same_eval_row_on_error(monkeypatch:
     agent = SimpleNamespace(
         agent=_FakeGraphAgent(expected_run_id="run-123", error=RuntimeError("boom")),
         runtime=_FakeRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
 
     result = await _run_agent_to_buffer(
@@ -246,7 +261,7 @@ async def test_run_agent_to_buffer_finalizes_same_eval_row_on_cancel(monkeypatch
     agent = SimpleNamespace(
         agent=_FakeGraphAgent(expected_run_id="run-123", wait_forever=True),
         runtime=_FakeRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
 
     task = asyncio.create_task(
