@@ -187,6 +187,18 @@ h2 {
   box-shadow: 0 12px 30px rgba(82, 59, 27, 0.06);
 }
 
+.lease-triage-card {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lease-triage-card--active {
+  border-color: rgba(143, 93, 47, 0.42);
+  background: rgba(255, 247, 230, 0.96);
+  box-shadow: 0 14px 32px rgba(82, 59, 27, 0.09);
+}
+
 .surface-card__eyebrow {
   color: #8f5d2f;
   font-size: 0.74rem;
@@ -210,6 +222,26 @@ h2 {
 .description {
   color: #5c5145;
   margin-bottom: 1rem;
+}
+
+.leases-workbench-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.lease-triage-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(243, 231, 210, 0.96);
+  color: #5e472e;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* Tables */

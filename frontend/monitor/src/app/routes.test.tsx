@@ -199,6 +199,10 @@ describe("MonitorRoutes", () => {
             thread: {
               thread_id: "thread-1",
             },
+            triage: {
+              category: "active_drift",
+              title: "Active Drift",
+            },
             state_badge: {
               color: "green",
               observed: "running",
@@ -219,13 +223,103 @@ describe("MonitorRoutes", () => {
     );
 
     expect(await screen.findByText("Lease Triage")).toBeInTheDocument();
-    expect(screen.getByText("Active Drift")).toBeInTheDocument();
-    expect(screen.getByText("Detached Residue")).toBeInTheDocument();
-    expect(screen.getByText("Orphan Cleanup")).toBeInTheDocument();
+    expect(screen.getAllByText("Active Drift").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Detached Residue").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Orphan Cleanup").length).toBeGreaterThan(0);
     expect(screen.getByText("Healthy Capacity")).toBeInTheDocument();
     expect(screen.getByText("Total: 1")).toBeInTheDocument();
     expect(screen.queryByText("Tracked Leases")).not.toBeInTheDocument();
-    expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
+    expect(screen.getByText("Lease Workbench")).toBeInTheDocument();
+  });
+
+  it("filters the lease table by triage card selection", async () => {
+    mockRoutePayloads({
+      "/leases": {
+        title: "All Leases",
+        count: 2,
+        summary: {
+          healthy: 0,
+          diverged: 1,
+          orphan: 0,
+          orphan_diverged: 1,
+          total: 2,
+        },
+        groups: [],
+        triage: {
+          summary: {
+            active_drift: 0,
+            detached_residue: 1,
+            orphan_cleanup: 1,
+            healthy_capacity: 0,
+            total: 2,
+          },
+          groups: [],
+        },
+        items: [
+          {
+            lease_id: "lease-detached",
+            provider: "local",
+            instance_id: null,
+            thread: {
+              thread_id: "thread-a",
+            },
+            triage: {
+              category: "detached_residue",
+              title: "Detached Residue",
+            },
+            state_badge: {
+              color: "yellow",
+              observed: "detached",
+              desired: "running",
+              text: "detached -> running",
+            },
+            updated_ago: "14h ago",
+            error: null,
+          },
+          {
+            lease_id: "lease-orphan",
+            provider: "local",
+            instance_id: null,
+            thread: {
+              thread_id: null,
+            },
+            triage: {
+              category: "orphan_cleanup",
+              title: "Orphan Cleanup",
+            },
+            state_badge: {
+              color: "yellow",
+              observed: "detached",
+              desired: "running",
+              text: "detached -> running",
+            },
+            updated_ago: "2d ago",
+            error: null,
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "All Leases" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "lease-detached" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "lease-orphan" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /detached residue/i }));
+
+    expect(screen.getByRole("link", { name: "lease-detached" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "lease-orphan" })).not.toBeInTheDocument();
+    expect(screen.getByText("Showing Detached Residue")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /all triage/i }));
+
+    expect(screen.getByRole("link", { name: "lease-detached" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "lease-orphan" })).toBeInTheDocument();
   });
 
   it("renders lease detail under the leases surface", async () => {
