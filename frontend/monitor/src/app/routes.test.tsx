@@ -1382,6 +1382,7 @@ describe("MonitorRoutes", () => {
     expect(within(providerCard).queryByText("FS")).not.toBeInTheDocument();
     expect(within(providerCard).getByLabelText("filesystem enabled")).toBeInTheDocument();
     expect(within(providerCard).getByLabelText("terminal enabled")).toBeInTheDocument();
+    expect(within(providerCard).getByText("5/8")).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("button", { name: /planner/i }));
 

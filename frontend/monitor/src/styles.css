@@ -979,6 +979,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin-top: 0.85rem;
   padding-top: 0.75rem;
   border-top: 1px solid rgba(81, 59, 29, 0.08);
+  flex-wrap: wrap;
 }
 
 .provider-capability-icon {
@@ -1000,6 +1001,14 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-capability-icon--disabled {
   background: rgba(242, 237, 229, 0.9);
   color: #b6aa9c;
+}
+
+.provider-capability-count {
+  color: #776a5b;
+  font-size: 0.74rem;
+  font-family: "SF Mono", Monaco, monospace;
+  letter-spacing: 0.02em;
+  margin-left: 0.15rem;
 }
 
 .provider-detail-card {

@@ -580,9 +580,12 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
 }
 
 function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabilities }) {
+  const keys = Object.keys(capabilities) as Array<keyof ProviderCapabilities>;
+  const enabledCount = keys.filter((key) => capabilities[key]).length;
+
   return (
     <div className="provider-card__capability-strip">
-      {(Object.keys(capabilities) as Array<keyof ProviderCapabilities>).map((key) => {
+      {keys.map((key) => {
         const enabled = capabilities[key];
         return (
           <span
@@ -598,6 +601,9 @@ function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabilities 
           </span>
         );
       })}
+      <span className="provider-capability-count">
+        {enabledCount}/{keys.length}
+      </span>
     </div>
   );
 }
