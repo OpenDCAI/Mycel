@@ -12,7 +12,7 @@ def _stub_monitor_health(monkeypatch):
         "db": {
             "strategy": "supabase",
             "schema": "staging",
-            "counts": {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0},
+            "counts": {"chat_sessions": 0, "sandbox_leases": 0, "events": 0},
         },
         "sessions": {"total": 0, "providers": {}},
     }
@@ -237,6 +237,23 @@ def test_monitor_leases_route_exposes_summary_and_groups(monkeypatch):
     assert isinstance(payload["groups"], list)
     assert set(payload["triage"]["summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
     assert isinstance(payload["triage"]["groups"], list)
+
+
+def test_monitor_removed_forensic_routes_return_404():
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        thread_response = client.get("/api/monitor/thread/thread-404")
+        threads_response = client.get("/api/monitor/threads")
+        lease_response = client.get("/api/monitor/lease/lease-404")
+        diverged_response = client.get("/api/monitor/diverged")
+        events_response = client.get("/api/monitor/events", params={"limit": 25})
+        event_response = client.get("/api/monitor/event/event-404")
+
+    assert thread_response.status_code == 404
+    assert threads_response.status_code == 404
+    assert lease_response.status_code == 404
+    assert diverged_response.status_code == 404
+    assert events_response.status_code == 404
+    assert event_response.status_code == 404
 
 
 def test_monitor_evaluation_route_exposes_operator_truth(monkeypatch):

@@ -72,12 +72,9 @@ describe("MonitorRoutes", () => {
 
     expect(screen.getByText("Leon Sandbox Monitor")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /threads/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /resources/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /leases/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /diverged/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /events/i })).toBeInTheDocument();
   });
 
   it("shows dashboard content for /dashboard", async () => {
@@ -175,12 +172,10 @@ describe("MonitorRoutes", () => {
         items: [
           {
             lease_id: "lease-1",
-            lease_url: "/lease/lease-1",
             provider: "local",
             instance_id: "instance-1",
             thread: {
               thread_id: "thread-1",
-              thread_url: "/thread/thread-1",
             },
             state_badge: {
               color: "green",
@@ -208,181 +203,6 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Healthy Capacity")).toBeInTheDocument();
     expect(screen.getByText("Tracked Leases")).toBeInTheDocument();
     expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
-  });
-
-  it("renders threads with pressure summary before the raw table", async () => {
-    mockRoutePayloads({
-      "/threads": {
-        title: "Threads",
-        count: 1,
-        items: [
-          {
-            thread_id: "thread-1",
-            thread_url: "/thread/thread-1",
-            session_count: 2,
-            last_active_ago: "2m",
-            lease: {
-              lease_id: "lease-1",
-              lease_url: "/lease/lease-1",
-              provider: "local",
-            },
-            state_badge: {
-              color: "yellow",
-              observed: "paused",
-              desired: "running",
-              text: "paused",
-            },
-          },
-        ],
-      },
-    });
-
-    render(
-      <MemoryRouter initialEntries={["/threads"]}>
-        <MonitorRoutes />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText("Thread Pressure")).toBeInTheDocument();
-    expect(screen.getByText("Raw Thread Table")).toBeInTheDocument();
-  });
-
-  it("renders thread detail session ids as plain text when monitor has no session route", async () => {
-    mockRoutePayloads({
-      "/thread/thread-1": {
-        thread_id: "thread-1",
-        breadcrumb: [
-          { label: "Threads", url: "/threads" },
-          { label: "thread-1", url: "/thread/thread-1" },
-        ],
-        sessions: {
-          title: "Sessions",
-          count: 1,
-          items: [
-            {
-              session_id: "session-1",
-              session_url: "/session/session-1",
-              status: "running",
-              started_ago: "1m",
-              ended_ago: null,
-              lease: {
-                lease_id: "lease-1",
-                lease_url: "/lease/lease-1",
-              },
-              state_badge: {
-                color: "green",
-                observed: "running",
-                desired: "running",
-                text: "running",
-              },
-              error: null,
-            },
-          ],
-        },
-        related_leases: {
-          title: "Related Leases",
-          items: [{ lease_id: "lease-1", lease_url: "/lease/lease-1" }],
-        },
-      },
-    });
-
-    render(
-      <MemoryRouter initialEntries={["/thread/thread-1"]}>
-        <MonitorRoutes />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByRole("heading", { name: /thread:/i })).toBeInTheDocument();
-    expect(screen.getByText("session-")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "session-" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "lease-1" })).toHaveLength(2);
-    for (const link of screen.getAllByRole("link", { name: "lease-1" })) {
-      expect(link).toHaveAttribute("href", "/lease/lease-1");
-    }
-  });
-
-  it("renders diverged leases with triage before the raw table", async () => {
-    mockRoutePayloads({
-      "/diverged": {
-        title: "Diverged leases",
-        description: "Leases whose observed state diverges from desired state.",
-        count: 1,
-        items: [
-          {
-            lease_id: "lease-1",
-            lease_url: "/lease/lease-1",
-            provider: "daytona_selfhost",
-            thread: {
-              thread_id: "thread-1",
-              thread_url: "/thread/thread-1",
-            },
-            state_badge: {
-              color: "red",
-              desired: "running",
-              observed: "stopped",
-              hours_diverged: 5,
-            },
-            error: "provider unavailable",
-          },
-        ],
-      },
-    });
-
-    render(
-      <MemoryRouter initialEntries={["/diverged"]}>
-        <MonitorRoutes />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText("Drift Triage")).toBeInTheDocument();
-    expect(screen.getByText("Raw Divergence Table")).toBeInTheDocument();
-  });
-
-  it("renders events with signal summary before the raw table", async () => {
-    mockRoutePayloads({
-      "/events?limit=100": {
-        title: "Events",
-        description: "Recent monitor events.",
-        count: 2,
-        items: [
-          {
-            event_id: "event-1",
-            event_url: "/event/event-1",
-            event_type: "lease.state.changed",
-            source: "monitor",
-            provider: "local",
-            lease: {
-              lease_id: "lease-1",
-              lease_url: "/lease/lease-1",
-            },
-            error: null,
-            created_ago: "1m",
-          },
-          {
-            event_id: "event-2",
-            event_url: "/event/event-2",
-            event_type: "probe.failed",
-            source: "probe",
-            provider: "daytona_selfhost",
-            lease: {
-              lease_id: null,
-              lease_url: null,
-            },
-            error: "provider unavailable",
-            created_ago: "3m",
-          },
-        ],
-      },
-    });
-
-    render(
-      <MemoryRouter initialEntries={["/events"]}>
-        <MonitorRoutes />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText("Signal Feed")).toBeInTheDocument();
-    expect(screen.getByText("Raw Event Table")).toBeInTheDocument();
   });
 
   it("renders evaluation as a truthful operator surface", async () => {

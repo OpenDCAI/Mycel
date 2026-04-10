@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "react-router-dom";
 
 import {
   browseMonitorSandbox,
@@ -973,9 +972,9 @@ function SandboxInspector({
                   </div>
                   <div>
                     <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
-                    <Link className="sandbox-link" to={`/thread/${session.threadId}`}>
+                    <span className="sandbox-link">
                       {session.threadId}
-                    </Link>
+                    </span>
                     {session.runtimeSessionId && (
                       <div className="sandbox-session-row__meta">runtime {session.runtimeSessionId}</div>
                     )}
@@ -1014,11 +1013,7 @@ function SandboxInspector({
         <div className="sandbox-modal__section sandbox-modal__section--fill">
           <div className="sandbox-modal__section-header">
             <h4>文件</h4>
-            {group.leaseId && (
-              <Link className="sandbox-link" to={`/lease/${group.leaseId}`}>
-                打开 lease
-              </Link>
-            )}
+            {group.leaseId ? <span className="sandbox-link">{group.leaseId}</span> : null}
           </div>
           <MonitorFileBrowser
             leaseId={group.leaseId}

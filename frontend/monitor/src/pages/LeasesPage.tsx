@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 import ErrorState from "../components/ErrorState";
 import StateBadge from "../components/StateBadge";
 import { useMonitorData } from "../app/fetch";
@@ -18,12 +16,10 @@ type LeasesPayload = {
   };
   items: Array<{
     lease_id: string;
-    lease_url: string;
     provider: string;
     instance_id?: string | null;
     thread: {
       thread_id?: string | null;
-      thread_url?: string | null;
     };
     state_badge: Record<string, unknown>;
     updated_ago?: string | null;
@@ -77,14 +73,12 @@ export default function LeasesPage() {
         <tbody>
           {data.items.map((item: any) => (
             <tr key={item.lease_id}>
-              <td>
-                <Link to={item.lease_url}>{item.lease_id}</Link>
-              </td>
+              <td className="mono">{item.lease_id}</td>
               <td>{item.provider}</td>
               <td className="mono">{item.instance_id?.slice(0, 12) || "-"}</td>
               <td>
                 {item.thread.thread_id ? (
-                  <Link to={item.thread.thread_url}>{item.thread.thread_id.slice(0, 8)}</Link>
+                  <span className="mono">{item.thread.thread_id.slice(0, 8)}</span>
                 ) : (
                   <span className="orphan">orphan</span>
                 )}

@@ -1,20 +1,17 @@
-"""Monitor router compatibility layer.
-
-Expose the richer monitor implementation from ``backend.web.monitor`` while
-preserving the newer resource/health helper endpoints added on main.
-"""
+"""Monitor router."""
 
 import asyncio
 
-from fastapi import HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.web.monitor import list_leases, router
 from backend.web.services import monitor_service, resource_service
 from backend.web.services.resource_cache import (
     get_monitor_resource_overview_snapshot,
     refresh_monitor_resource_overview_sync,
 )
+
+router = APIRouter(prefix="/api/monitor")
 
 
 class ResourceCleanupRequest(BaseModel):
@@ -34,12 +31,16 @@ def _refresh_monitor_resources_sync():
 def health_snapshot():
     return monitor_service.runtime_health_snapshot()
 
+@router.get("/leases")
+def leases_snapshot():
+    return monitor_service.list_leases()
+
 
 @router.get("/dashboard")
 def dashboard_snapshot():
     health = monitor_service.runtime_health_snapshot()
     resources = get_monitor_resource_overview_snapshot()
-    leases = list_leases()
+    leases = monitor_service.list_leases()
     evaluation = monitor_service.get_monitor_evaluation_dashboard_summary()
 
     resource_summary = resources.get("summary") or {}
