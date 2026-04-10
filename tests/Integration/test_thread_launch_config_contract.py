@@ -375,15 +375,14 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(
             threads_router.sandbox_service,
-            "list_user_leases",
-            return_value=[
-                {
-                    "lease_id": "lease-1",
-                    "provider_name": "daytona_selfhost",
-                    "recipe": {"id": "daytona:recipe-1"},
-                }
-            ],
+            "resolve_owned_lease",
+            return_value={
+                "lease_id": "lease-1",
+                "provider_name": "daytona_selfhost",
+                "recipe": {"id": "daytona:recipe-1"},
+            },
         ),
+        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
         patch.object(threads_router, "save_last_successful_config", return_value=None) as save_successful,
     ):

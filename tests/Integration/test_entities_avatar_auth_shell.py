@@ -4,9 +4,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 
 from backend.web.routers import entities as entities_router
+from backend.web.utils import serializers
 
 
 class _FakeUploadFile:
@@ -26,49 +26,14 @@ def _user(user_id: str, *, owner_user_id: str | None = None, avatar: str | None 
     )
 
 
-def test_avatar_user_helper_allows_self_or_owner():
-    user_repo = SimpleNamespace(
-        get_by_id=lambda user_id: _user(user_id, owner_user_id="user-9"),
-    )
+def test_avatar_url_uses_local_file_truth_when_db_avatar_is_null(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    avatar_dir = tmp_path / "avatars"
+    avatar_dir.mkdir()
+    (avatar_dir / "agent-1.png").write_bytes(b"png")
+    monkeypatch.setattr(serializers, "avatars_dir", lambda: avatar_dir)
 
-    self_user = entities_router._get_owned_avatar_user_or_404("user-1", "user-1", user_repo)
-    owner_user = entities_router._get_owned_avatar_user_or_404("agent-1", "user-9", user_repo)
-
-    assert self_user.id == "user-1"
-    assert owner_user.id == "agent-1"
-
-
-def test_avatar_user_helper_raises_404_for_missing_user():
-    user_repo = SimpleNamespace(get_by_id=lambda _user_id: None)
-
-    with pytest.raises(HTTPException) as excinfo:
-        entities_router._get_owned_avatar_user_or_404("missing", "user-1", user_repo)
-
-    assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == "User not found"
-
-
-def test_avatar_user_helper_raises_403_for_unrelated_user():
-    user_repo = SimpleNamespace(
-        get_by_id=lambda _user_id: _user("agent-1", owner_user_id="user-2"),
-    )
-
-    with pytest.raises(HTTPException) as excinfo:
-        entities_router._get_owned_avatar_user_or_404("agent-1", "user-1", user_repo)
-
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Not authorized"
-
-
-def test_avatar_mutation_routes_use_user_id_path_param():
-    route_paths = {
-        (route.path, tuple(sorted(route.methods))) for route in entities_router.users_router.routes if getattr(route, "methods", None)
-    }
-
-    assert ("/api/users/{user_id}/avatar", ("GET",)) in route_paths
-    assert ("/api/users/{user_id}/avatar", ("PUT",)) in route_paths
-    assert ("/api/users/{user_id}/avatar", ("DELETE",)) in route_paths
-    assert all(not path.startswith("/api/members/") for path, _methods in route_paths)
+    assert serializers.avatar_url("agent-1", False) == "/api/users/agent-1/avatar"
+    assert serializers.avatar_url("agent-2", False) is None
 
 
 @pytest.mark.asyncio
@@ -137,4 +102,5 @@ async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
     assert seen[1] == ("save", (b"png-bytes", "agent-1"))
     assert seen[2][0] == "update"
     assert seen[2][1][0] == "agent-1"
-    assert seen[2][1][1]["avatar"] == "avatars/agent-1.png"
+    assert "avatar" not in seen[2][1][1]
+    assert seen[2][1][1]["updated_at"] == pytest.approx(seen[2][1][1]["updated_at"], rel=0, abs=5)

@@ -14,10 +14,21 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
     seen: dict[str, object] = {}
 
     monkeypatch.setattr(marketplace_router.marketplace_client, "publish", lambda **kwargs: seen.update(kwargs) or {"ok": True})
-    monkeypatch.setattr("backend.web.services.profile_service.get_profile", lambda: {"name": "owner-name"})
+    monkeypatch.setattr(
+        "backend.web.services.profile_service.get_profile",
+        lambda user=None: (
+            (_ for _ in ()).throw(AssertionError("config profile fallback not allowed")) if user is None else {"name": user.display_name}
+        ),
+    )
 
     user_repo = SimpleNamespace(
-        get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+        get_by_id=lambda user_id: (
+            SimpleNamespace(id=user_id, owner_user_id="owner-1")
+            if user_id == "agent-1"
+            else SimpleNamespace(id=user_id, display_name="owner-name", email="owner@example.com")
+            if user_id == "owner-1"
+            else None
+        )
     )
     agent_config_repo = SimpleNamespace()
     req = PublishToMarketplaceRequest(user_id="agent-1")

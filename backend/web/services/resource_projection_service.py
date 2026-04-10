@@ -104,6 +104,41 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
     }
 
 
+def _query_runtime_session_ids(repo: Any, lease_ids: list[str]) -> dict[str, str | None]:
+    ordered_ids = []
+    seen: set[str] = set()
+    for lease_id in lease_ids:
+        normalized = str(lease_id or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered_ids.append(normalized)
+    if not ordered_ids:
+        return {}
+
+    query_lease_instance_ids = getattr(repo, "query_lease_instance_ids", None)
+    if not callable(query_lease_instance_ids):
+        raise RuntimeError("sandbox monitor repo must support batch lease runtime lookup")
+    return query_lease_instance_ids(ordered_ids)
+
+
+def _backfill_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
+    pending_leases = [lease for lease in leases if not str(lease.get("runtime_session_id") or "").strip()]
+    if not pending_leases:
+        return
+
+    repo = make_sandbox_monitor_repo()
+    try:
+        runtime_session_ids = _query_runtime_session_ids(repo, [str(lease.get("lease_id") or "") for lease in pending_leases])
+        for lease in pending_leases:
+            lease_id = str(lease.get("lease_id") or "").strip()
+            runtime_session_id = runtime_session_ids.get(lease_id)
+            if runtime_session_id:
+                lease["runtime_session_id"] = runtime_session_id
+    finally:
+        repo.close()
+
+
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
     thread_repo = getattr(app.state, "thread_repo", None)
     user_repo = getattr(app.state, "user_repo", None)
@@ -115,6 +150,7 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
+    _backfill_runtime_session_ids(leases)
 
     leases_by_provider: dict[str, list[dict[str, Any]]] = {}
     for lease in leases:
@@ -194,11 +230,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
         if not lease_id:
             continue
 
-        try:
-            thread_rows = repo.query_lease_threads(lease_id)
-        except Exception:
-            thread_rows = []
-
+        thread_rows = repo.query_lease_threads(lease_id)
         preferred_thread_id = next(
             (str(item.get("thread_id") or "").strip() for item in thread_rows if _is_resource_visible_thread(item.get("thread_id"))),
             "",
@@ -219,6 +251,7 @@ def list_resource_providers() -> dict[str, Any]:
     try:
         raw_sessions = repo.list_sessions_with_leases()
         sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
+        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
     finally:
         repo.close()
 
@@ -226,8 +259,6 @@ def list_resource_providers() -> dict[str, Any]:
     for session in sessions:
         provider_instance = str(session.get("provider") or "local")
         grouped.setdefault(provider_instance, []).append(session)
-    runtime_session_ids: dict[str, str | None] = {}
-    query_lease_instance_id = getattr(repo, "query_lease_instance_id", None)
 
     owners = _thread_owners([str(session["thread_id"]) for session in sessions if session.get("thread_id")])
     snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
@@ -255,9 +286,6 @@ def list_resource_providers() -> dict[str, Any]:
             thread_id = str(session.get("thread_id") or "")
             lease_id = str(session.get("lease_id") or "")
             runtime_session_id = runtime_session_ids.get(lease_id)
-            if lease_id and lease_id not in runtime_session_ids:
-                runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
-                runtime_session_ids[lease_id] = runtime_session_id
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             normalized = _resource_display_status(
                 observed_state=observed_state,
@@ -340,11 +368,10 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
     try:
         raw_sessions = repo.list_sessions_with_leases()
         sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
-        query_lease_instance_id = getattr(repo, "query_lease_instance_id", None)
+        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
     finally:
         repo.close()
 
-    runtime_session_ids: dict[str, str | None] = {}
     snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
     stats: dict[str, dict[str, int]] = {}
     seen_session_ids: set[str] = set()
@@ -359,9 +386,6 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
 
         lease_id = str(session.get("lease_id") or "")
         runtime_session_id = runtime_session_ids.get(lease_id)
-        if lease_id and lease_id not in runtime_session_ids:
-            runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
-            runtime_session_ids[lease_id] = runtime_session_id
         normalized = _resource_display_status(
             observed_state=session.get("observed_state"),
             desired_state=session.get("desired_state"),

@@ -39,13 +39,16 @@ def _log_captured_exception(message: str, err: BaseException) -> None:
     )
 
 
-def _resolve_run_event_repo(agent: Any) -> RunEventRepo | None:
+def _resolve_run_event_repo(agent: Any) -> RunEventRepo:
     storage_container = getattr(agent, "storage_container", None)
     if storage_container is None:
-        return None
+        raise RuntimeError("streaming_service requires agent.storage_container.run_event_repo()")
 
     # @@@runtime-storage-consumer - runtime run lifecycle must consume injected storage container, not assignment-only wiring.
-    return storage_container.run_event_repo()
+    run_event_repo = getattr(storage_container, "run_event_repo", None)
+    if not callable(run_event_repo):
+        raise RuntimeError("streaming_service requires agent.storage_container.run_event_repo()")
+    return run_event_repo()
 
 
 def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any:
@@ -131,13 +134,20 @@ async def write_cancellation_markers(
         updated_channel_values["messages"] = list(updated_channel_values.get("messages", []))
         updated_channel_values["messages"].extend(cancel_messages)
 
-        # Prepare new versions for checkpoint
-        new_versions = {k: int(v) + 1 for k, v in checkpoint["channel_versions"].items()}
-
         # Build complete checkpoint with all required fields
         new_checkpoint = create_checkpoint(checkpoint, None, metadata.get("step", 0))
         # Override channel_values with our updated messages
         new_checkpoint["channel_values"] = updated_channel_values
+        current_versions = dict(checkpoint.get("channel_versions", {}) or {})
+        get_next_version = getattr(checkpointer, "get_next_version", None)
+        # @@@checkpoint-version-contract - LangGraph saver versions are opaque monotonic ids,
+        # not plain ints. Cancellation writes must advance them through the saver contract.
+        if not callable(get_next_version):
+            raise RuntimeError("Checkpointer missing get_next_version; cannot write cancellation markers honestly")
+        next_message_version = get_next_version(current_versions.get("messages"), None)
+        new_versions = {"messages": next_message_version}
+        new_checkpoint["channel_versions"] = {**current_versions, **new_versions}
+        new_checkpoint["updated_channels"] = list(new_versions)
 
         # Write updated checkpoint
         await checkpointer.aput(

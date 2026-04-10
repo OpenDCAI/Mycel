@@ -289,6 +289,23 @@ async def test_task_output_times_out_when_blocking_wait_expires(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_task_output_reports_cancelled_bash_run_honestly(tmp_path):
+    service = _make_service(tmp_path)
+    async_cmd = _FakeAsyncCommand()
+    async_cmd.done = True
+    async_cmd.cancelled = True
+    service._tasks["cmd_cancelled"] = _BashBackgroundRun(async_cmd, "sleep 20")
+
+    payload = json.loads(await service._handle_task_output("cmd_cancelled", block=False))
+
+    assert payload == {
+        "task_id": "cmd_cancelled",
+        "status": "cancelled",
+        "result": "Command cancelled",
+    }
+
+
+@pytest.mark.asyncio
 async def test_run_agent_applies_forked_bootstrap_to_child_agent(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
 

@@ -44,7 +44,7 @@ from backend.web.services.thread_launch_config_service import (
     save_last_successful_config,
 )
 from backend.web.services.thread_naming import sidebar_label
-from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime
+from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
@@ -53,7 +53,7 @@ from backend.web.services.thread_state_service import (
 )
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
-from core.agents.service import _background_run_cancelled, request_background_run_stop
+from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_lease
@@ -277,17 +277,11 @@ def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
     if payload.lease_id:
-        owned_lease = next(
-            (
-                lease
-                for lease in sandbox_service.list_user_leases(
-                    owner_user_id,
-                    thread_repo=app.state.thread_repo,
-                    user_repo=app.state.user_repo,
-                )
-                if lease["lease_id"] == payload.lease_id
-            ),
-            None,
+        owned_lease = sandbox_service.resolve_owned_lease(
+            owner_user_id,
+            payload.lease_id,
+            thread_repo=app.state.thread_repo,
+            user_repo=app.state.user_repo,
         )
         if owned_lease is not None:
             sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
@@ -565,17 +559,11 @@ def _create_owned_thread(
     selected_lease_id = payload.lease_id
     owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
-        owned_lease = next(
-            (
-                lease
-                for lease in sandbox_service.list_user_leases(
-                    owner_user_id,
-                    thread_repo=app.state.thread_repo,
-                    user_repo=app.state.user_repo,
-                )
-                if lease["lease_id"] == selected_lease_id
-            ),
-            None,
+        owned_lease = sandbox_service.resolve_owned_lease(
+            owner_user_id,
+            selected_lease_id,
+            thread_repo=app.state.thread_repo,
+            user_repo=app.state.user_repo,
         )
         if owned_lease is None:
             raise HTTPException(403, "Lease not authorized")
@@ -754,10 +742,11 @@ async def list_threads(
 
     raw = app.state.thread_repo.list_by_owner_user_id(user_id)
     pool = app.state.agent_pool
+    runtime_states = summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
     threads = []
     for t in raw:
         tid = t["id"]
-        runtime_state = converge_owner_thread_runtime(app, tid)
+        runtime_state = runtime_states.get(tid) or converge_owner_thread_runtime(app, tid)
         if runtime_state in {"missing", "purged"}:
             continue
         if _is_internal_child_thread(tid):
@@ -1407,7 +1396,7 @@ def _background_run_type(run: Any) -> str:
 
 def _serialize_background_run(task_id: str, run: Any, *, include_result: bool) -> dict[str, Any]:
     run_type = _background_run_type(run)
-    result_text = run.get_result() if include_result and run.is_done else None
+    result_text = _background_run_result(run) if include_result and run.is_done else None
     if _background_run_cancelled(run):
         status = "cancelled"
     else:

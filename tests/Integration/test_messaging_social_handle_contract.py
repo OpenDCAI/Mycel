@@ -1269,3 +1269,88 @@ async def test_async_deliver_prefers_unique_ready_child_thread_over_default_main
 
     assert started == [("thread-child", "chat-3", "thread-user-1")]
     assert enqueued == [("Human|chat-3|1|ping", "thread-child", "human-user-1", "Human")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("threads", "pool", "chat_id", "expected_thread_id"),
+    [
+        (
+            [
+                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
+                {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
+            ],
+            {
+                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
+                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
+            },
+            "chat-4",
+            "thread-child",
+        ),
+        (
+            [
+                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
+                {"id": "thread-child-old", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
+                {"id": "thread-child-fresh", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 2},
+            ],
+            {
+                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
+                "thread-child-old:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
+                "thread-child-fresh:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
+            },
+            "chat-5",
+            "thread-child-fresh",
+        ),
+    ],
+    ids=["prefer-only-live-child", "prefer-latest-live-child"],
+)
+async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
+    monkeypatch: pytest.MonkeyPatch,
+    threads,
+    pool,
+    chat_id,
+    expected_thread_id,
+) -> None:
+    started: list[tuple[str, str, str]] = []
+    enqueued: list[tuple[str, str, str | None, str | None]] = []
+
+    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
+        return SimpleNamespace(id=f"agent-for-{thread_id}")
+
+    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "core.runtime.middleware.queue.formatters.format_chat_notification",
+        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
+                list_by_agent_user=lambda uid: threads if uid == "agent-user-1" else [],
+            ),
+            agent_pool=pool,
+            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
+            messaging_service=SimpleNamespace(count_unread=lambda _chat_id, _user_id: 1),
+            queue_manager=SimpleNamespace(
+                enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
+                    (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
+                )
+            ),
+        )
+    )
+
+    await delivery_module._async_deliver(
+        app,
+        "thread-user-1",
+        cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
+        "Human",
+        chat_id,
+        "human-user-1",
+        signal="ping",
+    )
+
+    assert started == [(expected_thread_id, chat_id, "thread-user-1")]
+    assert enqueued == [(f"Human|{chat_id}|1|ping", expected_thread_id, "human-user-1", "Human")]

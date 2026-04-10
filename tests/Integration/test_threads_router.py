@@ -120,14 +120,6 @@ def _require_app_state(loop: QueryLoop) -> AppState:
     return app_state
 
 
-def test_threads_router_sandbox_bootstrap_no_longer_imports_storage_factory() -> None:
-    threads_source = Path("backend/web/routers/threads.py").read_text(encoding="utf-8")
-
-    assert "from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo" not in threads_source
-    assert "resolve_role_db_path" not in threads_source
-    assert "sandbox.control_plane_repos" in threads_source
-
-
 def _require_await_kwargs(mock: AsyncMock) -> dict[str, Any]:
     await_args = mock.await_args
     assert await_args is not None
@@ -483,9 +475,10 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
     with (
         patch.object(
             threads_router.sandbox_service,
-            "list_user_leases",
-            return_value=[{"lease_id": "lease-1", "provider_name": "local", "recipe": None}],
+            "resolve_owned_lease",
+            return_value={"lease_id": "lease-1", "provider_name": "local", "recipe": None},
         ),
+        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused") as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
@@ -549,6 +542,9 @@ async def test_list_threads_hides_internal_subagent_threads():
             get_by_id=lambda thread_id: rows.get(thread_id),
         ),
         terminal_repo=SimpleNamespace(
+            summarize_threads=lambda thread_ids: {
+                thread_id: {"active_terminal_id": "term-1", "latest_terminal_id": "term-1"} for thread_id in thread_ids
+            },
             get_active=lambda _thread_id: {"terminal_id": "term-1"},
             list_by_thread=lambda _thread_id: [{"terminal_id": "term-1"}],
             set_active=lambda _thread_id, _terminal_id: None,
@@ -560,6 +556,56 @@ async def test_list_threads_hides_internal_subagent_threads():
     payload = await threads_router.list_threads("owner-1", app)
 
     assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
+
+
+@pytest.mark.asyncio
+async def test_list_threads_prefers_batch_terminal_summary_when_available():
+    rows = {
+        "main-thread": {
+            "id": "main-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 0,
+            "is_main": True,
+            "agent_avatar": None,
+        },
+        "child-thread": {
+            "id": "child-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 1,
+            "is_main": False,
+            "agent_avatar": None,
+        },
+    }
+    summarize_calls: list[list[str]] = []
+    app = _make_threads_app(
+        thread_repo=SimpleNamespace(
+            list_by_owner_user_id=lambda _user_id: list(rows.values()),
+            get_by_id=lambda thread_id: rows.get(thread_id),
+        ),
+        terminal_repo=SimpleNamespace(
+            summarize_threads=lambda thread_ids: (
+                summarize_calls.append(list(thread_ids))
+                or {
+                    "main-thread": {"active_terminal_id": "term-main", "latest_terminal_id": "term-main"},
+                    "child-thread": {"active_terminal_id": "term-child", "latest_terminal_id": "term-child"},
+                }
+            ),
+            get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("should not use per-thread get_active")),
+            list_by_thread=lambda _thread_id: (_ for _ in ()).throw(AssertionError("should not use per-thread list_by_thread")),
+            set_active=lambda _thread_id, _terminal_id: (_ for _ in ()).throw(AssertionError("should not repair ready threads")),
+        ),
+        agent_pool={},
+        thread_last_active={},
+    )
+
+    payload = await threads_router.list_threads("owner-1", app)
+
+    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread", "child-thread"]
+    assert summarize_calls == [["main-thread", "child-thread"]]
 
 
 @pytest.mark.asyncio
@@ -598,6 +644,13 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
             delete=_delete,
         ),
         terminal_repo=SimpleNamespace(
+            summarize_threads=lambda thread_ids: {
+                thread_id: {
+                    "active_terminal_id": f"term-{thread_id}" if thread_id == "healthy-thread" else None,
+                    "latest_terminal_id": "term-healthy" if thread_id == "healthy-thread" else None,
+                }
+                for thread_id in thread_ids
+            },
             get_active=lambda thread_id: {"terminal_id": f"term-{thread_id}"} if thread_id == "healthy-thread" else None,
             list_by_thread=lambda thread_id: [] if thread_id == "broken-thread" else [{"terminal_id": "term-healthy"}],
             set_active=lambda _thread_id, _terminal_id: None,
@@ -658,9 +711,10 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
     with (
         patch.object(
             threads_router.sandbox_service,
-            "list_user_leases",
-            return_value=[{"lease_id": "lease-1", "provider_name": "daytona", "recipe": None}],
+            "resolve_owned_lease",
+            return_value={"lease_id": "lease-1", "provider_name": "daytona", "recipe": None},
         ),
+        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None),
     ):
         result = await threads_router.create_thread(payload, "owner-1", app)

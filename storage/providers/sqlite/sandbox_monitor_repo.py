@@ -502,6 +502,40 @@ class SQLiteSandboxMonitorRepo:
         val = str(row["instance_id"] or "").strip()
         return val or None
 
+    def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
+        ordered_ids = [str(lease_id or "").strip() for lease_id in lease_ids if str(lease_id or "").strip()]
+        if not ordered_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in ordered_ids)
+        if self._table_exists("sandbox_instances"):
+            rows = self._conn.execute(
+                f"""
+                SELECT sl.lease_id, COALESCE(si.provider_session_id, sl.current_instance_id) as instance_id
+                FROM sandbox_leases sl
+                LEFT JOIN sandbox_instances si ON sl.lease_id = si.lease_id
+                WHERE sl.lease_id IN ({placeholders})
+                """,
+                ordered_ids,
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                f"""
+                SELECT lease_id, current_instance_id as instance_id
+                FROM sandbox_leases
+                WHERE lease_id IN ({placeholders})
+                """,
+                ordered_ids,
+            ).fetchall()
+
+        instance_map: dict[str, str | None] = {lease_id: None for lease_id in ordered_ids}
+        for row in rows:
+            lease_id = str(row["lease_id"] or "").strip()
+            instance_id = str(row["instance_id"] or "").strip()
+            if lease_id:
+                instance_map[lease_id] = instance_id or None
+        return instance_map
+
     def _table_exists(self, table_name: str) -> bool:
         row = self._conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",

@@ -62,3 +62,36 @@ def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
 
     purge_incomplete_owner_thread(app, thread_id)
     return "purged"
+
+
+def summarize_owner_thread_runtime(app: Any, thread_ids: list[str]) -> dict[str, str]:
+    """Batch-converge owner-visible threads when terminal repo can summarize them."""
+
+    terminal_repo = getattr(app.state, "terminal_repo", None)
+    if terminal_repo is None:
+        raise RuntimeError("terminal_repo is required for thread runtime convergence")
+
+    summarize_threads = getattr(terminal_repo, "summarize_threads", None)
+    if not callable(summarize_threads):
+        raise RuntimeError("terminal_repo must support summarize_threads for owner runtime convergence")
+
+    summary = summarize_threads(thread_ids)
+    states: dict[str, str] = {}
+    for thread_id in thread_ids:
+        item = summary.get(thread_id)
+        if item is None:
+            continue
+
+        active_terminal_id = str(item.get("active_terminal_id") or "").strip()
+        latest_terminal_id = str(item.get("latest_terminal_id") or "").strip()
+        if active_terminal_id:
+            states[thread_id] = "ready"
+            continue
+        if latest_terminal_id:
+            terminal_repo.set_active(thread_id, latest_terminal_id)
+            states[thread_id] = "repaired_pointer"
+            continue
+
+        purge_incomplete_owner_thread(app, thread_id)
+        states[thread_id] = "purged"
+    return states

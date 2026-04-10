@@ -118,6 +118,7 @@ def _load_workspace_settings(storage: _SettingsStorage) -> WorkspaceSettings:
                 recent_workspaces=row.get("recent_workspaces") or [],
                 default_model=row.get("default_model") or "leon:large",
             )
+        return WorkspaceSettings()
     return load_settings()
 
 
@@ -181,8 +182,7 @@ def _save_observation_data(storage: _SettingsStorage, data: dict[str, Any]) -> N
 def _load_sandbox_configs(storage: _SettingsStorage) -> dict[str, Any] | None:
     if storage.repo_backed:
         data = storage.repo.get_sandbox_configs(storage.user_id)
-        if data is not None:
-            return data
+        return data or {}
     sandboxes: dict[str, Any] = {}
     seen: set[Path] = set()
     for root in user_home_read_candidates("sandboxes"):
@@ -207,11 +207,10 @@ def _save_sandbox_configs(storage: _SettingsStorage, data: dict[str, Any]) -> No
 
 
 def _load_models_for_user(repo, user_id: str | None) -> dict[str, Any]:
-    """Load models config: Supabase first, filesystem fallback."""
+    """Load models config from the active persistence contract."""
     if repo and user_id:
         data = repo.get_models_config(user_id)
-        if data is not None:
-            return data
+        return data or {}
     return _load_user_json("models.json")
 
 
@@ -238,6 +237,21 @@ def load_models() -> dict[str, Any]:
 def load_merged_models() -> ModelsConfig:
     """Load fully merged ModelsConfig (system + user)."""
     return ModelsLoader().load()
+
+
+def _load_merged_models_for_storage(storage: _SettingsStorage) -> ModelsConfig:
+    if not storage.repo_backed:
+        return load_merged_models()
+
+    loader = ModelsLoader()
+    # @@@repo-backed-model-merge - repo-backed user settings must override filesystem user models, but still preserve system defaults.
+    system = loader._load_json(loader._system_dir / "models.json")
+    merged = loader._merge(system, _load_models_data(storage))
+    merged = loader._merge(merged, loader._load_project())
+    merged = loader._expand_env_vars(merged)
+    merged["catalog"] = system.get("catalog", [])
+    merged["virtual_models"] = system.get("virtual_models", [])
+    return ModelsConfig(**merged)
 
 
 def _load_user_json(*parts: str) -> dict[str, Any]:
@@ -280,7 +294,7 @@ async def get_settings(request: Request) -> UserSettings:
     """Get combined settings (workspace + default_model from Supabase or preferences.json, models from models.json)."""
     storage = _resolve_settings_storage(request)
     ws = _load_workspace_settings(storage)
-    models = load_merged_models()
+    models = _load_merged_models_for_storage(storage)
 
     # Build compat view
     mapping = {k: v.model for k, v in models.mapping.items()}
@@ -438,7 +452,7 @@ async def update_model_config(request: ModelConfigRequest, req: Request) -> dict
 
 
 @router.get("/available-models")
-async def get_available_models() -> dict[str, Any]:
+async def get_available_models(req: Request) -> dict[str, Any]:
     """Get all available models and virtual models from models.json."""
     models_file = Path(__file__).parent.parent.parent.parent / "core" / "runtime" / "middleware" / "monitor" / "models.json"
 
@@ -473,8 +487,9 @@ async def get_available_models() -> dict[str, Any]:
         pricing_ids = seen
 
         # Merge custom + orphaned enabled models
-        mc = load_merged_models()
-        data = load_models()
+        storage = _resolve_settings_storage(req)
+        mc = _load_merged_models_for_storage(storage)
+        data = _load_models_data(storage)
         custom_providers = data.get("pool", {}).get("custom_providers", {})
         extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - pricing_ids)
         for mid in sorted(extra_ids):
@@ -605,18 +620,19 @@ class ModelTestRequest(BaseModel):
 
 
 @router.post("/models/test")
-async def test_model(request: ModelTestRequest) -> dict[str, Any]:
+async def test_model(request: ModelTestRequest, req: Request) -> dict[str, Any]:
     """Test if a model is reachable by sending a minimal request."""
     import asyncio
 
-    mc = load_merged_models()
+    storage = _resolve_settings_storage(req)
+    mc = _load_merged_models_for_storage(storage)
 
     # Resolve virtual model
     resolved, overrides = mc.resolve_model(request.model_id)
     provider_name = overrides.get("model_provider") or (mc.active.provider if mc.active else None)
 
     # Check custom_providers mapping
-    data = load_models()
+    data = _load_models_data(storage)
     custom_providers = data.get("pool", {}).get("custom_providers", {})
     if request.model_id in custom_providers:
         provider_name = custom_providers[request.model_id]

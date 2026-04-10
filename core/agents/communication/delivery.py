@@ -37,13 +37,14 @@ def _resolve_unique_active_thread_id(app: Any, recipient_id: str, thread: dict[s
 
     pool = getattr(app.state, "agent_pool", {}) or {}
     active_thread_ids: list[str] = []
-    live_child_thread_ids: list[str] = []
+    live_child_threads: list[tuple[int, str]] = []
     for candidate in thread_repo.list_by_agent_user(agent_user_id):
         thread_id = str(candidate.get("id") or "").strip()
         if not thread_id:
             continue
-        # @@@active-thread-delivery-precedence - fresh chat delivery should prefer the
-        # recipient's unique active thread over a stale default-main thread with dirty history.
+        # @@@active-thread-delivery-precedence - fresh chat delivery should prefer a
+        # recipient's latest live child thread over the default-main thread, even when the
+        # main thread is still marked ACTIVE from stale work or older child threads still exist.
         for pool_key, agent in pool.items():
             if not str(pool_key).startswith(f"{thread_id}:"):
                 continue
@@ -51,17 +52,16 @@ def _resolve_unique_active_thread_id(app: Any, recipient_id: str, thread: dict[s
             if state in {AgentState.READY, AgentState.ACTIVE, AgentState.IDLE, AgentState.SUSPENDED, AgentState.INITIALIZING} and not bool(
                 candidate.get("is_main")
             ):
-                live_child_thread_ids.append(thread_id)
+                live_child_threads.append((int(candidate.get("branch_index") or -1), thread_id))
             if state == AgentState.ACTIVE:
                 active_thread_ids.append(thread_id)
                 break
 
+    if live_child_threads:
+        return max(live_child_threads)[1]
     unique_active_thread_ids = list(dict.fromkeys(active_thread_ids))
     if len(unique_active_thread_ids) == 1:
         return unique_active_thread_ids[0]
-    unique_live_child_thread_ids = list(dict.fromkeys(live_child_thread_ids))
-    if len(unique_live_child_thread_ids) == 1:
-        return unique_live_child_thread_ids[0]
     return None
 
 

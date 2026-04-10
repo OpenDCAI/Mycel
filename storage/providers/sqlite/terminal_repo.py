@@ -173,6 +173,52 @@ class SQLiteTerminalRepo:
             self._conn.row_factory = None
             return dict(row) if row else None
 
+    def summarize_threads(self, thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
+        normalized_ids = [str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()]
+        if not normalized_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in normalized_ids)
+        with self._lock:
+            self._conn.row_factory = sqlite3.Row
+            pointer_rows = self._conn.execute(
+                f"""
+                SELECT thread_id, active_terminal_id
+                FROM thread_terminal_pointers
+                WHERE thread_id IN ({placeholders})
+                """,
+                tuple(normalized_ids),
+            ).fetchall()
+            terminal_rows = self._conn.execute(
+                f"""
+                SELECT thread_id, terminal_id
+                FROM abstract_terminals
+                WHERE thread_id IN ({placeholders})
+                ORDER BY thread_id ASC, created_at DESC
+                """,
+                tuple(normalized_ids),
+            ).fetchall()
+            self._conn.row_factory = None
+
+        summary: dict[str, dict[str, str | None]] = {
+            thread_id: {"active_terminal_id": None, "latest_terminal_id": None} for thread_id in normalized_ids
+        }
+        for row in pointer_rows:
+            thread_id = str(row["thread_id"] or "").strip()
+            if thread_id:
+                summary.setdefault(thread_id, {"active_terminal_id": None, "latest_terminal_id": None})["active_terminal_id"] = (
+                    str(row["active_terminal_id"] or "").strip() or None
+                )
+        for row in terminal_rows:
+            thread_id = str(row["thread_id"] or "").strip()
+            terminal_id = str(row["terminal_id"] or "").strip()
+            if not thread_id or not terminal_id:
+                continue
+            bucket = summary.setdefault(thread_id, {"active_terminal_id": None, "latest_terminal_id": None})
+            if bucket["latest_terminal_id"] is None:
+                bucket["latest_terminal_id"] = terminal_id
+        return summary
+
     def get_latest_by_lease(self, lease_id: str) -> dict[str, Any] | None:
         with self._lock:
             self._conn.row_factory = sqlite3.Row

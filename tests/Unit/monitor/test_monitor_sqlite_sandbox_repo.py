@@ -1,8 +1,65 @@
 import sqlite3
 
+import pytest
+
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from tests.fakes.supabase import FakeSupabaseClient
+
+
+class _BrokenSandboxInstancesClient(FakeSupabaseClient):
+    def table(self, table_name: str):
+        if table_name == "sandbox_instances":
+            raise RuntimeError("sandbox_instances exploded")
+        return super().table(table_name)
+
+
+class _CountResponse:
+    def __init__(self, count: int) -> None:
+        self.data = []
+        self.count = count
+
+
+class _CountQuery:
+    def __init__(self, count: int) -> None:
+        self._count = count
+
+    def select(self, _columns: str, **_kwargs):
+        return self
+
+    def limit(self, _value: int):
+        return self
+
+    def execute(self):
+        return _CountResponse(self._count)
+
+
+class _CountClient:
+    def __init__(self, counts: dict[str, int]) -> None:
+        self._counts = counts
+
+    def table(self, table_name: str):
+        return _CountQuery(self._counts[table_name])
+
+
+class _BrokenCountClient(_CountClient):
+    def table(self, table_name: str):
+        if table_name == "sandbox_leases":
+            raise RuntimeError("count exploded")
+        return super().table(table_name)
+
+
+def _broken_instance_lookup_repo(*, include_updated_at: bool) -> SupabaseSandboxMonitorRepo:
+    row = {
+        "lease_id": "lease-1",
+        "provider_name": "daytona_selfhost",
+        "desired_state": "running",
+        "observed_state": "detached",
+        "current_instance_id": "instance-fallback",
+    }
+    if include_updated_at:
+        row["updated_at"] = "2026-04-05T10:10:00"
+    return SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient({"sandbox_leases": [row]}))
 
 
 def _bootstrap_monitor_db(db_path):
@@ -109,43 +166,6 @@ def test_list_sessions_with_leases_keeps_raw_newest_terminal_truth(tmp_path):
     assert all(row["lease_id"] == "lease-1" for row in rows)
 
 
-def test_query_threads_accepts_optional_thread_filter(tmp_path):
-    db_path = tmp_path / "sandbox.db"
-    _bootstrap_monitor_db(db_path)
-
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute(
-            """
-            INSERT INTO sandbox_leases (
-                lease_id, provider_name, desired_state, observed_state, current_instance_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("lease-1", "local", "running", "running", "instance-1", "2026-04-05T10:00:00", "2026-04-05T10:00:00"),
-        )
-        conn.executemany(
-            """
-            INSERT INTO chat_sessions (chat_session_id, thread_id, lease_id, status, started_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            [
-                ("sess-1", "thread-1", "lease-1", "active", "2026-04-05T10:00:00"),
-                ("sess-2", "thread-2", "lease-1", "active", "2026-04-05T10:05:00"),
-            ],
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-    repo = SQLiteSandboxMonitorRepo(db_path=db_path)
-    try:
-        rows = repo.query_threads(thread_id="thread-2")
-    finally:
-        repo.close()
-
-    assert [row["thread_id"] for row in rows] == ["thread-2"]
-
-
 def test_supabase_query_threads_accepts_optional_thread_filter_matches_sqlite(tmp_path):
     db_path = tmp_path / "sandbox.db"
     _bootstrap_monitor_db(db_path)
@@ -179,6 +199,8 @@ def test_supabase_query_threads_accepts_optional_thread_filter_matches_sqlite(tm
         sqlite_rows = sqlite_repo.query_threads(thread_id="thread-2")
     finally:
         sqlite_repo.close()
+
+    assert [row["thread_id"] for row in sqlite_rows] == ["thread-2"]
 
     supabase_tables = {
         "sandbox_leases": [
@@ -456,6 +478,46 @@ def test_supabase_list_probe_targets_prefers_provider_session_id_matches_sqlite(
     supabase_rows = supabase_repo.list_probe_targets()
 
     assert supabase_rows == sqlite_rows
+
+
+@pytest.mark.parametrize(
+    ("include_updated_at", "caller"),
+    [
+        (False, lambda repo: repo.query_lease_instance_id("lease-1")),
+        (True, lambda repo: repo.list_probe_targets()),
+    ],
+    ids=["query-lease-instance-id", "list-probe-targets"],
+)
+def test_supabase_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
+    repo = _broken_instance_lookup_repo(include_updated_at=include_updated_at)
+
+    with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
+        caller(repo)
+
+
+def test_supabase_count_rows_returns_exact_counts() -> None:
+    repo = SupabaseSandboxMonitorRepo(
+        _CountClient(
+            {
+                "chat_sessions": 3,
+                "sandbox_leases": 5,
+                "provider_events": 7,
+            }
+        )
+    )
+
+    assert repo.count_rows(["chat_sessions", "sandbox_leases", "provider_events"]) == {
+        "chat_sessions": 3,
+        "sandbox_leases": 5,
+        "provider_events": 7,
+    }
+
+
+def test_supabase_count_rows_fails_loudly_when_count_query_breaks() -> None:
+    repo = SupabaseSandboxMonitorRepo(_BrokenCountClient({"chat_sessions": 3, "sandbox_leases": 5}))
+
+    with pytest.raises(RuntimeError, match="count exploded"):
+        repo.count_rows(["chat_sessions", "sandbox_leases"])
 
 
 def test_supabase_list_sessions_with_leases_matches_sqlite_terminal_and_recent_session_fallback(tmp_path):

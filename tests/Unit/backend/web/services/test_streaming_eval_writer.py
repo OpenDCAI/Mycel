@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.streaming_service import _run_agent_to_buffer
+from backend.web.services.streaming_service import _run_agent_to_buffer, write_cancellation_markers
 from core.runtime.middleware.monitor import AgentState
 from eval.models import RunTrajectory
 
@@ -113,6 +113,43 @@ async def _noop_async(*_args, **_kwargs) -> None:
     return None
 
 
+class _VersionedCheckpointSaver:
+    def __init__(self) -> None:
+        self.checkpoint = {
+            "v": 1,
+            "ts": "2026-04-10T00:00:00+00:00",
+            "id": "checkpoint-1",
+            "channel_values": {"messages": []},
+            "channel_versions": {"messages": "00000000000000000000000000000001.1234567890123456"},
+            "versions_seen": {},
+            "pending_sends": [],
+            "updated_channels": None,
+        }
+        self.metadata = {"step": 3}
+        self.saved_checkpoint = None
+        self.saved_metadata = None
+        self.saved_versions = None
+
+    async def aget_tuple(self, _config):
+        return SimpleNamespace(checkpoint=self.checkpoint, metadata=self.metadata)
+
+    def get_next_version(self, current: str | None, _channel) -> str:
+        if current is None:
+            current_v = 0
+        else:
+            current_v = int(str(current).split(".")[0])
+        return f"{current_v + 1:032}.test"
+
+    async def aput(self, _config, checkpoint, metadata, new_versions):
+        self.saved_checkpoint = checkpoint
+        self.saved_metadata = metadata
+        self.saved_versions = new_versions
+
+
+def _fake_storage_container() -> SimpleNamespace:
+    return SimpleNamespace(run_event_repo=lambda: SimpleNamespace(close=lambda: None))
+
+
 def _make_app() -> SimpleNamespace:
     return SimpleNamespace(
         state=SimpleNamespace(
@@ -152,7 +189,7 @@ async def test_run_agent_to_buffer_persists_running_then_completed_eval_row(monk
     agent = SimpleNamespace(
         agent=_FakeGraphAgent(expected_run_id="run-123"),
         runtime=_FakeRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
 
     result = await _run_agent_to_buffer(
@@ -187,7 +224,7 @@ async def test_run_agent_to_buffer_finalizes_same_eval_row_on_error(monkeypatch:
     agent = SimpleNamespace(
         agent=_FakeGraphAgent(expected_run_id="run-123", error=RuntimeError("boom")),
         runtime=_FakeRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
 
     result = await _run_agent_to_buffer(
@@ -213,7 +250,7 @@ async def test_run_agent_to_buffer_finalizes_same_eval_row_on_cancel(monkeypatch
     agent = SimpleNamespace(
         agent=_FakeGraphAgent(expected_run_id="run-123", wait_forever=True),
         runtime=_FakeRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
 
     task = asyncio.create_task(
@@ -238,3 +275,22 @@ async def test_run_agent_to_buffer_finalizes_same_eval_row_on_cancel(monkeypatch
     assert result == ""
     assert _FakeTrajectoryStore.finalize_calls[0]["run_id"] == "run-123"
     assert _FakeTrajectoryStore.finalize_calls[0]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_write_cancellation_markers_advances_string_channel_versions() -> None:
+    saver = _VersionedCheckpointSaver()
+    agent = SimpleNamespace(agent=SimpleNamespace(checkpointer=saver))
+
+    cancelled = await write_cancellation_markers(
+        agent,
+        {"configurable": {"thread_id": "thread-1"}},
+        {"tc-1": {"name": "shell"}},
+    )
+
+    assert cancelled == ["tc-1"]
+    assert saver.saved_versions == {"messages": "00000000000000000000000000000002.test"}
+    assert saver.saved_checkpoint["channel_versions"]["messages"] == "00000000000000000000000000000002.test"
+    message = saver.saved_checkpoint["channel_values"]["messages"][-1]
+    assert message.tool_call_id == "tc-1"
+    assert message.name == "shell"

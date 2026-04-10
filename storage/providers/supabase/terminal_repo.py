@@ -69,6 +69,59 @@ class SupabaseTerminalRepo:
         )
         return dict(rows[0]) if rows else None
 
+    def summarize_threads(self, thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
+        normalized_ids = [str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()]
+        if not normalized_ids:
+            return {}
+
+        pointer_rows = q.rows(
+            q.in_(
+                self._pointers().select("thread_id,active_terminal_id"),
+                "thread_id",
+                normalized_ids,
+                _REPO,
+                "summarize_threads pointers",
+            ).execute(),
+            _REPO,
+            "summarize_threads pointers",
+        )
+        terminal_rows = q.rows(
+            q.in_(
+                q.order(
+                    self._terminals().select("thread_id,terminal_id,created_at"),
+                    "created_at",
+                    desc=True,
+                    repo=_REPO,
+                    operation="summarize_threads terminals",
+                ),
+                "thread_id",
+                normalized_ids,
+                _REPO,
+                "summarize_threads terminals",
+            ).execute(),
+            _REPO,
+            "summarize_threads terminals",
+        )
+
+        summary: dict[str, dict[str, str | None]] = {
+            thread_id: {"active_terminal_id": None, "latest_terminal_id": None} for thread_id in normalized_ids
+        }
+        for row in pointer_rows:
+            thread_id = str(row.get("thread_id") or "").strip()
+            if thread_id:
+                summary.setdefault(thread_id, {"active_terminal_id": None, "latest_terminal_id": None})["active_terminal_id"] = (
+                    str(row.get("active_terminal_id") or "").strip() or None
+                )
+        for row in terminal_rows:
+            thread_id = str(row.get("thread_id") or "").strip()
+            terminal_id = str(row.get("terminal_id") or "").strip()
+            if not thread_id or not terminal_id:
+                continue
+            bucket = summary.setdefault(thread_id, {"active_terminal_id": None, "latest_terminal_id": None})
+            if bucket["latest_terminal_id"] is None:
+                bucket["latest_terminal_id"] = terminal_id
+        return summary
+
     def get_latest_by_lease(self, lease_id: str) -> dict[str, Any] | None:
         rows = q.rows(
             q.limit(

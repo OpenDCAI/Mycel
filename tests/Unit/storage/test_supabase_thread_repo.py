@@ -6,6 +6,7 @@ class _FakeTable:
         self.insert_payload = None
         self.update_payload = None
         self.eq_calls: list[tuple[str, object]] = []
+        self.in_calls: list[tuple[str, list[str]]] = []
         self.rows = [
             {
                 "id": "thread-1",
@@ -35,6 +36,10 @@ class _FakeTable:
 
     def eq(self, key, value):
         self.eq_calls.append((key, value))
+        return self
+
+    def in_(self, key, values):
+        self.in_calls.append((key, list(values)))
         return self
 
     def execute(self):
@@ -145,3 +150,13 @@ def test_supabase_thread_repo_get_by_user_id_targets_default_main_thread() -> No
 
     assert ("agent_user_id", "agent-1") in client.table_obj.eq_calls
     assert ("is_main", 1) in client.table_obj.eq_calls
+
+
+def test_supabase_thread_repo_list_by_ids_reads_threads_in_batch() -> None:
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    rows = repo.list_by_ids(["thread-1", "thread-2"])
+
+    assert [row["id"] for row in rows] == ["thread-1"]
+    assert ("id", ["thread-1", "thread-2"]) in client.table_obj.in_calls

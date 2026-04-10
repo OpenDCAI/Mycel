@@ -48,6 +48,44 @@ class _MemoryCheckpointer:
         self.store[cfg["configurable"]["thread_id"]] = checkpoint
 
 
+class _FakeRunEventRepo:
+    def __init__(self) -> None:
+        self._seq = 0
+
+    def close(self) -> None:
+        return None
+
+    def append_event(self, thread_id: str, run_id: str, event_type: str, data: dict[str, Any], message_id: str | None = None) -> int:
+        self._seq += 1
+        return self._seq
+
+    def list_events(self, thread_id: str, run_id: str, *, after: int = 0, limit: int = 200) -> list[dict[str, Any]]:
+        return []
+
+    def latest_seq(self, thread_id: str) -> int:
+        return self._seq
+
+    def latest_run_id(self, thread_id: str) -> str | None:
+        return None
+
+    def list_run_ids(self, thread_id: str) -> list[str]:
+        return []
+
+    def run_start_seq(self, thread_id: str, run_id: str) -> int:
+        return 0
+
+    def delete_runs(self, thread_id: str, run_ids: list[str]) -> int:
+        return 0
+
+    def delete_thread_events(self, thread_id: str) -> int:
+        return 0
+
+
+def _fake_storage_container() -> SimpleNamespace:
+    repo = _FakeRunEventRepo()
+    return SimpleNamespace(run_event_repo=lambda: repo)
+
+
 class _NoToolModel:
     def __init__(self, text: str = "done") -> None:
         self._text = text
@@ -399,7 +437,7 @@ def _make_streaming_agent(loop: QueryLoop, *, queue_manager: MessageQueueManager
     agent = SimpleNamespace(
         agent=loop,
         runtime=_StreamingRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
     if queue_manager is not None:
         agent.queue_manager = queue_manager
@@ -938,7 +976,7 @@ async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(mon
     agent = SimpleNamespace(
         agent=loop,
         runtime=runtime,
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -1505,7 +1543,7 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
     agent = SimpleNamespace(
         agent=_StreamingGraphAgent(),
         runtime=_StreamingRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -1571,7 +1609,7 @@ async def test_run_agent_to_buffer_persists_terminal_notifications_before_assist
     agent = SimpleNamespace(
         agent=loop,
         runtime=_StreamingRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -1629,7 +1667,7 @@ async def test_run_agent_to_buffer_resumes_graph_for_terminal_background_notific
     agent = SimpleNamespace(
         agent=graph,
         runtime=_StreamingRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -1839,6 +1877,14 @@ async def test_cancel_task_route_marks_bash_run_cancelled_and_forces_process_sto
     assert async_cmd.done is True
     assert async_cmd.exit_code == -9
     assert threads_router._serialize_background_run("cmd-cancel-route", run, include_result=False)["status"] == "cancelled"
+    assert threads_router._serialize_background_run("cmd-cancel-route", run, include_result=True) == {
+        "task_id": "cmd-cancel-route",
+        "task_type": "bash",
+        "status": "cancelled",
+        "command_line": "sleep 30; echo NEVER",
+        "result": "Command cancelled",
+        "text": "Command cancelled",
+    }
 
 
 @pytest.mark.asyncio
@@ -1983,7 +2029,7 @@ async def test_run_agent_to_buffer_logs_real_stream_error_without_none_traceback
     agent = SimpleNamespace(
         agent=_BrokenStreamGraphAgent(RuntimeError("stream blew up")),
         runtime=_StreamingRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -2055,7 +2101,7 @@ async def test_run_agent_to_buffer_batches_additional_terminal_notifications(mon
     agent = SimpleNamespace(
         agent=_StreamingGraphAgent(),
         runtime=_StreamingRuntime(),
-        storage_container=None,
+        storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
         state=SimpleNamespace(

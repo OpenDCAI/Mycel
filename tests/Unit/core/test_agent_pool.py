@@ -361,3 +361,70 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
 
     assert seen["user_id"] == "agent-user-7"
     assert "member" not in seen
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("settings_row", "expected_model_name", "agent_id", "owner_id", "config_id", "thread_id", "agent_user_id"),
+    [
+        ({"default_model": "repo-default-model"}, "repo-default-model", "agent-8", "owner-8", "cfg-8", "thread-8", "agent-user-8"),
+        (None, None, "agent-9", "owner-9", "cfg-9", "thread-9", "agent-user-9"),
+    ],
+    ids=["prefer-repo-default-model", "missing-repo-default-stays-none"],
+)
+async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_row,
+    expected_model_name,
+    agent_id,
+    owner_id,
+    config_id,
+    thread_id,
+    agent_user_id,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["model_name"] = kwargs.get("model_name")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: agent_id)
+    monkeypatch.setattr(
+        "backend.web.routers.settings.load_settings",
+        lambda: (_ for _ in ()).throw(AssertionError("filesystem preferences not allowed")),
+    )
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": agent_user_id,
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id=owner_id, agent_config_id=config_id)
+
+    class _UserSettingsRepo:
+        def get(self, user_id: str):
+            assert user_id == owner_id
+            return settings_row
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            user_settings_repo=_UserSettingsRepo(),
+            agent_config_repo=SimpleNamespace(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id=thread_id)
+
+    assert captured["model_name"] == expected_model_name

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime
+import pytest
+
+from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 
 
 class _FakeThreadRepo:
@@ -39,6 +41,17 @@ class _FakeTerminalRepo:
             if str(row["terminal_id"]) == terminal_id:
                 self._active_by_thread[thread_id] = row
                 break
+
+    def summarize_threads(self, thread_ids: list[str]):
+        summary: dict[str, dict[str, str | None]] = {}
+        for thread_id in thread_ids:
+            active = self._active_by_thread.get(thread_id)
+            terminals = self._terminals_by_thread.get(thread_id, [])
+            summary[thread_id] = {
+                "active_terminal_id": str(active["terminal_id"]) if active is not None else None,
+                "latest_terminal_id": str(terminals[0]["terminal_id"]) if terminals else None,
+            }
+        return summary
 
 
 def _make_app(*, thread_repo, terminal_repo):
@@ -104,3 +117,13 @@ def test_converge_owner_thread_runtime_purges_incomplete_thread_without_terminal
     assert "thread-1" not in app.state.thread_tasks
     assert "thread-1" not in app.state.thread_last_active
     assert app.state.agent_pool == {}
+
+
+def test_summarize_owner_thread_runtime_requires_batch_summary_contract() -> None:
+    app = _make_app(
+        thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
+        terminal_repo=SimpleNamespace(),
+    )
+
+    with pytest.raises(RuntimeError, match="terminal_repo must support summarize_threads for owner runtime convergence"):
+        summarize_owner_thread_runtime(app, ["thread-1"])
