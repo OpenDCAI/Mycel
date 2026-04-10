@@ -1,6 +1,7 @@
+import React from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { useMonitorData } from "../app/fetch";
+import { postMonitorData, useMonitorData } from "../app/fetch";
 import ErrorState from "../components/ErrorState";
 import StateBadge from "../components/StateBadge";
 
@@ -36,35 +37,196 @@ type LeaseDetailPayload = {
     thread_id?: string | null;
     status?: string | null;
   }> | null;
+  cleanup?: {
+    allowed?: boolean;
+    recommended_action?: string | null;
+    reason?: string | null;
+    operation?: {
+      operation_id?: string | null;
+      kind?: string | null;
+      status?: string | null;
+      summary?: string | null;
+    } | null;
+    recent_operations?: Array<{
+      operation_id?: string | null;
+      kind?: string | null;
+      status?: string | null;
+      summary?: string | null;
+    }> | null;
+  } | null;
+};
+
+type LeaseCleanupActionPayload = {
+  accepted: boolean;
+  message?: string | null;
+  operation?: {
+    operation_id?: string | null;
+    kind?: string | null;
+    target_type?: string | null;
+    target_id?: string | null;
+    status?: string | null;
+    summary?: string | null;
+  } | null;
+  current_truth?: {
+    lease_id?: string | null;
+    triage_category?: string | null;
+  } | null;
 };
 
 export default function LeaseDetailPage() {
   const params = useParams<{ leaseId: string }>();
   const leaseId = params.leaseId ?? "";
   const { data, error } = useMonitorData<LeaseDetailPayload>(`/leases/${leaseId}`);
+  const [leaseData, setLeaseData] = React.useState<LeaseDetailPayload | null>(null);
+  const [cleanupMessage, setCleanupMessage] = React.useState<string | null>(null);
+  const [cleanupPending, setCleanupPending] = React.useState(false);
+
+  React.useEffect(() => {
+    if (data) {
+      setLeaseData(data);
+      setCleanupMessage(null);
+      setCleanupPending(false);
+    }
+  }, [data]);
 
   if (error) return <ErrorState title={`Lease ${leaseId}`} error={error} />;
-  if (!data) return <div>Loading...</div>;
+  if (!leaseData) return <div>Loading...</div>;
 
-  const threads = data.threads ?? [];
-  const sessions = data.sessions ?? [];
+  const threads = leaseData.threads ?? [];
+  const sessions = leaseData.sessions ?? [];
+  const cleanup = leaseData.cleanup ?? {};
+  const recentOperations = (cleanup.recent_operations ?? []).filter(
+    (operation) => operation.operation_id !== cleanup.operation?.operation_id,
+  );
+
+  async function startCleanup() {
+    setCleanupPending(true);
+    try {
+      const result = await postMonitorData<LeaseCleanupActionPayload>(`/leases/${leaseId}/cleanup`);
+      setCleanupMessage(result.message ?? null);
+      setLeaseData((current) => {
+        if (!current) return current;
+        const nextOperation = result.operation
+          ? {
+              operation_id: result.operation.operation_id ?? null,
+              kind: result.operation.kind ?? null,
+              status: result.operation.status ?? null,
+              summary: result.operation.summary ?? result.message ?? null,
+            }
+          : null;
+        const nextRecent = nextOperation
+          ? [
+              nextOperation,
+              ...(current.cleanup?.recent_operations ?? []).filter(
+                (item) => item.operation_id !== nextOperation.operation_id,
+              ),
+            ]
+          : current.cleanup?.recent_operations ?? [];
+        return {
+          ...current,
+          cleanup: {
+            ...current.cleanup,
+            operation: nextOperation,
+            recent_operations: nextRecent,
+          },
+        };
+      });
+    } finally {
+      setCleanupPending(false);
+    }
+  }
 
   return (
     <div className="page">
-      <h1>{`Lease ${data.lease.lease_id}`}</h1>
-      <p className="description">{data.triage?.description ?? "Lease operator truth"}</p>
+      <h1>{`Lease ${leaseData.lease.lease_id}`}</h1>
+      <p className="description">{leaseData.triage?.description ?? "Lease operator truth"}</p>
       <section className="surface-section">
         <h2>Operator Truth</h2>
         <div className="surface-grid">
           <article className="surface-card">
             <p className="surface-card__eyebrow">State</p>
-            <StateBadge badge={data.lease.badge ?? { text: data.lease.observed_state ?? "-" }} />
+            <StateBadge badge={leaseData.lease.badge ?? { text: leaseData.lease.observed_state ?? "-" }} />
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Triage</p>
-            <p className="surface-card__value">{data.triage?.title ?? "-"}</p>
+            <p className="surface-card__value">{leaseData.triage?.title ?? "-"}</p>
           </article>
         </div>
+      </section>
+      <section className="surface-section">
+        <h2>Cleanup</h2>
+        <div className="info-grid">
+          <div>
+            <strong>Eligibility</strong>
+            <span>{cleanup.allowed ? "Ready for managed cleanup" : "Cleanup blocked"}</span>
+          </div>
+          <div>
+            <strong>Recommended action</strong>
+            <span>{cleanup.recommended_action ?? "-"}</span>
+          </div>
+          <div>
+            <strong>Latest operation</strong>
+            <span>
+              {cleanup.operation?.operation_id ? (
+                <Link to={`/operations/${cleanup.operation.operation_id}`}>{cleanup.operation.operation_id}</Link>
+              ) : (
+                "-"
+              )}
+            </span>
+          </div>
+          <div>
+            <strong>Status</strong>
+            <span>{cleanup.operation?.status ?? "-"}</span>
+          </div>
+          <div>
+            <strong>Reason</strong>
+            <span>{cleanup.reason ?? "-"}</span>
+          </div>
+          <div>
+            <strong>Action</strong>
+            <span>
+              <button
+                type="button"
+                className="monitor-action-button"
+                disabled={!cleanup.allowed || cleanupPending}
+                onClick={() => void startCleanup()}
+              >
+                Start lease cleanup
+              </button>
+            </span>
+          </div>
+        </div>
+        {cleanupMessage ? <p className="description">{cleanupMessage}</p> : null}
+        <table>
+          <thead>
+            <tr>
+              <th>Operation</th>
+              <th>Status</th>
+              <th>Summary</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentOperations.length > 0 ? (
+              recentOperations.map((operation) => (
+                <tr key={operation.operation_id ?? "missing-operation"}>
+                  <td className="mono">
+                    {operation.operation_id ? (
+                      <Link to={`/operations/${operation.operation_id}`}>{operation.operation_id}</Link>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td>{operation.status ?? "-"}</td>
+                  <td>{operation.summary ?? "-"}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={3}>No recorded cleanup operations.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </section>
       <section className="surface-section">
         <h2>Relations</h2>
@@ -72,16 +234,16 @@ export default function LeaseDetailPage() {
           <div>
             <strong>Provider</strong>
             <span>
-              {data.provider?.id ? (
-                <Link to={`/providers/${data.provider.id}`}>{data.provider.name ?? data.provider.id}</Link>
+              {leaseData.provider?.id ? (
+                <Link to={`/providers/${leaseData.provider.id}`}>{leaseData.provider.name ?? leaseData.provider.id}</Link>
               ) : (
-                data.provider?.name ?? data.lease.provider_name ?? "-"
+                leaseData.provider?.name ?? leaseData.lease.provider_name ?? "-"
               )}
             </span>
           </div>
           <div>
             <strong>Updated</strong>
-            <span>{data.lease.updated_ago ?? data.lease.updated_at ?? "-"}</span>
+            <span>{leaseData.lease.updated_ago ?? leaseData.lease.updated_at ?? "-"}</span>
           </div>
           <div>
             <strong>Surface</strong>
@@ -91,13 +253,13 @@ export default function LeaseDetailPage() {
           </div>
           <div>
             <strong>Last error</strong>
-            <span>{data.lease.last_error ?? "-"}</span>
+            <span>{leaseData.lease.last_error ?? "-"}</span>
           </div>
           <div>
             <strong>Runtime</strong>
             <span>
-              {data.runtime?.runtime_session_id ? (
-                <Link to={`/runtimes/${data.runtime.runtime_session_id}`}>{data.runtime.runtime_session_id}</Link>
+              {leaseData.runtime?.runtime_session_id ? (
+                <Link to={`/runtimes/${leaseData.runtime.runtime_session_id}`}>{leaseData.runtime.runtime_session_id}</Link>
               ) : (
                 "-"
               )}

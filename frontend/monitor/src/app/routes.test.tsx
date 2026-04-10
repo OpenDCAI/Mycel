@@ -418,6 +418,155 @@ describe("MonitorRoutes", () => {
     expect(screen.getAllByText("runtime-1")).toHaveLength(1);
   });
 
+  it("renders a lease cleanup panel with action and operation history", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : String(input.url);
+      const method =
+        init?.method ?? (typeof input === "object" && input !== null && "method" in input ? String(input.method) : "GET");
+
+      if (url.endsWith("/leases/lease-1") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            lease: {
+              lease_id: "lease-1",
+              provider_name: "daytona",
+              desired_state: "running",
+              observed_state: "detached",
+              updated_at: "2026-04-08T00:00:00Z",
+              updated_ago: "1m ago",
+              last_error: null,
+              badge: {
+                color: "yellow",
+                observed: "detached",
+                desired: "running",
+                text: "detached -> running",
+              },
+            },
+            triage: {
+              category: "orphan_cleanup",
+              title: "Orphan Cleanup",
+              description: "Lease lost its active thread binding.",
+              tone: "warning",
+            },
+            provider: {
+              id: "daytona",
+              name: "daytona",
+            },
+            runtime: {
+              runtime_session_id: "runtime-1",
+            },
+            threads: [],
+            sessions: [],
+            cleanup: {
+              allowed: true,
+              recommended_action: "lease_cleanup",
+              reason: "Lease is orphan cleanup residue and can enter managed cleanup.",
+              operation: {
+                operation_id: "op-1",
+                kind: "lease_cleanup",
+                status: "running",
+                summary: "Destroy flow started",
+              },
+              recent_operations: [
+                {
+                  operation_id: "op-1",
+                  kind: "lease_cleanup",
+                  status: "running",
+                  summary: "Destroy flow started",
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/leases/lease-1/cleanup") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            accepted: true,
+            message: "Lease cleanup completed.",
+            operation: {
+              operation_id: "op-2",
+              kind: "lease_cleanup",
+              target_type: "lease",
+              target_id: "lease-1",
+              status: "succeeded",
+              summary: "Lease cleanup completed.",
+            },
+            current_truth: {
+              lease_id: "lease-1",
+              triage_category: "orphan_cleanup",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases/lease-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Lease lease-1" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cleanup" })).toBeInTheDocument();
+    expect(screen.getByText("Lease is orphan cleanup residue and can enter managed cleanup.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start lease cleanup" })).toBeEnabled();
+    expect(screen.getByRole("link", { name: "op-1" })).toHaveAttribute("href", "/operations/op-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Start lease cleanup" }));
+
+    expect(await screen.findByText("Lease cleanup completed.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "op-2" })).toHaveAttribute("href", "/operations/op-2");
+  });
+
+  it("renders operation detail under the leases surface", async () => {
+    mockRoutePayloads({
+      "/operations/op-1": {
+        operation: {
+          operation_id: "op-1",
+          kind: "lease_cleanup",
+          status: "running",
+          summary: "Destroy flow started",
+          reason: "Lease is orphan cleanup residue and can enter managed cleanup.",
+        },
+        target: {
+          target_type: "lease",
+          target_id: "lease-1",
+          provider_id: "daytona",
+          runtime_session_id: "runtime-1",
+          thread_ids: [],
+        },
+        result_truth: {
+          lease_state_before: "detached",
+          lease_state_after: null,
+          runtime_state_after: null,
+          thread_state_after: null,
+        },
+        events: [
+          { at: "2026-04-10T10:00:00Z", status: "pending", message: "Cleanup queued" },
+          { at: "2026-04-10T10:00:05Z", status: "running", message: "Destroy flow started" },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operations/op-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Operation op-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /leases/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Destroy flow started")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
+    expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
+  });
+
   it("renders provider detail under the resources surface", async () => {
     mockRoutePayloads({
       "/providers/daytona": {

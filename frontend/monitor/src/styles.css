@@ -457,6 +457,25 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   cursor: not-allowed;
 }
 
+.monitor-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid rgba(81, 59, 29, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 248, 235, 0.96);
+  color: #6f421b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.monitor-action-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .resources-summary-dot,
 .provider-status-dot {
   width: 0.6rem;
