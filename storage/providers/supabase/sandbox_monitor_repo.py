@@ -443,17 +443,14 @@ class SupabaseSandboxMonitorRepo:
 
         # Try sandbox_instances for provider_session_id
         instance_map: dict[str, str] = {}
-        try:
-            instances = q.rows(
-                self._client.table("sandbox_instances").select("lease_id,provider_session_id").execute(),
-                _REPO,
-                "list_probe_targets instances",
-            )
-            for inst in instances:
-                if inst.get("provider_session_id"):
-                    instance_map[inst["lease_id"]] = inst["provider_session_id"]
-        except Exception:
-            pass
+        instances = q.rows(
+            self._client.table("sandbox_instances").select("lease_id,provider_session_id").execute(),
+            _REPO,
+            "list_probe_targets instances",
+        )
+        for inst in instances:
+            if inst.get("provider_session_id"):
+                instance_map[inst["lease_id"]] = inst["provider_session_id"]
 
         targets = []
         for lease in leases:
@@ -471,21 +468,7 @@ class SupabaseSandboxMonitorRepo:
         return targets
 
     def query_lease_instance_id(self, lease_id: str) -> str | None:
-        try:
-            instances = q.rows(
-                self._client.table("sandbox_instances").select("provider_session_id").eq("lease_id", lease_id).execute(),
-                _REPO,
-                "query_lease_instance_id",
-            )
-            if instances and instances[0].get("provider_session_id"):
-                return instances[0]["provider_session_id"]
-        except Exception:
-            pass
-        lease = self.query_lease(lease_id)
-        if lease:
-            val = str(lease.get("current_instance_id") or "").strip()
-            return val or None
-        return None
+        return self.query_lease_instance_ids([lease_id]).get(lease_id)
 
     def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
         ordered_ids = [str(lease_id or "").strip() for lease_id in lease_ids if str(lease_id or "").strip()]

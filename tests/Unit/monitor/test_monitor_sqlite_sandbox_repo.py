@@ -1,8 +1,17 @@
 import sqlite3
 
+import pytest
+
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from tests.fakes.supabase import FakeSupabaseClient
+
+
+class _BrokenSandboxInstancesClient(FakeSupabaseClient):
+    def table(self, table_name: str):
+        if table_name == "sandbox_instances":
+            raise RuntimeError("sandbox_instances exploded")
+        return super().table(table_name)
 
 
 def _bootstrap_monitor_db(db_path):
@@ -456,6 +465,49 @@ def test_supabase_list_probe_targets_prefers_provider_session_id_matches_sqlite(
     supabase_rows = supabase_repo.list_probe_targets()
 
     assert supabase_rows == sqlite_rows
+
+
+def test_supabase_query_lease_instance_id_fails_loudly_when_instance_lookup_breaks() -> None:
+    repo = SupabaseSandboxMonitorRepo(
+        _BrokenSandboxInstancesClient(
+            {
+                "sandbox_leases": [
+                    {
+                        "lease_id": "lease-1",
+                        "provider_name": "daytona_selfhost",
+                        "desired_state": "running",
+                        "observed_state": "detached",
+                        "current_instance_id": "instance-fallback",
+                    }
+                ]
+            }
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
+        repo.query_lease_instance_id("lease-1")
+
+
+def test_supabase_list_probe_targets_fails_loudly_when_instance_lookup_breaks() -> None:
+    repo = SupabaseSandboxMonitorRepo(
+        _BrokenSandboxInstancesClient(
+            {
+                "sandbox_leases": [
+                    {
+                        "lease_id": "lease-1",
+                        "provider_name": "daytona_selfhost",
+                        "desired_state": "running",
+                        "observed_state": "detached",
+                        "current_instance_id": "instance-fallback",
+                        "updated_at": "2026-04-05T10:10:00",
+                    }
+                ]
+            }
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
+        repo.list_probe_targets()
 
 
 def test_supabase_list_sessions_with_leases_matches_sqlite_terminal_and_recent_session_fallback(tmp_path):
