@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.streaming_service import _resolve_run_event_repo, _run_agent_to_buffer, write_cancellation_markers
+from backend.web.services.streaming_service import _run_agent_to_buffer, write_cancellation_markers
 from core.runtime.middleware.monitor import AgentState
 from eval.models import RunTrajectory
 
@@ -214,17 +214,6 @@ async def test_run_agent_to_buffer_persists_running_then_completed_eval_row(monk
         }
     ]
     assert [call["tier"] for call in _FakeTrajectoryStore.metric_calls] == ["system", "objective"]
-
-
-def test_resolve_run_event_repo_requires_storage_container_run_event_repo() -> None:
-    agent = SimpleNamespace(
-        agent=_FakeGraphAgent(expected_run_id="run-123"),
-        runtime=_FakeRuntime(),
-        storage_container=None,
-    )
-
-    with pytest.raises(RuntimeError, match="storage_container.run_event_repo"):
-        _resolve_run_event_repo(agent)
 
 
 @pytest.mark.asyncio

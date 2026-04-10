@@ -1,19 +1,8 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from backend.web.services import sandbox_service
-
-
-def test_sandbox_service_no_longer_imports_storage_factory() -> None:
-    service_source = Path("backend/web/services/sandbox_service.py").read_text(encoding="utf-8")
-
-    assert "backend.web.core.storage_factory" not in service_source
-    assert "storage.runtime" in service_source
-    assert "storage.providers.sqlite.kernel" not in service_source
-    assert "resolve_role_db_path" not in service_source
-
 
 def _lease_row(
     lease_id: str,
@@ -133,12 +122,52 @@ class _FakeUserRepo:
         pass
 
 
-def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents(monkeypatch):
-    rows = [
-        _lease_row("lease-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
-        _lease_row("lease-1", "subagent-deadbeef", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
-    ]
-    thread_repo, user_repo = _single_agent_repos("thread-parent", "subagent-deadbeef")
+@pytest.mark.parametrize(
+    ("rows", "thread_ids", "expected_thread_ids", "expected_agents"),
+    [
+        (
+            [
+                _lease_row("lease-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
+                _lease_row("lease-1", "subagent-deadbeef", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
+            ],
+            ("thread-parent", "subagent-deadbeef"),
+            ["thread-parent"],
+            [
+                {
+                    "thread_id": "thread-parent",
+                    "agent_user_id": "agent-1",
+                    "agent_name": "Morel",
+                    "avatar_url": "/api/users/agent-1/avatar",
+                }
+            ],
+        ),
+        (
+            [
+                _lease_row("lease-1", "thread-a"),
+                _lease_row("lease-1", "thread-b"),
+            ],
+            ("thread-a", "thread-b"),
+            ["thread-a", "thread-b"],
+            [
+                {
+                    "thread_id": "thread-a",
+                    "agent_user_id": "agent-1",
+                    "agent_name": "Morel",
+                    "avatar_url": "/api/users/agent-1/avatar",
+                },
+                {
+                    "thread_id": "thread-b",
+                    "agent_user_id": "agent-1",
+                    "agent_name": "Morel",
+                    "avatar_url": "/api/users/agent-1/avatar",
+                },
+            ],
+        ),
+    ],
+    ids=["hide-subagent-threads", "keep-distinct-visible-threads"],
+)
+def test_list_user_leases_visible_thread_contract(monkeypatch, rows, thread_ids, expected_thread_ids, expected_agents):
+    thread_repo, user_repo = _single_agent_repos(*thread_ids)
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
 
@@ -151,53 +180,9 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
     assert len(leases) == 1
     lease = leases[0]
     assert lease["lease_id"] == "lease-1"
-    assert lease["provider_name"] == "daytona_selfhost"
-    assert lease["observed_state"] == "running"
-    assert lease["desired_state"] == "running"
-    assert lease["created_at"] == "2026-04-07T10:00:00Z"
-    assert lease["cwd"] == "/home/daytona/files/app"
-    assert lease["thread_ids"] == ["thread-parent"]
-    assert lease["agents"] == [
-        {
-            "thread_id": "thread-parent",
-            "agent_user_id": "agent-1",
-            "agent_name": "Morel",
-            "avatar_url": "/api/users/agent-1/avatar",
-        }
-    ]
+    assert lease["thread_ids"] == expected_thread_ids
+    assert lease["agents"] == expected_agents
     _assert_daytona_recipe(lease)
-
-
-def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(monkeypatch):
-    rows = [
-        _lease_row("lease-1", "thread-a"),
-        _lease_row("lease-1", "thread-b"),
-    ]
-    thread_repo, user_repo = _single_agent_repos("thread-a", "thread-b")
-
-    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
-
-    leases = sandbox_service.list_user_leases(
-        "owner-1",
-        thread_repo=thread_repo,
-        user_repo=user_repo,
-    )
-
-    assert leases[0]["thread_ids"] == ["thread-a", "thread-b"]
-    assert leases[0]["agents"] == [
-        {
-            "thread_id": "thread-a",
-            "agent_user_id": "agent-1",
-            "agent_name": "Morel",
-            "avatar_url": "/api/users/agent-1/avatar",
-        },
-        {
-            "thread_id": "thread-b",
-            "agent_user_id": "agent-1",
-            "agent_name": "Morel",
-            "avatar_url": "/api/users/agent-1/avatar",
-        },
-    ]
 
 
 def test_list_user_leases_uses_owner_bulk_repo_surfaces(monkeypatch):

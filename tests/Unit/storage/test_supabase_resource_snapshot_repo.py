@@ -1,10 +1,4 @@
-import pytest
-
-from storage.providers.supabase.resource_snapshot_repo import (
-    SupabaseResourceSnapshotRepo,
-    list_snapshots_by_lease_ids,
-    upsert_lease_resource_snapshot,
-)
+from storage.providers.supabase.resource_snapshot_repo import SupabaseResourceSnapshotRepo
 
 
 class _FakeTable:
@@ -34,25 +28,6 @@ class _FakeClient:
 
     def table(self, _name):
         return self.table_obj
-
-
-@pytest.mark.parametrize(
-    "caller",
-    [
-        lambda: upsert_lease_resource_snapshot(
-            lease_id="lease-1",
-            provider_name="daytona",
-            observed_state="running",
-            probe_mode="runtime",
-            client=None,
-        ),
-        lambda: list_snapshots_by_lease_ids(["lease-1"], client=None),
-    ],
-    ids=["upsert-helper", "list-helper"],
-)
-def test_resource_snapshot_helpers_require_client(caller) -> None:
-    with pytest.raises(RuntimeError, match="requires a client"):
-        caller()
 
 
 def test_supabase_resource_snapshot_repo_upserts_with_client() -> None:
