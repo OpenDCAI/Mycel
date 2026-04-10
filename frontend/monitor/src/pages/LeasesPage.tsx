@@ -41,7 +41,6 @@ export default function LeasesPage() {
     { label: "Detached Residue", value: triage.detached_residue ?? 0 },
     { label: "Orphan Cleanup", value: triage.orphan_cleanup ?? 0 },
     { label: "Healthy Capacity", value: triage.healthy_capacity ?? 0 },
-    { label: "Tracked Leases", value: triage.total ?? data.count ?? 0 },
   ];
 
   return (

@@ -168,7 +168,7 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: /latest evaluation/i })).toHaveAttribute("href", "/evaluation");
   });
 
-  it("renders leases with a triage summary before the raw table", async () => {
+  it("renders leases with triage categories but without a duplicate tracked-leases card", async () => {
     mockRoutePayloads({
       "/leases": {
         title: "All Leases",
@@ -223,7 +223,8 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Detached Residue")).toBeInTheDocument();
     expect(screen.getByText("Orphan Cleanup")).toBeInTheDocument();
     expect(screen.getByText("Healthy Capacity")).toBeInTheDocument();
-    expect(screen.getByText("Tracked Leases")).toBeInTheDocument();
+    expect(screen.getByText("Total: 1")).toBeInTheDocument();
+    expect(screen.queryByText("Tracked Leases")).not.toBeInTheDocument();
     expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
   });
 
