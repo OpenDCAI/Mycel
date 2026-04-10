@@ -3,7 +3,6 @@
 import asyncio
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
 
 from backend.web.services import monitor_service, resource_service
 from backend.web.services.resource_cache import (
@@ -12,12 +11,6 @@ from backend.web.services.resource_cache import (
 )
 
 router = APIRouter(prefix="/api/monitor")
-
-
-class ResourceCleanupRequest(BaseModel):
-    action: str = Field(default="cleanup_residue")
-    lease_ids: list[str]
-    expected_category: str
 
 
 def _refresh_monitor_resources_sync():
@@ -72,21 +65,6 @@ def resources_overview():
 async def resources_refresh():
     # @@@refresh-off-main-loop - provider I/O stays off event loop to avoid request head-of-line blocking.
     return await asyncio.to_thread(_refresh_monitor_resources_sync)
-
-
-@router.post("/resources/cleanup")
-async def resources_cleanup(payload: ResourceCleanupRequest):
-    from backend.web.services import monitor_service
-
-    try:
-        return await asyncio.to_thread(
-            monitor_service.cleanup_resource_leases,
-            action=payload.action,
-            lease_ids=payload.lease_ids,
-            expected_category=payload.expected_category,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/sandbox/{lease_id}/browse")
