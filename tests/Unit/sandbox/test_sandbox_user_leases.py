@@ -56,6 +56,10 @@ def _single_agent_repos(*thread_ids: str):
     return thread_repo, user_repo
 
 
+def _agent_user(user_id: str, display_name: str, *, owner_user_id: str, avatar: str | None) -> SimpleNamespace:
+    return SimpleNamespace(id=user_id, display_name=display_name, avatar=avatar, owner_user_id=owner_user_id)
+
+
 def _assert_daytona_recipe(lease: dict, *, runtime_session_id: str | None = None) -> None:
     assert lease["recipe_id"] == "daytona:default"
     assert lease["recipe_name"] == "Daytona Default"
@@ -134,17 +138,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
         _lease_row("lease-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
         _lease_row("lease-1", "subagent-deadbeef", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
     ]
-    thread_repo = _FakeThreadRepo(
-        {
-            "thread-parent": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-            "subagent-deadbeef": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-        }
-    )
-    user_repo = _FakeUserRepo(
-        {
-            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
-        }
-    )
+    thread_repo, user_repo = _single_agent_repos("thread-parent", "subagent-deadbeef")
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
 
@@ -176,40 +170,10 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
 
 def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(monkeypatch):
     rows = [
-        {
-            "lease_id": "lease-1",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:00:00Z",
-            "cwd": "/tmp/app",
-            "thread_id": "thread-a",
-        },
-        {
-            "lease_id": "lease-1",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:00:00Z",
-            "cwd": "/tmp/app",
-            "thread_id": "thread-b",
-        },
+        _lease_row("lease-1", "thread-a"),
+        _lease_row("lease-1", "thread-b"),
     ]
-    thread_repo = _FakeThreadRepo(
-        {
-            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-            "thread-b": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-        }
-    )
-    user_repo = _FakeUserRepo(
-        {
-            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
-        }
-    )
+    thread_repo, user_repo = _single_agent_repos("thread-a", "thread-b")
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
 
@@ -238,28 +202,8 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
 
 def test_list_user_leases_uses_owner_bulk_repo_surfaces(monkeypatch):
     rows = [
-        {
-            "lease_id": "lease-1",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:00:00Z",
-            "cwd": "/tmp/app",
-            "thread_id": "thread-a",
-        },
-        {
-            "lease_id": "lease-2",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:01:00Z",
-            "cwd": "/tmp/app2",
-            "thread_id": "thread-b",
-        },
+        _lease_row("lease-1", "thread-a"),
+        _lease_row("lease-2", "thread-b", created_at="2026-04-07T10:01:00Z", cwd="/tmp/app2"),
     ]
 
     class _BulkOnlyThreadRepo(_FakeThreadRepo):
@@ -278,8 +222,8 @@ def test_list_user_leases_uses_owner_bulk_repo_surfaces(monkeypatch):
     )
     user_repo = _BulkOnlyUserRepo(
         {
-            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
-            "agent-2": SimpleNamespace(id="agent-2", display_name="Toad", avatar=None, owner_user_id="owner-1"),
+            "agent-1": _agent_user("agent-1", "Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-2": _agent_user("agent-2", "Toad", avatar=None, owner_user_id="owner-1"),
         }
     )
 
@@ -389,28 +333,8 @@ def test_list_user_leases_runtime_session_id_contract(
 
 def test_resolve_owned_lease_filters_to_single_authorized_lease(monkeypatch):
     rows = [
-        {
-            "lease_id": "lease-1",
-            "provider_name": "daytona_selfhost",
-            "recipe_id": "daytona:default",
-            "recipe_json": None,
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:00:00Z",
-            "cwd": "/home/daytona/files/app",
-            "thread_id": "thread-parent",
-        },
-        {
-            "lease_id": "lease-2",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:01:00Z",
-            "cwd": "/tmp/other",
-            "thread_id": "thread-other",
-        },
+        _lease_row("lease-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
+        _lease_row("lease-2", "thread-other", created_at="2026-04-07T10:01:00Z", cwd="/tmp/other"),
     ]
     thread_repo = _FakeThreadRepo(
         {
@@ -420,8 +344,8 @@ def test_resolve_owned_lease_filters_to_single_authorized_lease(monkeypatch):
     )
     user_repo = _FakeUserRepo(
         {
-            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
-            "agent-2": SimpleNamespace(id="agent-2", display_name="Toad", avatar=None, owner_user_id="owner-2"),
+            "agent-1": _agent_user("agent-1", "Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-2": _agent_user("agent-2", "Toad", avatar=None, owner_user_id="owner-2"),
         }
     )
 
@@ -460,63 +384,39 @@ def test_resolve_owned_lease_filters_to_single_authorized_lease(monkeypatch):
 
 def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch):
     rows = [
-        {
-            "lease_id": "lease-running",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:00:00Z",
-            "cwd": "/tmp/running",
-            "thread_id": "thread-running",
-        },
-        {
-            "lease_id": "lease-paused",
-            "provider_name": "daytona_selfhost",
-            "recipe_id": "daytona:default",
-            "recipe_json": None,
-            "observed_state": "paused",
-            "desired_state": "paused",
-            "created_at": "2026-04-07T10:01:00Z",
-            "cwd": "/home/daytona/app",
-            "thread_id": "thread-paused",
-        },
-        {
-            "lease_id": "lease-detached",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "detached",
-            "desired_state": "running",
-            "created_at": "2026-04-07T10:02:00Z",
-            "cwd": "/tmp/stale",
-            "thread_id": "thread-detached",
-        },
-        {
-            "lease_id": "lease-destroying",
-            "provider_name": "local",
-            "recipe_id": "local:default",
-            "recipe_json": None,
-            "observed_state": "paused",
-            "desired_state": "destroyed",
-            "created_at": "2026-04-07T10:03:00Z",
-            "cwd": "/tmp/destroying",
-            "thread_id": "thread-destroying",
-        },
+        _lease_row("lease-running", "thread-running", cwd="/tmp/running"),
+        _lease_row(
+            "lease-paused",
+            "thread-paused",
+            provider_name="daytona_selfhost",
+            recipe_id="daytona:default",
+            observed_state="paused",
+            desired_state="paused",
+            created_at="2026-04-07T10:01:00Z",
+            cwd="/home/daytona/app",
+        ),
+        _lease_row(
+            "lease-detached",
+            "thread-detached",
+            observed_state="detached",
+            desired_state="running",
+            created_at="2026-04-07T10:02:00Z",
+            cwd="/tmp/stale",
+        ),
+        _lease_row(
+            "lease-destroying",
+            "thread-destroying",
+            observed_state="paused",
+            desired_state="destroyed",
+            created_at="2026-04-07T10:03:00Z",
+            cwd="/tmp/destroying",
+        ),
     ]
-    thread_repo = _FakeThreadRepo(
-        {
-            "thread-running": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-            "thread-paused": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-            "thread-detached": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-            "thread-destroying": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
-        }
-    )
-    user_repo = _FakeUserRepo(
-        {
-            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
-        }
+    thread_repo, user_repo = _single_agent_repos(
+        "thread-running",
+        "thread-paused",
+        "thread-detached",
+        "thread-destroying",
     )
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
