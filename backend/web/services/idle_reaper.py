@@ -15,7 +15,9 @@ def run_idle_reaper_once(app_obj: FastAPI) -> int:
     managed_providers: set[str] = set()
 
     # First use live managers from resident agents (can close live runtimes safely).
-    for agent in app_obj.state.agent_pool.values():
+    # @@@idle-reaper-pool-snapshot - reaping a live manager can evict sibling agents from the pool.
+    # Iterate a stable snapshot so cleanup never mutates the dict view we're walking.
+    for agent in list(app_obj.state.agent_pool.values()):
         sandbox = getattr(agent, "_sandbox", None)
         manager = getattr(sandbox, "manager", None)
         if manager is None:

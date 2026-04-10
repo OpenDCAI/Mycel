@@ -179,6 +179,8 @@ def refresh_resource_snapshots() -> dict[str, Any]:
         provider_key = item["provider_name"]
         instance_id = item["instance_id"]
         status = item["observed_state"]
+        if status == "paused":
+            continue
         probe_mode = "running_runtime" if status in ("running", "detached") else "non_running_sdk"
         if probe_mode == "running_runtime":
             running_targets += 1
