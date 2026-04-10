@@ -483,10 +483,6 @@ function ProviderCard({
   const detachedResidueCount = provider.sessions.filter(
     (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
   ).length;
-  const runningMetric = {
-    ...provider.telemetry.running,
-    used: runningCount,
-  };
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
@@ -533,7 +529,13 @@ function ProviderCard({
         </div>
       ) : (
         <div className="provider-card__metric-row">
-          <MetricOrb label="运行数" metric={runningMetric} />
+          <div className="provider-card__running-stat">
+            <div className="provider-card__running-value">{formatNumber(runningCount)}</div>
+            <div className="provider-card__running-copy">
+              <div className="provider-card__running-label">运行中沙盒</div>
+              <div className="provider-card__running-note">具体指标见下方沙盒</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -560,23 +562,6 @@ function ProviderCard({
 
       <CapabilityStrip capabilities={provider.capabilities} />
     </button>
-  );
-}
-
-function MetricOrb({ label, metric }: { label: string; metric: UsageMetric }) {
-  const value =
-    metric.used == null
-      ? "--"
-      : metric.unit === "%" || metric.unit === "GB"
-        ? formatMetric(metric.used, metric.unit)
-        : formatNumber(metric.used);
-
-  return (
-    <div className="metric-orb" title={metric.error || undefined}>
-      <div className="metric-orb__value">{value}</div>
-      <div className="metric-orb__label">{label}</div>
-      {metric.limit != null && <div className="metric-orb__sub">{formatMetric(metric.limit, metric.unit)}</div>}
-    </div>
   );
 }
 
@@ -951,7 +936,7 @@ function SandboxInspector({
         </div>
 
         <div className="sandbox-modal__section">
-            <h4>成员</h4>
+            <h4>Agent</h4>
           <div className="sandbox-session-list">
             {group.sessions.map((session) => (
               <div key={session.id} className="sandbox-session-row">

@@ -162,7 +162,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: rgba(244, 239, 230, 0.72);
+  background: #f6f0e6;
 }
 
 .monitor-shell__header {
@@ -172,8 +172,7 @@ body {
   align-items: flex-end;
   padding: 1.5rem 2rem 1rem;
   border-bottom: 1px solid rgba(81, 59, 29, 0.08);
-  background: rgba(244, 239, 230, 0.86);
-  backdrop-filter: blur(8px);
+  background: #f6f0e6;
 }
 
 .monitor-shell__title {
@@ -508,13 +507,10 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .resources-hero {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid rgba(81, 59, 29, 0.12);
-  border-radius: 18px;
-  background: rgba(255, 252, 245, 0.88);
-  box-shadow: 0 14px 34px rgba(82, 59, 27, 0.06);
+  align-items: center;
+  padding: 0.1rem 0 0.2rem;
 }
 
 .resources-summary-strip {
@@ -804,13 +800,13 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .sandbox-card,
 .resources-error-card {
   border: 1px solid rgba(81, 59, 29, 0.12);
-  border-radius: 18px;
-  background: rgba(255, 252, 247, 0.94);
-  box-shadow: 0 10px 24px rgba(82, 59, 27, 0.045);
+  border-radius: 16px;
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow: 0 8px 18px rgba(82, 59, 27, 0.035);
 }
 
 .provider-card {
-  padding: 1rem;
+  padding: 0.95rem 1rem;
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -820,12 +816,12 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .provider-card:hover {
   transform: translateY(-1px);
   border-color: rgba(146, 88, 45, 0.26);
-  box-shadow: 0 12px 26px rgba(82, 59, 27, 0.06);
+  box-shadow: 0 10px 20px rgba(82, 59, 27, 0.045);
 }
 
 .provider-card--selected {
   border-color: rgba(146, 88, 45, 0.45);
-  box-shadow: 0 0 0 1px rgba(146, 88, 45, 0.14), 0 12px 28px rgba(82, 59, 27, 0.065);
+  box-shadow: 0 0 0 1px rgba(146, 88, 45, 0.14), 0 10px 22px rgba(82, 59, 27, 0.05);
 }
 
 .provider-card--unavailable {
@@ -873,13 +869,11 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 }
 
 .provider-card__metric-row {
-  display: flex;
-  justify-content: center;
-  gap: 0.85rem;
-  margin: 1rem 0 0.9rem;
-  padding: 0.8rem 0.75rem;
-  border-radius: 16px;
-  background: rgba(246, 240, 230, 0.82);
+  margin: 0.95rem 0 0.8rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(81, 59, 29, 0.08);
+  background: rgba(248, 243, 234, 0.8);
 }
 
 .provider-card__unavailable {
@@ -909,26 +903,28 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   line-height: 1.45;
 }
 
-.metric-orb {
-  min-width: 72px;
-  text-align: center;
+.provider-card__running-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
 }
 
-.metric-orb__value {
-  display: grid;
-  place-items: center;
-  width: 3.4rem;
-  height: 3.4rem;
-  margin: 0 auto;
-  border-radius: 999px;
-  border: 1px solid rgba(81, 59, 29, 0.12);
-  background: rgba(255, 252, 247, 0.98);
-  font-weight: 700;
+.provider-card__running-value {
+  min-width: 3rem;
   font-family: "SF Mono", Monaco, monospace;
+  font-size: 1.8rem;
+  line-height: 1;
+  font-weight: 700;
+  color: #241d14;
 }
 
-.metric-orb__label,
-.metric-orb__sub,
+.provider-card__running-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.provider-card__running-label,
+.provider-card__running-note,
 .inline-metric__label,
 .sandbox-metric-block__label,
 .provider-section__header span,
@@ -936,18 +932,19 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .file-browser__empty,
 .file-browser__note {
   color: #776a5b;
+  font-size: 0.76rem;
 }
 
-.metric-orb__label {
-  margin-top: 0.45rem;
-  font-size: 0.72rem;
+.provider-card__running-label {
+  color: #4a3a29;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.metric-orb__sub {
-  margin-top: 0.2rem;
-  font-size: 0.72rem;
+.provider-card__running-note {
+  color: #8a7765;
+  font-size: 0.78rem;
 }
 
 .provider-card__footer,
@@ -1210,7 +1207,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   color: inherit;
   cursor: pointer;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
-  background: rgba(255, 252, 247, 0.98);
+  background: rgba(255, 252, 247, 0.92);
 }
 
 .sandbox-card:hover {
@@ -1336,7 +1333,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   display: flex;
   justify-content: flex-end;
   padding: 1rem 1rem 1rem 2rem;
-  background: rgba(57, 45, 34, 0.08);
+  background: rgba(74, 58, 41, 0.06);
   backdrop-filter: blur(6px);
   z-index: 50;
 }
@@ -1349,9 +1346,9 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   overflow: hidden;
   padding: 0;
   border: 1px solid rgba(81, 59, 29, 0.12);
-  border-radius: 24px;
-  background: rgba(255, 252, 247, 0.99);
-  box-shadow: 0 24px 54px rgba(82, 59, 27, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 252, 247, 0.995);
+  box-shadow: 0 18px 40px rgba(82, 59, 27, 0.1);
 }
 
 .sandbox-modal__close,
