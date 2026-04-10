@@ -90,7 +90,9 @@ export default function EvaluationPage() {
             {runs.length > 0 ? (
               runs.map((run) => (
                 <tr key={run.run_id ?? `${run.thread_id}-${run.started_at}`}>
-                  <td className="mono">{run.run_id ?? "-"}</td>
+                  <td className="mono">
+                    {run.run_id ? <Link to={`/evaluation/runs/${run.run_id}`}>{run.run_id}</Link> : "-"}
+                  </td>
                   <td>{run.thread_id ? <Link to={`/threads/${run.thread_id}`}>{run.thread_id}</Link> : "-"}</td>
                   <td>{run.status ?? "-"}</td>
                   <td>{run.started_at ?? "-"}</td>
@@ -115,7 +117,13 @@ export default function EvaluationPage() {
           </div>
           <div>
             <strong>Run ID</strong>
-            <span className="mono">{selectedRun.run_id ?? "-"}</span>
+            {selectedRun.run_id ? (
+              <Link className="mono" to={`/evaluation/runs/${selectedRun.run_id}`}>
+                {selectedRun.run_id}
+              </Link>
+            ) : (
+              <span className="mono">-</span>
+            )}
           </div>
           <div>
             <strong>Status</strong>

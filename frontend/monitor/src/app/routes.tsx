@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import ResourcesPage from "../ResourcesPage";
 import DashboardPage from "../pages/DashboardPage";
 import EvaluationPage from "../pages/EvaluationPage";
+import EvaluationRunDetailPage from "../pages/EvaluationRunDetailPage";
 import LeaseDetailPage from "../pages/LeaseDetailPage";
 import LeasesPage from "../pages/LeasesPage";
 import OperationDetailPage from "../pages/OperationDetailPage";
@@ -27,6 +28,7 @@ export function MonitorRoutes() {
         <Route path="/threads" element={<ThreadsPage />} />
         <Route path="/threads/:threadId" element={<ThreadDetailPage />} />
         <Route path="/evaluation" element={<EvaluationPage />} />
+        <Route path="/evaluation/runs/:runId" element={<EvaluationRunDetailPage />} />
       </Routes>
     </MonitorShell>
   );

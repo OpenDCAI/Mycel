@@ -412,6 +412,14 @@ def _build_monitor_evaluation_run_row(run: dict[str, Any], metrics_rows: list[di
     }
 
 
+def _build_monitor_evaluation_run_detail(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "run": _build_monitor_evaluation_run_row(run, metrics_rows),
+        "facts": _build_monitor_evaluation_run_fact_rows(metrics_rows),
+        "limitations": ["Launch/config is not restored yet; this workbench is read-only for now."],
+    }
+
+
 def get_monitor_evaluation_workbench() -> dict[str, Any]:
     store = make_eval_store()
     runs = store.list_runs(limit=25)
@@ -457,6 +465,14 @@ def get_monitor_evaluation_workbench() -> dict[str, Any]:
         "selected_run": run_rows[0],
         "limitations": ["Launch/config is not restored yet; this workbench is read-only for now."],
     }
+
+
+def get_monitor_evaluation_run_detail(run_id: str) -> dict[str, Any]:
+    store = make_eval_store()
+    run = store.get_run(run_id)
+    if run is None:
+        raise KeyError(f"Evaluation run not found: {run_id}")
+    return _build_monitor_evaluation_run_detail(run, store.get_metrics(run_id))
 
 
 def get_monitor_evaluation_truth() -> dict[str, Any]:

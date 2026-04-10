@@ -178,6 +178,26 @@ class SupabaseEvalRepo:
             raise RuntimeError("Supabase eval repo expected non-null trajectory_json in get_trajectory_json. Check eval_runs table schema.")
         return str(val)
 
+    def get_run(self, run_id: str) -> dict | None:
+        query = q.limit(
+            self._t("eval_runs").select("id,thread_id,started_at,finished_at,status,user_message").eq("id", run_id),
+            1,
+            _REPO,
+            "get_run",
+        )
+        rows = q.rows(query.execute(), _REPO, "get_run")
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "id": str(row.get("id") or ""),
+            "thread_id": str(row.get("thread_id") or ""),
+            "started_at": row.get("started_at"),
+            "finished_at": row.get("finished_at"),
+            "status": str(row.get("status") or ""),
+            "user_message": str(row.get("user_message") or ""),
+        }
+
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:
         query = self._t("eval_runs").select("id,thread_id,started_at,finished_at,status,user_message")
         if thread_id:

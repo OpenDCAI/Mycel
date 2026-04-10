@@ -1239,6 +1239,21 @@ describe("MonitorRoutes", () => {
         },
         limitations: ["Launch/config is not restored yet; this workbench is read-only for now."],
       },
+      "/evaluation/runs/run-1": {
+        run: {
+          run_id: "run-1",
+          thread_id: "thread-eval",
+          status: "completed",
+          started_at: "2026-04-08T00:00:00Z",
+          finished_at: "2026-04-08T00:03:00Z",
+          user_message: "leave a hello note",
+        },
+        facts: [
+          { label: "Metric Tiers", value: "1" },
+          { label: "Total tokens", value: "123" },
+        ],
+        limitations: ["Launch/config is not restored yet; this workbench is read-only for now."],
+      },
     });
 
     render(
@@ -1252,13 +1267,45 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Evaluation Workbench")).toBeInTheDocument();
     expect(screen.getByText("Recent Runs")).toBeInTheDocument();
     expect(screen.getByText("Current Run")).toBeInTheDocument();
-    expect(screen.getAllByText("run-1").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "run-1" }).every((link) => link.getAttribute("href") === "/evaluation/runs/run-1")).toBe(true);
     expect(screen.getAllByRole("link", { name: "thread-eval" }).every((link) => link.getAttribute("href") === "/threads/thread-eval")).toBe(true);
     expect(screen.getByText("Run Facts")).toBeInTheDocument();
     expect(screen.getByText("Workbench Boundary")).toBeInTheDocument();
     expect(screen.getByText("Launch/config is not restored yet; this workbench is read-only for now.")).toBeInTheDocument();
     expect(screen.queryByText("Operator Truth")).not.toBeInTheDocument();
     expect(screen.queryByText("Current Summary")).not.toBeInTheDocument();
+  });
+
+  it("renders evaluation run detail as a hidden route under the evaluation surface", async () => {
+    mockRoutePayloads({
+      "/evaluation/runs/run-1": {
+        run: {
+          run_id: "run-1",
+          thread_id: "thread-eval",
+          status: "completed",
+          started_at: "2026-04-08T00:00:00Z",
+          finished_at: "2026-04-08T00:03:00Z",
+          user_message: "leave a hello note",
+        },
+        facts: [
+          { label: "Metric Tiers", value: "1" },
+          { label: "Total tokens", value: "123" },
+        ],
+        limitations: ["Launch/config is not restored yet; this workbench is read-only for now."],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/evaluation/runs/run-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Evaluation Run run-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /evaluation/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "thread-eval" })).toHaveAttribute("href", "/threads/thread-eval");
+    expect(screen.getByText("Run Facts")).toBeInTheDocument();
+    expect(screen.getByText("Workbench Boundary")).toBeInTheDocument();
   });
 
   it("reads local provider files even when the resource session has no lease id", async () => {

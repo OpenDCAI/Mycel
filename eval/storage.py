@@ -93,6 +93,10 @@ class TrajectoryStore:
             return None
         return RunTrajectory.model_validate_json(trajectory_json)
 
+    def get_run(self, run_id: str) -> dict | None:
+        """Load one persisted run header by run_id."""
+        return self._repo.get_run(run_id)
+
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:
         """List eval runs, optionally filtered by thread_id."""
         return self._repo.list_runs(thread_id=thread_id, limit=limit)

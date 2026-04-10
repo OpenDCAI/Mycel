@@ -211,6 +211,13 @@ class SQLiteEvalRepo:
             return None
         return row["trajectory_json"]
 
+    def get_run(self, run_id: str) -> dict | None:
+        row = self._conn.execute(
+            "SELECT id, thread_id, started_at, finished_at, status, user_message FROM eval_runs WHERE id = ?",
+            (run_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:
         if thread_id:
             rows = self._conn.execute(

@@ -114,6 +114,14 @@ def evaluation_snapshot():
     return monitor_service.get_monitor_evaluation_workbench()
 
 
+@router.get("/evaluation/runs/{run_id}")
+def evaluation_run_detail_snapshot(run_id: str):
+    try:
+        return monitor_service.get_monitor_evaluation_run_detail(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/resources")
 def resources_overview():
     return get_resource_overview_snapshot()

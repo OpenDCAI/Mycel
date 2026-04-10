@@ -10,7 +10,7 @@ export const monitorNav: readonly MonitorNavItem[] = [
   { to: "/resources", label: "Resources", eyebrow: "Runtime", matchPrefixes: ["/resources", "/providers", "/runtimes"] },
   { to: "/leases", label: "Leases", eyebrow: "Runtime", matchPrefixes: ["/leases", "/operations"] },
   { to: "/threads", label: "Threads", eyebrow: "Workbench", matchPrefixes: ["/threads"] },
-  { to: "/evaluation", label: "Evaluation", eyebrow: "Operators" },
+  { to: "/evaluation", label: "Evaluation", eyebrow: "Operators", matchPrefixes: ["/evaluation"] },
 ];
 
 export function resolveMonitorNav(pathname: string): MonitorNavItem {

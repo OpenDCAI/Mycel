@@ -625,6 +625,40 @@ def test_monitor_evaluation_route_exposes_recent_persisted_runs(monkeypatch):
     }
 
 
+def test_monitor_evaluation_run_detail_route_exposes_selected_run_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_evaluation_run_detail",
+        lambda run_id: {
+            "run": {
+                "run_id": run_id,
+                "thread_id": "thread-eval",
+                "status": "completed",
+                "started_at": "2026-04-08T00:00:00Z",
+                "finished_at": "2026-04-08T00:03:00Z",
+                "user_message": "solve the eval task",
+            },
+            "facts": [
+                {"label": "Metric Tiers", "value": "1"},
+                {"label": "Total tokens", "value": "123"},
+            ],
+            "limitations": ["Launch/config is not restored yet; this workbench is read-only for now."],
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/evaluation/runs/run-1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run"]["run_id"] == "run-1"
+    assert payload["run"]["thread_id"] == "thread-eval"
+    assert payload["facts"] == [
+        {"label": "Metric Tiers", "value": "1"},
+        {"label": "Total tokens", "value": "123"},
+    ]
+
+
 def test_monitor_dashboard_route_derives_evaluation_summary_from_service(monkeypatch):
     _stub_monitor_resource_snapshot(monkeypatch)
     _stub_monitor_leases(monkeypatch)
