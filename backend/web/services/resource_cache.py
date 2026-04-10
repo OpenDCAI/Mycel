@@ -28,10 +28,6 @@ def clear_resource_overview_cache() -> None:
         _snapshot_cache = None
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
 def _read_refresh_interval_sec() -> float:
     raw = (os.getenv("LEON_MONITOR_RESOURCES_REFRESH_SEC") or "").strip()
     if not raw:
@@ -40,23 +36,6 @@ def _read_refresh_interval_sec() -> float:
     if value <= 0:
         raise RuntimeError("LEON_MONITOR_RESOURCES_REFRESH_SEC must be > 0")
     return value
-
-
-def _with_refresh_metadata(
-    payload: dict[str, Any],
-    *,
-    duration_ms: float,
-    status: str,
-    error: str | None,
-) -> dict[str, Any]:
-    summary = payload.setdefault("summary", {})
-    snapshot_at = str(summary.get("snapshot_at") or _now_iso())
-    summary["snapshot_at"] = snapshot_at
-    summary["last_refreshed_at"] = snapshot_at
-    summary["refresh_duration_ms"] = round(duration_ms, 1)
-    summary["refresh_status"] = status
-    summary["refresh_error"] = error
-    return payload
 
 
 def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
@@ -106,8 +85,13 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     payload = resource_projection_service.list_resource_providers()
     payload = _attach_monitor_triage(payload)
     _validate_resource_overview_payload(payload)
-    duration_ms = (time.perf_counter() - started) * 1000
-    payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
+    summary = payload.setdefault("summary", {})
+    snapshot_at = str(summary.get("snapshot_at") or datetime.now(UTC).isoformat().replace("+00:00", "Z"))
+    summary["snapshot_at"] = snapshot_at
+    summary["last_refreshed_at"] = snapshot_at
+    summary["refresh_duration_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    summary["refresh_status"] = "ok"
+    summary["refresh_error"] = None
     with _snapshot_lock:
         _snapshot_cache = copy.deepcopy(payload)
     return payload
