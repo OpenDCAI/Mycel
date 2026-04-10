@@ -199,6 +199,81 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
     assert "memberName" not in payload["providers"][0]["sessions"][0]
 
 
+def test_user_resource_projection_only_backfills_remote_runtime_ids(monkeypatch) -> None:
+    class _State:
+        thread_repo = object()
+        user_repo = object()
+
+    class _App:
+        state = _State()
+
+    class _FakeMonitorRepo:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def query_lease_instance_id(self, lease_id: str) -> str | None:
+            self.calls.append(lease_id)
+            if lease_id == "lease-remote":
+                return "provider-session-remote"
+            raise AssertionError(f"unexpected runtime-session probe: {lease_id}")
+
+        def close(self) -> None:
+            return None
+
+    monitor_repo = _FakeMonitorRepo()
+
+    def _fake_list_user_leases(owner_user_id: str, **kwargs):
+        assert kwargs.get("include_runtime_session_id") in {None, False}
+        return [
+            {
+                "lease_id": "lease-local",
+                "provider_name": "local",
+                "thread_ids": ["thread-local"],
+                "agents": [{"agent_user_id": "agent-local", "agent_name": "Local", "avatar_url": None}],
+                "observed_state": "detached",
+                "desired_state": "running",
+                "created_at": "2026-04-07T10:00:00Z",
+            },
+            {
+                "lease_id": "lease-remote",
+                "provider_name": "daytona_selfhost",
+                "thread_ids": ["thread-remote"],
+                "agents": [{"agent_user_id": "agent-remote", "agent_name": "Remote", "avatar_url": None}],
+                "observed_state": "detached",
+                "desired_state": "running",
+                "created_at": "2026-04-07T10:00:01Z",
+            },
+        ]
+
+    monkeypatch.setattr(resource_projection_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_display_contract",
+        lambda config_name, *_args, **_kwargs: {
+            "provider_name": "local" if config_name == "local" else "daytona",
+            "description": config_name,
+            "vendor": config_name,
+            "type": "local" if config_name == "local" else "cloud",
+            "console_url": None,
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_capability_contract",
+        lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), None),
+        raising=False,
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    providers = {item["id"]: item for item in payload["providers"]}
+    assert "runtimeSessionId" not in providers["local"]["sessions"][0]
+    assert providers["daytona_selfhost"]["sessions"][0]["runtimeSessionId"] == "provider-session-remote"
+    assert monitor_repo.calls == ["lease-remote"]
+
+
 def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch) -> None:
     class _State:
         thread_repo = object()

@@ -104,6 +104,35 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
     }
 
 
+def _backfill_remote_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
+    remote_leases = [
+        lease
+        for lease in leases
+        if str(lease.get("provider_name") or "local") != "local" and not str(lease.get("runtime_session_id") or "").strip()
+    ]
+    if not remote_leases:
+        return
+
+    repo = make_sandbox_monitor_repo()
+    try:
+        query_lease_instance_id = getattr(repo, "query_lease_instance_id", None)
+        if not callable(query_lease_instance_id):
+            return
+        runtime_session_ids: dict[str, str | None] = {}
+        for lease in remote_leases:
+            lease_id = str(lease.get("lease_id") or "").strip()
+            if not lease_id:
+                continue
+            runtime_session_id = runtime_session_ids.get(lease_id)
+            if lease_id not in runtime_session_ids:
+                runtime_session_id = query_lease_instance_id(lease_id)
+                runtime_session_ids[lease_id] = runtime_session_id
+            if runtime_session_id:
+                lease["runtime_session_id"] = runtime_session_id
+    finally:
+        repo.close()
+
+
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
     thread_repo = getattr(app.state, "thread_repo", None)
     user_repo = getattr(app.state, "user_repo", None)
@@ -114,8 +143,8 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
         owner_user_id,
         thread_repo=thread_repo,
         user_repo=user_repo,
-        include_runtime_session_id=True,
     )
+    _backfill_remote_runtime_session_ids(leases)
 
     leases_by_provider: dict[str, list[dict[str, Any]]] = {}
     for lease in leases:
