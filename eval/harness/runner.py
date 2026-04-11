@@ -35,6 +35,7 @@ class EvalRunner:
         thread_id = await self.client.create_thread(agent_user_id=self.agent_user_id, sandbox=scenario.sandbox)
         captures: list[TrajectoryCapture] = []
         started_at = datetime.now(UTC)
+        primary_error: BaseException | None = None
 
         try:
             for msg in scenario.messages:
@@ -45,6 +46,10 @@ class EvalRunner:
                     timeout=scenario.timeout_seconds,
                 )
                 captures.append(capture)
+                if capture.terminal_event in {"error", "cancelled"}:
+                    detail = capture.final_status.get("error") or capture.final_status.get("detail") or capture.final_status.get("message")
+                    suffix = f": {detail}" if detail else ""
+                    raise RuntimeError(f"Eval scenario {scenario.id} ended with {capture.terminal_event}{suffix}")
 
             runtime_status = await self.client.get_runtime(thread_id)
 
@@ -74,8 +79,17 @@ class EvalRunner:
                 system_metrics=sys_metrics,
                 objective_metrics=obj_metrics,
             )
+        except BaseException as exc:
+            primary_error = exc
+            raise
         finally:
-            await self.client.delete_thread(thread_id)
+            try:
+                await self.client.delete_thread(thread_id)
+            except Exception as cleanup_exc:
+                if primary_error is not None:
+                    primary_error.add_note(f"Thread cleanup failed after primary eval error: {cleanup_exc}")
+                else:
+                    raise
 
     async def run_all(
         self,

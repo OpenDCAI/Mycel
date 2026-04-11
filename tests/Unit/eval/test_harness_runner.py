@@ -32,6 +32,25 @@ class _DeleteFailingClient:
         raise RuntimeError("delete failed")
 
 
+class _TerminalErrorClient:
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+        self.deleted = False
+
+    async def create_thread(self, *, agent_user_id: str, sandbox: str) -> str:
+        return "thread-1"
+
+    async def run_message(self, _thread_id: str, message: str, enable_trajectory: bool = True) -> TrajectoryCapture:
+        self.messages.append(message)
+        return TrajectoryCapture(terminal_event="error", final_status={"error": "upstream 502"})
+
+    async def get_runtime(self, _thread_id: str) -> dict:
+        raise AssertionError("terminal error should stop before runtime collection")
+
+    async def delete_thread(self, _thread_id: str) -> None:
+        self.deleted = True
+
+
 @pytest.mark.asyncio
 async def test_eval_runner_fails_loudly_when_runtime_status_is_unavailable():
     runner = EvalRunner(client=_RuntimeFailingClient(), agent_user_id="agent-1")
@@ -46,3 +65,21 @@ async def test_eval_runner_fails_loudly_when_thread_cleanup_fails():
 
     with pytest.raises(RuntimeError, match="delete failed"):
         await runner.run_scenario(EvalScenario(id="scenario-1", name="Scenario 1", messages=[ScenarioMessage(content="hello")]))
+
+
+@pytest.mark.asyncio
+async def test_eval_runner_stops_on_terminal_error_before_next_message():
+    client = _TerminalErrorClient()
+    runner = EvalRunner(client=client, agent_user_id="agent-1")
+
+    with pytest.raises(RuntimeError, match="upstream 502"):
+        await runner.run_scenario(
+            EvalScenario(
+                id="scenario-1",
+                name="Scenario 1",
+                messages=[ScenarioMessage(content="first"), ScenarioMessage(content="second")],
+            )
+        )
+
+    assert client.messages == ["first"]
+    assert client.deleted is True

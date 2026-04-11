@@ -118,3 +118,28 @@ async def test_create_thread_falls_back_to_env_agent_user_id(monkeypatch: pytest
 
     assert thread_id == "thread-1"
     assert calls[0][1]["agent_user_id"] == "agent-from-env"
+
+
+@pytest.mark.asyncio
+async def test_runtime_and_delete_use_auth_headers() -> None:
+    calls: list[tuple[str, str, dict]] = []
+
+    async def fake_get(path: str, *, headers: dict) -> _FakeResponse:
+        calls.append(("GET", path, headers))
+        return _FakeResponse({"status": "idle"})
+
+    async def fake_delete(path: str, *, headers: dict) -> _FakeResponse:
+        calls.append(("DELETE", path, headers))
+        return _FakeResponse()
+
+    transport = SimpleNamespace(get=fake_get, delete=fake_delete)
+    with patch("eval.harness.client.httpx.AsyncClient", return_value=transport):
+        client = EvalClient(base_url="http://example.test", token="tok-1")
+        runtime = await client.get_runtime("thread-1")
+        await client.delete_thread("thread-1")
+
+    assert runtime == {"status": "idle"}
+    assert calls == [
+        ("GET", "/api/threads/thread-1/runtime", {"Authorization": "Bearer tok-1"}),
+        ("DELETE", "/api/threads/thread-1", {"Authorization": "Bearer tok-1"}),
+    ]
