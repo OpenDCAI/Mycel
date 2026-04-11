@@ -28,7 +28,7 @@ export default defineConfig({
         changeOrigin: true,
         configure: (proxy) => {
           // Disable buffering for SSE responses
-          proxy.on("proxyRes", (proxyRes, _req, _res) => {
+          proxy.on("proxyRes", (proxyRes) => {
             if (proxyRes.headers["content-type"]?.includes("text/event-stream")) {
               // Ensure no compression/buffering on the proxy side
               proxyRes.headers["cache-control"] = "no-cache";

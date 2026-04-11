@@ -82,8 +82,9 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
       } catch {
         // ignore bootstrap errors in UI; user can retry by action
       } finally {
-        if (cancelled) return;
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
 
