@@ -95,8 +95,10 @@ class SupabaseThreadRepo:
         if not ordered_ids:
             return []
         select = ", ".join(_COLS)
-        response = q.in_(self._t().select(select), "id", ordered_ids, _REPO, "list_by_ids").execute()
-        rows = q.rows(response, _REPO, "list_by_ids")
+        rows: list[dict[str, Any]] = []
+        for chunk in q.value_chunks(ordered_ids):
+            response = q.in_(self._t().select(select), "id", chunk, _REPO, "list_by_ids").execute()
+            rows.extend(q.rows(response, _REPO, "list_by_ids"))
         normalized_rows = [_to_dict(row) for row in rows]
         indexed = {row["id"]: row for row in normalized_rows}
         return [indexed[thread_id] for thread_id in ordered_ids if thread_id in indexed]
