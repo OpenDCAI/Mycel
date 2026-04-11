@@ -18,7 +18,7 @@ vi.mock("zustand/middleware", async () => {
   };
 });
 
-vi.mock("./MemberAvatar", () => ({
+vi.mock("./ActorAvatar", () => ({
   default: ({ name }: { name: string }) => <div>{name}</div>,
 }));
 

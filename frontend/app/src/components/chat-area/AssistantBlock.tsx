@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Loader2 } from "lucide-react";
 import type { AssistantTurn, NoticeSegment, NotificationType, RetrySegment, StreamStatus, ToolSegment, TurnSegment } from "../../api";
 import MarkdownContent from "../MarkdownContent";
-import MemberAvatar from "../MemberAvatar";
+import ActorAvatar from "../ActorAvatar";
 import { CopyButton } from "./CopyButton";
 import { InlineNotice } from "./NoticeBubble";
 import { ThinkingIndicator } from "./ThinkingIndicator";
@@ -122,7 +122,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
 
   return (
     <div className="flex gap-2.5 animate-fade-in group/block">
-      <MemberAvatar name={displayName} avatarUrl={agentAvatarUrl} size="xs" type="mycel_agent" className={`mt-0.5${isBooting ? " avatar-booting" : ""}`} />
+      <ActorAvatar name={displayName} avatarUrl={agentAvatarUrl} size="xs" type="mycel_agent" className={`mt-0.5${isBooting ? " avatar-booting" : ""}`} />
       <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">{displayName}</span>

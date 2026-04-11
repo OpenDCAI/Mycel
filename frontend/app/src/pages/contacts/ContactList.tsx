@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Bot, Search, User, Plus } from "lucide-react";
-import MemberAvatar from "@/components/MemberAvatar";
+import ActorAvatar from "@/components/ActorAvatar";
 import { useAppStore } from "@/store/app-store";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 
@@ -108,7 +108,7 @@ export default function ContactList() {
                     isActive ? "bg-background shadow-sm" : "hover:bg-muted"
                   }`}
                 >
-                  <MemberAvatar
+                  <ActorAvatar
                     name={agent.name}
                     avatarUrl={agent.avatar_url}
                     type="mycel_agent"
