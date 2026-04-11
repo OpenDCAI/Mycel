@@ -129,13 +129,13 @@ class EvalClient:
 
     async def get_runtime(self, thread_id: str) -> dict:
         """Get runtime status for a thread."""
-        resp = await self._client.get(f"/api/threads/{thread_id}/runtime")
+        resp = await self._client.get(f"/api/threads/{thread_id}/runtime", headers=self._auth_headers())
         resp.raise_for_status()
         return resp.json()
 
     async def delete_thread(self, thread_id: str) -> None:
         """Delete a thread and its resources."""
-        resp = await self._client.delete(f"/api/threads/{thread_id}")
+        resp = await self._client.delete(f"/api/threads/{thread_id}", headers=self._auth_headers())
         resp.raise_for_status()
 
     async def close(self) -> None:

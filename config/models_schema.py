@@ -104,6 +104,10 @@ class ModelsConfig(BaseModel):
             ValueError: If virtual model name not found in mapping
         """
         if not name.startswith("leon:"):
+            if ":" in name:
+                provider, model_name = name.split(":", 1)
+                if provider in self.providers and model_name:
+                    return model_name, {"model_provider": provider}
             overrides: dict[str, Any] = {}
             # From active model config
             if self.active:
