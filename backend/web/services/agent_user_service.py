@@ -273,7 +273,10 @@ def create_agent_user(
             updated_at=now_ms,
         )
 
-    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)  # type: ignore
+    created = get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    if created is None:
+        raise RuntimeError(f"Created agent user {agent_user_id} was not readable")
+    return created
 
 
 def _require_repo_backed_agent_ops(user_repo: Any = None, agent_config_repo: Any = None) -> None:
