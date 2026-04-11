@@ -52,6 +52,40 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
     assert payload["runtime_session_ids"] == ["runtime-1"]
 
 
+def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monkeypatch):
+    scenario_dir = tmp_path / "scenarios"
+    scenario_dir.mkdir()
+    (scenario_dir / "hello.yaml").write_text(
+        "\n".join(
+            [
+                "id: hello",
+                "name: Hello Eval",
+                "category: smoke",
+                "sandbox: local",
+                "messages:",
+                "  - content: Say hello like a real assistant.",
+            ]
+        )
+    )
+    monkeypatch.setattr(monitor_service, "EVAL_SCENARIO_DIR", scenario_dir)
+
+    payload = monitor_service.get_monitor_evaluation_scenarios()
+
+    assert payload == {
+        "items": [
+            {
+                "scenario_id": "hello",
+                "name": "Hello Eval",
+                "category": "smoke",
+                "sandbox": "local",
+                "message_count": 1,
+                "timeout_seconds": 120,
+            }
+        ],
+        "count": 1,
+    }
+
+
 def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypatch):
     monkeypatch.setattr(monitor_service, "get_resource_overview_snapshot", lambda: {"providers": []})
 

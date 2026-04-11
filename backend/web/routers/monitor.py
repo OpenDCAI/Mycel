@@ -119,6 +119,11 @@ def evaluation_batches_snapshot(limit: int = Query(default=50, ge=1, le=200)):
     return monitor_service.get_monitor_evaluation_batches(limit=limit)
 
 
+@router.get("/evaluation/scenarios")
+def evaluation_scenarios_snapshot():
+    return monitor_service.get_monitor_evaluation_scenarios()
+
+
 @router.get("/evaluation/batches/{batch_id}")
 def evaluation_batch_detail_snapshot(batch_id: str):
     try:

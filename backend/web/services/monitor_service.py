@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from backend.web.services import monitor_operation_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from eval.batch_service import EvaluationBatchService
+from eval.harness.scenario import load_scenarios_from_dir
 from eval.storage import TrajectoryStore
 from storage.runtime import (
     build_evaluation_batch_repo,
@@ -16,10 +18,12 @@ from storage.runtime import (
     build_sandbox_monitor_repo as make_sandbox_monitor_repo,
 )
 
-
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
 # ---------------------------------------------------------------------------
+EVAL_SCENARIO_DIR = Path(__file__).resolve().parents[3] / "eval" / "scenarios"
+
+
 def make_eval_store() -> TrajectoryStore:
     return TrajectoryStore()
 
@@ -491,6 +495,21 @@ def get_monitor_evaluation_batches(limit: int = 50) -> dict[str, Any]:
         "items": items,
         "count": len(items),
     }
+
+
+def get_monitor_evaluation_scenarios() -> dict[str, Any]:
+    items = [
+        {
+            "scenario_id": scenario.id,
+            "name": scenario.name,
+            "category": scenario.category,
+            "sandbox": scenario.sandbox,
+            "message_count": len(scenario.messages),
+            "timeout_seconds": scenario.timeout_seconds,
+        }
+        for scenario in load_scenarios_from_dir(EVAL_SCENARIO_DIR)
+    ]
+    return {"items": items, "count": len(items)}
 
 
 def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:

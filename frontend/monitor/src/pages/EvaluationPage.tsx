@@ -50,13 +50,28 @@ type EvaluationBatchIndexPayload = {
   count?: number | null;
 };
 
+type EvaluationScenarioCatalogPayload = {
+  items?: Array<{
+    scenario_id?: string | null;
+    name?: string | null;
+    category?: string | null;
+    sandbox?: string | null;
+    message_count?: number | null;
+    timeout_seconds?: number | null;
+  }> | null;
+  count?: number | null;
+};
+
 export default function EvaluationPage() {
   const { data, error } = useMonitorData<EvaluationPayload>("/evaluation");
   const { data: batchesData, error: batchesError } = useMonitorData<EvaluationBatchIndexPayload>("/evaluation/batches");
+  const { data: scenariosData, error: scenariosError } =
+    useMonitorData<EvaluationScenarioCatalogPayload>("/evaluation/scenarios");
 
   if (error) return <ErrorState title="Evaluation" error={error} />;
   if (batchesError) return <ErrorState title="Evaluation batches" error={batchesError} />;
-  if (!data || !batchesData) return <div>Loading...</div>;
+  if (scenariosError) return <ErrorState title="Evaluation scenarios" error={scenariosError} />;
+  if (!data || !batchesData || !scenariosData) return <div>Loading...</div>;
 
   const overview = data.overview ?? {};
   const runs = data.runs ?? [];
@@ -64,6 +79,7 @@ export default function EvaluationPage() {
   const facts = selectedRun.facts ?? [];
   const limitations = data.limitations ?? [];
   const batches = batchesData.items ?? [];
+  const scenarios = scenariosData.items ?? [];
 
   return (
     <div className="page">
@@ -93,6 +109,45 @@ export default function EvaluationPage() {
       <section className="surface-section">
         <h2>Workbench Summary</h2>
         <p className="surface-card__body">{data.summary ?? "No evaluation summary available."}</p>
+      </section>
+      <section className="surface-section">
+        <h2>Scenario Catalog</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Sandbox</th>
+              <th>Messages</th>
+              <th>Timeout</th>
+            </tr>
+          </thead>
+          <tbody>
+            {scenarios.length > 0 ? (
+              scenarios.map((scenario) => (
+                <tr key={scenario.scenario_id ?? scenario.name}>
+                  <td className="mono">
+                    {scenario.scenario_id ? (
+                      <Link to={`/evaluation?scenario=${scenario.scenario_id}`}>{scenario.scenario_id}</Link>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td>{scenario.name ?? "-"}</td>
+                  <td>{scenario.category ?? "-"}</td>
+                  <td>{scenario.sandbox ?? "-"}</td>
+                  <td>{scenario.message_count ?? 0}</td>
+                  <td>{scenario.timeout_seconds ?? "-"}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={6}>No evaluation scenarios found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </section>
       <section className="surface-section">
         <h2>Batch Queue</h2>

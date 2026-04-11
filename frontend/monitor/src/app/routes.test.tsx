@@ -1270,6 +1270,19 @@ describe("MonitorRoutes", () => {
         ],
         count: 1,
       },
+      "/evaluation/scenarios": {
+        items: [
+          {
+            scenario_id: "scenario-1",
+            name: "Scenario 1",
+            category: "smoke",
+            sandbox: "local",
+            message_count: 1,
+            timeout_seconds: 120,
+          },
+        ],
+        count: 1,
+      },
       "/evaluation/runs/run-1": {
         run: {
           run_id: "run-1",
@@ -1301,6 +1314,8 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("Evaluation Workbench")).toBeInTheDocument();
+    expect(screen.getByText("Scenario Catalog")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "scenario-1" })).toHaveAttribute("href", "/evaluation?scenario=scenario-1");
     expect(screen.getByText("Batch Queue")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "batch-1" })).toHaveAttribute("href", "/evaluation/batches/batch-1");
     expect(screen.getByText("10 total / 2 running / 7 completed / 1 failed")).toBeInTheDocument();

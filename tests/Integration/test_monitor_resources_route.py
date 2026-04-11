@@ -725,6 +725,20 @@ def test_monitor_evaluation_batches_route_exposes_batch_index(monkeypatch):
     assert payload["items"][0]["summary_json"]["total_runs"] == 10
 
 
+def test_monitor_evaluation_scenarios_route_exposes_catalog(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_evaluation_scenarios",
+        lambda: {"items": [{"scenario_id": "scenario-1", "name": "Scenario 1"}], "count": 1},
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/evaluation/scenarios")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [{"scenario_id": "scenario-1", "name": "Scenario 1"}], "count": 1}
+
+
 def test_monitor_evaluation_batch_detail_route_exposes_batch_runs(monkeypatch):
     monkeypatch.setattr(
         monitor_service,
