@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 
+import { cx } from "./classes";
 import { monitorNav, resolveMonitorNav } from "./monitor-nav";
 
 export function MonitorNav({
@@ -15,7 +16,7 @@ export function MonitorNav({
   return (
     <nav
       aria-label="Monitor sections"
-      className={["monitor-sidebar", collapsed ? "monitor-sidebar--collapsed" : ""].join(" ").trim()}
+      className={cx("monitor-sidebar", collapsed && "monitor-sidebar--collapsed")}
     >
       <div className="monitor-sidebar__brand">
         <div className="monitor-sidebar__brand-row">
@@ -45,7 +46,7 @@ export function MonitorNav({
               aria-current={current.to === item.to ? "page" : undefined}
               aria-label={collapsed ? item.label : undefined}
               title={collapsed ? item.label : undefined}
-              className={["monitor-sidebar__link", current.to === item.to ? "active" : ""].join(" ").trim()}
+              className={cx("monitor-sidebar__link", current.to === item.to && "active")}
             >
               <span className="monitor-sidebar__link-icon" aria-hidden="true">
                 {item.label.slice(0, 1)}

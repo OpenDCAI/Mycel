@@ -77,6 +77,40 @@ def _require_recipe_repo(recipe_repo: RecipeRepo | None) -> RecipeRepo:
     return recipe_repo
 
 
+def _file_resource_content_path(resource_type: str, resource_id: str) -> Path | None:
+    if resource_type == "skill":
+        return LIBRARY_DIR / "skills" / resource_id / "SKILL.md"
+    if resource_type == "agent":
+        return LIBRARY_DIR / "agents" / f"{resource_id}.md"
+    return None
+
+
+def _file_resource_meta_path(resource_type: str, resource_id: str) -> Path | None:
+    if resource_type == "skill":
+        return LIBRARY_DIR / "skills" / resource_id / "meta.json"
+    if resource_type == "agent":
+        return LIBRARY_DIR / "agents" / f"{resource_id}.json"
+    return None
+
+
+def _library_resource_item(
+    resource_type: str,
+    resource_id: str,
+    meta: dict[str, Any],
+    *,
+    name: str | None = None,
+    updated_at: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": resource_id,
+        "type": resource_type,
+        "name": name if name is not None else meta.get("name", resource_id),
+        "desc": meta.get("desc", ""),
+        "created_at": meta.get("created_at", 0),
+        "updated_at": updated_at if updated_at is not None else meta.get("updated_at", 0),
+    }
+
+
 def list_library(
     resource_type: str,
     owner_user_id: str | None = None,
@@ -108,44 +142,17 @@ def list_library(
             for d in sorted(skills_dir.iterdir()):
                 if d.is_dir():
                     meta = _read_json(d / "meta.json", {})
-                    results.append(
-                        {
-                            "id": d.name,
-                            "type": "skill",
-                            "name": meta.get("name", d.name),
-                            "desc": meta.get("desc", ""),
-                            "created_at": meta.get("created_at", 0),
-                            "updated_at": meta.get("updated_at", 0),
-                        }
-                    )
+                    results.append(_library_resource_item("skill", d.name, meta))
     elif resource_type == "agent":
         agents_dir = LIBRARY_DIR / "agents"
         if agents_dir.exists():
             for f in sorted(agents_dir.glob("*.md")):
                 meta = _read_json(f.with_suffix(".json"), {})
-                results.append(
-                    {
-                        "id": f.stem,
-                        "type": "agent",
-                        "name": meta.get("name", f.stem),
-                        "desc": meta.get("desc", ""),
-                        "created_at": meta.get("created_at", 0),
-                        "updated_at": meta.get("updated_at", 0),
-                    }
-                )
+                results.append(_library_resource_item("agent", f.stem, meta))
     elif resource_type == "mcp":
         mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
         for name, cfg in mcp_data.get("mcpServers", {}).items():
-            results.append(
-                {
-                    "id": name,
-                    "type": "mcp",
-                    "name": name,
-                    "desc": cfg.get("desc", ""),
-                    "created_at": cfg.get("created_at", 0),
-                    "updated_at": cfg.get("updated_at", 0),
-                }
-            )
+            results.append(_library_resource_item("mcp", name, cfg, name=name))
     return results
 
 
@@ -198,45 +205,30 @@ def create_resource(
         rid = name.lower().replace(" ", "-")
         skill_dir = LIBRARY_DIR / "skills" / rid
         skill_dir.mkdir(parents=True, exist_ok=True)
-        _write_json(
-            skill_dir / "meta.json",
-            {
-                "name": name,
-                "desc": desc,
-                "category": cat,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
+        meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
+        _write_json(skill_dir / "meta.json", meta)
         (skill_dir / "SKILL.md").write_text(f"# {name}\n\n{desc}\n", encoding="utf-8")
-        return {"id": rid, "type": "skill", "name": name, "desc": desc, "created_at": now, "updated_at": now}
+        return _library_resource_item("skill", rid, meta)
     elif resource_type == "agent":
         rid = name.lower().replace(" ", "-")
         agents_dir = LIBRARY_DIR / "agents"
         agents_dir.mkdir(parents=True, exist_ok=True)
-        _write_json(
-            agents_dir / f"{rid}.json",
-            {
-                "name": name,
-                "desc": desc,
-                "category": cat,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
+        meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
+        _write_json(agents_dir / f"{rid}.json", meta)
         (agents_dir / f"{rid}.md").write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
-        return {"id": rid, "type": "agent", "name": name, "desc": desc, "created_at": now, "updated_at": now}
+        return _library_resource_item("agent", rid, meta)
     elif resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
-        mcp_data["mcpServers"][name] = {
+        meta = {
             "desc": desc,
             "category": cat,
             "created_at": now,
             "updated_at": now,
         }
+        mcp_data["mcpServers"][name] = meta
         _write_json(mcp_path, mcp_data)
-        return {"id": name, "type": "mcp", "name": name, "desc": desc, "created_at": now, "updated_at": now}
+        return _library_resource_item("mcp", name, meta, name=name)
     raise ValueError(f"Unknown resource type: {resource_type}")
 
 
@@ -291,14 +283,7 @@ def update_resource(
         meta.update(updates)
         meta["updated_at"] = now
         _write_json(meta_path, meta)
-        return {
-            "id": resource_id,
-            "type": "skill",
-            "name": meta.get("name", resource_id),
-            "desc": meta.get("desc", ""),
-            "created_at": meta.get("created_at", 0),
-            "updated_at": now,
-        }
+        return _library_resource_item("skill", resource_id, meta, updated_at=now)
     elif resource_type == "agent":
         meta_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
         if not meta_path.exists():
@@ -307,14 +292,7 @@ def update_resource(
         meta.update(updates)
         meta["updated_at"] = now
         _write_json(meta_path, meta)
-        return {
-            "id": resource_id,
-            "type": "agent",
-            "name": meta.get("name", resource_id),
-            "desc": meta.get("desc", ""),
-            "created_at": meta.get("created_at", 0),
-            "updated_at": now,
-        }
+        return _library_resource_item("agent", resource_id, meta, updated_at=now)
     elif resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
@@ -324,14 +302,7 @@ def update_resource(
         mcp_data["mcpServers"][resource_id]["updated_at"] = now
         _write_json(mcp_path, mcp_data)
         entry = mcp_data["mcpServers"][resource_id]
-        return {
-            "id": resource_id,
-            "type": "mcp",
-            "name": entry.get("name", resource_id),
-            "desc": entry.get("desc", ""),
-            "created_at": entry.get("created_at", 0),
-            "updated_at": now,
-        }
+        return _library_resource_item("mcp", resource_id, entry, name=entry.get("name", resource_id), updated_at=now)
     return None
 
 
@@ -387,31 +358,10 @@ def list_library_names(
     recipe_repo: RecipeRepo | None = None,
 ) -> list[dict[str, str]]:
     """Lightweight name+desc list for Picker UI."""
-    results: list[dict[str, str]] = []
-    if resource_type == "recipe":
-        owner_user_id = _require_recipe_owner(owner_user_id)
-        return [
-            {"name": item["name"], "desc": item["desc"]}
-            for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo)
-        ]
-    if resource_type == "skill":
-        skills_dir = LIBRARY_DIR / "skills"
-        if skills_dir.exists():
-            for d in sorted(skills_dir.iterdir()):
-                if d.is_dir():
-                    meta = _read_json(d / "meta.json", {})
-                    results.append({"name": meta.get("name", d.name), "desc": meta.get("desc", "")})
-    elif resource_type == "agent":
-        agents_dir = LIBRARY_DIR / "agents"
-        if agents_dir.exists():
-            for f in sorted(agents_dir.glob("*.md")):
-                meta = _read_json(f.with_suffix(".json"), {})
-                results.append({"name": meta.get("name", f.stem), "desc": meta.get("desc", "")})
-    elif resource_type == "mcp":
-        mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
-        for name, cfg in mcp_data.get("mcpServers", {}).items():
-            results.append({"name": name, "desc": cfg.get("desc", "")})
-    return results
+    return [
+        {"name": item["name"], "desc": item["desc"]}
+        for item in list_library(resource_type, owner_user_id=owner_user_id, recipe_repo=recipe_repo)
+    ]
 
 
 def get_mcp_server_config(name: str) -> dict[str, Any] | None:
@@ -486,17 +436,12 @@ def get_resource_content(
             if item["id"] == resource_id:
                 return json.dumps(item, ensure_ascii=False, indent=2)
         return None
-    if resource_type == "skill":
-        path = LIBRARY_DIR / "skills" / resource_id / "SKILL.md"
-        if path.exists():
-            return path.read_text(encoding="utf-8")
+    content_path = _file_resource_content_path(resource_type, resource_id)
+    if content_path is not None:
+        if content_path.exists():
+            return content_path.read_text(encoding="utf-8")
         return ""
-    elif resource_type == "agent":
-        path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
-        if path.exists():
-            return path.read_text(encoding="utf-8")
-        return ""
-    elif resource_type == "mcp":
+    if resource_type == "mcp":
         mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
         cfg = mcp_data.get("mcpServers", {}).get(resource_id)
         if cfg is None:
@@ -516,27 +461,19 @@ def update_resource_content(resource_type: str, resource_id: str, content: str) 
     now = int(time.time() * 1000)
     if resource_type == "recipe":
         return False
-    if resource_type == "skill":
-        skill_dir = LIBRARY_DIR / "skills" / resource_id
-        if not skill_dir.is_dir():
+    content_path = _file_resource_content_path(resource_type, resource_id)
+    meta_path = _file_resource_meta_path(resource_type, resource_id)
+    if content_path is not None and meta_path is not None:
+        if resource_type == "skill" and not content_path.parent.is_dir():
             return False
-        (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
-        meta_path = skill_dir / "meta.json"
+        if resource_type == "agent" and not meta_path.exists():
+            return False
+        content_path.write_text(content, encoding="utf-8")
         meta = _read_json(meta_path, {})
         meta["updated_at"] = now
         _write_json(meta_path, meta)
         return True
-    elif resource_type == "agent":
-        md_path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
-        json_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
-        if not json_path.exists():
-            return False
-        md_path.write_text(content, encoding="utf-8")
-        meta = _read_json(json_path, {})
-        meta["updated_at"] = now
-        _write_json(json_path, meta)
-        return True
-    elif resource_type == "mcp":
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         if resource_id not in mcp_data.get("mcpServers", {}):

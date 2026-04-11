@@ -17,6 +17,7 @@ import {
   readMonitorSandboxFile,
   refreshMonitorResources,
 } from "./resources/api";
+import { cx } from "./app/classes";
 import type {
   BrowseItem,
   ProviderCapabilities,
@@ -195,7 +196,7 @@ function MonitorAvatar({
 
   return (
     <div
-      className={["sandbox-avatar", sizeClass].join(" ").trim()}
+      className={cx("sandbox-avatar", sizeClass)}
       title={name || "未绑定"}
       aria-label={`${name || "未绑定"} avatar`}
       style={!avatarUrl ? fallbackStyle : undefined}
@@ -445,10 +446,10 @@ export default function ResourcesPage() {
           {stoppedSessionCount > 0 && <div className="resources-summary-pill">{stoppedSessionCount} 已结束</div>}
           <div className="resources-summary-pill">
             <span
-              className={[
+              className={cx(
                 "resources-summary-dot",
                 summary?.refresh_status === "error" ? "resources-summary-dot--warn" : "resources-summary-dot--ok",
-              ].join(" ")}
+              )}
             />
             刷新 {refreshedAt}
           </div>
@@ -511,11 +512,11 @@ function ProviderCard({
   return (
     <button
       type="button"
-      className={[
+      className={cx(
         "provider-card",
-        selected ? "provider-card--selected" : "",
-        provider.status === "unavailable" ? "provider-card--unavailable" : "",
-      ].join(" ")}
+        selected && "provider-card--selected",
+        provider.status === "unavailable" && "provider-card--unavailable",
+      )}
       onClick={onSelect}
     >
       <div className="provider-card__header">
@@ -557,10 +558,7 @@ function ProviderCard({
               {sessionDots.map((session) => (
                 <span
                   key={session.id}
-                  className={[
-                    "provider-card__session-dot",
-                    `provider-card__session-dot--${session.status}`,
-                  ].join(" ")}
+                  className={cx("provider-card__session-dot", `provider-card__session-dot--${session.status}`)}
                 />
               ))}
             </div>
@@ -679,10 +677,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                 <div className="provider-filter-row" role="group" aria-label="Sandbox status filters">
                   <button
                     type="button"
-                    className={[
-                      "provider-filter-chip",
-                      statusFilter === "all" ? "provider-filter-chip--active" : "",
-                    ].join(" ")}
+                    className={cx("provider-filter-chip", statusFilter === "all" && "provider-filter-chip--active")}
                     onClick={() => setStatusFilter("all")}
                   >
                     全部 {groups.length}
@@ -691,10 +686,10 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                     <button
                       key={status}
                       type="button"
-                      className={[
+                      className={cx(
                         "provider-filter-chip",
-                        statusFilter === status ? "provider-filter-chip--active" : "",
-                      ].join(" ")}
+                        statusFilter === status && "provider-filter-chip--active",
+                      )}
                       onClick={() => setStatusFilter(status)}
                     >
                       {STATUS_LABEL[status]} {groupCounts[status]}
@@ -747,10 +742,10 @@ function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabilities 
             role="img"
             aria-label={`${key} ${enabled ? "enabled" : "unavailable"}`}
             title={CAPABILITY_LABELS[key]}
-            className={[
+            className={cx(
               "provider-capability-icon",
               enabled ? "provider-capability-icon--enabled" : "provider-capability-icon--disabled",
-            ].join(" ")}
+            )}
           >
             <Icon className="provider-capability-svg" aria-hidden="true" />
           </span>
@@ -1144,10 +1139,10 @@ function MonitorFileBrowser({
               <button
                 key={item.path}
                 type="button"
-                className={[
+                className={cx(
                   "file-browser__item",
-                  !item.is_dir && selectedFile === item.path ? "file-browser__item--selected" : "",
-                ].join(" ")}
+                  !item.is_dir && selectedFile === item.path && "file-browser__item--selected",
+                )}
                 onClick={() => (item.is_dir ? void loadPath(item.path) : void openFile(item.path))}
               >
                 <span>{item.is_dir ? "DIR" : "FILE"}</span>
