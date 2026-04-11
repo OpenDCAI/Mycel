@@ -27,7 +27,7 @@ vi.mock("@/components/ui/popover", () => ({
   PopoverContent: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@/components/CreateMemberDialog", () => ({
+vi.mock("@/components/CreateAgentDialog", () => ({
   default: () => null,
 }));
 

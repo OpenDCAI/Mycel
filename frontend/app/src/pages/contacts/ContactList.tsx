@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Bot, Search, User, Plus } from "lucide-react";
 import ActorAvatar from "@/components/ActorAvatar";
 import { useAppStore } from "@/store/app-store";
-import CreateMemberDialog from "@/components/CreateMemberDialog";
+import CreateAgentDialog from "@/components/CreateAgentDialog";
 
 type Tab = "agents" | "contacts";
 
@@ -134,7 +134,7 @@ export default function ContactList() {
         )}
       </div>
 
-      <CreateMemberDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateAgentDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

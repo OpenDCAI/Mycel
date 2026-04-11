@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { uploadUserAvatar } from "@/api/client";
 import ActorAvatar from "@/components/ActorAvatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import CreateMemberDialog from "@/components/CreateMemberDialog";
+import CreateAgentDialog from "@/components/CreateAgentDialog";
 import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAppStore } from "@/store/app-store";
@@ -38,7 +38,7 @@ function AuthenticatedLayout() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const [showCreate, setShowCreate] = useState(false);
-  const [createMemberOpen, setCreateMemberOpen] = useState(false);
+  const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [avatarRev, setAvatarRev] = useState(0);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +94,7 @@ function AuthenticatedLayout() {
   const handleCreateAction = useCallback(async (action: string) => {
     setShowCreate(false);
     switch (action) {
-      case "staff": setCreateMemberOpen(true); break;
+      case "staff": setCreateAgentOpen(true); break;
       case "chat": setNewChatOpen(true); break;
     }
   }, []);
@@ -211,7 +211,7 @@ function AuthenticatedLayout() {
           })}
         </nav>
 
-        <CreateMemberDialog open={createMemberOpen} onOpenChange={setCreateMemberOpen} />
+        <CreateAgentDialog open={createAgentOpen} onOpenChange={setCreateAgentOpen} />
         <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
       </div>
     );
@@ -314,7 +314,7 @@ function AuthenticatedLayout() {
       <main className="flex-1 overflow-hidden">
         <div className="h-full animate-page-in"><Outlet /></div>
       </main>
-      <CreateMemberDialog open={createMemberOpen} onOpenChange={setCreateMemberOpen} />
+      <CreateAgentDialog open={createAgentOpen} onOpenChange={setCreateAgentOpen} />
       <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
     </div>
   );
