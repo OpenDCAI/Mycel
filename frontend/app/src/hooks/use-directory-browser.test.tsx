@@ -28,4 +28,19 @@ describe("useDirectoryBrowser", () => {
     expect(view.result.current.items).toEqual([]);
     expect(view.result.current.error).toBe("Malformed directory browser payload: items must be an array");
   });
+
+  it("ignores non-string error details", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      json: async () => ({ detail: { message: "not a string" } }),
+    } as Response);
+
+    const view = renderHook(() => useDirectoryBrowser((path) => `/browse?path=${path}`, "/workspace"));
+
+    await act(async () => {
+      await view.result.current.loadPath("/workspace");
+    });
+
+    expect(view.result.current.error).toBe("加载失败");
+  });
 });

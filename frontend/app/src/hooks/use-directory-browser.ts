@@ -64,8 +64,9 @@ export function useDirectoryBrowser(buildUrl: (path: string) => string, initialP
     try {
       const res = await fetch(buildUrl(path));
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error((d as { detail?: string }).detail || "加载失败");
+        const errorPayload = asRecord(await res.json().catch(() => null));
+        const detail = errorPayload ? recordString(errorPayload, "detail") : undefined;
+        throw new Error(detail || "加载失败");
       }
       const data = parseBrowsePayload(await res.json(), path);
       setCurrentPath(data.currentPath);
