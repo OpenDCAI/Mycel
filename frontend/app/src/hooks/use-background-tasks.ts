@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UseThreadStreamResult } from './use-thread-stream';
 import type { StreamEvent } from '../api/types';
+import { asRecord } from '../lib/records';
 
 export interface BackgroundTask {
   task_id: string;
@@ -28,8 +29,8 @@ interface BackgroundTaskEventData {
 const threadTasksInflight = new Map<string, Promise<BackgroundTask[]>>();
 
 function isBackgroundTaskEventData(data: unknown): data is BackgroundTaskEventData {
-  if (!data || typeof data !== "object") return false;
-  const value = data as Record<string, unknown>;
+  const value = asRecord(data);
+  if (!value) return false;
   return value.background === true && typeof value.task_id === "string";
 }
 

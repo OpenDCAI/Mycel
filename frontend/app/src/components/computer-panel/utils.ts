@@ -1,4 +1,5 @@
 import type { ChatEntry, ToolStep, SandboxFileEntry } from "../../api";
+import { asRecord } from "../../lib/records";
 import type { TreeNode } from "./types";
 
 /* ── Flow types for message-flow panel ── */
@@ -40,27 +41,23 @@ export function extractAgentSteps(entries: ChatEntry[]): ToolStep[] {
 }
 
 export function parseCommandArgs(args: unknown): { command?: string; cwd?: string; description?: string } {
-  if (args && typeof args === "object") {
-    const a = args as Record<string, unknown>;
-    return {
-      command: a.command as string | undefined,
-      cwd: a.cwd as string | undefined,
-      description: a.description as string | undefined,
-    };
-  }
-  return {};
+  const a = asRecord(args);
+  if (!a) return {};
+  return {
+    command: a.command as string | undefined,
+    cwd: a.cwd as string | undefined,
+    description: a.description as string | undefined,
+  };
 }
 
 export function parseAgentArgs(args: unknown): { description?: string; prompt?: string; subagent_type?: string } {
-  if (args && typeof args === "object") {
-    const a = args as Record<string, unknown>;
-    return {
-      description: (a.Description ?? a.description) as string | undefined,
-      prompt: (a.Prompt ?? a.prompt) as string | undefined,
-      subagent_type: (a.SubagentType ?? a.subagent_type) as string | undefined,
-    };
-  }
-  return {};
+  const a = asRecord(args);
+  if (!a) return {};
+  return {
+    description: (a.Description ?? a.description) as string | undefined,
+    prompt: (a.Prompt ?? a.prompt) as string | undefined,
+    subagent_type: (a.SubagentType ?? a.subagent_type) as string | undefined,
+  };
 }
 
 export function buildTreeNodes(entries: SandboxFileEntry[], parentPath: string): TreeNode[] {
