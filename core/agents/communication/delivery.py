@@ -2,7 +2,7 @@
 
 v3: no full message text injected. Agent must read_messages to see content.
 MessagingService._deliver_to_agents calls the delivery function for each
-non-sender agent member.
+non-sender agent user.
 """
 
 from __future__ import annotations
@@ -93,13 +93,13 @@ def make_chat_delivery_fn(app: Any):
     return _deliver
 
 
-def _log_delivery_result(member_id: str, f: Any) -> None:
+def _log_delivery_result(recipient_id: str, f: Any) -> None:
     """Done-callback for async delivery futures."""
     exc = f.exception()
     if exc:
-        logger.error("[delivery] async delivery failed for %s: %s", member_id, exc, exc_info=exc)
+        logger.error("[delivery] async delivery failed for %s: %s", recipient_id, exc, exc_info=exc)
     else:
-        logger.info("[delivery] async delivery completed for %s", member_id)
+        logger.info("[delivery] async delivery completed for %s", recipient_id)
 
 
 async def _async_deliver(

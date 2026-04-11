@@ -235,11 +235,11 @@ def create_agent_user(
     agent_config_repo: Any = None,
 ) -> dict[str, Any]:
     from storage.contracts import UserRow, UserType
-    from storage.utils import generate_agent_config_id, generate_member_id
+    from storage.utils import generate_agent_config_id, generate_agent_user_id
 
     now = time.time()
     now_ms = int(now * 1000)
-    agent_user_id = generate_member_id()
+    agent_user_id = generate_agent_user_id()
     agent_config_id = generate_agent_config_id()
 
     # Persist to users table so panel/auth shells see a unified agent identity
@@ -580,7 +580,7 @@ def install_from_snapshot(
 ) -> str:
     """Create or update a marketplace-backed agent user via repos only."""
     from storage.contracts import UserRow, UserType
-    from storage.utils import generate_agent_config_id, generate_member_id
+    from storage.utils import generate_agent_config_id, generate_agent_user_id
 
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
@@ -606,7 +606,7 @@ def install_from_snapshot(
         created_at = int(current_config.get("created_at", now_ms))
         user_repo.update(user_id, display_name=agent_name)
     else:
-        user_id = generate_member_id()
+        user_id = generate_agent_user_id()
         agent_config_id = generate_agent_config_id()
         created_at = now_ms
         row = UserRow(

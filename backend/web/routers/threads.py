@@ -589,7 +589,7 @@ def _create_owned_thread(
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     # @@@user-owned-thread-seq - thread ids are now allocated from the unified
     # user identity root, so create-path sequencing must fail loudly through
-    # user_repo instead of silently reaching back into member_repo.
+    # user_repo instead of silently reaching back into a legacy member repo.
     seq = app.state.user_repo.increment_thread_seq(agent_user_id)
     new_thread_id = f"{agent_user_id}-{seq}"
     has_main = app.state.thread_repo.get_default_thread(agent_user_id) is not None
@@ -663,7 +663,7 @@ async def create_thread(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any] | JSONResponse:
-    """Create a new child thread for an agent member."""
+    """Create a new child thread for an agent user."""
     provider_error = _validate_sandbox_provider_gate(app, user_id, payload)
     if provider_error is not None:
         return provider_error
@@ -690,7 +690,7 @@ async def resolve_main_thread(
     agent_user_id = payload.agent_user_id
     agent_member = _find_owned_agent(app, agent_user_id, user_id)
     if agent_member is None:
-        # Return null instead of 403 — member may not exist yet (stale client state)
+        # Return null instead of 403 — agent user may not exist yet (stale client state)
         # or belong to another user (harmless to reveal "no thread")
         return {
             "agent_user_id": agent_user_id,
@@ -712,8 +712,8 @@ async def resolve_main_thread(
             "thread": _thread_payload(app, default_thread["id"], default_thread.get("sandbox_type", "local")),
         }
     except HTTPException as exc:
-        # @@@orphan-default-thread - stale bootstrap data can leave the member pointing at a thread whose
-        # member rows are gone. Treat that as "no resolvable default thread" instead of surfacing a 500.
+        # @@@orphan-default-thread - stale bootstrap data can leave the agent user pointing at a thread whose
+        # user rows are gone. Treat that as "no resolvable default thread" instead of surfacing a 500.
         if exc.status_code == 500 and "missing agent user" in str(exc.detail):
             logger.warning(
                 "resolve_main_thread ignored orphaned default thread %s for agent user %s",
