@@ -655,7 +655,7 @@ async def create_thread(
         return provider_error
     # Validate bind_mounts capability before creating thread
     sandbox_type = payload.sandbox or "local"
-    requested_mounts = payload.bind_mounts if payload.bind_mounts else []
+    requested_mounts = payload.bind_mounts or []
     capability_error = await _validate_mount_capability_gate(sandbox_type, requested_mounts)
     if capability_error is not None:
         return capability_error

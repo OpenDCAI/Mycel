@@ -33,10 +33,9 @@ def _hub_api(method: str, path: str, **kwargs: Any) -> dict:
         status = e.response.status_code
         if status == 404:
             raise HTTPException(status_code=404, detail="Marketplace item not found")
-        elif status == 409:
+        if status == 409:
             raise HTTPException(status_code=409, detail="Item already exists with this version")
-        else:
-            raise HTTPException(status_code=502, detail=f"Hub API error: {status}")
+        raise HTTPException(status_code=502, detail=f"Hub API error: {status}")
     except (httpx.ConnectError, httpx.TimeoutException):
         raise HTTPException(status_code=503, detail="Marketplace Hub unavailable")
 

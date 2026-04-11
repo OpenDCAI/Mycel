@@ -213,7 +213,7 @@ def create_resource(
         content = f"# {name}\n\n{desc}\n" if resource_type == "skill" else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
         content_path.write_text(content, encoding="utf-8")
         return _library_resource_item(resource_type, rid, meta)
-    elif resource_type == "mcp":
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         meta = {
@@ -317,7 +317,7 @@ def delete_resource(
             return False
         shutil.rmtree(target)
         return True
-    elif resource_type == "agent":
+    if resource_type == "agent":
         md_path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
         json_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
         found = False
@@ -328,7 +328,7 @@ def delete_resource(
             json_path.unlink()
             found = True
         return found
-    elif resource_type == "mcp":
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         if resource_id not in mcp_data.get("mcpServers", {}):

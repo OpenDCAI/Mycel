@@ -68,7 +68,7 @@ def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: 
         if target == "cloud":
             return "https://app.daytona.io"
         api_url = str(daytona.get("api_url") or "").strip().rstrip("/")
-        return api_url[:-4] if api_url.endswith("/api") else api_url
+        return api_url.removesuffix("/api")
     return None
 
 

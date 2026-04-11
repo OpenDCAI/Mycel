@@ -47,7 +47,7 @@ async def publish_to_marketplace(
     profile = await asyncio.to_thread(get_profile, publisher_user)
     username = profile.get("name", "anonymous")
 
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         marketplace_client.publish,
         user_id=req.user_id,
         type_=req.type,
@@ -60,7 +60,6 @@ async def publish_to_marketplace(
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
-    return result
 
 
 @router.post("/download")
@@ -71,14 +70,13 @@ async def download_from_marketplace(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         marketplace_client.download,
         item_id=req.item_id,
         owner_user_id=user_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
-    return result
 
 
 @router.post("/upgrade")
@@ -91,7 +89,7 @@ async def upgrade_from_marketplace(
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         marketplace_client.upgrade,
         user_id=req.user_id,
         item_id=req.item_id,
@@ -99,7 +97,6 @@ async def upgrade_from_marketplace(
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
-    return result
 
 
 @router.post("/check-updates")
@@ -107,8 +104,7 @@ async def check_updates(
     req: CheckUpdatesRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         marketplace_client.check_updates,
         items=[item.model_dump() for item in req.items],
     )
-    return result

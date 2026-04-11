@@ -102,7 +102,7 @@ def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
     except Exception as exc:
         raise RuntimeError(f"Failed to list directory: {exc}") from exc
 
-    norm_path = path if path else "/"
+    norm_path = path or "/"
 
     items = []
     for entry in entries:

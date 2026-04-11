@@ -480,8 +480,7 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
             kwargs["api_key"] = p.api_key
         if p and p.base_url:
             url = p.base_url.rstrip("/")
-            if url.endswith("/v1"):
-                url = url[:-3]
+            url = url.removesuffix("/v1")
             if provider_name != "anthropic":
                 url = f"{url}/v1"
             kwargs["base_url"] = url

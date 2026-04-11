@@ -79,8 +79,7 @@ def _rules_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[
     rules = []
     for row in agent_config_repo.list_rules(agent_config_id):
         filename = str(row.get("filename") or "")
-        name = filename[:-3] if filename.endswith(".md") else filename
-        rules.append({"name": name, "content": row.get("content", "")})
+        rules.append({"name": filename.removesuffix(".md"), "content": row.get("content", "")})
     return rules
 
 

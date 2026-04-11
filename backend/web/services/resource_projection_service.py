@@ -187,9 +187,7 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
 
 def _is_resource_visible_thread(thread_id: str | None) -> bool:
     raw = str(thread_id or "").strip()
-    if raw.startswith("subagent-"):
-        return False
-    return True
+    return not raw.startswith("subagent-")
 
 
 def _resource_session_identity(session: dict[str, Any]) -> str:
