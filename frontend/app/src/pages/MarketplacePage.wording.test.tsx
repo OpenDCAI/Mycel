@@ -65,4 +65,16 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getAllByRole("button", { name: /Agent/ }).length).toBeGreaterThan(0);
     expect(screen.getByText("暂无已安装的 Agent")).toBeTruthy();
   });
+
+  it("falls back to explore for invalid tab params", () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=unknown&sub=ghost"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Explore" })).toBeTruthy();
+  });
 });

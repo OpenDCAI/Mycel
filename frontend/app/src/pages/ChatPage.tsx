@@ -24,6 +24,7 @@ import { useDisplayDeltas } from "../hooks/use-display-deltas";
 import { useThreadData } from "../hooks/use-thread-data";
 import { useThreadPermissions } from "../hooks/use-thread-permissions";
 import { useThreadStream } from "../hooks/use-thread-stream";
+import { asRecord } from "../lib/records";
 import type { PermissionRuleBehavior } from "../api";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
@@ -217,9 +218,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         "allow",
         undefined,
         answers,
-        typeof currentPermissionRequest.args.annotations === "object" && currentPermissionRequest.args.annotations !== null
-          ? currentPermissionRequest.args.annotations as Record<string, unknown>
-          : undefined,
+        asRecord(currentPermissionRequest.args.annotations) ?? undefined,
       );
       await refreshThread();
       toast.success("已提交回答，Leon 会继续当前任务");
