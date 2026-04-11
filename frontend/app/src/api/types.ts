@@ -226,6 +226,22 @@ export interface RetrySegment {
 
 export type TurnSegment = TextSegment | ToolSegment | NoticeSegment | RetrySegment;
 
+export function isTextSegment(segment: TurnSegment): segment is TextSegment {
+  return segment.type === "text";
+}
+
+export function isToolSegment(segment: TurnSegment): segment is ToolSegment {
+  return segment.type === "tool";
+}
+
+export function isNoticeSegment(segment: TurnSegment): segment is NoticeSegment {
+  return segment.type === "notice";
+}
+
+export function isRetrySegment(segment: TurnSegment): segment is RetrySegment {
+  return segment.type === "retry";
+}
+
 export interface AssistantTurn {
   id: string;
   messageIds?: string[];
