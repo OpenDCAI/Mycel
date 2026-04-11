@@ -22,6 +22,9 @@ export default function MarketplaceDetailPage() {
   const fetchVersionSnapshot = useMarketplaceStore((s) => s.fetchVersionSnapshot);
   const clearSnapshot = useMarketplaceStore((s) => s.clearSnapshot);
   const [installOpen, setInstallOpen] = useState(false);
+  const detailId = detail?.id;
+  const detailType = detail?.type;
+  const previewVersion = detail?.versions[0]?.version;
 
   useEffect(() => {
     if (id) {
@@ -32,11 +35,11 @@ export default function MarketplaceDetailPage() {
   }, [id, fetchDetail, fetchLineage, clearDetail]);
 
   useEffect(() => {
-    if (detail && detail.versions.length > 0 && (detail.type === "skill" || detail.type === "agent")) {
-      fetchVersionSnapshot(detail.id, detail.versions[0].version);
+    if (detailId && previewVersion && (detailType === "skill" || detailType === "agent")) {
+      fetchVersionSnapshot(detailId, previewVersion);
     }
     return () => clearSnapshot();
-  }, [detail?.id, detail?.type, fetchVersionSnapshot, clearSnapshot]);
+  }, [detailId, detailType, previewVersion, fetchVersionSnapshot, clearSnapshot]);
 
   if (detailLoading) {
     return (
