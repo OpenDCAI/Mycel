@@ -37,7 +37,7 @@ class AuthService:
     # Registration flow (standard Supabase signUp)
     # Step 1: send_otp(email, password) → signUp creates user, GoTrue sends OTP
     # Step 2: verify_register_otp(...)  → verifyOtp(type:signup), returns temp_token
-    # Step 3: complete_register(...)    → validate invite, create member records
+    # Step 3: complete_register(...)    → validate invite, create user + agent records
     # ------------------------------------------------------------------
 
     def send_otp(self, email: str, password: str, invite_code: str) -> None:
@@ -153,7 +153,7 @@ class AuthService:
         auth_user_id = str(resp.user.id)
         token = resp.session.access_token
 
-        # Load member info
+        # Load user info
         user = self._users.get_by_id(auth_user_id)
         if user is None:
             raise ValueError("账号数据异常，请联系支持")
@@ -235,7 +235,7 @@ class AuthService:
             raise RuntimeError("Agent config repo required for initial agent creation during schema cutover.")
         from pathlib import Path
 
-        from storage.utils import generate_agent_config_id, generate_member_id
+        from storage.utils import generate_agent_config_id, generate_agent_user_id
 
         initial_agents = [
             {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
@@ -245,7 +245,7 @@ class AuthService:
         first_agent_info = None
 
         for i, agent_def in enumerate(initial_agents):
-            agent_id = generate_member_id()
+            agent_id = generate_agent_user_id()
             agent_config_id = generate_agent_config_id()
             self._users.create(
                 UserRow(
@@ -270,14 +270,13 @@ class AuthService:
                 },
             )
             src_avatar = assets_dir / agent_def["avatar"]
-            if src_avatar.exists():
-                try:
-                    from backend.web.routers.entities import process_and_save_avatar
+            if not src_avatar.exists():
+                raise RuntimeError(f"Default agent avatar missing: {src_avatar}")
+            from backend.web.routers.entities import process_and_save_avatar
 
-                    process_and_save_avatar(src_avatar, agent_id)
-                except Exception as e:
-                    logger.warning("Avatar copy failed for %s: %s", agent_def["name"], e)
+            avatar_path = process_and_save_avatar(src_avatar, agent_id)
+            self._users.update(agent_id, avatar=avatar_path)
             if i == 0:
-                first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "agent", "avatar": None}
+                first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "agent", "avatar": avatar_path}
 
         return first_agent_info

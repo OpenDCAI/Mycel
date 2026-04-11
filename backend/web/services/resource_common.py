@@ -217,7 +217,7 @@ def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any
         if own_thread_repo:
             repo.close()
 
-    member_meta: dict[str, dict[str, str | None]] = {}
+    agent_user_meta: dict[str, dict[str, str | None]] = {}
     if refs:
         repo = user_repo
         own_user_repo = False
@@ -225,7 +225,7 @@ def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any
             repo = build_user_repo()
             own_user_repo = True
         try:
-            member_meta = {
+            agent_user_meta = {
                 user.id: {
                     "agent_name": user.display_name,
                     "avatar_url": f"/api/users/{user.id}/avatar" if user.id and user.avatar else None,
@@ -243,8 +243,8 @@ def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any
         if not agent_ref:
             owners[thread_id] = {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None}
             continue
-        # @@@agent-name-resolution - thread_config.agent may be member id or direct display name.
-        meta = member_meta.get(agent_ref, {})
+        # @@@agent-name-resolution - thread_config.agent may be agent user id or direct display name.
+        meta = agent_user_meta.get(agent_ref, {})
         owners[thread_id] = {
             "agent_user_id": agent_ref,
             "agent_name": meta.get("agent_name") or agent_ref,

@@ -92,7 +92,7 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
         if thread_repo is not None and thread_repo.get_by_user_id(participant_id) is not None:
             validated.append(participant_id)
             continue
-        # @@@group-chat-actor-boundary - template member ids are display/config identities,
+        # @@@group-chat-actor-boundary - agent user ids are display/config identities,
         # not deliverable chat actors. Reject them loudly at ingress instead of guessing.
         if user_repo is not None:
             candidate = user_repo.get_by_id(participant_id)

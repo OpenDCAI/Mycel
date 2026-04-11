@@ -57,11 +57,11 @@ users_router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @users_router.get("")
-async def list_members(
+async def list_users(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """List all agent users for the member directory page."""
+    """List all agent users for the user directory page."""
     user_repo = app.state.user_repo
 
     all_users = user_repo.list_all()

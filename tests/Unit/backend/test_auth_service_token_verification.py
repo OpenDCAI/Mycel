@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -96,10 +97,12 @@ def _service(
     supabase_auth_client=None,
     supabase_auth_client_factory=None,
     user_repo=None,
+    agent_configs=None,
     invite_codes=None,
 ) -> AuthService:
     return AuthService(
-        users=user_repo or SimpleNamespace(),
+        users=cast(Any, user_repo or SimpleNamespace()),
+        agent_configs=agent_configs,
         supabase_client=supabase_client,
         supabase_auth_client=supabase_auth_client,
         supabase_auth_client_factory=supabase_auth_client_factory,
@@ -235,6 +238,38 @@ def test_verify_register_otp_accepts_direct_gotrue_client_without_auth_wrapper()
 
     assert auth_client.calls == [{"email": "fresh@example.com", "token": "123456", "type": "signup"}]
     assert result == {"temp_token": "temp-token-1"}
+
+
+def test_create_initial_agents_persists_default_agent_avatars(monkeypatch: pytest.MonkeyPatch):
+    created_users: list[SimpleNamespace] = []
+    updates: list[tuple[str, dict[str, object]]] = []
+    saved_configs: list[tuple[str, dict[str, object]]] = []
+    user_ids = iter(["agent-toad", "agent-morel"])
+    config_ids = iter(["cfg-toad", "cfg-morel"])
+
+    monkeypatch.setattr("storage.utils.generate_agent_user_id", lambda: next(user_ids))
+    monkeypatch.setattr("storage.utils.generate_agent_config_id", lambda: next(config_ids))
+    monkeypatch.setattr(
+        "backend.web.routers.entities.process_and_save_avatar",
+        lambda _source, user_id: f"avatars/{user_id}.png",
+    )
+
+    user_repo = SimpleNamespace(
+        create=lambda row: created_users.append(row),
+        update=lambda user_id, **fields: updates.append((user_id, fields)),
+    )
+    agent_configs = SimpleNamespace(save_config=lambda config_id, payload: saved_configs.append((config_id, payload)))
+
+    result = _service(user_repo=user_repo, agent_configs=agent_configs)._create_initial_agents("owner-1", 123.0)
+
+    assert [row.id for row in created_users] == ["agent-toad", "agent-morel"]
+    assert [row.display_name for row in created_users] == ["Toad", "Morel"]
+    assert [item[0] for item in saved_configs] == ["cfg-toad", "cfg-morel"]
+    assert updates == [
+        ("agent-toad", {"avatar": "avatars/agent-toad.png"}),
+        ("agent-morel", {"avatar": "avatars/agent-morel.png"}),
+    ]
+    assert result == {"id": "agent-toad", "name": "Toad", "type": "agent", "avatar": "avatars/agent-toad.png"}
 
 
 def test_login_resolves_numeric_mycel_id_via_user_repo():

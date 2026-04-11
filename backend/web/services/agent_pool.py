@@ -123,7 +123,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 settings_row = user_settings_repo.get(owner_user_id) or {}
                 model_name = settings_row.get("default_model")
 
-        # @@@agent-vs-member - thread_config.agent stores a member ID (e.g. "__leon__") for display,
+        # @@@agent-vs-agent-user - thread_config.agent stores an agent user id (e.g. "__leon__") for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None → default Leon agent
         bundle_dir = None

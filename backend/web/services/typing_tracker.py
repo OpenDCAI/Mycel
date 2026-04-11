@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _ChatEntry:
     chat_id: str
-    user_id: str  # social identity: user_id for humans, member_id for agents
+    user_id: str  # social identity: user id for humans and agent users
 
 
 class TypingTracker:
