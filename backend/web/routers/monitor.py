@@ -114,6 +114,19 @@ def evaluation_snapshot():
     return monitor_service.get_monitor_evaluation_workbench()
 
 
+@router.get("/evaluation/batches")
+def evaluation_batches_snapshot(limit: int = Query(default=50, ge=1, le=200)):
+    return monitor_service.get_monitor_evaluation_batches(limit=limit)
+
+
+@router.get("/evaluation/batches/{batch_id}")
+def evaluation_batch_detail_snapshot(batch_id: str):
+    try:
+        return monitor_service.get_monitor_evaluation_batch_detail(batch_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/evaluation/runs/{run_id}")
 def evaluation_run_detail_snapshot(run_id: str):
     try:

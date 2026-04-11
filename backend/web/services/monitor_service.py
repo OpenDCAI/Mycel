@@ -7,7 +7,11 @@ from typing import Any
 
 from backend.web.services import monitor_operation_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
+from eval.batch_service import EvaluationBatchService
 from eval.storage import TrajectoryStore
+from storage.runtime import (
+    build_evaluation_batch_repo,
+)
 from storage.runtime import (
     build_sandbox_monitor_repo as make_sandbox_monitor_repo,
 )
@@ -18,6 +22,10 @@ from storage.runtime import (
 # ---------------------------------------------------------------------------
 def make_eval_store() -> TrajectoryStore:
     return TrajectoryStore()
+
+
+def make_eval_batch_service() -> EvaluationBatchService:
+    return EvaluationBatchService(batch_repo=build_evaluation_batch_repo())
 
 
 def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
@@ -473,6 +481,18 @@ def get_monitor_evaluation_run_detail(run_id: str) -> dict[str, Any]:
     if run is None:
         raise KeyError(f"Evaluation run not found: {run_id}")
     return _build_monitor_evaluation_run_detail(run, store.get_metrics(run_id))
+
+
+def get_monitor_evaluation_batches(limit: int = 50) -> dict[str, Any]:
+    items = make_eval_batch_service().list_batches(limit=limit)
+    return {
+        "items": items,
+        "count": len(items),
+    }
+
+
+def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
+    return make_eval_batch_service().get_batch_detail(batch_id)
 
 
 def get_monitor_evaluation_truth() -> dict[str, Any]:

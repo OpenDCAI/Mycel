@@ -659,6 +659,75 @@ def test_monitor_evaluation_run_detail_route_exposes_selected_run_truth(monkeypa
     ]
 
 
+def test_monitor_evaluation_batches_route_exposes_batch_index(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_evaluation_batches",
+        lambda limit=50: {
+            "items": [
+                {
+                    "batch_id": "batch-1",
+                    "status": "running",
+                    "summary_json": {"total_runs": 10, "running_runs": 3, "completed_runs": 7, "failed_runs": 0},
+                }
+            ],
+            "count": 1,
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/evaluation/batches")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] == 1
+    assert payload["items"][0]["batch_id"] == "batch-1"
+    assert payload["items"][0]["summary_json"]["total_runs"] == 10
+
+
+def test_monitor_evaluation_batch_detail_route_exposes_batch_runs(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_evaluation_batch_detail",
+        lambda batch_id: {
+            "batch": {"batch_id": batch_id, "status": "running"},
+            "runs": [
+                {
+                    "batch_run_id": "batch-run-1",
+                    "batch_id": batch_id,
+                    "scenario_id": "scenario-1",
+                    "status": "completed",
+                    "thread_id": "thread-1",
+                    "eval_run_id": "eval-run-1",
+                }
+            ],
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/evaluation/batches/batch-1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["batch"] == {"batch_id": "batch-1", "status": "running"}
+    assert payload["runs"][0]["thread_id"] == "thread-1"
+    assert payload["runs"][0]["eval_run_id"] == "eval-run-1"
+
+
+def test_monitor_evaluation_batch_detail_route_maps_missing_batch_to_404(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_evaluation_batch_detail",
+        lambda batch_id: (_ for _ in ()).throw(KeyError(f"Evaluation batch not found: {batch_id}")),
+    )
+
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/api/monitor/evaluation/batches/batch-404")
+
+    assert response.status_code == 404
+    assert "Evaluation batch not found: batch-404" in response.text
+
+
 def test_monitor_dashboard_route_derives_evaluation_summary_from_service(monkeypatch):
     _stub_monitor_resource_snapshot(monkeypatch)
     _stub_monitor_leases(monkeypatch)
