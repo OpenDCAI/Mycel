@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 
@@ -110,3 +111,28 @@ class EvaluationBatchService:
             raise KeyError(f"Evaluation batch run not found: {batch_run_id}")
         self.refresh_batch_summary(str(updated["batch_id"]))
         return updated
+
+    def record_eval_result(self, batch_id: str, result: Any) -> dict:
+        batch_run = self._find_batch_run_for_scenario(batch_id, str(result.scenario_id))
+        summary = {
+            "total_tokens": int(result.system_metrics.total_tokens),
+            "tool_call_count": int(result.system_metrics.tool_call_count),
+        }
+        updated = self._batch_repo.update_batch_run(
+            batch_run["batch_run_id"],
+            thread_id=result.trajectory.thread_id,
+            eval_run_id=result.trajectory.id,
+            status=result.trajectory.status,
+            finished_at=datetime.now(UTC).isoformat(),
+            summary_json=summary,
+        )
+        if updated is None:
+            raise KeyError(f"Evaluation batch run not found: {batch_run['batch_run_id']}")
+        self.refresh_batch_summary(batch_id)
+        return updated
+
+    def _find_batch_run_for_scenario(self, batch_id: str, scenario_id: str) -> dict:
+        for batch_run in self._batch_repo.list_batch_runs(batch_id):
+            if str(batch_run.get("scenario_id") or "") == scenario_id:
+                return batch_run
+        raise KeyError(f"Evaluation batch run not found for scenario {scenario_id} in batch {batch_id}")

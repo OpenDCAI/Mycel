@@ -1,5 +1,6 @@
 from eval.batch_models import EvaluationBatch, EvaluationBatchRun
 from eval.batch_service import EvaluationBatchService
+from eval.models import EvalResult, RunTrajectory, SystemMetrics
 
 
 def _batch_row(*, batch_id: str = "batch-1", status: str = "pending") -> dict:
@@ -169,3 +170,32 @@ def test_batch_service_marks_batch_run_running_with_started_at():
     assert updated["status"] == "running"
     assert updated["thread_id"] == "thread-1"
     assert updated["started_at"]
+
+
+def test_batch_service_records_eval_result_for_matching_scenario():
+    repo = _FakeBatchRepo()
+    service = EvaluationBatchService(batch_repo=repo)
+    batch = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+    result = EvalResult(
+        scenario_id="scenario-1",
+        trajectory=RunTrajectory(
+            id="eval-run-1",
+            thread_id="thread-1",
+            user_message="hello",
+            status="completed",
+        ),
+        system_metrics=SystemMetrics(total_tokens=42, tool_call_count=3),
+    )
+
+    updated = service.record_eval_result(batch["batch_id"], result)
+
+    assert updated["eval_run_id"] == "eval-run-1"
+    assert updated["thread_id"] == "thread-1"
+    assert updated["status"] == "completed"
+    assert updated["summary_json"] == {"total_tokens": 42, "tool_call_count": 3}
