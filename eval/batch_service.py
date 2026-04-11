@@ -77,6 +77,16 @@ class EvaluationBatchService:
     def list_batch_runs_for_thread(self, thread_id: str) -> list[dict]:
         return self._batch_repo.list_batch_runs_by_thread_id(thread_id)
 
+    def update_batch_status(self, batch_id: str, status: str) -> dict:
+        updated = self._batch_repo.update_batch(
+            batch_id,
+            status=status,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+        if updated is None:
+            raise KeyError(f"Evaluation batch not found: {batch_id}")
+        return updated
+
     def refresh_batch_summary(self, batch_id: str) -> dict:
         batch_runs = self._batch_repo.list_batch_runs(batch_id)
         summary = {
