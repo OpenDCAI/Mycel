@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   cancelRun,
+  isAssistantTurn,
   postRun,
   type AssistantTurn,
   type ChatEntry,
@@ -71,9 +72,10 @@ function updateLastTurn(
   updater: (turn: AssistantTurn) => AssistantTurn,
 ): ChatEntry[] {
   for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].role === "assistant") {
+    const entry = entries[i];
+    if (isAssistantTurn(entry)) {
       const updated = [...entries];
-      updated[i] = updater(entries[i] as AssistantTurn);
+      updated[i] = updater(entry);
       return updated;
     }
   }
