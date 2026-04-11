@@ -17,7 +17,21 @@ interface UseBackgroundTasksProps {
   subscribe: UseThreadStreamResult["subscribe"];
 }
 
+interface BackgroundTaskEventData {
+  background: true;
+  task_id: string;
+  task_type?: BackgroundTask["task_type"];
+  command_line?: string;
+  description?: string;
+}
+
 const threadTasksInflight = new Map<string, Promise<BackgroundTask[]>>();
+
+function isBackgroundTaskEventData(data: unknown): data is BackgroundTaskEventData {
+  if (!data || typeof data !== "object") return false;
+  const value = data as Record<string, unknown>;
+  return value.background === true && typeof value.task_id === "string";
+}
 
 function isActiveThreadRoute(threadId: string): boolean {
   const path = window.location.pathname.replace(/\/+$/, "");
@@ -64,11 +78,9 @@ export function useBackgroundTasks({ threadId, subscribe }: UseBackgroundTasksPr
   // 监听 SSE 事件
   useEffect(() => {
     const unsubscribe = subscribe((event: StreamEvent) => {
-      const data = event.data as any;
-
       // 只处理 background task 事件
-      const isBackgroundTask = data?.background === true;
-      if (!isBackgroundTask) return;
+      if (!isBackgroundTaskEventData(event.data)) return;
+      const data = event.data;
 
       if (event.type === 'task_start') {
         // Optimistic update
@@ -90,8 +102,19 @@ export function useBackgroundTasks({ threadId, subscribe }: UseBackgroundTasksPr
 
   // 初始加载
   useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+    let cancelled = false;
+    void loadThreadTasks(threadId)
+      .then((data) => {
+        if (!cancelled) setTasks(data);
+      })
+      .catch((err: unknown) => {
+        if (cancelled || !isActiveThreadRoute(threadId)) return;
+        console.error('[BackgroundTasks] Error fetching tasks:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId]);
 
   const getTask = useCallback((taskId: string) => {
     return tasks.find(t => t.task_id === taskId);
