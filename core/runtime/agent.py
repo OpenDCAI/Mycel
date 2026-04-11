@@ -731,21 +731,22 @@ class LeonAgent:
 
     def _create_extraction_model(self):
         """Create a small model for WebFetch AI extraction (leon:mini)."""
-        try:
-            model_name, overrides = self.models_config.resolve_model("leon:mini")
-            provider = self._resolve_provider_name(model_name, overrides)
-            kwargs: dict = {}
-            if provider:
-                kwargs["model_provider"] = provider
-            p = self.models_config.get_provider(provider) if provider else None
-            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
-            if base_url:
-                kwargs["base_url"] = self._normalize_base_url(base_url, provider)
-            return init_chat_model(model_name, **kwargs)
-        except Exception as e:
-            if self.verbose:
-                print(f"[LeonAgent] Failed to create extraction model: {e}, extraction will be unavailable")
-            return None
+        model_name, overrides = self.models_config.resolve_model("leon:mini")
+        provider = self._resolve_provider_name(model_name, overrides)
+        kwargs: dict = {}
+        if provider:
+            kwargs["model_provider"] = provider
+
+        p = self.models_config.get_provider(provider) if provider else None
+        api_key = (p.api_key if p else None) or self.models_config.get_api_key() or getattr(self, "api_key", None)
+        if not api_key:
+            raise RuntimeError("API key required for WebFetch extraction model")
+        kwargs["api_key"] = api_key
+
+        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        if base_url:
+            kwargs["base_url"] = self._normalize_base_url(base_url, provider)
+        return init_chat_model(model_name, **kwargs)
 
     def _build_model_kwargs(self) -> dict:
         """Build model parameters for model initialization and sub-agents."""
