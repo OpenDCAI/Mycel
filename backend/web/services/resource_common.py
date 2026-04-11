@@ -112,7 +112,7 @@ def _to_metric_freshness(collected_at: str | None) -> str:
         return "stale"
     try:
         parsed = datetime.fromisoformat(raw)
-    except Exception:
+    except ValueError:
         return "stale"
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
