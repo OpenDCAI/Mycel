@@ -144,12 +144,6 @@ def metric(
     return payload
 
 
-def _sum_or_none(values: list[float | int]) -> float | None:
-    if not values:
-        return None
-    return float(sum(values))
-
-
 def _as_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
@@ -273,27 +267,25 @@ def aggregate_provider_telemetry(
         latest_collected_at = max(str(snapshot.get("collected_at") or "") for snapshot in snapshots)
         freshness = _to_metric_freshness(latest_collected_at)
 
-    cpu_used = _sum_or_none([float(snapshot["cpu_used"]) for snapshot in snapshots if snapshot.get("cpu_used") is not None])
-    cpu_limit = _sum_or_none([float(snapshot["cpu_limit"]) for snapshot in snapshots if snapshot.get("cpu_limit") is not None])
-    mem_used = _sum_or_none(
-        [float(snapshot["memory_used_mb"]) / 1024.0 for snapshot in snapshots if snapshot.get("memory_used_mb") is not None]
-    )
-    mem_limit = _sum_or_none(
-        [
-            float(snapshot["memory_total_mb"]) / 1024.0
-            for snapshot in snapshots
-            if snapshot.get("memory_total_mb") is not None and float(snapshot["memory_total_mb"]) > 0
-        ]
-    )
-    disk_used = _sum_or_none([float(snapshot["disk_used_gb"]) for snapshot in snapshots if snapshot.get("disk_used_gb") is not None])
+    def _sum_snapshot_field(field: str, *, scale: float = 1.0, positive_only: bool = False) -> float | None:
+        values = []
+        for snapshot in snapshots:
+            raw = snapshot.get(field)
+            if raw is None:
+                continue
+            value = float(raw)
+            if positive_only and value <= 0:
+                continue
+            values.append(value / scale)
+        return float(sum(values)) if values else None
+
+    cpu_used = _sum_snapshot_field("cpu_used")
+    cpu_limit = _sum_snapshot_field("cpu_limit")
+    mem_used = _sum_snapshot_field("memory_used_mb", scale=1024.0)
+    mem_limit = _sum_snapshot_field("memory_total_mb", scale=1024.0, positive_only=True)
+    disk_used = _sum_snapshot_field("disk_used_gb")
     # @@@disk-total-zero-guard - disk_total=0 is physically impossible; treat as missing probe data.
-    disk_limit = _sum_or_none(
-        [
-            float(snapshot["disk_total_gb"])
-            for snapshot in snapshots
-            if snapshot.get("disk_total_gb") is not None and float(snapshot["disk_total_gb"]) > 0
-        ]
-    )
+    disk_limit = _sum_snapshot_field("disk_total_gb", positive_only=True)
 
     has_snapshots = len(snapshots) > 0
     latest_probe_error: str | None = None

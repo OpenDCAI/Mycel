@@ -15,12 +15,8 @@ from eval.harness.runner import EvalRunner
 from eval.harness.scenario import load_scenarios_from_dir
 from eval.models import EvalScenario
 from eval.storage import TrajectoryStore
-from storage.runtime import (
-    build_evaluation_batch_repo,
-)
-from storage.runtime import (
-    build_sandbox_monitor_repo as make_sandbox_monitor_repo,
-)
+from storage.runtime import build_evaluation_batch_repo
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
@@ -290,15 +286,14 @@ def _build_monitor_evaluation_run_fact_rows(metrics_rows: list[dict[str, Any]]) 
     system_metrics = metrics_by_tier.get("system") or {}
     objective_metrics = metrics_by_tier.get("objective") or {}
     facts = [{"label": "Metric Tiers", "value": str(len(metrics_rows))}]
-    total_tokens = system_metrics.get("total_tokens")
-    if total_tokens is not None:
-        facts.append({"label": "Total tokens", "value": str(total_tokens)})
-    llm_call_count = system_metrics.get("llm_call_count")
-    if llm_call_count is not None:
-        facts.append({"label": "LLM calls", "value": str(llm_call_count)})
-    tool_call_count = system_metrics.get("tool_call_count")
-    if tool_call_count is not None:
-        facts.append({"label": "Tool calls", "value": str(tool_call_count)})
+    for label, key in [
+        ("Total tokens", "total_tokens"),
+        ("LLM calls", "llm_call_count"),
+        ("Tool calls", "tool_call_count"),
+    ]:
+        value = system_metrics.get(key)
+        if value is not None:
+            facts.append({"label": label, "value": str(value)})
     total_duration_ms = objective_metrics.get("total_duration_ms")
     if total_duration_ms is not None:
         duration_value = int(total_duration_ms) if float(total_duration_ms).is_integer() else total_duration_ms
@@ -623,18 +618,16 @@ def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
         raise KeyError(f"Provider not found: {provider_id}")
 
     sessions = provider.get("sessions") or []
-    lease_ids = sorted({str(item.get("leaseId") or "").strip() for item in sessions if str(item.get("leaseId") or "").strip()})
-    thread_ids = sorted({str(item.get("threadId") or "").strip() for item in sessions if str(item.get("threadId") or "").strip()})
-    runtime_session_ids = sorted(
-        {str(item.get("runtimeSessionId") or "").strip() for item in sessions if str(item.get("runtimeSessionId") or "").strip()}
-    )
-
     return {
         "provider": provider,
-        "lease_ids": lease_ids,
-        "thread_ids": thread_ids,
-        "runtime_session_ids": runtime_session_ids,
+        "lease_ids": _session_values(sessions, "leaseId"),
+        "thread_ids": _session_values(sessions, "threadId"),
+        "runtime_session_ids": _session_values(sessions, "runtimeSessionId"),
     }
+
+
+def _session_values(sessions: list[dict[str, Any]], key: str) -> list[str]:
+    return sorted({str(item.get(key) or "").strip() for item in sessions if str(item.get(key) or "").strip()})
 
 
 def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
