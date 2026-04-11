@@ -165,42 +165,48 @@ async def test_call_auth_service_maps_value_error_to_given_status():
     assert exc_info.value.detail == "邀请码无效"
 
 
-class _VerifyOnlyAuthService:
+class _ChatEventBus:
     def __init__(self) -> None:
-        self.tokens: list[str] = []
+        self.subscribed: list[str] = []
+        self.unsubscribed: list[tuple[str, object]] = []
 
-    def verify_token(self, token: str) -> dict:
-        self.tokens.append(token)
-        return {"user_id": "user-1"}
+    def subscribe(self, chat_id: str) -> object:
+        self.subscribed.append(chat_id)
+        return object()
+
+    def unsubscribe(self, chat_id: str, queue: object) -> None:
+        self.unsubscribed.append((chat_id, queue))
 
 
 @pytest.mark.asyncio
-async def test_chat_events_requires_token():
+async def test_chat_events_requires_chat_membership():
     app = SimpleNamespace(
         state=SimpleNamespace(
-            auth_service=_VerifyOnlyAuthService(),
-            chat_event_bus=SimpleNamespace(subscribe=lambda _chat_id: None),
+            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: {"id": "chat-1"}),
+            messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: False),
+            chat_event_bus=_ChatEventBus(),
         )
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await chats_router.stream_chat_events("chat-1", token=None, app=app)
+        await chats_router.stream_chat_events("chat-1", user_id="user-1", app=app)
 
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.detail == "Missing token"
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not a participant of this chat"
 
 
 @pytest.mark.asyncio
-async def test_chat_events_verifies_provided_token():
-    auth_service = _VerifyOnlyAuthService()
+async def test_chat_events_uses_authenticated_participant():
+    event_bus = _ChatEventBus()
     app = SimpleNamespace(
         state=SimpleNamespace(
-            auth_service=auth_service,
-            chat_event_bus=SimpleNamespace(subscribe=lambda _chat_id: None),
+            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: {"id": "chat-1"}),
+            messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, user_id: user_id == "user-1"),
+            chat_event_bus=event_bus,
         )
     )
 
-    response = await chats_router.stream_chat_events("chat-1", token="tok-chat", app=app)
+    response = await chats_router.stream_chat_events("chat-1", user_id="user-1", app=app)
 
-    assert auth_service.tokens == ["tok-chat"]
+    assert event_bus.subscribed == ["chat-1"]
     assert response.media_type == "text/event-stream"
