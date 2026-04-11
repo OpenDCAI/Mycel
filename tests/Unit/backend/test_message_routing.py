@@ -29,15 +29,20 @@ class _FakeAgent:
         self.runtime = _FakeRuntime()
 
 
-@pytest.mark.asyncio
-async def test_route_message_to_brain_clears_resource_overview_cache_when_starting_run() -> None:
-    app = SimpleNamespace(
+def _fake_app() -> SimpleNamespace:
+    return SimpleNamespace(
         state=SimpleNamespace(
             queue_manager=_FakeQueueManager(),
             thread_locks={},
             thread_locks_guard=asyncio.Lock(),
+            thread_tasks={},
         )
     )
+
+
+@pytest.mark.asyncio
+async def test_route_message_to_brain_clears_resource_overview_cache_when_starting_run() -> None:
+    app = _fake_app()
     agent = _FakeAgent()
 
     with (
@@ -54,13 +59,7 @@ async def test_route_message_to_brain_clears_resource_overview_cache_when_starti
 
 @pytest.mark.asyncio
 async def test_route_message_to_brain_passes_enable_trajectory_to_start_agent_run() -> None:
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            queue_manager=_FakeQueueManager(),
-            thread_locks={},
-            thread_locks_guard=asyncio.Lock(),
-        )
-    )
+    app = _fake_app()
     agent = _FakeAgent()
 
     with (
