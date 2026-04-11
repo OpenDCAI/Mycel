@@ -25,7 +25,7 @@ def _is_expired(row: dict) -> bool:
     try:
         exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
         return datetime.now(UTC) > exp
-    except Exception:
+    except ValueError:
         return False
 
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from json import JSONDecodeError
 from typing import Any
 
 from storage.providers.supabase import _query as q
@@ -31,11 +33,9 @@ class SupabaseUserSettingsRepo:
             return {"user_id": user_id, "default_workspace": None, "recent_workspaces": [], "default_model": "leon:large"}
         row = dict(rows[0])
         if isinstance(row.get("recent_workspaces"), str):
-            import json
-
             try:
                 row["recent_workspaces"] = json.loads(row["recent_workspaces"])
-            except Exception:
+            except JSONDecodeError:
                 row["recent_workspaces"] = []
         if row.get("recent_workspaces") is None:
             row["recent_workspaces"] = []
