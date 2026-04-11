@@ -7,7 +7,7 @@ import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thre
 import { useWorkspaceSettings } from "../hooks/use-workspace-settings";
 import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
-import MemberAvatar from "../components/MemberAvatar";
+import ActorAvatar from "../components/ActorAvatar";
 import FilesystemBrowser from "../components/FilesystemBrowser";
 import { getDefaultThreadConfig, listMyLeases, saveDefaultThreadConfig } from "../api/client";
 import type { RecipeFeatureOption, RecipeSnapshot, ThreadLaunchConfig, UserLeaseSummary } from "../api/types";
@@ -39,7 +39,7 @@ function ResolveStateCard({
     <div className="flex-1 flex items-center justify-center relative">
       <div className="w-full max-w-[420px] px-6 text-center">
         <div className="flex justify-center mb-4">
-          <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
+          <ActorAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
         </div>
         <h1 className="text-xl font-medium text-foreground mb-2">{title}</h1>
         <p className={`text-sm ${destructive ? "text-destructive" : "text-muted-foreground"}`}>
@@ -544,7 +544,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[600px] px-4">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
+            <ActorAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
           </div>
           <h1 className="text-2xl font-medium text-foreground mb-2">
             {mode === "new" ? `为 ${memberName} 创建新对话` : `开始与 ${memberName} 对话`}
@@ -815,7 +815,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                     </div>
                                     <div className="flex -space-x-2">
                                       {lease.agents.slice(0, 4).map((agent) => (
-                                        <MemberAvatar
+                                        <ActorAvatar
                                           key={agent.thread_id}
                                           name={agent.agent_name}
                                           avatarUrl={agent.avatar_url ?? undefined}

@@ -6,7 +6,7 @@
  */
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { colorForType, colorForId, getInitials } from "@/lib/member-colors";
+import { colorForType, colorForId, getInitials } from "@/lib/actor-colors";
 import { cn } from "@/lib/utils";
 
 const SIZE_MAP = {
@@ -16,7 +16,7 @@ const SIZE_MAP = {
   lg: "w-16 h-16 text-lg",
 } as const;
 
-interface MemberAvatarProps {
+interface ActorAvatarProps {
   name: string;
   /** Avatar image URL from backend. Frontend doesn't build URLs. */
   avatarUrl?: string;
@@ -28,14 +28,14 @@ interface MemberAvatarProps {
   rev?: number;
 }
 
-export default function MemberAvatar({
+export default function ActorAvatar({
   name,
   avatarUrl,
   type,
   size = "md",
   className,
   rev,
-}: MemberAvatarProps) {
+}: ActorAvatarProps) {
   const sizeClass = SIZE_MAP[size];
   const fallbackColor = type ? colorForType(type).tw : colorForId(name);
   const src = avatarUrl ? `${avatarUrl}${rev ? `?v=${rev}` : ""}` : undefined;

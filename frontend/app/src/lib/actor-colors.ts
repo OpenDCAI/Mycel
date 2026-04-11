@@ -1,6 +1,6 @@
 /**
- * @@@member-colors - single source of truth for member type colors.
- * Used by MemberAvatar (DOM/Tailwind) and NetworkPage (Canvas/hex).
+ * @@@actor-colors - single source of truth for actor type colors.
+ * Used by ActorAvatar (DOM/Tailwind) and NetworkPage (Canvas/hex).
  */
 
 // Type → color mapping. Each entry has both Canvas hex and Tailwind classes.
@@ -12,7 +12,7 @@ const TYPE_COLORS: Record<string, { hex: string; tw: string }> = {
 
 const FALLBACK = { hex: "#a78bfa", tw: "bg-purple-100 text-purple-700" };
 
-/** Resolve color by member type. Returns both hex (Canvas) and tw (DOM) variants. */
+/** Resolve color by actor type. Returns both hex (Canvas) and tw (DOM) variants. */
 export function colorForType(type?: string): { hex: string; tw: string } {
   return (type && TYPE_COLORS[type]) || FALLBACK;
 }

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import MemberAvatar from "../MemberAvatar";
+import ActorAvatar from "../ActorAvatar";
 import MarkdownContent from "../MarkdownContent";
 import { formatTime } from "./utils";
 
@@ -22,7 +22,7 @@ export const ChatBubble = memo(function ChatBubble({
 }: ChatBubbleProps) {
   return (
     <div className="flex gap-2.5 mb-1 animate-fade-in">
-      <MemberAvatar name={senderName} avatarUrl={avatarUrl} type={memberType} size="xs" />
+      <ActorAvatar name={senderName} avatarUrl={avatarUrl} type={memberType} size="xs" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {showName && <span className="text-sm font-medium text-foreground">{senderName}</span>}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
-import MemberAvatar from "@/components/MemberAvatar";
+import ActorAvatar from "@/components/ActorAvatar";
 import { useConversationStore } from "@/store/conversation-store";
 import type { ConversationItem } from "@/types/conversation";
 import type { ThreadSummary } from "@/api";
@@ -112,7 +112,7 @@ export default function ConversationList({ threads }: { threads: ThreadSummary[]
                 }`}
               >
                 <div className="relative">
-                  <MemberAvatar
+                  <ActorAvatar
                     name={title}
                     avatarUrl={item.avatar_url ?? undefined}
                     type={item.type === "hire" ? "mycel_agent" : "human"}

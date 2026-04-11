@@ -35,7 +35,7 @@ vi.mock("@/components/NewChatDialog", () => ({
   default: () => null,
 }));
 
-vi.mock("@/components/MemberAvatar", () => ({
+vi.mock("@/components/ActorAvatar", () => ({
   default: () => null,
 }));
 

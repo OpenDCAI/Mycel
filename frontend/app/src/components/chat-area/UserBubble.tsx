@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
 import type { UserMessage } from "../../api";
 import { getSandboxDownloadUrl } from "../../api";
-import MemberAvatar from "../MemberAvatar";
+import ActorAvatar from "../ActorAvatar";
 import { formatTime } from "./utils";
 
 /** Strip "[User uploaded N file(s)...]" prefix from message content. */
@@ -56,7 +56,7 @@ export const UserBubble = memo(function UserBubble(props: UserBubbleProps) {
           </div>
         )}
       </div>
-      <MemberAvatar name={props.userName || "You"} avatarUrl={props.avatarUrl} size="xs" type="human" />
+      <ActorAvatar name={props.userName || "You"} avatarUrl={props.avatarUrl} size="xs" type="human" />
     </div>
   );
 });

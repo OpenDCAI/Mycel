@@ -32,7 +32,7 @@ vi.mock("../components/FilesystemBrowser", () => ({
   default: () => null,
 }));
 
-vi.mock("../components/MemberAvatar", () => ({
+vi.mock("../components/ActorAvatar", () => ({
   default: ({ name }: { name: string }) => <div>{name}</div>,
 }));
 

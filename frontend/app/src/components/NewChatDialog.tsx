@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, MessageSquare } from "lucide-react";
-import MemberAvatar from "./MemberAvatar";
+import ActorAvatar from "./ActorAvatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { useAppStore } from "@/store/app-store";
@@ -18,10 +18,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
-    if (open) {
-      loadAll();
-      setFilter("");
-    }
+    if (open) loadAll();
   }, [open, loadAll]);
 
   const filtered = useMemo(() => {
@@ -68,7 +65,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
                 onClick={() => handleSelect(member)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors duration-fast"
               >
-                <MemberAvatar name={member.name} avatarUrl={member.avatar_url} type="mycel_agent" size="sm" />
+                <ActorAvatar name={member.name} avatarUrl={member.avatar_url} type="mycel_agent" size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{member.name}</span>
