@@ -12,10 +12,6 @@ def leon_home_dir() -> Path:
     return preferred_user_home_dir()
 
 
-def members_dir() -> Path:
-    return leon_home_dir() / "members"
-
-
 def library_dir() -> Path:
     return leon_home_dir() / "library"
 
