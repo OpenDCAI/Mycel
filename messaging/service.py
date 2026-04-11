@@ -32,7 +32,7 @@ class MessagingService:
         messages_repo: Any,  # SupabaseMessagesRepo
         message_read_repo: Any,  # SupabaseMessageReadRepo
         user_repo: Any,  # UserRepo (for name + avatar lookup)
-        thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> agent-user display lookup
+        thread_repo: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
         event_bus: Any | None = None,  # ChatEventBus-compatible publisher (optional)
@@ -41,7 +41,6 @@ class MessagingService:
         self._members_repo = chat_member_repo
         self._messages = messages_repo
         self._user_repo = user_repo
-        self._thread_repo = thread_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
@@ -77,7 +76,6 @@ class MessagingService:
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         return resolve_messaging_display_user(
             user_repo=self._user_repo,
-            thread_repo=self._thread_repo,
             social_user_id=social_user_id,
         )
 

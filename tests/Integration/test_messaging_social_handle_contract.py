@@ -48,8 +48,6 @@ class _FakeRelationshipRepo:
 
 def _messaging_display_service(**overrides: Any) -> SimpleNamespace:
     def _resolve_display_user(uid: str) -> Any | None:
-        if uid == "thread-user-1":
-            return SimpleNamespace(id="agent-user-1", display_name="Toad", owner_user_id="owner-user-1")
         if uid == "agent-user-1":
             return SimpleNamespace(id="agent-user-1", display_name="Toad", owner_user_id="owner-user-1")
         return None
@@ -66,7 +64,6 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
             )
         ),
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("thread bridge should not be used")),
         social_user_id="human-user-1",
     )
 
@@ -74,7 +71,7 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     assert resolved.display_name == "Human"
 
 
-def test_messaging_display_user_resolver_bridges_thread_user_to_agent_row() -> None:
+def test_messaging_display_user_resolver_does_not_bridge_legacy_thread_user_id() -> None:
     resolved = resolve_messaging_display_user(
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
@@ -85,15 +82,10 @@ def test_messaging_display_user_resolver_bridges_thread_user_to_agent_row() -> N
                 else None
             )
         ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
         social_user_id="thread-user-1",
     )
 
-    assert resolved is not None
-    assert resolved.id == "agent-user-1"
-    assert resolved.display_name == "Toad"
+    assert resolved is None
 
 
 def test_deliver_to_agents_does_not_require_main_thread_id():
@@ -288,7 +280,7 @@ def test_chat_tool_service_rejects_dead_repo_constructor_kwargs() -> None:
         )
 
 
-def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
+def test_messaging_service_resolves_sender_name_from_agent_user_id() -> None:
     published: list[dict[str, object]] = []
     service = MessagingService(
         chat_repo=SimpleNamespace(),
@@ -297,22 +289,17 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
                 if uid == "human-user-1"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
                 if uid == "agent-user-1"
                 else None
             )
         ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
         event_bus=SimpleNamespace(publish=lambda _chat_id, payload: published.append(payload)),
     )
 
-    service.send("chat-1", "thread-user-1", "hello")
+    service.send("chat-1", "agent-user-1", "hello")
 
     payload = cast(dict[str, object], published[0])
     data = cast(dict[str, object], payload["data"])
@@ -328,22 +315,17 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
                 if uid == "human-user-1"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
                 if uid == "agent-user-1"
                 else None
             )
         ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
         event_bus=SimpleNamespace(publish=lambda _chat_id, payload: published.append(payload)),
     )
 
-    created = service.send("chat-1", "thread-user-1", "hello", mentions=["human-user-1"], signal="open")
+    created = service.send("chat-1", "agent-user-1", "hello", mentions=["human-user-1"], signal="open")
 
     payload = cast(dict[str, object], published[0])
     assert payload == {
@@ -352,7 +334,7 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
     }
 
 
-def test_messaging_service_list_message_responses_projects_sender_name_from_thread_user_id() -> None:
+def test_messaging_service_list_message_responses_projects_sender_name_from_agent_user_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(),
@@ -361,7 +343,7 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_thre
                 {
                     "id": "msg-1",
                     "chat_id": "chat-1",
-                    "sender_user_id": "thread-user-1",
+                    "sender_user_id": "agent-user-1",
                     "content": "hello",
                     "message_type": "human",
                     "created_at": "2026-04-07T00:00:00Z",
@@ -370,16 +352,7 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_thre
         ),
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
-                if uid == "agent-user-1"
-                else None
-            )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
         ),
     )
 
@@ -389,7 +362,7 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_thre
         {
             "id": "msg-1",
             "chat_id": "chat-1",
-            "sender_id": "thread-user-1",
+            "sender_id": "agent-user-1",
             "sender_name": "Toad",
             "content": "hello",
             "message_type": "human",
@@ -410,7 +383,7 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
 
         def last_read_seq(self, chat_id: str, user_id: str) -> int:
             assert chat_id == "chat-1"
-            assert user_id == "thread-user-1"
+            assert user_id == "agent-user-1"
             return 7
 
     class _MessagesRepo:
@@ -424,28 +397,19 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
         messages_repo=_MessagesRepo(),
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
-                if uid == "agent-user-1"
-                else None
-            )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
         ),
     )
 
-    service.send("chat-1", "thread-user-1", "hello", enforce_caught_up=True)
+    service.send("chat-1", "agent-user-1", "hello", enforce_caught_up=True)
 
     assert len(created_rows) == 1
     row, expected_read_seq = created_rows[0]
-    assert row["sender_user_id"] == "thread-user-1"
+    assert row["sender_user_id"] == "agent-user-1"
     assert expected_read_seq == 7
 
 
-def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> None:
+def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
             list_by_ids=lambda chat_ids: [
@@ -657,11 +621,11 @@ def test_messaging_service_conversation_summaries_fail_on_unknown_member_identit
         service.list_conversation_summaries_for_user("human-user-1")
 
 
-def test_messaging_service_get_chat_detail_exposes_thread_user_participant_id() -> None:
+def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(
-            list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "thread-user-1"}],
+            list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "agent-user-1"}],
         ),
         messages_repo=SimpleNamespace(),
         message_read_repo=SimpleNamespace(),
@@ -669,15 +633,10 @@ def test_messaging_service_get_chat_detail_exposes_thread_user_participant_id() 
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
                 if uid == "human-user-1"
-                else None
-                if uid == "thread-user-1"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
                 if uid == "agent-user-1"
                 else None
             )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
         ),
     )
 
@@ -703,7 +662,7 @@ def test_messaging_service_get_chat_detail_exposes_thread_user_participant_id() 
                 "avatar_url": avatar_url("human-user-1", False),
             },
             {
-                "id": "thread-user-1",
+                "id": "agent-user-1",
                 "name": "Toad",
                 "type": "agent",
                 "avatar_url": avatar_url("agent-user-1", False),
@@ -806,7 +765,7 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
     assert after[0]["unread_count"] == 0
 
 
-def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
+def test_chat_tool_formats_agent_user_id_sender_as_agent_name() -> None:
     registry = ToolRegistry()
     service = ChatToolService(
         registry=registry,
@@ -814,12 +773,12 @@ def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
         messaging_service=_messaging_display_service(),
     )
 
-    rendered = service._format_msgs([{"sender_id": "thread-user-1", "content": "hello"}], "human-user-1")
+    rendered = service._format_msgs([{"sender_id": "agent-user-1", "content": "hello"}], "human-user-1")
 
     assert "[Toad]: hello" in rendered
 
 
-def test_chat_tool_send_accepts_thread_user_target_id() -> None:
+def test_chat_tool_send_accepts_agent_user_target_id() -> None:
     registry = ToolRegistry()
     sent: list[tuple[str, str, str]] = []
     ChatToolService(
@@ -835,7 +794,7 @@ def test_chat_tool_send_accepts_thread_user_target_id() -> None:
     send_message = registry.get("send_message")
     assert send_message is not None
 
-    result = send_message.handler(content="hello", user_id="thread-user-1")
+    result = send_message.handler(content="hello", user_id="agent-user-1")
 
     assert result == "Message sent to Toad."
     assert sent == [("chat-1", "human-user-1", "hello")]
@@ -901,7 +860,7 @@ def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
     sent: list[dict[str, object]] = []
     ChatToolService(
         registry=registry,
-        chat_identity_id="thread-user-1",
+        chat_identity_id="agent-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
             count_unread=lambda _chat_id, _user_id: 1,
@@ -936,7 +895,7 @@ def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> No
 
     ChatToolService(
         registry=registry,
-        chat_identity_id="thread-user-1",
+        chat_identity_id="agent-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
             count_unread=lambda _chat_id, _user_id: 0,
@@ -955,7 +914,7 @@ def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> No
     assert result.content == "Chat advanced after your last read. Call read_messages(chat_id='chat-1') first."
 
 
-def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
+def test_read_messages_uses_agent_user_target_name_on_no_history() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -966,7 +925,7 @@ def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
     read_messages = registry.get("read_messages")
     assert read_messages is not None
 
-    result = read_messages.handler(user_id="thread-user-1")
+    result = read_messages.handler(user_id="agent-user-1")
 
     assert result == "No chat history with Toad."
 
@@ -984,7 +943,7 @@ def test_read_messages_uses_messaging_service_direct_chat_lookup_without_member_
     read_messages = registry.get("read_messages")
     assert read_messages is not None
 
-    result = read_messages.handler(user_id="thread-user-1")
+    result = read_messages.handler(user_id="agent-user-1")
 
     assert result == "No chat history with Toad."
 
@@ -997,7 +956,7 @@ def test_read_messages_uses_messaging_service_time_range_history_without_message
         messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
                 {
-                    "sender_id": "thread-user-1",
+                    "sender_id": "agent-user-1",
                     "content": f"after={after};before={before}",
                 }
             ],
@@ -1013,7 +972,7 @@ def test_read_messages_uses_messaging_service_time_range_history_without_message
     assert "[Toad]: after=" in result
 
 
-def test_chat_tool_search_does_not_fall_back_to_global_search_for_thread_user_target() -> None:
+def test_chat_tool_search_does_not_fall_back_to_global_search_for_agent_user_target() -> None:
     registry = ToolRegistry()
     search_calls: list[tuple[str, str | None]] = []
     ChatToolService(
@@ -1028,7 +987,7 @@ def test_chat_tool_search_does_not_fall_back_to_global_search_for_thread_user_ta
     search_messages = registry.get("search_messages")
     assert search_messages is not None
 
-    result = search_messages.handler(query="hello", user_id="thread-user-1")
+    result = search_messages.handler(query="hello", user_id="agent-user-1")
 
     assert result == "No messages matching 'hello' with Toad."
     assert search_calls == []
@@ -1049,37 +1008,32 @@ def test_chat_tool_search_uses_messaging_service_direct_chat_lookup_without_memb
     search_messages = registry.get("search_messages")
     assert search_messages is not None
 
-    result = search_messages.handler(query="hello", user_id="thread-user-1")
+    result = search_messages.handler(query="hello", user_id="agent-user-1")
 
     assert result == "No messages matching 'hello'."
     assert search_calls == [("hello", "chat-1")]
 
 
-def test_deliver_to_agents_routes_delivery_by_thread_user_id() -> None:
+def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
     delivered: list[tuple[str, str]] = []
     service = MessagingService(
         chat_repo=SimpleNamespace(),
-        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "thread-user-1"}]),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
         messages_repo=SimpleNamespace(),
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
                 if uid == "agent-user-1"
                 else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
             )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
         ),
         delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
     )
 
     service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
 
-    assert delivered == [("thread-user-1", "agent-user-1")]
+    assert delivered == [("agent-user-1", "agent-user-1")]
 
 
 def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
@@ -1089,8 +1043,8 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
                 {"user_id": "human-user-1"},
-                {"user_id": "thread-user-1"},
-                {"user_id": "thread-user-2"},
+                {"user_id": "agent-user-1"},
+                {"user_id": "agent-user-2"},
             ]
         ),
         relationship_repo=SimpleNamespace(get=lambda _a, _b: None),
@@ -1100,8 +1054,8 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
                 {"user_id": "human-user-1"},
-                {"user_id": "thread-user-1"},
-                {"user_id": "thread-user-2"},
+                {"user_id": "agent-user-1"},
+                {"user_id": "agent-user-2"},
             ]
         ),
         messages_repo=SimpleNamespace(),
@@ -1110,21 +1064,10 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)
                 if uid == "human-user-1"
-                else None
-                if uid in {"thread-user-1", "thread-user-2"}
                 else SimpleNamespace(id=uid, display_name="Morel", type="agent", avatar=None, owner_user_id="human-user-1")
                 if uid == "agent-user-1"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None, owner_user_id="human-user-1")
                 if uid == "agent-user-2"
-                else None
-            )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: (
-                {"id": "thread-1", "agent_user_id": "agent-user-1"}
-                if uid == "thread-user-1"
-                else {"id": "thread-2", "agent_user_id": "agent-user-2"}
-                if uid == "thread-user-2"
                 else None
             )
         ),
@@ -1134,7 +1077,7 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
 
     service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
 
-    assert delivered == [("thread-user-1", "agent-user-1"), ("thread-user-2", "agent-user-2")]
+    assert delivered == [("agent-user-1", "agent-user-1"), ("agent-user-2", "agent-user-2")]
 
 
 def test_delivery_resolver_drops_when_new_contact_edge_is_blocked() -> None:
@@ -1186,8 +1129,8 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
                 {"user_id": "human-user-1"},
-                {"user_id": "thread-user-1"},
-                {"user_id": "thread-user-2"},
+                {"user_id": "agent-user-1"},
+                {"user_id": "agent-user-2"},
             ]
         ),
         relationship_repo=SimpleNamespace(get=lambda _a, _b: None),
@@ -1197,8 +1140,8 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
                 {"user_id": "human-user-1"},
-                {"user_id": "thread-user-1"},
-                {"user_id": "thread-user-2"},
+                {"user_id": "agent-user-1"},
+                {"user_id": "agent-user-2"},
             ]
         ),
         messages_repo=SimpleNamespace(),
@@ -1207,8 +1150,6 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)
                 if uid == "human-user-1"
-                else None
-                if uid in {"thread-user-1", "thread-user-2"}
                 else SimpleNamespace(id=uid, display_name="Morel", type="agent", avatar=None, owner_user_id="human-user-1")
                 if uid == "agent-user-1"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None, owner_user_id="human-user-1")
@@ -1216,22 +1157,13 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
                 else None
             )
         ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: (
-                {"id": "thread-1", "agent_user_id": "agent-user-1"}
-                if uid == "thread-user-1"
-                else {"id": "thread-2", "agent_user_id": "agent-user-2"}
-                if uid == "thread-user-2"
-                else None
-            )
-        ),
         delivery_resolver=resolver,
         delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
     )
 
-    service._deliver_to_agents("chat-1", "thread-user-1", "hello", [])
+    service._deliver_to_agents("chat-1", "agent-user-1", "hello", [])
 
-    assert delivered == [("thread-user-2", "agent-user-2")]
+    assert delivered == [("agent-user-2", "agent-user-2")]
 
 
 @pytest.mark.asyncio
@@ -1254,7 +1186,7 @@ async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None
             ),
             typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
             messaging_service=SimpleNamespace(count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or 7),
@@ -1268,7 +1200,7 @@ async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and
 
     await delivery_module._async_deliver(
         app,
-        "thread-user-1",
+        "agent-user-1",
         cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
         "Human",
         "chat-1",
@@ -1276,8 +1208,8 @@ async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and
         signal="ping",
     )
 
-    assert started == [("thread-1", "chat-1", "thread-user-1")]
-    assert unread_calls == [("chat-1", "thread-user-1")]
+    assert started == [("thread-1", "chat-1", "agent-user-1")]
+    assert unread_calls == [("chat-1", "agent-user-1")]
     assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
 
 
@@ -1301,7 +1233,7 @@ async def test_async_deliver_prefers_unique_active_child_thread_over_default_mai
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
+                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
                 list_by_agent_user=lambda uid: (
                     [
                         {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
@@ -1327,7 +1259,7 @@ async def test_async_deliver_prefers_unique_active_child_thread_over_default_mai
 
     await delivery_module._async_deliver(
         app,
-        "thread-user-1",
+        "agent-user-1",
         cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
         "Human",
         "chat-2",
@@ -1335,8 +1267,8 @@ async def test_async_deliver_prefers_unique_active_child_thread_over_default_mai
         signal="ping",
     )
 
-    assert started == [("thread-child", "chat-2", "thread-user-1")]
-    assert unread_calls == [("chat-2", "thread-user-1")]
+    assert started == [("thread-child", "chat-2", "agent-user-1")]
+    assert unread_calls == [("chat-2", "agent-user-1")]
     assert enqueued == [("Human|chat-2|3|ping", "thread-child", "human-user-1", "Human")]
 
 
@@ -1359,7 +1291,7 @@ async def test_async_deliver_prefers_unique_ready_child_thread_over_default_main
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
+                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
                 list_by_agent_user=lambda uid: (
                     [
                         {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
@@ -1385,7 +1317,7 @@ async def test_async_deliver_prefers_unique_ready_child_thread_over_default_main
 
     await delivery_module._async_deliver(
         app,
-        "thread-user-1",
+        "agent-user-1",
         cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
         "Human",
         "chat-3",
@@ -1393,7 +1325,7 @@ async def test_async_deliver_prefers_unique_ready_child_thread_over_default_main
         signal="ping",
     )
 
-    assert started == [("thread-child", "chat-3", "thread-user-1")]
+    assert started == [("thread-child", "chat-3", "agent-user-1")]
     assert enqueued == [("Human|chat-3|1|ping", "thread-child", "human-user-1", "Human")]
 
 
@@ -1454,7 +1386,7 @@ async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
+                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
                 list_by_agent_user=lambda uid: threads if uid == "agent-user-1" else [],
             ),
             agent_pool=pool,
@@ -1470,7 +1402,7 @@ async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
 
     await delivery_module._async_deliver(
         app,
-        "thread-user-1",
+        "agent-user-1",
         cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
         "Human",
         chat_id,
@@ -1478,5 +1410,5 @@ async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
         signal="ping",
     )
 
-    assert started == [(expected_thread_id, chat_id, "thread-user-1")]
+    assert started == [(expected_thread_id, chat_id, "agent-user-1")]
     assert enqueued == [(f"Human|{chat_id}|1|ping", expected_thread_id, "human-user-1", "Human")]
