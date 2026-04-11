@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="./assets/banner.png" alt="Mycel Banner" width="600">
+<img src="./assets/banner.gif" alt="Mycel Banner" width="600">
 
 **Link: connecting people, agents, and teams for the next era of human-AI collaboration**
 
