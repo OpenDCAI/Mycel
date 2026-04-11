@@ -174,7 +174,7 @@ function normalizeStatus(raw: string): ParsedNotice["status"] {
   return "pending";
 }
 
-export function parseNoticeContent(raw: string, notificationType?: NotificationType): ParsedNotice {
+function parseNoticeContent(raw: string, notificationType?: NotificationType): ParsedNotice {
   switch (notificationType) {
     case "steer":
       return parseSteer(raw);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Zap, Users, RefreshCw } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
@@ -12,32 +12,53 @@ export default function LibraryItemDetailPage() {
   const fetchLibrary = useAppStore((s) => s.fetchLibrary);
   const fetchResourceContent = useAppStore((s) => s.fetchResourceContent);
 
-  const [item, setItem] = useState<ResourceItem | null>(null);
-  const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(true);
+  const contentKey = type && id ? `${type}:${id}` : "";
+  const [contentState, setContentState] = useState<{ key: string; content: string; error: string | null }>({
+    key: "",
+    content: "",
+    error: null,
+  });
 
   useEffect(() => {
     if (!type || !id) return;
     fetchLibrary(type === "skill" ? "skill" : "agent");
   }, [type, id, fetchLibrary]);
 
-  useEffect(() => {
-    if (!type || !id) return;
+  const item = useMemo<ResourceItem | null>(() => {
+    if (!type || !id) return null;
     const list = type === "skill" ? librarySkills : libraryAgents;
-    const found = list.find((i) => i.id === id);
-    if (found) setItem(found);
+    return list.find((i) => i.id === id) ?? null;
   }, [librarySkills, libraryAgents, type, id]);
 
   useEffect(() => {
     if (!type || !id) return;
-    setLoading(true);
+    const key = `${type}:${id}`;
+    let cancelled = false;
     fetchResourceContent(type, id)
-      .then(setContent)
-      .finally(() => setLoading(false));
+      .then((content) => {
+        if (!cancelled) {
+          setContentState({ key, content, error: null });
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setContentState({
+            key,
+            content: "",
+            error: err instanceof Error ? err.message : "加载失败",
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [type, id, fetchResourceContent]);
 
   const isSkill = type === "skill";
   const filename = isSkill ? "SKILL.md" : "agent.md";
+  const loading = !!contentKey && contentState.key !== contentKey;
+  const content = contentState.key === contentKey ? contentState.content : "";
+  const error = contentState.key === contentKey ? contentState.error : null;
 
   if (!item && !loading) {
     return (
@@ -90,6 +111,8 @@ export default function LibraryItemDetailPage() {
             <div className="flex items-center justify-center py-8">
               <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
             </div>
+          ) : error ? (
+            <p className="text-sm text-destructive text-center py-6">{error}</p>
           ) : content ? (
             <pre className="text-xs text-foreground whitespace-pre-wrap font-mono leading-relaxed max-h-[600px] overflow-y-auto">
               {content}
