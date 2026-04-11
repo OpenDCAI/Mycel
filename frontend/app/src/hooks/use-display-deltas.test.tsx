@@ -41,7 +41,7 @@ function Harness({
   streamIsRunning?: boolean;
 }) {
   const [entries, setEntries] = useState<ChatEntry[]>(initialEntries);
-  const { isRunning, handleSendMessage } = useDisplayDeltas({
+  const { isRunning, handleSendMessage, handleStopStreaming } = useDisplayDeltas({
     threadId,
     onUpdate: setEntries,
     displaySeq: 0,
@@ -61,6 +61,7 @@ function Harness({
       <pre data-testid="entries">{JSON.stringify(entries)}</pre>
       <div data-testid="running">{String(isRunning)}</div>
       <button data-testid="send" onClick={() => void handleSendMessage("hello")} />
+      <button data-testid="stop" onClick={() => void handleStopStreaming()} />
     </>
   );
 }
@@ -231,5 +232,33 @@ describe("useDisplayDeltas", () => {
       expect(screen.getByTestId("running").textContent).toBe("false");
     });
     expect(JSON.parse(screen.getByTestId("entries").textContent || "[]")).toEqual([]);
+  });
+
+  it("closes display-owned running state after stop succeeds", async () => {
+    render(<Harness initialEntries={[]} streamIsRunning={false} />);
+
+    act(() => {
+      latestHandler?.({
+        type: "display_delta",
+        data: {
+          type: "append_entry",
+          entry: {
+            id: "turn-1",
+            role: "assistant",
+            timestamp: Date.now(),
+            streaming: true,
+            segments: [],
+          },
+        },
+      });
+    });
+
+    expect(screen.getByTestId("running").textContent).toBe("true");
+
+    fireEvent.click(screen.getByTestId("stop"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("running").textContent).toBe("false");
+    });
   });
 });
