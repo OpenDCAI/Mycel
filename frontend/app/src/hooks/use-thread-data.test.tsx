@@ -22,8 +22,8 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-function Harness({ threadId }: { threadId?: string }) {
-  const state = useThreadData(threadId);
+function Harness({ threadId, skipInitialLoad = false }: { threadId?: string; skipInitialLoad?: boolean }) {
+  const state = useThreadData(threadId, skipInitialLoad);
   useEffect(() => {
     void state.loading;
   }, [state.loading]);
@@ -48,6 +48,22 @@ describe("useThreadData", () => {
     await Promise.resolve();
 
     expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("logs skipped initial sandbox load failures while still on the thread route", async () => {
+    window.history.replaceState({}, "", "/chat/hire/thread/thread-1");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getThread.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    render(<Harness threadId="thread-1" skipInitialLoad />);
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "[useThreadData] Failed to load sandbox status:",
+        expect.any(TypeError),
+      );
+    });
     consoleError.mockRestore();
   });
 });

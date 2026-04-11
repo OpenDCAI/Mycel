@@ -82,10 +82,14 @@ export function useThreadData(threadId: string | undefined, skipInitialLoad = fa
       // @@@skip-entries-not-sandbox — skipInitialLoad skips ENTRIES (to avoid
       // overwriting optimistic entries), but we still need sandbox status so
       // TaskProgress shows the correct indicator from the start.
-      loadThreadDetail(threadId).then(thread => {
-        const sandbox = thread.sandbox;
-        setActiveSandbox(sandbox && typeof sandbox === "object" ? (sandbox as SandboxInfo) : null);
-      }).catch(() => {});
+      loadThreadDetail(threadId)
+        .then((thread) => {
+          setActiveSandbox(thread.sandbox);
+        })
+        .catch((err: unknown) => {
+          if (!isActiveThreadRoute(threadId)) return;
+          console.error("[useThreadData] Failed to load sandbox status:", err);
+        });
       return;
     }
     void loadThread(threadId);
