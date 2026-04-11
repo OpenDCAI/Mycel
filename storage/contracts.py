@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -458,6 +458,7 @@ class CheckpointRepo(Protocol):
     def delete_checkpoints_by_ids(self, thread_id: str, checkpoint_ids: list[str]) -> None: ...
 
 
+@runtime_checkable
 class RunEventRepo(Protocol):
     def close(self) -> None: ...
     def append_event(

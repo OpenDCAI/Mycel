@@ -76,11 +76,15 @@ def summarize_owner_thread_runtime(app: Any, thread_ids: list[str]) -> dict[str,
         raise RuntimeError("terminal_repo must support summarize_threads for owner runtime convergence")
 
     summary = summarize_threads(thread_ids)
+    if not isinstance(summary, dict):
+        raise RuntimeError("terminal_repo.summarize_threads must return a dict")
     states: dict[str, str] = {}
     for thread_id in thread_ids:
         item = summary.get(thread_id)
         if item is None:
             continue
+        if not isinstance(item, dict):
+            raise RuntimeError("terminal_repo.summarize_threads returned an invalid summary item")
 
         active_terminal_id = str(item.get("active_terminal_id") or "").strip()
         latest_terminal_id = str(item.get("latest_terminal_id") or "").strip()
