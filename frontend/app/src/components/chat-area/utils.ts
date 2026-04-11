@@ -1,5 +1,17 @@
 import type { ToolStep } from "../../api";
-import { asRecord } from "../../lib/records";
+import { asRecord, recordString } from "../../lib/records";
+
+function firstString(args: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = recordString(args, key);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function summarize(value: string): string {
+  return value.length > 60 ? value.slice(0, 57) + "..." : value;
+}
 
 export function formatTime(ts?: number): string {
   if (!ts) return "";
@@ -13,10 +25,10 @@ export function getStepSummary(step: ToolStep): string {
 
   // Agent tool: show description (PascalCase from backend)
   if (step.name === "Agent") {
-    const description = (args.Description ?? args.description) as string;
-    if (description) return description.length > 60 ? description.slice(0, 57) + "..." : description;
-    const prompt = (args.Prompt ?? args.prompt) as string;
-    if (prompt) return prompt.length > 60 ? prompt.slice(0, 57) + "..." : prompt;
+    const description = firstString(args, ["Description", "description"]);
+    if (description) return summarize(description);
+    const prompt = firstString(args, ["Prompt", "prompt"]);
+    if (prompt) return summarize(prompt);
   }
 
   // TaskOutput tool
@@ -24,32 +36,25 @@ export function getStepSummary(step: ToolStep): string {
     return "查看任务输出";
   }
 
-  const filePath =
-    (args.FilePath as string) ??
-    (args.file_path as string) ??
-    (args.path as string);
+  const filePath = firstString(args, ["FilePath", "file_path", "path"]);
   if (filePath) {
     const parts = filePath.split("/");
     return parts[parts.length - 1] || filePath;
   }
 
-  const cmd = args.command as string;
+  const cmd = recordString(args, "command");
   if (cmd) {
-    return cmd.length > 60 ? cmd.slice(0, 57) + "..." : cmd;
+    return summarize(cmd);
   }
 
-  const pattern =
-    (args.Pattern as string) ??
-    (args.pattern as string) ??
-    (args.query as string) ??
-    (args.SearchPath as string);
+  const pattern = firstString(args, ["Pattern", "pattern", "query", "SearchPath"]);
   if (pattern) {
-    return pattern.length > 60 ? pattern.slice(0, 57) + "..." : pattern;
+    return summarize(pattern);
   }
 
-  const desc = (args.Description ?? args.description ?? args.Prompt ?? args.prompt) as string;
+  const desc = firstString(args, ["Description", "description", "Prompt", "prompt"]);
   if (desc) {
-    return desc.length > 60 ? desc.slice(0, 57) + "..." : desc;
+    return summarize(desc);
   }
 
   return step.name;
@@ -72,7 +77,7 @@ export function getStepResultSummary(step: ToolStep): string | null {
     const lines = result.split("\n").length;
     if (lines > 1) return `Wrote ${lines} lines`;
     if (args) {
-      const content = (args.Content ?? args.content) as string;
+      const content = firstString(args, ["Content", "content"]);
       if (content) {
         const contentLines = content.split("\n").length;
         return `Wrote ${contentLines} lines`;
@@ -84,8 +89,8 @@ export function getStepResultSummary(step: ToolStep): string | null {
   // Edit: calculate added/removed from args
   if (step.name === "Edit") {
     if (args) {
-      const oldString = (args.OldString ?? args.old_string) as string;
-      const newString = (args.NewString ?? args.new_string) as string;
+      const oldString = firstString(args, ["OldString", "old_string"]);
+      const newString = firstString(args, ["NewString", "new_string"]);
       if (oldString && newString) {
         const removed = oldString.split("\n").length;
         const added = newString.split("\n").length;
@@ -105,7 +110,7 @@ export function getStepResultSummary(step: ToolStep): string | null {
   if (step.name === "Bash") {
     const firstLine = result.split("\n")[0];
     if (firstLine) {
-      return firstLine.length > 60 ? firstLine.slice(0, 57) + "..." : firstLine;
+      return summarize(firstLine);
     }
     return "Done";
   }
@@ -117,7 +122,7 @@ export function getStepResultSummary(step: ToolStep): string | null {
 
   // Agent/TaskCreate/...: first 60 chars of result
   if (step.name === "Agent" || step.name === "TaskCreate" || step.name === "TaskOutput") {
-    return result.length > 60 ? result.slice(0, 57) + "..." : result;
+    return summarize(result);
   }
 
   return null;
