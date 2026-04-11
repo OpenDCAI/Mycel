@@ -41,14 +41,9 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
 
 
 def _format_time_ago(iso_timestamp: str | None) -> str:
-    if not iso_timestamp:
+    dt = _parse_local_timestamp(iso_timestamp)
+    if dt is None:
         return "never"
-    # @@@naive-local-time - SQLite timestamps in this module are local-time strings.
-    if "Z" in iso_timestamp:
-        iso_timestamp = iso_timestamp.replace("Z", "")
-    if "+" in iso_timestamp:
-        iso_timestamp = iso_timestamp.split("+")[0]
-    dt = datetime.fromisoformat(iso_timestamp)
     delta = datetime.now() - dt
     if delta.days > 0:
         return f"{delta.days}d ago"
@@ -209,6 +204,7 @@ def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -
 def _parse_local_timestamp(iso_timestamp: str | None) -> datetime | None:
     if not iso_timestamp:
         return None
+    # @@@naive-local-time - SQLite timestamps in this module are local-time strings.
     cleaned = iso_timestamp
     if "Z" in cleaned:
         cleaned = cleaned.replace("Z", "")

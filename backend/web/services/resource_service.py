@@ -11,6 +11,7 @@ from backend.web.services.resource_common import resolve_console_url as _resolve
 from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
 from backend.web.services.resource_common import resolve_provider_name
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
+from backend.web.services.resource_common import to_resource_status as _to_resource_status
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.resource_snapshot import probe_and_upsert_for_instance, upsert_lease_resource_snapshot
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
@@ -33,9 +34,8 @@ def get_provider_capability_contract(config_name: str) -> tuple[dict[str, bool],
 
 
 def build_provider_availability_payload(*, available: bool, running_count: int, unavailable_reason: str | None) -> dict[str, Any]:
-    status = "unavailable" if not available else ("active" if running_count > 0 else "ready")
     return {
-        "status": status,
+        "status": _to_resource_status(available, running_count),
         "unavailableReason": unavailable_reason,
         "error": ({"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None),
     }

@@ -10,11 +10,11 @@ from backend.web.services import resource_service, sandbox_service
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
 from backend.web.services.resource_common import aggregate_provider_telemetry as _aggregate_provider_telemetry
-from backend.web.services.resource_common import empty_capabilities, resolve_provider_name
 from backend.web.services.resource_common import metric as _metric
 from backend.web.services.resource_common import resolve_card_cpu_metric as _resolve_card_cpu_metric
 from backend.web.services.resource_common import resolve_console_url as _resolve_console_url
 from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
+from backend.web.services.resource_common import resolve_provider_name
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from backend.web.services.resource_common import to_resource_status as _to_resource_status
@@ -38,10 +38,6 @@ def _empty_metric(unit: str) -> dict[str, Any]:
         "source": "unknown",
         "freshness": "stale",
     }
-
-
-def _empty_capabilities() -> dict[str, bool]:
-    return empty_capabilities()
 
 
 def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict[str, Any]:
@@ -357,7 +353,7 @@ def list_resource_providers() -> dict[str, Any]:
         )
 
     summary = {
-        "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "snapshot_at": _now_iso(),
         "total_providers": len(providers),
         "active_providers": len([provider for provider in providers if provider.get("status") == "active"]),
         "unavailable_providers": len([provider for provider in providers if provider.get("status") == "unavailable"]),

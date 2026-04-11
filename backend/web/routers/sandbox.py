@@ -56,9 +56,8 @@ async def pick_folder() -> dict[str, Any]:
             if result.returncode == 0:
                 path = result.stdout.strip()
                 return {"path": path}
-            else:
-                raise HTTPException(400, "User cancelled folder selection")
-        elif sys.platform == "win32":  # Windows
+            raise HTTPException(400, "User cancelled folder selection")
+        if sys.platform == "win32":  # Windows
             # Use PowerShell folder browser
             ps_script = """
             Add-Type -AssemblyName System.Windows.Forms
@@ -78,8 +77,7 @@ async def pick_folder() -> dict[str, Any]:
             if result.returncode == 0 and result.stdout.strip():
                 path = result.stdout.strip()
                 return {"path": path}
-            else:
-                raise HTTPException(400, "User cancelled folder selection")
+            raise HTTPException(400, "User cancelled folder selection")
         else:  # Linux
             # Try zenity first, fallback to kdialog
             try:

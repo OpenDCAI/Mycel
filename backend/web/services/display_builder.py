@@ -417,14 +417,12 @@ class DisplayBuilder:
                 )
 
                 if sub_thread and not seg["step"].get("subagent_stream"):
-                    seg["step"]["subagent_stream"] = {
-                        "task_id": task_id or "",
-                        "thread_id": sub_thread,
-                        "description": meta.get("description"),
-                        "text": "",
-                        "tool_calls": [],
-                        "status": task_status,
-                    }
+                    seg["step"]["subagent_stream"] = _build_subagent_stream(
+                        task_id=task_id or "",
+                        thread_id=sub_thread,
+                        description=meta.get("description"),
+                        status=task_status,
+                    )
                 break
 
 
