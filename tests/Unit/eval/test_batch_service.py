@@ -217,3 +217,20 @@ def test_batch_service_records_eval_error_for_matching_scenario():
     assert updated["status"] == "failed"
     assert updated["finished_at"]
     assert updated["summary_json"] == {"error": "boom"}
+
+
+def test_batch_service_returns_batch_detail_with_runs():
+    repo = _FakeBatchRepo()
+    service = EvaluationBatchService(batch_repo=repo)
+    batch = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1", "scenario-2"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+
+    detail = service.get_batch_detail(batch["batch_id"])
+
+    assert detail["batch"]["batch_id"] == batch["batch_id"]
+    assert [row["scenario_id"] for row in detail["runs"]] == ["scenario-1", "scenario-2"]

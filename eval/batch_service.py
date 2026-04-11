@@ -59,6 +59,18 @@ class EvaluationBatchService:
             )
         return batch
 
+    def list_batches(self, limit: int = 50) -> list[dict]:
+        return self._batch_repo.list_batches(limit=limit)
+
+    def get_batch_detail(self, batch_id: str) -> dict:
+        batch = self._batch_repo.get_batch(batch_id)
+        if batch is None:
+            raise KeyError(f"Evaluation batch not found: {batch_id}")
+        return {
+            "batch": batch,
+            "runs": self._batch_repo.list_batch_runs(batch_id),
+        }
+
     def refresh_batch_summary(self, batch_id: str) -> dict:
         batch_runs = self._batch_repo.list_batch_runs(batch_id)
         summary = {
