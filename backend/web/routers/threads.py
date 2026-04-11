@@ -324,17 +324,17 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     thread = app.state.thread_repo.get_by_id(thread_id)
     if thread is None:
         raise HTTPException(404, "Thread not found")
-    member = app.state.user_repo.get_by_id(thread["agent_user_id"])
-    if member is None:
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if agent_user is None:
         raise HTTPException(500, f"Thread {thread_id} missing agent user")
     return {
         "thread_id": thread_id,
         "sandbox": sandbox_type,
-        "agent_user_id": member.id,
-        "agent_name": member.display_name,
+        "agent_user_id": agent_user.id,
+        "agent_name": agent_user.display_name,
         "branch_index": thread["branch_index"],
         "sidebar_label": _sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
-        "avatar_url": avatar_url(member.id, bool(member.avatar)),
+        "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
         "is_main": thread["is_main"],
     }
 
@@ -688,8 +688,8 @@ async def resolve_main_thread(
 ) -> dict[str, Any]:
     """Return the default representative thread for an agent user."""
     agent_user_id = payload.agent_user_id
-    agent_member = _find_owned_agent(app, agent_user_id, user_id)
-    if agent_member is None:
+    agent_user = _find_owned_agent(app, agent_user_id, user_id)
+    if agent_user is None:
         # Return null instead of 403 — agent user may not exist yet (stale client state)
         # or belong to another user (harmless to reveal "no thread")
         return {
@@ -850,7 +850,7 @@ async def delete_thread(
         app.state.queue_manager.unregister_wake(thread_id)
         await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
-        # Also delete from threads table (member-chat addition)
+        # Also delete from threads table.
         app.state.thread_repo.delete(thread_id)
 
     # Clean up thread-specific state
@@ -1193,8 +1193,8 @@ async def stream_thread_events(
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
-    agent_member = app.state.user_repo.get_by_id(thread["agent_user_id"])
-    if not agent_member or agent_member.owner_user_id != user_id:
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if not agent_user or agent_user.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
 
     last_id = request.headers.get("Last-Event-ID")
