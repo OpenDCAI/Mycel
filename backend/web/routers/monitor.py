@@ -3,7 +3,7 @@
 import asyncio
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.web.core.dependencies import get_app, get_current_user_id
@@ -28,6 +28,16 @@ def _refresh_monitor_resources_sync():
     # sandbox metrics first; recomputing the overview alone just re-labels stale snapshots.
     resource_service.refresh_resource_snapshots()
     return refresh_resource_overview_sync()
+
+
+def _extract_bearer_token(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = auth_header.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    return token
 
 
 @router.get("/leases")
@@ -144,6 +154,26 @@ def evaluation_batch_create_action(
 @router.get("/evaluation/scenarios")
 def evaluation_scenarios_snapshot():
     return monitor_service.get_monitor_evaluation_scenarios()
+
+
+@router.post("/evaluation/batches/{batch_id}/start")
+def evaluation_batch_start_action(
+    batch_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    _user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    try:
+        return monitor_service.start_monitor_evaluation_batch(
+            batch_id=batch_id,
+            base_url=str(request.base_url).rstrip("/"),
+            token=_extract_bearer_token(request),
+            schedule_task=background_tasks.add_task,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/evaluation/batches/{batch_id}")

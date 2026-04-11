@@ -116,6 +116,58 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
     ]
 
 
+def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
+    scenario_dir = tmp_path / "scenarios"
+    scenario_dir.mkdir()
+    (scenario_dir / "scenario-1.yaml").write_text(
+        "\n".join(
+            [
+                "id: scenario-1",
+                "name: Scenario 1",
+                "sandbox: local",
+                "messages:",
+                "  - content: Solve a realistic task.",
+            ]
+        )
+    )
+    scheduled = []
+
+    class FakeBatchService:
+        def get_batch_detail(self, batch_id):
+            return {
+                "batch": {
+                    "batch_id": batch_id,
+                    "agent_user_id": "agent-1",
+                    "config_json": {
+                        "scenario_ids": ["scenario-1"],
+                        "sandbox": "daytona_selfhost",
+                    },
+                },
+                "runs": [],
+            }
+
+        def update_batch_status(self, batch_id, status):
+            return {"batch_id": batch_id, "status": status}
+
+    monkeypatch.setattr(monitor_service, "EVAL_SCENARIO_DIR", scenario_dir)
+    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+
+    payload = monitor_service.start_monitor_evaluation_batch(
+        "batch-1",
+        base_url="http://testserver",
+        token="token-1",
+        schedule_task=lambda fn, **kwargs: scheduled.append((fn, kwargs)),
+    )
+
+    assert payload == {"accepted": True, "batch": {"batch_id": "batch-1", "status": "running"}}
+    assert len(scheduled) == 1
+    assert scheduled[0][1]["base_url"] == "http://testserver"
+    assert scheduled[0][1]["token"] == "token-1"
+    assert scheduled[0][1]["agent_user_id"] == "agent-1"
+    assert scheduled[0][1]["scenarios"][0].id == "scenario-1"
+    assert scheduled[0][1]["scenarios"][0].sandbox == "daytona_selfhost"
+
+
 def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypatch):
     monkeypatch.setattr(monitor_service, "get_resource_overview_snapshot", lambda: {"providers": []})
 

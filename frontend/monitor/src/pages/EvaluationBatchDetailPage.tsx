@@ -1,6 +1,7 @@
+import React from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { useMonitorData } from "../app/fetch";
+import { postMonitorData, useMonitorData, type MonitorFetchError } from "../app/fetch";
 import ErrorState from "../components/ErrorState";
 
 type EvaluationBatchDetailPayload = {
@@ -31,18 +32,58 @@ type EvaluationBatchDetailPayload = {
   }> | null;
 };
 
+type EvaluationBatchStartPayload = {
+  accepted: boolean;
+  batch?: EvaluationBatchDetailPayload["batch"];
+};
+
 export default function EvaluationBatchDetailPage() {
   const params = useParams<{ batchId: string }>();
   const batchId = params.batchId ?? "";
   const { data, error } = useMonitorData<EvaluationBatchDetailPayload>(`/evaluation/batches/${batchId}`);
+  const [batchData, setBatchData] = React.useState<EvaluationBatchDetailPayload | null>(null);
+  const [startMessage, setStartMessage] = React.useState<string | null>(null);
+  const [startError, setStartError] = React.useState<string | null>(null);
+  const [startPending, setStartPending] = React.useState(false);
+
+  React.useEffect(() => {
+    if (data) {
+      setBatchData(data);
+      setStartMessage(null);
+      setStartError(null);
+      setStartPending(false);
+    }
+  }, [data]);
 
   if (error) return <ErrorState title={`Evaluation batch ${batchId}`} error={error} />;
-  if (!data) return <div>Loading...</div>;
+  if (!batchData) return <div>Loading...</div>;
 
-  const batch = data.batch ?? {};
+  const batch = batchData.batch ?? {};
   const config = batch.config_json ?? {};
   const summary = batch.summary_json ?? {};
-  const runs = data.runs ?? [];
+  const runs = batchData.runs ?? [];
+
+  async function startBatch() {
+    setStartPending(true);
+    setStartMessage(null);
+    setStartError(null);
+    try {
+      const result = await postMonitorData<EvaluationBatchStartPayload>(`/evaluation/batches/${batchId}/start`);
+      setBatchData((current) => ({
+        ...(current ?? {}),
+        batch: {
+          ...(current?.batch ?? {}),
+          ...(result.batch ?? {}),
+        },
+      }));
+      setStartMessage(result.accepted ? "Batch execution scheduled." : "Batch execution was not accepted.");
+    } catch (err: unknown) {
+      const fetchError = err as MonitorFetchError;
+      setStartError(fetchError.message);
+    } finally {
+      setStartPending(false);
+    }
+  }
 
   return (
     <div className="page">
@@ -77,6 +118,23 @@ export default function EvaluationBatchDetailPage() {
           </div>
         </div>
       </section>
+      {batch.status === "pending" || startMessage || startError ? (
+        <section className="surface-section">
+          <h2>Execution</h2>
+          {batch.status === "pending" ? (
+            <button
+              type="button"
+              className="monitor-action-button"
+              disabled={startPending}
+              onClick={() => void startBatch()}
+            >
+              Start evaluation batch
+            </button>
+          ) : null}
+          {startMessage ? <p className="description">{startMessage}</p> : null}
+          {startError ? <p className="description">{startError}</p> : null}
+        </section>
+      ) : null}
       <section className="surface-section">
         <h2>Batch Runs</h2>
         <table>

@@ -759,6 +759,29 @@ def test_monitor_evaluation_batch_create_route_uses_current_user(monkeypatch):
     ]
 
 
+def test_monitor_evaluation_batch_start_route_schedules_execution(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        monitor_service,
+        "start_monitor_evaluation_batch",
+        lambda **kwargs: calls.append(kwargs) or {"accepted": True, "batch": {"batch_id": "batch-1", "status": "running"}},
+    )
+    app = _build_monitor_test_app()
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/monitor/evaluation/batches/batch-1/start",
+            headers={"Authorization": "Bearer token-1"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"accepted": True, "batch": {"batch_id": "batch-1", "status": "running"}}
+    assert calls[0]["batch_id"] == "batch-1"
+    assert calls[0]["base_url"] == "http://testserver"
+    assert calls[0]["token"] == "token-1"
+
+
 def test_monitor_evaluation_scenarios_route_exposes_catalog(monkeypatch):
     monkeypatch.setattr(
         monitor_service,

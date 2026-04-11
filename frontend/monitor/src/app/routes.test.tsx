@@ -1453,6 +1453,46 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "run-1" })).toHaveAttribute("href", "/evaluation/runs/run-1");
   });
 
+  it("starts a pending evaluation batch from batch detail", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : String(input.url);
+      const method = init?.method ?? "GET";
+      if (method === "GET" && url.endsWith("/evaluation/batches/batch-1")) {
+        return new Response(
+          JSON.stringify({
+            batch: {
+              batch_id: "batch-1",
+              status: "pending",
+              kind: "scenario_batch",
+              config_json: { sandbox: "local", max_concurrent: 1 },
+              summary_json: { total_runs: 1 },
+            },
+            runs: [{ batch_run_id: "batch-run-1", scenario_id: "scenario-1", status: "pending" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (method === "POST" && url.endsWith("/evaluation/batches/batch-1/start")) {
+        return new Response(JSON.stringify({ accepted: true, batch: { batch_id: "batch-1", status: "running" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/evaluation/batches/batch-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Evaluation Batch batch-1" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start evaluation batch" }));
+
+    expect(await screen.findByText("Batch execution scheduled.")).toBeInTheDocument();
+  });
+
   it("renders evaluation run detail as a hidden route under the evaluation surface", async () => {
     mockRoutePayloads({
       "/evaluation/runs/run-1": {
