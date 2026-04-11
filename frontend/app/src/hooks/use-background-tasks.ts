@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UseThreadStreamResult } from './use-thread-stream';
 import type { StreamEvent } from '../api/types';
-import { asRecord } from '../lib/records';
+import { asRecord, recordNumber, recordString } from '../lib/records';
 
 export interface BackgroundTask {
   task_id: string;
   task_type: 'bash' | 'agent';
-  status: 'running' | 'completed' | 'error';
+  status: 'running' | 'completed' | 'error' | 'cancelled';
   command_line?: string;
   description?: string;
   exit_code?: number;
@@ -27,6 +27,37 @@ interface BackgroundTaskEventData {
 }
 
 const threadTasksInflight = new Map<string, Promise<BackgroundTask[]>>();
+
+function parseTaskType(value: unknown): BackgroundTask["task_type"] {
+  if (value === "bash" || value === "agent") return value;
+  throw new Error("Malformed background task payload: task_type");
+}
+
+function parseTaskStatus(value: unknown): BackgroundTask["status"] {
+  if (value === "running" || value === "completed" || value === "error" || value === "cancelled") return value;
+  throw new Error("Malformed background task payload: status");
+}
+
+function parseBackgroundTasks(value: unknown): BackgroundTask[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Malformed background task payload: expected task array");
+  }
+  return value.map((item, index) => {
+    const record = asRecord(item);
+    if (!record) throw new Error(`Malformed background task payload: task[${index}]`);
+    const taskId = recordString(record, "task_id");
+    if (!taskId) throw new Error(`Malformed background task payload: task[${index}].task_id`);
+    return {
+      task_id: taskId,
+      task_type: parseTaskType(record.task_type),
+      status: parseTaskStatus(record.status),
+      command_line: recordString(record, "command_line"),
+      description: recordString(record, "description"),
+      exit_code: recordNumber(record, "exit_code"),
+      error: recordString(record, "error"),
+    };
+  });
+}
 
 function isBackgroundTaskEventData(data: unknown): data is BackgroundTaskEventData {
   const value = asRecord(data);
@@ -50,7 +81,7 @@ function loadThreadTasks(threadId: string): Promise<BackgroundTask[]> {
       if (!response.ok) {
         throw new Error(response.statusText || `HTTP ${response.status}`);
       }
-      return response.json() as Promise<BackgroundTask[]>;
+      return parseBackgroundTasks(await response.json());
     })
     .finally(() => {
       threadTasksInflight.delete(threadId);
