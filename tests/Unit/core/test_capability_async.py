@@ -99,7 +99,7 @@ def test_local_sandbox_rebuilds_stale_closed_capability_before_execute_async(tmp
     sandbox.manager.session_manager.delete(stale_session_id, reason="test_close")
 
     async def run():
-        async_cmd = await sandbox.shell().execute_async("sleep 0.01; echo hi")
+        async_cmd = await sandbox.shell().execute_async("echo hi")
         result = await sandbox.shell().wait_for(async_cmd.command_id, timeout=1.0)
         return async_cmd, result
 
