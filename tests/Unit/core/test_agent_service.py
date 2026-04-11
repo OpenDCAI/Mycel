@@ -220,6 +220,26 @@ def _agent_tool_json(result) -> dict[str, Any]:
     return json.loads(content)
 
 
+def _patch_create_leon_agent(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    child_cls=_FakeChildAgent,
+    created: list[_FakeChildAgent] | None = None,
+    captured: dict[str, Any] | None = None,
+) -> None:
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = child_cls(Path(workspace_root), model_name)
+        if created is not None:
+            created.append(child)
+        if captured is not None:
+            captured["model_name"] = model_name
+            captured["workspace_root"] = Path(workspace_root)
+            captured["kwargs"] = kwargs
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+
 async def _sleep_forever():
     while True:
         await asyncio.sleep(3600)
@@ -308,13 +328,7 @@ async def test_task_output_reports_cancelled_bash_run_honestly(tmp_path):
 @pytest.mark.asyncio
 async def test_run_agent_applies_forked_bootstrap_to_child_agent(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
@@ -360,13 +374,7 @@ async def test_run_agent_applies_forked_bootstrap_to_child_agent(monkeypatch, tm
 @pytest.mark.asyncio
 async def test_run_agent_applies_isolated_tool_context_to_child_agent_service(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
@@ -396,13 +404,7 @@ async def test_run_agent_applies_isolated_tool_context_to_child_agent_service(mo
 @pytest.mark.asyncio
 async def test_run_agent_uses_explicit_child_fork_wiring_api(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
@@ -461,10 +463,7 @@ async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeyp
                 yield None
             return
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        return _CapturingChild(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, child_cls=_CapturingChild)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry)
@@ -503,10 +502,7 @@ async def test_agent_tool_fork_context_treats_empty_parent_messages_as_authorita
                 yield None
             return
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        return _CapturingChild(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, child_cls=_CapturingChild)
     set_current_messages([{"role": "user", "content": "AMBIENT_LEAK"}])
 
     registry = ToolRegistry()
@@ -548,12 +544,7 @@ async def test_run_agent_rolls_child_bootstrap_costs_back_into_parent_bootstrap(
                 yield None
             return
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _CostReportingChild(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, child_cls=_CostReportingChild, created=created)
 
     service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
@@ -596,12 +587,7 @@ async def test_run_agent_preserves_concurrent_parent_and_child_bootstrap_growth(
                 yield None
             return
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _ConcurrentCostChild(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, child_cls=_ConcurrentCostChild, created=created)
 
     service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
@@ -631,13 +617,7 @@ async def test_run_agent_preserves_concurrent_parent_and_child_bootstrap_growth(
 @pytest.mark.asyncio
 async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry)
@@ -670,10 +650,7 @@ async def test_run_agent_without_fork_context_does_not_inject_parent_messages(mo
                 yield None
             return
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        return _CapturingChild(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, child_cls=_CapturingChild)
 
     service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
@@ -702,13 +679,7 @@ async def test_run_agent_without_fork_context_does_not_inject_parent_messages(mo
 @pytest.mark.asyncio
 async def test_run_agent_child_tool_context_deep_clones_read_file_state(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
@@ -738,14 +709,7 @@ async def test_run_agent_child_tool_context_deep_clones_read_file_state(monkeypa
 @pytest.mark.asyncio
 async def test_agent_tool_live_runner_path_applies_role_specific_tool_filters(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["workspace_root"] = Path(workspace_root)
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="gpt-parent")
@@ -774,13 +738,7 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_p
         encoding="utf-8",
     )
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
     monkeypatch.setenv("CLAUDE_CODE_SUBAGENT_MODEL", "env-model")
 
     registry = ToolRegistry()
@@ -832,13 +790,7 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
         encoding="utf-8",
     )
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
@@ -863,13 +815,7 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
 @pytest.mark.asyncio
 async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
@@ -894,13 +840,7 @@ async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatc
 @pytest.mark.asyncio
 async def test_agent_tool_model_inherit_literal_inherits_parent_model(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
@@ -925,13 +865,7 @@ async def test_agent_tool_model_inherit_literal_inherits_parent_model(monkeypatc
 @pytest.mark.asyncio
 async def test_agent_tool_inherited_default_bootstrap_model_uses_parent_service_model(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-service-model")
@@ -957,13 +891,7 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
         encoding="utf-8",
     )
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
@@ -983,13 +911,7 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
 @pytest.mark.asyncio
 async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_frontmatter(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="service-model")
@@ -1053,13 +975,7 @@ async def test_cleanup_background_runs_does_not_relabel_completed_agent_run(tmp_
 @pytest.mark.asyncio
 async def test_run_agent_cleans_up_child_background_runs_before_close(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     service = _make_service(tmp_path)
 
@@ -1080,13 +996,7 @@ async def test_run_agent_cleans_up_child_background_runs_before_close(monkeypatc
 @pytest.mark.asyncio
 async def test_run_agent_links_child_abort_controller_to_parent_tool_context(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
@@ -1143,12 +1053,7 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
                 yield None
             return
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _LeaseCapturingChild(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, child_cls=_LeaseCapturingChild, created=created)
     set_current_thread_id(parent_thread_id)
 
     service = _make_service(tmp_path)
@@ -1173,15 +1078,8 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
 
 @pytest.mark.asyncio
 async def test_run_agent_inherits_parent_sandbox_when_forking_child(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["model_name"] = model_name
-        captured["workspace_root"] = Path(workspace_root)
-        captured["sandbox"] = kwargs.get("sandbox")
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    captured: dict[str, Any] = {}
+    _patch_create_leon_agent(monkeypatch, captured=captured)
 
     service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
@@ -1205,19 +1103,13 @@ async def test_run_agent_inherits_parent_sandbox_when_forking_child(monkeypatch,
 
     assert result == "(Agent completed with no text output)"
     assert captured["workspace_root"] == Path("/home/daytona")
-    assert captured["sandbox"] == "daytona_selfhost"
+    assert captured["kwargs"]["sandbox"] == "daytona_selfhost"
 
 
 @pytest.mark.asyncio
 async def test_run_agent_child_cleanup_skips_sandbox_close(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
-
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        child = _FakeChildAgent(Path(workspace_root), model_name)
-        created.append(child)
-        return child
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, created=created)
 
     service = _make_service(tmp_path)
 
@@ -1238,10 +1130,7 @@ async def test_run_agent_child_cleanup_skips_sandbox_close(monkeypatch, tmp_path
 
 @pytest.mark.asyncio
 async def test_handle_agent_registers_subagent_thread_metadata_before_return(monkeypatch, tmp_path):
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch)
 
     thread_repo = _FakeThreadRepo(
         rows={
@@ -1289,10 +1178,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
 
 @pytest.mark.asyncio
 async def test_handle_agent_reuses_existing_completed_child_thread_for_same_parent_and_name(monkeypatch, tmp_path):
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch)
 
     thread_repo = _FakeThreadRepo(
         rows={
@@ -1352,10 +1238,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
 
 @pytest.mark.asyncio
 async def test_agent_tool_blocking_result_preserves_child_identity_metadata(monkeypatch, tmp_path):
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch)
 
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry)
@@ -1385,11 +1268,7 @@ async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monk
         captured["input_messages"] = input_messages
         return "LIVE_CHILD_DONE"
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        captured["child_web_app"] = kwargs.get("web_app")
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch, captured=captured)
     monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
 
     web_app = SimpleNamespace()
@@ -1409,7 +1288,7 @@ async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monk
     assert captured["thread_id"] == "subagent-1"
     assert captured["prompt"] == "do work"
     assert captured["app"] is web_app
-    assert captured["child_web_app"] is web_app
+    assert captured["kwargs"]["web_app"] is web_app
     assert len(captured["input_messages"]) == 1
     assert captured["input_messages"][0]["role"] == "user"
     assert captured["input_messages"][0]["content"] == "do work"
@@ -1426,10 +1305,7 @@ async def test_run_agent_normalizes_workspace_suffix_in_child_prompt(monkeypatch
         captured["input_messages"] = input_messages
         return "LIVE_CHILD_DONE"
 
-    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
-        return _FakeChildAgent(Path(workspace_root), model_name)
-
-    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    _patch_create_leon_agent(monkeypatch)
     monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
 
     service = _make_service(tmp_path, web_app=SimpleNamespace())
