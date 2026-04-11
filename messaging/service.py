@@ -27,7 +27,7 @@ class MessagingService:
 
     def __init__(
         self,
-        chat_repo: Any,  # storage.providers.sqlite.chat_repo.SQLiteChatRepo (for chat creation)
+        chat_repo: Any,  # chat repo compatible with MessagingService create/list/delete operations
         chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
         messages_repo: Any,  # SupabaseMessagesRepo
         message_read_repo: Any,  # SupabaseMessageReadRepo
