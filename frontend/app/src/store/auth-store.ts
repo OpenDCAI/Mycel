@@ -116,14 +116,18 @@ export const useAuthStore = create<AuthState>()(
 /**
  * Fetch with Bearer token. On 401, clears auth.
  */
+function buildAuthHeaders(init: RequestInit | undefined, token: string | null): Headers {
+  const headers = new Headers(init?.headers);
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return headers;
+}
+
 export async function authFetch(url: string, init?: RequestInit): Promise<Response> {
   const token = useAuthStore.getState().token;
-  const isFormData = init?.body instanceof FormData;
-  const headers: Record<string, string> = {
-    ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    ...(init?.headers as Record<string, string> ?? {}),
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers = buildAuthHeaders(init, token);
 
   // Prepend API_BASE for relative URLs when configured
   const resolvedUrl = API_BASE && url.startsWith("/") ? `${API_BASE}${url}` : url;
