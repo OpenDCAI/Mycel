@@ -1330,6 +1330,85 @@ describe("MonitorRoutes", () => {
     expect(screen.queryByText("Current Summary")).not.toBeInTheDocument();
   });
 
+  it("creates an evaluation batch from selected catalog scenarios", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : String(input.url);
+      const method = init?.method ?? "GET";
+      if (method === "GET" && url.endsWith("/evaluation")) {
+        return new Response(
+          JSON.stringify({
+            headline: "Evaluation Workbench",
+            summary: "Recent persisted evaluation runs and their runtime truth.",
+            overview: { total_runs: 0, running_runs: 0, completed_runs: 0, failed_runs: 0 },
+            runs: [],
+            selected_run: {},
+            limitations: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (method === "GET" && url.endsWith("/evaluation/batches")) {
+        return new Response(JSON.stringify({ items: [], count: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (method === "GET" && url.endsWith("/evaluation/scenarios")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                scenario_id: "scenario-1",
+                name: "Scenario 1",
+                category: "smoke",
+                sandbox: "local",
+                message_count: 1,
+                timeout_seconds: 120,
+              },
+            ],
+            count: 1,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (method === "POST" && url.endsWith("/evaluation/batches")) {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          agent_user_id: "agent-1",
+          scenario_ids: ["scenario-1"],
+          sandbox: "local",
+          max_concurrent: 1,
+        });
+        return new Response(JSON.stringify({ batch: { batch_id: "batch-created", status: "pending" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (method === "GET" && url.endsWith("/evaluation/batches/batch-created")) {
+        return new Response(
+          JSON.stringify({
+            batch: { batch_id: "batch-created", status: "pending", config_json: { sandbox: "local", max_concurrent: 1 } },
+            runs: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/evaluation"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Agent user id"), { target: { value: "agent-1" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /scenario-1/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Create evaluation batch" }));
+
+    expect(await screen.findByRole("heading", { name: "Evaluation Batch batch-created" })).toBeInTheDocument();
+  });
+
   it("renders evaluation batch detail as a hidden route under the evaluation surface", async () => {
     mockRoutePayloads({
       "/evaluation/batches/batch-1": {

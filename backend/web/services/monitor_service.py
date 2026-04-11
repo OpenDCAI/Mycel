@@ -512,6 +512,24 @@ def get_monitor_evaluation_scenarios() -> dict[str, Any]:
     return {"items": items, "count": len(items)}
 
 
+def create_monitor_evaluation_batch(
+    *,
+    submitted_by_user_id: str,
+    agent_user_id: str,
+    scenario_ids: list[str],
+    sandbox: str,
+    max_concurrent: int,
+) -> dict[str, Any]:
+    batch = make_eval_batch_service().create_batch(
+        submitted_by_user_id=submitted_by_user_id,
+        agent_user_id=agent_user_id,
+        scenario_ids=scenario_ids,
+        sandbox=sandbox,
+        max_concurrent=max_concurrent,
+    )
+    return {"batch": batch}
+
+
 def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
     return make_eval_batch_service().get_batch_detail(batch_id)
 

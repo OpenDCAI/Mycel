@@ -725,6 +725,40 @@ def test_monitor_evaluation_batches_route_exposes_batch_index(monkeypatch):
     assert payload["items"][0]["summary_json"]["total_runs"] == 10
 
 
+def test_monitor_evaluation_batch_create_route_uses_current_user(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        monitor_service,
+        "create_monitor_evaluation_batch",
+        lambda **kwargs: calls.append(kwargs) or {"batch": {"batch_id": "batch-created", "status": "pending"}},
+    )
+    app = _build_monitor_test_app()
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/monitor/evaluation/batches",
+            json={
+                "agent_user_id": "agent-1",
+                "scenario_ids": ["scenario-1"],
+                "sandbox": "local",
+                "max_concurrent": 1,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"batch": {"batch_id": "batch-created", "status": "pending"}}
+    assert calls == [
+        {
+            "submitted_by_user_id": "owner-1",
+            "agent_user_id": "agent-1",
+            "scenario_ids": ["scenario-1"],
+            "sandbox": "local",
+            "max_concurrent": 1,
+        }
+    ]
+
+
 def test_monitor_evaluation_scenarios_route_exposes_catalog(monkeypatch):
     monkeypatch.setattr(
         monitor_service,

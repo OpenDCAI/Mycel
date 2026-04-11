@@ -4,6 +4,7 @@ import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.services import monitor_service, resource_service
@@ -13,6 +14,13 @@ from backend.web.services.resource_cache import (
 )
 
 router = APIRouter(prefix="/api/monitor")
+
+
+class EvaluationBatchCreateRequest(BaseModel):
+    agent_user_id: str
+    scenario_ids: list[str] = Field(min_length=1)
+    sandbox: str = "local"
+    max_concurrent: int = Field(default=1, ge=1, le=50)
 
 
 def _refresh_monitor_resources_sync():
@@ -117,6 +125,20 @@ def evaluation_snapshot():
 @router.get("/evaluation/batches")
 def evaluation_batches_snapshot(limit: int = Query(default=50, ge=1, le=200)):
     return monitor_service.get_monitor_evaluation_batches(limit=limit)
+
+
+@router.post("/evaluation/batches")
+def evaluation_batch_create_action(
+    payload: EvaluationBatchCreateRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    return monitor_service.create_monitor_evaluation_batch(
+        submitted_by_user_id=user_id,
+        agent_user_id=payload.agent_user_id,
+        scenario_ids=payload.scenario_ids,
+        sandbox=payload.sandbox,
+        max_concurrent=payload.max_concurrent,
+    )
 
 
 @router.get("/evaluation/scenarios")

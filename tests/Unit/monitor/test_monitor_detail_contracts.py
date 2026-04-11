@@ -86,6 +86,36 @@ def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monk
     }
 
 
+def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
+    calls = []
+
+    class FakeBatchService:
+        def create_batch(self, **kwargs):
+            calls.append(kwargs)
+            return {"batch_id": "batch-created", "status": "pending"}
+
+    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+
+    payload = monitor_service.create_monitor_evaluation_batch(
+        submitted_by_user_id="owner-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+
+    assert payload == {"batch": {"batch_id": "batch-created", "status": "pending"}}
+    assert calls == [
+        {
+            "submitted_by_user_id": "owner-1",
+            "agent_user_id": "agent-1",
+            "scenario_ids": ["scenario-1"],
+            "sandbox": "local",
+            "max_concurrent": 1,
+        }
+    ]
+
+
 def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypatch):
     monkeypatch.setattr(monitor_service, "get_resource_overview_snapshot", lambda: {"providers": []})
 

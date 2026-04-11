@@ -1,7 +1,8 @@
-import { Link } from "react-router-dom";
+import React from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import ErrorState from "../components/ErrorState";
-import { useMonitorData } from "../app/fetch";
+import { postMonitorData, useMonitorData } from "../app/fetch";
 
 type EvaluationPayload = {
   headline?: string | null;
@@ -62,11 +63,24 @@ type EvaluationScenarioCatalogPayload = {
   count?: number | null;
 };
 
+type EvaluationBatchCreatePayload = {
+  batch?: {
+    batch_id?: string | null;
+  } | null;
+};
+
 export default function EvaluationPage() {
+  const navigate = useNavigate();
   const { data, error } = useMonitorData<EvaluationPayload>("/evaluation");
   const { data: batchesData, error: batchesError } = useMonitorData<EvaluationBatchIndexPayload>("/evaluation/batches");
   const { data: scenariosData, error: scenariosError } =
     useMonitorData<EvaluationScenarioCatalogPayload>("/evaluation/scenarios");
+  const [agentUserId, setAgentUserId] = React.useState("");
+  const [sandbox, setSandbox] = React.useState("local");
+  const [maxConcurrent, setMaxConcurrent] = React.useState(1);
+  const [selectedScenarioIds, setSelectedScenarioIds] = React.useState<string[]>([]);
+  const [createError, setCreateError] = React.useState<string | null>(null);
+  const [createPending, setCreatePending] = React.useState(false);
 
   if (error) return <ErrorState title="Evaluation" error={error} />;
   if (batchesError) return <ErrorState title="Evaluation batches" error={batchesError} />;
@@ -80,6 +94,33 @@ export default function EvaluationPage() {
   const limitations = data.limitations ?? [];
   const batches = batchesData.items ?? [];
   const scenarios = scenariosData.items ?? [];
+
+  function toggleScenario(scenarioId: string) {
+    setSelectedScenarioIds((current) =>
+      current.includes(scenarioId) ? current.filter((item) => item !== scenarioId) : [...current, scenarioId],
+    );
+  }
+
+  async function createBatch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreatePending(true);
+    setCreateError(null);
+    try {
+      const result = await postMonitorData<EvaluationBatchCreatePayload>("/evaluation/batches", {
+        agent_user_id: agentUserId.trim(),
+        scenario_ids: selectedScenarioIds,
+        sandbox,
+        max_concurrent: maxConcurrent,
+      });
+      const batchId = result.batch?.batch_id;
+      if (!batchId) throw new Error("Evaluation batch create response did not include batch_id.");
+      navigate(`/evaluation/batches/${batchId}`);
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreatePending(false);
+    }
+  }
 
   return (
     <div className="page">
@@ -111,10 +152,46 @@ export default function EvaluationPage() {
         <p className="surface-card__body">{data.summary ?? "No evaluation summary available."}</p>
       </section>
       <section className="surface-section">
+        <h2>Create Batch</h2>
+        <form className="info-grid" onSubmit={(event) => void createBatch(event)}>
+          <label>
+            <strong>Agent user id</strong>
+            <input value={agentUserId} onChange={(event) => setAgentUserId(event.target.value)} />
+          </label>
+          <label>
+            <strong>Sandbox</strong>
+            <input value={sandbox} onChange={(event) => setSandbox(event.target.value)} />
+          </label>
+          <label>
+            <strong>Max concurrent</strong>
+            <input
+              min={1}
+              type="number"
+              value={maxConcurrent}
+              onChange={(event) => setMaxConcurrent(Number(event.target.value))}
+            />
+          </label>
+          <div>
+            <strong>Selected scenarios</strong>
+            <span>{selectedScenarioIds.length}</span>
+          </div>
+          <button
+            type="submit"
+            className="monitor-action-button"
+            disabled={createPending || agentUserId.trim() === "" || selectedScenarioIds.length === 0}
+          >
+            Create evaluation batch
+          </button>
+          <p className="surface-card__body">Creates a pending batch. Execution is handled by the batch runner path.</p>
+        </form>
+        {createError ? <p className="description">{createError}</p> : null}
+      </section>
+      <section className="surface-section">
         <h2>Scenario Catalog</h2>
         <table>
           <thead>
             <tr>
+              <th>Select</th>
               <th>Scenario</th>
               <th>Name</th>
               <th>Category</th>
@@ -127,6 +204,16 @@ export default function EvaluationPage() {
             {scenarios.length > 0 ? (
               scenarios.map((scenario) => (
                 <tr key={scenario.scenario_id ?? scenario.name}>
+                  <td>
+                    {scenario.scenario_id ? (
+                      <input
+                        aria-label={`Select ${scenario.scenario_id}`}
+                        checked={selectedScenarioIds.includes(scenario.scenario_id)}
+                        type="checkbox"
+                        onChange={() => toggleScenario(scenario.scenario_id ?? "")}
+                      />
+                    ) : null}
+                  </td>
                   <td className="mono">
                     {scenario.scenario_id ? (
                       <Link to={`/evaluation?scenario=${scenario.scenario_id}`}>{scenario.scenario_id}</Link>
@@ -143,7 +230,7 @@ export default function EvaluationPage() {
               ))
             ) : (
               <tr>
-                <td colSpan={6}>No evaluation scenarios found.</td>
+                <td colSpan={7}>No evaluation scenarios found.</td>
               </tr>
             )}
           </tbody>
