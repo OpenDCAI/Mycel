@@ -83,11 +83,28 @@ class EvaluationBatchService:
         eval_run_id: str,
         status: str,
     ) -> dict:
+        updates = {
+            "thread_id": thread_id,
+            "eval_run_id": eval_run_id,
+            "status": status,
+        }
+        if status in {"completed", "failed", "cancelled"}:
+            updates["finished_at"] = datetime.now(UTC).isoformat()
+        updated = self._batch_repo.update_batch_run(
+            batch_run_id,
+            **updates,
+        )
+        if updated is None:
+            raise KeyError(f"Evaluation batch run not found: {batch_run_id}")
+        self.refresh_batch_summary(str(updated["batch_id"]))
+        return updated
+
+    def mark_batch_run_running(self, batch_run_id: str, *, thread_id: str) -> dict:
         updated = self._batch_repo.update_batch_run(
             batch_run_id,
             thread_id=thread_id,
-            eval_run_id=eval_run_id,
-            status=status,
+            status="running",
+            started_at=datetime.now(UTC).isoformat(),
         )
         if updated is None:
             raise KeyError(f"Evaluation batch run not found: {batch_run_id}")

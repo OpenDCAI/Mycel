@@ -148,4 +148,24 @@ def test_batch_service_links_batch_run_to_eval_run_and_refreshes_summary():
 
     assert updated["thread_id"] == "thread-1"
     assert updated["eval_run_id"] == "eval-run-1"
+    assert updated["finished_at"]
     assert summary["completed_runs"] == 1
+
+
+def test_batch_service_marks_batch_run_running_with_started_at():
+    repo = _FakeBatchRepo()
+    service = EvaluationBatchService(batch_repo=repo)
+    batch = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["s1"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+    batch_run = repo.list_batch_runs(batch["batch_id"])[0]
+
+    updated = service.mark_batch_run_running(batch_run["batch_run_id"], thread_id="thread-1")
+
+    assert updated["status"] == "running"
+    assert updated["thread_id"] == "thread-1"
+    assert updated["started_at"]
