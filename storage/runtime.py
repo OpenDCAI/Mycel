@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import os
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from storage.container import StorageContainer
@@ -13,12 +12,8 @@ from storage.container import StorageContainer
 _WEB_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_supabase_client"
 
 
-def current_storage_strategy() -> str:
-    return str(os.getenv("LEON_STORAGE_STRATEGY") or "supabase").strip().lower()
-
-
 def uses_supabase_storage() -> bool:
-    return current_storage_strategy() == "supabase"
+    return str(os.getenv("LEON_STORAGE_STRATEGY") or "supabase").strip().lower() == "supabase"
 
 
 def uses_supabase_runtime_defaults() -> bool:
@@ -38,36 +33,48 @@ def build_storage_container(
 ) -> StorageContainer:
     """Build a runtime storage container (Supabase-only)."""
     client = _resolve_supabase_client(supabase_client, supabase_client_factory)
-    public_client = (
-        public_supabase_client
-        if public_supabase_client is not None
-        else (_resolve_supabase_client(public_supabase_client, public_supabase_client_factory) if public_supabase_client_factory else None)
-    )
+    if public_supabase_client is not None:
+        public_client = public_supabase_client
+    elif public_supabase_client_factory:
+        public_client = _resolve_supabase_client(factory_ref=public_supabase_client_factory)
+    else:
+        public_client = None
     return StorageContainer(supabase_client=client, public_supabase_client=public_client)
+
+
+def _build_storage_repo(
+    repo_factory: Callable[[StorageContainer], Any],
+    supabase_client: Any | None,
+    supabase_client_factory: str | None,
+    *,
+    public_supabase_client_factory: str | None = None,
+    **kwargs: Any,
+) -> Any:
+    container = build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        public_supabase_client_factory=public_supabase_client_factory,
+        **kwargs,
+    )
+    return repo_factory(container)
 
 
 def build_thread_repo(
     *,
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
-    **_kwargs: Any,
+    **kwargs: Any,
 ):
-    client = _resolve_supabase_client(supabase_client, supabase_client_factory)
-    from storage.providers.supabase.thread_repo import SupabaseThreadRepo
-
-    return SupabaseThreadRepo(client)
+    return _build_storage_repo(StorageContainer.thread_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_user_repo(
     *,
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
-    **_kwargs: Any,
+    **kwargs: Any,
 ):
-    client = _resolve_supabase_client(supabase_client, supabase_client_factory)
-    from storage.providers.supabase.user_repo import SupabaseUserRepo
-
-    return SupabaseUserRepo(client)
+    return _build_storage_repo(StorageContainer.user_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_tool_task_repo(
@@ -76,11 +83,7 @@ def build_tool_task_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).tool_task_repo()
+    return _build_storage_repo(StorageContainer.tool_task_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_lease_repo(
@@ -89,11 +92,7 @@ def build_lease_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).lease_repo()
+    return _build_storage_repo(StorageContainer.lease_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_chat_session_repo(
@@ -102,11 +101,7 @@ def build_chat_session_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).chat_session_repo()
+    return _build_storage_repo(StorageContainer.chat_session_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_terminal_repo(
@@ -115,11 +110,7 @@ def build_terminal_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).terminal_repo()
+    return _build_storage_repo(StorageContainer.terminal_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_agent_registry_repo(
@@ -128,12 +119,13 @@ def build_agent_registry_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
+    return _build_storage_repo(
+        StorageContainer.agent_registry_repo,
+        supabase_client,
+        supabase_client_factory,
         public_supabase_client_factory="backend.web.core.supabase_factory:create_public_supabase_client",
         **kwargs,
-    ).agent_registry_repo()
+    )
 
 
 def build_sync_file_repo(
@@ -142,12 +134,13 @@ def build_sync_file_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
+    return _build_storage_repo(
+        StorageContainer.sync_file_repo,
+        supabase_client,
+        supabase_client_factory,
         public_supabase_client_factory="backend.web.core.supabase_factory:create_public_supabase_client",
         **kwargs,
-    ).sync_file_repo()
+    )
 
 
 def build_resource_snapshot_repo(
@@ -156,11 +149,9 @@ def build_resource_snapshot_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY,
-        **kwargs,
-    ).resource_snapshot_repo()
+    return _build_storage_repo(
+        StorageContainer.resource_snapshot_repo, supabase_client, supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY, **kwargs
+    )
 
 
 def build_evaluation_batch_repo(
@@ -169,11 +160,9 @@ def build_evaluation_batch_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY,
-        **kwargs,
-    ).evaluation_batch_repo()
+    return _build_storage_repo(
+        StorageContainer.evaluation_batch_repo, supabase_client, supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY, **kwargs
+    )
 
 
 def build_sandbox_monitor_repo(
@@ -187,43 +176,13 @@ def build_sandbox_monitor_repo(
     return SupabaseSandboxMonitorRepo(client)
 
 
-def resolve_runtime_health_monitor_db_path(*, db_path: str | Path | None = None) -> Path | None:
-    if current_storage_strategy() == "supabase":
-        return None
-    if db_path is not None:
-        return Path(db_path)
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
-    return resolve_role_db_path(SQLiteDBRole.SANDBOX)
-
-
-def build_runtime_health_monitor_repo(
-    *,
-    db_path: str | Path | None = None,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-):
-    if current_storage_strategy() == "supabase":
-        return build_sandbox_monitor_repo(
-            supabase_client=supabase_client,
-            supabase_client_factory=supabase_client_factory,
-        )
-    from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
-
-    return SQLiteSandboxMonitorRepo(db_path=resolve_runtime_health_monitor_db_path(db_path=db_path))
-
-
 def build_provider_event_repo(
     *,
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).provider_event_repo()
+    return _build_storage_repo(StorageContainer.provider_event_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_checkpoint_repo(
@@ -232,11 +191,7 @@ def build_checkpoint_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).checkpoint_repo()
+    return _build_storage_repo(StorageContainer.checkpoint_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_file_operation_repo(
@@ -245,11 +200,7 @@ def build_file_operation_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).file_operation_repo()
+    return _build_storage_repo(StorageContainer.file_operation_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_queue_repo(
@@ -258,11 +209,7 @@ def build_queue_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).queue_repo()
+    return _build_storage_repo(StorageContainer.queue_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def build_summary_repo(
@@ -271,11 +218,7 @@ def build_summary_repo(
     supabase_client_factory: str | None = None,
     **kwargs: Any,
 ):
-    return build_storage_container(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        **kwargs,
-    ).summary_repo()
+    return _build_storage_repo(StorageContainer.summary_repo, supabase_client, supabase_client_factory, **kwargs)
 
 
 def list_resource_snapshots(

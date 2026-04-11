@@ -159,26 +159,14 @@ class StorageContainer:
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
-        checkpoint = self.checkpoint_repo()
-        try:
-            checkpoint.delete_thread_data(thread_id)
-        finally:
-            checkpoint.close()
-
-        run_event = self.run_event_repo()
-        try:
-            run_event.delete_thread_events(thread_id)
-        finally:
-            run_event.close()
-
-        file_op = self.file_operation_repo()
-        try:
-            file_op.delete_thread_operations(thread_id)
-        finally:
-            file_op.close()
-
-        summary = self.summary_repo()
-        try:
-            summary.delete_thread_summaries(thread_id)
-        finally:
-            summary.close()
+        for repo_factory, purge in (
+            (self.checkpoint_repo, lambda repo: repo.delete_thread_data(thread_id)),
+            (self.run_event_repo, lambda repo: repo.delete_thread_events(thread_id)),
+            (self.file_operation_repo, lambda repo: repo.delete_thread_operations(thread_id)),
+            (self.summary_repo, lambda repo: repo.delete_thread_summaries(thread_id)),
+        ):
+            repo = repo_factory()
+            try:
+                purge(repo)
+            finally:
+                repo.close()
