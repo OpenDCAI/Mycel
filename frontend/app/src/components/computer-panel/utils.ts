@@ -1,5 +1,5 @@
 import type { ChatEntry, ToolStep, SandboxFileEntry } from "../../api";
-import { asRecord } from "../../lib/records";
+import { asRecord, recordString } from "../../lib/records";
 import type { TreeNode } from "./types";
 
 /* ── Flow types for message-flow panel ── */
@@ -10,6 +10,14 @@ export type FlowItem =
 function joinPath(base: string, name: string): string {
   if (base.endsWith("/")) return `${base}${name}`;
   return `${base}/${name}`;
+}
+
+function firstString(args: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = recordString(args, key);
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 /** Extract all Bash tool steps from chat entries */
@@ -43,20 +51,26 @@ export function extractAgentSteps(entries: ChatEntry[]): ToolStep[] {
 export function parseCommandArgs(args: unknown): { command?: string; cwd?: string; description?: string } {
   const a = asRecord(args);
   if (!a) return {};
+  const command = recordString(a, "command");
+  const cwd = recordString(a, "cwd");
+  const description = recordString(a, "description");
   return {
-    command: a.command as string | undefined,
-    cwd: a.cwd as string | undefined,
-    description: a.description as string | undefined,
+    ...(command !== undefined ? { command } : {}),
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(description !== undefined ? { description } : {}),
   };
 }
 
 export function parseAgentArgs(args: unknown): { description?: string; prompt?: string; subagent_type?: string } {
   const a = asRecord(args);
   if (!a) return {};
+  const description = firstString(a, ["Description", "description"]);
+  const prompt = firstString(a, ["Prompt", "prompt"]);
+  const subagentType = firstString(a, ["SubagentType", "subagent_type"]);
   return {
-    description: (a.Description ?? a.description) as string | undefined,
-    prompt: (a.Prompt ?? a.prompt) as string | undefined,
-    subagent_type: (a.SubagentType ?? a.subagent_type) as string | undefined,
+    ...(description !== undefined ? { description } : {}),
+    ...(prompt !== undefined ? { prompt } : {}),
+    ...(subagentType !== undefined ? { subagent_type: subagentType } : {}),
   };
 }
 
