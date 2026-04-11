@@ -1,8 +1,54 @@
 import { authFetch } from "../store/auth-store";
+import { asRecord } from "../lib/records";
+import type { ChatMessage } from "./types";
 
 export interface ChatStreamEvent {
   type: string;
   data: unknown;
+}
+
+function requiredString(value: Record<string, unknown>, key: string): string {
+  const field = value[key];
+  if (typeof field !== "string") {
+    throw new Error(`Malformed chat message event: ${key} must be a string`);
+  }
+  return field;
+}
+
+function requiredNumber(value: Record<string, unknown>, key: string): number {
+  const field = value[key];
+  if (typeof field !== "number") {
+    throw new Error(`Malformed chat message event: ${key} must be a number`);
+  }
+  return field;
+}
+
+function requiredStringArray(value: Record<string, unknown>, key: string): string[] {
+  const field = value[key];
+  if (!Array.isArray(field) || field.some((item) => typeof item !== "string")) {
+    throw new Error(`Malformed chat message event: ${key} must be a string array`);
+  }
+  return field;
+}
+
+export function parseChatMessageEventData(data: unknown): ChatMessage {
+  const value = asRecord(data);
+  if (!value) throw new Error("Malformed chat message event: data must be an object");
+  return {
+    id: requiredString(value, "id"),
+    chat_id: requiredString(value, "chat_id"),
+    sender_id: requiredString(value, "sender_id"),
+    sender_name: requiredString(value, "sender_name"),
+    content: requiredString(value, "content"),
+    mentioned_ids: requiredStringArray(value, "mentioned_ids"),
+    created_at: requiredNumber(value, "created_at"),
+  };
+}
+
+export function parseChatTypingUserId(data: unknown): string | null {
+  const value = asRecord(data);
+  const userId = value?.user_id;
+  return typeof userId === "string" && userId ? userId : null;
 }
 
 function parseEvent(raw: string): ChatStreamEvent | null {

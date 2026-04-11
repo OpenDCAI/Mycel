@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useOutletContext } from "react-router-dom";
 import { PanelLeft, Send } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
-import { streamChatEvents } from "../api/chat-events";
+import { parseChatMessageEventData, parseChatTypingUserId, streamChatEvents } from "../api/chat-events";
 import { UserBubble } from "../components/chat-area/UserBubble";
 import { ChatBubble } from "../components/chat-area/ChatBubble";
 import type { ChatMember, ChatMessage, ChatDetail } from "../api/types";
@@ -122,7 +122,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       chatId,
       (event) => {
         if (event.type === "message") {
-          const msg = event.data as ChatMessage;
+          const msg = parseChatMessageEventData(event.data);
           setMessages(prev => {
             // Skip if we already have this exact message id
             if (prev.some(m => m.id === msg.id)) return prev;
@@ -146,14 +146,12 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           return;
         }
         if (event.type === "typing_start") {
-          const data = event.data as { user_id?: string };
-          const userId = data.user_id;
+          const userId = parseChatTypingUserId(event.data);
           if (userId) setTypingEntities(prev => new Set([...prev, userId]));
           return;
         }
         if (event.type === "typing_stop") {
-          const data = event.data as { user_id?: string };
-          const userId = data.user_id;
+          const userId = parseChatTypingUserId(event.data);
           if (!userId) return;
           setTypingEntities(prev => {
             const next = new Set(prev);
