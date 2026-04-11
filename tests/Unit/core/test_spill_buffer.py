@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import MagicMock
 
+import pytest
 from langchain_core.messages import ToolMessage
 
 from core.runtime.middleware import ModelRequest
@@ -47,6 +48,17 @@ def _require_text_content(message: ToolMessage) -> str:
     return message.content
 
 
+def _spill(content: Any, *, threshold_bytes: int, tool_call_id: str = "call", fs_backend: Any = None, workspace_root: str = "/w"):
+    fs = fs_backend or _make_fs_backend()
+    return spill_if_needed(
+        content=content,
+        threshold_bytes=threshold_bytes,
+        tool_call_id=tool_call_id,
+        fs_backend=fs,
+        workspace_root=workspace_root,
+    )
+
+
 # ===========================================================================
 # spill_if_needed()
 # ===========================================================================
@@ -55,17 +67,18 @@ def _require_text_content(message: ToolMessage) -> str:
 class TestSpillIfNeeded:
     """Unit tests for the core spill function."""
 
-    def test_small_output_not_triggered(self):
-        """Content under threshold is returned unchanged."""
+    @pytest.mark.parametrize(
+        ("content", "threshold"),
+        [
+            ("short output", 1000),
+            ("0123456789", 10),
+            ("\u4e2d" * 10, 30),
+        ],
+    )
+    def test_content_at_or_under_threshold_is_returned_unchanged(self, content: str, threshold: int):
         fs = _make_fs_backend()
-        content = "short output"
-        result = spill_if_needed(
-            content=content,
-            threshold_bytes=1000,
-            tool_call_id="call_1",
-            fs_backend=fs,
-            workspace_root="/workspace",
-        )
+        result = _spill(content, threshold_bytes=threshold, fs_backend=fs)
+
         assert result == content
         fs.write_file.assert_not_called()
 
@@ -73,8 +86,8 @@ class TestSpillIfNeeded:
         """Content exceeding threshold is spilled to disk; preview returned."""
         fs = _make_fs_backend()
         large = "A" * 60_000
-        result = spill_if_needed(
-            content=large,
+        result = _spill(
+            large,
             threshold_bytes=50_000,
             tool_call_id="call_big",
             fs_backend=fs,
@@ -93,83 +106,28 @@ class TestSpillIfNeeded:
         # Preview text is the first PREVIEW_BYTES chars of the original.
         assert large[:PREVIEW_BYTES] in result
 
-    def test_threshold_boundary_equal_no_trigger(self):
-        """Content whose byte length exactly equals threshold is NOT spilled."""
+    @pytest.mark.parametrize(
+        ("content", "threshold", "expected_bytes"),
+        [
+            ("0123456789X", 10, None),
+            ("\u4e2d" * 10, 25, 30),
+        ],
+    )
+    def test_content_over_threshold_triggers_spill(self, content: str, threshold: int, expected_bytes: int | None):
         fs = _make_fs_backend()
-        # 10 ASCII bytes
-        content = "0123456789"
-        assert len(content.encode("utf-8")) == 10
+        result = _spill(content, threshold_bytes=threshold, fs_backend=fs)
 
-        result = spill_if_needed(
-            content=content,
-            threshold_bytes=10,
-            tool_call_id="call_edge",
-            fs_backend=fs,
-            workspace_root="/w",
-        )
-        assert result == content
-        fs.write_file.assert_not_called()
-
-    def test_threshold_boundary_one_byte_over_triggers(self):
-        """Content one byte over threshold IS spilled."""
-        fs = _make_fs_backend()
-        content = "0123456789X"  # 11 bytes
-        result = spill_if_needed(
-            content=content,
-            threshold_bytes=10,
-            tool_call_id="call_over",
-            fs_backend=fs,
-            workspace_root="/w",
-        )
         assert result != content
         assert result.startswith("<persisted-output")
+        if expected_bytes is not None:
+            assert f"{expected_bytes} bytes" in result
         fs.write_file.assert_called_once()
-
-    def test_unicode_byte_counting(self):
-        """Byte size is measured via UTF-8, not character count."""
-        fs = _make_fs_backend()
-        # Each CJK character is 3 bytes in UTF-8.
-        content = "\u4e2d" * 10  # 10 chars, 30 bytes
-        assert len(content) == 10
-        assert len(content.encode("utf-8")) == 30
-
-        # Threshold 25 < 30 bytes => should spill.
-        result = spill_if_needed(
-            content=content,
-            threshold_bytes=25,
-            tool_call_id="call_uni",
-            fs_backend=fs,
-            workspace_root="/w",
-        )
-        assert result.startswith("<persisted-output")
-        assert "30 bytes" in result
-        fs.write_file.assert_called_once()
-
-    def test_unicode_under_threshold_no_spill(self):
-        """Same chars, higher threshold => no spill."""
-        fs = _make_fs_backend()
-        content = "\u4e2d" * 10  # 30 bytes
-        result = spill_if_needed(
-            content=content,
-            threshold_bytes=30,
-            tool_call_id="call_uni2",
-            fs_backend=fs,
-            workspace_root="/w",
-        )
-        assert result == content
-        fs.write_file.assert_not_called()
 
     def test_non_string_passthrough(self):
         """Non-string content is returned as-is without any check."""
         fs = _make_fs_backend()
         for value in [42, None, ["a", "b"], {"key": "val"}]:
-            result = spill_if_needed(
-                content=value,
-                threshold_bytes=1,
-                tool_call_id="call_ns",
-                fs_backend=fs,
-                workspace_root="/w",
-            )
+            result = _spill(value, threshold_bytes=1, tool_call_id="call_ns", fs_backend=fs)
             assert result is value
         fs.write_file.assert_not_called()
 
@@ -179,8 +137,8 @@ class TestSpillIfNeeded:
         fs.write_file.side_effect = OSError("disk full")
 
         large = "B" * 60_000
-        result = spill_if_needed(
-            content=large,
+        result = _spill(
+            large,
             threshold_bytes=50_000,
             tool_call_id="call_fail",
             fs_backend=fs,
@@ -201,13 +159,7 @@ class TestSpillIfNeeded:
         fs = _make_fs_backend()
         # Create content much larger than PREVIEW_BYTES.
         large = "X" * (PREVIEW_BYTES * 5)
-        result = spill_if_needed(
-            content=large,
-            threshold_bytes=100,
-            tool_call_id="call_prev",
-            fs_backend=fs,
-            workspace_root="/w",
-        )
+        result = _spill(large, threshold_bytes=100, tool_call_id="call_prev", fs_backend=fs)
         # The preview portion should be exactly PREVIEW_BYTES chars of "X".
         assert ("X" * PREVIEW_BYTES) in result
         # But not the full content.
@@ -218,8 +170,8 @@ class TestSpillIfNeeded:
         fs = _make_fs_backend()
         large = "A" * 60_000
 
-        result = spill_if_needed(
-            content=large,
+        result = _spill(
+            large,
             threshold_bytes=50_000,
             tool_call_id="call_wrapped",
             fs_backend=fs,
@@ -239,8 +191,8 @@ class TestSpillIfNeeded:
             {"type": "image_url", "image_url": {"url": "https://example.com/a.png"}},
         ]
 
-        result = spill_if_needed(
-            content=content,
+        result = _spill(
+            content,
             threshold_bytes=1,
             tool_call_id="call_image",
             fs_backend=fs,

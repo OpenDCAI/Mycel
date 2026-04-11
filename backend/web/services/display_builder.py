@@ -127,6 +127,19 @@ def _append_to_turn(turn: dict, msg_id: str, segments: list[dict]) -> None:
     turn.setdefault("messageIds", []).append(msg_id)
 
 
+def _iter_tool_segments(turn: dict, *, reverse: bool = False):
+    segments = list(enumerate(turn.get("segments", [])))
+    if reverse:
+        segments = list(reversed(segments))
+    for index, seg in segments:
+        if seg.get("type") == "tool":
+            yield index, seg
+
+
+def _find_tool_segment_by_id(turn: dict, tc_id: str) -> tuple[int, dict] | None:
+    return next(((index, seg) for index, seg in _iter_tool_segments(turn) if seg.get("step", {}).get("id") == tc_id), None)
+
+
 def _build_subagent_stream(
     *,
     task_id: str,
@@ -142,6 +155,23 @@ def _build_subagent_stream(
         "tool_calls": [],
         "status": status,
     }
+
+
+def _attach_subagent_stream(step: dict, metadata: dict, content: str) -> bool:
+    task_id, sub_thread, task_status = _extract_subagent_stream_identity(
+        step.get("name"),
+        metadata,
+        content,
+    )
+    if not sub_thread or step.get("subagent_stream"):
+        return False
+    step["subagent_stream"] = _build_subagent_stream(
+        task_id=task_id or "",
+        thread_id=sub_thread,
+        description=metadata.get("description"),
+        status=task_status,
+    )
+    return True
 
 
 def _build_hidden_ask_user_answer_entry(
@@ -403,27 +433,14 @@ class DisplayBuilder:
         if not tc_id:
             return
 
-        for seg in current_turn["segments"]:
-            if seg.get("type") == "tool" and seg.get("step", {}).get("id") == tc_id:
-                content_str = _extract_text_content(msg.get("content"))
-                seg["step"]["result"] = content_str
-                seg["step"]["status"] = "done"
-
-                meta = msg.get("metadata") or {}
-                task_id, sub_thread, task_status = _extract_subagent_stream_identity(
-                    seg["step"].get("name"),
-                    meta,
-                    content_str,
-                )
-
-                if sub_thread and not seg["step"].get("subagent_stream"):
-                    seg["step"]["subagent_stream"] = _build_subagent_stream(
-                        task_id=task_id or "",
-                        thread_id=sub_thread,
-                        description=meta.get("description"),
-                        status=task_status,
-                    )
-                break
+        found = _find_tool_segment_by_id(current_turn, tc_id)
+        if not found:
+            return
+        _, seg = found
+        content_str = _extract_text_content(msg.get("content"))
+        seg["step"]["result"] = content_str
+        seg["step"]["status"] = "done"
+        _attach_subagent_stream(seg["step"], msg.get("metadata") or {}, content_str)
 
 
 # ---------------------------------------------------------------------------
@@ -537,16 +554,17 @@ def _handle_tool_call(td: ThreadDisplay, data: dict) -> dict | None:
     tc_args = data.get("args")
 
     # Dedup: if tool_call already exists, update args only
-    for seg in turn["segments"]:
-        if seg.get("type") == "tool" and seg.get("step", {}).get("id") == tc_id:
-            if tc_args is not None and tc_args != {}:
-                seg["step"]["args"] = tc_args
-                return {
-                    "type": "update_segment",
-                    "index": _find_seg_index(turn, tc_id),
-                    "patch": {"args": tc_args},
-                }
-            return None
+    found = _find_tool_segment_by_id(turn, tc_id)
+    if found:
+        index, seg = found
+        if tc_args is not None and tc_args != {}:
+            seg["step"]["args"] = tc_args
+            return {
+                "type": "update_segment",
+                "index": index,
+                "patch": {"args": tc_args},
+            }
+        return None
 
     seg = {
         "type": "tool",
@@ -571,29 +589,18 @@ def _handle_tool_result(td: ThreadDisplay, data: dict) -> dict | None:
     result = data.get("content", "")
     metadata = data.get("metadata") or {}
 
-    for i, seg in enumerate(turn["segments"]):
-        if seg.get("type") == "tool" and seg.get("step", {}).get("id") == tc_id:
-            seg["step"]["result"] = result
-            seg["step"]["status"] = "done"
+    found = _find_tool_segment_by_id(turn, tc_id)
+    if found:
+        index, seg = found
+        seg["step"]["result"] = result
+        seg["step"]["status"] = "done"
+        _attach_subagent_stream(seg["step"], metadata, result)
 
-            task_id, sub_thread, task_status = _extract_subagent_stream_identity(
-                seg["step"].get("name"),
-                metadata,
-                result,
-            )
-            if sub_thread and not seg["step"].get("subagent_stream"):
-                seg["step"]["subagent_stream"] = _build_subagent_stream(
-                    task_id=task_id or "",
-                    thread_id=sub_thread,
-                    description=metadata.get("description"),
-                    status=task_status,
-                )
-
-            return {
-                "type": "update_segment",
-                "index": i,
-                "patch": {"status": "done", "result": result},
-            }
+        return {
+            "type": "update_segment",
+            "index": index,
+            "patch": {"status": "done", "result": result},
+        }
     return None
 
 
@@ -670,8 +677,8 @@ def _handle_cancelled(td: ThreadDisplay, data: dict) -> dict | None:
 
     ids = data.get("cancelled_tool_call_ids") or []
     patches = []
-    for seg in turn["segments"]:
-        if seg.get("type") == "tool" and seg.get("step", {}).get("id") in ids:
+    for _, seg in _iter_tool_segments(turn):
+        if seg.get("step", {}).get("id") in ids:
             seg["step"]["status"] = "cancelled"
             seg["step"]["result"] = "任务被用户取消"
             patches.append(seg["step"]["id"])
@@ -714,15 +721,14 @@ def _handle_task_start(td: ThreadDisplay, data: dict) -> dict | None:
     # immediate "started" ToolMessage before the async task_start activity
     # reaches the parent thread. Still patch the newest Agent step that
     # has no child stream, even if its tool_result already marked it done.
-    for seg in reversed(turn["segments"]):
-        if seg.get("type") == "tool" and seg.get("step", {}).get("name") == "Agent" and not seg.get("step", {}).get("subagent_stream"):
+    for idx, seg in _iter_tool_segments(turn, reverse=True):
+        if seg.get("step", {}).get("name") == "Agent" and not seg.get("step", {}).get("subagent_stream"):
             seg["step"]["subagent_stream"] = _build_subagent_stream(
                 task_id=task_id,
                 thread_id=sub_thread,
                 description=data.get("description"),
                 status="running",
             )
-            idx = _find_seg_index(turn, seg["step"]["id"])
             return {
                 "type": "update_segment",
                 "index": idx,
@@ -737,23 +743,15 @@ def _handle_task_done(td: ThreadDisplay, data: dict) -> dict | None:
         return None
 
     task_id = data["task_id"]
-    for seg in turn["segments"]:
-        if seg.get("type") == "tool" and seg.get("step", {}).get("subagent_stream", {}).get("task_id") == task_id:
+    for idx, seg in _iter_tool_segments(turn):
+        if seg.get("step", {}).get("subagent_stream", {}).get("task_id") == task_id:
             seg["step"]["subagent_stream"]["status"] = "completed"
-            idx = _find_seg_index(turn, seg["step"]["id"])
             return {
                 "type": "update_segment",
                 "index": idx,
                 "patch": {"subagent_stream_status": "completed"},
             }
     return None
-
-
-def _find_seg_index(turn: dict, tc_id: str) -> int:
-    for i, seg in enumerate(turn.get("segments", [])):
-        if seg.get("type") == "tool" and seg.get("step", {}).get("id") == tc_id:
-            return i
-    return -1
 
 
 def _extract_subagent_stream_identity(step_name: str | None, metadata: dict, content: str) -> tuple[str | None, str | None, str]:

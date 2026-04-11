@@ -10,6 +10,7 @@ from typing import Any
 from storage.container import StorageContainer
 
 _WEB_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_supabase_client"
+_PUBLIC_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_public_supabase_client"
 
 
 def uses_supabase_storage() -> bool:
@@ -44,121 +45,68 @@ def build_storage_container(
 
 def _build_storage_repo(
     repo_method: str,
-    supabase_client: Any | None,
-    supabase_client_factory: str | None,
     *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    default_supabase_client_factory: str | None = None,
     public_supabase_client_factory: str | None = None,
     **kwargs: Any,
 ) -> Any:
     container = build_storage_container(
         supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
+        supabase_client_factory=supabase_client_factory or default_supabase_client_factory,
         public_supabase_client_factory=public_supabase_client_factory,
         **kwargs,
     )
     return getattr(container, repo_method)()
 
 
-def build_thread_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("thread_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_thread_repo(**kwargs: Any):
+    return _build_storage_repo("thread_repo", **kwargs)
 
 
-def build_user_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("user_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_user_repo(**kwargs: Any):
+    return _build_storage_repo("user_repo", **kwargs)
 
 
-def build_tool_task_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("tool_task_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_tool_task_repo(**kwargs: Any):
+    return _build_storage_repo("tool_task_repo", **kwargs)
 
 
-def build_lease_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("lease_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_lease_repo(**kwargs: Any):
+    return _build_storage_repo("lease_repo", **kwargs)
 
 
-def build_chat_session_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("chat_session_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_chat_session_repo(**kwargs: Any):
+    return _build_storage_repo("chat_session_repo", **kwargs)
 
 
-def build_terminal_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("terminal_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_terminal_repo(**kwargs: Any):
+    return _build_storage_repo("terminal_repo", **kwargs)
 
 
-def build_agent_registry_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
+def build_agent_registry_repo(**kwargs: Any):
     return _build_storage_repo(
         "agent_registry_repo",
-        supabase_client,
-        supabase_client_factory,
-        public_supabase_client_factory="backend.web.core.supabase_factory:create_public_supabase_client",
+        public_supabase_client_factory=_PUBLIC_SUPABASE_CLIENT_FACTORY,
         **kwargs,
     )
 
 
-def build_sync_file_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
+def build_sync_file_repo(**kwargs: Any):
     return _build_storage_repo(
         "sync_file_repo",
-        supabase_client,
-        supabase_client_factory,
-        public_supabase_client_factory="backend.web.core.supabase_factory:create_public_supabase_client",
+        public_supabase_client_factory=_PUBLIC_SUPABASE_CLIENT_FACTORY,
         **kwargs,
     )
 
 
-def build_resource_snapshot_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("resource_snapshot_repo", supabase_client, supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY, **kwargs)
+def build_resource_snapshot_repo(**kwargs: Any):
+    return _build_storage_repo("resource_snapshot_repo", default_supabase_client_factory=_WEB_SUPABASE_CLIENT_FACTORY, **kwargs)
 
 
-def build_evaluation_batch_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("evaluation_batch_repo", supabase_client, supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY, **kwargs)
+def build_evaluation_batch_repo(**kwargs: Any):
+    return _build_storage_repo("evaluation_batch_repo", default_supabase_client_factory=_WEB_SUPABASE_CLIENT_FACTORY, **kwargs)
 
 
 def build_sandbox_monitor_repo(
@@ -172,49 +120,24 @@ def build_sandbox_monitor_repo(
     return SupabaseSandboxMonitorRepo(client)
 
 
-def build_provider_event_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("provider_event_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_provider_event_repo(**kwargs: Any):
+    return _build_storage_repo("provider_event_repo", **kwargs)
 
 
-def build_checkpoint_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("checkpoint_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_checkpoint_repo(**kwargs: Any):
+    return _build_storage_repo("checkpoint_repo", **kwargs)
 
 
-def build_file_operation_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("file_operation_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_file_operation_repo(**kwargs: Any):
+    return _build_storage_repo("file_operation_repo", **kwargs)
 
 
-def build_queue_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("queue_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_queue_repo(**kwargs: Any):
+    return _build_storage_repo("queue_repo", **kwargs)
 
 
-def build_summary_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **kwargs: Any,
-):
-    return _build_storage_repo("summary_repo", supabase_client, supabase_client_factory, **kwargs)
+def build_summary_repo(**kwargs: Any):
+    return _build_storage_repo("summary_repo", **kwargs)
 
 
 def list_resource_snapshots(
