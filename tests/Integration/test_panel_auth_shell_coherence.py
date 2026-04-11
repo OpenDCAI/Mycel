@@ -351,6 +351,34 @@ def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytes
     assert seen == [("user-1", "repo-1", "cfg-repo")]
 
 
+def test_create_agent_user_fails_loudly_when_created_row_is_not_readable():
+    created_rows: list[UserRow] = []
+    saved_configs: list[tuple[str, dict[str, object]]] = []
+
+    class _UserRepo:
+        def create(self, row: UserRow) -> None:
+            created_rows.append(row)
+
+        def get_by_id(self, _user_id: str):
+            return None
+
+    class _AgentConfigRepo:
+        def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
+            saved_configs.append((agent_config_id, data))
+
+    with pytest.raises(RuntimeError, match="Created agent user .* was not readable"):
+        agent_user_service.create_agent_user(
+            "Toad",
+            "probe",
+            owner_user_id="user-1",
+            user_repo=_UserRepo(),
+            agent_config_repo=_AgentConfigRepo(),
+        )
+
+    assert len(created_rows) == 1
+    assert len(saved_configs) == 1
+
+
 @pytest.mark.asyncio
 async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, object] = {}
