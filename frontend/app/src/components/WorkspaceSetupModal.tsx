@@ -13,6 +13,7 @@ import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import FilesystemBrowser from "./FilesystemBrowser";
 import { authFetch } from "@/store/auth-store";
+import { asRecord, recordString } from "@/lib/records";
 
 interface WorkspaceSetupModalProps {
   open: boolean;
@@ -58,12 +59,16 @@ export default function WorkspaceSetupModal({
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "保存失败");
+        const data = asRecord(await response.json());
+        throw new Error(data ? recordString(data, "detail") || "保存失败" : "保存失败");
       }
 
-      const data = await response.json();
-      onWorkspaceSet(data.workspace);
+      const data = asRecord(await response.json());
+      const savedWorkspace = data ? recordString(data, "workspace") : undefined;
+      if (!savedWorkspace) {
+        throw new Error("保存失败");
+      }
+      onWorkspaceSet(savedWorkspace);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
