@@ -49,7 +49,7 @@ export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
       }
       toast.success(`${agent.name} v${newVersion} 已发布`);
       onOpenChange(false);
-    } catch (e) {
+    } catch {
       toast.error("发布失败，请重试");
     } finally {
       setPublishing(false);

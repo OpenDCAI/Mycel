@@ -48,6 +48,11 @@ export interface UpdateAvailable {
   release_notes: string;
 }
 
+export interface MarketplaceVersionSnapshot {
+  content?: string;
+  meta?: Record<string, unknown>;
+}
+
 interface MarketplaceFilters {
   type: string | null;
   q: string;
@@ -62,7 +67,7 @@ interface MarketplaceState {
   loading: boolean;
   error: string | null;
   filters: MarketplaceFilters;
-  setFilter: (key: keyof MarketplaceFilters, value: any) => void;
+  setFilter: <K extends keyof MarketplaceFilters>(key: K, value: MarketplaceFilters[K]) => void;
   fetchItems: () => Promise<void>;
 
   // Detail
@@ -80,7 +85,7 @@ interface MarketplaceState {
   checkUpdates: (installed: { marketplace_item_id: string; installed_version: string }[]) => Promise<void>;
 
   // Preview
-  versionSnapshot: { content?: string; meta?: any } | null;
+  versionSnapshot: MarketplaceVersionSnapshot | null;
   snapshotLoading: boolean;
   fetchVersionSnapshot: (itemId: string, version: string) => Promise<void>;
   clearSnapshot: () => void;
@@ -89,7 +94,7 @@ interface MarketplaceState {
   downloading: boolean;
   download: (itemId: string) => Promise<{ resource_id: string; type: string; version: string }>;
   upgrade: (userId: string, itemId: string) => Promise<void>;
-  publishToMarketplace: (userId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<any>;
+  publishToMarketplace: (userId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
 }
 
 function isActiveMarketplaceRoute(): boolean {
@@ -102,7 +107,7 @@ function isActiveMarketplaceDetailRoute(itemId: string): boolean {
   return path === `/marketplace/${encodeURIComponent(itemId)}`;
 }
 
-async function hubApi<T = any>(path: string): Promise<T> {
+async function hubApi<T = unknown>(path: string): Promise<T> {
   try {
     const res = await fetch(`${HUB_URL}/api/v1${path}`);
     if (!res.ok) {
@@ -120,7 +125,7 @@ async function hubApi<T = any>(path: string): Promise<T> {
   }
 }
 
-async function backendApi<T = any>(path: string, opts?: RequestInit): Promise<T> {
+async function backendApi<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
   const token = useAuthStore.getState().token;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -192,7 +197,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   fetchVersionSnapshot: async (itemId, version) => {
     set({ snapshotLoading: true, versionSnapshot: null });
     try {
-      const data = await hubApi<{ snapshot: any }>(`/items/${itemId}/versions/${version}`);
+      const data = await hubApi<{ snapshot: MarketplaceVersionSnapshot | null }>(`/items/${itemId}/versions/${version}`);
       set({ versionSnapshot: data.snapshot ?? null });
     } catch (e) {
       // @@@marketplace-snapshot-route-teardown - snapshot fetches can resolve
@@ -260,11 +265,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   },
 
   upgrade: async (userId, itemId) => {
-    const data = await backendApi("/upgrade", {
+    await backendApi("/upgrade", {
       method: "POST",
       body: JSON.stringify({ user_id: userId, item_id: itemId }),
     });
-    return data;
   },
 
   publishToMarketplace: async (userId, type, bumpType, releaseNotes, tags, visibility) => {
