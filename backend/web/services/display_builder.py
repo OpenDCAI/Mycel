@@ -112,6 +112,16 @@ def _create_turn(msg_id: str, segments: list[dict], now: int) -> dict:
     }
 
 
+def _create_streaming_turn(turn_id: str, now: int) -> dict:
+    return {
+        "id": turn_id,
+        "role": "assistant",
+        "segments": [],
+        "timestamp": now,
+        "streaming": True,
+    }
+
+
 def _append_to_turn(turn: dict, msg_id: str, segments: list[dict]) -> None:
     turn["segments"].extend(segments)
     turn.setdefault("messageIds", []).append(msg_id)
@@ -264,13 +274,7 @@ class DisplayBuilder:
             self._threads[thread_id] = td
         turn_id = turn_id or _make_id("turn")
         ts = timestamp or int(time.time() * 1000)
-        turn: dict = {
-            "id": turn_id,
-            "role": "assistant",
-            "segments": [],
-            "timestamp": ts,
-            "streaming": True,
-        }
+        turn = _create_streaming_turn(turn_id, ts)
         td.entries.append(turn)
         td.current_turn_id = turn_id
         return {"type": "append_entry", "entry": turn}
@@ -493,13 +497,7 @@ def _handle_run_start(td: ThreadDisplay, data: dict) -> dict | None:
         # No previous turn — fall through to create new
 
     turn_id = _make_id("turn")
-    turn: dict = {
-        "id": turn_id,
-        "role": "assistant",
-        "segments": [],
-        "timestamp": now,
-        "streaming": True,
-    }
+    turn = _create_streaming_turn(turn_id, now)
     td.entries.append(turn)
     td.current_turn_id = turn_id
     td.current_run_id = run_id

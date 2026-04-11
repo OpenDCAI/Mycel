@@ -14,11 +14,6 @@ from config.loader import AgentLoader
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[3] / "config" / "defaults" / "agents").resolve()
 
 
-def _load_tools_catalog() -> dict[str, ToolDef]:
-    """Return the typed tool catalog (name → ToolDef)."""
-    return TOOLS_BY_NAME
-
-
 def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
     if not content.startswith("---"):
         return None
@@ -41,12 +36,11 @@ def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
 
 
 def _tools_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
-    catalog = _load_tools_catalog()
     runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
     enabled_tools = config.get("tools") or ["*"]
     is_all = enabled_tools == ["*"]
     tools_list = []
-    for tool_name, tool_info in catalog.items():
+    for tool_name, tool_info in TOOLS_BY_NAME.items():
         runtime_key = f"tools:{tool_name}"
         override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
         tools_list.append(
@@ -91,7 +85,6 @@ def _rules_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[
 
 
 def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
-    catalog = _load_tools_catalog()
     sub_agents = []
     for row in agent_config_repo.list_sub_agents(agent_config_id):
         raw_tools = row.get("tools_json") or row.get("tools") or ["*"]
@@ -103,7 +96,7 @@ def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[
                 "desc": info.desc,
                 "group": info.group,
             }
-            for name, info in catalog.items()
+            for name, info in TOOLS_BY_NAME.items()
         ]
         sub_agents.append(
             {
@@ -164,10 +157,9 @@ def _member_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
 
 def _leon_builtin() -> dict[str, Any]:
     """Build Leon builtin member dict with full tool catalog."""
-    catalog = _load_tools_catalog()
-    tools = [{"name": k, "enabled": v.default, "desc": v.desc, "group": v.group} for k, v in catalog.items()]
+    tools = [{"name": k, "enabled": v.default, "desc": v.desc, "group": v.group} for k, v in TOOLS_BY_NAME.items()]
     # Load built-in sub-agents (read-only display)
-    builtin_agents = _load_builtin_agents(catalog)
+    builtin_agents = _load_builtin_agents(TOOLS_BY_NAME)
 
     return {
         "id": "__leon__",
@@ -299,7 +291,6 @@ def update_member(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
-    _require_repo_backed_member_ops(user_repo, agent_config_repo)
     user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
@@ -331,10 +322,6 @@ def update_member_config(
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
-    _require_repo_backed_member_ops(user_repo, agent_config_repo)
-    user, _config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
-    if user is None or _config is None:
-        return None
     return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
 
 
@@ -465,15 +452,14 @@ def _sync_repo_children(agent_config_id: str, config_patch: dict[str, Any], agen
             )
 
 
-def _sync_member_patch_to_repo(member_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
+def _sync_member_patch_to_repo(
+    member_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any
+) -> dict[str, Any] | None:
     # @@@repo-only-agent-shell - fresh register now creates DB-only agents. Owner-scoped
     # panel edits must keep working even when no legacy member dir exists.
-    user = user_repo.get_by_id(member_id)
-    if user is None or user.agent_config_id is None:
-        raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
-    current_config = agent_config_repo.get_config(user.agent_config_id)
-    if current_config is None:
-        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+    user, current_config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if user is None or current_config is None:
+        return None
 
     runtime, tools = _runtime_and_tools_from_patch(current_config, config_patch)
     updated_config = {
@@ -499,7 +485,6 @@ def _sync_member_patch_to_repo(member_id: str, config_patch: dict[str, Any], use
 
 
 def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
-    _require_repo_backed_member_ops(user_repo, agent_config_repo)
     user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
@@ -532,8 +517,7 @@ def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = No
 def _resolve_repo_backed_agent(
     member_id: str, user_repo: Any = None, agent_config_repo: Any = None
 ) -> tuple[Any | None, dict[str, Any] | None]:
-    if user_repo is None or agent_config_repo is None:
-        return None, None
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
     user = user_repo.get_by_id(member_id)
     if user is None or user.agent_config_id is None:
         return None, None
