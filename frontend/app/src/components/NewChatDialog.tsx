@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, MessageSquare } from "lucide-react";
 import ActorAvatar from "./ActorAvatar";
@@ -14,12 +14,7 @@ interface NewChatDialogProps {
 export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const navigate = useNavigate();
   const agentList = useAppStore(s => s.agentList);
-  const loadAll = useAppStore(s => s.loadAll);
   const [filter, setFilter] = useState("");
-
-  useEffect(() => {
-    if (open) loadAll();
-  }, [open, loadAll]);
 
   const filtered = useMemo(() => {
     if (!filter) return agentList;
