@@ -1,8 +1,5 @@
 import { create } from "zustand";
-import type {
-  Agent, Task, ResourceItem, UserProfile,
-  AgentConfig, TaskStatus, CronJob,
-} from "./types";
+import type { Agent, AgentConfig, ResourceItem, UserProfile } from "./types";
 import { useAuthStore } from "./auth-store";
 
 const API = "/api/panel";
@@ -11,8 +8,6 @@ let loadAllInflight: Promise<void> | null = null;
 interface AppState {
   // ── Data ──
   agentList: Agent[];
-  taskList: Task[];
-  cronJobs: CronJob[];
   librarySkills: ResourceItem[];
   libraryMcps: ResourceItem[];
   libraryAgents: ResourceItem[];
@@ -34,21 +29,6 @@ interface AppState {
   publishAgent: (id: string, bumpType: string) => Promise<Agent>;
   deleteAgent: (id: string) => Promise<void>;
   getAgentById: (id: string) => Agent | undefined;
-
-  // ── Tasks ──
-  fetchTasks: () => Promise<void>;
-  addTask: (fields?: Partial<Task>) => Promise<Task>;
-  updateTask: (id: string, fields: Partial<Task>) => Promise<void>;
-  deleteTask: (id: string) => Promise<void>;
-  bulkUpdateTaskStatus: (ids: string[], status: TaskStatus) => Promise<void>;
-  bulkDeleteTasks: (ids: string[]) => Promise<void>;
-
-  // ── Cron Jobs ──
-  fetchCronJobs: () => Promise<void>;
-  addCronJob: (fields?: Partial<CronJob>) => Promise<CronJob>;
-  updateCronJob: (id: string, fields: Partial<CronJob>) => Promise<void>;
-  deleteCronJob: (id: string) => Promise<void>;
-  triggerCronJob: (id: string) => Promise<void>;
 
   // ── Library ──
   fetchLibrary: (type: string) => Promise<void>;
@@ -93,8 +73,6 @@ function getLibraryStateKey(type: string): LibraryStateKey {
 function emptySessionState() {
   return {
     agentList: [],
-    taskList: [],
-    cronJobs: [],
     librarySkills: [],
     libraryMcps: [],
     libraryAgents: [],
@@ -125,12 +103,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       set({ error: null });
       try {
         // @@@load-all-singleflight - RootLayout can mount twice in dev StrictMode and /threads
-        // index redirect now avoids AppLayout, so keep the global panel bootstrap idempotent
-        // instead of firing duplicate agents/tasks/library/profile bursts.
+        // index redirect now avoids AppLayout, so keep the global panel bootstrap idempotent.
         await Promise.all([
           get().fetchAgents(),
-          get().fetchTasks(),
-          get().fetchCronJobs(),
           get().fetchLibrary("skill"),
           get().fetchLibrary("mcp"),
           get().fetchLibrary("agent"),
@@ -210,92 +185,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   getAgentById: (id) => get().agentList.find((x) => x.id === id),
-
-  // ── Tasks ──
-  fetchTasks: async () => {
-    const data = await api<{ items: Task[] }>("/tasks");
-    set({ taskList: data.items });
-  },
-
-  addTask: async (fields = {}) => {
-    const task = await api<Task>("/tasks", {
-      method: "POST",
-      body: JSON.stringify(fields),
-    });
-    set((s) => ({ taskList: [task, ...s.taskList] }));
-    return task;
-  },
-
-  updateTask: async (id, fields) => {
-    const updated = await api<Task>(`/tasks/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(fields),
-    });
-    set((s) => ({ taskList: s.taskList.map((x) => (x.id === id ? updated : x)) }));
-  },
-
-  deleteTask: async (id) => {
-    await api(`/tasks/${id}`, { method: "DELETE" });
-    set((s) => ({ taskList: s.taskList.filter((x) => x.id !== id) }));
-  },
-
-  bulkUpdateTaskStatus: async (ids, status) => {
-    await api("/tasks/bulk-status", {
-      method: "PUT",
-      body: JSON.stringify({ ids, status }),
-    });
-    set((s) => ({
-      taskList: s.taskList.map((t) =>
-        ids.includes(t.id)
-          ? { ...t, status, progress: status === "completed" ? 100 : status === "pending" ? 0 : t.progress }
-          : t
-      ),
-    }));
-  },
-
-  bulkDeleteTasks: async (ids) => {
-    await api("/tasks/bulk-delete", {
-      method: "POST",
-      body: JSON.stringify({ ids }),
-    });
-    set((s) => ({
-      taskList: s.taskList.filter((t) => !ids.includes(t.id)),
-    }));
-  },
-
-  // ── Cron Jobs ──
-  fetchCronJobs: async () => {
-    const data = await api<{ items: CronJob[] }>("/cron-jobs");
-    set({ cronJobs: data.items });
-  },
-
-  addCronJob: async (fields = {}) => {
-    const data = await api<{ item: CronJob }>("/cron-jobs", {
-      method: "POST",
-      body: JSON.stringify(fields),
-    });
-    const item = data.item;
-    set((s) => ({ cronJobs: [item, ...s.cronJobs] }));
-    return item;
-  },
-
-  updateCronJob: async (id, fields) => {
-    const data = await api<{ item: CronJob }>(`/cron-jobs/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(fields),
-    });
-    const updated = data.item;
-    set((s) => ({ cronJobs: s.cronJobs.map((x) => (x.id === id ? updated : x)) }));
-  },
-
-  deleteCronJob: async (id) => {
-    await api(`/cron-jobs/${id}`, { method: "DELETE" });
-    set((s) => ({ cronJobs: s.cronJobs.filter((x) => x.id !== id) }));
-  },
-
-  triggerCronJob: async (id) => {
-    await api(`/cron-jobs/${id}/run`, { method: "POST" });
-  },
 
   // ── Library ──
   fetchLibrary: async (type) => {

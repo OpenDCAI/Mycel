@@ -12,12 +12,11 @@ from .contracts import (
     ChatSessionRepo,
     CheckpointRepo,
     ContactRepo,
-    CronJobRepo,
     EvalRepo,
+    EvaluationBatchRepo,
     FileOperationRepo,
     InviteCodeRepo,
     LeaseRepo,
-    PanelTaskRepo,
     ProviderEventRepo,
     QueueRepo,
     RecipeRepo,
@@ -40,14 +39,13 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "file_operation_repo": ("storage.providers.supabase.file_operation_repo", "SupabaseFileOperationRepo"),
     "summary_repo": ("storage.providers.supabase.summary_repo", "SupabaseSummaryRepo"),
     "eval_repo": ("storage.providers.supabase.eval_repo", "SupabaseEvalRepo"),
+    "evaluation_batch_repo": ("storage.providers.supabase.eval_batch_repo", "SupabaseEvaluationBatchRepo"),
     "queue_repo": ("storage.providers.supabase.queue_repo", "SupabaseQueueRepo"),
     "sandbox_volume_repo": ("storage.providers.supabase.sandbox_volume_repo", "SupabaseSandboxVolumeRepo"),
     "provider_event_repo": ("storage.providers.supabase.provider_event_repo", "SupabaseProviderEventRepo"),
     "lease_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
     "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
     "chat_session_repo": ("storage.providers.supabase.chat_session_repo", "SupabaseChatSessionRepo"),
-    "panel_task_repo": ("storage.providers.supabase.panel_task_repo", "SupabasePanelTaskRepo"),
-    "cron_job_repo": ("storage.providers.supabase.cron_job_repo", "SupabaseCronJobRepo"),
     "agent_registry_repo": ("storage.providers.supabase.agent_registry_repo", "SupabaseAgentRegistryRepo"),
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
     "sync_file_repo": ("storage.providers.supabase.sync_file_repo", "SupabaseSyncFileRepo"),
@@ -96,6 +94,9 @@ class StorageContainer:
     def eval_repo(self) -> EvalRepo:
         return self._build("eval_repo")
 
+    def evaluation_batch_repo(self) -> EvaluationBatchRepo:
+        return self._build("evaluation_batch_repo")
+
     def sandbox_volume_repo(self) -> SandboxVolumeRepo:
         return self._build("sandbox_volume_repo")
 
@@ -110,14 +111,6 @@ class StorageContainer:
 
     def chat_session_repo(self) -> ChatSessionRepo:
         return self._build("chat_session_repo")
-
-    def panel_task_repo(self) -> PanelTaskRepo:
-        # @@@panel-task-public-schema - panel task board is still a public-schema
-        # island, so the live repo must not silently inherit runtime staging schema.
-        return self._build("panel_task_repo", client=self._public_supabase_client)
-
-    def cron_job_repo(self) -> CronJobRepo:
-        return self._build("cron_job_repo")
 
     def agent_registry_repo(self) -> AgentRegistryRepo:
         # @@@agent-registry-public-schema - agent_registry is still a public-schema
@@ -166,26 +159,14 @@ class StorageContainer:
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
-        checkpoint = self.checkpoint_repo()
-        try:
-            checkpoint.delete_thread_data(thread_id)
-        finally:
-            checkpoint.close()
-
-        run_event = self.run_event_repo()
-        try:
-            run_event.delete_thread_events(thread_id)
-        finally:
-            run_event.close()
-
-        file_op = self.file_operation_repo()
-        try:
-            file_op.delete_thread_operations(thread_id)
-        finally:
-            file_op.close()
-
-        summary = self.summary_repo()
-        try:
-            summary.delete_thread_summaries(thread_id)
-        finally:
-            summary.close()
+        for repo_factory, purge in (
+            (self.checkpoint_repo, lambda repo: repo.delete_thread_data(thread_id)),
+            (self.run_event_repo, lambda repo: repo.delete_thread_events(thread_id)),
+            (self.file_operation_repo, lambda repo: repo.delete_thread_operations(thread_id)),
+            (self.summary_repo, lambda repo: repo.delete_thread_summaries(thread_id)),
+        ):
+            repo = repo_factory()
+            try:
+                purge(repo)
+            finally:
+                repo.close()

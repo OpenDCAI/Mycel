@@ -1,6 +1,7 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
+import { authFetch } from "@/store/auth-store";
 
 interface ProviderConfig {
   api_key: string | null;
@@ -42,7 +43,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
     onUpdate(providerId, config);
 
     try {
-      await fetch("/api/settings/providers", {
+      await authFetch("/api/settings/providers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

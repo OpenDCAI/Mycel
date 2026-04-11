@@ -110,7 +110,7 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
 
 
 @router.get("")
-async def list_chats(
+def list_chats(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
@@ -118,7 +118,7 @@ async def list_chats(
 
 
 @router.post("")
-async def create_chat(
+def create_chat(
     body: CreateChatBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
@@ -145,7 +145,7 @@ async def create_chat(
 
 
 @router.get("/{chat_id}")
-async def get_chat(
+def get_chat(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
@@ -160,7 +160,7 @@ async def get_chat(
 
 
 @router.get("/{chat_id}/messages")
-async def list_messages(
+def list_messages(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
@@ -173,7 +173,7 @@ async def list_messages(
 
 
 @router.post("/{chat_id}/messages")
-async def send_message(
+def send_message(
     chat_id: str,
     body: SendMessageBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -194,7 +194,7 @@ async def send_message(
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")
-async def retract_message(
+def retract_message(
     chat_id: str,
     message_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -207,7 +207,7 @@ async def retract_message(
 
 
 @router.delete("/{chat_id}/messages/{message_id}")
-async def delete_message_for_self(
+def delete_message_for_self(
     chat_id: str,
     message_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -218,7 +218,7 @@ async def delete_message_for_self(
 
 
 @router.post("/{chat_id}/read")
-async def mark_read(
+def mark_read(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
@@ -233,7 +233,7 @@ async def mark_read(
 
 
 @router.delete("/{chat_id}")
-async def delete_chat(
+def delete_chat(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
@@ -289,7 +289,7 @@ async def stream_chat_events(
 
 
 @router.post("/{chat_id}/mute")
-async def mute_chat(
+def mute_chat(
     chat_id: str,
     body: MuteChatBody,
     user_id: Annotated[str, Depends(get_current_user_id)],

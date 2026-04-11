@@ -6,12 +6,14 @@ ConversationList can render a unified sidebar.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
 from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 
@@ -33,7 +35,7 @@ def _conversation_updated_at_key(item: dict[str, Any]) -> float:
         # visit chats can still surface numeric timestamps from older chat storage.
         # Normalize both before sorting so /api/conversations stays honest.
         try:
-            return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+            return datetime.fromisoformat(raw).timestamp()
         except ValueError:
             return float("-inf")
     return float("-inf")
@@ -44,11 +46,15 @@ async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(_list_conversations_for_user, app, user_id)
+
+
+def _list_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
     """Return hire threads + visit chats merged by updated_at desc."""
     items: list[dict[str, Any]] = []
 
     # ── Hire threads ──
-    raw_threads = app.state.thread_repo.list_by_owner_user_id(user_id)
+    raw_threads = canonical_owner_threads(app.state.thread_repo.list_by_owner_user_id(user_id))
     pool = app.state.agent_pool
     for t in raw_threads:
         tid = t["id"]
@@ -76,7 +82,7 @@ async def list_conversations(
     # ── Visit chats ──
     messaging = getattr(app.state, "messaging_service", None)
     if messaging:
-        chats = messaging.list_chats_for_user(user_id)
+        chats = messaging.list_conversation_summaries_for_user(user_id)
         for chat in chats:
             items.append(
                 {

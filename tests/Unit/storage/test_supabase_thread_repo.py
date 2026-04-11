@@ -43,7 +43,11 @@ class _FakeTable:
         return self
 
     def execute(self):
-        return type("Resp", (), {"data": self.rows})()
+        rows = self.rows
+        if self.in_calls:
+            key, values = self.in_calls[-1]
+            rows = [row for row in rows if row.get(key) in values]
+        return type("Resp", (), {"data": rows})()
 
 
 class _FakeClient:
@@ -160,3 +164,41 @@ def test_supabase_thread_repo_list_by_ids_reads_threads_in_batch() -> None:
 
     assert [row["id"] for row in rows] == ["thread-1"]
     assert ("id", ["thread-1", "thread-2"]) in client.table_obj.in_calls
+
+
+def test_supabase_thread_repo_list_by_ids_chunks_large_in_filters() -> None:
+    client = _FakeClient()
+    client.table_obj.rows = [
+        {
+            "id": "thread-0",
+            "agent_user_id": "agent-1",
+            "sandbox_type": "local",
+            "model": None,
+            "cwd": None,
+            "status": "active",
+            "is_main": 1,
+            "branch_index": 0,
+            "created_at": 1.0,
+            "updated_at": None,
+            "last_active_at": None,
+        },
+        {
+            "id": "thread-80",
+            "agent_user_id": "agent-1",
+            "sandbox_type": "local",
+            "model": None,
+            "cwd": None,
+            "status": "active",
+            "is_main": 0,
+            "branch_index": 1,
+            "created_at": 2.0,
+            "updated_at": None,
+            "last_active_at": None,
+        },
+    ]
+    repo = SupabaseThreadRepo(client)
+
+    rows = repo.list_by_ids([f"thread-{i}" for i in range(81)])
+
+    assert [row["id"] for row in rows] == ["thread-0", "thread-80"]
+    assert [len(values) for _key, values in client.table_obj.in_calls] == [80, 1]

@@ -10,7 +10,7 @@ from psycopg import AsyncConnection
 
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
-from backend.web.services.resource_cache import monitor_resource_overview_refresh_loop
+from backend.web.services.resource_cache import resource_overview_refresh_loop
 from core.runtime.middleware.queue import MessageQueueManager
 
 
@@ -64,8 +64,6 @@ async def lifespan(app: FastAPI):
     app.state.invite_code_repo = storage_container.invite_code_repo()
     app.state.user_settings_repo = storage_container.user_settings_repo()
     app.state.agent_config_repo = storage_container.agent_config_repo()
-    app.state.panel_task_repo = storage_container.panel_task_repo()
-    app.state.cron_job_repo = storage_container.cron_job_repo()
     app.state._supabase_client = _supabase_client
     app.state._public_supabase_client = _public_supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
@@ -147,7 +145,6 @@ async def lifespan(app: FastAPI):
     app.state.display_builder = DisplayBuilder()
     app.state.thread_last_active = cast(dict[str, float], {})  # thread_id → epoch timestamp
     app.state.idle_reaper_task = cast(asyncio.Task[Any] | None, None)
-    app.state.cron_service = None
     app.state._event_loop = asyncio.get_running_loop()
     app.state.monitor_resources_task = cast(asyncio.Task[Any] | None, None)
 
@@ -156,17 +153,7 @@ async def lifespan(app: FastAPI):
         app.state.idle_reaper_task = asyncio.create_task(idle_reaper_loop(app))
 
         # Start resource overview refresh loop
-        app.state.monitor_resources_task = asyncio.create_task(monitor_resource_overview_refresh_loop())
-
-        # Start cron scheduler
-        from backend.web.services.cron_service import CronService
-
-        cron_svc = CronService(
-            cron_job_repo=app.state.cron_job_repo,
-            task_repo=app.state.panel_task_repo,
-        )
-        await cron_svc.start()
-        app.state.cron_service = cron_svc
+        app.state.monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())
 
         yield
     finally:
@@ -179,10 +166,6 @@ async def lifespan(app: FastAPI):
                     await task
                 except asyncio.CancelledError:
                     pass
-
-        # Cleanup: stop cron scheduler
-        if app.state.cron_service:
-            await app.state.cron_service.stop()
 
         if hasattr(app.state, "recipe_repo"):
             app.state.recipe_repo.close()

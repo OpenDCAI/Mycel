@@ -36,7 +36,6 @@ class RuntimeConfig(BaseModel):
     allowed_extensions: Annotated[list[str] | None, Field(description="Allowed extensions (None = all)")] = None
     block_dangerous_commands: Annotated[bool, Field(description="Block dangerous commands")] = True
     block_network_commands: Annotated[bool, Field(description="Block network commands")] = False
-    queue_mode: Annotated[str, Field(deprecated=True, description="Deprecated. Queue mode is now determined by message timing.")] = "steer"
 
 
 # ============================================================================
@@ -81,27 +80,11 @@ class MemoryConfig(BaseModel):
 # ============================================================================
 
 
-class ReadFileConfig(BaseModel):
-    """Configuration for read_file tool."""
+class FileSystemConfig(BaseModel):
+    """Configuration for filesystem tools."""
 
     enabled: bool = True
     max_file_size: Annotated[int, Field(gt=0, description="Max file size in bytes (10MB)")] = 10485760
-
-
-class FileSystemToolsConfig(BaseModel):
-    """Configuration for filesystem tools."""
-
-    read_file: ReadFileConfig = Field(default_factory=lambda: ReadFileConfig())
-    write_file: bool = True
-    edit_file: bool = True
-    list_dir: bool = True
-
-
-class FileSystemConfig(BaseModel):
-    """Configuration for filesystem middleware."""
-
-    enabled: bool = True
-    tools: FileSystemToolsConfig = Field(default_factory=lambda: FileSystemToolsConfig())
 
 
 class GrepConfig(BaseModel):
@@ -119,14 +102,14 @@ class SearchToolsConfig(BaseModel):
 
 
 class SearchConfig(BaseModel):
-    """Configuration for search middleware."""
+    """Configuration for search tools."""
 
     enabled: bool = True
     tools: SearchToolsConfig = Field(default_factory=lambda: SearchToolsConfig())
 
 
 class WebSearchConfig(BaseModel):
-    """Configuration for web_search tool."""
+    """Configuration for the WebSearch tool."""
 
     enabled: bool = True
     max_results: Annotated[int, Field(gt=0, description="Max search results")] = 5
@@ -135,8 +118,8 @@ class WebSearchConfig(BaseModel):
     firecrawl_api_key: Annotated[str | None, Field(description="Firecrawl API key")] = None
 
 
-class FetchConfig(BaseModel):
-    """Configuration for Fetch tool (AI extraction mode)."""
+class WebFetchConfig(BaseModel):
+    """Configuration for the WebFetch tool."""
 
     enabled: bool = True
     jina_api_key: Annotated[str | None, Field(description="Jina AI API key")] = None
@@ -146,36 +129,21 @@ class WebToolsConfig(BaseModel):
     """Configuration for web tools."""
 
     web_search: WebSearchConfig = Field(default_factory=lambda: WebSearchConfig())
-    fetch: FetchConfig = Field(default_factory=lambda: FetchConfig())
+    web_fetch: WebFetchConfig = Field(default_factory=lambda: WebFetchConfig())
 
 
 class WebConfig(BaseModel):
-    """Configuration for web middleware."""
+    """Configuration for web tools."""
 
     enabled: bool = True
     timeout: Annotated[int, Field(gt=0, description="Request timeout in seconds")] = 15
     tools: WebToolsConfig = Field(default_factory=lambda: WebToolsConfig())
 
 
-class RunCommandConfig(BaseModel):
-    """Configuration for run_command tool."""
-
-    enabled: bool = True
-    default_timeout: Annotated[int, Field(gt=0, description="Default timeout in seconds")] = 120
-
-
-class CommandToolsConfig(BaseModel):
+class CommandConfig(BaseModel):
     """Configuration for command tools."""
 
-    run_command: RunCommandConfig = Field(default_factory=lambda: RunCommandConfig())
-    command_status: bool = True
-
-
-class CommandConfig(BaseModel):
-    """Configuration for command middleware."""
-
     enabled: bool = True
-    tools: CommandToolsConfig = Field(default_factory=lambda: CommandToolsConfig())
 
 
 class SpillBufferConfig(BaseModel):
@@ -187,9 +155,8 @@ class SpillBufferConfig(BaseModel):
         default_factory=lambda: {
             "Grep": 20_000,
             "Glob": 20_000,
-            "run_command": 50_000,
-            "command_status": 50_000,
-            "Fetch": 50_000,
+            "Bash": 50_000,
+            "WebFetch": 50_000,
         },
         description="Per-tool spill thresholds in bytes",
     )
@@ -203,10 +170,6 @@ class ToolsConfig(BaseModel):
     web: WebConfig = Field(default_factory=lambda: WebConfig())
     command: CommandConfig = Field(default_factory=lambda: CommandConfig())
     spill_buffer: SpillBufferConfig = Field(default_factory=lambda: SpillBufferConfig())
-    tool_modes: dict[str, str] = Field(
-        default_factory=dict,
-        description="Per-tool mode overrides: tool_name -> 'inline' | 'deferred'",
-    )
 
 
 # ============================================================================

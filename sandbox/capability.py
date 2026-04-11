@@ -94,7 +94,7 @@ class _CommandWrapper(BaseExecutor):
     async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env: dict[str, str] | None = None):
         """Execute command via runtime."""
         self._session.touch()
-        # @@@command-context - CommandMiddleware passes Cwd/env; preserve that context for remote runtimes.
+        # @@@command-context - CommandService passes env; preserve that context for remote runtimes.
         wrapped, _ = self._wrap_command(command, cwd, env)
         print(
             "[_CommandWrapper.execute] "
@@ -187,10 +187,6 @@ class _CommandWrapper(BaseExecutor):
         """Wait for async command completion."""
         session = self._resolve_session_for_command(command_id)
         return await session.runtime.wait_for_command(command_id, timeout=timeout)
-
-    def store_completed_result(self, command_id: str, command_line: str, cwd: str, result):
-        """Store completed result for command_status lookup."""
-        self._session.runtime.store_completed_result(command_id, command_line, cwd, result)
 
 
 class _FileSystemWrapper(FileSystemBackend):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.tools.filesystem.backend import (
+from sandbox.interfaces.filesystem import (
     DirEntry,
     DirListResult,
     FileReadResult,

@@ -6,6 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import SettingsPage from "./SettingsPage";
 
+const { authFetch } = vi.hoisted(() => ({
+  authFetch: vi.fn(),
+}));
+
+vi.mock("../store/auth-store", () => ({
+  authFetch,
+}));
+
 vi.mock("../hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
@@ -38,14 +46,38 @@ vi.mock("@/components/ui/tooltip", () => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  authFetch.mockReset();
   window.history.replaceState({}, "", "/");
 });
 
 describe("SettingsPage", () => {
+  it("loads settings bootstrap through authenticated fetch", async () => {
+    window.history.replaceState({}, "", "/settings");
+    authFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+
+    render(
+      <BrowserRouter>
+        <Routes>
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
+      </BrowserRouter>,
+    );
+
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith("/api/settings/available-models");
+      expect(authFetch).toHaveBeenCalledWith("/api/settings");
+      expect(authFetch).toHaveBeenCalledWith("/api/settings/sandboxes");
+      expect(authFetch).toHaveBeenCalledWith("/api/settings/observation");
+    });
+  });
+
   it("does not log a failed settings load once navigation already left /settings", async () => {
     window.history.replaceState({}, "", "/settings");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    authFetch.mockImplementation(async () => {
       window.history.pushState({}, "", "/chat");
       window.dispatchEvent(new PopStateEvent("popstate"));
       throw new TypeError("Failed to fetch");
@@ -61,7 +93,7 @@ describe("SettingsPage", () => {
     );
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalled();
+      expect(authFetch).toHaveBeenCalled();
     });
 
     await waitFor(() => {

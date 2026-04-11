@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.providers.agentbay import AgentBayProvider
@@ -17,12 +17,6 @@ from sandbox.providers.docker import DockerProvider
 from sandbox.providers.e2b import E2BProvider
 from sandbox.providers.local import LocalSessionProvider
 from storage.runtime import build_thread_repo, build_user_repo
-
-_CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
-
-
-def _resource_avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
-    return f"/api/users/{user_id}/avatar" if user_id and has_avatar else None
 
 
 @dataclass(frozen=True)
@@ -42,10 +36,14 @@ CATALOG: dict[str, CatalogEntry] = {
 
 
 def resolve_provider_name(config_name: str, *, sandboxes_dir: Path) -> str:
-    return _CONFIG_LOADER.get_provider_name(config_name)
+    payload = _load_sandbox_config(config_name, sandboxes_dir)
+    provider = str(payload.get("provider") or "").strip()
+    if not provider:
+        raise RuntimeError(f"Sandbox config missing provider: {config_name}")
+    return provider
 
 
-def resolve_provider_type(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str:
+def resolve_provider_type(provider_name: str) -> str:
     entry = CATALOG.get(provider_name)
     if not entry:
         raise RuntimeError(f"Unsupported provider type: {provider_name}")
@@ -55,7 +53,7 @@ def resolve_provider_type(provider_name: str, config_name: str, *, sandboxes_dir
 
 
 def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str | None:
-    payload = _CONFIG_LOADER.load(config_name)
+    payload = _load_sandbox_config(config_name, sandboxes_dir)
     override = str(payload.get("console_url") or "").strip()
     if override:
         return override
@@ -70,8 +68,18 @@ def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: 
         if target == "cloud":
             return "https://app.daytona.io"
         api_url = str(daytona.get("api_url") or "").strip().rstrip("/")
-        return api_url[:-4] if api_url.endswith("/api") else api_url
+        return api_url.removesuffix("/api")
     return None
+
+
+def _load_sandbox_config(config_name: str, sandboxes_dir: Path) -> dict[str, Any]:
+    if config_name == "local":
+        return {"provider": "local"}
+    config_path = sandboxes_dir / f"{config_name}.json"
+    payload = json.loads(config_path.read_text())
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Sandbox config is not a JSON object: {config_path}")
+    return payload
 
 
 def empty_capabilities() -> dict[str, bool]:
@@ -103,7 +111,7 @@ def _to_metric_freshness(collected_at: str | None) -> str:
     if not raw:
         return "stale"
     try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw)
     except Exception:
         return "stale"
     if parsed.tzinfo is None:
@@ -134,12 +142,6 @@ def metric(
     if error:
         payload["error"] = error
     return payload
-
-
-def _sum_or_none(values: list[float | int]) -> float | None:
-    if not values:
-        return None
-    return float(sum(values))
 
 
 def _as_float(value: Any) -> float | None:
@@ -192,15 +194,16 @@ def to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | None
     }
 
 
-def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[str, str]:
+def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
     unique = sorted({tid for tid in thread_ids if tid})
     if not unique:
         return {}
+
     repo = thread_repo
-    own_repo = False
+    own_thread_repo = False
     if repo is None:
         repo = build_thread_repo()
-        own_repo = True
+        own_thread_repo = True
     try:
         refs: dict[str, str] = {}
         for data in repo.list_by_ids(unique):
@@ -210,36 +213,30 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
             agent_ref = str(data.get("agent_user_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref
-        return refs
     finally:
-        if own_repo:
+        if own_thread_repo:
             repo.close()
 
-
-def member_meta_map(user_repo: Any = None) -> dict[str, dict[str, str | None]]:
-    repo = user_repo
-    own_repo = False
-    if repo is None:
-        repo = build_user_repo()
-        own_repo = True
-    try:
-        users = repo.list_all()
-        return {
-            user.id: {
-                "agent_name": user.display_name,
-                "avatar_url": _resource_avatar_url(user.id, bool(user.avatar)),
+    member_meta: dict[str, dict[str, str | None]] = {}
+    if refs:
+        repo = user_repo
+        own_user_repo = False
+        if repo is None:
+            repo = build_user_repo()
+            own_user_repo = True
+        try:
+            member_meta = {
+                user.id: {
+                    "agent_name": user.display_name,
+                    "avatar_url": f"/api/users/{user.id}/avatar" if user.id and user.avatar else None,
+                }
+                for user in repo.list_all()
+                if user.id and user.display_name
             }
-            for user in users
-            if user.id and user.display_name
-        }
-    finally:
-        if own_repo:
-            repo.close()
+        finally:
+            if own_user_repo:
+                repo.close()
 
-
-def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
-    refs = thread_agent_refs(thread_ids, thread_repo=thread_repo)
-    member_meta = member_meta_map(user_repo=user_repo)
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
@@ -270,27 +267,25 @@ def aggregate_provider_telemetry(
         latest_collected_at = max(str(snapshot.get("collected_at") or "") for snapshot in snapshots)
         freshness = _to_metric_freshness(latest_collected_at)
 
-    cpu_used = _sum_or_none([float(snapshot["cpu_used"]) for snapshot in snapshots if snapshot.get("cpu_used") is not None])
-    cpu_limit = _sum_or_none([float(snapshot["cpu_limit"]) for snapshot in snapshots if snapshot.get("cpu_limit") is not None])
-    mem_used = _sum_or_none(
-        [float(snapshot["memory_used_mb"]) / 1024.0 for snapshot in snapshots if snapshot.get("memory_used_mb") is not None]
-    )
-    mem_limit = _sum_or_none(
-        [
-            float(snapshot["memory_total_mb"]) / 1024.0
-            for snapshot in snapshots
-            if snapshot.get("memory_total_mb") is not None and float(snapshot["memory_total_mb"]) > 0
-        ]
-    )
-    disk_used = _sum_or_none([float(snapshot["disk_used_gb"]) for snapshot in snapshots if snapshot.get("disk_used_gb") is not None])
+    def _sum_snapshot_field(field: str, *, scale: float = 1.0, positive_only: bool = False) -> float | None:
+        values = []
+        for snapshot in snapshots:
+            raw = snapshot.get(field)
+            if raw is None:
+                continue
+            value = float(raw)
+            if positive_only and value <= 0:
+                continue
+            values.append(value / scale)
+        return float(sum(values)) if values else None
+
+    cpu_used = _sum_snapshot_field("cpu_used")
+    cpu_limit = _sum_snapshot_field("cpu_limit")
+    mem_used = _sum_snapshot_field("memory_used_mb", scale=1024.0)
+    mem_limit = _sum_snapshot_field("memory_total_mb", scale=1024.0, positive_only=True)
+    disk_used = _sum_snapshot_field("disk_used_gb")
     # @@@disk-total-zero-guard - disk_total=0 is physically impossible; treat as missing probe data.
-    disk_limit = _sum_or_none(
-        [
-            float(snapshot["disk_total_gb"])
-            for snapshot in snapshots
-            if snapshot.get("disk_total_gb") is not None and float(snapshot["disk_total_gb"]) > 0
-        ]
-    )
+    disk_limit = _sum_snapshot_field("disk_total_gb", positive_only=True)
 
     has_snapshots = len(snapshots) > 0
     latest_probe_error: str | None = None

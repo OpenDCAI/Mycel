@@ -72,17 +72,15 @@ async def prime_sandbox(agent: Any, thread_id: str) -> None:
         terminal = mgr.get_terminal(thread_id)
         if terminal:
             existing = mgr.session_manager.get(thread_id, terminal.terminal_id)
-            if existing and existing.status == "paused":
-                if not agent._sandbox.resume_thread(thread_id):
-                    raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
+            if existing and existing.status == "paused" and not agent._sandbox.resume_thread(thread_id):
+                raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
         agent._sandbox.ensure_session(thread_id)
         terminal = mgr.get_terminal(thread_id)
         lease = mgr.get_lease(terminal.lease_id) if terminal else None
         if lease:
             lease_status = lease.refresh_instance_status(mgr.provider)
-            if lease_status == "paused" and mgr.provider_capability.can_resume:
-                if not agent._sandbox.resume_thread(thread_id):
-                    raise RuntimeError(f"Failed to auto-resume paused sandbox for thread {thread_id}")
+            if lease_status == "paused" and mgr.provider_capability.can_resume and not agent._sandbox.resume_thread(thread_id):
+                raise RuntimeError(f"Failed to auto-resume paused sandbox for thread {thread_id}")
 
     await asyncio.to_thread(_prime_sandbox)
 
@@ -1021,14 +1019,12 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             # resumes from the last checkpoint without re-appending the user message.
             stream_gen = run_agent_stream(_initial_input if stream_attempt == 0 else None)
             task = asyncio.create_task(stream_gen.__anext__())
-            app.state.thread_tasks[thread_id] = task
             stream_err: Exception | None = None
 
             while True:  # 内层 chunk 循环
                 try:
                     chunk = await task
                     task = asyncio.create_task(stream_gen.__anext__())
-                    app.state.thread_tasks[thread_id] = task
                 except StopAsyncIteration:
                     break
                 except Exception as err:
@@ -1389,17 +1385,6 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         if agent and hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
             agent.runtime.transition(AgentState.IDLE)
 
-        # Check for pending board tasks on idle
-        taskboard_svc = getattr(agent, "_taskboard_service", None)
-        if taskboard_svc is not None and taskboard_svc.auto_claim:
-            try:
-                next_task = await taskboard_svc.on_idle()
-                if next_task:
-                    logger.info("Board task available: %s (id=%s)", next_task.get("title"), next_task["id"])
-                    # V1: log only. Auto-execution requires thread management design (V2).
-            except Exception:
-                logger.debug("Board task idle check failed", exc_info=True)
-
         # Clean up old run events and close repo BEFORE starting followup run,
         # so the new run gets a fresh connection and there is no closed-repo race.
         try:
@@ -1623,9 +1608,8 @@ async def _observe_sse_buffer(
             # @@@after-filter — skip events already seen on reconnect.
             # display_delta now carries the source raw-event seq too, so stale
             # derived deltas are filtered together with their persisted source.
-            if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data:
-                if parsed_data["_seq"] <= after:
-                    continue
+            if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data and parsed_data["_seq"] <= after:
+                continue
 
             seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None
             if seq_id:

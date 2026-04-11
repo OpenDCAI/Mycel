@@ -7,23 +7,23 @@ from pathlib import Path
 
 import pytest
 
-from config.loader import AgentLoader, ConfigLoader, load_bundle_from_repo, load_config
+from config.loader import AgentLoader, load_bundle_from_repo, load_config
 from config.schema import LeonSettings
 
 
-class TestConfigLoader:
-    """Tests for ConfigLoader."""
+class TestAgentLoader:
+    """Tests for AgentLoader."""
 
     def test_init(self, tmp_path):
-        loader = ConfigLoader(workspace_root=str(tmp_path))
+        loader = AgentLoader(workspace_root=str(tmp_path))
         assert loader.workspace_root == tmp_path
 
     def test_init_no_workspace(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
         assert loader.workspace_root is None
 
     def test_load_system_defaults_missing(self, tmp_path):
-        loader = ConfigLoader()
+        loader = AgentLoader()
         loader._system_defaults_dir = tmp_path / "nonexistent"
 
         result = loader._load_system_defaults()
@@ -32,22 +32,22 @@ class TestConfigLoader:
     def test_load_user_config_missing(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
 
-        loader = ConfigLoader()
+        loader = AgentLoader()
         result = loader._load_user_config()
         assert result == {}
 
     def test_load_project_config_no_workspace(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
         result = loader._load_project_config()
         assert result == {}
 
     def test_load_project_config_missing(self, tmp_path):
-        loader = ConfigLoader(workspace_root=str(tmp_path))
+        loader = AgentLoader(workspace_root=str(tmp_path))
         result = loader._load_project_config()
         assert result == {}
 
     def test_deep_merge_simple(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         dict1 = {"a": 1, "b": 2}
         dict2 = {"b": 3, "c": 4}
@@ -56,7 +56,7 @@ class TestConfigLoader:
         assert result == {"a": 1, "b": 3, "c": 4}
 
     def test_deep_merge_nested(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         dict1 = {"api": {"model": "gpt-3", "temperature": 0.5}}
         dict2 = {"api": {"model": "gpt-4"}}
@@ -66,7 +66,7 @@ class TestConfigLoader:
         assert result["api"]["temperature"] == 0.5
 
     def test_deep_merge_none_values(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         dict1 = {"api": {"model": "gpt-4", "temperature": 0.5}}
         dict2 = {"api": {"temperature": None}}
@@ -76,7 +76,7 @@ class TestConfigLoader:
         assert result["api"]["temperature"] == 0.5
 
     def test_deep_merge_multiple(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         dict1 = {"a": 1, "b": {"x": 1}}
         dict2 = {"b": {"y": 2}, "c": 3}
@@ -86,7 +86,7 @@ class TestConfigLoader:
         assert result == {"a": 1, "b": {"x": 1, "y": 2, "z": 3}, "c": 3, "d": 4}
 
     def test_lookup_merge(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         config1 = {"mcp": {"servers": {"server1": {}}}}
         config2 = {"mcp": {"servers": {"server2": {}}}}
@@ -98,7 +98,7 @@ class TestConfigLoader:
         assert "server2" not in result["servers"]
 
     def test_lookup_merge_skip_none(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         config1 = {"mcp": None}
         config2 = {"mcp": {"servers": {"server1": {}}}}
@@ -107,7 +107,7 @@ class TestConfigLoader:
         assert "server1" in result["servers"]
 
     def test_lookup_merge_missing_key(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         config1 = {"api": {}}
         config2 = {"tools": {}}
@@ -116,14 +116,14 @@ class TestConfigLoader:
         assert result == {}
 
     def test_expand_env_vars_string(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         os.environ["TEST_VAR"] = "test_value"
         result = loader._expand_env_vars("${TEST_VAR}")
         assert result == "test_value"
 
     def test_expand_env_vars_dict(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         os.environ["API_KEY"] = "secret"
         obj = {"api": {"key": "${API_KEY}"}}
@@ -131,7 +131,7 @@ class TestConfigLoader:
         assert result["api"]["key"] == "secret"
 
     def test_expand_env_vars_list(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         os.environ["PATH1"] = "/path1"
         os.environ["PATH2"] = "/path2"
@@ -141,14 +141,14 @@ class TestConfigLoader:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="HOME monkeypatch does not affect expanduser on Windows")
     def test_expand_env_vars_tilde(self, tmp_path, monkeypatch):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         monkeypatch.setenv("HOME", str(tmp_path))
         result = loader._expand_env_vars("~/test")
         assert result == str(tmp_path / "test")
 
     def test_expand_env_vars_nested(self):
-        loader = ConfigLoader()
+        loader = AgentLoader()
 
         os.environ["BASE"] = "/base"
         obj = {
@@ -175,7 +175,7 @@ class TestConfigLoader:
             encoding="utf-8",
         )
 
-        result = ConfigLoader._discover_mcp(tmp_path)
+        result = AgentLoader._discover_mcp(tmp_path)
 
         assert result["wsdemo"].transport == "websocket"
         assert result["wsdemo"].url == "ws://example.test/mcp"
@@ -261,7 +261,8 @@ def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
     assert bundle.meta["source"] == {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}
     assert bundle.rules == [{"name": "default", "content": "Be careful."}]
     assert bundle.skills == [{"name": "Search", "content": "search skill"}]
-    assert [agent.name for agent in bundle.agents] == ["Scout"]
+    agent_names = {agent.name for agent in bundle.agents}
+    assert {"bash", "explore", "general", "plan", "Scout"}.issubset(agent_names)
     assert seen == [
         ("config", "cfg-1"),
         ("rules", "cfg-1"),

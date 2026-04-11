@@ -1,8 +1,8 @@
 """Sandbox ABC, LocalSandbox, and RemoteSandbox — unified interface for execution environments.
 
 A Sandbox bundles sub-capabilities by interaction surface:
-- fs()    → FileSystemBackend  (consumed by FileSystemMiddleware)
-- shell() → BaseExecutor       (consumed by CommandMiddleware)
+- fs()    → FileSystemBackend  (consumed by FileSystemService)
+- shell() → BaseExecutor       (consumed by CommandService)
 """
 
 from __future__ import annotations
@@ -59,10 +59,10 @@ class _LazyFSBackend:
 
 
 class _LazyExecutor:
-    # @@@lazy-remote-flag - CommandMiddleware probes is_remote during init; keep this side-effect free.
+    # @@@lazy-remote-flag - CommandService probes is_remote during init; keep this side-effect free.
     is_remote = True
     runtime_owns_cwd = True
-    # @@@lazy-shell-name - CommandMiddleware logs shell_name during init.
+    # @@@lazy-shell-name - CommandService reads shell_name during init.
     shell_name = "remote"
 
     def __init__(self, sandbox: RemoteSandbox):

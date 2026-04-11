@@ -1,49 +1,49 @@
-"""Monitor service: sandbox lease/thread observation + health diagnostics."""
+"""Monitor service: lease observation + health diagnostics."""
 
 from __future__ import annotations
 
-import json
-import os
-import re
-from datetime import UTC, datetime
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
-from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
+from backend.web.services import monitor_operation_service
+from backend.web.services.resource_common import thread_owners as _thread_owners
+from eval.batch_executor import EvaluationBatchExecutor
+from eval.batch_service import EvaluationBatchService
+from eval.harness.client import EvalClient
+from eval.harness.runner import EvalRunner
+from eval.harness.scenario import load_scenarios_from_dir
+from eval.models import EvalScenario
 from eval.storage import TrajectoryStore
-from storage.runtime import (
-    build_chat_session_repo as make_chat_session_repo,
-)
-from storage.runtime import (
-    build_lease_repo as make_lease_repo,
-)
-from storage.runtime import (
-    build_runtime_health_monitor_repo as make_runtime_health_monitor_repo,
-)
-from storage.runtime import (
-    build_sandbox_monitor_repo as make_sandbox_monitor_repo,
-)
-from storage.runtime import (
-    current_storage_strategy,
-    resolve_runtime_health_monitor_db_path,
-)
-
+from storage.runtime import build_evaluation_batch_repo
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
 # ---------------------------------------------------------------------------
-def make_eval_store() -> TrajectoryStore:
-    return TrajectoryStore()
+EVAL_SCENARIO_DIR = Path(__file__).resolve().parents[3] / "eval" / "scenarios"
+
+
+def make_eval_batch_service() -> EvaluationBatchService:
+    return EvaluationBatchService(batch_repo=build_evaluation_batch_repo())
+
+
+def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
+    from backend.web.routers.threads import build_owner_thread_workbench
+
+    return build_owner_thread_workbench(app, user_id)
+
+
+def get_resource_overview_snapshot() -> dict[str, Any]:
+    from backend.web.services.resource_cache import get_resource_overview_snapshot as _get_resource_overview_snapshot
+
+    return _get_resource_overview_snapshot()
 
 
 def _format_time_ago(iso_timestamp: str | None) -> str:
-    if not iso_timestamp:
+    dt = _parse_local_timestamp(iso_timestamp)
+    if dt is None:
         return "never"
-    # @@@naive-local-time - SQLite timestamps in this module are local-time strings.
-    if "Z" in iso_timestamp:
-        iso_timestamp = iso_timestamp.replace("Z", "")
-    if "+" in iso_timestamp:
-        iso_timestamp = iso_timestamp.split("+")[0]
-    dt = datetime.fromisoformat(iso_timestamp)
     delta = datetime.now() - dt
     if delta.days > 0:
         return f"{delta.days}d ago"
@@ -73,26 +73,50 @@ def _make_badge(desired: str | None, observed: str | None) -> dict[str, Any]:
 def _thread_ref(thread_id: str | None) -> dict[str, Any]:
     return {
         "thread_id": thread_id,
-        "thread_url": f"/thread/{thread_id}" if thread_id else None,
         "is_orphan": not thread_id,
     }
 
 
-def _lease_ref(
-    lease_id: str | None,
-    provider: str | None,
-    instance_id: str | None = None,
-) -> dict[str, Any]:
+def _derive_thread_summary_from_sessions(sessions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not sessions:
+        return None
+    latest = sessions[0]
+    summary = {
+        "provider_name": latest.get("provider_name"),
+        "lease_id": latest.get("lease_id"),
+        "current_instance_id": latest.get("current_instance_id"),
+        "desired_state": latest.get("desired_state"),
+        "observed_state": latest.get("observed_state"),
+    }
+    return summary if any(value is not None for value in summary.values()) else None
+
+
+def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
+    if owner is None:
+        return None
     return {
-        "lease_id": lease_id,
-        "lease_url": f"/lease/{lease_id}" if lease_id else None,
-        "provider": provider,
-        "instance_id": instance_id,
+        "user_id": owner.get("user_id") or owner.get("agent_user_id"),
+        "display_name": owner.get("display_name") or owner.get("agent_name"),
+        "email": owner.get("email"),
+        "avatar_url": owner.get("avatar_url"),
     }
 
 
-def _lease_link(lease_id: str | None) -> dict[str, Any]:
-    return {"lease_id": lease_id, "lease_url": f"/lease/{lease_id}" if lease_id else None}
+def _normalize_monitor_thread(thread: dict[str, Any], requested_thread_id: str) -> dict[str, Any]:
+    return {
+        **thread,
+        "thread_id": thread.get("thread_id") or thread.get("id") or requested_thread_id,
+    }
+
+
+def _live_thread_ids(thread_ids: list[str]) -> set[str]:
+    unique = sorted({str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()})
+    if not unique:
+        return set()
+    # @@@monitor-live-thread-state - monitor triage must validate terminal pointers against live
+    # thread rows, otherwise stale abstract_terminals residue gets misclassified as healthy.
+    owners = _thread_owners(unique)
+    return {thread_id for thread_id in unique if (owners.get(thread_id) or {}).get("agent_user_id")}
 
 
 LEASE_SEMANTIC_ORDER = [
@@ -122,15 +146,6 @@ LEASE_SEMANTIC_META = {
 }
 
 
-EVAL_NOTE_KEYS = [
-    "runner",
-    "rc",
-    "sandbox",
-    "run_dir",
-    "stdout_log",
-    "stderr_log",
-]
-
 LEASE_TRIAGE_ORDER = [
     "active_drift",
     "detached_residue",
@@ -141,7 +156,7 @@ LEASE_TRIAGE_ORDER = [
 LEASE_TRIAGE_META = {
     "active_drift": {
         "title": "Active Drift",
-        "description": "Leases whose desired and observed state still disagree recently enough to warrant active operator attention.",
+        "description": "Leases whose desired and observed state still disagree recently enough to warrant attention.",
         "tone": "warning",
     },
     "detached_residue": {
@@ -165,8 +180,6 @@ LEASE_TRIAGE_META = {
 }
 
 DETACHED_RESIDUE_THRESHOLD_HOURS = 4.0
-RESOURCE_CLEANUP_ALLOWED_CATEGORIES = {"detached_residue", "orphan_cleanup"}
-ACTIVE_CHAT_SESSION_STATUSES = {"active", "idle", "paused"}
 
 
 def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -> dict[str, str]:
@@ -191,6 +204,7 @@ def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -
 def _parse_local_timestamp(iso_timestamp: str | None) -> datetime | None:
     if not iso_timestamp:
         return None
+    # @@@naive-local-time - SQLite timestamps in this module are local-time strings.
     cleaned = iso_timestamp
     if "Z" in cleaned:
         cleaned = cleaned.replace("Z", "")
@@ -243,378 +257,234 @@ def _classify_lease_triage(
     }
 
 
-def _cleanable_lease_ids(lease_ids: list[str]) -> list[str]:
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    for raw in lease_ids:
-        lease_id = str(raw or "").strip()
-        if not lease_id or lease_id in seen:
-            continue
-        seen.add(lease_id)
-        cleaned.append(lease_id)
-    if not cleaned:
-        raise ValueError("lease_ids must contain at least one non-empty lease id")
-    return cleaned
-
-
-def _triage_category_for_row(row: dict[str, Any]) -> str:
-    badge = _make_badge(row.get("desired_state"), row.get("observed_state"))
-    triage = _classify_lease_triage(
-        thread_id=row.get("thread_id"),
-        badge=badge,
-        observed_state=row.get("observed_state"),
-        desired_state=row.get("desired_state"),
-        updated_at=row.get("updated_at"),
-    )
-    return str(triage["category"])
-
-
-def _extract_eval_note_value(notes: str, key: str) -> str | None:
-    match = re.search(rf"(?:^|[ |]){re.escape(key)}=([^ ]+)", notes)
-    if not match:
-        return None
-    return match.group(1).strip()
-
-
-def build_evaluation_operator_surface(
+def _lease_groups(
     *,
-    status: str,
-    notes: str,
-    score: dict[str, Any],
-    threads_total: int,
-    threads_running: int,
-    threads_done: int,
-) -> dict[str, Any]:
-    extracted = {key: _extract_eval_note_value(notes, key) for key in EVAL_NOTE_KEYS}
-    rc_text = extracted.get("rc")
-    try:
-        rc = int(rc_text) if rc_text is not None else None
-    except ValueError:
-        rc = None
+    items: list[dict[str, Any]],
+    order: list[str],
+    meta_by_key: dict[str, dict[str, Any]],
+    field: str,
+) -> tuple[dict[str, int], list[dict[str, Any]]]:
+    summary = {key: 0 for key in order}
+    for item in items:
+        summary[item[field]["category"]] += 1
+    summary["total"] = len(items)
 
-    scored = bool(score.get("scored"))
-    score_gate = str(score.get("score_gate") or "provisional")
-    artifacts = [
-        {
-            "label": "Run directory",
-            "path": score.get("run_dir") or extracted.get("run_dir"),
-        },
-        {"label": "Run manifest", "path": score.get("manifest_path")},
-        {"label": "STDOUT log", "path": extracted.get("stdout_log")},
-        {"label": "STDERR log", "path": extracted.get("stderr_log")},
-        {"label": "Eval summary", "path": score.get("eval_summary_path")},
-        {"label": "Trace summaries", "path": score.get("trace_summaries_path")},
-    ]
-    artifacts = [
-        {
-            **item,
-            "status": "present" if item["path"] else "missing",
-        }
-        for item in artifacts
-    ]
-    artifact_summary = {
-        "present": sum(1 for item in artifacts if item["status"] == "present"),
-        "missing": sum(1 for item in artifacts if item["status"] == "missing"),
-        "total": len(artifacts),
-    }
-
-    facts = [
-        {"label": "Status", "value": status},
-        {"label": "Score gate", "value": score_gate},
-        {"label": "Threads materialized", "value": str(threads_total)},
-        {"label": "Threads running", "value": str(threads_running)},
-        {"label": "Threads done", "value": str(threads_done)},
-    ]
-    runner = extracted.get("runner")
-    if runner:
-        facts.append({"label": "Runner", "value": runner})
-    if rc is not None:
-        facts.append({"label": "Exit code", "value": str(rc)})
-
-    kind = "collecting_runtime_evidence"
-    tone = "default"
-    headline = "Evaluation is still collecting runtime evidence."
-    summary = "Use the artifacts below to inspect progress and confirm whether thread rows are materializing."
-    next_steps = [
-        "Open the run manifest to confirm the slice payload and output directory.",
-        "Inspect stdout/stderr before assuming the run is healthy.",
-    ]
-
-    if status == "provisional" and not scored:
-        kind = "provisional_waiting_for_summary"
-        tone = "warning"
-        headline = "Evaluation is provisional. Final score is blocked."
-        summary = "This run has not produced the final eval summary yet, so publishable scoring is intentionally withheld."
-        next_steps = [
-            "Check whether eval_summary_path is still missing because the run is ongoing or because the runner exited early.",
-            "Use stdout/stderr logs to confirm whether the solve phase actually started.",
-        ]
-
-    if rc is not None and rc != 0 and threads_total == 0:
-        kind = "bootstrap_failure"
-        tone = "danger"
-        headline = "Runner exited before evaluation threads materialized."
-        summary = "Treat this as a bootstrap failure, not as an empty successful run. No evaluation thread rows were created."
-        next_steps = [
-            "Inspect STDERR first to find the failing bootstrap step.",
-            "Use the run manifest and stdout log to confirm whether the slice was prepared before exit.",
-            "Re-run only after the failing dependency or model configuration is understood.",
-        ]
-    elif status == "running" and threads_total == 0 and threads_running > 0:
-        kind = "running_waiting_for_threads"
-        tone = "default"
-        headline = "Evaluation is actively running while thread rows catch up."
-        summary = (
-            "The runner is alive, but thread rows have not materialized yet. Treat this as an ingestion lag window, not as an empty run."
-        )
-        next_steps = [
-            "Refresh after the first thread row materializes.",
-            "Use stdout/stderr to confirm the solve loop is still advancing.",
-        ]
-    elif status == "running":
-        kind = "running_active"
-        tone = "default"
-        headline = "Evaluation is actively running."
-        summary = "Thread rows and traces may lag behind the runner. Use live progress and logs before declaring drift."
-        next_steps = [
-            "Refresh after new thread rows materialize.",
-            "Inspect traces only after the first active thread appears.",
-        ]
-    elif status == "completed_with_errors" and scored:
-        kind = "completed_with_errors"
-        tone = "warning"
-        headline = "Evaluation completed with recorded errors."
-        summary = (
-            "Some thread rows reached completion, but at least one instance recorded an error. Treat this as reviewable but not clean."
-        )
-        next_steps = [
-            "Inspect error-bearing threads before comparing this run against cleaner baselines.",
-            "Use eval summary and trace summaries to isolate failing instances.",
-        ]
-    elif status == "completed" and scored:
-        kind = "completed_publishable"
-        tone = "success"
-        headline = "Evaluation finished with a publishable score surface."
-        summary = "Score artifacts are present. Use the thread table to drill into trace-level evidence."
-        next_steps = [
-            "Open threads with low-quality traces and inspect tool-call detail.",
-            "Use the eval summary and trace summaries to compare runs.",
-        ]
-
-    return {
-        "status": status,
-        "kind": kind,
-        "tone": tone,
-        "headline": headline,
-        "summary": summary,
-        "facts": facts,
-        "artifacts": artifacts,
-        "artifact_summary": artifact_summary,
-        "next_steps": next_steps,
-        "raw_notes": notes,
-    }
+    groups = []
+    for key in order:
+        meta = meta_by_key[key]
+        group_items = [item for item in items if item[field]["category"] == key]
+        groups.append({"key": key, **meta, "count": len(group_items), "items": group_items})
+    return summary, groups
 
 
-def _evaluation_unavailable_surface() -> dict[str, Any]:
-    return {
-        "status": "unavailable",
-        "kind": "unavailable",
-        "tone": "warning",
-        "headline": "Evaluation operator truth is not wired in this runtime yet.",
-        "summary": "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
-        "facts": [{"label": "Status", "value": "unavailable"}],
-        "artifacts": [],
-        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "next_steps": ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
-        "raw_notes": None,
-    }
-
-
-def _evaluation_no_runs_surface() -> dict[str, Any]:
-    return {
-        "status": "idle",
-        "kind": "no_recorded_runs",
-        "tone": "default",
-        "headline": "No persisted evaluation runs are available yet.",
-        "summary": "Evaluation storage is wired, but there are no recorded runs to report yet.",
-        "facts": [{"label": "Status", "value": "idle"}],
-        "artifacts": [],
-        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "next_steps": ["Run an evaluation to populate the operator surface with persisted runtime truth."],
-        "raw_notes": None,
-    }
-
-
-def _normalize_persisted_eval_status(raw_status: str | None) -> tuple[str, str, str, str]:
-    status = str(raw_status or "").strip().lower()
-    # @@@eval-status-normalization - persisted eval_runs only record coarse terminal status,
-    # so monitor must normalize them without pretending the old manifest/thread truth still exists.
-    if status == "running":
-        return (
-            "running",
-            "running_recorded",
-            "default",
-            "Latest persisted evaluation run is still marked running.",
-        )
-    if status in {"error", "failed", "cancelled"}:
-        return (
-            "completed_with_errors",
-            "run_recorded_with_errors",
-            "warning",
-            "Latest persisted evaluation run finished with errors.",
-        )
-    if status == "completed":
-        return (
-            "completed",
-            "completed_recorded",
-            "success",
-            "Latest persisted evaluation run completed successfully.",
-        )
-    return (
-        "provisional",
-        "persisted_status_unknown",
-        "warning",
-        "Latest persisted evaluation run reported an unknown status.",
-    )
-
-
-def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    status, kind, tone, headline = _normalize_persisted_eval_status(run.get("status"))
+def _build_monitor_evaluation_run_fact_rows(metrics_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
     metrics_by_tier = {str(row.get("tier") or "").strip().lower(): row.get("metrics") or {} for row in metrics_rows}
     system_metrics = metrics_by_tier.get("system") or {}
     objective_metrics = metrics_by_tier.get("objective") or {}
-    facts = [
-        {"label": "Status", "value": status},
-        {"label": "Run ID", "value": str(run.get("id") or "-")},
-        {"label": "Thread ID", "value": str(run.get("thread_id") or "-")},
-        {"label": "Started At", "value": str(run.get("started_at") or "-")},
-        {"label": "Finished At", "value": str(run.get("finished_at") or "-")},
-        {"label": "Metric Tiers", "value": str(len(metrics_rows))},
-    ]
-    user_message = str(run.get("user_message") or "").strip()
-    if user_message:
-        facts.append({"label": "User Message", "value": user_message})
-    total_tokens = system_metrics.get("total_tokens")
-    if total_tokens is not None:
-        facts.append({"label": "Total tokens", "value": str(total_tokens)})
-    llm_call_count = system_metrics.get("llm_call_count")
-    if llm_call_count is not None:
-        facts.append({"label": "LLM calls", "value": str(llm_call_count)})
-    tool_call_count = system_metrics.get("tool_call_count")
-    if tool_call_count is not None:
-        facts.append({"label": "Tool calls", "value": str(tool_call_count)})
+    facts = [{"label": "Metric Tiers", "value": str(len(metrics_rows))}]
+    for label, key in [
+        ("Total tokens", "total_tokens"),
+        ("LLM calls", "llm_call_count"),
+        ("Tool calls", "tool_call_count"),
+    ]:
+        value = system_metrics.get(key)
+        if value is not None:
+            facts.append({"label": label, "value": str(value)})
     total_duration_ms = objective_metrics.get("total_duration_ms")
     if total_duration_ms is not None:
         duration_value = int(total_duration_ms) if float(total_duration_ms).is_integer() else total_duration_ms
         facts.append({"label": "Duration (ms)", "value": str(duration_value)})
+    return facts
 
+
+def _build_monitor_evaluation_run_row(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
-        "status": status,
-        "kind": kind,
-        "tone": tone,
-        "headline": headline,
-        "summary": (
-            "Monitor is reading the latest persisted eval run from eval_runs/eval_metrics. "
-            "Legacy manifest, artifact, and thread-materialization detail are not wired in this slice."
-        ),
-        "facts": facts,
-        "artifacts": [],
-        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "next_steps": [
-            "Use the persisted run and metric facts here as the current source of truth.",
-            "Restore richer artifact and thread drilldown in later evaluation runtime slices if still needed.",
-        ],
-        "raw_notes": None,
+        "run_id": str(run.get("id") or "") or None,
+        "thread_id": str(run.get("thread_id") or "") or None,
+        "status": str(run.get("status") or "") or None,
+        "started_at": str(run.get("started_at") or "") or None,
+        "finished_at": str(run.get("finished_at") or "") or None,
+        "user_message": str(run.get("user_message") or "") or None,
+        "facts": _build_monitor_evaluation_run_fact_rows(metrics_rows),
     }
 
 
-def get_monitor_evaluation_truth() -> dict[str, Any]:
-    store = make_eval_store()
-    runs = store.list_runs(limit=1)
+def get_monitor_evaluation_workbench() -> dict[str, Any]:
+    store = TrajectoryStore()
+    runs = store.list_runs(limit=25)
     if not runs:
-        return _evaluation_no_runs_surface()
-    latest_run = runs[0]
-    metrics_rows = store.get_metrics(str(latest_run.get("id") or ""))
-    return _build_persisted_evaluation_surface(latest_run, metrics_rows)
+        return {
+            "headline": "Evaluation Workbench",
+            "summary": "No persisted evaluation runs are available yet.",
+            "overview": {
+                "total_runs": 0,
+                "running_runs": 0,
+                "completed_runs": 0,
+                "failed_runs": 0,
+            },
+            "runs": [],
+            "selected_run": None,
+            "limitations": ["Create and start an evaluation batch to populate persisted runs."],
+        }
 
+    run_rows = []
+    running_runs = 0
+    completed_runs = 0
+    failed_runs = 0
+    for run in runs:
+        status = str(run.get("status") or "").strip().lower()
+        if status == "running":
+            running_runs += 1
+        elif status == "completed":
+            completed_runs += 1
+        elif status in {"error", "failed", "cancelled"}:
+            failed_runs += 1
+        run_rows.append(_build_monitor_evaluation_run_row(run, store.get_metrics(str(run.get("id") or ""))))
 
-def build_monitor_evaluation_dashboard_summary(payload: dict[str, Any]) -> dict[str, Any]:
-    status = str(payload.get("status") or "unavailable")
     return {
-        "evaluations_running": 1 if status == "running" else 0,
-        "latest_evaluation": {
-            "status": status,
-            "kind": payload.get("kind"),
-            "tone": payload.get("tone"),
-            "headline": payload.get("headline"),
+        "headline": "Evaluation Workbench",
+        "summary": "Recent persisted evaluation runs and their runtime state.",
+        "overview": {
+            "total_runs": len(run_rows),
+            "running_runs": running_runs,
+            "completed_runs": completed_runs,
+            "failed_runs": failed_runs,
         },
+        "runs": run_rows,
+        "selected_run": run_rows[0],
+        "limitations": [],
     }
 
 
-def get_monitor_evaluation_dashboard_summary() -> dict[str, Any]:
-    return build_monitor_evaluation_dashboard_summary(get_monitor_evaluation_truth())
+def get_monitor_evaluation_run_detail(run_id: str) -> dict[str, Any]:
+    store = TrajectoryStore()
+    run = store.get_run(run_id)
+    if run is None:
+        raise KeyError(f"Evaluation run not found: {run_id}")
+    run_row = _build_monitor_evaluation_run_row(run, store.get_metrics(run_id))
+    detail = {"run": run_row, "facts": run_row["facts"], "limitations": []}
+    detail["batch_run"] = make_eval_batch_service().get_batch_run_for_eval_run(run_id)
+    return detail
 
 
-# ---------------------------------------------------------------------------
-# Mappers (private)
-# ---------------------------------------------------------------------------
-
-
-def _map_threads(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    items = [
-        {
-            "thread_id": row["thread_id"],
-            "thread_url": f"/thread/{row['thread_id']}",
-            "session_count": row["session_count"],
-            "last_active": row["last_active"],
-            "last_active_ago": _format_time_ago(row["last_active"]),
-            "lease": _lease_ref(row["lease_id"], row["provider_name"], row["current_instance_id"]),
-            "state_badge": _make_badge(row["desired_state"], row["observed_state"]),
-        }
-        for row in rows
-    ]
-    return {"title": "All Threads", "count": len(items), "items": items}
-
-
-def _map_thread_detail(thread_id: str, sessions: list[dict[str, Any]]) -> dict[str, Any]:
-    lease_ids = {str(s["lease_id"]) for s in sessions if s["lease_id"]}
-    items = [
-        {
-            "session_id": s["chat_session_id"],
-            "session_url": f"/session/{s['chat_session_id']}",
-            "status": s["status"],
-            "started_at": s["started_at"],
-            "started_ago": _format_time_ago(s["started_at"]),
-            "ended_at": s["ended_at"],
-            "ended_ago": _format_time_ago(s["ended_at"]) if s["ended_at"] else None,
-            "close_reason": s["close_reason"],
-            "lease": _lease_ref(s["lease_id"], s["provider_name"], s["current_instance_id"]),
-            "state_badge": _make_badge(s["desired_state"], s["observed_state"]),
-            "error": s["last_error"],
-        }
-        for s in sessions
-    ]
-    breadcrumb = [
-        {"label": "Threads", "url": "/threads"},
-        {"label": thread_id[:8], "url": f"/thread/{thread_id}"},
-    ]
+def get_monitor_evaluation_batches(limit: int = 50) -> dict[str, Any]:
+    items = make_eval_batch_service().list_batches(limit=limit)
     return {
-        "thread_id": thread_id,
-        "breadcrumb": breadcrumb,
-        "sessions": {"title": "Sessions", "count": len(items), "items": items},
-        "related_leases": {
-            "title": "Related Leases",
-            "items": [{"lease_id": lid, "lease_url": f"/lease/{lid}"} for lid in lease_ids],
-        },
+        "items": items,
+        "count": len(items),
     }
+
+
+def get_monitor_evaluation_scenarios() -> dict[str, Any]:
+    items = [
+        {
+            "scenario_id": scenario.id,
+            "name": scenario.name,
+            "category": scenario.category,
+            "sandbox": scenario.sandbox,
+            "message_count": len(scenario.messages),
+            "timeout_seconds": scenario.timeout_seconds,
+        }
+        for scenario in load_scenarios_from_dir(EVAL_SCENARIO_DIR)
+    ]
+    return {"items": items, "count": len(items)}
+
+
+def create_monitor_evaluation_batch(
+    *,
+    submitted_by_user_id: str,
+    agent_user_id: str,
+    scenario_ids: list[str],
+    sandbox: str,
+    max_concurrent: int,
+) -> dict[str, Any]:
+    batch = make_eval_batch_service().create_batch(
+        submitted_by_user_id=submitted_by_user_id,
+        agent_user_id=agent_user_id,
+        scenario_ids=scenario_ids,
+        sandbox=sandbox,
+        max_concurrent=max_concurrent,
+    )
+    return {"batch": batch}
+
+
+def _select_eval_scenarios(scenario_ids: list[str], *, sandbox: str) -> list[EvalScenario]:
+    catalog = {scenario.id: scenario for scenario in load_scenarios_from_dir(EVAL_SCENARIO_DIR)}
+    missing = [scenario_id for scenario_id in scenario_ids if scenario_id not in catalog]
+    if missing:
+        raise KeyError(f"Evaluation scenarios not found: {', '.join(missing)}")
+    return [catalog[scenario_id].model_copy(update={"sandbox": sandbox}) for scenario_id in scenario_ids]
+
+
+async def _run_monitor_evaluation_batch(
+    *,
+    batch_id: str,
+    scenarios: list[EvalScenario],
+    base_url: str,
+    token: str,
+    agent_user_id: str,
+    batch_service: EvaluationBatchService,
+) -> None:
+    client = EvalClient(base_url=base_url, token=token)
+    try:
+        runner = EvalRunner(client=client, agent_user_id=agent_user_id, store=TrajectoryStore())
+        executor = EvaluationBatchExecutor(runner=runner, batch_service=batch_service)
+        await executor.run_batch(batch_id, scenarios)
+    finally:
+        await client.close()
+
+
+def start_monitor_evaluation_batch(
+    batch_id: str,
+    *,
+    base_url: str,
+    token: str,
+    schedule_task,
+) -> dict[str, Any]:
+    batch_service = make_eval_batch_service()
+    detail = batch_service.get_batch_detail(batch_id)
+    batch = detail["batch"]
+    config = batch.get("config_json") or {}
+    scenario_ids = config.get("scenario_ids")
+    sandbox = config.get("sandbox")
+    agent_user_id = batch.get("agent_user_id")
+    if not scenario_ids:
+        raise ValueError("Evaluation batch is missing scenario_ids")
+    if not sandbox:
+        raise ValueError("Evaluation batch is missing sandbox")
+    if not agent_user_id:
+        raise ValueError("Evaluation batch is missing agent_user_id")
+    scenarios = _select_eval_scenarios(
+        [str(scenario_id) for scenario_id in scenario_ids],
+        sandbox=str(sandbox),
+    )
+    updated = batch_service.update_batch_status(batch_id, "running")
+    schedule_task(
+        _run_monitor_evaluation_batch,
+        batch_id=batch_id,
+        scenarios=scenarios,
+        base_url=base_url.rstrip("/"),
+        token=token,
+        agent_user_id=str(agent_user_id),
+        batch_service=batch_service,
+    )
+    return {"accepted": True, "batch": updated}
+
+
+def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
+    return make_eval_batch_service().get_batch_detail(batch_id)
 
 
 def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    live_threads = _live_thread_ids([str(row.get("thread_id") or "").strip() for row in rows])
     items = []
     for row in rows:
+        thread_id = str(row.get("thread_id") or "").strip() or None
+        if thread_id not in live_threads:
+            thread_id = None
         badge = _make_badge(row["desired_state"], row["observed_state"])
         triage = _classify_lease_triage(
-            thread_id=row["thread_id"],
+            thread_id=thread_id,
             badge=badge,
             observed_state=row["observed_state"],
             desired_state=row["desired_state"],
@@ -623,12 +493,11 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
         items.append(
             {
                 "lease_id": row["lease_id"],
-                "lease_url": f"/lease/{row['lease_id']}",
                 "provider": row["provider_name"],
                 "instance_id": row["current_instance_id"],
-                "thread": _thread_ref(row["thread_id"]),
+                "thread": _thread_ref(thread_id),
                 "state_badge": badge,
-                "semantics": _classify_lease_semantics(thread_id=row["thread_id"], badge=badge),
+                "semantics": _classify_lease_semantics(thread_id=thread_id, badge=badge),
                 "triage": triage,
                 "error": row["last_error"],
                 "updated_at": row["updated_at"],
@@ -636,44 +505,18 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
 
-    summary = {key: 0 for key in LEASE_SEMANTIC_ORDER}
-    for item in items:
-        summary[item["semantics"]["category"]] += 1
-    summary["total"] = len(items)
-
-    groups = []
-    for key in LEASE_SEMANTIC_ORDER:
-        meta = LEASE_SEMANTIC_META[key]
-        group_items = [item for item in items if item["semantics"]["category"] == key]
-        groups.append(
-            {
-                "key": key,
-                "title": meta["title"],
-                "description": meta["description"],
-                "count": len(group_items),
-                "items": group_items,
-            }
-        )
-
-    triage_summary = {key: 0 for key in LEASE_TRIAGE_ORDER}
-    for item in items:
-        triage_summary[item["triage"]["category"]] += 1
-    triage_summary["total"] = len(items)
-
-    triage_groups = []
-    for key in LEASE_TRIAGE_ORDER:
-        meta = LEASE_TRIAGE_META[key]
-        group_items = [item for item in items if item["triage"]["category"] == key]
-        triage_groups.append(
-            {
-                "key": key,
-                "title": meta["title"],
-                "description": meta["description"],
-                "tone": meta["tone"],
-                "count": len(group_items),
-                "items": group_items,
-            }
-        )
+    summary, groups = _lease_groups(
+        items=items,
+        order=LEASE_SEMANTIC_ORDER,
+        meta_by_key=LEASE_SEMANTIC_META,
+        field="semantics",
+    )
+    triage_summary, triage_groups = _lease_groups(
+        items=items,
+        order=LEASE_TRIAGE_ORDER,
+        meta_by_key=LEASE_TRIAGE_META,
+        field="triage",
+    )
 
     return {
         "title": "All Leases",
@@ -688,189 +531,6 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _map_lease_detail(
-    lease_id: str,
-    lease: dict[str, Any],
-    threads: list[dict[str, Any]],
-    events: list[dict[str, Any]],
-) -> dict[str, Any]:
-    badge = _make_badge(lease["desired_state"], lease["observed_state"])
-    badge["error"] = lease["last_error"]
-    return {
-        "lease_id": lease_id,
-        "breadcrumb": [
-            {"label": "Leases", "url": "/leases"},
-            {"label": lease_id, "url": f"/lease/{lease_id}"},
-        ],
-        "info": {
-            "provider": lease["provider_name"],
-            "instance_id": lease["current_instance_id"],
-            "created_at": lease["created_at"],
-            "created_ago": _format_time_ago(lease["created_at"]),
-            "updated_at": lease["updated_at"],
-            "updated_ago": _format_time_ago(lease["updated_at"]),
-        },
-        "state": badge,
-        "related_threads": {
-            "title": "Related Threads",
-            "items": [{"thread_id": r["thread_id"], "thread_url": f"/thread/{r['thread_id']}"} for r in threads],
-        },
-        "lease_events": {
-            "title": "Lease Events",
-            "count": len(events),
-            "items": [
-                {
-                    "event_id": e["event_id"],
-                    "event_url": f"/event/{e['event_id']}",
-                    "event_type": e["event_type"],
-                    "source": e["source"],
-                    "created_at": e["created_at"],
-                    "created_ago": _format_time_ago(e["created_at"]),
-                }
-                for e in events
-            ],
-        },
-    }
-
-
-def _historical_lease_detail(
-    lease_id: str,
-    sessions: list[dict[str, Any]],
-    events: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    if not sessions and not events:
-        return None
-
-    created_candidates = [
-        str(value) for value in [*(row.get("started_at") for row in sessions), *(row.get("created_at") for row in events)] if value
-    ]
-    updated_candidates = [
-        str(value)
-        for value in [
-            *(row.get("ended_at") or row.get("started_at") for row in sessions),
-            *(row.get("created_at") for row in events),
-        ]
-        if value
-    ]
-    first_session = sessions[0] if sessions else {}
-    thread_ids: list[str] = []
-    seen_threads: set[str] = set()
-    for row in sessions:
-        thread_id = str(row.get("thread_id") or "").strip()
-        if thread_id and thread_id not in seen_threads:
-            seen_threads.add(thread_id)
-            thread_ids.append(thread_id)
-
-    lease = {
-        "provider_name": first_session.get("provider_name") or "unknown",
-        "current_instance_id": first_session.get("current_instance_id"),
-        "created_at": min(created_candidates) if created_candidates else None,
-        "updated_at": max(updated_candidates) if updated_candidates else None,
-        "desired_state": first_session.get("desired_state"),
-        "observed_state": first_session.get("observed_state"),
-        "last_error": first_session.get("last_error"),
-    }
-    threads = [{"thread_id": thread_id} for thread_id in thread_ids]
-    return _map_lease_detail(lease_id, lease, threads, events)
-
-
-def _map_diverged(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    items = [
-        {
-            "lease_id": row["lease_id"],
-            "lease_url": f"/lease/{row['lease_id']}",
-            "provider": row["provider_name"],
-            "instance_id": row["current_instance_id"],
-            "thread": _thread_ref(row["thread_id"]),
-            "state_badge": {
-                "desired": row["desired_state"],
-                "observed": row["observed_state"],
-                "hours_diverged": row["hours_diverged"],
-                "color": "red" if row["hours_diverged"] > 24 else "yellow",
-            },
-            "error": row["last_error"],
-        }
-        for row in rows
-    ]
-    return {
-        "title": "Diverged Leases",
-        "description": "Leases where desired_state != observed_state",
-        "count": len(items),
-        "items": items,
-    }
-
-
-def _map_events(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    items = [
-        {
-            "event_id": row["event_id"],
-            "event_url": f"/event/{row['event_id']}",
-            "event_type": row["event_type"],
-            "source": row["source"],
-            "provider": row["provider_name"],
-            "lease": _lease_link(row["lease_id"]),
-            "error": row["error"],
-            "created_at": row["created_at"],
-            "created_ago": _format_time_ago(row["created_at"]),
-        }
-        for row in rows
-    ]
-    return {
-        "title": "Lease Events",
-        "description": "Audit log of all lease lifecycle operations",
-        "count": len(items),
-        "items": items,
-    }
-
-
-def _map_event_detail(event_id: str, event: dict[str, Any]) -> dict[str, Any]:
-    payload = json.loads(event["payload_json"]) if event["payload_json"] else {}
-    return {
-        "event_id": event_id,
-        "breadcrumb": [
-            {"label": "Events", "url": "/events"},
-            {"label": event["event_type"], "url": f"/event/{event_id}"},
-        ],
-        "info": {
-            "event_type": event["event_type"],
-            "source": event["source"],
-            "provider": event["provider_name"],
-            "created_at": event["created_at"],
-            "created_ago": _format_time_ago(event["created_at"]),
-        },
-        "related_lease": {
-            "lease_id": event["lease_id"],
-            "lease_url": f"/lease/{event['lease_id']}" if event["lease_id"] else None,
-        },
-        "error": event["error"],
-        "payload": payload,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Public API: observe
-# ---------------------------------------------------------------------------
-
-
-def list_threads() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        return _map_threads(repo.query_threads())
-    finally:
-        repo.close()
-
-
-def get_thread(thread_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        summary = repo.query_thread_summary(thread_id)
-        if not summary:
-            raise KeyError("Thread not found")
-        return _map_thread_detail(thread_id, repo.query_thread_sessions(thread_id))
-    finally:
-        repo.close()
-
-
 def list_leases() -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
@@ -879,226 +539,159 @@ def list_leases() -> dict[str, Any]:
         repo.close()
 
 
-def cleanup_resource_leases(
-    *,
-    action: str,
-    lease_ids: list[str],
-    expected_category: str,
-) -> dict[str, Any]:
-    if action != "cleanup_residue":
-        raise ValueError(f"Unsupported cleanup action: {action}")
-    if expected_category not in RESOURCE_CLEANUP_ALLOWED_CATEGORIES:
-        raise ValueError("expected_category must be one of: detached_residue, orphan_cleanup")
-
-    target_lease_ids = _cleanable_lease_ids(lease_ids)
-    monitor_repo = make_sandbox_monitor_repo()
-    lease_repo = make_lease_repo()
-    chat_session_repo = make_chat_session_repo()
-    try:
-        rows_by_id = {str(row.get("lease_id") or ""): row for row in monitor_repo.query_leases() if row.get("lease_id")}
-        providers, _ = init_providers_and_managers()
-        cleaned: list[dict[str, Any]] = []
-        skipped: list[str] = []
-        errors: list[dict[str, Any]] = []
-
-        for lease_id in target_lease_ids:
-            row = rows_by_id.get(lease_id)
-            if row is None:
-                skipped.append(lease_id)
-                errors.append({"lease_id": lease_id, "reason": "lease_not_found"})
-                continue
-
-            actual_category = _triage_category_for_row(row)
-            if actual_category != expected_category:
-                skipped.append(lease_id)
-                errors.append(
-                    {
-                        "lease_id": lease_id,
-                        "reason": "category_mismatch",
-                        "expected_category": expected_category,
-                        "actual_category": actual_category,
-                    }
-                )
-                continue
-
-            sessions = monitor_repo.query_lease_sessions(lease_id)
-            live_session_ids = [
-                str(session.get("chat_session_id"))
-                for session in sessions
-                if str(session.get("status") or "").strip().lower() in ACTIVE_CHAT_SESSION_STATUSES
-            ]
-            if live_session_ids:
-                skipped.append(lease_id)
-                errors.append(
-                    {
-                        "lease_id": lease_id,
-                        "reason": "live_sessions_present",
-                        "session_ids": live_session_ids,
-                    }
-                )
-                continue
-
-            if chat_session_repo.lease_has_running_command(lease_id):
-                skipped.append(lease_id)
-                errors.append({"lease_id": lease_id, "reason": "running_command_present"})
-                continue
-
-            provider_name = str(row.get("provider_name") or "").strip()
-            instance_id = str(row.get("current_instance_id") or "").strip() or None
-            if instance_id:
-                provider = providers.get(provider_name)
-                if provider is None:
-                    skipped.append(lease_id)
-                    errors.append(
-                        {
-                            "lease_id": lease_id,
-                            "reason": "provider_unavailable",
-                            "provider": provider_name,
-                        }
-                    )
-                    continue
-                if not provider.get_capability().can_destroy:
-                    skipped.append(lease_id)
-                    errors.append(
-                        {
-                            "lease_id": lease_id,
-                            "reason": "provider_destroy_unsupported",
-                            "provider": provider_name,
-                        }
-                    )
-                    continue
-                try:
-                    destroyed = provider.destroy_session(instance_id, sync=True)
-                except Exception as exc:
-                    skipped.append(lease_id)
-                    errors.append(
-                        {
-                            "lease_id": lease_id,
-                            "reason": "provider_destroy_failed",
-                            "provider": provider_name,
-                            "detail": str(exc),
-                        }
-                    )
-                    continue
-                if not destroyed:
-                    skipped.append(lease_id)
-                    errors.append(
-                        {
-                            "lease_id": lease_id,
-                            "reason": "provider_destroy_failed",
-                            "provider": provider_name,
-                            "detail": "destroy_session returned false",
-                        }
-                    )
-                    continue
-
-            lease_repo.delete(lease_id)
-            cleaned.append({"lease_id": lease_id, "category": actual_category})
-
-        refreshed_summary = list_leases()["triage"]["summary"]
-        return {
-            "action": action,
-            "expected_category": expected_category,
-            "attempted": target_lease_ids,
-            "cleaned": cleaned,
-            "skipped": skipped,
-            "errors": errors,
-            "refreshed_summary": refreshed_summary,
-        }
-    finally:
-        chat_session_repo.close()
-        lease_repo.close()
-        monitor_repo.close()
-
-
-def get_lease(lease_id: str) -> dict[str, Any]:
+def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
         lease = repo.query_lease(lease_id)
+        if lease is None:
+            raise KeyError(f"Lease not found: {lease_id}")
+
         threads = repo.query_lease_threads(lease_id)
-        events = repo.query_lease_events(lease_id)
         sessions = repo.query_lease_sessions(lease_id)
+        runtime_session_id = repo.query_lease_instance_id(lease_id)
     finally:
         repo.close()
-    if not lease:
-        fallback = _historical_lease_detail(lease_id, sessions, events)
-        if fallback:
-            return fallback
-        raise KeyError("Lease not found")
-    return _map_lease_detail(lease_id, lease, threads, events)
+
+    raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
+    live_threads = _live_thread_ids(raw_thread_ids)
+    live_thread_refs = [{"thread_id": thread_id} for thread_id in raw_thread_ids if thread_id in live_threads]
+    badge = _make_badge(lease.get("desired_state"), lease.get("observed_state"))
+    triage = _classify_lease_triage(
+        thread_id=live_thread_refs[0]["thread_id"] if live_thread_refs else None,
+        badge=badge,
+        observed_state=lease.get("observed_state"),
+        desired_state=lease.get("desired_state"),
+        updated_at=lease.get("updated_at"),
+    )
+    provider_name = str(lease.get("provider_name") or "").strip()
+
+    return {
+        "lease": {
+            "lease_id": str(lease.get("lease_id") or lease_id),
+            "provider_name": provider_name,
+            "desired_state": lease.get("desired_state"),
+            "observed_state": lease.get("observed_state"),
+            "current_instance_id": lease.get("current_instance_id"),
+            "updated_at": lease.get("updated_at"),
+            "last_error": lease.get("last_error"),
+            "badge": badge,
+        },
+        "triage": triage,
+        "provider": {
+            "id": provider_name,
+            "name": provider_name,
+        },
+        "runtime": {
+            "runtime_session_id": runtime_session_id,
+        },
+        "threads": live_thread_refs,
+        "sessions": [
+            {
+                "chat_session_id": item.get("chat_session_id"),
+                "thread_id": item.get("thread_id"),
+                "status": item.get("status"),
+                "started_at": item.get("started_at"),
+                "ended_at": item.get("ended_at"),
+                "close_reason": item.get("close_reason"),
+            }
+            for item in sessions
+        ],
+        "cleanup": monitor_operation_service.build_lease_cleanup_truth(
+            lease_id=str(lease.get("lease_id") or lease_id),
+            triage=triage,
+            provider_name=provider_name,
+            runtime_session_id=runtime_session_id,
+            sessions=sessions,
+            threads=live_thread_refs,
+        ),
+    }
 
 
-def list_diverged() -> dict[str, Any]:
+def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
+    snapshot = get_resource_overview_snapshot()
+    providers = snapshot.get("providers") or []
+    provider = next((item for item in providers if str(item.get("id") or "") == provider_id), None)
+    if provider is None:
+        raise KeyError(f"Provider not found: {provider_id}")
+
+    sessions = provider.get("sessions") or []
+    return {
+        "provider": provider,
+        "lease_ids": _session_values(sessions, "leaseId"),
+        "thread_ids": _session_values(sessions, "threadId"),
+        "runtime_session_ids": _session_values(sessions, "runtimeSessionId"),
+    }
+
+
+def _session_values(sessions: list[dict[str, Any]], key: str) -> list[str]:
+    return sorted({str(item.get(key) or "").strip() for item in sessions if str(item.get(key) or "").strip()})
+
+
+def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
+    snapshot = get_resource_overview_snapshot()
+    for provider in snapshot.get("providers") or []:
+        for session in provider.get("sessions") or []:
+            current = str(session.get("runtimeSessionId") or "").strip()
+            if current != runtime_session_id:
+                continue
+            return {
+                "provider": {
+                    "id": provider.get("id"),
+                    "name": provider.get("name"),
+                    "status": provider.get("status"),
+                    "consoleUrl": provider.get("consoleUrl"),
+                },
+                "runtime": session,
+                "lease_id": session.get("leaseId"),
+                "thread_id": session.get("threadId"),
+            }
+    raise KeyError(f"Runtime not found: {runtime_session_id}")
+
+
+async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
+    from backend.web.services.monitor_trace_service import build_monitor_thread_trajectory
+
+    thread_repo = getattr(app.state, "thread_repo", None)
+    if thread_repo is None:
+        raise RuntimeError("thread_repo is required for monitor thread detail")
+
+    thread = thread_repo.get_by_id(thread_id)
+    if thread is None:
+        raise KeyError(f"Thread not found: {thread_id}")
+
     repo = make_sandbox_monitor_repo()
     try:
-        return _map_diverged(repo.query_diverged())
+        summary = repo.query_thread_summary(thread_id)
+        sessions = repo.query_thread_sessions(thread_id)
     finally:
         repo.close()
 
+    if summary is None:
+        summary = _derive_thread_summary_from_sessions(sessions)
 
-def list_events(limit: int = 100) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        return _map_events(repo.query_events(limit))
-    finally:
-        repo.close()
+    owners = _thread_owners(
+        [thread_id],
+        user_repo=getattr(app.state, "user_repo", None),
+        thread_repo=thread_repo,
+    )
+
+    return {
+        "thread": _normalize_monitor_thread(thread, thread_id),
+        "owner": _normalize_thread_owner(owners.get(thread_id)),
+        "summary": summary,
+        "sessions": sessions,
+        "trajectory": await build_monitor_thread_trajectory(app, thread_id),
+    }
 
 
-def get_event(event_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        event = repo.query_event(event_id)
-    finally:
-        repo.close()
-    if not event:
-        raise KeyError("Event not found")
-    return _map_event_detail(event_id, event)
+def request_monitor_lease_cleanup(lease_id: str) -> dict[str, Any]:
+    return monitor_operation_service.request_lease_cleanup(get_monitor_lease_detail(lease_id))
+
+
+def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
+    return monitor_operation_service.get_operation_detail(operation_id)
 
 
 # ---------------------------------------------------------------------------
 # Public API: diagnostics
 # ---------------------------------------------------------------------------
-
-
-def runtime_health_snapshot() -> dict[str, Any]:
-    """Lightweight control-plane health snapshot."""
-    tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0}
-    storage_strategy = current_storage_strategy()
-
-    if storage_strategy == "supabase":
-        repo = make_sandbox_monitor_repo()
-        try:
-            tables = repo.count_rows(list(tables))
-        finally:
-            repo.close()
-        db_payload: dict[str, Any] = {
-            "strategy": "supabase",
-            "schema": str(os.getenv("LEON_DB_SCHEMA") or "public"),
-            "counts": tables,
-        }
-    else:
-        db_path = resolve_runtime_health_monitor_db_path()
-        if db_path is None:
-            raise RuntimeError("sqlite runtime health snapshot requires a sandbox db path")
-        db_exists = db_path.exists()
-        db_payload = {"path": str(db_path), "exists": db_exists, "counts": tables}
-        if db_exists:
-            repo = make_runtime_health_monitor_repo()
-            try:
-                tables = repo.count_rows(list(tables))
-            finally:
-                repo.close()
-            db_payload["counts"] = tables
-
-    _, managers = init_providers_and_managers()
-    sessions = load_all_sessions(managers)
-    provider_counts: dict[str, int] = {}
-    for session in sessions:
-        provider = str(session.get("provider") or "unknown")
-        provider_counts[provider] = provider_counts.get(provider, 0) + 1
-
-    return {
-        "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "db": db_payload,
-        "sessions": {"total": len(sessions), "providers": provider_counts},
-    }

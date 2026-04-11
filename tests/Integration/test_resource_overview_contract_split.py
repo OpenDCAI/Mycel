@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor as monitor_router
 from backend.web.routers import resources as resources_router
-from backend.web.services import resource_projection_service
+from backend.web.services import resource_common, resource_projection_service
 
 
 class _State:
@@ -53,7 +53,7 @@ def _patch_provider_contracts(monkeypatch, *, description: str, vendor: str, typ
     monkeypatch.setattr(
         resource_projection_service.resource_service,
         "get_provider_capability_contract",
-        lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), None),
+        lambda *_args, **_kwargs: (resource_common.empty_capabilities(), None),
         raising=False,
     )
 
@@ -115,7 +115,7 @@ def test_resources_overview_maps_runtime_error_to_500(monkeypatch) -> None:
 def test_monitor_resources_route_stays_global(monkeypatch) -> None:
     monkeypatch.setattr(
         monitor_router,
-        "get_monitor_resource_overview_snapshot",
+        "get_resource_overview_snapshot",
         lambda: {"summary": {"snapshot_at": "now"}, "providers": [{"id": "global-daytona"}]},
     )
 
@@ -204,7 +204,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
     monkeypatch.setattr(
         resource_projection_service.resource_service,
         "get_provider_capability_contract",
-        lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), "provider unavailable"),
+        lambda *_args, **_kwargs: (resource_common.empty_capabilities(), "provider unavailable"),
         raising=False,
     )
 

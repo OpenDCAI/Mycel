@@ -1,79 +1,201 @@
-"""Monitor router compatibility layer.
-
-Expose the richer monitor implementation from ``backend.web.monitor`` while
-preserving the newer resource/health helper endpoints added on main.
-"""
+"""Monitor router."""
 
 import asyncio
+from typing import Annotated, Any
 
-from fastapi import HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from backend.web.monitor import list_leases, router
+from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.services import monitor_service, resource_service
 from backend.web.services.resource_cache import (
-    get_monitor_resource_overview_snapshot,
-    refresh_monitor_resource_overview_sync,
+    get_resource_overview_snapshot,
+    refresh_resource_overview_sync,
 )
 
+router = APIRouter(prefix="/api/monitor")
 
-class ResourceCleanupRequest(BaseModel):
-    action: str = Field(default="cleanup_residue")
-    lease_ids: list[str]
-    expected_category: str
+
+class EvaluationBatchCreateRequest(BaseModel):
+    agent_user_id: str
+    scenario_ids: list[str] = Field(min_length=1)
+    sandbox: str = "local"
+    max_concurrent: int = Field(default=1, ge=1, le=50)
 
 
 def _refresh_monitor_resources_sync():
-    # @@@manual-resource-refresh-must-probe - the operator-facing refresh button must fetch new
+    # @@@manual-resource-refresh-must-probe - the monitor refresh button must fetch new
     # sandbox metrics first; recomputing the overview alone just re-labels stale snapshots.
     resource_service.refresh_resource_snapshots()
-    return refresh_monitor_resource_overview_sync()
+    return refresh_resource_overview_sync()
 
 
-@router.get("/health")
-def health_snapshot():
-    return monitor_service.runtime_health_snapshot()
+def _extract_bearer_token(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = auth_header.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    return token
+
+
+def _or_404(fn, *args):
+    try:
+        return fn(*args)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+async def _resource_io(fn, *args):
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/leases")
+def leases_snapshot():
+    return monitor_service.list_leases()
+
+
+@router.get("/threads")
+def threads_snapshot(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+):
+    return monitor_service.list_monitor_threads(app, user_id)
+
+
+@router.get("/providers/{provider_id}")
+def provider_detail_snapshot(provider_id: str):
+    return _or_404(monitor_service.get_monitor_provider_detail, provider_id)
+
+
+@router.get("/leases/{lease_id}")
+def lease_detail_snapshot(lease_id: str):
+    return _or_404(monitor_service.get_monitor_lease_detail, lease_id)
+
+
+@router.post("/leases/{lease_id}/cleanup")
+def lease_cleanup_action(lease_id: str):
+    return _or_404(monitor_service.request_monitor_lease_cleanup, lease_id)
+
+
+@router.get("/operations/{operation_id}")
+def operation_detail_snapshot(operation_id: str):
+    return _or_404(monitor_service.get_monitor_operation_detail, operation_id)
+
+
+@router.get("/runtimes/{runtime_session_id}")
+def runtime_detail_snapshot(runtime_session_id: str):
+    return _or_404(monitor_service.get_monitor_runtime_detail, runtime_session_id)
+
+
+@router.get("/threads/{thread_id}")
+async def thread_detail_snapshot(request: Request, thread_id: str):
+    try:
+        return await monitor_service.get_monitor_thread_detail(request.app, thread_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/dashboard")
 def dashboard_snapshot():
-    health = monitor_service.runtime_health_snapshot()
-    resources = get_monitor_resource_overview_snapshot()
-    leases = list_leases()
-    evaluation = monitor_service.get_monitor_evaluation_dashboard_summary()
+    resources = get_resource_overview_snapshot()
+    leases = monitor_service.list_leases()
+    evaluation = monitor_service.get_monitor_evaluation_workbench()
 
     resource_summary = resources.get("summary") or {}
     lease_summary = leases.get("summary") or {}
+    evaluation_overview = evaluation.get("overview") or {}
+    latest_evaluation = evaluation.get("selected_run") or {}
 
     return {
-        "snapshot_at": health.get("snapshot_at"),
-        "resources_summary": resource_summary,
+        "snapshot_at": resource_summary.get("snapshot_at"),
         "infra": {
             "providers_active": int(resource_summary.get("active_providers") or 0),
             "providers_unavailable": int(resource_summary.get("unavailable_providers") or 0),
             "leases_total": int(lease_summary.get("total") or leases.get("count") or 0),
             "leases_diverged": int(lease_summary.get("diverged") or 0) + int(lease_summary.get("orphan_diverged") or 0),
             "leases_orphan": int(lease_summary.get("orphan") or 0) + int(lease_summary.get("orphan_diverged") or 0),
-            "leases_healthy": int(lease_summary.get("healthy") or 0),
         },
         "workload": {
-            "db_sessions_total": int(((health.get("db") or {}).get("counts") or {}).get("chat_sessions") or 0),
-            "provider_sessions_total": int(((health.get("sessions") or {}).get("total")) or 0),
             "running_sessions": int(resource_summary.get("running_sessions") or 0),
-            "evaluations_running": int(evaluation["evaluations_running"]),
+            "evaluations_running": int(evaluation_overview.get("running_runs") or 0),
         },
-        "latest_evaluation": evaluation["latest_evaluation"],
+        "latest_evaluation": {
+            "run_id": latest_evaluation.get("run_id"),
+            "status": latest_evaluation.get("status"),
+            "headline": evaluation.get("summary") or "No evaluation runs recorded.",
+        },
     }
 
 
 @router.get("/evaluation")
 def evaluation_snapshot():
-    return monitor_service.get_monitor_evaluation_truth()
+    return monitor_service.get_monitor_evaluation_workbench()
+
+
+@router.get("/evaluation/batches")
+def evaluation_batches_snapshot(limit: int = Query(default=50, ge=1, le=200)):
+    return monitor_service.get_monitor_evaluation_batches(limit=limit)
+
+
+@router.post("/evaluation/batches")
+def evaluation_batch_create_action(
+    payload: EvaluationBatchCreateRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    return monitor_service.create_monitor_evaluation_batch(
+        submitted_by_user_id=user_id,
+        agent_user_id=payload.agent_user_id,
+        scenario_ids=payload.scenario_ids,
+        sandbox=payload.sandbox,
+        max_concurrent=payload.max_concurrent,
+    )
+
+
+@router.get("/evaluation/scenarios")
+def evaluation_scenarios_snapshot():
+    return monitor_service.get_monitor_evaluation_scenarios()
+
+
+@router.post("/evaluation/batches/{batch_id}/start")
+def evaluation_batch_start_action(
+    batch_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    _user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    try:
+        return monitor_service.start_monitor_evaluation_batch(
+            batch_id=batch_id,
+            base_url=str(request.base_url).rstrip("/"),
+            token=_extract_bearer_token(request),
+            schedule_task=background_tasks.add_task,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/evaluation/batches/{batch_id}")
+def evaluation_batch_detail_snapshot(batch_id: str):
+    return _or_404(monitor_service.get_monitor_evaluation_batch_detail, batch_id)
+
+
+@router.get("/evaluation/runs/{run_id}")
+def evaluation_run_detail_snapshot(run_id: str):
+    return _or_404(monitor_service.get_monitor_evaluation_run_detail, run_id)
 
 
 @router.get("/resources")
 def resources_overview():
-    return get_monitor_resource_overview_snapshot()
+    return get_resource_overview_snapshot()
 
 
 @router.post("/resources/refresh")
@@ -82,40 +204,11 @@ async def resources_refresh():
     return await asyncio.to_thread(_refresh_monitor_resources_sync)
 
 
-@router.post("/resources/cleanup")
-async def resources_cleanup(payload: ResourceCleanupRequest):
-    from backend.web.services import monitor_service
-
-    try:
-        return await asyncio.to_thread(
-            monitor_service.cleanup_resource_leases,
-            action=payload.action,
-            lease_ids=payload.lease_ids,
-            expected_category=payload.expected_category,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @router.get("/sandbox/{lease_id}/browse")
 async def sandbox_browse(lease_id: str, path: str = Query(default="/")):
-    from backend.web.services.resource_service import sandbox_browse as _browse
-
-    try:
-        return await asyncio.to_thread(_browse, lease_id, path)
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    return await _resource_io(resource_service.sandbox_browse, lease_id, path)
 
 
 @router.get("/sandbox/{lease_id}/read")
 async def sandbox_read_file(lease_id: str, path: str = Query(...)):
-    from backend.web.services.resource_service import sandbox_read as _read
-
-    try:
-        return await asyncio.to_thread(_read, lease_id, path)
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    return await _resource_io(resource_service.sandbox_read, lease_id, path)

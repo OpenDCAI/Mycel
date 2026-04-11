@@ -133,25 +133,3 @@ class BaseExecutor(ABC):
             ExecuteResult if command finished, None if not found
         """
         ...
-
-    @abstractmethod
-    def store_completed_result(
-        self,
-        command_id: str,
-        command_line: str,
-        cwd: str,
-        result: ExecuteResult,
-    ) -> None:
-        """
-        Store a completed command result for later retrieval via command_status.
-
-        Used when blocking mode output is truncated, allowing user to read
-        the full output using command_status with offset/limit.
-
-        Args:
-            command_id: Unique ID for this result
-            command_line: The command that was executed
-            cwd: Working directory used
-            result: The execution result to store
-        """
-        ...

@@ -6,8 +6,8 @@ Usage:
     config = SandboxConfig.load("agentbay")
     sbx = create_sandbox(config, db_path=db_path)
 
-    FileSystemMiddleware(backend=sbx.fs())
-    CommandMiddleware(executor=sbx.shell())
+    FileSystemService(backend=sbx.fs())
+    CommandService(executor=sbx.shell())
 """
 
 from __future__ import annotations

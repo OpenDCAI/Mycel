@@ -33,10 +33,9 @@ def _hub_api(method: str, path: str, **kwargs: Any) -> dict:
         status = e.response.status_code
         if status == 404:
             raise HTTPException(status_code=404, detail="Marketplace item not found")
-        elif status == 409:
+        if status == 409:
             raise HTTPException(status_code=409, detail="Item already exists with this version")
-        else:
-            raise HTTPException(status_code=502, detail=f"Hub API error: {status}")
+        raise HTTPException(status_code=502, detail=f"Hub API error: {status}")
     except (httpx.ConnectError, httpx.TimeoutException):
         raise HTTPException(status_code=503, detail="Marketplace Hub unavailable")
 
@@ -271,7 +270,7 @@ def download(
         if user_repo is None or agent_config_repo is None:
             raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
 
-        from backend.web.services.member_service import install_from_snapshot
+        from backend.web.services.agent_user_service import install_from_snapshot
 
         user_id = install_from_snapshot(
             snapshot=snapshot,
@@ -297,7 +296,7 @@ def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = Non
     snapshot = result["snapshot"]
     installed_version = result["version"]
 
-    from backend.web.services.member_service import install_from_snapshot
+    from backend.web.services.agent_user_service import install_from_snapshot
 
     install_from_snapshot(
         snapshot=snapshot,

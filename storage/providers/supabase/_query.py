@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+IN_FILTER_CHUNK_SIZE = 80
+
 
 def validate_client(client: Any, repo: str) -> Any:
     """Validate and return a Supabase client, raising on None or missing table()."""
@@ -46,6 +48,10 @@ def in_(query: Any, column: str, values: list[str], repo: str, operation: str) -
     if not hasattr(query, "in_"):
         raise RuntimeError(f"Supabase {repo} expects query.in_() for {operation}. Use supabase-py.")
     return query.in_(column, values)
+
+
+def value_chunks(values: list[str]) -> list[list[str]]:
+    return [values[i : i + IN_FILTER_CHUNK_SIZE] for i in range(0, len(values), IN_FILTER_CHUNK_SIZE)]
 
 
 def gt(query: Any, column: str, value: Any, repo: str, operation: str) -> Any:

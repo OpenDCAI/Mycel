@@ -58,22 +58,6 @@ class AgentLoader:
             project_config.get("runtime", {}),
         )
 
-        # Backward compat: old-style top-level keys fold into runtime
-        for cfg in (system_config, user_config, project_config):
-            for key in (
-                "context_limit",
-                "enable_audit_log",
-                "allowed_extensions",
-                "block_dangerous_commands",
-                "block_network_commands",
-                "queue_mode",
-                "temperature",
-                "max_tokens",
-                "model_kwargs",
-            ):
-                if key in cfg and key not in merged_runtime:
-                    merged_runtime[key] = cfg[key]
-
         merged_memory = self._deep_merge(
             system_config.get("memory", {}),
             user_config.get("memory", {}),
@@ -422,10 +406,6 @@ class AgentLoader:
                 path.mkdir(parents=True, exist_ok=True)
 
 
-# Backward compat alias
-ConfigLoader = AgentLoader
-
-
 def load_config(
     workspace_root: str | None = None,
     cli_overrides: dict[str, Any] | None = None,
@@ -471,20 +451,21 @@ def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> Agent
     rule_rows = agent_config_repo.list_rules(agent_config_id)
     rules = [{"name": r.get("filename", "").replace(".md", ""), "content": r.get("content", "")} for r in rule_rows]
 
-    # Sub-agents from agent_sub_agents table
+    # Sub-agents use the same default layer as filesystem bundles, then repo rows override by name.
+    loader = AgentLoader()
+    agents_by_name = {agent.name: agent for agent in loader._discover_agents(loader._system_defaults_dir)}
     sub_agent_rows = agent_config_repo.list_sub_agents(agent_config_id)
-    agents = []
     for sa in sub_agent_rows:
-        agents.append(
-            AgentConfig(
-                name=sa.get("name", ""),
-                description=sa.get("description", ""),
-                tools=sa.get("tools", ["*"]),
-                system_prompt=sa.get("system_prompt", ""),
-                model=sa.get("model"),
-                source_dir=None,
-            )
+        sub_agent = AgentConfig(
+            name=sa.get("name", ""),
+            description=sa.get("description", ""),
+            tools=sa.get("tools", ["*"]),
+            system_prompt=sa.get("system_prompt", ""),
+            model=sa.get("model"),
+            source_dir=None,
         )
+        if sub_agent.name:
+            agents_by_name[sub_agent.name] = sub_agent
 
     # Skills from agent_skills table
     skill_rows = agent_config_repo.list_skills(agent_config_id)
@@ -507,7 +488,7 @@ def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> Agent
         meta=meta,
         runtime=runtime,
         rules=rules,
-        agents=agents,
+        agents=list(agents_by_name.values()),
         skills=skills,
         mcp=mcp,
     )

@@ -390,10 +390,6 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: agent_id)
-    monkeypatch.setattr(
-        "backend.web.routers.settings.load_settings",
-        lambda: (_ for _ in ()).throw(AssertionError("filesystem preferences not allowed")),
-    )
 
     class _ThreadRepo:
         def get_by_id(self, thread_id: str):
@@ -428,3 +424,45 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id=thread_id)
 
     assert captured["model_name"] == expected_model_name
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_does_not_fallback_to_local_preferences_when_repo_missing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["model_name"] = kwargs.get("model_name")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-10")
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-10",
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-10", agent_config_id="cfg-10")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            agent_config_repo=SimpleNamespace(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-10")
+
+    assert captured["model_name"] is None

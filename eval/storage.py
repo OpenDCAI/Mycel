@@ -25,10 +25,6 @@ class TrajectoryStore:
             container = build_storage_container()
             self._repo = container.eval_repo()
 
-    def _init_db(self) -> None:
-        if hasattr(self._repo, "ensure_schema"):
-            self._repo.ensure_schema()
-
     def save_trajectory(self, trajectory: RunTrajectory) -> str:
         """Save a trajectory and its LLM/tool call records. Returns run_id."""
         trajectory_json = trajectory.model_dump_json()
@@ -92,6 +88,10 @@ class TrajectoryStore:
         if not trajectory_json:
             return None
         return RunTrajectory.model_validate_json(trajectory_json)
+
+    def get_run(self, run_id: str) -> dict | None:
+        """Load one persisted run header by run_id."""
+        return self._repo.get_run(run_id)
 
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:
         """List eval runs, optionally filtered by thread_id."""

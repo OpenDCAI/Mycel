@@ -17,12 +17,8 @@ class SQLiteDBRole(StrEnum):
     """Logical database roles used by SQLite callers."""
 
     MAIN = "main"
-    RUN_EVENT = "run_event"
-    EVAL = "eval"
     SANDBOX = "sandbox"
     QUEUE = "queue"
-    SUBAGENT = "subagent"
-    CHAT = "chat"
 
 
 def _env_path(env_var: str, fallback: Path) -> Path:
@@ -41,33 +37,11 @@ def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) 
 
     if role == SQLiteDBRole.MAIN:
         return main_path
-    if role == SQLiteDBRole.RUN_EVENT:
-        return _env_path("LEON_RUN_EVENT_DB_PATH", main_path.with_name("events.db"))
-    if role == SQLiteDBRole.EVAL:
-        return _env_path("LEON_EVAL_DB_PATH", home_root / "eval.db")
     if role == SQLiteDBRole.SANDBOX:
         return _env_path("LEON_SANDBOX_DB_PATH", home_root / "sandbox.db")
     if role == SQLiteDBRole.QUEUE:
         return _env_path("LEON_QUEUE_DB_PATH", main_path.with_name("queue.db"))
-    if role == SQLiteDBRole.SUBAGENT:
-        return _env_path("LEON_SUBAGENT_DB_PATH", main_path.with_name("subagent.db"))
-    if role == SQLiteDBRole.CHAT:
-        return _env_path("LEON_CHAT_DB_PATH", main_path.with_name("chat.db"))
     return main_path
-
-
-def retry_on_locked(fn, max_retries=5, delay=0.2):
-    """Retry a DB write on 'database is locked' errors with exponential backoff."""
-    import time
-
-    for attempt in range(max_retries):
-        try:
-            return fn()
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(delay * (attempt + 1))
-                continue
-            raise
 
 
 def apply_pragmas(conn: sqlite3.Connection) -> None:
@@ -96,24 +70,6 @@ def connect_sqlite(
     if row_factory is not None:
         conn.row_factory = row_factory
     return conn
-
-
-def connect_sqlite_role(
-    role: SQLiteDBRole,
-    *,
-    db_path: Path | str | None = None,
-    row_factory: type | None = None,
-    check_same_thread: bool = True,
-    timeout_ms: int = BUSY_TIMEOUT_MS,
-) -> sqlite3.Connection:
-    """Create connection for a logical role using role-specific path resolution."""
-    resolved = resolve_role_db_path(role, db_path=db_path)
-    return connect_sqlite(
-        resolved,
-        row_factory=row_factory,
-        check_same_thread=check_same_thread,
-        timeout_ms=timeout_ms,
-    )
 
 
 async def connect_sqlite_async(

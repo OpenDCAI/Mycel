@@ -27,7 +27,6 @@ class _FakeSnapshotRepo:
 
 
 def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
-    monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
         "make_sandbox_monitor_repo",
@@ -59,7 +58,6 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
 
 
 def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
-    monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
         "make_sandbox_monitor_repo",
@@ -85,7 +83,6 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
 
 
 def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatch):
-    monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
         "make_sandbox_monitor_repo",

@@ -131,7 +131,6 @@ class TaskService:
     def __init__(
         self,
         registry: ToolRegistry,
-        workspace_root: str | Path | None = None,
         db_path: Path | None = None,
         thread_id: str | None = None,
         repo: Any | None = None,
@@ -295,16 +294,3 @@ class TaskService:
             ensure_ascii=False,
             indent=2,
         )
-
-    # ── compatibility helpers (used by agent.py runtime introspection) ────────
-
-    def get_tasks(self) -> dict[str, Task]:
-        thread_id = self._get_thread_id()
-        return {t.id: t for t in self._repo.list_all(thread_id)}
-
-    def get_active_task(self) -> Task | None:
-        thread_id = self._get_thread_id()
-        for task in self._repo.list_all(thread_id):
-            if task.status == TaskStatus.IN_PROGRESS:
-                return task
-        return None

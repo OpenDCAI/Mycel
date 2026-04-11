@@ -241,31 +241,21 @@ class TestGrepMultiline:
 class TestGrepDefaultExcludes:
     """DEFAULT_EXCLUDES directories are skipped."""
 
-    def test_node_modules_excluded(self, mw: SearchService, workspace: Path):
-        # Create a file inside node_modules
-        nm = workspace / "node_modules" / "pkg"
-        nm.mkdir(parents=True)
-        (nm / "index.js").write_text("const hello = 'world';\n")
+    @pytest.mark.parametrize(
+        ("relative_path", "content"),
+        [
+            ("node_modules/pkg/index.js", "const hello = 'world';\n"),
+            (".git/objects/data", "hello ref\n"),
+            ("src/__pycache__/main.cpython-312.pyc", "hello cached\n"),
+        ],
+    )
+    def test_excluded_paths_do_not_appear(self, mw: SearchService, workspace: Path, relative_path: str, content: str):
+        excluded = workspace / relative_path
+        excluded.parent.mkdir(parents=True, exist_ok=True)
+        excluded.write_text(content)
 
         result = _grep(mw, pattern="hello", output_mode="files_with_matches")
-        # Check the excluded file itself is not in results
-        assert str(nm / "index.js") not in result
-
-    def test_git_excluded(self, mw: SearchService, workspace: Path):
-        git_dir = workspace / ".git" / "objects"
-        git_dir.mkdir(parents=True)
-        (git_dir / "data").write_text("hello ref\n")
-
-        result = _grep(mw, pattern="hello", output_mode="files_with_matches")
-        assert str(git_dir / "data") not in result
-
-    def test_pycache_excluded(self, mw: SearchService, workspace: Path):
-        cache_dir = workspace / "src" / "__pycache__"
-        cache_dir.mkdir(parents=True)
-        (cache_dir / "main.cpython-312.pyc").write_text("hello cached\n")
-
-        result = _grep(mw, pattern="hello", output_mode="files_with_matches")
-        assert str(cache_dir / "main.cpython-312.pyc") not in result
+        assert str(excluded) not in result
 
 
 class TestGrepInvalidPattern:
@@ -300,19 +290,20 @@ class TestGrepPathValidation:
 class TestGlobBasic:
     """Basic glob pattern matching."""
 
-    def test_all_py_files(self, mw: SearchService, workspace: Path):
-        result = _glob(mw, pattern="**/*.py")
-        assert "main.py" in result
-        assert "utils.py" in result
-
-    def test_all_js_files(self, mw: SearchService, workspace: Path):
-        result = _glob(mw, pattern="**/*.js")
-        assert "app.js" in result
-        assert "main.py" not in result
-
-    def test_md_files(self, mw: SearchService, workspace: Path):
-        result = _glob(mw, pattern="*.md")
-        assert "README.md" in result
+    @pytest.mark.parametrize(
+        ("pattern", "expected", "missing"),
+        [
+            ("**/*.py", ["main.py", "utils.py"], []),
+            ("**/*.js", ["app.js"], ["main.py"]),
+            ("*.md", ["README.md"], []),
+        ],
+    )
+    def test_matching_files(self, mw: SearchService, pattern: str, expected: list[str], missing: list[str]):
+        result = _glob(mw, pattern=pattern)
+        for item in expected:
+            assert item in result
+        for item in missing:
+            assert item not in result
 
     def test_no_matches(self, mw: SearchService):
         result = _glob(mw, pattern="**/*.xyz")
@@ -348,23 +339,21 @@ class TestGlobMtimeSorting:
 class TestGlobDefaultExcludes:
     """DEFAULT_EXCLUDES applied to Glob as well."""
 
-    def test_node_modules_excluded(self, mw: SearchService, workspace: Path):
-        nm = workspace / "node_modules" / "pkg"
-        nm.mkdir(parents=True)
-        (nm / "index.js").write_text("module.exports = {};\n")
+    @pytest.mark.parametrize(
+        ("relative_path", "pattern", "visible"),
+        [
+            ("node_modules/pkg/index.js", "**/*.js", "app.js"),
+            (".venv/lib/site.py", "**/*.py", "main.py"),
+        ],
+    )
+    def test_excluded_paths_do_not_appear(self, mw: SearchService, workspace: Path, relative_path: str, pattern: str, visible: str):
+        excluded = workspace / relative_path
+        excluded.parent.mkdir(parents=True)
+        excluded.write_text("excluded")
 
-        result = _glob(mw, pattern="**/*.js")
-        # The excluded file must not appear, but src/app.js should
-        assert str(nm / "index.js") not in result
-        assert "app.js" in result
-
-    def test_venv_excluded(self, mw: SearchService, workspace: Path):
-        venv = workspace / ".venv" / "lib"
-        venv.mkdir(parents=True)
-        (venv / "site.py").write_text("# site\n")
-
-        result = _glob(mw, pattern="**/*.py")
-        assert str(venv / "site.py") not in result
+        result = _glob(mw, pattern=pattern)
+        assert str(excluded) not in result
+        assert visible in result
 
 
 class TestGlobPathParameter:
@@ -402,21 +391,18 @@ class TestGlobPathParameter:
 class TestPaginate:
     """Unit tests for _paginate static method."""
 
-    def test_no_limits(self):
-        assert SearchService._paginate("a\nb\nc", None, None) == "a\nb\nc"
-
-    def test_head_limit_only(self):
-        assert SearchService._paginate("a\nb\nc", 2, None) == "a\nb"
-
-    def test_offset_only(self):
-        assert SearchService._paginate("a\nb\nc", None, 1) == "b\nc"
-
-    def test_both(self):
-        assert SearchService._paginate("a\nb\nc\nd\ne", 2, 1) == "b\nc"
-
-    def test_offset_beyond_lines(self):
-        result = SearchService._paginate("a\nb", None, 10)
-        assert result == "No matches found"
+    @pytest.mark.parametrize(
+        ("text", "head_limit", "offset", "expected"),
+        [
+            ("a\nb\nc", None, None, "a\nb\nc"),
+            ("a\nb\nc", 2, None, "a\nb"),
+            ("a\nb\nc", None, 1, "b\nc"),
+            ("a\nb\nc\nd\ne", 2, 1, "b\nc"),
+            ("a\nb", None, 10, "No matches found"),
+        ],
+    )
+    def test_paginate(self, text: str, head_limit: int | None, offset: int | None, expected: str):
+        assert SearchService._paginate(text, head_limit, offset) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -427,17 +413,17 @@ class TestPaginate:
 class TestIsExcluded:
     """Unit tests for _is_excluded."""
 
-    def test_excluded_dir(self):
-        assert SearchService._is_excluded(Path("/project/node_modules/pkg/index.js"))
-
-    def test_excluded_git(self):
-        assert SearchService._is_excluded(Path("/project/.git/HEAD"))
-
-    def test_not_excluded(self):
-        assert not SearchService._is_excluded(Path("/project/src/main.py"))
-
-    def test_excluded_nested(self):
-        assert SearchService._is_excluded(Path("/a/b/__pycache__/mod.pyc"))
+    @pytest.mark.parametrize(
+        ("path", "expected"),
+        [
+            ("/project/node_modules/pkg/index.js", True),
+            ("/project/.git/HEAD", True),
+            ("/project/src/main.py", False),
+            ("/a/b/__pycache__/mod.pyc", True),
+        ],
+    )
+    def test_paths(self, path: str, expected: bool):
+        assert SearchService._is_excluded(Path(path)) is expected
 
 
 # ---------------------------------------------------------------------------

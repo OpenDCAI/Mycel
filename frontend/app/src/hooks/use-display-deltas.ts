@@ -231,6 +231,7 @@ export function useDisplayDeltas(
         await postRun(threadId, message, undefined, attachments?.length ? { attachments } : undefined);
       } catch (err) {
         setSendPending(false);
+        if (err instanceof Error && err.message === "Run cancelled") return;
         if (err instanceof Error) {
           const errorTurn: AssistantTurn = {
             id: makeId("error"),
@@ -248,6 +249,8 @@ export function useDisplayDeltas(
   const handleStopStreaming = useCallback(async () => {
     try {
       await cancelRun(threadId);
+      setSendPending(false);
+      setDisplayRunState({ threadId, state: "closed" });
     } catch (err) {
       console.error("Failed to cancel run:", err);
     }

@@ -5,7 +5,6 @@ Uses mock model to verify the full astream pipeline without real API calls.
 
 import json
 import os
-import sys
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -963,12 +962,10 @@ def test_leon_agent_chat_tool_wiring_rejects_legacy_user_id_only_runtime_shape(m
             raise AssertionError("chat tool should not initialize from legacy-only runtime shape")
 
     monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
-    monkeypatch.setattr("core.runtime.agent.CronToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
     monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
-    monkeypatch.setitem(sys.modules, "backend.taskboard.service", SimpleNamespace(TaskBoardService=_NoopService))
     monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
 
     agent = object.__new__(LeonAgent)
@@ -1032,15 +1029,13 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy
     assert "- Your owner: Owner 2 (human user_id: human-user-2)" in prompt
 
 
-def test_leon_agent_chat_identity_prompt_resolves_thread_user_name_via_member() -> None:
+def test_leon_agent_chat_identity_prompt_does_not_bridge_legacy_thread_user_id() -> None:
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
-    agent._thread_repo = SimpleNamespace(
-        get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "member-agent-3"} if uid == "thread-user-3" else None
-    )
+    agent._thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("legacy thread-user bridge should not be used"))
     agent._chat_repos = {
         "chat_identity_id": "thread-user-3",
         "owner_id": "human-user-3",
@@ -1057,7 +1052,7 @@ def test_leon_agent_chat_identity_prompt_resolves_thread_user_name_via_member() 
 
     prompt = LeonAgent._compose_system_prompt(agent)
 
-    assert "- Your name: Truffle" in prompt
+    assert "- Your name: thread-user-3" in prompt
     assert "- Your chat identity id: thread-user-3" in prompt
     assert "- Your owner: Owner 3 (human user_id: human-user-3)" in prompt
 
@@ -1081,12 +1076,10 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
             captured.update(kwargs)
 
     monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
-    monkeypatch.setattr("core.runtime.agent.CronToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
     monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
-    monkeypatch.setitem(sys.modules, "backend.taskboard.service", SimpleNamespace(TaskBoardService=_NoopService))
     monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
 
     agent = object.__new__(LeonAgent)

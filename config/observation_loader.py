@@ -1,6 +1,6 @@
 """Three-tier observation configuration loader.
 
-Follows the same pattern as ConfigLoader / ModelsLoader:
+Follows the same pattern as AgentLoader / ModelsLoader:
 system defaults → user (~/.leon/observation.json) → project (.leon/observation.json) → CLI overrides
 """
 

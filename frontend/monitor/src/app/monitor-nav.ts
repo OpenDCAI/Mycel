@@ -1,16 +1,25 @@
 export type MonitorNavItem = {
   to: string;
   label: string;
-  matchPrefix?: string;
+  matchPrefixes?: string[];
   eyebrow: string;
 };
 
 export const monitorNav: readonly MonitorNavItem[] = [
   { to: "/dashboard", label: "Dashboard", eyebrow: "Overview" },
-  { to: "/threads", label: "Threads", matchPrefix: "/thread/", eyebrow: "Runtime" },
-  { to: "/resources", label: "Resources", eyebrow: "Runtime" },
-  { to: "/leases", label: "Leases", matchPrefix: "/lease/", eyebrow: "Runtime" },
-  { to: "/evaluation", label: "Evaluation", eyebrow: "Operators" },
-  { to: "/diverged", label: "Diverged", eyebrow: "Signals" },
-  { to: "/events", label: "Events", matchPrefix: "/event/", eyebrow: "Signals" },
+  { to: "/resources", label: "Resources", eyebrow: "Runtime", matchPrefixes: ["/resources", "/providers", "/runtimes"] },
+  { to: "/leases", label: "Leases", eyebrow: "Runtime", matchPrefixes: ["/leases", "/operations"] },
+  { to: "/threads", label: "Threads", eyebrow: "Workbench", matchPrefixes: ["/threads"] },
+  { to: "/evaluation", label: "Evaluation", eyebrow: "Operators", matchPrefixes: ["/evaluation"] },
 ];
+
+export function resolveMonitorNav(pathname: string): MonitorNavItem {
+  return (
+    monitorNav.find(
+      (item) =>
+        pathname === item.to ||
+        item.matchPrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)),
+    ) ??
+    monitorNav[0]
+  );
+}

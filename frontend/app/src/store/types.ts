@@ -51,42 +51,6 @@ export interface Agent {
   builtin?: boolean;
 }
 
-export type TaskStatus = "pending" | "running" | "completed" | "failed";
-export type Priority = "high" | "medium" | "low";
-export type TaskSource = "manual" | "cron" | "agent" | "queue";
-
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  assignee_id: string;
-  status: TaskStatus;
-  priority: Priority;
-  progress: number;
-  deadline: string;
-  created_at: number;
-  // New fields
-  thread_id: string;
-  source: TaskSource;
-  cron_job_id: string;
-  result: string;
-  started_at: number;
-  completed_at: number;
-  tags: string[];
-}
-
-export interface CronJob {
-  id: string;
-  name: string;
-  description: string;
-  cron_expression: string;
-  task_template: string;
-  enabled: number;
-  last_run_at: number;
-  next_run_at: number;
-  created_at: number;
-}
-
 export interface ResourceItem {
   id: string;
   name: string;

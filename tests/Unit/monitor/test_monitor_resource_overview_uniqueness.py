@@ -67,7 +67,7 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(
         resource_projection_service,
         "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
+        lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(resource_projection_service, "_thread_owners", owners)
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
@@ -104,7 +104,7 @@ def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch
     monkeypatch.setattr(
         resource_projection_service,
         "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
+        lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(
         resource_projection_service,
@@ -156,7 +156,7 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
     monkeypatch.setattr(
         resource_projection_service,
         "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
+        lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(
         resource_common,
@@ -220,7 +220,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
     monkeypatch.setattr(
         resource_projection_service,
         "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
+        lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(
         resource_projection_service,
@@ -264,7 +264,7 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
     monkeypatch.setattr(
         resource_projection_service,
         "_resolve_instance_capabilities",
-        lambda _config_name: (resource_projection_service._empty_capabilities(), None),
+        lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(
         resource_projection_service,

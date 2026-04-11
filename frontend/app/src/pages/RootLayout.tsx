@@ -69,7 +69,7 @@ function AuthenticatedLayout() {
     if (lastLoadedUserIdRef.current === userId) return;
     // @@@auth-session-reset - switching users in the same SPA process must discard
     // panel caches before reloading, otherwise the next account inherits old
-    // members/tasks and the sidebar mixes identities.
+    // agents/resources and the sidebar mixes identities.
     lastLoadedUserIdRef.current = userId;
     resetSessionData();
     void loadAll();

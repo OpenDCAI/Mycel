@@ -1,74 +1,88 @@
 import { Link } from "react-router-dom";
 
-import ErrorState from "../components/ErrorState";
-import StateBadge from "../components/StateBadge";
 import { useMonitorData } from "../app/fetch";
+import ErrorState from "../components/ErrorState";
+
+type ThreadsPayload = {
+  threads: Array<{
+    thread_id: string;
+    sandbox?: string | null;
+    agent_name?: string | null;
+    agent_user_id?: string | null;
+    branch_index?: number | null;
+    sidebar_label?: string | null;
+    avatar_url?: string | null;
+    is_main?: boolean | null;
+    running?: boolean | null;
+    updated_at?: string | null;
+  }>;
+};
 
 export default function ThreadsPage() {
-  const { data, error } = useMonitorData<any>("/threads");
+  const { data, error } = useMonitorData<ThreadsPayload>("/threads");
 
   if (error) return <ErrorState title="Threads" error={error} />;
   if (!data) return <div>Loading...</div>;
 
-  const items = data.items ?? [];
-  const threadCards = [
-    { label: "Active Threads", value: data.count ?? items.length },
-    {
-      label: "Attached Leases",
-      value: items.filter((item: any) => item.lease?.lease_id).length,
-    },
-    {
-      label: "Pressure Sessions",
-      value: items.reduce((total: number, item: any) => total + (item.session_count ?? 0), 0),
-    },
-  ];
+  const threads = data.threads ?? [];
+  const runningCount = threads.filter((thread) => thread.running).length;
+  const mainCount = threads.filter((thread) => thread.is_main).length;
 
   return (
     <div className="page">
-      <h1>{data.title}</h1>
-      <p className="count">Total: {data.count}</p>
+      <h1>Threads</h1>
+      <p className="description">Owner-visible threads, trajectory entry points, and runtime linkage.</p>
       <section className="surface-section">
-        <h2>Thread Pressure</h2>
+        <h2>Thread Summary</h2>
         <div className="surface-grid">
-          {threadCards.map((card) => (
-            <article className="surface-card" key={card.label}>
-              <p className="surface-card__eyebrow">{card.label}</p>
-              <p className="surface-card__value">{card.value}</p>
-            </article>
-          ))}
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">All Threads</p>
+            <p className="surface-card__value">{threads.length}</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Running Now</p>
+            <p className="surface-card__value">{runningCount}</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Main Threads</p>
+            <p className="surface-card__value">{mainCount}</p>
+          </article>
         </div>
       </section>
-      <h2>Raw Thread Table</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Thread ID</th>
-            <th>Sessions</th>
-            <th>Last Active</th>
-            <th>Lease</th>
-            <th>Provider</th>
-            <th>State</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.items.map((item: any) => (
-            <tr key={item.thread_id}>
-              <td>
-                <Link to={item.thread_url}>{item.thread_id.slice(0, 8)}</Link>
-              </td>
-              <td>{item.session_count}</td>
-              <td>{item.last_active_ago}</td>
-              <td>
-                {item.lease.lease_id ? <Link to={item.lease.lease_url}>{item.lease.lease_id}</Link> : "-"}
-              </td>
-              <td>{item.lease.provider || "-"}</td>
-              <td>
-                <StateBadge badge={item.state_badge} />
-              </td>
+      <section className="surface-section">
+        <div className="leases-workbench-header">
+          <div>
+            <h2>Thread Workbench</h2>
+            <p className="description">Pick a thread to inspect its trajectory and runtime links.</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Thread</th>
+              <th>Agent</th>
+              <th>Sandbox</th>
+              <th>Branch</th>
+              <th>Status</th>
+              <th>Updated</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {threads.map((thread) => (
+              <tr key={thread.thread_id}>
+                <td className="mono">
+                  <Link to={`/threads/${thread.thread_id}`}>{thread.thread_id}</Link>
+                </td>
+                <td>{thread.agent_name ?? thread.agent_user_id ?? "-"}</td>
+                <td>{thread.sandbox ?? "-"}</td>
+                <td>{thread.sidebar_label ?? (thread.branch_index != null ? `Branch ${thread.branch_index}` : "-")}</td>
+                <td>{thread.running ? "running" : "idle"}</td>
+                <td>{thread.updated_at ?? "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
     </div>
   );
 }

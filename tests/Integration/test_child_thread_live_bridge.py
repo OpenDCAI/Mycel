@@ -18,6 +18,44 @@ from core.runtime.middleware.monitor import AgentState
 from core.runtime.middleware.queue.manager import MessageQueueManager
 
 
+class _FakeRunEventRepo:
+    def __init__(self) -> None:
+        self._seq = 0
+
+    def close(self) -> None:
+        return None
+
+    def append_event(self, thread_id, run_id, event_type, data, message_id=None) -> int:
+        self._seq += 1
+        return self._seq
+
+    def list_events(self, thread_id, run_id, *, after=0, limit=200) -> list[dict]:
+        return []
+
+    def latest_seq(self, thread_id) -> int:
+        return self._seq
+
+    def latest_run_id(self, thread_id) -> str | None:
+        return None
+
+    def list_run_ids(self, thread_id) -> list[str]:
+        return []
+
+    def run_start_seq(self, thread_id, run_id) -> int:
+        return 0
+
+    def delete_runs(self, thread_id, run_ids) -> int:
+        return 0
+
+    def delete_thread_events(self, thread_id) -> int:
+        return 0
+
+
+def _fake_storage_container() -> SimpleNamespace:
+    repo = _FakeRunEventRepo()
+    return SimpleNamespace(run_event_repo=lambda: repo)
+
+
 class _FakeRuntime:
     def __init__(self) -> None:
         self.current_state = AgentState.IDLE
@@ -90,6 +128,7 @@ class _BlockingChildAgent:
     def __init__(self) -> None:
         self.runtime = _FakeRuntime()
         self.agent = _BlockingChildGraph()
+        self.storage_container = _fake_storage_container()
         self.closed = False
         self.close_kwargs: dict[str, object] = {}
 
@@ -100,6 +139,12 @@ class _BlockingChildAgent:
 
 def _make_request(app: SimpleNamespace) -> Request:
     return Request({"type": "http", "headers": [], "app": app})
+
+
+def _patch_event_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("backend.web.services.event_store.get_last_seq", AsyncMock(return_value=0))
+    monkeypatch.setattr("backend.web.services.event_store.get_latest_run_id", AsyncMock(return_value=None))
+    monkeypatch.setattr("backend.web.services.event_store.get_run_start_seq", AsyncMock(return_value=0))
 
 
 def _require_entries(builder: DisplayBuilder, thread_id: str) -> list[dict]:
@@ -193,7 +238,10 @@ def _make_router_app(
 
 
 @pytest.mark.asyncio
-async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runtime_and_detail_before_completion():
+async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runtime_and_detail_before_completion(
+    monkeypatch,
+):
+    _patch_event_store(monkeypatch)
     child_thread_id = "subagent-live-1"
     agent = _BlockingChildAgent()
     parent_events: list[dict] = []
@@ -249,6 +297,7 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
 
 @pytest.mark.asyncio
 async def test_run_child_thread_live_closes_and_detaches_completed_child_agent_without_losing_read_surface(monkeypatch):
+    _patch_event_store(monkeypatch)
     child_thread_id = "subagent-live-detach"
     agent = _BlockingChildAgent()
     app = SimpleNamespace(

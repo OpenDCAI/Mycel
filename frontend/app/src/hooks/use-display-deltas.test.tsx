@@ -1,17 +1,22 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatEntry, StreamEvent } from "../api";
 import { useDisplayDeltas } from "./use-display-deltas";
 
+const apiMocks = vi.hoisted(() => ({
+  cancelRun: vi.fn(async () => undefined),
+  postRun: vi.fn(async () => ({ run_id: "run-1", thread_id: "thread-1" })),
+}));
+
 vi.mock("../api", async () => {
   const actual = await vi.importActual<typeof import("../api")>("../api");
   return {
     ...actual,
-    cancelRun: vi.fn(async () => undefined),
-    postRun: vi.fn(async () => ({ run_id: "run-1", thread_id: "thread-1" })),
+    cancelRun: apiMocks.cancelRun,
+    postRun: apiMocks.postRun,
   };
 });
 
@@ -19,6 +24,10 @@ let latestHandler: ((event: StreamEvent) => void) | null = null;
 
 afterEach(() => {
   latestHandler = null;
+  apiMocks.cancelRun.mockReset();
+  apiMocks.cancelRun.mockResolvedValue(undefined);
+  apiMocks.postRun.mockReset();
+  apiMocks.postRun.mockResolvedValue({ run_id: "run-1", thread_id: "thread-1" });
   cleanup();
 });
 
@@ -32,7 +41,7 @@ function Harness({
   streamIsRunning?: boolean;
 }) {
   const [entries, setEntries] = useState<ChatEntry[]>(initialEntries);
-  const { isRunning, handleSendMessage } = useDisplayDeltas({
+  const { isRunning, handleSendMessage, handleStopStreaming } = useDisplayDeltas({
     threadId,
     onUpdate: setEntries,
     displaySeq: 0,
@@ -52,6 +61,7 @@ function Harness({
       <pre data-testid="entries">{JSON.stringify(entries)}</pre>
       <div data-testid="running">{String(isRunning)}</div>
       <button data-testid="send" onClick={() => void handleSendMessage("hello")} />
+      <button data-testid="stop" onClick={() => void handleStopStreaming()} />
     </>
   );
 }
@@ -209,5 +219,46 @@ describe("useDisplayDeltas", () => {
     });
 
     expect(screen.getByTestId("running").textContent).toBe("false");
+  });
+
+  it("clears pending state without appending an error when startup is cancelled", async () => {
+    apiMocks.postRun.mockRejectedValueOnce(new Error("Run cancelled"));
+
+    render(<Harness initialEntries={[]} streamIsRunning={false} />);
+
+    fireEvent.click(screen.getByTestId("send"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("running").textContent).toBe("false");
+    });
+    expect(JSON.parse(screen.getByTestId("entries").textContent || "[]")).toEqual([]);
+  });
+
+  it("closes display-owned running state after stop succeeds", async () => {
+    render(<Harness initialEntries={[]} streamIsRunning={false} />);
+
+    act(() => {
+      latestHandler?.({
+        type: "display_delta",
+        data: {
+          type: "append_entry",
+          entry: {
+            id: "turn-1",
+            role: "assistant",
+            timestamp: Date.now(),
+            streaming: true,
+            segments: [],
+          },
+        },
+      });
+    });
+
+    expect(screen.getByTestId("running").textContent).toBe("true");
+
+    fireEvent.click(screen.getByTestId("stop"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("running").textContent).toBe("false");
+    });
   });
 });

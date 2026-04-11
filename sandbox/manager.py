@@ -271,6 +271,27 @@ class SandboxManager:
             raise ValueError(f"Volume not found: {lease.volume_id}")
         return entry
 
+    def _destroy_volume_entry(self, volume_id: str) -> None:
+        import json
+
+        from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
+
+        repo = self._sandbox_volume_repo()
+        try:
+            entry = repo.get(volume_id)
+            if not entry:
+                raise RuntimeError(f"Volume not found: {volume_id}")
+            source = deserialize_volume_source(json.loads(entry["source"]))
+            # @@@managed-volume-destroy-seam - provider-managed volumes must be reclaimed
+            # through the manager-owned lease destroy path or Daytona quotas will leak.
+            if isinstance(source, DaytonaVolume):
+                self.provider.delete_managed_volume(source.volume_name)
+            source.cleanup()
+            if not repo.delete(volume_id):
+                raise RuntimeError(f"Failed to delete volume metadata: {volume_id}")
+        finally:
+            repo.close()
+
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
         import json
@@ -360,12 +381,6 @@ class SandboxManager:
         if thread_terminals:
             raise RuntimeError(f"Thread {thread_id} has terminals but no active terminal pointer")
         return None
-
-    def _get_active_session(self, thread_id: str):
-        terminal = self._get_active_terminal(thread_id)
-        if not terminal:
-            return None
-        return self.session_manager.get(thread_id, terminal.terminal_id)
 
     def _get_thread_terminals(self, thread_id: str):
         rows = self.terminal_store.list_by_thread(thread_id)
@@ -848,11 +863,20 @@ class SandboxManager:
             lease_in_use = any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all())
             if lease_in_use:
                 continue
-            lease = self._get_lease(lease_id)
-            if not lease:
+            if not self.destroy_lease_resources(lease_id):
                 raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
-            lease.destroy_instance(self.provider)
-            self.lease_store.delete(lease_id)
+        return True
+
+    def destroy_lease_resources(self, lease_id: str) -> bool:
+        lease = self._get_lease(lease_id)
+        if not lease:
+            return False
+        if any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all()):
+            raise RuntimeError(f"Lease {lease_id} still has bound terminals")
+        lease.destroy_instance(self.provider)
+        if lease.volume_id:
+            self._destroy_volume_entry(lease.volume_id)
+        self.lease_store.delete(lease_id)
         return True
 
     def list_sessions(self) -> list[dict]:

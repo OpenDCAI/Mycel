@@ -2,7 +2,7 @@
 name: explore
 description: 回答代码库问题。用于：查找文件、搜索代码、理解现有实现
 tools:
-  - read_file
+  - Read
   - Grep
   - Glob
   - list_dir
@@ -22,7 +22,7 @@ tools:
 ## 工作方式
 
 1. 用 Glob/Grep 快速定位
-2. 用 read_file 读取关键内容
+2. 用 Read 读取关键内容
 3. 总结发现，直接回答问题
 
 ## 限制

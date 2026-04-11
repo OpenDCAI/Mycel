@@ -1,7 +1,7 @@
 """Tool catalog — single source of truth for all available agent tools.
 
 Each entry is a ToolDef with fully-typed fields.  The catalog is the
-authoritative registry consumed by member_service to build tool lists
+authoritative registry consumed by agent_user_service to build tool lists
 for the panel UI.
 
 Adding a new tool:  append an entry below.
@@ -23,10 +23,8 @@ class ToolGroup(StrEnum):
     AGENT = "agent"
     CHAT = "chat"
     TODO = "todo"
-    CRON = "cron"
     SKILLS = "skills"
     SYSTEM = "system"
-    TASKBOARD = "taskboard"
 
 
 class ToolMode(StrEnum):
@@ -75,22 +73,11 @@ TOOLS: list[ToolDef] = [
     ToolDef(name="TaskGet", desc="获取任务详情", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
     ToolDef(name="TaskList", desc="列出所有任务", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
     ToolDef(name="TaskUpdate", desc="更新任务状态", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
-    # cron — backed by existing cron_jobs substrate; off by default until explicitly enabled
-    ToolDef(name="CronCreate", desc="创建定时任务", group=ToolGroup.CRON, mode=ToolMode.DEFERRED, default=False),
-    ToolDef(name="CronDelete", desc="删除定时任务", group=ToolGroup.CRON, mode=ToolMode.DEFERRED, default=False),
-    ToolDef(name="CronList", desc="列出定时任务", group=ToolGroup.CRON, mode=ToolMode.DEFERRED, default=False),
     # skills
     ToolDef(name="load_skill", desc="加载 Skill", group=ToolGroup.SKILLS),
     # system
     ToolDef(name="tool_search", desc="搜索可用工具", group=ToolGroup.SYSTEM),
     ToolDef(name="LSP", desc="Language Server Protocol 操作", group=ToolGroup.SYSTEM, mode=ToolMode.DEFERRED, default=False),
-    # taskboard — all off by default; enable on dedicated scheduler members
-    ToolDef(name="ListBoardTasks", desc="列出任务板上的任务", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="ClaimTask", desc="认领一个任务板任务", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="UpdateTaskProgress", desc="更新任务进度", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="CompleteTask", desc="将任务标记为完成", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="FailTask", desc="将任务标记为失败", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="CreateBoardTask", desc="在任务板上创建新任务（调度派发）", group=ToolGroup.TASKBOARD, default=False),
 ]
 
 # Fast lookup: name → ToolDef

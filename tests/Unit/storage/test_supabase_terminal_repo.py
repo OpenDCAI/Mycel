@@ -14,6 +14,7 @@ class _FakeTable:
         self.filters: list[tuple[str, object]] = []
         self.update_payload = None
         self.in_values: list[str] | None = None
+        self.client.in_calls.append((name, []))
         self.order_key: str | None = None
         self.order_desc = False
         self.limit_value: int | None = None
@@ -37,6 +38,7 @@ class _FakeTable:
 
     def in_(self, _key, values):
         self.in_values = list(values)
+        self.client.in_calls[-1] = (self.name, self.in_values)
         return self
 
     def order(self, key, *, desc=False):
@@ -56,7 +58,9 @@ class _FakeTable:
         return _FakeResponse([])
 
     def _match(self, row: dict) -> bool:
-        return all(row.get(key) == value for key, value in self.filters)
+        return all(row.get(key) == value for key, value in self.filters) and (
+            self.in_values is None or row.get("thread_id") in self.in_values
+        )
 
     def _execute_terminals(self):
         if self.mode == "select":
@@ -99,6 +103,7 @@ class _FakeClient:
     def __init__(self, *, terminals: list[dict], pointers: list[dict]) -> None:
         self.terminals = [dict(row) for row in terminals]
         self.pointers = [dict(row) for row in pointers]
+        self.in_calls: list[tuple[str, list[str]]] = []
 
     def table(self, name: str):
         return _FakeTable(self, name)
@@ -211,3 +216,48 @@ def test_supabase_terminal_repo_persists_terminal_state() -> None:
     assert row["env_delta_json"] == '{"PWD":"/workspace/next"}'
     assert row["state_version"] == 1
     assert row["updated_at"] != 1
+
+
+def test_supabase_terminal_repo_summarize_threads_batches_large_in_filters() -> None:
+    thread_ids = [f"thread-{i}" for i in range(81)]
+    client = _FakeClient(
+        terminals=[
+            {
+                "terminal_id": "term-0",
+                "thread_id": "thread-0",
+                "lease_id": "lease-1",
+                "cwd": "/workspace",
+                "env_delta_json": "{}",
+                "state_version": 0,
+                "created_at": 1,
+                "updated_at": 1,
+            },
+            {
+                "terminal_id": "term-80",
+                "thread_id": "thread-80",
+                "lease_id": "lease-2",
+                "cwd": "/workspace",
+                "env_delta_json": "{}",
+                "state_version": 0,
+                "created_at": 2,
+                "updated_at": 2,
+            },
+        ],
+        pointers=[
+            {
+                "thread_id": "thread-0",
+                "active_terminal_id": "term-0",
+                "default_terminal_id": "term-0",
+            }
+        ],
+    )
+    repo = SupabaseTerminalRepo(client)
+
+    summary = repo.summarize_threads(thread_ids)
+
+    assert summary["thread-0"] == {"active_terminal_id": "term-0", "latest_terminal_id": "term-0"}
+    assert summary["thread-80"] == {"active_terminal_id": None, "latest_terminal_id": "term-80"}
+    pointer_in_calls = [values for table, values in client.in_calls if table == "thread_terminal_pointers" and values]
+    terminal_in_calls = [values for table, values in client.in_calls if table == "abstract_terminals" and values]
+    assert [len(values) for values in pointer_in_calls] == [80, 1]
+    assert [len(values) for values in terminal_in_calls] == [80, 1]

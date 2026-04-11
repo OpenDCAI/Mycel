@@ -1,5 +1,6 @@
 """Sandbox management service."""
 
+import json
 import logging
 import os
 import threading
@@ -17,6 +18,7 @@ from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.models import map_lease_to_session_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
+from storage.runtime import build_storage_container
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,33 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
     }
 
 
+def _lease_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) -> dict[str, Any]:
+    return {
+        "thread_id": thread_id,
+        "agent_user_id": agent_user_id,
+        "agent_name": agent_user.display_name,
+        "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
+    }
+
+
+def _apply_lease_recipe(lease: dict[str, Any], provider_name: str, raw_recipe: Any) -> None:
+    provider_type = provider_type_from_name(provider_name)
+    recipe_snapshot = (
+        normalize_recipe_snapshot(provider_type, json.loads(str(raw_recipe))) if raw_recipe else normalize_recipe_snapshot(provider_type)
+    )
+    lease["recipe_id"] = recipe_snapshot["id"] or lease.get("recipe_id") or default_recipe_id(provider_type)
+    lease["recipe"] = recipe_snapshot
+    lease["recipe_name"] = recipe_snapshot["name"]
+
+
+def _configured_api_key(name: str, configured: str | None, env_name: str) -> str | None:
+    key = configured or os.getenv(env_name)
+    if not key:
+        logger.warning("[sandbox] %s configured but no API key; skipping", name)
+        return None
+    return key
+
+
 def list_default_recipes() -> list[dict[str, Any]]:
     return list_builtin_recipes(available_sandbox_types())
 
@@ -47,21 +76,15 @@ def list_user_leases(
     *,
     thread_repo: Any = None,
     user_repo: Any = None,
-    main_db_path: str | Path | None = None,
-    sandbox_db_path: str | Path | None = None,
     include_runtime_session_id: bool = False,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
     if thread_repo is None or user_repo is None:
         raise RuntimeError("thread_repo and user_repo are required for list_user_leases")
-    _thread_repo = thread_repo
-    _user_repo = user_repo
-    own_repos = False
     try:
-        threads_by_id = {str(thread.get("id") or ""): thread for thread in _thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
-        users_by_id = {str(user.id): user for user in _user_repo.list_by_owner_user_id(user_id)}
+        threads_by_id = {str(thread.get("id") or ""): thread for thread in thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
+        users_by_id = {str(user.id): user for user in user_repo.list_by_owner_user_id(user_id)}
         rows = monitor_repo.list_leases_with_threads()
-        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None) if include_runtime_session_id else None
         grouped: dict[str, dict[str, Any]] = {}
         runtime_session_ids: dict[str, str | None] = {}
         for row in rows:
@@ -71,8 +94,8 @@ def list_user_leases(
             runtime_session_id = runtime_session_ids.get(lease_id)
             if lease_id not in runtime_session_ids:
                 runtime_session_id = str(row.get("current_instance_id") or "").strip() or None
-                if runtime_session_id is None and callable(query_lease_instance_id):
-                    runtime_session_id = query_lease_instance_id(lease_id)
+                if include_runtime_session_id and runtime_session_id is None:
+                    runtime_session_id = monitor_repo.query_lease_instance_id(lease_id)
                 runtime_session_ids[lease_id] = runtime_session_id
             group = grouped.setdefault(
                 lease_id,
@@ -104,14 +127,7 @@ def list_user_leases(
             if agent_user is None:
                 continue
             group["thread_ids"].append(thread_id)
-            group["agents"].append(
-                {
-                    "thread_id": thread_id,
-                    "agent_user_id": agent_user_id,
-                    "agent_name": agent_user.display_name,
-                    "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
-                }
-            )
+            group["agents"].append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
             if not group["cwd"] and row.get("cwd"):
                 group["cwd"] = row.get("cwd")
 
@@ -122,22 +138,10 @@ def list_user_leases(
             if not _is_user_visible_lease_state(lease):
                 continue
             provider_name = lease["provider_name"]
-            provider_type = provider_type_from_name(provider_name)
-            if lease["recipe"]:
-                import json
-
-                recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe"])))
-            else:
-                recipe_snapshot = normalize_recipe_snapshot(provider_type)
-            lease["recipe_id"] = recipe_snapshot["id"] or lease["recipe_id"] or default_recipe_id(provider_type)
-            lease["recipe"] = recipe_snapshot
-            lease["recipe_name"] = recipe_snapshot["name"]
+            _apply_lease_recipe(lease, provider_name, lease["recipe"])
             leases.append(lease)
         return leases
     finally:
-        if own_repos:
-            _user_repo.close()
-            _thread_repo.close()
         monitor_repo.close()
 
 
@@ -151,8 +155,6 @@ def resolve_owned_lease(
     monitor_repo = make_sandbox_monitor_repo()
     if thread_repo is None or user_repo is None:
         raise RuntimeError("thread_repo and user_repo are required for resolve_owned_lease")
-    _thread_repo = thread_repo
-    _user_repo = user_repo
     try:
         lease = monitor_repo.query_lease(lease_id)
         if lease is None:
@@ -166,49 +168,31 @@ def resolve_owned_lease(
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id in thread_ids:
                 continue
-            thread = _thread_repo.get_by_id(thread_id)
+            thread = thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
             agent_user_id = str(thread.get("agent_user_id") or "").strip()
             if not agent_user_id:
                 continue
-            agent_user = _user_repo.get_by_id(agent_user_id)
+            agent_user = user_repo.get_by_id(agent_user_id)
             if agent_user is None or agent_user.owner_user_id != user_id:
                 continue
             thread_ids.append(thread_id)
-            agents.append(
-                {
-                    "thread_id": thread_id,
-                    "agent_user_id": agent_user_id,
-                    "agent_name": agent_user.display_name,
-                    "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
-                }
-            )
+            agents.append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
         if not thread_ids:
             return None
 
         provider_name = str(lease.get("provider_name") or "local")
-        provider_type = provider_type_from_name(provider_name)
-        if lease.get("recipe_json"):
-            import json
-
-            recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe_json"])))
-        else:
-            recipe_snapshot = normalize_recipe_snapshot(provider_type)
 
         result = dict(lease)
         result["lease_id"] = lease_id
         result["provider_name"] = provider_name
         result["thread_ids"] = thread_ids
         result["agents"] = agents
-        result["recipe_id"] = recipe_snapshot["id"] or result.get("recipe_id") or default_recipe_id(provider_type)
-        result["recipe"] = recipe_snapshot
-        result["recipe_name"] = recipe_snapshot["name"]
-        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None)
-        if callable(query_lease_instance_id):
-            runtime_session_id = query_lease_instance_id(lease_id)
-            if runtime_session_id:
-                result["runtime_session_id"] = runtime_session_id
+        _apply_lease_recipe(result, provider_name, lease.get("recipe_json"))
+        runtime_session_id = monitor_repo.query_lease_instance_id(lease_id)
+        if runtime_session_id:
+            result["runtime_session_id"] = runtime_session_id
         return result
     finally:
         monitor_repo.close()
@@ -216,13 +200,7 @@ def resolve_owned_lease(
 
 def _is_user_visible_lease_thread(thread_id: str | None) -> bool:
     raw = str(thread_id or "").strip()
-    if not raw:
-        return False
-    if raw.startswith("subagent-"):
-        return False
-    if is_virtual_thread_id(raw):
-        return False
-    return True
+    return bool(raw) and not raw.startswith("subagent-") and not is_virtual_thread_id(raw)
 
 
 def _is_user_visible_lease_state(lease: dict[str, Any]) -> bool:
@@ -262,14 +240,14 @@ def available_sandbox_types() -> list[dict[str, Any]]:
                     }
                 )
                 continue
-            item: dict[str, Any] = {
-                "name": name,
-                "provider": config.provider,
-                "available": True,
-            }
-            if provider_obj:
-                item["capability"] = _capability_to_dict(provider_obj.get_capability())
-            types.append(item)
+            types.append(
+                {
+                    "name": name,
+                    "provider": config.provider,
+                    "available": True,
+                    "capability": _capability_to_dict(provider_obj.get_capability()),
+                }
+            )
         except Exception as e:
             types.append({"name": name, "available": False, "reason": str(e)})
     return types
@@ -304,9 +282,8 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
             if config.provider == "agentbay":
                 from sandbox.providers.agentbay import AgentBayProvider
 
-                key = config.agentbay.api_key or os.getenv("AGENTBAY_API_KEY")
+                key = _configured_api_key(name, config.agentbay.api_key, "AGENTBAY_API_KEY")
                 if not key:
-                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
                     continue
                 providers[name] = AgentBayProvider(
                     api_key=key,
@@ -330,9 +307,8 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
             elif config.provider == "e2b":
                 from sandbox.providers.e2b import E2BProvider
 
-                key = config.e2b.api_key or os.getenv("E2B_API_KEY")
+                key = _configured_api_key(name, config.e2b.api_key, "E2B_API_KEY")
                 if not key:
-                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
                     continue
                 providers[name] = E2BProvider(
                     api_key=key,
@@ -344,9 +320,8 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
             elif config.provider == "daytona":
                 from sandbox.providers.daytona import DaytonaProvider
 
-                key = config.daytona.api_key or os.getenv("DAYTONA_API_KEY")
+                key = _configured_api_key(name, config.daytona.api_key, "DAYTONA_API_KEY")
                 if not key:
-                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
                     continue
                 providers[name] = DaytonaProvider(
                     api_key=key,
@@ -458,7 +433,7 @@ def mutate_sandbox_session(
     ok = False
     mode = "lease_enforced"
 
-    if manager and thread_id and not is_virtual_thread_id(thread_id):
+    if thread_id and not is_virtual_thread_id(thread_id):
         mode = "manager_thread"
         if action == "pause":
             ok = manager.pause_session(thread_id)
@@ -507,6 +482,53 @@ def mutate_sandbox_session(
         "lease_id": lease_id,
         "mode": mode,
     }
+
+
+def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any]:
+    """Destroy a lease through the manager-owned lease state machine."""
+    _, managers = init_providers_and_managers()
+    manager = managers.get(provider_name)
+    if manager is None:
+        raise RuntimeError(f"Provider manager unavailable: {provider_name}")
+
+    lease = manager.get_lease(lease_id)
+    if lease is None:
+        raise RuntimeError(f"Lease not found: {lease_id}")
+
+    # @@@lease-destroy-seam - detached residue may have no visible live session,
+    # so cleanup must target the lease state machine directly rather than session lookup.
+    _prune_stale_lease_terminals(manager, lease_id)
+    if not manager.destroy_lease_resources(lease_id):
+        raise RuntimeError(f"Lease not found: {lease_id}")
+    return {
+        "ok": True,
+        "action": "destroy",
+        "lease_id": lease_id,
+        "provider": provider_name,
+        "mode": "manager_lease",
+    }
+
+
+def _prune_stale_lease_terminals(manager: Any, lease_id: str) -> None:
+    thread_repo = build_storage_container().thread_repo()
+    try:
+        for row in list(manager.terminal_store.list_all()):
+            if str(row.get("lease_id") or "") != lease_id:
+                continue
+            thread_id = str(row.get("thread_id") or "").strip()
+            if thread_id and not is_virtual_thread_id(thread_id) and thread_repo.get_by_id(thread_id) is not None:
+                continue
+            terminal_id = str(row.get("terminal_id") or "").strip()
+            if not terminal_id:
+                raise RuntimeError(f"Lease {lease_id} has terminal row without terminal_id")
+            # @@@lease-cleanup-stale-terminal-prune - detached residue can keep dead terminal
+            # pointers long after the owning thread row is gone; drop only those stale pointers
+            # before enforcing the remaining bound-terminal guard.
+            if thread_id and not is_virtual_thread_id(thread_id):
+                manager.session_manager.delete_thread(thread_id, reason="stale_terminal_pruned")
+            manager.terminal_store.delete(terminal_id)
+    finally:
+        thread_repo.close()
 
 
 def get_session_metrics(session_id: str, provider_hint: str | None = None) -> dict[str, Any]:

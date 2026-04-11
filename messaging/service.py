@@ -27,21 +27,20 @@ class MessagingService:
 
     def __init__(
         self,
-        chat_repo: Any,  # storage.providers.sqlite.chat_repo.SQLiteChatRepo (for chat creation)
+        chat_repo: Any,  # chat repo compatible with MessagingService create/list/delete operations
         chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
         messages_repo: Any,  # SupabaseMessagesRepo
         message_read_repo: Any,  # SupabaseMessageReadRepo
         user_repo: Any,  # UserRepo (for name + avatar lookup)
-        thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> agent-user display lookup
+        thread_repo: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
-        event_bus: Any | None = None,  # ChatEventBus or SupabaseRealtimeBridge (optional)
+        event_bus: Any | None = None,  # ChatEventBus-compatible publisher (optional)
     ) -> None:
         self._chats = chat_repo
         self._members_repo = chat_member_repo
         self._messages = messages_repo
         self._user_repo = user_repo
-        self._thread_repo = thread_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
@@ -77,7 +76,6 @@ class MessagingService:
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         return resolve_messaging_display_user(
             user_repo=self._user_repo,
-            thread_repo=self._thread_repo,
             social_user_id=social_user_id,
         )
 
@@ -348,40 +346,130 @@ class MessagingService:
 
     def list_chats_for_user(self, user_id: str) -> list[dict[str, Any]]:
         """List all active chats for user with summary info."""
-        chat_ids = self._members_repo.list_chats_for_user(user_id)
-        result = []
-        for cid in chat_ids:
-            chat = self._chats.get_by_id(cid)
-            if not chat or chat.status != "active":
-                continue
-            entities_info = self._build_chat_entities(cid)
-            other_entities = [entity for entity in entities_info if entity["id"] != user_id]
-            other_names = [entity["name"] for entity in other_entities if entity.get("name")]
-            title = chat.title or ", ".join(other_names) or "Chat"
-            chat_avatar_url = other_entities[0]["avatar_url"] if other_entities else None
-            msgs = self._messages.list_by_chat(cid, limit=1)
-            last_msg = None
-            if msgs:
-                m = self._normalize_message_row(msgs[-1])
-                sender = self._resolve_display_user(m.get("sender_id", ""))
-                last_msg = {
-                    "content": m.get("content", ""),
-                    "sender_name": sender.display_name if sender else "unknown",
-                    "created_at": m.get("created_at"),
-                }
-            unread = self.count_unread(cid, user_id)
+        chat_rows, members_by_chat, users_by_id, unread_by_chat = self._chat_projection_inputs(user_id)
+        latest_messages = self._messages.list_latest_by_chat_ids([chat.id for chat in chat_rows])
+        latest_sender_ids: set[str] = set()
+        for row in latest_messages.values():
+            sender_id = str(self._normalize_message_row(row).get("sender_id") or "")
+            if sender_id:
+                latest_sender_ids.add(sender_id)
+        missing_sender_ids = sorted(latest_sender_ids - set(users_by_id))
+        users_by_id.update(self._users_by_id(missing_sender_ids))
+
+        result: list[dict[str, Any]] = []
+        for chat in chat_rows:
+            entities_info = self._project_chat_entities(members_by_chat[chat.id], users_by_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, entities_info, user_id)
             result.append(
                 {
-                    "id": cid,
+                    "id": chat.id,
                     "title": title,
                     "status": chat.status,
                     "created_at": chat.created_at,
                     "updated_at": getattr(chat, "updated_at", None) or getattr(chat, "created_at", None),
                     "avatar_url": chat_avatar_url,
                     "entities": entities_info,
-                    "last_message": last_msg,
-                    "unread_count": unread,
+                    "last_message": self._project_latest_message(latest_messages.get(chat.id), users_by_id),
+                    "unread_count": int(unread_by_chat.get(chat.id, 0)),
                     "has_mention": False,  # TODO: implement mention tracking
                 }
             )
         return result
+
+    def list_conversation_summaries_for_user(self, user_id: str) -> list[dict[str, Any]]:
+        """List lightweight visit-chat rows for the global conversation sidebar."""
+        chat_rows, members_by_chat, users_by_id, unread_by_chat = self._chat_projection_inputs(user_id)
+        result: list[dict[str, Any]] = []
+        for chat in chat_rows:
+            entities_info = self._project_chat_entities(members_by_chat[chat.id], users_by_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, entities_info, user_id)
+            result.append(
+                {
+                    "id": chat.id,
+                    "title": title,
+                    "updated_at": getattr(chat, "updated_at", None) or getattr(chat, "created_at", None),
+                    "avatar_url": chat_avatar_url,
+                    "unread_count": int(unread_by_chat.get(chat.id, 0)),
+                }
+            )
+        return result
+
+    def _chat_projection_inputs(
+        self,
+        user_id: str,
+    ) -> tuple[list[Any], dict[str, list[dict[str, Any]]], dict[str, Any], dict[str, int]]:
+        chat_ids = self._members_repo.list_chats_for_user(user_id)
+        if not chat_ids:
+            return [], {}, {}, {}
+
+        chat_rows = [chat for chat in self._chats.list_by_ids(chat_ids) if chat.status == "active"]
+        active_chat_ids = [chat.id for chat in chat_rows]
+        if not active_chat_ids:
+            return [], {}, {}, {}
+
+        members_by_chat: dict[str, list[dict[str, Any]]] = {chat_id: [] for chat_id in active_chat_ids}
+        last_read_by_chat: dict[str, int] = {}
+        for member in self._members_repo.list_members_for_chats(active_chat_ids):
+            chat_id = str(member.get("chat_id") or "")
+            if chat_id not in members_by_chat:
+                continue
+            members_by_chat[chat_id].append(member)
+            if member.get("user_id") == user_id:
+                last_read_by_chat[chat_id] = int(member.get("last_read_seq") or 0)
+
+        visible_chats = [chat for chat in chat_rows if chat.id in last_read_by_chat]
+        if not visible_chats:
+            return [], {}, {}, {}
+
+        users_by_id = self._users_by_id(
+            sorted(
+                {
+                    str(member.get("user_id") or "")
+                    for chat_id in active_chat_ids
+                    for member in members_by_chat.get(chat_id, [])
+                    if member.get("user_id")
+                }
+            )
+        )
+        unread_by_chat = self._messages.count_unread_by_chat_ids(user_id, last_read_by_chat)
+        return visible_chats, members_by_chat, users_by_id, unread_by_chat
+
+    def _project_chat_entities(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
+            self._project_known_user_entity(str(member.get("user_id") or ""), users_by_id) for member in members if member.get("user_id")
+        ]
+
+    def _chat_title_and_avatar(self, title: str | None, entities: list[dict[str, Any]], viewer_id: str) -> tuple[str, str | None]:
+        other_entities = [entity for entity in entities if entity["id"] != viewer_id]
+        other_names = [entity["name"] for entity in other_entities if entity.get("name")]
+        return title or ", ".join(other_names) or "Chat", other_entities[0]["avatar_url"] if other_entities else None
+
+    def _project_latest_message(self, row: dict[str, Any] | None, users_by_id: dict[str, Any]) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        message = self._normalize_message_row(row)
+        sender_id = str(message.get("sender_id") or "")
+        sender = users_by_id.get(sender_id)
+        if sender is None:
+            raise RuntimeError(f"Chat message sender {sender_id} is not a resolvable user row")
+        return {
+            "content": message.get("content", ""),
+            "sender_name": sender.display_name,
+            "created_at": message.get("created_at"),
+        }
+
+    def _users_by_id(self, user_ids: list[str]) -> dict[str, Any]:
+        if not user_ids:
+            return {}
+        return {user.id: user for user in self._user_repo.list_by_ids(user_ids)}
+
+    def _project_known_user_entity(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
+        user = users_by_id.get(social_user_id)
+        if user is None:
+            raise RuntimeError(f"Chat member {social_user_id} is not a resolvable user row")
+        return {
+            "id": social_user_id,
+            "name": user.display_name,
+            "type": user.type.value if hasattr(user.type, "value") else str(user.type),
+            "avatar_url": avatar_url(user.id, bool(user.avatar)),
+        }

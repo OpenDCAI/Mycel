@@ -5,7 +5,7 @@ from __future__ import annotations
 import posixpath
 from typing import Any
 
-from core.tools.filesystem.backend import FileSystemBackend
+from sandbox.interfaces.filesystem import FileSystemBackend
 
 PREVIEW_BYTES = 2048
 
@@ -65,7 +65,7 @@ def spill_if_needed(
     return (
         f'<persisted-output path="{spill_path}" bytes="{size}">'
         f"\nSize: {size} bytes"
-        f"\nUse read_file to inspect the full persisted output."
+        f"\nUse Read to inspect the full persisted output."
         f"\nPreview (first {PREVIEW_BYTES} bytes):\n{preview}\n..."
         f"{write_note}\n"
         f"</persisted-output>"

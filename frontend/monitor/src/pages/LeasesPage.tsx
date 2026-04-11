@@ -1,3 +1,4 @@
+import React from "react";
 import { Link } from "react-router-dom";
 
 import ErrorState from "../components/ErrorState";
@@ -18,12 +19,14 @@ type LeasesPayload = {
   };
   items: Array<{
     lease_id: string;
-    lease_url: string;
     provider: string;
     instance_id?: string | null;
+    triage?: {
+      category?: string | null;
+      title?: string | null;
+    };
     thread: {
       thread_id?: string | null;
-      thread_url?: string | null;
     };
     state_badge: Record<string, unknown>;
     updated_ago?: string | null;
@@ -31,20 +34,27 @@ type LeasesPayload = {
   }>;
 };
 
+type TriageFilter = "all" | "active_drift" | "detached_residue" | "orphan_cleanup" | "healthy_capacity";
+
 export default function LeasesPage() {
   const { data, error } = useMonitorData<LeasesPayload>("/leases");
+  const [selectedFilter, setSelectedFilter] = React.useState<TriageFilter>("all");
 
   if (error) return <ErrorState title="Leases" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   const triage = data.triage?.summary ?? {};
   const triageCards = [
-    { label: "Active Drift", value: triage.active_drift ?? 0 },
-    { label: "Detached Residue", value: triage.detached_residue ?? 0 },
-    { label: "Orphan Cleanup", value: triage.orphan_cleanup ?? 0 },
-    { label: "Healthy Capacity", value: triage.healthy_capacity ?? 0 },
-    { label: "Tracked Leases", value: triage.total ?? data.count ?? 0 },
-  ];
+    { key: "active_drift" as const, label: "Active Drift", value: triage.active_drift ?? 0 },
+    { key: "detached_residue" as const, label: "Detached Residue", value: triage.detached_residue ?? 0 },
+    { key: "orphan_cleanup" as const, label: "Orphan Cleanup", value: triage.orphan_cleanup ?? 0 },
+    { key: "healthy_capacity" as const, label: "Healthy Capacity", value: triage.healthy_capacity ?? 0 },
+  ] satisfies Array<{ key: TriageFilter; label: string; value: number }>;
+  const visibleItems =
+    selectedFilter === "all"
+      ? data.items
+      : data.items.filter((item) => (item.triage?.category ?? "") === selectedFilter);
+  const activeCard = triageCards.find((card) => card.key === selectedFilter);
 
   return (
     <div className="page">
@@ -53,41 +63,82 @@ export default function LeasesPage() {
       <section className="surface-section">
         <h2>Lease Triage</h2>
         <div className="surface-grid">
+          <button
+            type="button"
+            className={`surface-card lease-triage-card ${selectedFilter === "all" ? "lease-triage-card--active" : ""}`}
+            onClick={() => setSelectedFilter("all")}
+          >
+            <p className="surface-card__eyebrow">All Triage</p>
+            <p className="surface-card__value">{data.count}</p>
+          </button>
           {triageCards.map((card) => (
-            <article className="surface-card" key={card.label}>
+            <button
+              type="button"
+              className={`surface-card lease-triage-card ${selectedFilter === card.key ? "lease-triage-card--active" : ""}`}
+              key={card.label}
+              onClick={() => setSelectedFilter(card.key)}
+            >
               <p className="surface-card__eyebrow">{card.label}</p>
               <p className="surface-card__value">{card.value}</p>
-            </article>
+            </button>
           ))}
         </div>
       </section>
-      <h2>Raw Lease Table</h2>
+      <div className="leases-workbench-header">
+        <div>
+          <h2>Lease Workbench</h2>
+          <p className="description">
+            {activeCard ? `Showing ${activeCard.label}` : "Showing All Triage"}
+          </p>
+        </div>
+      </div>
       <table>
         <thead>
           <tr>
             <th>Lease ID</th>
-            <th>Provider</th>
-            <th>Instance ID</th>
-            <th>Thread</th>
+            <th>Topology</th>
+            <th>Triage</th>
             <th>State</th>
             <th>Updated</th>
             <th>Error</th>
           </tr>
         </thead>
         <tbody>
-          {data.items.map((item: any) => (
+          {visibleItems.map((item) => (
             <tr key={item.lease_id}>
-              <td>
-                <Link to={item.lease_url}>{item.lease_id}</Link>
+              <td className="mono">
+                <Link to={`/leases/${item.lease_id}`}>{item.lease_id}</Link>
               </td>
-              <td>{item.provider}</td>
-              <td className="mono">{item.instance_id?.slice(0, 12) || "-"}</td>
               <td>
-                {item.thread.thread_id ? (
-                  <Link to={item.thread.thread_url}>{item.thread.thread_id.slice(0, 8)}</Link>
-                ) : (
-                  <span className="orphan">orphan</span>
-                )}
+                <div className="lease-topology">
+                  <div className="lease-topology__row">
+                    <span className="lease-topology__label">provider</span>
+                    {item.provider ? <Link to={`/providers/${item.provider}`}>{item.provider}</Link> : <span>-</span>}
+                  </div>
+                  <div className="lease-topology__row">
+                    <span className="lease-topology__label">runtime</span>
+                    {item.instance_id ? (
+                      <Link className="mono" to={`/runtimes/${item.instance_id}`}>
+                        {item.instance_id.slice(0, 12)}
+                      </Link>
+                    ) : (
+                      <span>-</span>
+                    )}
+                  </div>
+                  <div className="lease-topology__row">
+                    <span className="lease-topology__label">thread</span>
+                    {item.thread.thread_id ? (
+                      <Link className="mono" to={`/threads/${item.thread.thread_id}`}>
+                        {item.thread.thread_id.slice(0, 8)}
+                      </Link>
+                    ) : (
+                      <span className="orphan">orphan</span>
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span className="lease-triage-chip">{item.triage?.title ?? "-"}</span>
               </td>
               <td>
                 <StateBadge badge={item.state_badge} />

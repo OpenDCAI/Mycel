@@ -583,7 +583,7 @@ async def test_running_command_survives_runtime_reload_without_false_failure(ter
     async_cmd = await runtime1.start_command("for i in 1 2 3; do echo tick-$i; sleep 1; done", "/tmp")
     await asyncio.sleep(0.4)
 
-    # Simulate command_status query from another runtime/session that has no in-memory task.
+    # Simulate TaskOutput/status lookup from another runtime/session that has no in-memory task.
     runtime2 = provider.create_runtime(terminal, lease)
     status_running = await runtime2.get_command(async_cmd.command_id)
     assert status_running is not None

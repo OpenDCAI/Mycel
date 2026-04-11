@@ -26,16 +26,7 @@ def build_existing_launch_config(
     model: str | None,
     workspace: str | None,
 ) -> dict[str, Any]:
-    return normalize_launch_config_payload(
-        {
-            "create_mode": "existing",
-            "provider_config": lease.get("provider_name"),
-            "recipe": lease.get("recipe"),
-            "lease_id": lease.get("lease_id"),
-            "model": model,
-            "workspace": workspace,
-        }
-    )
+    return normalize_launch_config_payload(_existing_config_from_lease(lease, model=model, workspace=workspace))
 
 
 def build_new_launch_config(
@@ -118,14 +109,7 @@ def _validate_saved_config(
         lease = next((item for item in leases if item["lease_id"] == lease_id), None)
         if lease is None:
             return None
-        return {
-            "create_mode": "existing",
-            "provider_config": lease["provider_name"],
-            "recipe": lease.get("recipe"),
-            "lease_id": lease["lease_id"],
-            "model": config.get("model"),
-            "workspace": lease.get("cwd"),
-        }
+        return _existing_config_from_lease(lease, model=config.get("model"), workspace=lease.get("cwd"))
 
     provider_config = config.get("provider_config")
     recipe = config.get("recipe")
@@ -156,6 +140,17 @@ def _save_launch_config(save_fn: Any, owner_user_id: str, agent_user_id: str, pa
     )
 
 
+def _existing_config_from_lease(lease: dict[str, Any], *, model: str | None, workspace: str | None) -> dict[str, Any]:
+    return {
+        "create_mode": "existing",
+        "provider_config": lease.get("provider_name"),
+        "recipe": lease.get("recipe"),
+        "lease_id": lease.get("lease_id"),
+        "model": model,
+        "workspace": workspace,
+    }
+
+
 def _derive_default_config(
     *,
     agent_threads: list[dict[str, Any]],
@@ -169,14 +164,7 @@ def _derive_default_config(
     ]
     if agent_leases:
         lease = agent_leases[0]
-        return {
-            "create_mode": "existing",
-            "provider_config": lease["provider_name"],
-            "recipe": lease.get("recipe"),
-            "lease_id": lease["lease_id"],
-            "model": None,
-            "workspace": lease.get("cwd"),
-        }
+        return _existing_config_from_lease(lease, model=None, workspace=lease.get("cwd"))
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")

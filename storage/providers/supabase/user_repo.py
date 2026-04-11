@@ -57,6 +57,16 @@ class SupabaseUserRepo:
     def get_by_mycel_id(self, mycel_id: int) -> UserRow | None:
         return self._get_single("get_by_mycel_id", mycel_id=mycel_id)
 
+    def list_by_ids(self, user_ids: list[str]) -> list[UserRow]:
+        if not user_ids:
+            return []
+        rows: list[dict[str, Any]] = []
+        for chunk in q.value_chunks(user_ids):
+            response = q.in_(self._t().select(", ".join(_COLS)), "id", chunk, _USER_REPO, "list_by_ids").execute()
+            rows.extend(q.rows(response, _USER_REPO, "list_by_ids"))
+        users_by_id = {row["id"]: UserRow.model_validate(row) for row in rows}
+        return [users_by_id[user_id] for user_id in user_ids if user_id in users_by_id]
+
     def list_all(self) -> list[UserRow]:
         query = q.order(self._t().select(", ".join(_COLS)), "created_at", desc=False, repo=_USER_REPO, operation="list_all")
         rows = q.rows(query.execute(), _USER_REPO, "list_all")

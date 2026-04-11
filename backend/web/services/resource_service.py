@@ -7,12 +7,13 @@ from typing import Any
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
-from backend.web.services.resource_common import empty_capabilities, resolve_provider_name
 from backend.web.services.resource_common import resolve_console_url as _resolve_console_url
 from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
+from backend.web.services.resource_common import resolve_provider_name
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
+from backend.web.services.resource_common import to_resource_status as _to_resource_status
 from backend.web.services.sandbox_service import build_provider_from_config_name
-from sandbox.resource_snapshot import ensure_resource_snapshot_table, probe_and_upsert_for_instance, upsert_lease_resource_snapshot
+from sandbox.resource_snapshot import probe_and_upsert_for_instance, upsert_lease_resource_snapshot
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 
@@ -23,22 +24,18 @@ def get_provider_display_contract(config_name: str) -> dict[str, Any]:
         "provider_name": provider_name,
         "description": catalog.description,
         "vendor": catalog.vendor,
-        "type": _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+        "type": _resolve_provider_type(provider_name),
         "console_url": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
     }
 
 
 def get_provider_capability_contract(config_name: str) -> tuple[dict[str, bool], str | None]:
-    capabilities, capability_error = _resolve_instance_capabilities(config_name)
-    if capability_error:
-        return empty_capabilities(), capability_error
-    return capabilities, None
+    return _resolve_instance_capabilities(config_name)
 
 
 def build_provider_availability_payload(*, available: bool, running_count: int, unavailable_reason: str | None) -> dict[str, Any]:
-    status = "unavailable" if not available else ("active" if running_count > 0 else "ready")
     return {
-        "status": status,
+        "status": _to_resource_status(available, running_count),
         "unavailableReason": unavailable_reason,
         "error": ({"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None),
     }
@@ -71,10 +68,7 @@ def build_resource_session_payload(
     return payload
 
 
-def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
-    """Browse the filesystem of a sandbox lease via its provider."""
-    from pathlib import PurePosixPath
-
+def _resolve_sandbox_provider(lease_id: str) -> tuple[Any, str]:
     repo = make_sandbox_monitor_repo()
     try:
         lease = repo.query_lease(lease_id)
@@ -88,20 +82,27 @@ def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
     provider_name = str(lease.get("provider_name") or "").strip()
     if not provider_name:
         raise RuntimeError("Lease has no provider")
-
     if not instance_id:
         raise RuntimeError("No active instance for this lease — sandbox may be destroyed or paused")
 
     provider = build_provider_from_config_name(provider_name)
     if provider is None:
         raise RuntimeError(f"Could not initialize provider: {provider_name}")
+    return provider, instance_id
+
+
+def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
+    """Browse the filesystem of a sandbox lease via its provider."""
+    from pathlib import PurePosixPath
+
+    provider, instance_id = _resolve_sandbox_provider(lease_id)
 
     try:
         entries = provider.list_dir(instance_id, path)
     except Exception as exc:
         raise RuntimeError(f"Failed to list directory: {exc}") from exc
 
-    norm_path = path if path else "/"
+    norm_path = path or "/"
 
     items = []
     for entry in entries:
@@ -125,26 +126,7 @@ _READ_MAX_BYTES = 100 * 1024
 
 def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
     """Read a file from a sandbox lease via its provider."""
-    repo = make_sandbox_monitor_repo()
-    try:
-        lease = repo.query_lease(lease_id)
-        instance_id = repo.query_lease_instance_id(lease_id)
-    finally:
-        repo.close()
-
-    if not lease:
-        raise KeyError(f"Lease not found: {lease_id}")
-
-    provider_name = str(lease.get("provider_name") or "").strip()
-    if not provider_name:
-        raise RuntimeError("Lease has no provider")
-
-    if not instance_id:
-        raise RuntimeError("No active instance for this lease — sandbox may be destroyed or paused")
-
-    provider = build_provider_from_config_name(provider_name)
-    if provider is None:
-        raise RuntimeError(f"Could not initialize provider: {provider_name}")
+    provider, instance_id = _resolve_sandbox_provider(lease_id)
 
     try:
         content = provider.read_file(instance_id, path)
@@ -161,7 +143,6 @@ def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
 
 def refresh_resource_snapshots() -> dict[str, Any]:
     """Probe active lease instances and upsert resource snapshots."""
-    ensure_resource_snapshot_table()
     repo = make_sandbox_monitor_repo()
     try:
         probe_targets = repo.list_probe_targets()

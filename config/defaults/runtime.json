@@ -4,7 +4,6 @@
   "allowed_extensions": null,
   "block_dangerous_commands": true,
   "block_network_commands": false,
-  "queue_mode": "steer",
   "temperature": null,
   "max_tokens": null,
   "model_kwargs": {},
@@ -27,15 +26,7 @@
   "tools": {
     "filesystem": {
       "enabled": true,
-      "tools": {
-        "read_file": {
-          "enabled": true,
-          "max_file_size": 10485760
-        },
-        "write_file": true,
-        "edit_file": true,
-        "list_dir": true
-      }
+      "max_file_size": 10485760
     },
     "search": {
       "enabled": true,
@@ -59,21 +50,14 @@
           "exa_api_key": null,
           "firecrawl_api_key": null
         },
-        "fetch": {
+        "web_fetch": {
           "enabled": true,
           "jina_api_key": null
         }
       }
     },
     "command": {
-      "enabled": true,
-      "tools": {
-        "run_command": {
-          "enabled": true,
-          "default_timeout": 120
-        },
-        "command_status": true
-      }
+      "enabled": true
     }
   },
   "mcp": {

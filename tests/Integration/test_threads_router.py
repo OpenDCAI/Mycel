@@ -317,12 +317,6 @@ class _NullLock:
         return False
 
 
-class _FakeClearAgent:
-    def __init__(self, state: AgentState = AgentState.IDLE) -> None:
-        self.runtime = SimpleNamespace(current_state=state)
-        self.aclear_thread = AsyncMock()
-
-
 def _make_threads_app(
     *,
     thread_repo=None,
@@ -337,20 +331,6 @@ def _make_threads_app(
     )
 
 
-def _make_clear_thread_app():
-    display_builder = SimpleNamespace(clear=MagicMock())
-    queue_manager = SimpleNamespace(clear_all=MagicMock())
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            agent_pool={},
-            display_builder=display_builder,
-            queue_manager=queue_manager,
-            thread_event_buffers={"thread-1": object()},
-        )
-    )
-    return app, display_builder, queue_manager
-
-
 @contextmanager
 def _patch_create_thread_noop_guards():
     with (
@@ -361,16 +341,6 @@ def _patch_create_thread_noop_guards():
         patch.object(threads_router, "save_last_successful_config", return_value=None),
     ):
         yield create_resources
-
-
-@contextmanager
-def _patch_local_clear_thread_agent(agent):
-    with (
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-        patch.object(threads_router, "get_or_create_agent", AsyncMock(return_value=agent)),
-        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
-    ):
-        yield
 
 
 @pytest.mark.asyncio
@@ -559,6 +529,51 @@ async def test_list_threads_hides_internal_subagent_threads():
 
 
 @pytest.mark.asyncio
+async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_per_agent_user():
+    rows = {
+        "main-thread": {
+            "id": "main-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 0,
+            "is_main": True,
+            "agent_avatar": None,
+        },
+        "extra-thread": {
+            "id": "extra-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 1,
+            "is_main": False,
+            "agent_avatar": None,
+        },
+    }
+    app = _make_threads_app(
+        thread_repo=SimpleNamespace(
+            list_by_owner_user_id=lambda _user_id: list(rows.values()),
+            get_by_id=lambda thread_id: rows.get(thread_id),
+        ),
+        terminal_repo=SimpleNamespace(
+            summarize_threads=lambda thread_ids: {
+                thread_id: {"active_terminal_id": "term-1", "latest_terminal_id": "term-1"} for thread_id in thread_ids
+            },
+            get_active=lambda _thread_id: {"terminal_id": "term-1"},
+            list_by_thread=lambda _thread_id: [{"terminal_id": "term-1"}],
+            set_active=lambda _thread_id, _terminal_id: None,
+        ),
+        agent_pool={},
+        thread_last_active={},
+    )
+
+    payload = await threads_router.list_threads("owner-1", app)
+
+    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
+    assert payload["threads"][0]["sidebar_label"] is None
+
+
+@pytest.mark.asyncio
 async def test_list_threads_prefers_batch_terminal_summary_when_available():
     rows = {
         "main-thread": {
@@ -604,7 +619,7 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
 
     payload = await threads_router.list_threads("owner-1", app)
 
-    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread", "child-thread"]
+    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
     assert summarize_calls == [["main-thread", "child-thread"]]
 
 
@@ -749,6 +764,36 @@ async def test_stream_thread_events_requires_token():
 
 
 @pytest.mark.asyncio
+async def test_delete_thread_route_does_not_delete_thread_row_when_resource_destroy_fails():
+    deleted_db: list[str] = []
+    deleted_rows: list[str] = []
+    app = _make_threads_app(
+        thread_repo=SimpleNamespace(delete=lambda thread_id: deleted_rows.append(thread_id)),
+        agent_pool={},
+        queue_manager=SimpleNamespace(unregister_wake=lambda _thread_id: None, clear_all=lambda _thread_id: None),
+        thread_sandbox={},
+        thread_cwd={},
+        thread_event_buffers={},
+    )
+
+    with (
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="daytona_selfhost"),
+        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
+        patch.object(threads_router, "delete_thread_in_db", side_effect=lambda thread_id: deleted_db.append(thread_id)),
+        patch.object(
+            threads_router,
+            "destroy_thread_resources_sync",
+            side_effect=RuntimeError("volume still attached to provider sandbox"),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="volume still attached to provider sandbox"):
+            await threads_router.delete_thread("thread-1", user_id="owner-1", app=app)
+
+    assert deleted_db == []
+    assert deleted_rows == []
+
+
+@pytest.mark.asyncio
 async def test_stream_thread_events_verifies_token_before_owner_check():
     auth_service = _FakeAuthService()
     thread_repo = SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "member-1"})
@@ -776,6 +821,7 @@ async def test_get_thread_permissions_returns_thread_scoped_pending_requests():
     result = await threads_router.get_thread_permissions(
         "thread-1",
         user_id="owner-1",
+        thread_lock=_NullLock(),
         agent=agent,
     )
 
@@ -807,6 +853,7 @@ async def test_get_thread_permissions_does_not_clear_live_pending_requests_durin
     result = await threads_router.get_thread_permissions(
         "thread-1",
         user_id="owner-1",
+        thread_lock=_NullLock(),
         agent=agent,
     )
 
@@ -889,6 +936,7 @@ async def test_resolve_thread_permission_request_persists_resolution():
         ResolvePermissionRequest(decision="allow", message="go ahead"),
         user_id="owner-1",
         agent=agent,
+        thread_lock=_NullLock(),
     )
 
     assert result == {"ok": True, "thread_id": "thread-1", "request_id": "perm-1"}
@@ -926,6 +974,7 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             user_id="owner-1",
             agent=agent,
             app=app,
+            thread_lock=_NullLock(),
         )
 
     assert result == {
@@ -995,6 +1044,7 @@ async def test_resolve_ask_user_question_request_requires_answers_for_allow():
             user_id="owner-1",
             agent=agent,
             app=SimpleNamespace(),
+            thread_lock=_NullLock(),
         )
 
     assert exc_info.value.status_code == 400
@@ -1013,6 +1063,7 @@ async def test_resolve_thread_permission_request_404s_missing_request():
             ResolvePermissionRequest(decision="deny", message="no"),
             user_id="owner-1",
             agent=agent,
+            thread_lock=_NullLock(),
         )
 
     assert exc_info.value.status_code == 404
@@ -1089,43 +1140,3 @@ async def test_remove_thread_permission_rule_persists_session_rule_change():
     }
     assert agent.rule_remove_calls == [("deny", "Bash")]
     agent.agent.apersist_state.assert_awaited_once_with("thread-1")
-
-
-@pytest.mark.asyncio
-async def test_clear_thread_route_clears_agent_state_and_thread_buffers():
-    agent = _FakeClearAgent()
-    app, display_builder, queue_manager = _make_clear_thread_app()
-
-    with _patch_local_clear_thread_agent(agent):
-        result = await threads_router.clear_thread_history(
-            "thread-1",
-            user_id="owner-1",
-            app=app,
-        )
-
-    assert result == {"ok": True, "thread_id": "thread-1"}
-    agent.aclear_thread.assert_awaited_once_with("thread-1")
-    display_builder.clear.assert_called_once_with("thread-1")
-    queue_manager.clear_all.assert_called_once_with("thread-1")
-    assert app.state.thread_event_buffers == {}
-
-
-@pytest.mark.asyncio
-async def test_clear_thread_route_rejects_active_run():
-    agent = _FakeClearAgent(state=AgentState.ACTIVE)
-    app, display_builder, queue_manager = _make_clear_thread_app()
-
-    with _patch_local_clear_thread_agent(agent):
-        with pytest.raises(threads_router.HTTPException) as exc_info:
-            await threads_router.clear_thread_history(
-                "thread-1",
-                user_id="owner-1",
-                app=app,
-            )
-
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == "Cannot clear thread while run is in progress"
-    agent.aclear_thread.assert_not_awaited()
-    display_builder.clear.assert_not_called()
-    queue_manager.clear_all.assert_not_called()
-    assert "thread-1" in app.state.thread_event_buffers

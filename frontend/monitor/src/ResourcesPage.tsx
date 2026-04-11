@@ -1,12 +1,24 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import {
+  Activity,
+  Camera,
+  Cpu,
+  FolderOpen,
+  Globe,
+  HardDrive,
+  Terminal,
+  Webhook,
+} from "lucide-react";
 
 import {
   browseMonitorSandbox,
+  fetchJsonOrThrow,
   fetchMonitorResources,
   readMonitorSandboxFile,
   refreshMonitorResources,
 } from "./resources/api";
+import { cx } from "./app/classes";
 import type {
   BrowseItem,
   ProviderCapabilities,
@@ -14,7 +26,6 @@ import type {
   ResourceOverviewResponse,
   ResourceSession,
   SessionMetrics,
-  UsageMetric,
 } from "./resources/types";
 
 const PROVIDER_TYPE_LABEL = {
@@ -22,6 +33,28 @@ const PROVIDER_TYPE_LABEL = {
   cloud: "云端",
   container: "容器",
 } as const;
+
+const CAPABILITY_LABELS: Record<keyof ProviderCapabilities, string> = {
+  filesystem: "文件",
+  terminal: "终端",
+  metrics: "指标",
+  screenshot: "截屏",
+  web: "Web",
+  process: "进程",
+  hooks: "Hook",
+  mount: "挂载",
+};
+
+const CAPABILITY_ICON_MAP: Record<keyof ProviderCapabilities, React.ElementType> = {
+  filesystem: FolderOpen,
+  terminal: Terminal,
+  metrics: Activity,
+  screenshot: Camera,
+  web: Globe,
+  process: Cpu,
+  hooks: Webhook,
+  mount: HardDrive,
+};
 
 const STATUS_LABEL = {
   active: "活跃",
@@ -39,6 +72,7 @@ const SESSION_STATUS_ORDER: Record<ResourceSession["status"], number> = {
   paused: 2,
   stopped: 3,
 };
+const SANDBOX_FILTER_STATUSES: ResourceSession["status"][] = ["running", "paused", "stopped", "destroying"];
 
 interface LeaseGroup {
   leaseId: string;
@@ -48,9 +82,27 @@ interface LeaseGroup {
   metrics: SessionMetrics | null;
 }
 
-function formatNumber(value: number | null | undefined, nullText: string = "--"): string {
+const AGENT_FALLBACK_COLORS = [
+  "#dbeafe:#1d4ed8",
+  "#dcfce7:#15803d",
+  "#f3e8ff:#7e22ce",
+  "#ffedd5:#c2410c",
+  "#fce7f3:#be185d",
+  "#ccfbf1:#0f766e",
+] as const;
+
+function avatarColor(name: string): { backgroundColor: string; color: string } {
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) {
+    hash = (hash * 31 + name.charCodeAt(index)) | 0;
+  }
+  const [backgroundColor, color] = AGENT_FALLBACK_COLORS[Math.abs(hash) % AGENT_FALLBACK_COLORS.length].split(":");
+  return { backgroundColor, color };
+}
+
+function formatNumber(value: number | null | undefined): string {
   if (value == null) {
-    return nullText;
+    return "--";
   }
   if (Number.isInteger(value)) {
     return String(value);
@@ -64,19 +116,6 @@ function formatMetric(value: number | null | undefined, unit: string): string {
     return `${Math.round(value * 1024)}MB`;
   }
   return `${formatNumber(value)}${unit}`;
-}
-
-function formatMetricRange(metric: UsageMetric): string {
-  if (metric.used == null && metric.limit == null) {
-    return "--";
-  }
-  if (metric.used != null && metric.limit != null) {
-    return `${formatMetric(metric.used, metric.unit)} / ${formatMetric(metric.limit, metric.unit)}`;
-  }
-  if (metric.used != null) {
-    return formatMetric(metric.used, metric.unit);
-  }
-  return `limit ${formatMetric(metric.limit, metric.unit)}`;
 }
 
 function formatSessionMetricRange(used: number | null | undefined, limit: number | null | undefined, unit: string): string {
@@ -134,17 +173,45 @@ function initials(name: string): string {
     .slice(0, 2);
 }
 
-function capabilityTags(capabilities: ProviderCapabilities): string[] {
-  const labels: Array<[keyof ProviderCapabilities, string]> = [
-    ["filesystem", "FS"],
-    ["terminal", "TERM"],
-    ["metrics", "METRIC"],
-    ["web", "WEB"],
-    ["screenshot", "SHOT"],
-    ["mount", "MOUNT"],
-  ];
-  return labels.filter(([key]) => capabilities[key]).map(([, label]) => label);
+function MonitorAvatar({
+  name,
+  avatarUrl,
+  size = "sm",
+  count,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  size?: "sm" | "lg";
+  count?: number;
+}) {
+  if (typeof count === "number") {
+    return (
+      <div className="sandbox-avatar sandbox-avatar--count" aria-label={`${count} more agents`}>
+        +{count}
+      </div>
+    );
+  }
+
+  const sizeClass = size === "lg" ? "sandbox-avatar--lg" : "";
+  const fallbackStyle = avatarColor(name || "?");
+
+  return (
+    <div
+      className={cx("sandbox-avatar", sizeClass)}
+      title={name || "未绑定"}
+      aria-label={`${name || "未绑定"} avatar`}
+      style={!avatarUrl ? fallbackStyle : undefined}
+    >
+      {avatarUrl ? <img src={avatarUrl} alt="" /> : initials(name || "未绑定")}
+    </div>
+  );
 }
+
+const PROVIDER_TYPE_GLYPH = {
+  local: "◉",
+  cloud: "☁",
+  container: "▣",
+} as const;
 
 function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
   const map = new Map<string, ResourceSession[]>();
@@ -176,11 +243,40 @@ function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
     .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4));
 }
 
+function defaultProviderStatusFilter(groups: LeaseGroup[]): LeaseGroup["status"] | "all" {
+  if (groups.some((group) => group.status === "running")) {
+    return "running";
+  }
+  if (groups.some((group) => group.status === "paused")) {
+    return "paused";
+  }
+  return "all";
+}
+
+function countSessions(sessions: ResourceSession[], status: ResourceSession["status"]): number {
+  return sessions.filter((session) => session.status === status).length;
+}
+
+function countProviderSessions(providers: ProviderInfo[], status: ResourceSession["status"]): number {
+  return providers.reduce((total, provider) => total + countSessions(provider.sessions, status), 0);
+}
+
+function countRuntimeUnboundRunning(provider: ProviderInfo): number {
+  return provider.sessions.filter(
+    (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
+  ).length;
+}
+
+function countDetachedResidue(sessions: ResourceSession[]): number {
+  return sessions.filter(
+    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
+  ).length;
+}
+
 export default function ResourcesPage() {
   const [providers, setProviders] = React.useState<ProviderInfo[]>([]);
   const [selectedId, setSelectedId] = React.useState("");
   const [summary, setSummary] = React.useState<ResourceOverviewResponse["summary"] | null>(null);
-  const [triage, setTriage] = React.useState<ResourceOverviewResponse["triage"] | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -188,7 +284,6 @@ export default function ResourcesPage() {
   const applyPayload = React.useCallback((payload: ResourceOverviewResponse) => {
     setProviders(payload.providers);
     setSummary(payload.summary);
-    setTriage(payload.triage ?? null);
     setSelectedId((previous) => {
       if (payload.providers.some((provider) => provider.id === previous)) {
         return previous;
@@ -290,75 +385,10 @@ export default function ResourcesPage() {
   }, [loadSnapshot]);
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
-  const runningSessionCount = providers.reduce(
-    (total, provider) => total + provider.sessions.filter((session) => session.status === "running").length,
-    0,
-  );
-  const runtimeUnboundUsageCount = providers.reduce(
-    (total, provider) =>
-      total +
-      provider.sessions.filter((session) => {
-        const metrics = session.metrics;
-        return (
-          session.status === "running" &&
-          provider.type !== "local" &&
-          !session.runtimeSessionId &&
-          metrics != null &&
-          (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-        );
-      }).length,
-    0,
-  );
-  const runtimeUnboundRunningCount = providers.reduce(
-    (total, provider) =>
-      total +
-      provider.sessions.filter(
-        (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
-      ).length,
-    0,
-  );
-  const liveUsageRunningCount = providers.reduce(
-    (total, provider) =>
-      total +
-      provider.sessions.filter((session) => {
-        const metrics = session.metrics;
-        return (
-          session.status === "running" &&
-          metrics != null &&
-          (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-        );
-      }).length,
-    0,
-  );
-  const missingLiveTelemetryRunningCount = runningSessionCount - liveUsageRunningCount;
-  const readyWithoutLiveTelemetryCount = providers.filter(
-    (provider) =>
-      provider.type !== "local" &&
-      provider.status === "ready" &&
-      provider.sessions.length === 0 &&
-      provider.telemetry.cpu.freshness === "stale" &&
-      provider.telemetry.memory.freshness === "stale" &&
-      provider.telemetry.disk.freshness === "stale",
-  ).length;
-  const quotaOnlyRunningCount = providers.reduce(
-    (total, provider) =>
-      total +
-      provider.sessions.filter((session) => {
-        const metrics = session.metrics;
-        return (
-          session.status === "running" &&
-          metrics != null &&
-          metrics.memory == null &&
-          metrics.disk == null &&
-          (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-          Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
-        );
-      }).length,
-    0,
-  );
-  const activeDriftCount = triage?.summary?.active_drift ?? 0;
-  const detachedResidueCount = triage?.summary?.detached_residue ?? 0;
-  const orphanCleanupCount = triage?.summary?.orphan_cleanup ?? 0;
+  const runningSessionCount = countProviderSessions(providers, "running");
+  const pausedSessionCount = countProviderSessions(providers, "paused");
+  const stoppedSessionCount = countProviderSessions(providers, "stopped");
+  const leaseGroupCount = providers.reduce((total, provider) => total + groupByLease(provider.sessions).length, 0);
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -397,52 +427,21 @@ export default function ResourcesPage() {
   return (
     <div className="page resources-shell">
       <header className="resources-hero">
-        <div>
-          <p className="resources-eyebrow">Global Resource Surface</p>
-          <h1>Resources</h1>
-          <p className="resources-hero-copy">
-            沿用旧资源页的卡片式布局，但直接接到 monitor 的全局资源面。这里看 provider 级概览，再下钻到 lease/sandbox。
-          </p>
-        </div>
         <div className="resources-summary-strip">
           <div className="resources-summary-pill">
             <span className="resources-summary-dot resources-summary-dot--ok" />
             {summary?.active_providers ?? 0} 活跃 provider
           </div>
-          <div className="resources-summary-pill">{runningSessionCount} 运行会话</div>
-          {liveUsageRunningCount > 0 && liveUsageRunningCount < runningSessionCount && (
-            <div className="resources-summary-pill">{liveUsageRunningCount} 有用量</div>
-          )}
-          {runtimeUnboundUsageCount > 0 && (
-            <div className="resources-summary-pill">{runtimeUnboundUsageCount} 无 runtime有用量</div>
-          )}
-          {missingLiveTelemetryRunningCount > 0 && (
-            <div className="resources-summary-pill">{missingLiveTelemetryRunningCount} 无 live telemetry</div>
-          )}
-          {runtimeUnboundRunningCount > 0 && (
-            <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
-          )}
-          {readyWithoutLiveTelemetryCount > 0 && (
-            <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 遥测未知</div>
-          )}
-          {quotaOnlyRunningCount > 0 && (
-            <div className="resources-summary-pill">{quotaOnlyRunningCount} 仅配额</div>
-          )}
-          {activeDriftCount > 0 && (
-            <div className="resources-summary-pill">{activeDriftCount} Active Drift</div>
-          )}
-          {detachedResidueCount > 0 && (
-            <div className="resources-summary-pill">{detachedResidueCount} Detached Residue</div>
-          )}
-          {orphanCleanupCount > 0 && (
-            <div className="resources-summary-pill">{orphanCleanupCount} Orphan Cleanup</div>
-          )}
+          <div className="resources-summary-pill">{leaseGroupCount} 沙盒</div>
+          <div className="resources-summary-pill">{runningSessionCount} 运行中</div>
+          {pausedSessionCount > 0 && <div className="resources-summary-pill">{pausedSessionCount} 已暂停</div>}
+          {stoppedSessionCount > 0 && <div className="resources-summary-pill">{stoppedSessionCount} 已结束</div>}
           <div className="resources-summary-pill">
             <span
-              className={[
+              className={cx(
                 "resources-summary-dot",
                 summary?.refresh_status === "error" ? "resources-summary-dot--warn" : "resources-summary-dot--ok",
-              ].join(" ")}
+              )}
             />
             刷新 {refreshedAt}
           </div>
@@ -483,87 +482,33 @@ function ProviderCard({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const runningCount = provider.sessions.filter((session) => session.status === "running").length;
-  const runtimeUnboundUsageCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      !session.runtimeSessionId &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
-  const runtimeUnboundRunningCount = provider.sessions.filter(
-    (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
-  ).length;
-  const liveUsageRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
-  const runtimeBoundTelemetryGapCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    const hasLiveUsage = metrics != null && (metrics.cpu != null || metrics.memory != null || metrics.disk != null);
-    const isQuotaOnly =
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError);
-    return session.status === "running" && Boolean(session.runtimeSessionId) && !hasLiveUsage && !isQuotaOnly;
-  }).length;
-  const quotaOnlyRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
-    );
-  }).length;
-  const detachedResidueCount = provider.sessions.filter(
-    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
-  ).length;
-  const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
-  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
-  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
-  const capabilityList = capabilityTags(provider.capabilities);
-  const showCpuMetric = provider.cardCpu.used != null || provider.cardCpu.limit != null;
-  const showMemoryMetric = provider.telemetry.memory.used != null || provider.telemetry.memory.limit != null;
-  const showDiskMetric = provider.telemetry.disk.used != null || provider.telemetry.disk.limit != null;
-  const runningMetric = {
-    ...provider.telemetry.running,
-    used: runningCount,
-  };
-  const showSandboxLevelCpuTruth =
-    provider.type !== "local" &&
-    runningCount > 0 &&
-    !showCpuMetric &&
-    provider.cardCpu.error === "CPU usage is per-sandbox, not a provider-level quota.";
-  const showTelemetryGapTruth =
-    provider.type !== "local" &&
-    provider.status === "ready" &&
-    runningCount === 0 &&
-    provider.telemetry.cpu.freshness === "stale" &&
-    provider.telemetry.memory.freshness === "stale" &&
-    provider.telemetry.disk.freshness === "stale";
+  const runningCount = countSessions(provider.sessions, "running");
+  const pausedCount = countSessions(provider.sessions, "paused");
+  const stoppedCount = countSessions(provider.sessions, "stopped");
+  const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
+  const detachedResidueCount = countDetachedResidue(provider.sessions);
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
+  const sessionSummary = [
+    `${runningCount} 运行中`,
+    pausedCount > 0 ? `${pausedCount} 已暂停` : null,
+    stoppedCount > 0 ? `${stoppedCount} 已结束` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const sessionDots = [...provider.sessions]
+    .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4))
+    .slice(0, 5);
 
   return (
     <button
       type="button"
-      className={[
+      className={cx(
         "provider-card",
-        selected ? "provider-card--selected" : "",
-        provider.status === "unavailable" ? "provider-card--unavailable" : "",
-      ].join(" ")}
+        selected && "provider-card--selected",
+        provider.status === "unavailable" && "provider-card--unavailable",
+      )}
       onClick={onSelect}
     >
       <div className="provider-card__header">
@@ -571,137 +516,92 @@ function ProviderCard({
           <span className={`provider-status-dot provider-status-dot--${provider.status}`} />
           <span>{provider.name}</span>
         </div>
-        <span className="provider-card__kind">{PROVIDER_TYPE_LABEL[provider.type]}</span>
+        <span className="provider-card__kind">
+          <span className="provider-card__type-glyph" aria-hidden="true">
+            {PROVIDER_TYPE_GLYPH[provider.type]}
+          </span>
+          {PROVIDER_TYPE_LABEL[provider.type]}
+        </span>
       </div>
 
       {provider.status === "unavailable" ? (
-        // @@@unavailable-card-truth - monitor cards must say when a provider is unavailable;
-        // showing a neutral `-- CPU` card hides the real operator actionability.
+        // @@@unavailable-card-state - monitor cards must say when a provider is unavailable;
+        // showing a neutral `-- CPU` card hides the actionable state.
         <div className="provider-card__unavailable">
           <div className="provider-card__unavailable-label">未就绪</div>
           <div className="provider-card__unavailable-reason">{unavailableHint}</div>
         </div>
       ) : (
         <div className="provider-card__metric-row">
-          <MetricOrb label="运行数" metric={runningMetric} />
-          {showCpuMetric && <MetricOrb label="CPU" metric={provider.cardCpu} />}
-          {showMemoryMetric && <MetricOrb label="RAM" metric={provider.telemetry.memory} />}
-          {showDiskMetric && <MetricOrb label="Disk" metric={provider.telemetry.disk} />}
+          <div className="provider-card__running-stat">
+            <div className="provider-card__running-value">{formatNumber(runningCount)}</div>
+            <div className="provider-card__running-copy">
+              <div className="provider-card__running-label">运行中沙盒</div>
+              <div className="provider-card__running-note">具体指标见下方沙盒</div>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="provider-card__footer">
-        <span>{runningCount} 占用中</span>
-        {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && <span>{liveUsageRunningCount} 有用量</span>}
-        {missingLiveTelemetryRunningCount > 0 && <span>{missingLiveTelemetryRunningCount} 无 live telemetry</span>}
-        {runtimeBoundTelemetryGapCount > 0 && <span>{runtimeBoundTelemetryGapCount} 有 runtime无遥测</span>}
-        {runtimeUnboundUsageCount > 0 && <span>{runtimeUnboundUsageCount} 无 runtime有用量</span>}
-        {quotaOnlyRunningCount > 0 && <span>{quotaOnlyRunningCount} 仅配额</span>}
-        {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
-        {detachedResidueCount > 0 && <span>{detachedResidueCount} Detached Residue</span>}
-        {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
-        {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
+        {provider.sessions.length > 0 && (
+          <div className="provider-card__activity">
+            <div className="provider-card__session-dots" aria-hidden="true">
+              {sessionDots.map((session) => (
+                <span
+                  key={session.id}
+                  className={cx("provider-card__session-dot", `provider-card__session-dot--${session.status}`)}
+                />
+              ))}
+            </div>
+            <span>{sessionSummary}</span>
+          </div>
+        )}
+        {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 未连上沙盒</span>}
+        {detachedResidueCount > 0 && <span>{detachedResidueCount} 历史残留</span>}
       </div>
 
-      {showTelemetryGapTruth && (
-        <div className="provider-card__truth">暂无 live telemetry</div>
-      )}
-      {showSandboxLevelCpuTruth && (
-        <div className="provider-card__truth">CPU 沙盒级</div>
-      )}
-
-      {capabilityList.length > 0 && (
-        <div className="provider-card__capabilities">
-          {capabilityList.map((capability) => (
-            <span key={capability} className="provider-capability-chip">
-              {capability}
-            </span>
-          ))}
-        </div>
-      )}
+      <CapabilityStrip capabilities={provider.capabilities} />
     </button>
-  );
-}
-
-function MetricOrb({ label, metric }: { label: string; metric: UsageMetric }) {
-  const value =
-    metric.used == null
-      ? "--"
-      : metric.unit === "%" || metric.unit === "GB"
-        ? formatMetric(metric.used, metric.unit)
-        : formatNumber(metric.used);
-
-  return (
-    <div className="metric-orb" title={metric.error || undefined}>
-      <div className="metric-orb__value">{value}</div>
-      <div className="metric-orb__label">{label}</div>
-      {metric.limit != null && <div className="metric-orb__sub">{formatMetric(metric.limit, metric.unit)}</div>}
-    </div>
   );
 }
 
 function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
+  const [statusFilter, setStatusFilter] = React.useState<LeaseGroup["status"] | "all">("all");
   const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
-  const runningCount = provider.sessions.filter((session) => session.status === "running").length;
-  const detachedResidueCount = provider.sessions.filter(
-    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
-  ).length;
-  const runtimeUnboundUsageCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      !session.runtimeSessionId &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
-  const runtimeUnboundRunningCount = provider.sessions.filter(
-    (session) => session.status === "running" && !session.runtimeSessionId,
-  ).length;
-  const quotaOnlyRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
-    );
-  }).length;
-  const liveUsageRunningCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    return (
-      session.status === "running" &&
-      metrics != null &&
-      (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
-    );
-  }).length;
-  const runtimeBoundTelemetryGapCount = provider.sessions.filter((session) => {
-    const metrics = session.metrics;
-    const hasLiveUsage = metrics != null && (metrics.cpu != null || metrics.memory != null || metrics.disk != null);
-    const isQuotaOnly =
-      metrics != null &&
-      metrics.memory == null &&
-      metrics.disk == null &&
-      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
-      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError);
-    return session.status === "running" && Boolean(session.runtimeSessionId) && !hasLiveUsage && !isQuotaOnly;
-  }).length;
-  const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
-  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
-  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
+  const filteredGroups = React.useMemo(
+    () => (statusFilter === "all" ? groups : groups.filter((group) => group.status === statusFilter)),
+    [groups, statusFilter],
+  );
+  const groupCounts = React.useMemo(
+    () =>
+      groups.reduce(
+        (counts, group) => {
+          counts[group.status] += 1;
+          return counts;
+        },
+        {
+          running: 0,
+          paused: 0,
+          stopped: 0,
+          destroying: 0,
+        } satisfies Record<LeaseGroup["status"], number>,
+      ),
+    [groups],
+  );
+  const runningCount = countSessions(provider.sessions, "running");
+  const detachedResidueCount = countDetachedResidue(provider.sessions);
+  const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
+  const pausedCount = countSessions(provider.sessions, "paused");
+  const stoppedCount = countSessions(provider.sessions, "stopped");
   const isLocal = provider.type === "local";
   const showUnavailableBanner = provider.status === "unavailable";
   const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
-  const showTelemetryGapBanner =
-    !isLocal &&
-    provider.status === "ready" &&
-    runningCount === 0 &&
-    provider.telemetry.cpu.freshness === "stale" &&
-    provider.telemetry.memory.freshness === "stale" &&
-    provider.telemetry.disk.freshness === "stale";
+
+  React.useEffect(() => {
+    setStatusFilter(defaultProviderStatusFilter(groups));
+  }, [groups, provider.id]);
 
   return (
     <>
@@ -721,6 +621,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
           </div>
           <div className="provider-detail__meta">
             <span>{PROVIDER_TYPE_LABEL[provider.type]}</span>
+            <Link to={`/providers/${provider.id}`} aria-label={`${provider.name} detail`}>
+              详情
+            </Link>
             {provider.consoleUrl && (
               <a href={provider.consoleUrl} target="_blank" rel="noreferrer">
                 控制台
@@ -737,68 +640,62 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
         ) : (
           <>
             {showUnavailableBanner && (
-              // @@@unavailable-with-sessions - monitor truth differs from the old app resource tab:
+              // @@@unavailable-with-sessions - monitor state differs from the app resource tab:
               // an unavailable provider can still carry historical/live lease rows, so keep the detail
               // surface inspectable instead of hard-disabling the whole card.
               <div className="provider-warning-banner">
                 {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条关联 session，可继续检查。
               </div>
             )}
-            {showTelemetryGapBanner && (
-              <div className="provider-warning-banner">
-                当前 provider 暂无 live telemetry，CPU / RAM / Disk 仍是未知状态。
-              </div>
-            )}
 
             <div className="provider-detail__overview">
-              {isLocal ? (
-                <div className="provider-inline-metrics">
-                  <InlineMetric label="运行中" value={String(runningCount)} />
-                  {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && (
-                    <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
-                  )}
-                  {missingLiveTelemetryRunningCount > 0 && (
-                    <InlineMetric label="无 live telemetry" value={String(missingLiveTelemetryRunningCount)} />
-                  )}
-                  {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
-                  <InlineMetric label="CPU" value={formatMetricRange(provider.cardCpu)} />
-                  <InlineMetric label="RAM" value={formatMetricRange(provider.telemetry.memory)} />
-                  <InlineMetric label="Disk" value={formatMetricRange(provider.telemetry.disk)} />
-                </div>
-              ) : (
-                <div className="provider-inline-metrics">
-                  <InlineMetric label="运行中" value={String(runningCount)} />
-                  {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && (
-                    <InlineMetric label="有用量" value={String(liveUsageRunningCount)} />
-                  )}
-                  {missingLiveTelemetryRunningCount > 0 && (
-                    <InlineMetric label="无 live telemetry" value={String(missingLiveTelemetryRunningCount)} />
-                  )}
-                  {runtimeBoundTelemetryGapCount > 0 && (
-                    <InlineMetric label="有 runtime无遥测" value={String(runtimeBoundTelemetryGapCount)} />
-                  )}
-                  {runtimeUnboundUsageCount > 0 && (
-                    <InlineMetric label="无 runtime有用量" value={String(runtimeUnboundUsageCount)} />
-                  )}
-                  {runtimeUnboundRunningCount > 0 && <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />}
-                  {quotaOnlyRunningCount > 0 && <InlineMetric label="仅配额" value={String(quotaOnlyRunningCount)} />}
-                  <InlineMetric label="已暂停" value={String(pausedCount)} />
-                  {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
-                  <InlineMetric label="已结束" value={String(stoppedCount)} />
-                </div>
-              )}
+              <div className="provider-inline-metrics">
+                <InlineMetric label="运行中" value={String(runningCount)} />
+                {pausedCount > 0 && <InlineMetric label="已暂停" value={String(pausedCount)} />}
+                {stoppedCount > 0 && <InlineMetric label="已结束" value={String(stoppedCount)} />}
+                {runtimeUnboundRunningCount > 0 && !isLocal && (
+                  <InlineMetric label="未连上沙盒" value={String(runtimeUnboundRunningCount)} />
+                )}
+                {detachedResidueCount > 0 && <InlineMetric label="历史残留" value={String(detachedResidueCount)} />}
+              </div>
             </div>
 
             <div className="provider-section">
               <div className="provider-section__header">
-                <h3>Sandboxes</h3>
-                <span>{groups.length} 组</span>
+                <h3>沙盒</h3>
+                <span>{filteredGroups.length} / {groups.length} 组</span>
               </div>
+              {groups.length > 0 && (
+                <div className="provider-filter-row" role="group" aria-label="Sandbox status filters">
+                  <button
+                    type="button"
+                    className={cx("provider-filter-chip", statusFilter === "all" && "provider-filter-chip--active")}
+                    onClick={() => setStatusFilter("all")}
+                  >
+                    全部 {groups.length}
+                  </button>
+                  {SANDBOX_FILTER_STATUSES.filter((status) => groupCounts[status] > 0).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      className={cx(
+                        "provider-filter-chip",
+                        statusFilter === status && "provider-filter-chip--active",
+                      )}
+                      onClick={() => setStatusFilter(status)}
+                    >
+                      {STATUS_LABEL[status]} {groupCounts[status]}
+                    </button>
+                  ))}
+                </div>
+              )}
               {groups.length === 0 ? (
                 <p className="provider-empty-state">暂无沙盒</p>
+              ) : filteredGroups.length === 0 ? (
+                <p className="provider-empty-state">当前筛选下暂无沙盒</p>
               ) : (
                 <div className="sandbox-grid">
-                  {groups.map((group) => (
+                  {filteredGroups.map((group) => (
                     <SandboxCard
                       key={group.leaseId || group.sessions.map((session) => session.id).join("|")}
                       group={group}
@@ -819,6 +716,37 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
         onClose={() => setSelectedGroup(null)}
       />
     </>
+  );
+}
+
+function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabilities }) {
+  const keys = Object.keys(capabilities) as Array<keyof ProviderCapabilities>;
+  const enabledCount = keys.filter((key) => capabilities[key]).length;
+
+  return (
+    <div className="provider-card__capability-strip">
+      {keys.map((key) => {
+        const enabled = capabilities[key];
+        const Icon = CAPABILITY_ICON_MAP[key];
+        return (
+          <span
+            key={key}
+            role="img"
+            aria-label={`${key} ${enabled ? "enabled" : "unavailable"}`}
+            title={CAPABILITY_LABELS[key]}
+            className={cx(
+              "provider-capability-icon",
+              enabled ? "provider-capability-icon--enabled" : "provider-capability-icon--disabled",
+            )}
+          >
+            <Icon className="provider-capability-svg" aria-hidden="true" />
+          </span>
+        );
+      })}
+      <span className="provider-capability-count">
+        {enabledCount}/{keys.length}
+      </span>
+    </div>
   );
 }
 
@@ -855,20 +783,20 @@ function SandboxCard({
     group.status === "running" &&
     Boolean(group.leaseId) &&
     !group.sessions.some((session) => Boolean(session.runtimeSessionId));
-  const showQuotaOnlyDiskTruth =
+  const showQuotaOnlyDiskState =
     metrics != null &&
     metrics.disk == null &&
     metrics.diskLimit != null &&
     Boolean(metrics.diskNote || metrics.probeError);
-  const showDetachedResidueTruth =
+  const showDetachedResidueState =
     group.status === "stopped" &&
     !group.sessions.some((session) => Boolean(session.runtimeSessionId)) &&
     metrics == null;
-  const showMissingLiveTelemetryTruth =
+  const showMissingMetricsState =
     group.status === "running" &&
     !showRuntimeBindingWarning &&
-    !showQuotaOnlyDiskTruth &&
-    !showDetachedResidueTruth &&
+    !showQuotaOnlyDiskState &&
+    !showDetachedResidueState &&
     (metrics == null || (metrics.cpu == null && metrics.memory == null && metrics.disk == null));
 
   return (
@@ -884,23 +812,25 @@ function SandboxCard({
         <div className="sandbox-card__agent-row">
           <div className="sandbox-card__avatar-stack">
             {group.sessions.slice(0, 3).map((session) => (
-              <div key={session.id} className="sandbox-avatar" title={session.agentName || "未绑定"}>
-                {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.agentName || "未绑定")}
-              </div>
+              <MonitorAvatar
+                key={session.id}
+                name={session.agentName || "未绑定"}
+                avatarUrl={session.avatarUrl}
+              />
             ))}
-            {group.sessions.length > 3 && <div className="sandbox-avatar sandbox-avatar--count">+{group.sessions.length - 3}</div>}
+            {group.sessions.length > 3 && <MonitorAvatar name="" count={group.sessions.length - 3} />}
           </div>
           <div className="sandbox-card__names">{names}</div>
         </div>
         {showRuntimeBindingWarning && (
           // @@@running-card-without-runtime - a persisted lease row can still say `running`
           // after the live runtime session disappears; the card has to surface that drift
-          // before the operator drills into a guaranteed-failing file browser.
-          <div className="sandbox-card__warning">无 active runtime</div>
+          // before opening a guaranteed-failing file browser.
+          <div className="sandbox-card__warning">未连上运行时</div>
         )}
-        {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">Disk 仅配额</div>}
-        {showDetachedResidueTruth && <div className="sandbox-card__warning">Detached Residue</div>}
-        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">无 live telemetry</div>}
+        {showQuotaOnlyDiskState && <div className="sandbox-card__warning">仅有磁盘配额</div>}
+        {showDetachedResidueState && <div className="sandbox-card__warning">历史残留</div>}
+        {showMissingMetricsState && <div className="sandbox-card__warning">等待运行中的沙盒上报指标</div>}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
@@ -943,9 +873,11 @@ function SandboxInspector({
 
   if (!group) return null;
   const browserUnavailableReason =
-    providerType !== "local" && group.leaseId && !group.sessions.some((session) => Boolean(session.runtimeSessionId))
-      ? "当前 lease 没有 active runtime session，无法浏览文件。"
-      : null;
+    group.status === "paused"
+      ? "沙盒已暂停，恢复运行后才能浏览文件。"
+      : providerType !== "local" && group.leaseId && !group.sessions.some((session) => Boolean(session.runtimeSessionId))
+        ? "当前 lease 没有 active runtime session，无法浏览文件。"
+        : null;
 
   return (
     <div className="sandbox-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
@@ -968,16 +900,25 @@ function SandboxInspector({
             {group.sessions.map((session) => (
               <div key={session.id} className="sandbox-session-row">
                 <div className="sandbox-session-row__identity">
-                  <div className="sandbox-avatar sandbox-avatar--lg" title={session.agentName || "未绑定"}>
-                    {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.agentName || "未绑定")}
-                  </div>
+                  <MonitorAvatar
+                    name={session.agentName || "未绑定"}
+                    avatarUrl={session.avatarUrl}
+                    size="lg"
+                  />
                   <div>
                     <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
-                    <Link className="sandbox-link" to={`/thread/${session.threadId}`}>
-                      {session.threadId}
-                    </Link>
+                    <div className="sandbox-session-row__meta">
+                      <Link className="sandbox-link" to={`/threads/${session.threadId}`}>
+                        {session.threadId}
+                      </Link>
+                    </div>
                     {session.runtimeSessionId && (
-                      <div className="sandbox-session-row__meta">runtime {session.runtimeSessionId}</div>
+                      <div className="sandbox-session-row__meta">
+                        runtime{" "}
+                        <Link className="sandbox-link" to={`/runtimes/${session.runtimeSessionId}`}>
+                          {session.runtimeSessionId}
+                        </Link>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -992,7 +933,7 @@ function SandboxInspector({
 
         {group.metrics && (
           <div className="sandbox-modal__section">
-            <h4>指标</h4>
+            <h4>实时指标</h4>
             <div className="sandbox-metric-grid">
               <MetricBlock label="CPU" value={formatMetric(group.metrics.cpu, "%")} />
               <MetricBlock
@@ -1013,12 +954,12 @@ function SandboxInspector({
 
         <div className="sandbox-modal__section sandbox-modal__section--fill">
           <div className="sandbox-modal__section-header">
-            <h4>文件</h4>
-            {group.leaseId && (
-              <Link className="sandbox-link" to={`/lease/${group.leaseId}`}>
-                打开 lease
+            <h4>工作区文件</h4>
+            {group.leaseId ? (
+              <Link className="sandbox-link" to={`/leases/${group.leaseId}`}>
+                {group.leaseId}
               </Link>
-            )}
+            ) : null}
           </div>
           <MonitorFileBrowser
             leaseId={group.leaseId}
@@ -1086,18 +1027,11 @@ function MonitorFileBrowser({
         // @@@local-monitor-browse - local resource sessions are host-bound, not active-instance-bound.
         // Reuse the same settings browse/read endpoints as the app resource surface.
         const data = isLocal
-          ? await (async () => {
-              const response = await fetch(`/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`);
-              if (!response.ok) {
-                const body = await response.text();
-                throw new Error(`API ${response.status}: ${body || response.statusText}`);
-              }
-              return await response.json() as {
+          ? await fetchJsonOrThrow<{
                 current_path?: string;
                 parent_path?: string | null;
                 items?: BrowseItem[];
-              };
-            })()
+              }>(`/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`)
           : await browseMonitorSandbox(leaseId, path);
         setCurrentPath(data.current_path ?? path);
         setParentPath(data.parent_path ?? null);
@@ -1112,12 +1046,12 @@ function MonitorFileBrowser({
   );
 
   React.useEffect(() => {
-    if (disabled) return;
+    if (disabled || unavailableReason) return;
     void loadPath(defaultPath);
     setSelectedFile(null);
     setFileContent(null);
     setFileError(null);
-  }, [defaultPath, disabled, loadPath]);
+  }, [defaultPath, disabled, loadPath, unavailableReason]);
 
   const loadFile = React.useCallback(
     async (path: string) => {
@@ -1126,14 +1060,9 @@ function MonitorFileBrowser({
       setFileLoading(true);
       try {
         const data = isLocal
-          ? await (async () => {
-              const response = await fetch(`/api/settings/read?path=${encodeURIComponent(path)}`);
-              if (!response.ok) {
-                const body = await response.text();
-                throw new Error(`API ${response.status}: ${body || response.statusText}`);
-              }
-              return await response.json() as { content: string; truncated: boolean };
-            })()
+          ? await fetchJsonOrThrow<{ content: string; truncated: boolean }>(
+              `/api/settings/read?path=${encodeURIComponent(path)}`,
+            )
           : await readMonitorSandboxFile(leaseId, path);
         setFileContent(data.content);
         if (data.truncated) {
@@ -1150,7 +1079,6 @@ function MonitorFileBrowser({
 
   const openFile = React.useCallback(
     async (path: string) => {
-      if (!leaseId && !isLocal) return;
       if (selectedFile === path) {
         setSelectedFile(null);
         setFileContent(null);
@@ -1160,12 +1088,8 @@ function MonitorFileBrowser({
       setSelectedFile(path);
       await loadFile(path);
     },
-    [isLocal, leaseId, selectedFile, loadFile],
+    [selectedFile, loadFile],
   );
-
-  if (!leaseId && !isLocal) {
-    return <p className="file-browser__empty">当前沙盒没有 lease id，无法浏览文件。</p>;
-  }
 
   if (unavailableReason) {
     return <p className="file-browser__empty">{unavailableReason}</p>;
@@ -1207,10 +1131,10 @@ function MonitorFileBrowser({
               <button
                 key={item.path}
                 type="button"
-                className={[
+                className={cx(
                   "file-browser__item",
-                  !item.is_dir && selectedFile === item.path ? "file-browser__item--selected" : "",
-                ].join(" ")}
+                  !item.is_dir && selectedFile === item.path && "file-browser__item--selected",
+                )}
                 onClick={() => (item.is_dir ? void loadPath(item.path) : void openFile(item.path))}
               >
                 <span>{item.is_dir ? "DIR" : "FILE"}</span>

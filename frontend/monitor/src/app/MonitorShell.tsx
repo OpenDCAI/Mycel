@@ -1,22 +1,18 @@
+import React from "react";
 import { useLocation } from "react-router-dom";
 
+import { cx } from "./classes";
 import { MonitorNav } from "./MonitorNav";
-import { monitorNav } from "./monitor-nav";
-
-function resolveCurrentSurface(pathname: string) {
-  return (
-    monitorNav.find((item) => pathname === item.to || (item.matchPrefix && pathname.startsWith(item.matchPrefix))) ??
-    monitorNav[0]
-  );
-}
+import { resolveMonitorNav } from "./monitor-nav";
 
 export function MonitorShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const current = resolveCurrentSurface(location.pathname);
+  const current = resolveMonitorNav(location.pathname);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
 
   return (
-    <div className="monitor-shell">
-      <MonitorNav />
+    <div className={cx("monitor-shell", sidebarCollapsed && "monitor-shell--sidebar-collapsed")}>
+      <MonitorNav collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
       <main className="monitor-shell__main">
         <header className="monitor-shell__header">
           <div>

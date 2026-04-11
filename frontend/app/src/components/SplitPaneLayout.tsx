@@ -14,8 +14,14 @@ export default function SplitPaneLayout({ sidebar, hasDetail, emptyMessage = "é€
 
   if (isMobile) {
     return (
-      <div className="h-full w-full">
-        {hasDetail ? <Outlet context={outletContext} /> : sidebar}
+      <div className="h-full w-full min-h-0 overflow-hidden">
+        {hasDetail ? (
+          <div className="h-full w-full min-h-0 flex flex-col overflow-hidden">
+            <Outlet context={outletContext} />
+          </div>
+        ) : (
+          sidebar
+        )}
       </div>
     );
   }
@@ -23,7 +29,7 @@ export default function SplitPaneLayout({ sidebar, hasDetail, emptyMessage = "é€
   return (
     <div className="h-full w-full flex overflow-hidden">
       <div className="w-72 shrink-0 h-full">{sidebar}</div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
         {hasDetail ? (
           <Outlet context={outletContext} />
         ) : (

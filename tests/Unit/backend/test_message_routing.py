@@ -29,22 +29,27 @@ class _FakeAgent:
         self.runtime = _FakeRuntime()
 
 
-@pytest.mark.asyncio
-async def test_route_message_to_brain_clears_resource_overview_cache_when_starting_run() -> None:
-    app = SimpleNamespace(
+def _fake_app() -> SimpleNamespace:
+    return SimpleNamespace(
         state=SimpleNamespace(
             queue_manager=_FakeQueueManager(),
             thread_locks={},
             thread_locks_guard=asyncio.Lock(),
+            thread_tasks={},
         )
     )
+
+
+@pytest.mark.asyncio
+async def test_route_message_to_brain_clears_resource_overview_cache_when_starting_run() -> None:
+    app = _fake_app()
     agent = _FakeAgent()
 
     with (
         patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
         patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=agent)),
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
-        patch("backend.web.services.resource_cache.clear_monitor_resource_overview_cache") as clear_cache,
+        patch("backend.web.services.resource_cache.clear_resource_overview_cache") as clear_cache,
     ):
         result = await route_message_to_brain(app, "thread-1", "hello")
 
@@ -53,21 +58,29 @@ async def test_route_message_to_brain_clears_resource_overview_cache_when_starti
 
 
 @pytest.mark.asyncio
+async def test_route_message_to_brain_requires_agent_runtime() -> None:
+    app = _fake_app()
+
+    with (
+        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=SimpleNamespace())),
+        patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
+        patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
+    ):
+        with pytest.raises(AttributeError):
+            await route_message_to_brain(app, "thread-1", "hello")
+
+
+@pytest.mark.asyncio
 async def test_route_message_to_brain_passes_enable_trajectory_to_start_agent_run() -> None:
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            queue_manager=_FakeQueueManager(),
-            thread_locks={},
-            thread_locks_guard=asyncio.Lock(),
-        )
-    )
+    app = _fake_app()
     agent = _FakeAgent()
 
     with (
         patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
         patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=agent)),
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123") as start_run,
-        patch("backend.web.services.resource_cache.clear_monitor_resource_overview_cache"),
+        patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
     ):
         await route_message_to_brain(app, "thread-1", "hello", enable_trajectory=True)
 

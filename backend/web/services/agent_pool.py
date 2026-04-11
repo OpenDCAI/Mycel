@@ -114,20 +114,14 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         agent_user_id = thread_data.get("agent_user_id") if thread_data else None
         agent_user = user_repo.get_by_id(agent_user_id) if agent_user_id and user_repo is not None else None
 
-        # Look up model for this thread (thread override → repo-backed user settings → local preferences)
+        # Look up model for this thread (thread override → repo-backed user settings)
         model_name = thread_data.get("model") if thread_data else None
         if not model_name:
             user_settings_repo = getattr(app_obj.state, "user_settings_repo", None)
             owner_user_id = getattr(agent_user, "owner_user_id", None) if agent_user is not None else None
-            repo_backed_owner_settings = user_settings_repo is not None and owner_user_id is not None
-            if repo_backed_owner_settings:
+            if user_settings_repo is not None and owner_user_id is not None:
                 settings_row = user_settings_repo.get(owner_user_id) or {}
                 model_name = settings_row.get("default_model")
-            if not model_name and not repo_backed_owner_settings:
-                from backend.web.routers.settings import load_settings as load_preferences
-
-                prefs = load_preferences()
-                model_name = prefs.default_model
 
         # @@@agent-vs-member - thread_config.agent stores a member ID (e.g. "__leon__") for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
@@ -145,25 +139,20 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None
-        if hasattr(app_obj.state, "user_repo") and thread_data:
-            agent_user_id = thread_data.get("agent_user_id")
+        if user_repo is not None and thread_data:
             if not agent_user_id:
                 raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
-            agent_user = agent_user or (user_repo.get_by_id(agent_user_id) if agent_user_id else None)
-            if agent_user:
-                chat_identity_id = agent_user_id
-                # @@@thread-chat-identity-source - agent users are now the stable social
-                # identity root. Runtime threads no longer carry a second dedicated user_id.
-                if not chat_identity_id:
-                    raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
-                owner_id = agent_user.owner_user_id or ""
-                chat_repos = {
-                    "chat_identity_id": chat_identity_id,
-                    "owner_id": owner_id,
-                    "user_repo": user_repo,
-                    "messaging_service": getattr(app_obj.state, "messaging_service", None),
-                    "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
-                }
+            agent_user = agent_user or user_repo.get_by_id(agent_user_id)
+            # @@@thread-chat-identity-source - agent users are now the stable social
+            # identity root. Runtime threads no longer carry a second dedicated user_id.
+            owner_id = agent_user.owner_user_id or ""
+            chat_repos = {
+                "chat_identity_id": agent_user_id,
+                "owner_id": owner_id,
+                "user_repo": user_repo,
+                "messaging_service": getattr(app_obj.state, "messaging_service", None),
+                "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
+            }
 
         # @@@per-thread-file-access - ensure thread files are accessible from agent
         from backend.web.services.file_channel_service import get_file_channel_source
@@ -258,10 +247,9 @@ async def update_agent_config(app_obj: FastAPI, model: str, thread_id: str | Non
     """
     # Get or create lock for this thread
     lock_key = thread_id or "global"
-    if lock_key not in _config_update_locks:
-        _config_update_locks[lock_key] = asyncio.Lock()
+    lock = _config_update_locks.setdefault(lock_key, asyncio.Lock())
 
-    async with _config_update_locks[lock_key]:
+    async with lock:
         if thread_id:
             # Update specific thread's agent
             sandbox_type = resolve_thread_sandbox(app_obj, thread_id)
@@ -286,25 +274,24 @@ async def update_agent_config(app_obj: FastAPI, model: str, thread_id: str | Non
                 "model": agent.model_name,
                 "message": f"Model updated to {agent.model_name}",
             }
-        else:
-            # Global update: update all existing agents
-            pool = app_obj.state.agent_pool
-            updated_count = 0
-            errors = []
+        # Global update: update all existing agents
+        pool = app_obj.state.agent_pool
+        updated_count = 0
+        errors = []
 
-            for pool_key, agent in pool.items():
-                try:
-                    await asyncio.to_thread(agent.update_config, model=model)
-                    updated_count += 1
-                except Exception as e:
-                    errors.append(f"{pool_key}: {str(e)}")
+        for pool_key, agent in pool.items():
+            try:
+                await asyncio.to_thread(agent.update_config, model=model)
+                updated_count += 1
+            except Exception as e:
+                errors.append(f"{pool_key}: {str(e)}")
 
-            if errors:
-                raise ValueError(f"Failed to update some agents: {'; '.join(errors)}")
+        if errors:
+            raise ValueError(f"Failed to update some agents: {'; '.join(errors)}")
 
-            return {
-                "success": True,
-                "updated_count": updated_count,
-                "model": model,
-                "message": f"Updated {updated_count} agent(s) to model {model}",
-            }
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "model": model,
+            "message": f"Updated {updated_count} agent(s) to model {model}",
+        }

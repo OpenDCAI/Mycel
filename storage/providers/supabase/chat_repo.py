@@ -39,20 +39,33 @@ class SupabaseChatRepo:
         rows = q.rows(response, _REPO_CHAT, "get_by_id")
         if not rows:
             return None
-        r = rows[0]
-        return ChatRow(
-            id=r["id"],
-            type=r["type"],
-            created_by_user_id=r["created_by_user_id"],
-            title=r.get("title"),
-            status=r.get("status", "active"),
-            next_message_seq=int(r.get("next_message_seq", 0)),
-            created_at=float(r["created_at"]),
-            updated_at=float(r["updated_at"]) if r.get("updated_at") is not None else None,
-        )
+        return _row_to_chat(rows[0])
+
+    def list_by_ids(self, chat_ids: list[str]) -> list[ChatRow]:
+        if not chat_ids:
+            return []
+        rows: list[dict[str, Any]] = []
+        for chunk in q.value_chunks(chat_ids):
+            response = q.in_(self._t().select("*"), "id", chunk, _REPO_CHAT, "list_by_ids").execute()
+            rows.extend(q.rows(response, _REPO_CHAT, "list_by_ids"))
+        by_id = {row["id"]: _row_to_chat(row) for row in rows}
+        return [by_id[chat_id] for chat_id in chat_ids if chat_id in by_id]
 
     def delete(self, chat_id: str) -> None:
         self._t().delete().eq("id", chat_id).execute()
 
     def _t(self) -> Any:
         return self._client.table(_TABLE_CHATS)
+
+
+def _row_to_chat(r: dict[str, Any]) -> ChatRow:
+    return ChatRow(
+        id=r["id"],
+        type=r["type"],
+        created_by_user_id=r["created_by_user_id"],
+        title=r.get("title"),
+        status=r.get("status", "active"),
+        next_message_seq=int(r.get("next_message_seq", 0)),
+        created_at=float(r["created_at"]),
+        updated_at=float(r["updated_at"]) if r.get("updated_at") is not None else None,
+    )

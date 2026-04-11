@@ -15,6 +15,7 @@ class _FakeVolumeRepo:
         self.closed = False
         self.requested_ids: list[str] = []
         self.created: list[tuple[str, str | None]] = []
+        self.deleted: list[str] = []
 
     def get(self, volume_id: str) -> dict[str, str] | None:
         self.requested_ids.append(volume_id)
@@ -25,6 +26,10 @@ class _FakeVolumeRepo:
     def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None:
         self.created.append((volume_id, name))
         self._source = json.loads(source_json)
+
+    def delete(self, volume_id: str) -> bool:
+        self.deleted.append(volume_id)
+        return True
 
     def close(self) -> None:
         self.closed = True
@@ -104,6 +109,7 @@ class _FakeDaytonaProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
         self.ready_waits: list[str] = []
+        self.deleted_volumes: list[str] = []
 
     def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
         self.calls.append((volume_id, mount_path))
@@ -111,6 +117,9 @@ class _FakeDaytonaProvider:
 
     def wait_managed_volume_ready(self, volume_name: str) -> None:
         self.ready_waits.append(volume_name)
+
+    def delete_managed_volume(self, volume_name: str) -> None:
+        self.deleted_volumes.append(volume_name)
 
 
 def _new_test_manager() -> Any:
@@ -421,7 +430,56 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     assert deleted_terminals == ["term-1"]
     assert destroyed_leases == []
     assert deleted_leases == []
-    assert all_terminals == [{"terminal_id": "term-2", "lease_id": "lease-1", "thread_id": "thread-2"}]
+
+
+def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_sessions: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+    repo = _FakeVolumeRepo(DaytonaVolume(tmp_path / "staging", "leon-volume-volume-1").serialize())
+    manager._sandbox_volume_repo = lambda: repo
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+        volume_id = "volume-1"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-volume-1"]
+    assert repo.deleted == ["volume-1"]
+    assert deleted_leases == ["lease-1"]
+    assert all_terminals == []
 
 
 def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():

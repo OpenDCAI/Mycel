@@ -32,10 +32,7 @@ export function getStepSummary(step: ToolStep): string {
     return parts[parts.length - 1] || filePath;
   }
 
-  const cmd =
-    (args.CommandLine as string) ??
-    (args.command as string) ??
-    (args.cmd as string);
+  const cmd = args.command as string;
   if (cmd) {
     return cmd.length > 60 ? cmd.slice(0, 57) + "..." : cmd;
   }
@@ -63,14 +60,14 @@ export function getStepResultSummary(step: ToolStep): string | null {
   const args = step.args as Record<string, unknown> | null;
   const result = step.result.trim();
 
-  // Read/read_file: count lines
-  if (step.name === "Read" || step.name === "read_file") {
+  // Read: count lines
+  if (step.name === "Read") {
     const lines = result.split("\n").length;
     return `Read ${lines} lines`;
   }
 
-  // Write/write_file: count lines from result or args.content
-  if (step.name === "Write" || step.name === "write_file") {
+  // Write: count lines from result or args.content
+  if (step.name === "Write") {
     const lines = result.split("\n").length;
     if (lines > 1) return `Wrote ${lines} lines`;
     if (args) {
@@ -83,8 +80,8 @@ export function getStepResultSummary(step: ToolStep): string | null {
     return "Wrote file";
   }
 
-  // Edit/edit_file: calculate added/removed from args
-  if (step.name === "Edit" || step.name === "edit_file") {
+  // Edit: calculate added/removed from args
+  if (step.name === "Edit") {
     if (args) {
       const oldString = (args.OldString ?? args.old_string) as string;
       const newString = (args.NewString ?? args.new_string) as string;
@@ -97,14 +94,14 @@ export function getStepResultSummary(step: ToolStep): string | null {
     return "Edited file";
   }
 
-  // Grep/Glob/search/find_files: count non-empty lines
-  if (step.name === "Grep" || step.name === "Glob" || step.name === "search" || step.name === "find_files") {
+  // Grep/Glob: count non-empty lines
+  if (step.name === "Grep" || step.name === "Glob") {
     const matches = result.split("\n").filter(line => line.trim()).length;
     return `Found ${matches} matches`;
   }
 
-  // Bash/run_command: first line (truncate 60 chars) or exit code
-  if (step.name === "Bash" || step.name === "run_command") {
+  // Bash: first line (truncate 60 chars) or exit code
+  if (step.name === "Bash") {
     const firstLine = result.split("\n")[0];
     if (firstLine) {
       return firstLine.length > 60 ? firstLine.slice(0, 57) + "..." : firstLine;
@@ -112,8 +109,8 @@ export function getStepResultSummary(step: ToolStep): string | null {
     return "Done";
   }
 
-  // WebFetch/WebSearch/web_search: extract summary or "Done"
-  if (step.name === "WebFetch" || step.name === "WebSearch" || step.name === "web_search") {
+  // WebFetch/WebSearch: extract summary or "Done"
+  if (step.name === "WebFetch" || step.name === "WebSearch") {
     return "Done";
   }
 

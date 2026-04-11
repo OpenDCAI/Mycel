@@ -813,30 +813,6 @@ class PhysicalTerminalRuntime(ABC):
         self._persisted_stderr_chunk_count.pop(command_id, None)
         return True
 
-    def store_completed_result(self, command_id: str, command_line: str, cwd: str, result: ExecuteResult) -> None:
-        cmd = AsyncCommand(
-            command_id=command_id,
-            command_line=command_line,
-            cwd=cwd,
-            stdout_buffer=[result.stdout],
-            stderr_buffer=[result.stderr],
-            exit_code=result.exit_code,
-            done=True,
-        )
-        self._commands[command_id] = cmd
-        self._upsert_command_row(
-            command_id=command_id,
-            command_line=command_line,
-            cwd=cwd,
-            status="done",
-            stdout=result.stdout,
-            stderr=result.stderr,
-            exit_code=result.exit_code,
-        )
-        self._last_stream_flush_at.pop(command_id, None)
-        self._persisted_stdout_chunk_count.pop(command_id, None)
-        self._persisted_stderr_chunk_count.pop(command_id, None)
-
     @abstractmethod
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
         """Execute command in this runtime."""
@@ -1032,24 +1008,3 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
     async def close(self) -> None:
         """No-op for remote runtime - instance lifecycle managed by lease."""
         pass
-
-
-# Re-exports for backwards compatibility and test imports
-def __getattr__(name: str):
-    if name == "DockerPtyRuntime":
-        from sandbox.providers.docker import DockerPtyRuntime
-
-        return DockerPtyRuntime
-    if name == "LocalPersistentShellRuntime":
-        from sandbox.providers.local import LocalPersistentShellRuntime
-
-        return LocalPersistentShellRuntime
-    if name == "DaytonaSessionRuntime":
-        from sandbox.providers.daytona import DaytonaSessionRuntime
-
-        return DaytonaSessionRuntime
-    if name == "E2BPtyRuntime":
-        from sandbox.providers.e2b import E2BPtyRuntime
-
-        return E2BPtyRuntime
-    raise AttributeError(f"module 'sandbox.runtime' has no attribute {name!r}")

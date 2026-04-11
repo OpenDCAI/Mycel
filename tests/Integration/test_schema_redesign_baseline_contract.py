@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from backend.web.services import resource_projection_service, resource_service, sandbox_service
+from backend.web.services import resource_common, resource_projection_service, resource_service, sandbox_service
 from backend.web.utils.serializers import avatar_url
 
 
@@ -115,7 +115,7 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
     monkeypatch.setattr(
         resource_projection_service.resource_service,
         "get_provider_capability_contract",
-        lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), None),
+        lambda *_args, **_kwargs: (resource_common.empty_capabilities(), None),
         raising=False,
     )
     monkeypatch.setattr(

@@ -74,34 +74,41 @@ class SupabaseTerminalRepo:
         if not normalized_ids:
             return {}
 
-        pointer_rows = q.rows(
-            q.in_(
-                self._pointers().select("thread_id,active_terminal_id"),
-                "thread_id",
-                normalized_ids,
-                _REPO,
-                "summarize_threads pointers",
-            ).execute(),
-            _REPO,
-            "summarize_threads pointers",
-        )
-        terminal_rows = q.rows(
-            q.in_(
-                q.order(
-                    self._terminals().select("thread_id,terminal_id,created_at"),
-                    "created_at",
-                    desc=True,
-                    repo=_REPO,
-                    operation="summarize_threads terminals",
-                ),
-                "thread_id",
-                normalized_ids,
-                _REPO,
-                "summarize_threads terminals",
-            ).execute(),
-            _REPO,
-            "summarize_threads terminals",
-        )
+        pointer_rows: list[dict[str, Any]] = []
+        terminal_rows: list[dict[str, Any]] = []
+        for chunk in q.value_chunks(normalized_ids):
+            pointer_rows.extend(
+                q.rows(
+                    q.in_(
+                        self._pointers().select("thread_id,active_terminal_id"),
+                        "thread_id",
+                        chunk,
+                        _REPO,
+                        "summarize_threads pointers",
+                    ).execute(),
+                    _REPO,
+                    "summarize_threads pointers",
+                )
+            )
+            terminal_rows.extend(
+                q.rows(
+                    q.in_(
+                        q.order(
+                            self._terminals().select("thread_id,terminal_id,created_at"),
+                            "created_at",
+                            desc=True,
+                            repo=_REPO,
+                            operation="summarize_threads terminals",
+                        ),
+                        "thread_id",
+                        chunk,
+                        _REPO,
+                        "summarize_threads terminals",
+                    ).execute(),
+                    _REPO,
+                    "summarize_threads terminals",
+                )
+            )
 
         summary: dict[str, dict[str, str | None]] = {
             thread_id: {"active_terminal_id": None, "latest_terminal_id": None} for thread_id in normalized_ids

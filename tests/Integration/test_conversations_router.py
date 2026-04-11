@@ -21,7 +21,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
             agent_pool={},
             thread_last_active={},
             messaging_service=SimpleNamespace(
-                list_chats_for_user=lambda _user_id: [
+                list_conversation_summaries_for_user=lambda _user_id: [
                     {
                         "id": "chat-1",
                         "title": "Toad",
@@ -38,6 +38,9 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
                         ],
                     }
                 ],
+                list_chats_for_user=lambda _user_id: (_ for _ in ()).throw(
+                    AssertionError("conversation sidebar must use lightweight chat summaries")
+                ),
             ),
             user_repo=SimpleNamespace(
                 get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))
@@ -85,7 +88,7 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
             agent_pool={},
             thread_last_active={"thread-1": 1775540000.0},
             messaging_service=SimpleNamespace(
-                list_chats_for_user=lambda _user_id: [
+                list_conversation_summaries_for_user=lambda _user_id: [
                     {
                         "id": "chat-1",
                         "title": "Toad",
@@ -102,6 +105,9 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                         ],
                     }
                 ],
+                list_chats_for_user=lambda _user_id: (_ for _ in ()).throw(
+                    AssertionError("conversation sidebar must use lightweight chat summaries")
+                ),
             ),
             user_repo=SimpleNamespace(
                 get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not batch resolve users"))
@@ -159,6 +165,43 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
 
 
 @pytest.mark.asyncio
+async def test_list_conversations_collapses_hire_threads_to_one_visible_conversation_per_agent_user() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                list_by_owner_user_id=lambda _user_id: [
+                    {
+                        "id": "thread-main",
+                        "agent_user_id": "agent-user-1",
+                        "agent_name": "Morel",
+                        "agent_avatar": "avatars/morel.png",
+                        "sandbox_type": "local",
+                        "is_main": True,
+                        "branch_index": 0,
+                    },
+                    {
+                        "id": "thread-extra",
+                        "agent_user_id": "agent-user-1",
+                        "agent_name": "Morel",
+                        "agent_avatar": "avatars/morel.png",
+                        "sandbox_type": "local",
+                        "is_main": False,
+                        "branch_index": 1,
+                    },
+                ],
+            ),
+            agent_pool={},
+            thread_last_active={"thread-main": 1775540000.0, "thread-extra": 1775541000.0},
+            messaging_service=None,
+        )
+    )
+
+    result = await conversations_router.list_conversations("human-user-1", app=app)
+
+    assert [(item["id"], item["title"]) for item in result] == [("thread-main", "Morel")]
+
+
+@pytest.mark.asyncio
 async def test_list_conversations_does_not_require_member_repo() -> None:
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -169,7 +212,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
             agent_pool={},
             thread_last_active={},
             messaging_service=SimpleNamespace(
-                list_chats_for_user=lambda _user_id: [
+                list_conversation_summaries_for_user=lambda _user_id: [
                     {
                         "id": "chat-1",
                         "title": "Morel",
@@ -186,6 +229,9 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
                         ],
                     }
                 ],
+                list_chats_for_user=lambda _user_id: (_ for _ in ()).throw(
+                    AssertionError("conversation sidebar must use lightweight chat summaries")
+                ),
             ),
             user_repo=SimpleNamespace(
                 get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit entities"))
@@ -203,3 +249,25 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
 
     assert result[0]["title"] == "Morel"
     assert result[0]["avatar_url"] == avatar_url("agent-user-1", True)
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
+            agent_pool={},
+            thread_last_active={},
+            messaging_service=SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: []),
+        )
+    )
+    to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def _fake_to_thread(fn, *args):
+        to_thread_calls.append((fn.__name__, args))
+        return fn(*args)
+
+    monkeypatch.setattr(conversations_router.asyncio, "to_thread", _fake_to_thread)
+
+    assert await conversations_router.list_conversations("human-user-1", app=app) == []
+    assert to_thread_calls == [("_list_conversations_for_user", (app, "human-user-1"))]

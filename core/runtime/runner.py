@@ -281,21 +281,6 @@ class ToolRunner(AgentMiddleware):
             return None
 
     @staticmethod
-    def _await_async_hook_with_timeout_sync(
-        request: ToolCallRequest,
-        awaitable,
-        *,
-        hook_name: str,
-    ):
-        return ToolRunner._run_awaitable_sync(
-            ToolRunner._await_async_hook_with_timeout(
-                request,
-                awaitable,
-                hook_name=hook_name,
-            )
-        )
-
-    @staticmethod
     def _get_state_callable(request: ToolCallRequest, name: str):
         state = getattr(request, "state", None)
         if state is None:

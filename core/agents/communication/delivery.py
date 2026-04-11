@@ -28,27 +28,23 @@ def _resolve_recipient_thread_id(app: Any, recipient_id: str) -> str | None:
 
 
 def _resolve_unique_active_thread_id(app: Any, recipient_id: str, thread: dict[str, Any] | None) -> str | None:
-    thread_repo = getattr(app.state, "thread_repo", None)
-    if thread_repo is None or not hasattr(thread_repo, "list_by_agent_user"):
-        return None
     agent_user_id = str((thread or {}).get("agent_user_id") or recipient_id).strip()
     if not agent_user_id:
         return None
 
-    pool = getattr(app.state, "agent_pool", {}) or {}
     active_thread_ids: list[str] = []
     live_child_threads: list[tuple[int, str]] = []
-    for candidate in thread_repo.list_by_agent_user(agent_user_id):
+    for candidate in app.state.thread_repo.list_by_agent_user(agent_user_id):
         thread_id = str(candidate.get("id") or "").strip()
         if not thread_id:
             continue
         # @@@active-thread-delivery-precedence - fresh chat delivery should prefer a
         # recipient's latest live child thread over the default-main thread, even when the
         # main thread is still marked ACTIVE from stale work or older child threads still exist.
-        for pool_key, agent in pool.items():
+        for pool_key, agent in app.state.agent_pool.items():
             if not str(pool_key).startswith(f"{thread_id}:"):
                 continue
-            state = getattr(getattr(agent, "runtime", None), "current_state", None)
+            state = agent.runtime.current_state
             if state in {AgentState.READY, AgentState.ACTIVE, AgentState.IDLE, AgentState.SUSPENDED, AgentState.INITIALIZING} and not bool(
                 candidate.get("is_main")
             ):

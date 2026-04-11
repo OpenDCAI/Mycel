@@ -1,13 +1,15 @@
 import { Route, Routes } from "react-router-dom";
 
 import ResourcesPage from "../ResourcesPage";
+import EvaluationBatchDetailPage from "../pages/EvaluationBatchDetailPage";
 import DashboardPage from "../pages/DashboardPage";
-import DivergedPage from "../pages/DivergedPage";
 import EvaluationPage from "../pages/EvaluationPage";
-import EventDetailPage from "../pages/EventDetailPage";
-import EventsPage from "../pages/EventsPage";
+import EvaluationRunDetailPage from "../pages/EvaluationRunDetailPage";
 import LeaseDetailPage from "../pages/LeaseDetailPage";
 import LeasesPage from "../pages/LeasesPage";
+import OperationDetailPage from "../pages/OperationDetailPage";
+import ProviderDetailPage from "../pages/ProviderDetailPage";
+import RuntimeDetailPage from "../pages/RuntimeDetailPage";
 import ThreadDetailPage from "../pages/ThreadDetailPage";
 import ThreadsPage from "../pages/ThreadsPage";
 import { MonitorShell } from "./MonitorShell";
@@ -19,14 +21,16 @@ export function MonitorRoutes() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/resources" element={<ResourcesPage />} />
-        <Route path="/threads" element={<ThreadsPage />} />
-        <Route path="/thread/:threadId" element={<ThreadDetailPage />} />
+        <Route path="/providers/:providerId" element={<ProviderDetailPage />} />
         <Route path="/leases" element={<LeasesPage />} />
-        <Route path="/lease/:leaseId" element={<LeaseDetailPage />} />
+        <Route path="/leases/:leaseId" element={<LeaseDetailPage />} />
+        <Route path="/operations/:operationId" element={<OperationDetailPage />} />
+        <Route path="/runtimes/:runtimeSessionId" element={<RuntimeDetailPage />} />
+        <Route path="/threads" element={<ThreadsPage />} />
+        <Route path="/threads/:threadId" element={<ThreadDetailPage />} />
         <Route path="/evaluation" element={<EvaluationPage />} />
-        <Route path="/diverged" element={<DivergedPage />} />
-        <Route path="/events" element={<EventsPage />} />
-        <Route path="/event/:eventId" element={<EventDetailPage />} />
+        <Route path="/evaluation/batches/:batchId" element={<EvaluationBatchDetailPage />} />
+        <Route path="/evaluation/runs/:runId" element={<EvaluationRunDetailPage />} />
       </Routes>
     </MonitorShell>
   );

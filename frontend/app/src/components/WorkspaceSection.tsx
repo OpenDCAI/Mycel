@@ -1,6 +1,7 @@
 import { FolderOpen } from "lucide-react";
 import { useState } from "react";
 import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
+import { authFetch } from "@/store/auth-store";
 
 interface WorkspaceSectionProps {
   defaultWorkspace: string | null;
@@ -19,7 +20,7 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
     setError("");
     setSuccess(false);
     try {
-      const res = await fetch("/api/settings/workspace", {
+      const res = await authFetch("/api/settings/workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace: path.trim() }),

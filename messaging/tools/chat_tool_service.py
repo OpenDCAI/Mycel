@@ -66,19 +66,6 @@ def _parse_time_endpoint(s: str, now: float) -> float | None:
     raise ValueError(f"Cannot parse time '{s}'. Use '-2h', '-1d', '-30m', or '2026-03-20'.")
 
 
-def _float_ts(ts: Any) -> float | None:
-    """Convert ISO string or float timestamp to float."""
-    if ts is None:
-        return None
-    if isinstance(ts, (int, float)):
-        return float(ts)
-    try:
-        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-        return dt.timestamp()
-    except (ValueError, TypeError):
-        return None
-
-
 class ChatToolService:
     """Registers 4 chat tools into ToolRegistry (messaging module version)."""
 

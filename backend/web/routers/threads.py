@@ -30,7 +30,7 @@ from backend.web.services import sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_source
-from backend.web.services.resource_cache import clear_monitor_resource_overview_cache
+from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
@@ -43,7 +43,6 @@ from backend.web.services.thread_launch_config_service import (
     save_last_confirmed_config,
     save_last_successful_config,
 )
-from backend.web.services.thread_naming import sidebar_label
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
     get_lease_status,
@@ -51,6 +50,7 @@ from backend.web.services.thread_state_service import (
     get_session_status,
     get_terminal_status,
 )
+from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
@@ -65,22 +65,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
 
-class _NoopAsyncLock:
-    async def __aenter__(self) -> None:
-        return None
-
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
-        return False
-
-
 def _is_internal_child_thread(thread_id: str) -> bool:
     return thread_id.startswith("subagent-")
+
+
+def _sidebar_label(*, is_main: bool, branch_index: int) -> str | None:
+    if branch_index < 0:
+        raise ValueError(f"branch_index must be >= 0, got {branch_index}")
+    if is_main and branch_index != 0:
+        raise ValueError(f"Default thread must have branch_index=0, got {branch_index}")
+    if not is_main and branch_index == 0:
+        raise ValueError("Child thread must have branch_index>0")
+    return None
 
 
 def _invalidate_resource_overview_cache() -> None:
     # @@@monitor-resource-overview-invalidation - thread/lease mutations change the monitor topology immediately.
     # Clear the overview snapshot so the next /api/monitor/resources read reflects the fresh binding/state.
-    clear_monitor_resource_overview_cache()
+    clear_resource_overview_cache()
 
 
 def _find_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any | None:
@@ -95,6 +97,21 @@ def _require_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any:
     if agent is None:
         raise HTTPException(403, "Not authorized")
     return agent
+
+
+def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
+    _require_owned_agent(app, agent_user_id, owner_user_id)
+    return resolve_default_config(app, owner_user_id, agent_user_id)
+
+
+def _save_default_config_for_owned_agent(
+    app: Any,
+    owner_user_id: str,
+    payload: SaveThreadLaunchConfigRequest,
+) -> dict[str, bool]:
+    _require_owned_agent(app, payload.agent_user_id, owner_user_id)
+    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, payload.model_dump())
+    return {"ok": True}
 
 
 async def _prepare_attachment_message(
@@ -316,7 +333,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
         "agent_user_id": member.id,
         "agent_name": member.display_name,
         "branch_index": thread["branch_index"],
-        "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
+        "sidebar_label": _sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
         "avatar_url": avatar_url(member.id, bool(member.avatar)),
         "is_main": thread["is_main"],
     }
@@ -634,7 +651,7 @@ def _create_owned_thread(
         "agent_user_id": agent_user_id,
         "agent_name": agent_user.display_name,
         "branch_index": branch_index,
-        "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
+        "sidebar_label": _sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_user_id, bool(agent_user.avatar)),
         "is_main": resolved_is_main,
     }
@@ -652,7 +669,7 @@ async def create_thread(
         return provider_error
     # Validate bind_mounts capability before creating thread
     sandbox_type = payload.sandbox or "local"
-    requested_mounts = payload.bind_mounts if payload.bind_mounts else []
+    requested_mounts = payload.bind_mounts or []
     capability_error = await _validate_mount_capability_gate(sandbox_type, requested_mounts)
     if capability_error is not None:
         return capability_error
@@ -717,8 +734,7 @@ async def get_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_agent(app, agent_user_id, user_id)
-    return resolve_default_config(app, user_id, agent_user_id)
+    return await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
 
 
 @router.post("/default-config")
@@ -727,23 +743,16 @@ async def save_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_agent(app, payload.agent_user_id, user_id)
-    save_last_confirmed_config(app, user_id, payload.agent_user_id, payload.model_dump())
-    return {"ok": True}
+    return await asyncio.to_thread(_save_default_config_for_owned_agent, app, user_id, payload)
 
 
-@router.get("")
-async def list_threads(
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """List threads owned by the current user."""
+def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
     from core.runtime.middleware.monitor import AgentState
 
     raw = app.state.thread_repo.list_by_owner_user_id(user_id)
     pool = app.state.agent_pool
     runtime_states = summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
-    threads = []
+    visible_threads = []
     for t in raw:
         tid = t["id"]
         runtime_state = runtime_states.get(tid) or converge_owner_thread_runtime(app, tid)
@@ -751,13 +760,16 @@ async def list_threads(
             continue
         if _is_internal_child_thread(tid):
             continue
+        visible_threads.append(t)
+
+    threads = []
+    for t in canonical_owner_threads(visible_threads):
+        tid = t["id"]
         sandbox_type = t.get("sandbox_type", "local")
-        # Check if agent is currently running — pool key is "{thread_id}:{sandbox_type}"
         running = False
         agent = pool.get(f"{tid}:{sandbox_type}")
         if agent and hasattr(agent, "runtime"):
             running = agent.runtime.current_state == AgentState.ACTIVE
-        # last_active from in-memory tracking (run start/done)
         last_active = app.state.thread_last_active.get(tid)
         from datetime import datetime
 
@@ -770,7 +782,7 @@ async def list_threads(
                 "agent_name": t.get("agent_name"),
                 "agent_user_id": t.get("agent_user_id"),
                 "branch_index": t.get("branch_index"),
-                "sidebar_label": sidebar_label(
+                "sidebar_label": _sidebar_label(
                     is_main=bool(t.get("is_main", False)),
                     branch_index=int(t.get("branch_index", 0)),
                 ),
@@ -781,6 +793,15 @@ async def list_threads(
             }
         )
     return {"threads": threads}
+
+
+@router.get("")
+async def list_threads(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """List threads owned by the current user."""
+    return build_owner_thread_workbench(app, user_id)
 
 
 @router.get("/{thread_id}")
@@ -827,16 +848,7 @@ async def delete_thread(
             agent.runtime.unbind_thread()
         # Unregister wake handler
         app.state.queue_manager.unregister_wake(thread_id)
-        # Clean up volume BEFORE destroying lease/terminal (destroy deletes those records)
-        try:
-            source = get_file_channel_source(thread_id)
-            source.cleanup()
-        except ValueError:
-            pass  # No volume to clean up
-        try:
-            await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
-        except Exception as exc:
-            logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
+        await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (member-chat addition)
         app.state.thread_repo.delete(thread_id)
@@ -851,28 +863,6 @@ async def delete_thread(
     app.state.agent_pool.pop(pool_key, None)
     _invalidate_resource_overview_cache()
 
-    return {"ok": True, "thread_id": thread_id}
-
-
-@router.post("/{thread_id}/clear")
-async def clear_thread_history(
-    thread_id: str,
-    user_id: Annotated[str, Depends(verify_thread_owner)],
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """Clear replayable thread history while preserving the thread itself."""
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-
-    lock = await get_thread_lock(app, thread_id)
-    async with lock:
-        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-        if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-            raise HTTPException(status_code=409, detail="Cannot clear thread while run is in progress")
-        await agent.aclear_thread(thread_id)
-
-    app.state.display_builder.clear(thread_id)
-    app.state.thread_event_buffers.pop(thread_id, None)
-    app.state.queue_manager.clear_all(thread_id)
     return {"ok": True, "thread_id": thread_id}
 
 
@@ -950,87 +940,27 @@ async def get_thread_history(
         limit: Max messages to return, from the end (default 20)
         truncate: Truncate content to this many chars (default 300, 0 = no limit)
     """
-    from backend.web.utils.serializers import extract_text_content
+    from backend.web.services.thread_history_service import get_thread_history_payload
 
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-    set_current_thread_id(thread_id)
-    config = {"configurable": {"thread_id": thread_id}}
-    state = await agent.agent.aget_state(config)
-
-    values = getattr(state, "values", {}) if state else {}
-    all_messages = values.get("messages", []) if isinstance(values, dict) else []
-    total = len(all_messages)
-    messages = all_messages[-limit:] if limit > 0 else all_messages
-
-    def _trunc(text: str) -> str:
-        if truncate > 0 and len(text) > truncate:
-            return text[:truncate] + f"…[+{len(text) - truncate}]"
-        return text
-
-    def _expand(msg: Any) -> list[dict[str, Any]]:
-        """Expand one LangChain message into 1-N flat entries.
-
-        AIMessage with tool_calls → N tool_call entries (one per call),
-        then the text content (if any) as an assistant entry.
-        ToolMessage → one tool_result entry.
-        HumanMessage → one human entry.
-        """
-        cls = msg.__class__.__name__
-        if cls == "HumanMessage":
-            metadata = getattr(msg, "metadata", {}) or {}
-            if metadata.get("source") == "internal":
-                return []
-            if metadata.get("source") == "system":
-                return [{"role": "notification", "text": _trunc(extract_text_content(msg.content))}]
-            return [{"role": "human", "text": _trunc(extract_text_content(msg.content))}]
-        if cls == "AIMessage":
-            entries: list[dict] = []
-            for c in getattr(msg, "tool_calls", []):
-                entries.append(
-                    {
-                        "role": "tool_call",
-                        "tool": c["name"],
-                        "args": str(c.get("args", {}))[:200],
-                    }
-                )
-            text = extract_text_content(msg.content)
-            if text:
-                entries.append({"role": "assistant", "text": _trunc(text)})
-            return entries
-        if cls == "ToolMessage":
-            return [
-                {
-                    "role": "tool_result",
-                    "tool": getattr(msg, "name", "?"),
-                    "text": _trunc(extract_text_content(msg.content)),
-                }
-            ]
-        return [{"role": "system", "text": _trunc(extract_text_content(msg.content))}]
-
-    flat: list[dict] = []
-    for m in messages:
-        flat.extend(_expand(m))
-
-    return {
-        "thread_id": thread_id,
-        "total": total,
-        "showing": len(messages),
-        "messages": flat,
-    }
+    return await get_thread_history_payload(
+        app=app,
+        thread_id=thread_id,
+        limit=limit,
+        truncate=truncate,
+    )
 
 
 @router.get("/{thread_id}/permissions")
 async def get_thread_permissions(
     thread_id: str,
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
-    thread_lock: Annotated[asyncio.Lock | None, Depends(get_thread_lock)] = None,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
     # @@@permission-state-lock - owner polling and resolve can race on idle
     # threads. Serialize the lightweight /permissions read with resolve/persist
     # so stale checkpoint hydration cannot resurrect an already-resolved request.
-    async with thread_lock or _NoopAsyncLock():
+    async with thread_lock:
         await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
         rule_state = agent.get_thread_permission_rules(thread_id)
         return {
@@ -1049,9 +979,9 @@ async def resolve_thread_permission_request(
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
-    thread_lock: Annotated[asyncio.Lock | None, Depends(get_thread_lock)] = None,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)] = None,
 ) -> dict[str, Any]:
-    async with thread_lock or _NoopAsyncLock():
+    async with thread_lock:
         await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
         pending_requests = {
             item.get("request_id"): item
@@ -1203,56 +1133,6 @@ async def get_thread_runtime(
         if run_id:
             status["run_start_seq"] = await get_run_start_seq(thread_id, run_id)
     return status
-
-
-# Sandbox control endpoints for threads
-@router.post("/{thread_id}/sandbox/pause")
-async def pause_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Pause sandbox for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.pause_thread, thread_id)
-        if not ok:
-            raise HTTPException(409, f"Failed to pause sandbox for thread {thread_id}")
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
-
-
-@router.post("/{thread_id}/sandbox/resume")
-async def resume_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Resume paused sandbox for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.resume_thread, thread_id)
-        if not ok:
-            raise HTTPException(409, f"Failed to resume sandbox for thread {thread_id}")
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
-
-
-@router.delete("/{thread_id}/sandbox")
-async def destroy_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Destroy sandbox session for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.manager.destroy_session, thread_id)
-        if not ok:
-            raise HTTPException(404, f"No sandbox session found for thread {thread_id}")
-        agent._sandbox._capability_cache.pop(thread_id, None)
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
 
 
 # Session/terminal/lease status endpoints

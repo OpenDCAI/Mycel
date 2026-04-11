@@ -10,17 +10,16 @@ from backend.web.services import resource_service, sandbox_service
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
 from backend.web.services.resource_common import aggregate_provider_telemetry as _aggregate_provider_telemetry
-from backend.web.services.resource_common import empty_capabilities, resolve_provider_name
 from backend.web.services.resource_common import metric as _metric
 from backend.web.services.resource_common import resolve_card_cpu_metric as _resolve_card_cpu_metric
 from backend.web.services.resource_common import resolve_console_url as _resolve_console_url
 from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
+from backend.web.services.resource_common import resolve_provider_name
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from backend.web.services.resource_common import to_resource_status as _to_resource_status
 from backend.web.services.resource_common import to_session_metrics as _to_session_metrics
 from backend.web.services.sandbox_service import available_sandbox_types
-from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_lease_to_session_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
@@ -39,10 +38,6 @@ def _empty_metric(unit: str) -> dict[str, Any]:
         "source": "unknown",
         "freshness": "stale",
     }
-
-
-def _empty_capabilities() -> dict[str, bool]:
-    return empty_capabilities() if callable(empty_capabilities) else {key: False for key in RESOURCE_CAPABILITY_KEYS}
 
 
 def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict[str, Any]:
@@ -116,10 +111,27 @@ def _query_runtime_session_ids(repo: Any, lease_ids: list[str]) -> dict[str, str
     if not ordered_ids:
         return {}
 
-    query_lease_instance_ids = getattr(repo, "query_lease_instance_ids", None)
-    if not callable(query_lease_instance_ids):
-        raise RuntimeError("sandbox monitor repo must support batch lease runtime lookup")
-    return query_lease_instance_ids(ordered_ids)
+    return repo.query_lease_instance_ids(ordered_ids)
+
+
+def _load_runtime_session_ids(lease_ids: list[str]) -> dict[str, str | None]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        return _query_runtime_session_ids(repo, lease_ids)
+    finally:
+        repo.close()
+
+
+def _load_visible_resource_runtime() -> tuple[list[dict[str, Any]], dict[str, str | None], dict[str, dict[str, Any]]]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        sessions = _project_user_visible_resource_sessions(repo, repo.list_sessions_with_leases())
+        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
+    finally:
+        repo.close()
+
+    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
+    return sessions, runtime_session_ids, snapshot_by_lease
 
 
 def _backfill_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
@@ -127,16 +139,12 @@ def _backfill_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
     if not pending_leases:
         return
 
-    repo = make_sandbox_monitor_repo()
-    try:
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(lease.get("lease_id") or "") for lease in pending_leases])
-        for lease in pending_leases:
-            lease_id = str(lease.get("lease_id") or "").strip()
-            runtime_session_id = runtime_session_ids.get(lease_id)
-            if runtime_session_id:
-                lease["runtime_session_id"] = runtime_session_id
-    finally:
-        repo.close()
+    runtime_session_ids = _load_runtime_session_ids([str(lease.get("lease_id") or "") for lease in pending_leases])
+    for lease in pending_leases:
+        lease_id = str(lease.get("lease_id") or "").strip()
+        runtime_session_id = runtime_session_ids.get(lease_id)
+        if runtime_session_id:
+            lease["runtime_session_id"] = runtime_session_id
 
 
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
@@ -175,9 +183,7 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
 
 def _is_resource_visible_thread(thread_id: str | None) -> bool:
     raw = str(thread_id or "").strip()
-    if raw.startswith("subagent-"):
-        return False
-    return True
+    return not raw.startswith("subagent-")
 
 
 def _resource_session_identity(session: dict[str, Any]) -> str:
@@ -247,13 +253,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
 
 
 def list_resource_providers() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        raw_sessions = repo.list_sessions_with_leases()
-        sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
-    finally:
-        repo.close()
+    sessions, runtime_session_ids, snapshot_by_lease = _load_visible_resource_runtime()
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for session in sessions:
@@ -261,7 +261,6 @@ def list_resource_providers() -> dict[str, Any]:
         grouped.setdefault(provider_instance, []).append(session)
 
     owners = _thread_owners([str(session["thread_id"]) for session in sessions if session.get("thread_id")])
-    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
 
     providers: list[dict[str, Any]] = []
     for item in available_sandbox_types():
@@ -314,7 +313,7 @@ def list_resource_providers() -> dict[str, Any]:
                 )
             )
 
-        provider_type = _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
+        provider_type = _resolve_provider_type(provider_name)
         telemetry = _aggregate_provider_telemetry(
             provider_sessions=provider_sessions,
             running_count=running_count,
@@ -354,7 +353,7 @@ def list_resource_providers() -> dict[str, Any]:
         )
 
     summary = {
-        "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "snapshot_at": _now_iso(),
         "total_providers": len(providers),
         "active_providers": len([provider for provider in providers if provider.get("status") == "active"]),
         "unavailable_providers": len([provider for provider in providers if provider.get("status") == "unavailable"]),
@@ -364,15 +363,7 @@ def list_resource_providers() -> dict[str, Any]:
 
 
 def visible_resource_session_stats() -> dict[str, dict[str, int]]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        raw_sessions = repo.list_sessions_with_leases()
-        sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
-    finally:
-        repo.close()
-
-    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
+    sessions, runtime_session_ids, snapshot_by_lease = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_session_ids: set[str] = set()
     seen_running_leases: set[tuple[str, str]] = set()
