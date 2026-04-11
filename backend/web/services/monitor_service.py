@@ -28,10 +28,6 @@ from storage.runtime import (
 EVAL_SCENARIO_DIR = Path(__file__).resolve().parents[3] / "eval" / "scenarios"
 
 
-def make_eval_store() -> TrajectoryStore:
-    return TrajectoryStore()
-
-
 def make_eval_batch_service() -> EvaluationBatchService:
     return EvaluationBatchService(batch_repo=build_evaluation_batch_repo())
 
@@ -323,7 +319,7 @@ def _build_monitor_evaluation_run_row(run: dict[str, Any], metrics_rows: list[di
 
 
 def get_monitor_evaluation_workbench() -> dict[str, Any]:
-    store = make_eval_store()
+    store = TrajectoryStore()
     runs = store.list_runs(limit=25)
     if not runs:
         return {
@@ -370,7 +366,7 @@ def get_monitor_evaluation_workbench() -> dict[str, Any]:
 
 
 def get_monitor_evaluation_run_detail(run_id: str) -> dict[str, Any]:
-    store = make_eval_store()
+    store = TrajectoryStore()
     run = store.get_run(run_id)
     if run is None:
         raise KeyError(f"Evaluation run not found: {run_id}")

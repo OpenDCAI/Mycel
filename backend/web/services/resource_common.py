@@ -19,10 +19,6 @@ from sandbox.providers.local import LocalSessionProvider
 from storage.runtime import build_thread_repo, build_user_repo
 
 
-def _resource_avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
-    return f"/api/users/{user_id}/avatar" if user_id and has_avatar else None
-
-
 @dataclass(frozen=True)
 class CatalogEntry:
     vendor: str | None
@@ -204,15 +200,16 @@ def to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | None
     }
 
 
-def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[str, str]:
+def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
     unique = sorted({tid for tid in thread_ids if tid})
     if not unique:
         return {}
+
     repo = thread_repo
-    own_repo = False
+    own_thread_repo = False
     if repo is None:
         repo = build_thread_repo()
-        own_repo = True
+        own_thread_repo = True
     try:
         refs: dict[str, str] = {}
         for data in repo.list_by_ids(unique):
@@ -222,36 +219,30 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
             agent_ref = str(data.get("agent_user_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref
-        return refs
     finally:
-        if own_repo:
+        if own_thread_repo:
             repo.close()
 
-
-def member_meta_map(user_repo: Any = None) -> dict[str, dict[str, str | None]]:
-    repo = user_repo
-    own_repo = False
-    if repo is None:
-        repo = build_user_repo()
-        own_repo = True
-    try:
-        users = repo.list_all()
-        return {
-            user.id: {
-                "agent_name": user.display_name,
-                "avatar_url": _resource_avatar_url(user.id, bool(user.avatar)),
+    member_meta: dict[str, dict[str, str | None]] = {}
+    if refs:
+        repo = user_repo
+        own_user_repo = False
+        if repo is None:
+            repo = build_user_repo()
+            own_user_repo = True
+        try:
+            member_meta = {
+                user.id: {
+                    "agent_name": user.display_name,
+                    "avatar_url": f"/api/users/{user.id}/avatar" if user.id and user.avatar else None,
+                }
+                for user in repo.list_all()
+                if user.id and user.display_name
             }
-            for user in users
-            if user.id and user.display_name
-        }
-    finally:
-        if own_repo:
-            repo.close()
+        finally:
+            if own_user_repo:
+                repo.close()
 
-
-def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
-    refs = thread_agent_refs(thread_ids, thread_repo=thread_repo)
-    member_meta = member_meta_map(user_repo=user_repo)
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
