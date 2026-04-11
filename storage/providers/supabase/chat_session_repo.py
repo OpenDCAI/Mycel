@@ -355,14 +355,10 @@ class SupabaseChatSessionRepo:
 
         if terminal_ids:
             # Find command_ids for these terminals
-            command_rows = q.rows(
-                q.in_(
-                    self._commands().select("command_id"),
-                    "terminal_id",
-                    terminal_ids,
-                    _REPO,
-                    "delete_by_thread command lookup",
-                ).execute(),
+            command_rows = q.rows_in_chunks(
+                lambda: self._commands().select("command_id"),
+                "terminal_id",
+                terminal_ids,
                 _REPO,
                 "delete_by_thread command lookup",
             )
@@ -398,19 +394,15 @@ class SupabaseChatSessionRepo:
         terminal_ids = [str(r["terminal_id"]) for r in terminal_rows]
         if not terminal_ids:
             return False
-        raw = q.rows(
-            q.limit(
-                q.in_(
-                    self._commands().select("command_id").eq("status", "running"),
-                    "terminal_id",
-                    terminal_ids,
-                    _REPO,
-                    "lease_has_running_command",
-                ),
+        raw = q.rows_in_chunks(
+            lambda: q.limit(
+                self._commands().select("command_id").eq("status", "running"),
                 1,
                 _REPO,
                 "lease_has_running_command",
-            ).execute(),
+            ),
+            "terminal_id",
+            terminal_ids,
             _REPO,
             "lease_has_running_command",
         )

@@ -106,21 +106,13 @@ class SupabaseSandboxMonitorRepo:
             return []
 
         lease_ids = [le["lease_id"] for le in leases]
-        terminals: list[dict[str, Any]] = []
-        for chunk in q.value_chunks(lease_ids):
-            terminals.extend(
-                q.rows(
-                    q.in_(
-                        self._client.table("abstract_terminals").select("lease_id,thread_id,created_at"),
-                        "lease_id",
-                        chunk,
-                        _REPO,
-                        "query_leases terminals",
-                    ).execute(),
-                    _REPO,
-                    "query_leases terminals",
-                )
-            )
+        terminals = q.rows_in_chunks(
+            lambda: self._client.table("abstract_terminals").select("lease_id,thread_id,created_at"),
+            "lease_id",
+            lease_ids,
+            _REPO,
+            "query_leases terminals",
+        )
         # Pick most recent terminal per lease
         term_map: dict[str, str] = {}
         for t in sorted(terminals, key=lambda x: x.get("created_at") or ""):
@@ -298,21 +290,13 @@ class SupabaseSandboxMonitorRepo:
             return {}
 
         instance_map: dict[str, str | None] = {lease_id: None for lease_id in ordered_ids}
-        instances = []
-        for chunk in q.value_chunks(ordered_ids):
-            instances.extend(
-                q.rows(
-                    q.in_(
-                        self._client.table("sandbox_instances").select("lease_id,provider_session_id"),
-                        "lease_id",
-                        chunk,
-                        _REPO,
-                        "query_lease_instance_ids instances",
-                    ).execute(),
-                    _REPO,
-                    "query_lease_instance_ids instances",
-                )
-            )
+        instances = q.rows_in_chunks(
+            lambda: self._client.table("sandbox_instances").select("lease_id,provider_session_id"),
+            "lease_id",
+            ordered_ids,
+            _REPO,
+            "query_lease_instance_ids instances",
+        )
         for row in instances:
             lease_id = str(row.get("lease_id") or "").strip()
             provider_session_id = str(row.get("provider_session_id") or "").strip()
@@ -323,21 +307,13 @@ class SupabaseSandboxMonitorRepo:
         if not missing_ids:
             return instance_map
 
-        leases = []
-        for chunk in q.value_chunks(missing_ids):
-            leases.extend(
-                q.rows(
-                    q.in_(
-                        self._client.table("sandbox_leases").select("lease_id,current_instance_id"),
-                        "lease_id",
-                        chunk,
-                        _REPO,
-                        "query_lease_instance_ids leases",
-                    ).execute(),
-                    _REPO,
-                    "query_lease_instance_ids leases",
-                )
-            )
+        leases = q.rows_in_chunks(
+            lambda: self._client.table("sandbox_leases").select("lease_id,current_instance_id"),
+            "lease_id",
+            missing_ids,
+            _REPO,
+            "query_lease_instance_ids leases",
+        )
         for row in leases:
             lease_id = str(row.get("lease_id") or "").strip()
             current_instance_id = str(row.get("current_instance_id") or "").strip()
@@ -349,21 +325,13 @@ class SupabaseSandboxMonitorRepo:
         ordered_ids = sorted({str(lease_id or "").strip() for lease_id in lease_ids if str(lease_id or "").strip()})
         if not ordered_ids:
             return {}
-        rows: list[dict[str, Any]] = []
-        for chunk in q.value_chunks(ordered_ids):
-            rows.extend(
-                q.rows(
-                    q.in_(
-                        self._client.table("sandbox_leases").select(select),
-                        "lease_id",
-                        chunk,
-                        _REPO,
-                        operation,
-                    ).execute(),
-                    _REPO,
-                    operation,
-                )
-            )
+        rows = q.rows_in_chunks(
+            lambda: self._client.table("sandbox_leases").select(select),
+            "lease_id",
+            ordered_ids,
+            _REPO,
+            operation,
+        )
         return {row["lease_id"]: row for row in rows}
 
     def _session_with_lease(self, session: dict, lease: dict | None, *, include_thread: bool = False) -> dict:

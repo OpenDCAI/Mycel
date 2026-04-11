@@ -60,10 +60,7 @@ class SupabaseUserRepo:
     def list_by_ids(self, user_ids: list[str]) -> list[UserRow]:
         if not user_ids:
             return []
-        rows: list[dict[str, Any]] = []
-        for chunk in q.value_chunks(user_ids):
-            response = q.in_(self._t().select(", ".join(_COLS)), "id", chunk, _USER_REPO, "list_by_ids").execute()
-            rows.extend(q.rows(response, _USER_REPO, "list_by_ids"))
+        rows = q.rows_in_chunks(lambda: self._t().select(", ".join(_COLS)), "id", user_ids, _USER_REPO, "list_by_ids")
         users_by_id = {row["id"]: UserRow.model_validate(row) for row in rows}
         return [users_by_id[user_id] for user_id in user_ids if user_id in users_by_id]
 
