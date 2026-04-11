@@ -22,16 +22,22 @@ import type {
 
 import { authFetch } from "../store/auth-store";
 
-export async function request<T>(url: string, init?: RequestInit): Promise<T> {
+async function checkedResponse(url: string, init?: RequestInit): Promise<Response> {
   const response = await authFetch(url, init);
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
   }
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  return response;
+}
+
+export async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await checkedResponse(url, init);
   return (await response.json()) as T;
+}
+
+export async function requestOk(url: string, init?: RequestInit): Promise<void> {
+  await checkedResponse(url, init);
 }
 
 // --- Thread API ---
@@ -81,14 +87,14 @@ export async function saveDefaultThreadConfig(
   agentUserId: string,
   config: ThreadLaunchConfig,
 ): Promise<void> {
-  await request("/api/threads/default-config", {
+  await requestOk("/api/threads/default-config", {
     method: "POST",
     body: JSON.stringify({ agent_user_id: agentUserId, ...config }),
   });
 }
 
 export async function deleteThread(threadId: string): Promise<void> {
-  await request(`/api/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
+  await requestOk(`/api/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
 }
 
 export async function getThread(threadId: string): Promise<ThreadDetail> {
@@ -189,7 +195,7 @@ export async function listMyLeases(signal?: AbortSignal): Promise<UserLeaseSumma
 }
 
 export async function destroySandboxSession(sessionId: string, provider: string): Promise<void> {
-  await request(
+  await requestOk(
     `/api/sandbox/sessions/${encodeURIComponent(sessionId)}?provider=${encodeURIComponent(provider)}`,
     { method: "DELETE" },
   );
@@ -263,7 +269,7 @@ export function getSandboxDownloadUrl(
 // --- Settings API ---
 
 export async function saveSandboxConfig(name: string, config: Record<string, unknown>): Promise<void> {
-  await request("/api/settings/sandboxes", {
+  await requestOk("/api/settings/sandboxes", {
     method: "POST",
     body: JSON.stringify({ name, config }),
   });
@@ -275,7 +281,7 @@ export async function saveObservationConfig(
   active: string | null,
   config?: Record<string, unknown>,
 ): Promise<void> {
-  await request("/api/settings/observation", {
+  await requestOk("/api/settings/observation", {
     method: "POST",
     body: JSON.stringify({ active, ...config }),
   });
@@ -313,7 +319,7 @@ export async function generateInviteCode(expiresDays = 7): Promise<InviteCode> {
 }
 
 export async function revokeInviteCode(code: string): Promise<void> {
-  await request(`/api/invite-codes/${encodeURIComponent(code)}`, { method: "DELETE" });
+  await requestOk(`/api/invite-codes/${encodeURIComponent(code)}`, { method: "DELETE" });
 }
 
 // --- User Avatar API ---
