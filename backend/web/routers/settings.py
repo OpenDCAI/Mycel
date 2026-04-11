@@ -68,40 +68,12 @@ def _load_workspace_settings(repo: Any, user_id: str) -> WorkspaceSettings:
     )
 
 
-def _set_default_workspace(repo: Any, user_id: str, workspace: str) -> None:
-    repo.set_default_workspace(user_id, workspace)
-
-
-def _add_recent_workspace(repo: Any, user_id: str, workspace: str) -> None:
-    repo.add_recent_workspace(user_id, workspace)
-
-
-def _set_default_model(repo: Any, user_id: str, model: str) -> None:
-    repo.set_default_model(user_id, model)
-
-
 def _load_models_data(repo: Any, user_id: str) -> dict[str, Any]:
     return repo.get_models_config(user_id) or {}
 
 
-def _save_models_data(repo: Any, user_id: str, data: dict[str, Any]) -> None:
-    repo.set_models_config(user_id, data)
-
-
-def _load_observation_data(repo: Any, user_id: str) -> dict[str, Any] | None:
-    return repo.get_observation_config(user_id)
-
-
-def _save_observation_data(repo: Any, user_id: str, data: dict[str, Any]) -> None:
-    repo.set_observation_config(user_id, data)
-
-
 def _load_sandbox_configs(repo: Any, user_id: str) -> dict[str, Any]:
     return repo.get_sandbox_configs(user_id) or {}
-
-
-def _save_sandbox_configs(repo: Any, user_id: str, data: dict[str, Any]) -> None:
-    repo.set_sandbox_configs(user_id, data)
 
 
 # ============================================================================
@@ -232,7 +204,7 @@ async def set_default_workspace(
     )
 
     repo = _get_settings_repo(req)
-    _set_default_workspace(repo, user_id, workspace_str)
+    repo.set_default_workspace(user_id, workspace_str)
 
     return {"success": True, "workspace": workspace_str}
 
@@ -251,7 +223,7 @@ async def add_recent_workspace(
     )
 
     repo = _get_settings_repo(req)
-    _add_recent_workspace(repo, user_id, workspace_str)
+    repo.add_recent_workspace(user_id, workspace_str)
 
     return {"success": True}
 
@@ -268,7 +240,7 @@ async def set_default_model(
 ) -> dict[str, Any]:
     """Set default virtual model preference."""
     repo = _get_settings_repo(req)
-    _set_default_model(repo, user_id, request.model)
+    repo.set_default_model(user_id, request.model)
     return {"success": True, "default_model": request.model}
 
 
@@ -394,7 +366,7 @@ async def update_model_mapping(
             else:
                 mapping[name] = spec
     data["mapping"] = mapping
-    _save_models_data(repo, user_id, data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "model_mapping": request.mapping}
 
 
@@ -427,7 +399,7 @@ async def toggle_model(
         if request.model_id in enabled:
             enabled.remove(request.model_id)
 
-    _save_models_data(repo, user_id, data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "enabled_models": enabled}
 
 
@@ -469,7 +441,7 @@ async def add_custom_model(
             cfg["context_limit"] = request.context_limit
         custom_config[request.model_id] = cfg
 
-    _save_models_data(repo, user_id, data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "custom_models": custom, "enabled_models": enabled}
 
 
@@ -554,7 +526,7 @@ async def remove_custom_model(req: Request, user_id: CurrentUserId, model_id: st
     custom_config = pool.get("custom_config", {})
     custom_config.pop(model_id, None)
 
-    _save_models_data(repo, user_id, data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "custom_models": custom}
 
 
@@ -581,7 +553,7 @@ async def update_custom_model_config(request: CustomModelConfigRequest, req: Req
     if request.provider:
         custom_providers = pool.setdefault("custom_providers", {})
         custom_providers[request.model_id] = request.provider
-    _save_models_data(repo, user_id, data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "custom_config": custom_config}
 
 
@@ -612,7 +584,7 @@ async def update_provider(
     if request.base_url is not None:
         provider_data["base_url"] = request.base_url
     providers[request.provider] = provider_data
-    _save_models_data(repo, user_id, data)
+    repo.set_models_config(user_id, data)
 
     # @@@reload-agents-on-key-change — hot-reload all cached agents so they pick up new API keys
     pool = getattr(req.app.state, "agent_pool", {})
@@ -646,7 +618,7 @@ class ObservationRequest(BaseModel):
 async def get_observation_settings(req: Request, user_id: CurrentUserId) -> dict[str, Any]:
     """Get observation provider configuration."""
     repo = _get_settings_repo(req)
-    data = _load_observation_data(repo, user_id)
+    data = repo.get_observation_config(user_id)
     if data is not None:
         return data
     from config.observation_loader import ObservationLoader
@@ -663,7 +635,7 @@ async def update_observation_settings(request: ObservationRequest, req: Request,
     Existing threads keep their locked provider — only credentials are read live.
     """
     repo = _get_settings_repo(req)
-    data = _load_observation_data(repo, user_id) or {}
+    data = repo.get_observation_config(user_id) or {}
 
     data["active"] = request.active
     if request.langfuse is not None:
@@ -675,7 +647,7 @@ async def update_observation_settings(request: ObservationRequest, req: Request,
         existing.update(request.langsmith)
         data["langsmith"] = existing
 
-    _save_observation_data(repo, user_id, data)
+    repo.set_observation_config(user_id, data)
 
     return {"success": True, "active": data.get("active")}
 
@@ -769,7 +741,7 @@ async def save_sandbox_config(request: SandboxConfigRequest, req: Request, user_
         repo = _get_settings_repo(req)
         existing = _load_sandbox_configs(repo, user_id)
         existing[request.name] = cfg.model_dump()
-        _save_sandbox_configs(repo, user_id, existing)
+        repo.set_sandbox_configs(user_id, existing)
         return {"success": True, "path": f"supabase://user_settings/{user_id}/sandbox_configs/{request.name}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
