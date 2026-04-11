@@ -15,6 +15,8 @@ import {
   type AssistantTurn,
   type ChatEntry,
   type StreamStatus,
+  type ToolStep,
+  type TurnSegment,
 } from "../api";
 import type { UseThreadStreamResult } from "./use-thread-stream";
 import { makeId } from "./utils";
@@ -28,13 +30,19 @@ interface AppendEntryDelta {
 
 interface AppendSegmentDelta {
   type: "append_segment";
-  segment: Record<string, unknown>;
+  segment: TurnSegment;
 }
+
+type UpdateSegmentPatch = Partial<Pick<ToolStep, "status" | "result" | "args" | "subagent_stream">> & {
+  append_content?: string;
+  subagent_stream_status?: NonNullable<ToolStep["subagent_stream"]>["status"];
+  cancelled_ids?: string[];
+};
 
 interface UpdateSegmentDelta {
   type: "update_segment";
   index: number;
-  patch: Record<string, unknown>;
+  patch: UpdateSegmentPatch;
 }
 
 interface FinalizeTurnDelta {
@@ -82,7 +90,7 @@ function applyDelta(entries: ChatEntry[], delta: DisplayDelta): ChatEntry[] {
     case "append_segment":
       return updateLastTurn(entries, (t) => ({
         ...t,
-        segments: [...t.segments, delta.segment as unknown as AssistantTurn["segments"][number]],
+        segments: [...t.segments, delta.segment],
       }));
 
     case "update_segment": {
@@ -100,8 +108,8 @@ function applyDelta(entries: ChatEntry[], delta: DisplayDelta): ChatEntry[] {
         }
         // Tool status update
         if (seg.type === "tool" && patch.status) {
-          seg.step = { ...seg.step, status: patch.status as "done" | "cancelled" };
-          if (patch.result !== undefined) seg.step.result = patch.result as string;
+          seg.step = { ...seg.step, status: patch.status };
+          if (patch.result !== undefined) seg.step.result = patch.result;
         }
         // Tool args update
         if (seg.type === "tool" && patch.args !== undefined) {
@@ -109,23 +117,24 @@ function applyDelta(entries: ChatEntry[], delta: DisplayDelta): ChatEntry[] {
         }
         // Subagent stream
         if (seg.type === "tool" && patch.subagent_stream) {
-          seg.step = { ...seg.step, subagent_stream: patch.subagent_stream as AssistantTurn["segments"][number] extends { step: infer S } ? S extends { subagent_stream?: infer SS } ? SS : never : never };
+          seg.step = { ...seg.step, subagent_stream: patch.subagent_stream };
         }
         if (seg.type === "tool" && patch.subagent_stream_status) {
           if (seg.step.subagent_stream) {
             seg.step = {
               ...seg.step,
               status: patch.subagent_stream_status === "completed" ? "done" : seg.step.status,
-              subagent_stream: { ...seg.step.subagent_stream, status: patch.subagent_stream_status as "completed" },
+              subagent_stream: { ...seg.step.subagent_stream, status: patch.subagent_stream_status },
             };
           }
         }
         // Cancelled
-        if (patch.cancelled_ids && Array.isArray(patch.cancelled_ids)) {
+        const cancelledIds = patch.cancelled_ids;
+        if (cancelledIds && Array.isArray(cancelledIds)) {
           return {
             ...t,
             segments: segs.map((s) =>
-              s.type === "tool" && (patch.cancelled_ids as string[]).includes(s.step.id)
+              s.type === "tool" && cancelledIds.includes(s.step.id)
                 ? { ...s, step: { ...s.step, status: "cancelled" as const, result: "任务被用户取消" } }
                 : s,
             ),
