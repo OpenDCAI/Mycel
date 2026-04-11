@@ -18,7 +18,7 @@ const statusConfig = {
 type SortKey = "name" | "skills" | "status" | null;
 
 // @@@avatar-upload — click-to-upload avatar overlay on agent cards
-function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; name: string; hasAvatar: boolean }) {
+function AvatarUploadTrigger({ agentId, name, hasAvatar }: { agentId: string; name: string; hasAvatar: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [rev, setRev] = useState(0);
@@ -28,16 +28,16 @@ function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; 
     if (!file) return;
     setUploading(true);
     try {
-      await uploadUserAvatar(memberId, file);
+      await uploadUserAvatar(agentId, file);
       setRev((r) => r + 1);
       toast.success("头像已更新");
     } catch (err) { toast.error(`上传失败: ${err instanceof Error ? err.message : "unknown"}`); }
     finally { setUploading(false); if (inputRef.current) inputRef.current.value = ""; }
-  }, [memberId]);
+  }, [agentId]);
 
   return (
     <div className="relative group/avatar" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
-      <ActorAvatar avatarUrl={(hasAvatar || rev > 0) ? `/api/users/${memberId}/avatar` : undefined} name={name} size="md" className="rounded-xl" rev={rev} type="mycel_agent" />
+      <ActorAvatar avatarUrl={(hasAvatar || rev > 0) ? `/api/users/${agentId}/avatar` : undefined} name={name} size="md" className="rounded-xl" rev={rev} type="mycel_agent" />
       <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-fast flex items-center justify-center cursor-pointer">
         {uploading ? (
           <div className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />
@@ -50,7 +50,7 @@ function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; 
   );
 }
 
-export default function MembersPage() {
+export default function AgentsPage() {
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -169,28 +169,28 @@ export default function MembersPage() {
           )
         ) : (
           <div className={`grid gap-4 ${isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"}`}>
-            {filtered.map((member) => {
-              const status = statusConfig[member.status];
-              const isBuiltin = member.builtin === true;
+            {filtered.map((agent) => {
+              const status = statusConfig[agent.status];
+              const isBuiltin = agent.builtin === true;
               const canDelete = !isBuiltin && filtered.length > 1;
               const handleCardClick = () => {
-                navigate(`/contacts/agents/${member.id}`);
+                navigate(`/contacts/agents/${agent.id}`);
               };
               const handleStartChat = (e: React.MouseEvent) => {
                 e.stopPropagation();
-                navigate(`/chat/hire/${member.id}`);
+                navigate(`/chat/hire/${agent.id}`);
               };
               const handleCopy = async (e: React.MouseEvent) => {
                 e.stopPropagation();
                 try {
-                  const newAgent = await addAgent(`${member.name} (副本)`, member.description);
+                  const newAgent = await addAgent(`${agent.name} (副本)`, agent.description);
                   await updateAgentConfig(newAgent.id, {
-                    prompt: member.config.prompt,
-                    tools: member.config.tools,
-                    mcps: member.config.mcps,
-                    skills: member.config.skills,
-                    subAgents: member.config.subAgents,
-                    rules: member.config.rules,
+                    prompt: agent.config.prompt,
+                    tools: agent.config.tools,
+                    mcps: agent.config.mcps,
+                    skills: agent.config.skills,
+                    subAgents: agent.config.subAgents,
+                    rules: agent.config.rules,
                   });
                   toast.success("已复制");
                 } catch { toast.error("复制失败"); }
@@ -199,28 +199,28 @@ export default function MembersPage() {
                 e.stopPropagation();
                 if (isBuiltin) return;
                 try {
-                  await deleteAgent(member.id);
+                  await deleteAgent(agent.id);
                   toast.success("已删除");
                 } catch { toast.error("删除失败"); }
               };
               return (
-                <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={`查看 Agent ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
+                <div key={agent.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={`查看 Agent ${agent.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
                   <div className="flex items-start justify-between mb-3">
-                    <AvatarUploadTrigger memberId={member.id} name={member.name} hasAvatar={!!member.avatar_url} />
+                    <AvatarUploadTrigger agentId={agent.id} name={agent.name} hasAvatar={!!agent.avatar_url} />
                     <div className="flex items-center gap-1.5">
                       {isBuiltin && <span className="text-2xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">内置</span>}
                       <div className={`w-1.5 h-1.5 ${status.shape} ${status.dot}`} />
                       <span className="text-xs text-muted-foreground">{status.label}</span>
                     </div>
                   </div>
-                  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors duration-fast mb-0.5">{member.name}</h3>
-                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{member.description}</p>
+                  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors duration-fast mb-0.5">{agent.name}</h3>
+                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{agent.description}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Zap className="w-3 h-3" /> {member.config.skills.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Skills</p></TooltipContent></Tooltip>
-                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Wrench className="w-3 h-3" /> {member.config.tools.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Tools</p></TooltipContent></Tooltip>
-                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Plug className="w-3 h-3" /> {member.config.mcps.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>MCP</p></TooltipContent></Tooltip>
-                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Users className="w-3 h-3" /> {member.config.subAgents.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Agents</p></TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Zap className="w-3 h-3" /> {agent.config.skills.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Skills</p></TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Wrench className="w-3 h-3" /> {agent.config.tools.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Tools</p></TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Plug className="w-3 h-3" /> {agent.config.mcps.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>MCP</p></TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Users className="w-3 h-3" /> {agent.config.subAgents.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Agents</p></TooltipContent></Tooltip>
                     </div>
                     <div className="flex items-center gap-0.5">
                       <Tooltip>

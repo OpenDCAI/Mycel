@@ -14,7 +14,7 @@ import ChatPage from './pages/ChatPage';
 import NewChatPage from './pages/NewChatPage';
 import ChatConversationPage from './pages/ChatConversationPage';
 import AgentDetailPage from './pages/AgentDetailPage';
-import MembersPage from './pages/MembersPage';
+import AgentsPage from './pages/AgentsPage';
 
 export const router = createBrowserRouter([
   {
@@ -36,7 +36,7 @@ export const router = createBrowserRouter([
         path: 'contacts',
         element: <ContactsLayout />,
         children: [
-          { index: true, element: <MembersPage /> },
+          { index: true, element: <AgentsPage /> },
           { path: 'agents/:id', element: <AgentDetailPage /> },
         ],
       },

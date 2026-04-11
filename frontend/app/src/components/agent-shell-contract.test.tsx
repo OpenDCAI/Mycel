@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import CreateAgentDialog from "./CreateAgentDialog";
 import NewChatDialog from "./NewChatDialog";
-import MembersPage from "../pages/MembersPage";
+import AgentsPage from "../pages/AgentsPage";
 import { useAppStore } from "../store/app-store";
 
 vi.mock("zustand/middleware", async () => {
@@ -115,10 +115,10 @@ describe("frontend agent wording contract", () => {
     expect(screen.getByText("暂无 Agent")).toBeTruthy();
   });
 
-  it("MembersPage presents agent wording", () => {
+  it("AgentsPage presents agent wording", () => {
     render(
       <MemoryRouter>
-        <MembersPage />
+        <AgentsPage />
       </MemoryRouter>,
     );
 
