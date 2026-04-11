@@ -1,10 +1,15 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
 import { CodeBlock } from "../shared/CodeBlock";
+import { asRecord, recordString } from "@/lib/records";
 
 function parseArgs(args: unknown): { path?: string; dir_path?: string } {
-  if (args && typeof args === "object") return args as { path?: string; dir_path?: string };
-  return {};
+  const record = asRecord(args);
+  if (!record) return {};
+  return {
+    path: recordString(record, "path"),
+    dir_path: recordString(record, "dir_path"),
+  };
 }
 
 export default memo(function ListDirRenderer({ step, expanded }: ToolRendererProps) {
