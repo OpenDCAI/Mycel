@@ -755,6 +755,7 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         "owner": _normalize_thread_owner(owners.get(thread_id)),
         "summary": summary,
         "sessions": sessions,
+        "evaluation_batch_runs": make_eval_batch_service().list_batch_runs_for_thread(thread_id),
         "trajectory": await build_monitor_thread_trajectory(app, thread_id),
     }
 

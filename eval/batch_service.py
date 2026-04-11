@@ -74,6 +74,9 @@ class EvaluationBatchService:
     def get_batch_run_for_eval_run(self, eval_run_id: str) -> dict | None:
         return self._batch_repo.get_batch_run_by_eval_run_id(eval_run_id)
 
+    def list_batch_runs_for_thread(self, thread_id: str) -> list[dict]:
+        return self._batch_repo.list_batch_runs_by_thread_id(thread_id)
+
     def refresh_batch_summary(self, batch_id: str) -> dict:
         batch_runs = self._batch_repo.list_batch_runs(batch_id)
         summary = {

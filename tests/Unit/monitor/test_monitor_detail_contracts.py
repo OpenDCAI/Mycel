@@ -17,6 +17,15 @@ def _default_live_thread_ids(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _default_eval_batch_service(monkeypatch):
+    class FakeBatchService:
+        def list_batch_runs_for_thread(self, _thread_id):
+            return []
+
+    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+
+
 def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch):
     monkeypatch.setattr(
         monitor_service,
@@ -418,7 +427,20 @@ async def test_get_monitor_thread_detail_exposes_trajectory_truth(monkeypatch):
         def close(self):
             return None
 
+    class FakeBatchService:
+        def list_batch_runs_for_thread(self, thread_id):
+            return [
+                {
+                    "batch_run_id": "batch-run-1",
+                    "batch_id": "batch-1",
+                    "scenario_id": "scenario-1",
+                    "thread_id": thread_id,
+                    "eval_run_id": "eval-run-1",
+                }
+            ]
+
     monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
+    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
     monkeypatch.setattr(
         monitor_service,
         "_thread_owners",
@@ -458,6 +480,15 @@ async def test_get_monitor_thread_detail_exposes_trajectory_truth(monkeypatch):
     assert payload["trajectory"]["run_id"] == "run-1"
     assert payload["trajectory"]["conversation"][0]["role"] == "human"
     assert payload["trajectory"]["events"][0]["event_type"] == "tool_call"
+    assert payload["evaluation_batch_runs"] == [
+        {
+            "batch_run_id": "batch-run-1",
+            "batch_id": "batch-1",
+            "scenario_id": "scenario-1",
+            "thread_id": "thread-1",
+            "eval_run_id": "eval-run-1",
+        }
+    ]
 
 
 def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():

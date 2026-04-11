@@ -94,6 +94,9 @@ class _FakeBatchRepo:
         row = next((row for row in self.batch_runs.values() if row.get("eval_run_id") == eval_run_id), None)
         return dict(row) if row is not None else None
 
+    def list_batch_runs_by_thread_id(self, thread_id: str) -> list[dict]:
+        return [dict(row) for row in self.batch_runs.values() if row.get("thread_id") == thread_id]
+
     def update_batch_run(self, batch_run_id: str, **fields) -> dict | None:
         row = self.batch_runs.get(batch_run_id)
         if row is None:
@@ -258,3 +261,22 @@ def test_batch_service_finds_batch_run_by_eval_run_id():
     assert found is not None
     assert found["batch_id"] == batch["batch_id"]
     assert found["thread_id"] == "thread-1"
+
+
+def test_batch_service_lists_batch_runs_for_thread():
+    repo = _FakeBatchRepo()
+    service = EvaluationBatchService(batch_repo=repo)
+    batch = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1", "scenario-2"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+    batch_runs = repo.list_batch_runs(batch["batch_id"])
+    repo.update_batch_run(batch_runs[0]["batch_run_id"], eval_run_id="eval-run-1", thread_id="thread-1")
+    repo.update_batch_run(batch_runs[1]["batch_run_id"], eval_run_id="eval-run-2", thread_id="thread-2")
+
+    found = service.list_batch_runs_for_thread("thread-1")
+
+    assert [row["eval_run_id"] for row in found] == ["eval-run-1"]

@@ -185,3 +185,38 @@ def test_supabase_eval_batch_repo_finds_batch_run_by_eval_run_id():
 
     assert found == created
     assert repo.get_batch_run_by_eval_run_id("missing-run") is None
+
+
+def test_supabase_eval_batch_repo_lists_batch_runs_by_thread_id():
+    repo = SupabaseEvaluationBatchRepo(_FakeClient())
+    first = repo.create_batch_run(
+        {
+            "batch_run_id": "batch-run-1",
+            "batch_id": "batch-1",
+            "item_key": "s1",
+            "scenario_id": "scenario-1",
+            "status": "completed",
+            "thread_id": "thread-1",
+            "eval_run_id": "eval-run-1",
+            "started_at": None,
+            "finished_at": None,
+            "summary_json": {},
+        }
+    )
+    repo.create_batch_run(
+        {
+            "batch_run_id": "batch-run-2",
+            "batch_id": "batch-1",
+            "item_key": "s2",
+            "scenario_id": "scenario-2",
+            "status": "completed",
+            "thread_id": "thread-2",
+            "eval_run_id": "eval-run-2",
+            "started_at": None,
+            "finished_at": None,
+            "summary_json": {},
+        }
+    )
+
+    assert repo.list_batch_runs_by_thread_id("thread-1") == [first]
+    assert repo.list_batch_runs_by_thread_id("missing-thread") == []

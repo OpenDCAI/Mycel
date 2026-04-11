@@ -83,6 +83,11 @@ class SupabaseEvaluationBatchRepo:
             return None
         return self._map_batch_run(rows[0])
 
+    def list_batch_runs_by_thread_id(self, thread_id: str) -> list[dict[str, Any]]:
+        query = self._client.table(_BATCH_RUN_TABLE).select("*").eq("thread_id", thread_id)
+        query = q.order(query, "started_at", desc=True, repo=_REPO, operation="list_batch_runs_by_thread_id")
+        return [self._map_batch_run(row) for row in q.rows(query.execute(), _REPO, "list_batch_runs_by_thread_id")]
+
     def update_batch_run(self, batch_run_id: str, **fields: Any) -> dict[str, Any] | None:
         updates = {key: value for key, value in fields.items() if value is not None}
         if not updates:

@@ -27,6 +27,13 @@ type ThreadDetailPayload = {
     chat_session_id?: string | null;
     status?: string | null;
   }> | null;
+  evaluation_batch_runs?: Array<{
+    batch_run_id?: string | null;
+    batch_id?: string | null;
+    scenario_id?: string | null;
+    status?: string | null;
+    eval_run_id?: string | null;
+  }> | null;
   trajectory?: {
     run_id?: string | null;
     conversation?: Array<{
@@ -103,6 +110,7 @@ export default function ThreadDetailPage() {
 
   const summary = data.summary ?? {};
   const owner = data.owner ?? {};
+  const evaluationBatchRuns = data.evaluation_batch_runs ?? [];
   const trajectory = data.trajectory ?? {};
   const conversation = trajectory.conversation ?? [];
   const events = trajectory.events ?? [];
@@ -154,6 +162,33 @@ export default function ThreadDetailPage() {
           </div>
         </div>
       </section>
+      {evaluationBatchRuns.length > 0 ? (
+        <section className="surface-section">
+          <h2>Evaluation Runs</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Batch</th>
+                <th>Scenario</th>
+                <th>Eval Run</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {evaluationBatchRuns.map((run) => (
+                <tr key={run.batch_run_id ?? `${run.batch_id}-${run.eval_run_id}`}>
+                  <td>{run.batch_id ? <Link to={`/evaluation/batches/${run.batch_id}`}>{run.batch_id}</Link> : "-"}</td>
+                  <td>{run.scenario_id ?? "-"}</td>
+                  <td>
+                    {run.eval_run_id ? <Link to={`/evaluation/runs/${run.eval_run_id}`}>{run.eval_run_id}</Link> : "-"}
+                  </td>
+                  <td>{run.status ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
       <section className="surface-section">
         <div className="trajectory-header">
           <div>

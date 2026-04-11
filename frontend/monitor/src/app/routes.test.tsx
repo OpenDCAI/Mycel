@@ -1110,6 +1110,15 @@ describe("MonitorRoutes", () => {
           observed_state: "running",
         },
         sessions: [{ chat_session_id: "session-1", status: "active" }],
+        evaluation_batch_runs: [
+          {
+            batch_run_id: "batch-run-1",
+            batch_id: "batch-1",
+            scenario_id: "scenario-1",
+            thread_id: "thread-1",
+            eval_run_id: "eval-run-1",
+          },
+        ],
         trajectory: {
           run_id: "run-1",
           conversation: [
@@ -1137,6 +1146,9 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: "daytona" })).toHaveAttribute("href", "/providers/daytona");
     expect(screen.getByRole("link", { name: "lease-1" })).toHaveAttribute("href", "/leases/lease-1");
     expect(screen.getByRole("link", { name: "runtime-1" })).toHaveAttribute("href", "/runtimes/runtime-1");
+    expect(screen.getByRole("heading", { name: "Evaluation Runs" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "batch-1" })).toHaveAttribute("href", "/evaluation/batches/batch-1");
+    expect(screen.getByRole("link", { name: "eval-run-1" })).toHaveAttribute("href", "/evaluation/runs/eval-run-1");
     expect(screen.getByRole("heading", { name: "Trajectory" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Conversation Ledger" })).toBeInTheDocument();
     expect(screen.getByText("Please inspect the sandbox drift.")).toBeInTheDocument();
