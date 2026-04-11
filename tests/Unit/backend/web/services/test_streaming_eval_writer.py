@@ -147,7 +147,18 @@ class _VersionedCheckpointSaver:
 
 
 def _fake_storage_container() -> SimpleNamespace:
-    return SimpleNamespace(run_event_repo=lambda: SimpleNamespace(close=lambda: None))
+    repo = SimpleNamespace(
+        close=lambda: None,
+        append_event=lambda _thread_id, _run_id, _event_type, _data, message_id=None: 0,
+        list_events=lambda _thread_id, _run_id, *, after=0, limit=200: [],
+        latest_seq=lambda _thread_id: 0,
+        latest_run_id=lambda _thread_id: None,
+        list_run_ids=lambda _thread_id: [],
+        run_start_seq=lambda _thread_id, _run_id: 0,
+        delete_runs=lambda _thread_id, _run_ids: 0,
+        delete_thread_events=lambda _thread_id: 0,
+    )
+    return SimpleNamespace(run_event_repo=lambda: repo)
 
 
 def _make_app() -> SimpleNamespace:

@@ -48,7 +48,10 @@ def _resolve_run_event_repo(agent: Any) -> RunEventRepo:
     run_event_repo = getattr(storage_container, "run_event_repo", None)
     if not callable(run_event_repo):
         raise RuntimeError("streaming_service requires agent.storage_container.run_event_repo()")
-    return run_event_repo()
+    repo = run_event_repo()
+    if not isinstance(repo, RunEventRepo):
+        raise RuntimeError("agent.storage_container.run_event_repo() returned an invalid repo")
+    return repo
 
 
 def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any:
@@ -143,6 +146,8 @@ async def write_cancellation_markers(
         if not callable(get_next_version):
             raise RuntimeError("Checkpointer missing get_next_version; cannot write cancellation markers honestly")
         next_message_version = get_next_version(current_versions.get("messages"), None)
+        if not isinstance(next_message_version, str | int | float):
+            raise RuntimeError("Checkpointer returned an invalid messages channel version")
         new_versions = {"messages": next_message_version}
         new_checkpoint["channel_versions"] = {**current_versions, **new_versions}
         new_checkpoint["updated_channels"] = list(new_versions)

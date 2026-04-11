@@ -586,6 +586,8 @@ def _handle_tool_result(td: ThreadDisplay, data: dict) -> dict | None:
         return None
 
     tc_id = data.get("tool_call_id")
+    if not isinstance(tc_id, str) or not tc_id:
+        return None
     result = data.get("content", "")
     metadata = data.get("metadata") or {}
 
