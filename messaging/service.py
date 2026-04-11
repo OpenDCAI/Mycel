@@ -35,7 +35,7 @@ class MessagingService:
         thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> agent-user display lookup
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
-        event_bus: Any | None = None,  # ChatEventBus or SupabaseRealtimeBridge (optional)
+        event_bus: Any | None = None,  # ChatEventBus-compatible publisher (optional)
     ) -> None:
         self._chats = chat_repo
         self._members_repo = chat_member_repo
