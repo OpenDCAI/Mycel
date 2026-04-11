@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { asRecord, recordString } from "@/lib/records";
 import { authFetch } from "../store/auth-store";
 
 interface UserSettings {
@@ -11,6 +12,11 @@ interface UserSettings {
 function isActiveNewChatRoute(): boolean {
   const path = window.location.pathname.replace(/\/+$/, "");
   return path.startsWith("/chat/hire");
+}
+
+function errorDetail(value: unknown): string | undefined {
+  const payload = asRecord(value);
+  return payload ? recordString(payload, "detail") : undefined;
 }
 
 export function useWorkspaceSettings() {
@@ -47,7 +53,7 @@ export function useWorkspaceSettings() {
 
     if (!response.ok) {
       const data = await response.json();
-      throw new Error(data.detail || "Failed to set workspace");
+      throw new Error(errorDetail(data) || "Failed to set workspace");
     }
 
     await loadSettings();

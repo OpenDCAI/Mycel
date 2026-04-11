@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useWorkspaceSettings } from "./use-workspace-settings";
@@ -28,5 +28,33 @@ describe("useWorkspaceSettings", () => {
     await waitFor(() => {
       expect(consoleError).not.toHaveBeenCalled();
     });
+  });
+
+  it("ignores non-string workspace error details", async () => {
+    window.history.replaceState({}, "", "/chat/hire/agent-1");
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          default_workspace: null,
+          recent_workspaces: [],
+          default_model: "leon:large",
+          enabled_models: ["leon:large"],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ detail: { message: "not a string" } }),
+      } as Response);
+
+    const view = renderHook(() => useWorkspaceSettings());
+
+    await waitFor(() => {
+      expect(view.result.current.loading).toBe(false);
+    });
+
+    await expect(act(async () => {
+      await view.result.current.setDefaultWorkspace("/workspace");
+    })).rejects.toThrow("Failed to set workspace");
   });
 });
