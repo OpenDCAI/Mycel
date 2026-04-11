@@ -1,9 +1,50 @@
 import { useState } from "react";
+import { asRecord, recordString } from "@/lib/records";
 
 export interface BrowseItem {
   name: string;
   path: string;
   is_dir: boolean;
+}
+
+function parseBrowseItems(value: unknown): BrowseItem[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Malformed directory browser payload: items must be an array");
+  }
+  return value.map((item, index) => {
+    const record = asRecord(item);
+    if (!record || typeof record.is_dir !== "boolean") {
+      throw new Error(`Malformed directory browser payload: items[${index}]`);
+    }
+    const name = recordString(record, "name");
+    const path = recordString(record, "path");
+    if (!name || !path) {
+      throw new Error(`Malformed directory browser payload: items[${index}]`);
+    }
+    return { name, path, is_dir: record.is_dir };
+  });
+}
+
+function parseBrowsePayload(value: unknown, requestedPath: string): { currentPath: string; parentPath: string | null; items: BrowseItem[] } {
+  const payload = asRecord(value);
+  if (!payload) {
+    throw new Error("Malformed directory browser payload: expected object");
+  }
+  const currentPath = recordString(payload, "current_path") ?? requestedPath;
+  const rawParentPath = payload.parent_path;
+  let parentPath: string | null = null;
+  if (rawParentPath !== null && rawParentPath !== undefined) {
+    const parsedParentPath = recordString(payload, "parent_path");
+    if (parsedParentPath === undefined) {
+      throw new Error("Malformed directory browser payload: parent_path must be a string or null");
+    }
+    parentPath = parsedParentPath;
+  }
+  return {
+    currentPath,
+    parentPath,
+    items: parseBrowseItems(payload.items),
+  };
 }
 
 /**
@@ -26,10 +67,10 @@ export function useDirectoryBrowser(buildUrl: (path: string) => string, initialP
         const d = await res.json().catch(() => ({}));
         throw new Error((d as { detail?: string }).detail || "加载失败");
       }
-      const data = await res.json();
-      setCurrentPath((data.current_path as string) ?? path);
-      setParentPath((data.parent_path as string | null) ?? null);
-      setItems((data.items as BrowseItem[]) ?? []);
+      const data = parseBrowsePayload(await res.json(), path);
+      setCurrentPath(data.currentPath);
+      setParentPath(data.parentPath);
+      setItems(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
     } finally {
