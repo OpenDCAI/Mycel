@@ -23,14 +23,14 @@ interface OutletContext {
 }
 
 function ResolveStateCard({
-  memberName,
-  memberAvatarUrl,
+  agentName,
+  agentAvatarUrl,
   title,
   description,
   destructive = false,
 }: {
-  memberName: string;
-  memberAvatarUrl?: string;
+  agentName: string;
+  agentAvatarUrl?: string;
   title: string;
   description: string;
   destructive?: boolean;
@@ -39,7 +39,7 @@ function ResolveStateCard({
     <div className="flex-1 flex items-center justify-center relative">
       <div className="w-full max-w-[420px] px-6 text-center">
         <div className="flex justify-center mb-4">
-          <ActorAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
+          <ActorAvatar name={agentName} avatarUrl={agentAvatarUrl} type="mycel_agent" size="lg" />
         </div>
         <h1 className="text-xl font-medium text-foreground mb-2">{title}</h1>
         <p className={`text-sm ${destructive ? "text-destructive" : "text-muted-foreground"}`}>
@@ -118,13 +118,13 @@ function isActiveHireRoute(): boolean {
   return path.startsWith("/chat/hire");
 }
 
-export default function NewChatPage({ mode = "member" }: { mode?: "member" | "new" }) {
+export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new" }) {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
   const { tm } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetDefaultThread } = tm;
   const { settings, loading, hasWorkspace, refreshSettings, setDefaultWorkspace } = useWorkspaceSettings();
-  const shouldResolveDefaultThread = mode === "member";
+  const shouldResolveDefaultThread = mode === "agent";
   const [error, setError] = useState<string | null>(null);
   const [resolveState, setResolveState] = useState<"resolving" | "ready" | "error">(
     shouldResolveDefaultThread ? "resolving" : "ready",
@@ -149,10 +149,10 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const agentList = useAppStore(s => s.agentList);
   const libraryRecipes = useAppStore(s => s.libraryRecipes);
   const decodedAgentId = agentId ? decodeURIComponent(agentId) : null;
-  const resolvedMember = decodedAgentId ? agentList.find(m => m.id === decodedAgentId) : undefined;
+  const resolvedAgent = decodedAgentId ? agentList.find(agent => agent.id === decodedAgentId) : undefined;
   const isOwnedAgent = decodedAgentId === authAgent?.id;
-  const memberName = resolvedMember?.name ?? (isOwnedAgent ? (authAgent?.name || "Agent") : "Agent");
-  const memberAvatarUrl = resolvedMember?.avatar_url;
+  const agentName = resolvedAgent?.name ?? (isOwnedAgent ? (authAgent?.name || "Agent") : "Agent");
+  const agentAvatarUrl = resolvedAgent?.avatar_url;
 
   useEffect(() => {
     if (!shouldResolveDefaultThread) return;
@@ -519,9 +519,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   if (loading || resolveState === "resolving") {
     return (
       <ResolveStateCard
-        memberName={memberName}
-        memberAvatarUrl={memberAvatarUrl ?? undefined}
-        title={`正在检查 ${memberName} 的默认线程`}
+        agentName={agentName}
+        agentAvatarUrl={agentAvatarUrl ?? undefined}
+        title={`正在检查 ${agentName} 的默认线程`}
         description="如果没有默认线程，这里会进入创建界面。"
       />
     );
@@ -530,9 +530,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   if (resolveState === "error") {
     return (
       <ResolveStateCard
-        memberName={memberName}
-        memberAvatarUrl={memberAvatarUrl ?? undefined}
-        title={`无法检查 ${memberName} 的默认线程`}
+        agentName={agentName}
+        agentAvatarUrl={agentAvatarUrl ?? undefined}
+        title={`无法检查 ${agentName} 的默认线程`}
         description={error ?? "未知错误"}
         destructive
       />
@@ -544,17 +544,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[600px] px-4">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <ActorAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
+            <ActorAvatar name={agentName} avatarUrl={agentAvatarUrl} type="mycel_agent" size="lg" />
           </div>
           <h1 className="text-2xl font-medium text-foreground mb-2">
-            {mode === "new" ? `为 ${memberName} 创建新对话` : `开始与 ${memberName} 对话`}
+            {mode === "new" ? `为 ${agentName} 创建新对话` : `开始与 ${agentName} 对话`}
           </h1>
           <p className="text-sm text-muted-foreground">
             {mode === "new"
               ? "先确认这次要复用还是新建 sandbox，再发送第一条消息。"
               : isOwnedAgent
                 ? "选择好环境后，直接发送第一条消息开始主线对话。"
-                : `${memberName} 已准备好，先确认环境再开始。`}
+                : `${agentName} 已准备好，先确认环境再开始。`}
           </p>
         </div>
 
