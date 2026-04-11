@@ -95,10 +95,7 @@ class SupabaseThreadRepo:
         if not ordered_ids:
             return []
         select = ", ".join(_COLS)
-        rows: list[dict[str, Any]] = []
-        for chunk in q.value_chunks(ordered_ids):
-            response = q.in_(self._t().select(select), "id", chunk, _REPO, "list_by_ids").execute()
-            rows.extend(q.rows(response, _REPO, "list_by_ids"))
+        rows = q.rows_in_chunks(lambda: self._t().select(select), "id", ordered_ids, _REPO, "list_by_ids")
         normalized_rows = [_to_dict(row) for row in rows]
         indexed = {row["id"]: row for row in normalized_rows}
         return [indexed[thread_id] for thread_id in ordered_ids if thread_id in indexed]
@@ -160,20 +157,25 @@ class SupabaseThreadRepo:
 
         # Step 2: get threads for those agent users
         thread_cols = ", ".join(_COLS)
-        query = q.order(
-            q.order(
-                q.in_(self._t().select(thread_cols), "agent_user_id", agent_user_ids, _REPO, "list_by_owner_user_id"),
-                "is_main",
-                desc=True,
+        thread_rows = q.rows_in_chunks(
+            lambda: q.order(
+                q.order(
+                    self._t().select(thread_cols),
+                    "is_main",
+                    desc=True,
+                    repo=_REPO,
+                    operation="list_by_owner_user_id",
+                ),
+                "created_at",
+                desc=False,
                 repo=_REPO,
                 operation="list_by_owner_user_id",
             ),
-            "created_at",
-            desc=False,
-            repo=_REPO,
-            operation="list_by_owner_user_id",
+            "agent_user_id",
+            agent_user_ids,
+            _REPO,
+            "list_by_owner_user_id:threads",
         )
-        thread_rows = q.rows(query.execute(), _REPO, "list_by_owner_user_id:threads")
 
         # Step 3: enrich with agent display data from user_map
         result: list[dict[str, Any]] = []

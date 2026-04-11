@@ -64,21 +64,13 @@ def list_snapshots_by_lease_ids(
         return {}
     from storage.providers.supabase import _query as q
 
-    rows: list[dict[str, Any]] = []
-    for chunk in q.value_chunks(unique_ids):
-        rows.extend(
-            q.rows(
-                q.in_(
-                    client.table("lease_resource_snapshots").select("*"),
-                    "lease_id",
-                    chunk,
-                    "resource_snapshot",
-                    "list_by_ids",
-                ).execute(),
-                "resource_snapshot",
-                "list_by_ids",
-            )
-        )
+    rows = q.rows_in_chunks(
+        lambda: client.table("lease_resource_snapshots").select("*"),
+        "lease_id",
+        unique_ids,
+        "resource_snapshot",
+        "list_by_ids",
+    )
     return {str(r["lease_id"]): dict(r) for r in rows}
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 IN_FILTER_CHUNK_SIZE = 80
@@ -52,6 +53,20 @@ def in_(query: Any, column: str, values: list[str], repo: str, operation: str) -
 
 def value_chunks(values: list[str]) -> list[list[str]]:
     return [values[i : i + IN_FILTER_CHUNK_SIZE] for i in range(0, len(values), IN_FILTER_CHUNK_SIZE)]
+
+
+def rows_in_chunks(
+    query_factory: Callable[[], Any],
+    column: str,
+    values: list[str],
+    repo: str,
+    operation: str,
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for chunk in value_chunks(values):
+        response = in_(query_factory(), column, chunk, repo, operation).execute()
+        result.extend(rows(response, repo, operation))
+    return result
 
 
 def gt(query: Any, column: str, value: Any, repo: str, operation: str) -> Any:
