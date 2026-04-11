@@ -46,12 +46,7 @@ class EvalRunner:
                 )
                 captures.append(capture)
 
-            # Get final runtime status
-            runtime_status = None
-            try:
-                runtime_status = await self.client.get_runtime(thread_id)
-            except Exception:
-                pass
+            runtime_status = await self.client.get_runtime(thread_id)
 
             finished_at = datetime.now(UTC)
 
@@ -80,10 +75,7 @@ class EvalRunner:
                 objective_metrics=obj_metrics,
             )
         finally:
-            try:
-                await self.client.delete_thread(thread_id)
-            except Exception:
-                pass
+            await self.client.delete_thread(thread_id)
 
     async def run_all(
         self,
