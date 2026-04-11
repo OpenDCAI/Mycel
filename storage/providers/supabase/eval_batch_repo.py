@@ -73,6 +73,16 @@ class SupabaseEvaluationBatchRepo:
         query = q.order(query, "item_key", desc=False, repo=_REPO, operation="list_batch_runs")
         return [self._map_batch_run(row) for row in q.rows(query.execute(), _REPO, "list_batch_runs")]
 
+    def get_batch_run_by_eval_run_id(self, eval_run_id: str) -> dict[str, Any] | None:
+        rows = q.rows(
+            self._client.table(_BATCH_RUN_TABLE).select("*").eq("eval_run_id", eval_run_id).execute(),
+            _REPO,
+            "get_batch_run_by_eval_run_id",
+        )
+        if not rows:
+            return None
+        return self._map_batch_run(rows[0])
+
     def update_batch_run(self, batch_run_id: str, **fields: Any) -> dict[str, Any] | None:
         updates = {key: value for key, value in fields.items() if value is not None}
         if not updates:

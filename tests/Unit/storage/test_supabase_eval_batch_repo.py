@@ -162,3 +162,26 @@ def test_supabase_eval_batch_repo_creates_lists_and_updates_batch_runs():
     assert updated["status"] == "completed"
     assert updated["eval_run_id"] == "eval-run-1"
     assert rows[0]["summary_json"]["tool_calls"] == 2
+
+
+def test_supabase_eval_batch_repo_finds_batch_run_by_eval_run_id():
+    repo = SupabaseEvaluationBatchRepo(_FakeClient())
+    created = repo.create_batch_run(
+        {
+            "batch_run_id": "batch-run-1",
+            "batch_id": "batch-1",
+            "item_key": "s1",
+            "scenario_id": "scenario-1",
+            "status": "completed",
+            "thread_id": "thread-1",
+            "eval_run_id": "eval-run-1",
+            "started_at": None,
+            "finished_at": None,
+            "summary_json": {},
+        }
+    )
+
+    found = repo.get_batch_run_by_eval_run_id("eval-run-1")
+
+    assert found == created
+    assert repo.get_batch_run_by_eval_run_id("missing-run") is None

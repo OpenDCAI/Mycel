@@ -13,6 +13,11 @@ type EvaluationRunDetailPayload = {
     user_message?: string | null;
   } | null;
   facts?: Array<{ label?: string | null; value?: string | null }> | null;
+  batch_run?: {
+    batch_run_id?: string | null;
+    batch_id?: string | null;
+    scenario_id?: string | null;
+  } | null;
   limitations?: string[] | null;
 };
 
@@ -26,6 +31,7 @@ export default function EvaluationRunDetailPage() {
 
   const run = data.run ?? {};
   const facts = data.facts ?? [];
+  const batchRun = data.batch_run ?? {};
   const limitations = data.limitations ?? [];
 
   return (
@@ -54,6 +60,14 @@ export default function EvaluationRunDetailPage() {
           <div>
             <strong>User Message</strong>
             <span>{run.user_message ?? "-"}</span>
+          </div>
+          <div>
+            <strong>Batch</strong>
+            {batchRun.batch_id ? <Link to={`/evaluation/batches/${batchRun.batch_id}`}>{batchRun.batch_id}</Link> : <span>-</span>}
+          </div>
+          <div>
+            <strong>Scenario</strong>
+            <span>{batchRun.scenario_id ?? "-"}</span>
           </div>
           <div>
             <strong>Surface</strong>

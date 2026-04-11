@@ -1267,6 +1267,11 @@ describe("MonitorRoutes", () => {
           finished_at: "2026-04-08T00:03:00Z",
           user_message: "leave a hello note",
         },
+        batch_run: {
+          batch_run_id: "batch-run-1",
+          batch_id: "batch-1",
+          scenario_id: "scenario-1",
+        },
         facts: [
           { label: "Metric Tiers", value: "1" },
           { label: "Total tokens", value: "123" },
@@ -1353,6 +1358,11 @@ describe("MonitorRoutes", () => {
           finished_at: "2026-04-08T00:03:00Z",
           user_message: "leave a hello note",
         },
+        batch_run: {
+          batch_run_id: "batch-run-1",
+          batch_id: "batch-1",
+          scenario_id: "scenario-1",
+        },
         facts: [
           { label: "Metric Tiers", value: "1" },
           { label: "Total tokens", value: "123" },
@@ -1369,6 +1379,7 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByRole("heading", { name: "Evaluation Run run-1" })).toBeInTheDocument();
     expect(screen.getByRole("link", { current: "page", name: /evaluation/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "batch-1" })).toHaveAttribute("href", "/evaluation/batches/batch-1");
     expect(screen.getByRole("link", { name: "thread-eval" })).toHaveAttribute("href", "/threads/thread-eval");
     expect(screen.getByText("Run Facts")).toBeInTheDocument();
     expect(screen.getByText("Workbench Boundary")).toBeInTheDocument();

@@ -659,6 +659,46 @@ def test_monitor_evaluation_run_detail_route_exposes_selected_run_truth(monkeypa
     ]
 
 
+def test_monitor_evaluation_run_detail_links_back_to_batch_run(monkeypatch):
+    class FakeStore:
+        def get_run(self, run_id):
+            return {
+                "id": run_id,
+                "thread_id": "thread-eval",
+                "status": "completed",
+                "started_at": "2026-04-08T00:00:00Z",
+                "finished_at": "2026-04-08T00:03:00Z",
+                "user_message": "solve the eval task",
+            }
+
+        def get_metrics(self, _run_id):
+            return []
+
+    class FakeBatchService:
+        def get_batch_run_for_eval_run(self, eval_run_id):
+            return {
+                "batch_run_id": "batch-run-1",
+                "batch_id": "batch-1",
+                "scenario_id": "scenario-1",
+                "thread_id": "thread-eval",
+                "eval_run_id": eval_run_id,
+            }
+
+    monkeypatch.setattr(monitor_service, "make_eval_store", lambda: FakeStore())
+    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+
+    payload = monitor_service.get_monitor_evaluation_run_detail("run-1")
+
+    assert payload["run"]["run_id"] == "run-1"
+    assert payload["batch_run"] == {
+        "batch_run_id": "batch-run-1",
+        "batch_id": "batch-1",
+        "scenario_id": "scenario-1",
+        "thread_id": "thread-eval",
+        "eval_run_id": "run-1",
+    }
+
+
 def test_monitor_evaluation_batches_route_exposes_batch_index(monkeypatch):
     monkeypatch.setattr(
         monitor_service,

@@ -480,7 +480,9 @@ def get_monitor_evaluation_run_detail(run_id: str) -> dict[str, Any]:
     run = store.get_run(run_id)
     if run is None:
         raise KeyError(f"Evaluation run not found: {run_id}")
-    return _build_monitor_evaluation_run_detail(run, store.get_metrics(run_id))
+    detail = _build_monitor_evaluation_run_detail(run, store.get_metrics(run_id))
+    detail["batch_run"] = make_eval_batch_service().get_batch_run_for_eval_run(run_id)
+    return detail
 
 
 def get_monitor_evaluation_batches(limit: int = 50) -> dict[str, Any]:
