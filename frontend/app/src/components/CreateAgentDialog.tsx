@@ -16,7 +16,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-export default function CreateMemberDialog({ open, onOpenChange }: Props) {
+export default function CreateAgentDialog({ open, onOpenChange }: Props) {
   const navigate = useNavigate();
   const addAgent = useAppStore(s => s.addAgent);
   const [name, setName] = useState("");
@@ -25,12 +25,12 @@ export default function CreateMemberDialog({ open, onOpenChange }: Props) {
   const handleCreate = async () => {
     if (!name.trim()) return;
     try {
-      const member = await addAgent(name.trim(), description.trim());
+      const agent = await addAgent(name.trim(), description.trim());
       onOpenChange(false);
       setName("");
       setDescription("");
-      navigate(`/contacts/agents/${member.id}`);
-    } catch (e) {
+      navigate(`/contacts/agents/${agent.id}`);
+    } catch {
       toast.error("创建失败，请重试");
     }
   };

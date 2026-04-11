@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import CreateMemberDialog from "./CreateMemberDialog";
+import CreateAgentDialog from "./CreateAgentDialog";
 import NewChatDialog from "./NewChatDialog";
 import MembersPage from "../pages/MembersPage";
 import { useAppStore } from "../store/app-store";
@@ -91,10 +91,10 @@ describe("frontend agent wording contract", () => {
     });
   });
 
-  it("CreateMemberDialog presents agent wording", () => {
+  it("CreateAgentDialog presents agent wording", () => {
     render(
       <MemoryRouter>
-        <CreateMemberDialog open onOpenChange={() => undefined} />
+        <CreateAgentDialog open onOpenChange={() => undefined} />
       </MemoryRouter>,
     );
 

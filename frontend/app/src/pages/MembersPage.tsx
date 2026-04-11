@@ -3,7 +3,7 @@ import { Search, Plus, Zap, Users, Wrench, Plug, SearchX, ArrowUpDown, AlertTria
 import ActorAvatar from "@/components/ActorAvatar";
 import { uploadUserAvatar } from "@/api/client";
 import { useNavigate } from "react-router-dom";
-import CreateMemberDialog from "@/components/CreateMemberDialog";
+import CreateAgentDialog from "@/components/CreateAgentDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAppStore } from "@/store/app-store";
@@ -258,7 +258,7 @@ export default function MembersPage() {
         )}
       </div>
 
-      <CreateMemberDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateAgentDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }
