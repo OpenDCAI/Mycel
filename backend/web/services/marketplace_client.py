@@ -12,6 +12,7 @@ import httpx
 import yaml
 from fastapi import HTTPException
 
+from backend.web.utils.versioning import BumpType, bump_semver
 from config.loader import load_bundle_from_repo
 from config.types import AgentBundle
 
@@ -100,7 +101,7 @@ def _load_repo_publish_material(user_id: str, user_repo: Any, agent_config_repo:
 def publish(
     user_id: str,
     type_: str,
-    bump_type: str,
+    bump_type: BumpType,
     release_notes: str,
     tags: list[str],
     visibility: str,
@@ -117,17 +118,7 @@ def publish(
     snapshot = _bundle_snapshot(bundle)
     snapshot["meta"] = copy.deepcopy(meta)
 
-    # Calculate new version
-    current_version = meta.get("version", "0.1.0")
-    parts = current_version.split(".")
-    major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
-    if bump_type == "major":
-        major, minor, patch = major + 1, 0, 0
-    elif bump_type == "minor":
-        minor, patch = minor + 1, 0
-    else:
-        patch += 1
-    new_version = f"{major}.{minor}.{patch}"
+    new_version = bump_semver(meta.get("version", "0.1.0"), bump_type)
 
     # Get slug from agent name
     slug = bundle.agent.name.lower().replace(" ", "-")

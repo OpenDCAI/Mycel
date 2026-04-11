@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from backend.web.utils.versioning import BumpType
+
 # ── Agents ──
 
 
@@ -26,7 +28,7 @@ class UpdateAgentRequest(BaseModel):
 
 
 class PublishAgentRequest(BaseModel):
-    bump_type: str = "patch"  # patch | minor | major
+    bump_type: BumpType = "patch"
     notes: str = ""
 
 
