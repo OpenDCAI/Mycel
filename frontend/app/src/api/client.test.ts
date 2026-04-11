@@ -16,6 +16,18 @@ function okJson(payload: unknown): Response {
   } as Response;
 }
 
+function noContent(): Response {
+  return {
+    ok: true,
+    status: 204,
+    statusText: "No Content",
+    json: async () => {
+      throw new Error("204 response should not parse JSON");
+    },
+    text: async () => "",
+  } as unknown as Response;
+}
+
 describe("thread api client contract", () => {
   let api: typeof import("./client");
 
@@ -86,6 +98,14 @@ describe("thread api client contract", () => {
         }),
       }),
     );
+  });
+
+  it("deleteThread accepts no-content responses without parsing JSON", async () => {
+    authFetch.mockResolvedValue(noContent());
+
+    await api.deleteThread("thread-1");
+
+    expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1", { method: "DELETE" });
   });
 
   it("uploadUserAvatar sends user avatar path instead of members path", async () => {
