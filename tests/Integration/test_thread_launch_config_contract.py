@@ -445,6 +445,32 @@ async def test_get_default_thread_config_uses_strict_agent_gate(monkeypatch: pyt
 
 
 @pytest.mark.asyncio
+async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def _fake_to_thread(fn, *args):
+        to_thread_calls.append((fn.__name__, args))
+        return fn(*args)
+
+    monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
+    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, member_id, owner_user_id: object())
+    monkeypatch.setattr(
+        threads_router,
+        "resolve_default_config",
+        lambda app_obj, owner_user_id, agent_user_id: {
+            "source": "last_successful",
+            "config": {"create_mode": "existing", "provider_config": "local"},
+        },
+    )
+
+    result = await threads_router.get_default_thread_config("member-1", "owner-1", app)
+
+    assert result == {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
+    assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "member-1"))]
+
+
+@pytest.mark.asyncio
 async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     payload = threads_router.SaveThreadLaunchConfigRequest(
@@ -470,6 +496,40 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
     assert calls == [(app, "member-2", "owner-1")]
+
+
+@pytest.mark.asyncio
+async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    payload = threads_router.SaveThreadLaunchConfigRequest(
+        agent_user_id="member-1",
+        create_mode="new",
+        provider_config="local",
+        recipe=None,
+        lease_id=None,
+        model="gpt-5.4-mini",
+        workspace="/tmp/demo",
+    )
+    saved: list[tuple[object, str, str, dict[str, object]]] = []
+    to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def _fake_to_thread(fn, *args):
+        to_thread_calls.append((fn.__name__, args))
+        return fn(*args)
+
+    monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
+    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, member_id, owner_user_id: object())
+    monkeypatch.setattr(
+        threads_router,
+        "save_last_confirmed_config",
+        lambda app_obj, owner_user_id, agent_user_id, config: saved.append((app_obj, owner_user_id, agent_user_id, config)),
+    )
+
+    result = await threads_router.save_default_thread_config(payload, "owner-1", app)
+
+    assert result == {"ok": True}
+    assert to_thread_calls == [("_save_default_config_for_owned_agent", (app, "owner-1", payload))]
+    assert saved == [(app, "owner-1", "member-1", payload.model_dump())]
 
 
 def test_get_default_thread_config_route_rejects_unowned_agent() -> None:

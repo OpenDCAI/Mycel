@@ -6,6 +6,7 @@ ConversationList can render a unified sidebar.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -44,6 +45,10 @@ async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(_list_conversations_for_user, app, user_id)
+
+
+def _list_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
     """Return hire threads + visit chats merged by updated_at desc."""
     items: list[dict[str, Any]] = []
 
@@ -76,7 +81,7 @@ async def list_conversations(
     # ── Visit chats ──
     messaging = getattr(app.state, "messaging_service", None)
     if messaging:
-        chats = messaging.list_chats_for_user(user_id)
+        chats = messaging.list_conversation_summaries_for_user(user_id)
         for chat in chats:
             items.append(
                 {

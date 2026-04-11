@@ -1,7 +1,7 @@
 import pytest
 
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
-from tests.fakes.supabase import FakeSupabaseClient
+from tests.fakes.supabase import FakeSupabaseClient, FakeSupabaseQuery
 
 
 class _BrokenSandboxInstancesClient(FakeSupabaseClient):
@@ -9,6 +9,20 @@ class _BrokenSandboxInstancesClient(FakeSupabaseClient):
         if table_name == "sandbox_instances":
             raise RuntimeError("sandbox_instances exploded")
         return super().table(table_name)
+
+
+class _MaxInFilterQuery(FakeSupabaseQuery):
+    def in_(self, column: str, values: list[object]):
+        assert len(values) <= 80
+        return super().in_(column, values)
+
+
+class _MaxInFilterClient(FakeSupabaseClient):
+    def table(self, table_name: str):
+        query = _MaxInFilterQuery(table_name, self._tables)
+        if table_name in self._auto_seq_tables:
+            query._auto_seq = True
+        return query
 
 
 def _repo(tables: dict) -> SupabaseSandboxMonitorRepo:
@@ -134,6 +148,32 @@ def test_query_leases_uses_latest_terminal_binding() -> None:
             "thread_id": "thread-new",
         }
     ]
+
+
+def test_query_leases_chunks_terminal_binding_lookup() -> None:
+    leases = [
+        _lease(
+            f"lease-{index}",
+            updated_at=f"2026-04-05T10:{index % 60:02d}:00",
+            recipe_id=None,
+            recipe_json=None,
+            last_error=None,
+        )
+        for index in range(175)
+    ]
+    repo = SupabaseSandboxMonitorRepo(
+        _MaxInFilterClient(
+            {
+                "sandbox_leases": leases,
+                "abstract_terminals": [_terminal("term-174", "lease-174", "thread-174", "2026-04-05T10:02:00")],
+            }
+        )
+    )
+
+    rows = repo.query_leases()
+
+    assert len(rows) == 175
+    assert next(row for row in rows if row["lease_id"] == "lease-174")["thread_id"] == "thread-174"
 
 
 def test_query_lease_threads_returns_latest_unique_threads_first() -> None:

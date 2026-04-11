@@ -385,3 +385,76 @@ class MessagingService:
                 }
             )
         return result
+
+    def list_conversation_summaries_for_user(self, user_id: str) -> list[dict[str, Any]]:
+        """List lightweight visit-chat rows for the global conversation sidebar."""
+        chat_ids = self._members_repo.list_chats_for_user(user_id)
+        if not chat_ids:
+            return []
+
+        chat_rows = [chat for chat in self._chats.list_by_ids(chat_ids) if chat.status == "active"]
+        active_chat_ids = [chat.id for chat in chat_rows]
+        if not active_chat_ids:
+            return []
+
+        members_by_chat: dict[str, list[dict[str, Any]]] = {chat_id: [] for chat_id in active_chat_ids}
+        last_read_by_chat: dict[str, int] = {}
+        for member in self._members_repo.list_members_for_chats(active_chat_ids):
+            chat_id = str(member.get("chat_id") or "")
+            if chat_id not in members_by_chat:
+                continue
+            members_by_chat[chat_id].append(member)
+            if member.get("user_id") == user_id:
+                last_read_by_chat[chat_id] = int(member.get("last_read_seq") or 0)
+
+        visible_chats = [chat for chat in chat_rows if chat.id in last_read_by_chat]
+        if not visible_chats:
+            return []
+
+        users_by_id = self._users_by_id(
+            sorted(
+                {
+                    str(member.get("user_id") or "")
+                    for chat_id in active_chat_ids
+                    for member in members_by_chat.get(chat_id, [])
+                    if member.get("user_id")
+                }
+            )
+        )
+        unread_by_chat = self._messages.count_unread_by_chat_ids(user_id, last_read_by_chat)
+
+        result: list[dict[str, Any]] = []
+        for chat in visible_chats:
+            other_entities = [
+                entity
+                for member in members_by_chat[chat.id]
+                if member.get("user_id") != user_id
+                for entity in [self._project_known_user_entity(str(member.get("user_id") or ""), users_by_id)]
+            ]
+            other_names = [entity["name"] for entity in other_entities if entity.get("name")]
+            result.append(
+                {
+                    "id": chat.id,
+                    "title": chat.title or ", ".join(other_names) or "Chat",
+                    "updated_at": getattr(chat, "updated_at", None) or getattr(chat, "created_at", None),
+                    "avatar_url": other_entities[0]["avatar_url"] if other_entities else None,
+                    "unread_count": int(unread_by_chat.get(chat.id, 0)),
+                }
+            )
+        return result
+
+    def _users_by_id(self, user_ids: list[str]) -> dict[str, Any]:
+        if not user_ids:
+            return {}
+        return {user.id: user for user in self._user_repo.list_by_ids(user_ids)}
+
+    def _project_known_user_entity(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
+        user = users_by_id.get(social_user_id)
+        if user is None:
+            raise RuntimeError(f"Chat member {social_user_id} is not a resolvable user row")
+        return {
+            "id": social_user_id,
+            "name": user.display_name,
+            "type": user.type.value if hasattr(user.type, "value") else str(user.type),
+            "avatar_url": avatar_url(user.id, bool(user.avatar)),
+        }

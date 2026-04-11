@@ -106,17 +106,21 @@ class SupabaseSandboxMonitorRepo:
             return []
 
         lease_ids = [le["lease_id"] for le in leases]
-        terminals = q.rows(
-            q.in_(
-                self._client.table("abstract_terminals").select("lease_id,thread_id,created_at"),
-                "lease_id",
-                lease_ids,
-                _REPO,
-                "query_leases terminals",
-            ).execute(),
-            _REPO,
-            "query_leases terminals",
-        )
+        terminals: list[dict[str, Any]] = []
+        for chunk in q.value_chunks(lease_ids):
+            terminals.extend(
+                q.rows(
+                    q.in_(
+                        self._client.table("abstract_terminals").select("lease_id,thread_id,created_at"),
+                        "lease_id",
+                        chunk,
+                        _REPO,
+                        "query_leases terminals",
+                    ).execute(),
+                    _REPO,
+                    "query_leases terminals",
+                )
+            )
         # Pick most recent terminal per lease
         term_map: dict[str, str] = {}
         for t in sorted(terminals, key=lambda x: x.get("created_at") or ""):

@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from messaging._utils import now_iso
+from storage.providers.supabase import _query as q
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,21 @@ class SupabaseChatMemberRepo:
     def list_chats_for_user(self, user_id: str) -> list[str]:
         res = self._client.table("chat_members").select("chat_id").eq("user_id", user_id).execute()
         return [r["chat_id"] for r in (res.data or [])]
+
+    def list_members_for_chats(self, chat_ids: list[str]) -> list[dict[str, Any]]:
+        if not chat_ids:
+            return []
+        rows: list[dict[str, Any]] = []
+        for chunk in q.value_chunks(chat_ids):
+            res = q.in_(
+                self._client.table("chat_members").select("chat_id,user_id,last_read_seq"),
+                "chat_id",
+                chunk,
+                "chat member repo",
+                "list_members_for_chats",
+            ).execute()
+            rows.extend(res.data or [])
+        return rows
 
     def is_member(self, chat_id: str, user_id: str) -> bool:
         res = self._client.table("chat_members").select("user_id").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
@@ -151,6 +167,23 @@ class SupabaseMessagesRepo:
             q = q.gt("seq", last_read_seq)
         res = q.execute()
         return res.count or 0
+
+    def count_unread_by_chat_ids(self, user_id: str, last_read_by_chat: dict[str, int]) -> dict[str, int]:
+        if not last_read_by_chat:
+            return {}
+        counts = {chat_id: 0 for chat_id in last_read_by_chat}
+        min_last_read_seq = min(last_read_by_chat.values())
+        for chunk in q.value_chunks(list(last_read_by_chat)):
+            query = self._client.table("messages").select("chat_id,seq").neq("sender_user_id", user_id).is_("deleted_at", "null")
+            query = q.in_(query, "chat_id", chunk, "messages repo", "count_unread_by_chat_ids")
+            if min_last_read_seq > 0:
+                query = query.gt("seq", min_last_read_seq)
+            for row in query.execute().data or []:
+                chat_id = str(row.get("chat_id") or "")
+                if int(row.get("seq") or 0) <= last_read_by_chat.get(chat_id, 0):
+                    continue
+                counts[chat_id] += 1
+        return counts
 
     def _last_read_seq(self, chat_id: str, user_id: str) -> int:
         member_res = (

@@ -100,6 +100,21 @@ def _require_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any:
     return agent
 
 
+def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
+    _require_owned_agent(app, agent_user_id, owner_user_id)
+    return resolve_default_config(app, owner_user_id, agent_user_id)
+
+
+def _save_default_config_for_owned_agent(
+    app: Any,
+    owner_user_id: str,
+    payload: SaveThreadLaunchConfigRequest,
+) -> dict[str, bool]:
+    _require_owned_agent(app, payload.agent_user_id, owner_user_id)
+    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, payload.model_dump())
+    return {"ok": True}
+
+
 async def _prepare_attachment_message(
     thread_id: str,
     sandbox_type: str,
@@ -720,8 +735,7 @@ async def get_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_agent(app, agent_user_id, user_id)
-    return resolve_default_config(app, user_id, agent_user_id)
+    return await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
 
 
 @router.post("/default-config")
@@ -730,9 +744,7 @@ async def save_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_agent(app, payload.agent_user_id, user_id)
-    save_last_confirmed_config(app, user_id, payload.agent_user_id, payload.model_dump())
-    return {"ok": True}
+    return await asyncio.to_thread(_save_default_config_for_owned_agent, app, user_id, payload)
 
 
 def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:

@@ -538,6 +538,112 @@ def test_messaging_service_list_chats_ignores_blank_other_names_in_title_fallbac
     assert chats[0]["title"] == "Toad"
 
 
+def test_messaging_service_conversation_summaries_use_bulk_projection_repos() -> None:
+    calls: list[str] = []
+    user_rows = {
+        "human-user-1": SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None),
+        "agent-user-1": SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None),
+    }
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda chat_ids: (
+                calls.append(f"chats:{','.join(chat_ids)}")
+                or [
+                    SimpleNamespace(
+                        id="chat-1",
+                        title=None,
+                        status="active",
+                        created_at=1.0,
+                        updated_at=2.0,
+                    ),
+                    SimpleNamespace(
+                        id="chat-closed",
+                        title="Closed",
+                        status="closed",
+                        created_at=1.0,
+                        updated_at=2.0,
+                    ),
+                ]
+            ),
+            get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch chats one by one")),
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda user_id: calls.append(f"chat-ids:{user_id}") or ["chat-1", "chat-closed"],
+            list_members_for_chats=lambda chat_ids: (
+                calls.append(f"members:{','.join(chat_ids)}")
+                or [
+                    {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 4},
+                    {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+                    {"chat_id": "chat-closed", "user_id": "human-user-1", "last_read_seq": 0},
+                ]
+            ),
+            list_members=lambda _chat_id: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch members one by one")),
+        ),
+        messages_repo=SimpleNamespace(
+            count_unread_by_chat_ids=lambda user_id, last_read_by_chat: (
+                calls.append(f"unread:{user_id}:{last_read_by_chat}") or {"chat-1": 2}
+            ),
+            list_by_chat=lambda _chat_id, limit=1: (_ for _ in ()).throw(
+                AssertionError("conversation summaries must not fetch latest messages")
+            ),
+            count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(
+                AssertionError("conversation summaries must not count unread one by one")
+            ),
+        ),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda user_ids: calls.append(f"users:{','.join(user_ids)}") or [user_rows[user_id] for user_id in user_ids],
+            get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch users one by one")),
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("direct user ids should not need thread fallback"))
+        ),
+    )
+
+    summaries = service.list_conversation_summaries_for_user("human-user-1")
+
+    assert summaries == [
+        {
+            "id": "chat-1",
+            "title": "Toad",
+            "avatar_url": avatar_url("agent-user-1", False),
+            "updated_at": 2.0,
+            "unread_count": 2,
+        }
+    ]
+    assert calls == [
+        "chat-ids:human-user-1",
+        "chats:chat-1,chat-closed",
+        "members:chat-1",
+        "users:agent-user-1,human-user-1",
+        "unread:human-user-1:{'chat-1': 4}",
+    ]
+
+
+def test_messaging_service_conversation_summaries_fail_on_unknown_member_identity() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0},
+                {"chat_id": "chat-1", "user_id": "missing-user", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat member missing-user is not a resolvable user row"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
 def test_messaging_service_get_chat_detail_exposes_thread_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(),
