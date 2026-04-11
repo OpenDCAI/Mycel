@@ -1,5 +1,6 @@
 """Sandbox management service."""
 
+import json
 import logging
 import os
 import threading
@@ -37,6 +38,33 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
         "runtime_kind": capability.runtime_kind,
         "mount": capability.mount.to_dict(),
     }
+
+
+def _lease_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) -> dict[str, Any]:
+    return {
+        "thread_id": thread_id,
+        "agent_user_id": agent_user_id,
+        "agent_name": agent_user.display_name,
+        "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
+    }
+
+
+def _apply_lease_recipe(lease: dict[str, Any], provider_name: str, raw_recipe: Any) -> None:
+    provider_type = provider_type_from_name(provider_name)
+    recipe_snapshot = (
+        normalize_recipe_snapshot(provider_type, json.loads(str(raw_recipe))) if raw_recipe else normalize_recipe_snapshot(provider_type)
+    )
+    lease["recipe_id"] = recipe_snapshot["id"] or lease.get("recipe_id") or default_recipe_id(provider_type)
+    lease["recipe"] = recipe_snapshot
+    lease["recipe_name"] = recipe_snapshot["name"]
+
+
+def _configured_api_key(name: str, configured: str | None, env_name: str) -> str | None:
+    key = configured or os.getenv(env_name)
+    if not key:
+        logger.warning("[sandbox] %s configured but no API key; skipping", name)
+        return None
+    return key
 
 
 def list_default_recipes() -> list[dict[str, Any]]:
@@ -99,14 +127,7 @@ def list_user_leases(
             if agent_user is None:
                 continue
             group["thread_ids"].append(thread_id)
-            group["agents"].append(
-                {
-                    "thread_id": thread_id,
-                    "agent_user_id": agent_user_id,
-                    "agent_name": agent_user.display_name,
-                    "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
-                }
-            )
+            group["agents"].append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
             if not group["cwd"] and row.get("cwd"):
                 group["cwd"] = row.get("cwd")
 
@@ -117,16 +138,7 @@ def list_user_leases(
             if not _is_user_visible_lease_state(lease):
                 continue
             provider_name = lease["provider_name"]
-            provider_type = provider_type_from_name(provider_name)
-            if lease["recipe"]:
-                import json
-
-                recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe"])))
-            else:
-                recipe_snapshot = normalize_recipe_snapshot(provider_type)
-            lease["recipe_id"] = recipe_snapshot["id"] or lease["recipe_id"] or default_recipe_id(provider_type)
-            lease["recipe"] = recipe_snapshot
-            lease["recipe_name"] = recipe_snapshot["name"]
+            _apply_lease_recipe(lease, provider_name, lease["recipe"])
             leases.append(lease)
         return leases
     finally:
@@ -166,34 +178,18 @@ def resolve_owned_lease(
             if agent_user is None or agent_user.owner_user_id != user_id:
                 continue
             thread_ids.append(thread_id)
-            agents.append(
-                {
-                    "thread_id": thread_id,
-                    "agent_user_id": agent_user_id,
-                    "agent_name": agent_user.display_name,
-                    "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
-                }
-            )
+            agents.append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
         if not thread_ids:
             return None
 
         provider_name = str(lease.get("provider_name") or "local")
-        provider_type = provider_type_from_name(provider_name)
-        if lease.get("recipe_json"):
-            import json
-
-            recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe_json"])))
-        else:
-            recipe_snapshot = normalize_recipe_snapshot(provider_type)
 
         result = dict(lease)
         result["lease_id"] = lease_id
         result["provider_name"] = provider_name
         result["thread_ids"] = thread_ids
         result["agents"] = agents
-        result["recipe_id"] = recipe_snapshot["id"] or result.get("recipe_id") or default_recipe_id(provider_type)
-        result["recipe"] = recipe_snapshot
-        result["recipe_name"] = recipe_snapshot["name"]
+        _apply_lease_recipe(result, provider_name, lease.get("recipe_json"))
         runtime_session_id = monitor_repo.query_lease_instance_id(lease_id)
         if runtime_session_id:
             result["runtime_session_id"] = runtime_session_id
@@ -244,14 +240,14 @@ def available_sandbox_types() -> list[dict[str, Any]]:
                     }
                 )
                 continue
-            item: dict[str, Any] = {
-                "name": name,
-                "provider": config.provider,
-                "available": True,
-            }
-            if provider_obj:
-                item["capability"] = _capability_to_dict(provider_obj.get_capability())
-            types.append(item)
+            types.append(
+                {
+                    "name": name,
+                    "provider": config.provider,
+                    "available": True,
+                    "capability": _capability_to_dict(provider_obj.get_capability()),
+                }
+            )
         except Exception as e:
             types.append({"name": name, "available": False, "reason": str(e)})
     return types
@@ -286,9 +282,8 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
             if config.provider == "agentbay":
                 from sandbox.providers.agentbay import AgentBayProvider
 
-                key = config.agentbay.api_key or os.getenv("AGENTBAY_API_KEY")
+                key = _configured_api_key(name, config.agentbay.api_key, "AGENTBAY_API_KEY")
                 if not key:
-                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
                     continue
                 providers[name] = AgentBayProvider(
                     api_key=key,
@@ -312,9 +307,8 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
             elif config.provider == "e2b":
                 from sandbox.providers.e2b import E2BProvider
 
-                key = config.e2b.api_key or os.getenv("E2B_API_KEY")
+                key = _configured_api_key(name, config.e2b.api_key, "E2B_API_KEY")
                 if not key:
-                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
                     continue
                 providers[name] = E2BProvider(
                     api_key=key,
@@ -326,9 +320,8 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
             elif config.provider == "daytona":
                 from sandbox.providers.daytona import DaytonaProvider
 
-                key = config.daytona.api_key or os.getenv("DAYTONA_API_KEY")
+                key = _configured_api_key(name, config.daytona.api_key, "DAYTONA_API_KEY")
                 if not key:
-                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
                     continue
                 providers[name] = DaytonaProvider(
                     api_key=key,
