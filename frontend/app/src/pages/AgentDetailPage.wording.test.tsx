@@ -33,10 +33,6 @@ vi.mock("@/store/app-store", () => ({
     }),
 }));
 
-vi.mock("@/components/TestPanel", () => ({
-  default: () => null,
-}));
-
 vi.mock("@/components/PublishDialog", () => ({
   default: () => null,
 }));
@@ -63,5 +59,17 @@ describe("AgentDetailPage wording contract", () => {
     );
 
     expect(screen.getByRole("button", { name: /子 Agent/ })).toBeTruthy();
+  });
+
+  it("does not expose the old fake local test panel", () => {
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("button", { name: /^测试$/ })).toBeNull();
   });
 });

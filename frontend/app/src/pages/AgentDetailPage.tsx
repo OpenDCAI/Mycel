@@ -2,9 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Bot, FileText, Wrench, Plug, Zap, Users, BookOpen,
-  Play, Tag, Save, Plus, Trash2, Search, X, Check, Lock,
+  Tag, Save, Plus, Trash2, Search, X, Check, Lock,
 } from "lucide-react";
-import TestPanel from "@/components/TestPanel";
 import PublishDialog from "@/components/PublishDialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -12,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAppStore } from "@/store/app-store";
-import type { CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
+import type { AgentConfig, CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
 
 // ==================== Types ====================
 
@@ -22,7 +21,7 @@ interface ModuleDef {
   id: ModuleId;
   label: string;
   icon: typeof FileText;
-  count?: (cfg: any) => number;
+  count?: (cfg: AgentConfig) => number;
 }
 
 const modules: ModuleDef[] = [
@@ -37,7 +36,6 @@ const modules: ModuleDef[] = [
 export default function AgentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [showTest, setShowTest] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [activeModule, setActiveModule] = useState<ModuleId>("role");
 
@@ -217,9 +215,6 @@ export default function AgentDetail() {
         </span>
         <span className="text-xs text-muted-foreground">v{member.version}</span>
         <div className="flex-1" />
-        <Button size="sm" variant="outline" onClick={() => setShowTest(true)}>
-          <Play className="h-3.5 w-3.5 mr-1" /> 测试
-        </Button>
         <Button size="sm" onClick={() => setShowPublish(true)}>
           <Tag className="h-3.5 w-3.5 mr-1" /> 发布
         </Button>
@@ -257,7 +252,6 @@ export default function AgentDetail() {
         </div>
       </div>
 
-      {showTest && <TestPanel memberName={member.name} onClose={() => setShowTest(false)} />}
       {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} agentId={member.id} />}
       {pickerType && (() => {
         const libraryMap = { skill: librarySkills, mcp: libraryMcps, agent: libraryAgents };
