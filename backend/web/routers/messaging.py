@@ -62,7 +62,7 @@ def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
     if not sender:
         raise HTTPException(403, "User not found")
     if sender.id == user_id:
-        return  # human member sending as themselves
+        return  # human user sending as themselves
     if sender.owner_user_id == user_id:
         return  # agent owned by current user
     raise HTTPException(403, "User does not belong to you")

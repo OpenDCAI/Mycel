@@ -7,7 +7,7 @@ interface ChatBubbleProps {
   content: string;
   senderName: string;
   avatarUrl?: string;
-  memberType?: string;
+  actorType?: string;
   timestamp?: number;
   showName?: boolean;
 }
@@ -16,13 +16,13 @@ export const ChatBubble = memo(function ChatBubble({
   content,
   senderName,
   avatarUrl,
-  memberType,
+  actorType,
   timestamp,
   showName = true,
 }: ChatBubbleProps) {
   return (
     <div className="flex gap-2.5 mb-1 animate-fade-in">
-      <ActorAvatar name={senderName} avatarUrl={avatarUrl} type={memberType} size="xs" />
+      <ActorAvatar name={senderName} avatarUrl={avatarUrl} type={actorType} size="xs" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {showName && <span className="text-sm font-medium text-foreground">{senderName}</span>}
