@@ -1,10 +1,16 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
 import { CodeBlock } from "../shared/CodeBlock";
+import { asRecord, recordString } from "@/lib/records";
 
 function parseArgs(args: unknown): { pattern?: string; path?: string; glob?: string } {
-  if (args && typeof args === "object") return args as { pattern?: string; path?: string; glob?: string };
-  return {};
+  const record = asRecord(args);
+  if (!record) return {};
+  return {
+    pattern: recordString(record, "pattern"),
+    path: recordString(record, "path"),
+    glob: recordString(record, "glob"),
+  };
 }
 
 // Parse search result lines to find which display lines are actual matches.
