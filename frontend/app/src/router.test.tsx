@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { router } from "./router";
 
-function collectPaths(routes: readonly { path?: string; children?: readonly { path?: string; children?: readonly any[] }[] }[]): string[] {
+interface RouteNode {
+  path?: string;
+  children?: readonly RouteNode[];
+}
+
+function collectPaths(routes: readonly RouteNode[]): string[] {
   const paths: string[] = [];
   for (const route of routes) {
     if (route.path) paths.push(route.path);
