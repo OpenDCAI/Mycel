@@ -57,7 +57,14 @@ export async function postRun(
   signal?: AbortSignal,
   options?: { model?: string; enable_trajectory?: boolean; attachments?: string[] },
 ): Promise<{ run_id: string; thread_id: string }> {
-  return postJSON(`/api/threads/${encodeURIComponent(threadId)}/messages`, { message, ...options }, signal);
+  const payload = await postJSON<{ run_id?: string; thread_id: string; status?: string }>(
+    `/api/threads/${encodeURIComponent(threadId)}/messages`,
+    { message, ...options },
+    signal,
+  );
+  if (payload.status === "cancelled") throw new Error("Run cancelled");
+  if (!payload.run_id) throw new Error("Run did not start");
+  return { run_id: payload.run_id, thread_id: payload.thread_id };
 }
 
 /** Persistent SSE connection to a thread's event stream. */
@@ -116,4 +123,6 @@ export async function streamThreadEvents(
 export async function cancelRun(threadId: string): Promise<void> {
   const res = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
   if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`);
+  const payload = await res.json();
+  if (payload?.ok === false) throw new Error(payload.message || "Cancel failed");
 }

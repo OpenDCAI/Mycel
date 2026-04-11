@@ -231,6 +231,7 @@ export function useDisplayDeltas(
         await postRun(threadId, message, undefined, attachments?.length ? { attachments } : undefined);
       } catch (err) {
         setSendPending(false);
+        if (err instanceof Error && err.message === "Run cancelled") return;
         if (err instanceof Error) {
           const errorTurn: AssistantTurn = {
             id: makeId("error"),

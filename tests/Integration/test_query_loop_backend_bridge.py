@@ -17,6 +17,7 @@ from backend.web.routers import threads as threads_router
 from backend.web.routers.threads import get_thread_history, get_thread_messages
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
+from backend.web.services.message_routing import route_message_to_brain
 from backend.web.services.streaming_service import (
     _ensure_thread_handlers,
     _repair_incomplete_tool_calls,
@@ -1069,6 +1070,49 @@ async def test_start_agent_run_keeps_cancel_target_on_outer_run_task(monkeypatch
     finally:
         producer_task.cancel()
         await asyncio.gather(producer_task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_route_message_cancelled_during_startup_does_not_start_run(monkeypatch, tmp_path):
+    thread_id = "startup-cancel-window-thread"
+    agent_lookup_started = asyncio.Event()
+    release_agent_lookup = asyncio.Event()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    runtime = _StreamingRuntime()
+    agent = SimpleNamespace(
+        agent=_StreamingGraphAgent(),
+        runtime=runtime,
+        storage_container=_fake_storage_container(),
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_tasks={},
+            thread_locks={},
+            thread_locks_guard=asyncio.Lock(),
+            queue_manager=queue_manager,
+        )
+    )
+
+    async def fake_get_or_create_agent(*_args, **_kwargs):
+        agent_lookup_started.set()
+        await release_agent_lookup.wait()
+        return agent
+
+    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda *_args, **_kwargs: "local")
+    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", fake_get_or_create_agent)
+
+    startup_task = asyncio.create_task(route_message_to_brain(app, thread_id, "start"))
+    await asyncio.wait_for(agent_lookup_started.wait(), timeout=2)
+    cancel_handle = app.state.thread_tasks[thread_id]
+    assert cancel_handle is not startup_task
+
+    cancel_handle.cancel()
+    release_agent_lookup.set()
+    result = await asyncio.wait_for(startup_task, timeout=2)
+
+    assert result == {"status": "cancelled", "routing": "cancelled", "thread_id": thread_id}
+    assert app.state.thread_tasks.get(thread_id) is None
+    assert runtime.current_state == AgentState.IDLE
 
 
 @pytest.mark.asyncio

@@ -31,36 +31,28 @@ async def route_message_to_brain(
     from backend.web.services.resource_cache import clear_resource_overview_cache
     from backend.web.services.streaming_service import start_agent_run
 
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-    qm = app.state.queue_manager
+    startup_cancel = None
+    existing_task = app.state.thread_tasks.get(thread_id)
+    if existing_task is None or existing_task.done():
+        startup_cancel = asyncio.get_running_loop().create_future()
+        app.state.thread_tasks[thread_id] = startup_cancel
 
-    state = agent.runtime.current_state if hasattr(agent, "runtime") else "no-runtime"
-    logger.debug("[route] thread=%s state=%s source=%s", thread_id[:15], state, source)
+    try:
+        sandbox_type = resolve_thread_sandbox(app, thread_id)
+        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+        qm = app.state.queue_manager
 
-    # v3: no context shift hints — content passes through as-is
-    steer_content = content
-    run_content = content
+        if startup_cancel is not None and startup_cancel.cancelled():
+            return {"status": "cancelled", "routing": "cancelled", "thread_id": thread_id}
 
-    if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-        qm.enqueue(
-            steer_content,
-            thread_id,
-            "steer",
-            source=source,
-            sender_name=sender_name,
-            sender_avatar_url=sender_avatar_url,
-            is_steer=True,
-        )
-        logger.debug("[route] → ENQUEUED (agent active)")
-        return {"status": "injected", "routing": "steer", "thread_id": thread_id}
+        state = agent.runtime.current_state if hasattr(agent, "runtime") else "no-runtime"
+        logger.debug("[route] thread=%s state=%s source=%s", thread_id[:15], state, source)
 
-    # IDLE path — acquire lock for atomic transition
-    locks = app.state.thread_locks
-    async with app.state.thread_locks_guard:
-        lock = locks.setdefault(thread_id, asyncio.Lock())
-    async with lock:
-        if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
+        # v3: no context shift hints — content passes through as-is
+        steer_content = content
+        run_content = content
+
+        if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
             qm.enqueue(
                 steer_content,
                 thread_id,
@@ -70,23 +62,44 @@ async def route_message_to_brain(
                 sender_avatar_url=sender_avatar_url,
                 is_steer=True,
             )
-            logger.debug("[route] → ENQUEUED (transition failed)")
+            logger.debug("[route] → ENQUEUED (agent active)")
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
-        logger.debug("[route] → START RUN (idle→active)")
-        meta = {"source": source, "sender_name": sender_name, "sender_avatar_url": sender_avatar_url}
-        if message_metadata:
-            meta.update(message_metadata)
-        if attachments:
-            meta["attachments"] = attachments
-        run_id = start_agent_run(
-            agent,
-            thread_id,
-            run_content,
-            app,
-            enable_trajectory=enable_trajectory,
-            message_metadata=meta,
-        )
-        # @@@monitor-resource-cache-run-start - a fresh run can create or resume a lease immediately.
-        # Drop the cached monitor snapshot so the next /api/monitor/resources read reflects the live topology.
-        clear_resource_overview_cache()
-    return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
+
+        # IDLE path — acquire lock for atomic transition
+        locks = app.state.thread_locks
+        async with app.state.thread_locks_guard:
+            lock = locks.setdefault(thread_id, asyncio.Lock())
+        async with lock:
+            if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
+                qm.enqueue(
+                    steer_content,
+                    thread_id,
+                    "steer",
+                    source=source,
+                    sender_name=sender_name,
+                    sender_avatar_url=sender_avatar_url,
+                    is_steer=True,
+                )
+                logger.debug("[route] → ENQUEUED (transition failed)")
+                return {"status": "injected", "routing": "steer", "thread_id": thread_id}
+            logger.debug("[route] → START RUN (idle→active)")
+            meta = {"source": source, "sender_name": sender_name, "sender_avatar_url": sender_avatar_url}
+            if message_metadata:
+                meta.update(message_metadata)
+            if attachments:
+                meta["attachments"] = attachments
+            run_id = start_agent_run(
+                agent,
+                thread_id,
+                run_content,
+                app,
+                enable_trajectory=enable_trajectory,
+                message_metadata=meta,
+            )
+            # @@@monitor-resource-cache-run-start - a fresh run can create or resume a lease immediately.
+            # Drop the cached monitor snapshot so the next /api/monitor/resources read reflects the live topology.
+            clear_resource_overview_cache()
+        return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
+    finally:
+        if startup_cancel is not None and app.state.thread_tasks.get(thread_id) is startup_cancel:
+            app.state.thread_tasks.pop(thread_id, None)
