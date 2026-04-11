@@ -72,17 +72,15 @@ async def prime_sandbox(agent: Any, thread_id: str) -> None:
         terminal = mgr.get_terminal(thread_id)
         if terminal:
             existing = mgr.session_manager.get(thread_id, terminal.terminal_id)
-            if existing and existing.status == "paused":
-                if not agent._sandbox.resume_thread(thread_id):
-                    raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
+            if existing and existing.status == "paused" and not agent._sandbox.resume_thread(thread_id):
+                raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
         agent._sandbox.ensure_session(thread_id)
         terminal = mgr.get_terminal(thread_id)
         lease = mgr.get_lease(terminal.lease_id) if terminal else None
         if lease:
             lease_status = lease.refresh_instance_status(mgr.provider)
-            if lease_status == "paused" and mgr.provider_capability.can_resume:
-                if not agent._sandbox.resume_thread(thread_id):
-                    raise RuntimeError(f"Failed to auto-resume paused sandbox for thread {thread_id}")
+            if lease_status == "paused" and mgr.provider_capability.can_resume and not agent._sandbox.resume_thread(thread_id):
+                raise RuntimeError(f"Failed to auto-resume paused sandbox for thread {thread_id}")
 
     await asyncio.to_thread(_prime_sandbox)
 
@@ -1612,9 +1610,8 @@ async def _observe_sse_buffer(
             # @@@after-filter — skip events already seen on reconnect.
             # display_delta now carries the source raw-event seq too, so stale
             # derived deltas are filtered together with their persisted source.
-            if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data:
-                if parsed_data["_seq"] <= after:
-                    continue
+            if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data and parsed_data["_seq"] <= after:
+                continue
 
             seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None
             if seq_id:

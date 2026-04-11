@@ -111,7 +111,7 @@ def _to_metric_freshness(collected_at: str | None) -> str:
     if not raw:
         return "stale"
     try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw)
     except Exception:
         return "stale"
     if parsed.tzinfo is None:

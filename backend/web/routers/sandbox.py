@@ -78,30 +78,30 @@ async def pick_folder() -> dict[str, Any]:
                 path = result.stdout.strip()
                 return {"path": path}
             raise HTTPException(400, "User cancelled folder selection")
-        else:  # Linux
-            # Try zenity first, fallback to kdialog
-            try:
-                result = subprocess.run(
-                    ["zenity", "--file-selection", "--directory", "--title=选择工作目录"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                if result.returncode == 0:
-                    path = result.stdout.strip()
-                    return {"path": path}
-            except FileNotFoundError:
-                # Try kdialog
-                result = subprocess.run(
-                    ["kdialog", "--getexistingdirectory", ".", "--title", "选择工作目录"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                if result.returncode == 0:
-                    path = result.stdout.strip()
-                    return {"path": path}
-            raise HTTPException(400, "User cancelled folder selection")
+        # Linux
+        # Try zenity first, fallback to kdialog
+        try:
+            result = subprocess.run(
+                ["zenity", "--file-selection", "--directory", "--title=选择工作目录"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode == 0:
+                path = result.stdout.strip()
+                return {"path": path}
+        except FileNotFoundError:
+            # Try kdialog
+            result = subprocess.run(
+                ["kdialog", "--getexistingdirectory", ".", "--title", "选择工作目录"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode == 0:
+                path = result.stdout.strip()
+                return {"path": path}
+        raise HTTPException(400, "User cancelled folder selection")
     except subprocess.TimeoutExpired:
         raise HTTPException(408, "Folder selection timed out")
     # @@@http_passthrough - keep explicit business/status errors from selection branches intact

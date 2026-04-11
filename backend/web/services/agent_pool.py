@@ -274,25 +274,24 @@ async def update_agent_config(app_obj: FastAPI, model: str, thread_id: str | Non
                 "model": agent.model_name,
                 "message": f"Model updated to {agent.model_name}",
             }
-        else:
-            # Global update: update all existing agents
-            pool = app_obj.state.agent_pool
-            updated_count = 0
-            errors = []
+        # Global update: update all existing agents
+        pool = app_obj.state.agent_pool
+        updated_count = 0
+        errors = []
 
-            for pool_key, agent in pool.items():
-                try:
-                    await asyncio.to_thread(agent.update_config, model=model)
-                    updated_count += 1
-                except Exception as e:
-                    errors.append(f"{pool_key}: {str(e)}")
+        for pool_key, agent in pool.items():
+            try:
+                await asyncio.to_thread(agent.update_config, model=model)
+                updated_count += 1
+            except Exception as e:
+                errors.append(f"{pool_key}: {str(e)}")
 
-            if errors:
-                raise ValueError(f"Failed to update some agents: {'; '.join(errors)}")
+        if errors:
+            raise ValueError(f"Failed to update some agents: {'; '.join(errors)}")
 
-            return {
-                "success": True,
-                "updated_count": updated_count,
-                "model": model,
-                "message": f"Updated {updated_count} agent(s) to model {model}",
-            }
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "model": model,
+            "message": f"Updated {updated_count} agent(s) to model {model}",
+        }

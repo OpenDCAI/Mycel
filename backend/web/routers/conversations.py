@@ -33,7 +33,7 @@ def _conversation_updated_at_key(item: dict[str, Any]) -> float:
         # visit chats can still surface numeric timestamps from older chat storage.
         # Normalize both before sorting so /api/conversations stays honest.
         try:
-            return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+            return datetime.fromisoformat(raw).timestamp()
         except ValueError:
             return float("-inf")
     return float("-inf")
