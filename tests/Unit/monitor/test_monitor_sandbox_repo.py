@@ -236,7 +236,12 @@ def test_list_sessions_with_leases_keeps_active_terminal_and_recent_session_fall
                 },
             ],
             "abstract_terminals": [
-                {"terminal_id": "term-parent", "lease_id": "lease-terminal", "thread_id": "thread-parent", "created_at": "2026-04-05T11:05:00"},
+                {
+                    "terminal_id": "term-parent",
+                    "lease_id": "lease-terminal",
+                    "thread_id": "thread-parent",
+                    "created_at": "2026-04-05T11:05:00",
+                },
                 {
                     "terminal_id": "term-subagent",
                     "lease_id": "lease-terminal",
