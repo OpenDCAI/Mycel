@@ -244,22 +244,17 @@ def delete_chat(
 
 
 # ---------------------------------------------------------------------------
-# SSE stream (typing indicators fallback, messages come via Supabase Realtime)
+# SSE stream
 # ---------------------------------------------------------------------------
 
 
 @router.get("/{chat_id}/events")
 async def stream_chat_events(
     chat_id: str,
-    token: str | None = None,
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ):
-    if not token:
-        raise HTTPException(401, "Missing token")
-    try:
-        app.state.auth_service.verify_token(token)
-    except ValueError as e:
-        raise HTTPException(401, str(e))
+    _get_accessible_chat_or_404(app, chat_id, user_id)
 
     from fastapi.responses import StreamingResponse
 

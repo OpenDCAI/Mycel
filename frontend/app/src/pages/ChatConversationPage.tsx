@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useOutletContext } from "react-router-dom";
 import { PanelLeft, Send } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
+import { streamChatEvents } from "../api/chat-events";
 import { UserBubble } from "../components/chat-area/UserBubble";
 import { ChatBubble } from "../components/chat-area/ChatBubble";
 import type { ChatMember, ChatMessage, ChatDetail } from "../api/types";
@@ -115,66 +116,59 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
 
   // SSE for real-time messages
   useEffect(() => {
-    const token = useAuthStore.getState().token;
-    if (!token) return;
+    const ac = new AbortController();
 
-    const es = new EventSource(`/api/chats/${chatId}/events?token=${encodeURIComponent(token)}`);
-
-    // @@@sse-dedup — SSE message dedup: skip if real id exists, replace optimistic if content matches
-    es.addEventListener("message", (e) => {
-      try {
-        const msg: ChatMessage = JSON.parse(e.data);
-        setMessages(prev => {
-          // Skip if we already have this exact message id
-          if (prev.some(m => m.id === msg.id)) return prev;
-          // Replace optimistic message if sender+content matches
-          const optimisticIdx = prev.findIndex(
-            m => m.id.startsWith("optimistic-") && m.sender_id === msg.sender_id && m.content === msg.content,
-          );
-          if (optimisticIdx >= 0) {
-            const next = [...prev];
-            next[optimisticIdx] = msg;
-            return next;
+    void streamChatEvents(
+      chatId,
+      (event) => {
+        if (event.type === "message") {
+          const msg = event.data as ChatMessage;
+          setMessages(prev => {
+            // Skip if we already have this exact message id
+            if (prev.some(m => m.id === msg.id)) return prev;
+            // Replace optimistic message if sender+content matches
+            const optimisticIdx = prev.findIndex(
+              m => m.id.startsWith("optimistic-") && m.sender_id === msg.sender_id && m.content === msg.content,
+            );
+            if (optimisticIdx >= 0) {
+              const next = [...prev];
+              next[optimisticIdx] = msg;
+              return next;
+            }
+            return [...prev, msg];
+          });
+          if (isAtBottomRef.current) {
+            setTimeout(scrollToBottom, 50);
+            // User is viewing → mark read + refresh sidebar
+            authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(err => console.warn("[mark_read] failed:", err));
+            refreshChatList();
           }
-          return [...prev, msg];
-        });
-        if (isAtBottomRef.current) {
-          setTimeout(scrollToBottom, 50);
-          // User is viewing → mark read + refresh sidebar
-          authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(err => console.warn("[mark_read] failed:", err));
-          refreshChatList();
+          return;
         }
-      } catch (err) {
-        console.error("[ChatSSE] parse error:", err);
-      }
+        if (event.type === "typing_start") {
+          const data = event.data as { user_id?: string };
+          const userId = data.user_id;
+          if (userId) setTypingEntities(prev => new Set([...prev, userId]));
+          return;
+        }
+        if (event.type === "typing_stop") {
+          const data = event.data as { user_id?: string };
+          const userId = data.user_id;
+          if (!userId) return;
+          setTypingEntities(prev => {
+            const next = new Set(prev);
+            next.delete(userId);
+            return next;
+          });
+        }
+      },
+      ac.signal,
+    ).catch((err) => {
+      if (!ac.signal.aborted) console.error("[ChatSSE] connection failed:", err);
     });
-
-    es.addEventListener("typing_start", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setTypingEntities(prev => new Set([...prev, data.user_id]));
-      } catch (err) { console.warn("[ChatSSE] typing_start parse error:", err); }
-    });
-
-    es.addEventListener("typing_stop", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setTypingEntities(prev => {
-          const next = new Set(prev);
-          next.delete(data.user_id);
-          return next;
-        });
-      } catch (err) { console.warn("[ChatSSE] typing_stop parse error:", err); }
-    });
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        console.error("[ChatSSE] connection permanently closed");
-      }
-    };
 
     return () => {
-      es.close();
+      ac.abort();
       refreshChatList(); // refresh sidebar on leave
     };
   }, [chatId, scrollToBottom, refreshChatList]);
