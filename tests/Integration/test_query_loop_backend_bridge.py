@@ -329,6 +329,23 @@ class _BrokenStreamGraphAgent(_StreamingGraphAgent):
         raise self._error
 
 
+class _BlockingSecondPullGraphAgent(_StreamingGraphAgent):
+    def __init__(self) -> None:
+        self.second_pull_started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.system_prompt = None
+
+    async def astream(self, *_args, **_kwargs):
+        class AIMessageChunk:
+            content = "first"
+            id = "chunk-first"
+
+        yield ("messages", (AIMessageChunk(), {}))
+        self.second_pull_started.set()
+        await self.release.wait()
+        yield ("updates", {"agent": {"messages": []}})
+
+
 class _StreamingRuntime:
     current_state = AgentState.IDLE
 
@@ -1029,6 +1046,29 @@ async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(mon
         "fresh user message",
         "LAST_HUMAN:fresh user message",
     ]
+
+
+@pytest.mark.asyncio
+async def test_start_agent_run_keeps_cancel_target_on_outer_run_task(monkeypatch, tmp_path):
+    _patch_direct_streaming(monkeypatch)
+    graph = _BlockingSecondPullGraphAgent()
+    agent = SimpleNamespace(
+        agent=graph,
+        runtime=_StreamingRuntime(),
+        storage_container=_fake_storage_container(),
+    )
+    app, _queue_manager = _make_streaming_app(tmp_path)
+    thread_id = "stable-cancel-target-thread"
+
+    start_agent_run(agent, thread_id, "start", app)
+    producer_task = app.state.thread_tasks[thread_id]
+
+    try:
+        await asyncio.wait_for(graph.second_pull_started.wait(), timeout=2)
+        assert app.state.thread_tasks[thread_id] is producer_task
+    finally:
+        producer_task.cancel()
+        await asyncio.gather(producer_task, return_exceptions=True)
 
 
 @pytest.mark.asyncio

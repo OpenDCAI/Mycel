@@ -1019,14 +1019,12 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             # resumes from the last checkpoint without re-appending the user message.
             stream_gen = run_agent_stream(_initial_input if stream_attempt == 0 else None)
             task = asyncio.create_task(stream_gen.__anext__())
-            app.state.thread_tasks[thread_id] = task
             stream_err: Exception | None = None
 
             while True:  # 内层 chunk 循环
                 try:
                     chunk = await task
                     task = asyncio.create_task(stream_gen.__anext__())
-                    app.state.thread_tasks[thread_id] = task
                 except StopAsyncIteration:
                     break
                 except Exception as err:
