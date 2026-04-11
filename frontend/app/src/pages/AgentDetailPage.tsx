@@ -42,11 +42,9 @@ export default function AgentDetail() {
   const agent = useAppStore(s => s.getAgentById(id || ""));
   const updateAgent = useAppStore(s => s.updateAgent);
   const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
-  const loadAll = useAppStore(s => s.loadAll);
   const librarySkills = useAppStore(s => s.librarySkills);
   const libraryMcps = useAppStore(s => s.libraryMcps);
   const libraryAgents = useAppStore(s => s.libraryAgents);
-  useEffect(() => { loadAll(); }, [loadAll]);
 
   const [pickerType, setPickerType] = useState<"skill" | "mcp" | "agent" | null>(null);
   const [editingName, setEditingName] = useState(false);

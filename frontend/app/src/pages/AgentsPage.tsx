@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Search, Plus, Zap, Users, Wrench, Plug, SearchX, ArrowUpDown, AlertTriangle, RefreshCw, MessageSquare, Copy, Trash2, Bot, Camera } from "lucide-react";
 import ActorAvatar from "@/components/ActorAvatar";
 import { uploadUserAvatar } from "@/api/client";
@@ -58,14 +58,11 @@ export default function AgentsPage() {
   const [sortBy, setSortBy] = useState<SortKey>(null);
   const navigate = useNavigate();
   const agentList = useAppStore(s => s.agentList);
-  const loadAll = useAppStore(s => s.loadAll);
   const error = useAppStore(s => s.error);
   const retry = useAppStore(s => s.retry);
   const deleteAgent = useAppStore(s => s.deleteAgent);
   const addAgent = useAppStore(s => s.addAgent);
   const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
-
-  useEffect(() => { loadAll(); }, [loadAll]);
 
   let filtered = agentList.filter((s) => {
     if (statusFilter !== "all" && s.status !== statusFilter) return false;
