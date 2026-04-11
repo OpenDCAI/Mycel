@@ -1,4 +1,5 @@
 import type { ToolStep } from "../../api";
+import { asRecord } from "../../lib/records";
 
 export function formatTime(ts?: number): string {
   if (!ts) return "";
@@ -7,7 +8,7 @@ export function formatTime(ts?: number): string {
 }
 
 export function getStepSummary(step: ToolStep): string {
-  const args = step.args as Record<string, unknown> | null;
+  const args = asRecord(step.args);
   if (!args) return step.name;
 
   // Agent tool: show description (PascalCase from backend)
@@ -57,7 +58,7 @@ export function getStepSummary(step: ToolStep): string {
 export function getStepResultSummary(step: ToolStep): string | null {
   if (!step.result) return null;
 
-  const args = step.args as Record<string, unknown> | null;
+  const args = asRecord(step.args);
   const result = step.result.trim();
 
   // Read: count lines

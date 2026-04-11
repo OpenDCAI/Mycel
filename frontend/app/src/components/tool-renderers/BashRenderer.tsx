@@ -1,17 +1,16 @@
 import { Check, Copy } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import type { ToolRendererProps } from "./types";
+import { asRecord } from "@/lib/records";
 import { FEEDBACK_BRIEF } from "@/styles/ux-timing";
 
 function parseArgs(args: unknown): { command?: string; description?: string } {
-  if (args && typeof args === "object") {
-    const a = args as Record<string, unknown>;
-    return {
-      command: a.command as string | undefined,
-      description: a.description as string | undefined,
-    };
-  }
-  return {};
+  const a = asRecord(args);
+  if (!a) return {};
+  return {
+    command: a.command as string | undefined,
+    description: a.description as string | undefined,
+  };
 }
 
 function CopyInline({ text }: { text: string }) {

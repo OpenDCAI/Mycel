@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { ToolRendererProps } from "./types";
+import { asRecord } from "@/lib/records";
 
 function parseArgs(args: unknown): {
   description?: string;
@@ -10,18 +11,16 @@ function parseArgs(args: unknown): {
   status?: string;
   subagent_type?: string;
 } {
-  if (args && typeof args === "object") {
-    const a = args as Record<string, unknown>;
-    return {
-      description: (a.Description ?? a.description) as string | undefined,
-      prompt: (a.Prompt ?? a.prompt) as string | undefined,
-      subject: (a.subject ?? a.Subject) as string | undefined,
-      taskId: (a.taskId ?? a.TaskId) as string | undefined,
-      status: (a.status ?? a.Status) as string | undefined,
-      subagent_type: (a.SubagentType ?? a.subagent_type) as string | undefined,
-    };
-  }
-  return {};
+  const a = asRecord(args);
+  if (!a) return {};
+  return {
+    description: (a.Description ?? a.description) as string | undefined,
+    prompt: (a.Prompt ?? a.prompt) as string | undefined,
+    subject: (a.subject ?? a.Subject) as string | undefined,
+    taskId: (a.taskId ?? a.TaskId) as string | undefined,
+    status: (a.status ?? a.Status) as string | undefined,
+    subagent_type: (a.SubagentType ?? a.subagent_type) as string | undefined,
+  };
 }
 
 function getTaskLabel(name: string, args: ReturnType<typeof parseArgs>): string {
