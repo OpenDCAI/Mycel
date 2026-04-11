@@ -13,20 +13,10 @@ export interface ProviderCapabilities {
   mount: boolean;
 }
 
-export interface ProviderQuota {
-  used: number;
-  limit: number;
-}
-
-export type MetricSource = "api" | "sandbox_db" | "derived" | "plan" | "console" | "unknown";
-export type MetricFreshness = "live" | "cached" | "stale";
-
 export interface UsageMetric {
   used: number | null;
   limit: number | null;
   unit: string;
-  source: MetricSource;
-  freshness?: MetricFreshness;
   error?: string;
 }
 
@@ -35,7 +25,6 @@ export interface ProviderTelemetry {
   cpu: UsageMetric;
   memory: UsageMetric;
   disk: UsageMetric;
-  quota?: UsageMetric;
 }
 
 export interface SessionMetrics {
@@ -79,7 +68,6 @@ export interface ProviderInfo {
     message: string;
   } | null;
   capabilities: ProviderCapabilities;
-  quota?: ProviderQuota;
   telemetry: ProviderTelemetry;
   cardCpu: UsageMetric;
   consoleUrl?: string;
