@@ -68,14 +68,6 @@ def _load_workspace_settings(repo: Any, user_id: str) -> WorkspaceSettings:
     )
 
 
-def _load_models_data(repo: Any, user_id: str) -> dict[str, Any]:
-    return repo.get_models_config(user_id) or {}
-
-
-def _load_sandbox_configs(repo: Any, user_id: str) -> dict[str, Any]:
-    return repo.get_sandbox_configs(user_id) or {}
-
-
 # ============================================================================
 # Models config (models.json)
 # ============================================================================
@@ -85,7 +77,7 @@ def _load_merged_models_for_storage(repo: Any, user_id: str) -> ModelsConfig:
     loader = ModelsLoader()
     # @@@repo-backed-model-merge - repo-backed user settings must override filesystem user models, but still preserve system defaults.
     system = loader._load_json(loader._system_dir / "models.json")
-    merged = loader._merge(system, _load_models_data(repo, user_id))
+    merged = loader._merge(system, repo.get_models_config(user_id) or {})
     merged = loader._merge(merged, loader._load_project())
     merged = loader._expand_env_vars(merged)
     merged["catalog"] = system.get("catalog", [])
@@ -126,7 +118,7 @@ async def get_settings(request: Request, user_id: CurrentUserId) -> UserSettings
     # Build compat view
     mapping = {k: v.model for k, v in models.mapping.items()}
     providers = {k: ProviderConfig(api_key=v.api_key, base_url=v.base_url) for k, v in models.providers.items()}
-    raw = _load_models_data(repo, user_id)
+    raw = repo.get_models_config(user_id) or {}
     custom_config = raw.get("pool", {}).get("custom_config", {})
 
     return UserSettings(
@@ -319,7 +311,7 @@ async def get_available_models(req: Request, user_id: CurrentUserId) -> dict[str
         # Merge custom + orphaned enabled models
         repo = _get_settings_repo(req)
         mc = _load_merged_models_for_storage(repo, user_id)
-        data = _load_models_data(repo, user_id)
+        data = repo.get_models_config(user_id) or {}
         custom_providers = data.get("pool", {}).get("custom_providers", {})
         extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - pricing_ids)
         for mid in sorted(extra_ids):
@@ -357,7 +349,7 @@ async def update_model_mapping(
 ) -> dict[str, Any]:
     """Update virtual model mapping → models config."""
     repo = _get_settings_repo(req)
-    data = _load_models_data(repo, user_id)
+    data = repo.get_models_config(user_id) or {}
     mapping = data.get("mapping", {})
     for name, spec in request.mapping.items():
         if isinstance(spec, dict):
@@ -388,7 +380,7 @@ async def toggle_model(
 ) -> dict[str, Any]:
     """Enable or disable a model."""
     repo = _get_settings_repo(req)
-    data = _load_models_data(repo, user_id)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     enabled = pool.setdefault("enabled", [])
 
@@ -418,7 +410,7 @@ async def add_custom_model(
 ) -> dict[str, Any]:
     """Add a custom model + auto-enable."""
     repo = _get_settings_repo(req)
-    data = _load_models_data(repo, user_id)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -462,7 +454,7 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
     provider_name = overrides.get("model_provider") or (mc.active.provider if mc.active else None)
 
     # Check custom_providers mapping
-    data = _load_models_data(repo, user_id)
+    data = repo.get_models_config(user_id) or {}
     custom_providers = data.get("pool", {}).get("custom_providers", {})
     if request.model_id in custom_providers:
         provider_name = custom_providers[request.model_id]
@@ -510,7 +502,7 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
 async def remove_custom_model(req: Request, user_id: CurrentUserId, model_id: str = Query(...)) -> dict[str, Any]:
     """Remove a custom model."""
     repo = _get_settings_repo(req)
-    data = _load_models_data(repo, user_id)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -541,7 +533,7 @@ class CustomModelConfigRequest(BaseModel):
 async def update_custom_model_config(request: CustomModelConfigRequest, req: Request, user_id: CurrentUserId) -> dict[str, Any]:
     """Update based_on/context_limit/provider for a custom model."""
     repo = _get_settings_repo(req)
-    data = _load_models_data(repo, user_id)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {})
     custom_config = pool.setdefault("custom_config", {})
     cfg: dict[str, Any] = custom_config.get(request.model_id, {})
@@ -576,7 +568,7 @@ async def update_provider(
 ) -> dict[str, Any]:
     """Update provider config, then reload all agents."""
     repo = _get_settings_repo(req)
-    data = _load_models_data(repo, user_id)
+    data = repo.get_models_config(user_id) or {}
     providers = data.setdefault("providers", {})
     provider_data: dict[str, Any] = {}
     if request.api_key is not None:
@@ -728,7 +720,7 @@ class SandboxConfigRequest(BaseModel):
 async def list_sandbox_configs(req: Request, user_id: CurrentUserId) -> dict[str, Any]:
     """List all sandbox configurations."""
     repo = _get_settings_repo(req)
-    return {"sandboxes": _load_sandbox_configs(repo, user_id)}
+    return {"sandboxes": repo.get_sandbox_configs(user_id) or {}}
 
 
 @router.post("/sandboxes")
@@ -739,7 +731,7 @@ async def save_sandbox_config(request: SandboxConfigRequest, req: Request, user_
     try:
         cfg = SandboxConfig(**request.config)
         repo = _get_settings_repo(req)
-        existing = _load_sandbox_configs(repo, user_id)
+        existing = repo.get_sandbox_configs(user_id) or {}
         existing[request.name] = cfg.model_dump()
         repo.set_sandbox_configs(user_id, existing)
         return {"success": True, "path": f"supabase://user_settings/{user_id}/sandbox_configs/{request.name}"}

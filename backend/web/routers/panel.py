@@ -19,6 +19,7 @@ from backend.web.models.panel import (
 from backend.web.services import library_service, member_service, profile_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
+CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 
 
 def _require_owned_agent_user(agent_id: str, user_id: str, user_repo: Any) -> Any:
@@ -49,7 +50,7 @@ def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None
 
 @router.get("/agents")
 async def list_members(
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
@@ -62,7 +63,7 @@ async def list_members(
 async def get_member(
     agent_id: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     return await asyncio.to_thread(
         _get_owned_agent_or_404_with_config,
@@ -76,7 +77,7 @@ async def get_member(
 @router.post("/agents")
 async def create_member(
     req: CreateAgentRequest,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
@@ -96,7 +97,7 @@ async def update_member(
     agent_id: str,
     req: UpdateAgentRequest,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
@@ -118,7 +119,7 @@ async def update_member_config(
     agent_id: str,
     req: AgentConfigPayload,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
@@ -140,7 +141,7 @@ async def publish_member(
     agent_id: str,
     req: PublishAgentRequest,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     if agent_id == "__leon__":
         raise HTTPException(403, "Cannot publish builtin agent")
@@ -163,7 +164,7 @@ async def publish_member(
 async def delete_member(
     agent_id: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     if agent_id == "__leon__":
         raise HTTPException(403, "Cannot delete builtin agent")
@@ -193,7 +194,7 @@ async def delete_member(
 async def list_library(
     resource_type: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     items = await asyncio.to_thread(library_service.list_library, resource_type, user_id, request.app.state.recipe_repo)
     return {"items": items}
@@ -204,7 +205,7 @@ async def create_resource(
     resource_type: str,
     req: CreateResourceRequest,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     category = req.provider_type or ""
     return await asyncio.to_thread(
@@ -225,7 +226,7 @@ async def update_resource(
     resource_id: str,
     req: UpdateResourceRequest,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     item = await asyncio.to_thread(
         library_service.update_resource,
@@ -245,7 +246,7 @@ async def delete_resource(
     resource_type: str,
     resource_id: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id, user_id, request.app.state.recipe_repo)
     if not ok:
@@ -257,7 +258,7 @@ async def delete_resource(
 async def list_library_names(
     resource_type: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     items = await asyncio.to_thread(library_service.list_library_names, resource_type, user_id, request.app.state.recipe_repo)
     return {"items": items}
@@ -268,7 +269,7 @@ async def get_used_by(
     resource_type: str,
     resource_name: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     users = await asyncio.to_thread(
         library_service.get_resource_used_by,
@@ -286,7 +287,7 @@ async def get_resource_content(
     resource_type: str,
     resource_id: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     content = await asyncio.to_thread(
         library_service.get_resource_content,
@@ -315,7 +316,7 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 
 @router.get("/profile")
 async def get_profile(
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
     request: Request,
 ) -> dict[str, Any]:
     user = request.app.state.user_repo.get_by_id(user_id)
@@ -326,7 +327,7 @@ async def get_profile(
 async def update_profile(
     req: UpdateProfileRequest,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
     return await asyncio.to_thread(
         profile_service.update_profile,

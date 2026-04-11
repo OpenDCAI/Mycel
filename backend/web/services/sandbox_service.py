@@ -53,11 +53,9 @@ def list_user_leases(
     monitor_repo = make_sandbox_monitor_repo()
     if thread_repo is None or user_repo is None:
         raise RuntimeError("thread_repo and user_repo are required for list_user_leases")
-    _thread_repo = thread_repo
-    _user_repo = user_repo
     try:
-        threads_by_id = {str(thread.get("id") or ""): thread for thread in _thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
-        users_by_id = {str(user.id): user for user in _user_repo.list_by_owner_user_id(user_id)}
+        threads_by_id = {str(thread.get("id") or ""): thread for thread in thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
+        users_by_id = {str(user.id): user for user in user_repo.list_by_owner_user_id(user_id)}
         rows = monitor_repo.list_leases_with_threads()
         grouped: dict[str, dict[str, Any]] = {}
         runtime_session_ids: dict[str, str | None] = {}
@@ -145,8 +143,6 @@ def resolve_owned_lease(
     monitor_repo = make_sandbox_monitor_repo()
     if thread_repo is None or user_repo is None:
         raise RuntimeError("thread_repo and user_repo are required for resolve_owned_lease")
-    _thread_repo = thread_repo
-    _user_repo = user_repo
     try:
         lease = monitor_repo.query_lease(lease_id)
         if lease is None:
@@ -160,13 +156,13 @@ def resolve_owned_lease(
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id in thread_ids:
                 continue
-            thread = _thread_repo.get_by_id(thread_id)
+            thread = thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
             agent_user_id = str(thread.get("agent_user_id") or "").strip()
             if not agent_user_id:
                 continue
-            agent_user = _user_repo.get_by_id(agent_user_id)
+            agent_user = user_repo.get_by_id(agent_user_id)
             if agent_user is None or agent_user.owner_user_id != user_id:
                 continue
             thread_ids.append(thread_id)
@@ -526,15 +522,14 @@ def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any
     }
 
 
-def _prune_stale_lease_terminals(manager: Any, lease_id: str, *, thread_repo: Any | None = None) -> None:
-    own_thread_repo = thread_repo is None
-    _thread_repo = thread_repo or build_storage_container().thread_repo()
+def _prune_stale_lease_terminals(manager: Any, lease_id: str) -> None:
+    thread_repo = build_storage_container().thread_repo()
     try:
         for row in list(manager.terminal_store.list_all()):
             if str(row.get("lease_id") or "") != lease_id:
                 continue
             thread_id = str(row.get("thread_id") or "").strip()
-            if thread_id and not is_virtual_thread_id(thread_id) and _thread_repo.get_by_id(thread_id) is not None:
+            if thread_id and not is_virtual_thread_id(thread_id) and thread_repo.get_by_id(thread_id) is not None:
                 continue
             terminal_id = str(row.get("terminal_id") or "").strip()
             if not terminal_id:
@@ -546,8 +541,7 @@ def _prune_stale_lease_terminals(manager: Any, lease_id: str, *, thread_repo: An
                 manager.session_manager.delete_thread(thread_id, reason="stale_terminal_pruned")
             manager.terminal_store.delete(terminal_id)
     finally:
-        if own_thread_repo and hasattr(_thread_repo, "close"):
-            _thread_repo.close()
+        thread_repo.close()
 
 
 def get_session_metrics(session_id: str, provider_hint: str | None = None) -> dict[str, Any]:
