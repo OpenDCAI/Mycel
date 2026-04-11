@@ -37,13 +37,20 @@ export async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> 
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   const text = await res.text();
-  const payload = text ? JSON.parse(text) : null;
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
 
   if (!res.ok) {
     const detail =
       payload && typeof payload === "object" && "detail" in payload
         ? String((payload as { detail?: unknown }).detail ?? `Request failed (${res.status})`)
-        : `Request failed (${res.status})`;
+        : text || `Request failed (${res.status})`;
     const error = new Error(detail) as MonitorFetchError;
     error.status = res.status;
     error.payload = payload;

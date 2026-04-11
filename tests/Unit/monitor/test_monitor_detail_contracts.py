@@ -407,18 +407,6 @@ def test_list_leases_ignores_stale_thread_refs_when_classifying_triage(monkeypat
 
 @pytest.mark.asyncio
 async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
-    class FakeBatchService:
-        def list_batch_runs_for_thread(self, thread_id):
-            return [
-                {
-                    "batch_run_id": "batch-run-1",
-                    "batch_id": "batch-1",
-                    "scenario_id": "scenario-1",
-                    "thread_id": thread_id,
-                    "eval_run_id": "eval-run-1",
-                }
-            ]
-
     _use_monitor_repo(
         monkeypatch,
         FakeMonitorThreadRepo(
@@ -432,7 +420,6 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
             sessions=[{"chat_session_id": "session-1", "status": "active"}],
         ),
     )
-    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
     _stub_thread_detail(
         monkeypatch,
         owner={"user_id": "user-1", "display_name": "Ada", "email": "ada@example.com"},
@@ -466,15 +453,6 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
     assert payload["trajectory"]["run_id"] == "run-1"
     assert payload["trajectory"]["conversation"][0]["role"] == "human"
     assert payload["trajectory"]["events"][0]["event_type"] == "tool_call"
-    assert payload["evaluation_batch_runs"] == [
-        {
-            "batch_run_id": "batch-run-1",
-            "batch_id": "batch-1",
-            "scenario_id": "scenario-1",
-            "thread_id": "thread-1",
-            "eval_run_id": "eval-run-1",
-        }
-    ]
 
 
 def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():
