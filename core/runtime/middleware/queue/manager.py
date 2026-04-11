@@ -124,14 +124,10 @@ class MessageQueueManager:
         self.clear_queue(thread_id)
         self.unregister_wake(thread_id)
 
-    def clear_thread(self, thread_id: str) -> None:
-        """Alias for clear_all (backward compat)."""
-        self.clear_all(thread_id)
-
     # ------------------------------------------------------------------
     # Diagnostics
     # ------------------------------------------------------------------
 
     def queue_sizes(self, thread_id: str) -> dict[str, int]:
-        """Return queue sizes. steer is always 0 (backward compat)."""
-        return {"steer": 0, "followup": self._repo.count(thread_id)}
+        """Return persisted queue sizes."""
+        return {"followup": self._repo.count(thread_id)}

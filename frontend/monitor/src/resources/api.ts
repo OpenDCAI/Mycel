@@ -4,11 +4,6 @@ function ensureProviderCardContract(payload: ResourceOverviewResponse): Resource
   if (!payload || !payload.summary || !Array.isArray(payload.providers)) {
     throw new Error("Unexpected /api/monitor/resources response shape");
   }
-  for (const provider of payload.providers) {
-    if (!provider.cardCpu) {
-      throw new Error(`Provider cardCpu missing: ${provider.id}`);
-    }
-  }
   return payload;
 }
 

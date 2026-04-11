@@ -303,7 +303,7 @@ class TestSpillBufferMiddleware:
     def test_small_output_passes_through(self):
         """Tool output under threshold is not modified."""
         mw, _fs = self._make_middleware()
-        request = _make_request("run_command", "call_1")
+        request = _make_request("Bash", "call_1")
         original_msg = ToolMessage(content="small", tool_call_id="call_1")
         handler = MagicMock(return_value=original_msg)
 
@@ -316,7 +316,7 @@ class TestSpillBufferMiddleware:
     def test_large_output_gets_spilled(self):
         """Tool output exceeding default threshold is replaced."""
         mw, fs = self._make_middleware(default_threshold=100)
-        request = _make_request("run_command", "call_2")
+        request = _make_request("Bash", "call_2")
         large_content = "Z" * 200
         original_msg = ToolMessage(content=large_content, tool_call_id="call_2")
         handler = MagicMock(return_value=original_msg)
@@ -333,10 +333,10 @@ class TestSpillBufferMiddleware:
     def test_per_tool_threshold(self):
         """Per-tool threshold overrides the default."""
         mw, fs = self._make_middleware(
-            thresholds={"grep_search": 100},
+            thresholds={"Grep": 100},
             default_threshold=1_000_000,
         )
-        request = _make_request("grep_search", "call_grep")
+        request = _make_request("Grep", "call_grep")
         large_content = "G" * 200  # 200 bytes > 100 per-tool threshold
         original_msg = ToolMessage(content=large_content, tool_call_id="call_grep")
         handler = MagicMock(return_value=original_msg)
@@ -349,10 +349,10 @@ class TestSpillBufferMiddleware:
     def test_per_tool_threshold_not_triggered(self):
         """Per-tool threshold allows content under its limit."""
         mw, fs = self._make_middleware(
-            thresholds={"grep_search": 500},
+            thresholds={"Grep": 500},
             default_threshold=10,  # very low default
         )
-        request = _make_request("grep_search", "call_grep2")
+        request = _make_request("Grep", "call_grep2")
         content = "G" * 200  # 200 bytes < 500 per-tool threshold
         original_msg = ToolMessage(content=content, tool_call_id="call_grep2")
         handler = MagicMock(return_value=original_msg)
@@ -365,10 +365,10 @@ class TestSpillBufferMiddleware:
     def test_default_threshold_for_unlisted_tool(self):
         """Tools not in thresholds dict use the default threshold."""
         mw, fs = self._make_middleware(
-            thresholds={"grep_search": 1_000_000},
+            thresholds={"Grep": 1_000_000},
             default_threshold=100,
         )
-        request = _make_request("run_command", "call_cmd")
+        request = _make_request("Bash", "call_cmd")
         content = "C" * 200  # 200 > default 100
         original_msg = ToolMessage(content=content, tool_call_id="call_cmd")
         handler = MagicMock(return_value=original_msg)
@@ -377,12 +377,12 @@ class TestSpillBufferMiddleware:
 
         assert _require_text_content(result).startswith("<persisted-output")
 
-    def test_read_file_is_skipped(self):
-        """read_file is in SKIP_TOOLS and must never be spilled."""
-        assert "read_file" in SKIP_TOOLS
+    def test_read_tool_is_skipped(self):
+        """Read is in SKIP_TOOLS and must never be spilled."""
+        assert "Read" in SKIP_TOOLS
 
         mw, fs = self._make_middleware(default_threshold=10)
-        request = _make_request("read_file", "call_rf")
+        request = _make_request("Read", "call_rf")
         large_content = "R" * 1000
         original_msg = ToolMessage(content=large_content, tool_call_id="call_rf")
         handler = MagicMock(return_value=original_msg)
@@ -407,7 +407,7 @@ class TestSpillBufferMiddleware:
     def test_awrap_tool_call_delegates_to_maybe_spill(self):
         """awrap_tool_call uses the same _maybe_spill logic (sync mock)."""
         mw, fs = self._make_middleware(default_threshold=50)
-        request = _make_request("run_command", "call_async")
+        request = _make_request("Bash", "call_async")
         large_content = "A" * 100
         original_msg = ToolMessage(content=large_content, tool_call_id="call_async")
 
@@ -432,7 +432,7 @@ class TestSpillBufferMiddleware:
         """Verify the spill file name is derived from tool_call_id."""
         mw, fs = self._make_middleware(default_threshold=10)
         unique_id = "call_unique_xyz_789"
-        request = _make_request("run_command", unique_id)
+        request = _make_request("Bash", unique_id)
         content = "D" * 100
         original_msg = ToolMessage(content=content, tool_call_id=unique_id)
         handler = MagicMock(return_value=original_msg)
@@ -446,28 +446,28 @@ class TestSpillBufferMiddleware:
     def test_whitespace_output_is_normalized(self):
         """Whitespace-only tool output becomes an explicit no-output marker."""
         mw, fs = self._make_middleware(default_threshold=10)
-        request = _make_request("run_command", "call_empty")
-        original_msg = ToolMessage(content="   \n\t", tool_call_id="call_empty", name="run_command")
+        request = _make_request("Bash", "call_empty")
+        original_msg = ToolMessage(content="   \n\t", tool_call_id="call_empty", name="Bash")
         handler = MagicMock(return_value=original_msg)
 
         result = mw.wrap_tool_call(request, handler)
 
-        assert _require_text_content(result) == "(run_command completed with no output)"
+        assert _require_text_content(result) == "(Bash completed with no output)"
         fs.write_file.assert_not_called()
 
     def test_spilled_tool_message_preserves_name_and_metadata(self):
         """Spill replacement must not discard tool name or additional metadata."""
         mw, _fs = self._make_middleware(default_threshold=10)
-        request = _make_request("run_command", "call_meta")
+        request = _make_request("Bash", "call_meta")
         original_msg = ToolMessage(
             content="M" * 100,
             tool_call_id="call_meta",
-            name="run_command",
+            name="Bash",
             additional_kwargs={"tool_result_meta": {"kind": "success", "source": "local"}},
         )
         handler = MagicMock(return_value=original_msg)
 
         result = mw.wrap_tool_call(request, handler)
 
-        assert result.name == "run_command"
+        assert result.name == "Bash"
         assert result.additional_kwargs == original_msg.additional_kwargs

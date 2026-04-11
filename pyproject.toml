@@ -112,7 +112,6 @@ packages = [
     "storage.providers.supabase",
     "eval",
     "eval.harness",
-    "backend.taskboard",
 ]
 py-modules = ["agent"]
 
@@ -146,10 +145,6 @@ known-third-party = ["httpx", "supabase", "supabase_auth"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["E402", "E501"]
 "examples/*.py" = ["E402", "N806"]
-# Tool parameter names follow PascalCase convention (see conventions.md)
-"backend/taskboard/service.py" = ["N803"]
-"core/tools/command/middleware.py" = ["N803"]
-"core/tools/web/middleware.py" = ["N803"]
 # Long lines inside string literals (SQL / markdown rules) that cannot be broken
 "core/runtime/agent.py" = ["E501"]
 "storage/providers/sqlite/terminal_repo.py" = ["E501"]

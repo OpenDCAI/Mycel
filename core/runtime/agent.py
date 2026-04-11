@@ -12,7 +12,6 @@ Tools are registered via Services into ToolRegistry:
 - SkillsService: load_skill (dynamic schema)
 - TaskService: TaskCreate/Update/List/Get (deferred)
 - AgentService: Agent, TaskOutput, TaskStop
-- TaskBoardService: ListBoardTasks, ClaimTask, UpdateTaskProgress, CompleteTask, FailTask, CreateBoardTask
 - ToolSearchService: tool_search
 
 All paths must be absolute. Full security mechanisms and audit logging.
@@ -74,7 +73,6 @@ from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook  #
 from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook  # noqa: E402
 from core.tools.command.hooks.file_permission import FilePermissionHook  # noqa: E402
 from core.tools.command.service import CommandService  # noqa: E402
-from core.tools.cron.service import CronToolService  # noqa: E402
 from core.tools.filesystem.service import FileSystemService  # noqa: E402
 from core.tools.mcp_resources.service import McpResourceToolService  # noqa: E402
 from core.tools.search.service import SearchService  # noqa: E402
@@ -641,7 +639,6 @@ class LeonAgent:
         self.block_network_commands = self.config.runtime.block_network_commands
         self.enable_audit_log = self.config.runtime.enable_audit_log
         self.enable_web_tools = self.config.tools.web.enabled
-        self.queue_mode = self.config.runtime.queue_mode
 
         self._session_pool: dict[str, Any] = {}
         env_db_path = os.getenv("LEON_DB_PATH")
@@ -741,7 +738,7 @@ class LeonAgent:
         )
 
     def _create_extraction_model(self):
-        """Create a small model for Fetch AI extraction (leon:mini)."""
+        """Create a small model for WebFetch AI extraction (leon:mini)."""
         try:
             model_name, overrides = self.models_config.resolve_model("leon:mini")
             provider = self._resolve_provider_name(model_name, overrides)
@@ -1126,7 +1123,7 @@ class LeonAgent:
                         allowed_extensions=self.allowed_file_extensions,
                     )
                 )
-            max_file_size = self.config.tools.filesystem.tools.read_file.max_file_size
+            max_file_size = self.config.tools.filesystem.max_file_size
             self._filesystem_service = FileSystemService(
                 registry=self._tool_registry,
                 workspace_root=self.workspace_root,
@@ -1152,7 +1149,7 @@ class LeonAgent:
             tavily_key = self.config.tools.web.tools.web_search.tavily_api_key or os.getenv("TAVILY_API_KEY")
             exa_key = self.config.tools.web.tools.web_search.exa_api_key or os.getenv("EXA_API_KEY")
             firecrawl_key = self.config.tools.web.tools.web_search.firecrawl_api_key or os.getenv("FIRECRAWL_API_KEY")
-            jina_key = self.config.tools.web.tools.fetch.jina_api_key or os.getenv("JINA_AI_API_KEY")
+            jina_key = self.config.tools.web.tools.web_fetch.jina_api_key or os.getenv("JINA_AI_API_KEY")
             extraction_model = self._create_extraction_model()
             self._web_service = WebService(
                 registry=self._tool_registry,
@@ -1207,12 +1204,6 @@ class LeonAgent:
         # Task tools (DEFERRED - discoverable via tool_search)
         self._task_service = TaskService(
             registry=self._tool_registry,
-            workspace_root=self.workspace_root,
-        )
-
-        # Cron tools (DEFERRED - backed by existing panel cron_jobs substrate)
-        self._cron_tool_service = CronToolService(
-            registry=self._tool_registry,
         )
 
         self._mcp_resource_tool_service = McpResourceToolService(
@@ -1246,14 +1237,6 @@ class LeonAgent:
         # self._team_service = TeamService(
         #     tool_registry=self._tool_registry,
         # )
-
-        # TaskBoard tools (board management — INLINE, blocked by default via catalog)
-        try:
-            from backend.taskboard.service import TaskBoardService
-
-            self._taskboard_service = TaskBoardService(registry=self._tool_registry)
-        except ImportError:
-            self._taskboard_service = None
 
         # @@@chat-tools - register chat tools for agents with user identity (v2 messaging)
         if self._chat_repos:

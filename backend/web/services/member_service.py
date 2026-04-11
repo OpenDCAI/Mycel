@@ -1,85 +1,22 @@
-"""Member CRUD — file-system based (~/.leon/members/).
+"""Member CRUD over repo-backed agent users/configs."""
 
-Storage layout per member:
-    {member_dir}/
-    ├── agent.md        # identity (YAML frontmatter + system prompt)
-    ├── meta.json       # status, version, timestamps
-    ├── runtime.json    # tools/skills enabled + desc
-    ├── rules/          # one .md per rule
-    ├── agents/         # one .md per sub-agent
-    ├── skills/         # one dir per skill
-    └── .mcp.json       # MCP server config
-"""
-
-import json
-import logging
 import re
-import shutil
 import time
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from backend.web.core.paths import avatars_dir, members_dir
 from backend.web.utils.serializers import avatar_url
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from config.loader import AgentLoader
 
-logger = logging.getLogger(__name__)
-
-MEMBERS_DIR = members_dir()
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[3] / "config" / "defaults" / "agents").resolve()
 
 
 def _load_tools_catalog() -> dict[str, ToolDef]:
     """Return the typed tool catalog (name → ToolDef)."""
     return TOOLS_BY_NAME
-
-
-# ── Low-level I/O helpers ──
-
-
-def _read_json(path: Path, default: Any = None) -> Any:
-    if not path.exists():
-        return default if default is not None else {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return default if default is not None else {}
-
-
-def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _write_agent_md(
-    path: Path,
-    name: str,
-    description: str = "",
-    model: str | None = None,
-    tools: list[str] | None = None,
-    system_prompt: str = "",
-) -> None:
-    fm: dict[str, Any] = {"name": name}
-    if description:
-        fm["description"] = description
-    if model:
-        fm["model"] = model
-    if tools and tools != ["*"]:
-        fm["tools"] = tools
-    content = f"---\n{yaml.dump(fm, allow_unicode=True, default_flow_style=False).strip()}\n---\n\n{system_prompt}\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-
-
-def _parse_agent_md(path: Path) -> dict[str, Any] | None:
-    try:
-        content = path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    return _parse_agent_md_content(content)
 
 
 def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
@@ -100,169 +37,6 @@ def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
         "model": fm.get("model"),
         "tools": fm.get("tools", ["*"]),
         "system_prompt": parts[2].strip(),
-    }
-
-
-# ── Migration: config.json → file structure ──
-
-
-def _maybe_migrate_config_json(member_dir: Path) -> None:
-    """Migrate legacy config.json to file structure, then delete it."""
-    cfg_path = member_dir / "config.json"
-    if not cfg_path.exists():
-        return
-
-    cfg = _read_json(cfg_path, {})
-    logger.info("Migrating config.json for member %s", member_dir.name)
-
-    # rules → rules/*.md
-    if cfg.get("rules") and isinstance(cfg["rules"], str) and cfg["rules"].strip():
-        rules_dir = member_dir / "rules"
-        rules_dir.mkdir(exist_ok=True)
-        (rules_dir / "default.md").write_text(cfg["rules"], encoding="utf-8")
-
-    # subAgents → agents/*.md
-    if cfg.get("subAgents") and isinstance(cfg["subAgents"], list):
-        agents_dir = member_dir / "agents"
-        agents_dir.mkdir(exist_ok=True)
-        for item in cfg["subAgents"]:
-            if isinstance(item, dict) and item.get("name"):
-                _write_agent_md(
-                    agents_dir / f"{item['name']}.md",
-                    name=item["name"],
-                    description=item.get("desc", ""),
-                )
-
-    # tools/skills → runtime.json
-    runtime: dict[str, dict[str, Any]] = {}
-    for key in ("tools", "skills"):
-        items = cfg.get(key)
-        if isinstance(items, list):
-            for item in items:
-                if isinstance(item, dict) and item.get("name"):
-                    runtime[f"{key}:{item['name']}"] = {
-                        "enabled": item.get("enabled", True),
-                        "desc": item.get("desc", ""),
-                    }
-    if runtime:
-        _write_json(member_dir / "runtime.json", runtime)
-
-    # mcps → .mcp.json
-    if cfg.get("mcps") and isinstance(cfg["mcps"], list):
-        servers: dict[str, Any] = {}
-        for item in cfg["mcps"]:
-            if isinstance(item, dict) and item.get("name"):
-                servers[item["name"]] = {
-                    "command": item.get("command", ""),
-                    "args": item.get("args", []),
-                    "env": item.get("env", {}),
-                    "disabled": not item.get("enabled", True),
-                }
-        if servers:
-            _write_json(member_dir / ".mcp.json", {"mcpServers": servers})
-
-    # Remove legacy file
-    cfg_path.unlink()
-    logger.info("Migrated and removed config.json for member %s", member_dir.name)
-
-
-# ── Bundle → frontend dict conversion ──
-
-
-def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
-    """Load member via AgentLoader.load_bundle, convert to frontend format."""
-    _maybe_migrate_config_json(member_dir)
-
-    loader = AgentLoader()
-    try:
-        bundle = loader.load_bundle(member_dir)
-    except (ValueError, OSError):
-        return None
-
-    agent = bundle.agent
-    meta = bundle.meta
-
-    # Build full tools list from catalog + runtime overrides
-    catalog = _load_tools_catalog()
-    tools_list = []
-    for tool_name, tool_info in catalog.items():
-        runtime_key = f"tools:{tool_name}"
-        if runtime_key in bundle.runtime:
-            rc = bundle.runtime[runtime_key]
-            tools_list.append({"name": tool_name, "enabled": rc.enabled, "desc": rc.desc or tool_info.desc, "group": tool_info.group})
-        else:
-            tools_list.append({"name": tool_name, "enabled": tool_info.default, "desc": tool_info.desc, "group": tool_info.group})
-
-    # Skills from runtime — enrich desc from Library if empty
-    skills_list = []
-    for key, rc in bundle.runtime.items():
-        if key.startswith("skills:"):
-            skill_name = key.split(":", 1)[-1]
-            desc = rc.desc
-            if not desc:
-                from backend.web.services.library_service import get_library_skill_desc
-
-                desc = get_library_skill_desc(skill_name)
-            skills_list.append({"name": skill_name, "enabled": rc.enabled, "desc": desc})
-
-    # Convert rules to list of {name, content}
-    rules_list = bundle.rules
-
-    # Convert sub-agents — mark builtin vs custom
-    sub_agents_list = []
-    for a in bundle.agents:
-        is_builtin = a.source_dir is not None and a.source_dir.resolve() == _SYSTEM_AGENTS_DIR
-        is_all = a.tools == ["*"]
-        agent_tools = [
-            {
-                "name": t_name,
-                "enabled": is_all or t_name in a.tools,
-                "desc": t_info.desc,
-                "group": t_info.group,
-            }
-            for t_name, t_info in catalog.items()
-        ]
-        sub_agents_list.append(
-            {
-                "name": a.name,
-                "desc": a.description,
-                "tools": agent_tools,
-                "system_prompt": a.system_prompt,
-                "builtin": is_builtin,
-            }
-        )
-
-    # Convert MCP servers
-    mcps_list = [
-        {
-            "name": name,
-            "command": srv.command or "",
-            "args": srv.args,
-            "env": srv.env,
-            "disabled": srv.disabled,
-        }
-        for name, srv in bundle.mcp.items()
-    ]
-
-    member_id = member_dir.name
-    return {
-        "id": member_id,
-        "name": agent.name,
-        "description": agent.description,
-        "model": agent.model,
-        "status": meta.get("status", "draft"),
-        "version": meta.get("version", "0.1.0"),
-        "avatar_url": avatar_url(member_id, (avatars_dir() / f"{member_id}.png").exists()),
-        "config": {
-            "prompt": agent.system_prompt,
-            "rules": rules_list,
-            "tools": tools_list,
-            "mcps": mcps_list,
-            "skills": skills_list,
-            "subAgents": sub_agents_list,
-        },
-        "created_at": meta.get("created_at", 0),
-        "updated_at": meta.get("updated_at", 0),
     }
 
 
@@ -442,14 +216,14 @@ def list_members(owner_user_id: str | None = None, user_repo: Any = None, agent_
         owner_user_id: Filter to agents owned by this user.
         user_repo: Injected UserRepo for agent ownership lookup.
     """
-    # @@@auth-scope — scoped by owner from DB, config from filesystem
+    # @@@auth-scope - scoped by owner and config repos.
     if owner_user_id:
         if user_repo is None or agent_config_repo is None:
             raise RuntimeError("user_repo and agent_config_repo are required when owner_user_id is provided")
         agents = user_repo.list_by_owner_user_id(owner_user_id)
         return [_member_from_repos(agent, agent_config_repo) for agent in agents]
 
-    # Unscoped legacy path is now builtin-only. Owner-scoped callers must use repos.
+    # Unscoped path is builtin-only. Owner-scoped callers must use repos.
     return [_leon_builtin()]
 
 
@@ -564,7 +338,7 @@ def update_member_config(
     return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
 
 
-# ── Supabase repo dual-write helper ──
+# ── Agent config repo helpers ──
 
 
 def _save_config_to_repo(
@@ -721,129 +495,6 @@ def _sync_member_patch_to_repo(member_id: str, config_patch: dict[str, Any], use
     return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
-# ── Write helpers for config fields → file structure ──
-
-
-def _write_rules(member_dir: Path, rules: list[dict[str, str]]) -> None:
-    """Write rules list to rules/ directory. Replaces all existing rules."""
-    rules_dir = member_dir / "rules"
-    if rules_dir.exists():
-        shutil.rmtree(rules_dir)
-    if not rules:
-        return
-    rules_dir.mkdir(exist_ok=True)
-    for rule in rules:
-        if isinstance(rule, dict) and rule.get("name"):
-            name = rule["name"].replace("/", "_").replace("\\", "_")
-            (rules_dir / f"{name}.md").write_text(rule.get("content", ""), encoding="utf-8")
-
-
-def _write_sub_agents(member_dir: Path, agents: list[dict[str, Any]]) -> None:
-    """Write sub-agents list to agents/ directory."""
-    from backend.web.services.library_service import get_library_agent_desc
-
-    agents_dir = member_dir / "agents"
-    if agents_dir.exists():
-        shutil.rmtree(agents_dir)
-    if not agents:
-        return
-    agents_dir.mkdir(exist_ok=True)
-    for item in agents:
-        if not (isinstance(item, dict) and item.get("name")):
-            continue
-        if item.get("builtin"):
-            continue
-        desc = item.get("desc", "")
-        if not desc:
-            desc = get_library_agent_desc(item["name"])
-        # Convert CrudItem[] tools back to string list
-        raw_tools = item.get("tools")
-        tools: list[str] | None = None
-        if isinstance(raw_tools, list) and raw_tools and isinstance(raw_tools[0], dict):
-            enabled = [t["name"] for t in raw_tools if t.get("enabled")]
-            tools = ["*"] if len(enabled) == len(raw_tools) else enabled
-        elif isinstance(raw_tools, list):
-            tools = raw_tools  # already string list
-        _write_agent_md(
-            agents_dir / f"{item['name']}.md",
-            name=item["name"],
-            description=desc,
-            tools=tools,
-            system_prompt=item.get("system_prompt", ""),
-        )
-
-
-def _write_runtime_resources(member_dir: Path, config_patch: dict[str, Any]) -> None:
-    """Write tools/skills enabled+desc to runtime.json."""
-    has_tools = "tools" in config_patch and config_patch["tools"] is not None
-    has_skills = "skills" in config_patch and config_patch["skills"] is not None
-    if not has_tools and not has_skills:
-        return
-
-    runtime = _read_json(member_dir / "runtime.json", {})
-
-    # Clear old entries of the type being updated
-    if has_tools:
-        runtime = {k: v for k, v in runtime.items() if not k.startswith("tools:")}
-        for item in config_patch["tools"]:
-            if isinstance(item, dict) and item.get("name"):
-                runtime[f"tools:{item['name']}"] = {
-                    "enabled": item.get("enabled", True),
-                    "desc": item.get("desc", ""),
-                }
-
-    if has_skills:
-        runtime = {k: v for k, v in runtime.items() if not k.startswith("skills:")}
-        for item in config_patch["skills"]:
-            if isinstance(item, dict) and item.get("name"):
-                runtime[f"skills:{item['name']}"] = {
-                    "enabled": item.get("enabled", True),
-                    "desc": item.get("desc", ""),
-                }
-
-    _write_json(member_dir / "runtime.json", runtime)
-
-
-def _write_mcps(member_dir: Path, mcps: list[dict[str, Any]]) -> None:
-    """Write MCP list to .mcp.json. New assignments (no command) copy from Library."""
-    from backend.web.services.library_service import get_mcp_server_config
-
-    servers: dict[str, Any] = {}
-    for item in mcps:
-        if isinstance(item, dict) and item.get("name"):
-            if item.get("command"):
-                # Existing/customized — write as-is
-                servers[item["name"]] = {
-                    "command": item["command"],
-                    "args": item.get("args", []),
-                    "env": item.get("env", {}),
-                    "disabled": item.get("disabled", False),
-                }
-            else:
-                # New assignment from Library — copy config
-                lib_cfg = get_mcp_server_config(item["name"])
-                if lib_cfg:
-                    servers[item["name"]] = {
-                        "command": lib_cfg.get("command", ""),
-                        "args": lib_cfg.get("args", []),
-                        "env": lib_cfg.get("env", {}),
-                        "disabled": item.get("disabled", False),
-                    }
-                else:
-                    servers[item["name"]] = {
-                        "command": "",
-                        "args": [],
-                        "env": {},
-                        "disabled": item.get("disabled", False),
-                    }
-    if servers:
-        _write_json(member_dir / ".mcp.json", {"mcpServers": servers})
-    else:
-        mcp_path = member_dir / ".mcp.json"
-        if mcp_path.exists():
-            mcp_path.unlink()
-
-
 # ── Publish / Delete ──
 
 
@@ -905,20 +556,15 @@ def delete_member(
     _require_repo_backed_member_ops(user_repo, agent_config_repo)
     if thread_launch_pref_repo is None:
         raise RuntimeError("thread_launch_pref_repo is required for agent delete")
-    member_dir = MEMBERS_DIR / member_id
     user = user_repo.get_by_id(member_id)
     if user is None:
         return False
 
-    # Delete from Supabase repo before removing filesystem
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
     # @@@delete-member-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
     agent_config_repo.delete_config(user.agent_config_id)
     thread_launch_pref_repo.delete_by_agent_user_id(member_id)
-
-    if member_dir.is_dir():
-        shutil.rmtree(member_dir)
 
     # Also remove from unified users table
     user_repo.delete(member_id)

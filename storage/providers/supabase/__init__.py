@@ -6,12 +6,10 @@ from .chat_repo import SupabaseChatRepo
 from .chat_session_repo import SupabaseChatSessionRepo
 from .checkpoint_repo import SupabaseCheckpointRepo
 from .contact_repo import SupabaseContactRepo
-from .cron_job_repo import SupabaseCronJobRepo
 from .eval_repo import SupabaseEvalRepo
 from .file_operation_repo import SupabaseFileOperationRepo
 from .invite_code_repo import SupabaseInviteCodeRepo
 from .lease_repo import SupabaseLeaseRepo
-from .panel_task_repo import SupabasePanelTaskRepo
 from .provider_event_repo import SupabaseProviderEventRepo
 from .queue_repo import SupabaseQueueRepo
 from .recipe_repo import SupabaseRecipeRepo
@@ -35,12 +33,10 @@ __all__ = [
     "SupabaseChatSessionRepo",
     "SupabaseCheckpointRepo",
     "SupabaseContactRepo",
-    "SupabaseCronJobRepo",
     "SupabaseEvalRepo",
     "SupabaseFileOperationRepo",
     "SupabaseInviteCodeRepo",
     "SupabaseLeaseRepo",
-    "SupabasePanelTaskRepo",
     "SupabaseProviderEventRepo",
     "SupabaseQueueRepo",
     "SupabaseRecipeRepo",

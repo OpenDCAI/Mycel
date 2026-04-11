@@ -91,9 +91,9 @@ export default function EvaluationBatchDetailPage() {
   return (
     <div className="page">
       <h1>{`Evaluation Batch ${batch.batch_id ?? batchId}`}</h1>
-      <p className="description">Scenario batch truth, run linkage, and thread drilldown.</p>
+      <p className="description">Scenario batch state, run linkage, and thread drilldown.</p>
       <section className="surface-section">
-        <h2>Batch Truth</h2>
+        <h2>Batch State</h2>
         <div className="info-grid">
           <div>
             <strong>Status</strong>

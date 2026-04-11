@@ -2169,12 +2169,12 @@ class TestToolRunnerInlineInjection:
 
 
 # ---------------------------------------------------------------------------
-# P1: tool_modes from config honored
+# P1: service-declared tool modes
 # ---------------------------------------------------------------------------
 
 
-class TestToolModeFromConfig:
-    """Verify tool_modes config is applied during service init."""
+class TestServiceDeclaredToolModes:
+    """Verify services declare the runtime tool modes they own."""
 
     def test_task_service_registers_deferred(self, tmp_path):
         reg = ToolRegistry()

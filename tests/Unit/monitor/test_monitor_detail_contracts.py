@@ -26,6 +26,119 @@ def _default_eval_batch_service(monkeypatch):
     monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
 
 
+def _lease_row(**overrides):
+    row = {
+        "lease_id": "lease-1",
+        "provider_name": "daytona",
+        "desired_state": "running",
+        "observed_state": "running",
+        "updated_at": "2026-04-08T00:00:00Z",
+        "current_instance_id": "runtime-1",
+        "last_error": None,
+    }
+    row.update(overrides)
+    return row
+
+
+_MISSING = object()
+
+
+class FakeLeaseRepo:
+    def __init__(self, *, lease=None, threads=None, sessions=None, runtime_session_id="runtime-1", leases=None):
+        self.lease = lease
+        self.threads = threads or []
+        self.sessions = sessions or []
+        self.runtime_session_id = runtime_session_id
+        self.leases = leases or []
+
+    def query_lease(self, lease_id):
+        if self.lease is _MISSING:
+            return None
+        return self.lease if self.lease is not None else _lease_row(lease_id=lease_id)
+
+    def query_lease_threads(self, _lease_id):
+        return self.threads
+
+    def query_lease_sessions(self, _lease_id):
+        return self.sessions
+
+    def query_lease_instance_id(self, _lease_id):
+        return self.runtime_session_id
+
+    def query_leases(self):
+        return self.leases
+
+    def close(self):
+        return None
+
+
+def _use_monitor_repo(monkeypatch, repo):
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: repo)
+
+
+def _detached_lease(**overrides):
+    return _lease_row(desired_state="running", observed_state="detached", **overrides)
+
+
+def _cleanup_state(reason: str):
+    return {
+        "allowed": True,
+        "recommended_action": "lease_cleanup",
+        "reason": reason,
+        "operation": None,
+        "recent_operations": [],
+    }
+
+
+def _record_destroy(calls):
+    def _destroy_sandbox_lease(*, lease_id: str, provider_name: str):
+        calls.append((lease_id, provider_name))
+        return {
+            "ok": True,
+            "action": "destroy",
+            "lease_id": lease_id,
+            "provider": provider_name,
+            "mode": "manager_lease",
+        }
+
+    return _destroy_sandbox_lease
+
+
+class FakeThreadRepo:
+    def __init__(self, thread):
+        self.thread = thread
+
+    def get_by_id(self, thread_id):
+        return {**self.thread, "id": self.thread.get("id", thread_id)}
+
+
+class FakeMonitorThreadRepo:
+    def __init__(self, *, summary=None, sessions=None):
+        self.summary = summary
+        self.sessions = sessions or []
+
+    def query_thread_summary(self, _thread_id):
+        return self.summary
+
+    def query_thread_sessions(self, _thread_id):
+        return self.sessions
+
+    def close(self):
+        return None
+
+
+def _stub_thread_detail(monkeypatch, *, owner=None, trajectory=None):
+    monkeypatch.setattr(
+        monitor_service,
+        "_thread_owners",
+        lambda *_args, **_kwargs: {"thread-1": owner},
+    )
+    monkeypatch.setattr(
+        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
+        AsyncMock(return_value=trajectory or {"run_id": None, "conversation": [], "events": []}),
+    )
+
+
 def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch):
     monkeypatch.setattr(
         monitor_service,
@@ -175,32 +288,14 @@ def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypa
         monitor_service.get_monitor_provider_detail("ghost")
 
 
-def test_get_monitor_lease_detail_merges_monitor_repo_truth(monkeypatch):
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return {
-                "lease_id": lease_id,
-                "provider_name": "daytona",
-                "desired_state": "running",
-                "observed_state": "running",
-                "updated_at": "2026-04-08T00:00:00Z",
-                "current_instance_id": "runtime-1",
-                "last_error": None,
-            }
-
-        def query_lease_threads(self, lease_id):
-            return [{"thread_id": "thread-1"}]
-
-        def query_lease_sessions(self, lease_id):
-            return [{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}]
-
-        def query_lease_instance_id(self, lease_id):
-            return "runtime-1"
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+def test_get_monitor_lease_detail_merges_monitor_repo_state(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            threads=[{"thread_id": "thread-1"}],
+            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
+        ),
+    )
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
@@ -211,256 +306,63 @@ def test_get_monitor_lease_detail_merges_monitor_repo_truth(monkeypatch):
     assert payload["sessions"] == [{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active", "started_at": None, "ended_at": None, "close_reason": None}]
 
 
-def test_get_monitor_lease_detail_exposes_cleanup_truth(monkeypatch):
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return {
-                "lease_id": lease_id,
-                "provider_name": "daytona",
-                "desired_state": "running",
-                "observed_state": "detached",
-                "updated_at": "2026-04-08T00:00:00Z",
-                "current_instance_id": "runtime-1",
-                "last_error": None,
-            }
-
-        def query_lease_threads(self, lease_id):
-            return []
-
-        def query_lease_sessions(self, lease_id):
-            return []
-
-        def query_lease_instance_id(self, lease_id):
-            return "runtime-1"
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+def test_get_monitor_lease_detail_exposes_cleanup_state(monkeypatch):
+    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
-    assert payload["cleanup"] == {
-        "allowed": True,
-        "recommended_action": "lease_cleanup",
-        "reason": "Lease is orphan cleanup residue and can enter managed cleanup.",
-        "operation": None,
-        "recent_operations": [],
-    }
+    assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
 
 
-def test_get_monitor_lease_detail_allows_detached_residue_cleanup_without_active_sessions(monkeypatch):
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return {
-                "lease_id": lease_id,
-                "provider_name": "daytona",
-                "desired_state": "running",
-                "observed_state": "detached",
-                "updated_at": "2026-04-08T00:00:00Z",
-                "current_instance_id": "runtime-1",
-                "last_error": None,
-            }
-
-        def query_lease_threads(self, lease_id):
-            return [{"thread_id": "thread-historical"}]
-
-        def query_lease_sessions(self, lease_id):
-            return []
-
-        def query_lease_instance_id(self, lease_id):
-            return "runtime-1"
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+@pytest.mark.parametrize("runtime_session_id", ["runtime-1", None])
+def test_get_monitor_lease_detail_allows_detached_residue_cleanup(monkeypatch, runtime_session_id):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_detached_lease(current_instance_id=runtime_session_id),
+            threads=[{"thread_id": "thread-historical"}],
+            runtime_session_id=runtime_session_id,
+        ),
+    )
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
+    assert payload["runtime"] == {"runtime_session_id": runtime_session_id}
     assert payload["triage"]["category"] == "detached_residue"
-    assert payload["cleanup"] == {
-        "allowed": True,
-        "recommended_action": "lease_cleanup",
-        "reason": "Lease is detached residue and can enter managed cleanup.",
-        "operation": None,
-        "recent_operations": [],
-    }
-
-
-def test_get_monitor_lease_detail_allows_detached_residue_cleanup_without_runtime_session(monkeypatch):
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return {
-                "lease_id": lease_id,
-                "provider_name": "daytona",
-                "desired_state": "running",
-                "observed_state": "detached",
-                "updated_at": "2026-04-08T00:00:00Z",
-                "current_instance_id": None,
-                "last_error": None,
-            }
-
-        def query_lease_threads(self, lease_id):
-            return [{"thread_id": "thread-historical"}]
-
-        def query_lease_sessions(self, lease_id):
-            return []
-
-        def query_lease_instance_id(self, lease_id):
-            return None
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
-
-    payload = monitor_service.get_monitor_lease_detail("lease-1")
-
-    assert payload["runtime"] == {"runtime_session_id": None}
-    assert payload["cleanup"] == {
-        "allowed": True,
-        "recommended_action": "lease_cleanup",
-        "reason": "Lease is detached residue and can enter managed cleanup.",
-        "operation": None,
-        "recent_operations": [],
-    }
+    assert payload["cleanup"] == _cleanup_state("Lease is detached residue and can enter managed cleanup.")
 
 
 def test_get_monitor_lease_detail_ignores_stale_thread_refs_when_classifying_triage(monkeypatch):
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return {
-                "lease_id": lease_id,
-                "provider_name": "daytona",
-                "desired_state": "paused",
-                "observed_state": "paused",
-                "updated_at": "2026-04-08T00:00:00Z",
-                "current_instance_id": "runtime-1",
-                "last_error": None,
-            }
-
-        def query_lease_threads(self, lease_id):
-            return [{"thread_id": "thread-gone"}]
-
-        def query_lease_sessions(self, lease_id):
-            return []
-
-        def query_lease_instance_id(self, lease_id):
-            return "runtime-1"
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_lease_row(desired_state="paused", observed_state="paused"),
+            threads=[{"thread_id": "thread-gone"}],
+        ),
+    )
     monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
     assert payload["threads"] == []
     assert payload["triage"]["category"] == "orphan_cleanup"
-    assert payload["cleanup"] == {
-        "allowed": True,
-        "recommended_action": "lease_cleanup",
-        "reason": "Lease is orphan cleanup residue and can enter managed cleanup.",
-        "operation": None,
-        "recent_operations": [],
-    }
+    assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
 
 
-def test_request_monitor_lease_cleanup_uses_lease_destroy_for_detached_residue(monkeypatch):
+@pytest.mark.parametrize("runtime_session_id", ["runtime-1", None])
+def test_request_monitor_lease_cleanup_uses_lease_destroy_for_detached_residue(monkeypatch, runtime_session_id):
     calls: list[tuple[str, str]] = []
-
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return {
-                "lease_id": lease_id,
-                "provider_name": "daytona",
-                "desired_state": "running",
-                "observed_state": "detached",
-                "updated_at": "2026-04-08T00:00:00Z",
-                "current_instance_id": None,
-                "last_error": None,
-            }
-
-        def query_lease_threads(self, lease_id):
-            return [{"thread_id": "thread-historical"}]
-
-        def query_lease_sessions(self, lease_id):
-            return []
-
-        def query_lease_instance_id(self, lease_id):
-            return "runtime-1"
-
-        def close(self):
-            return None
-
-    def _destroy_sandbox_lease(*, lease_id: str, provider_name: str):
-        calls.append((lease_id, provider_name))
-        return {
-            "ok": True,
-            "action": "destroy",
-            "lease_id": lease_id,
-            "provider": provider_name,
-            "mode": "manager_lease",
-        }
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
-    monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_lease",
-        _destroy_sandbox_lease,
-        raising=False,
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_detached_lease(current_instance_id=runtime_session_id),
+            threads=[{"thread_id": "thread-historical"}],
+            runtime_session_id=runtime_session_id,
+        ),
     )
-
-    payload = monitor_service.request_monitor_lease_cleanup("lease-1")
-
-    assert payload["accepted"] is True
-    assert payload["message"] == "Lease cleanup completed."
-    assert payload["operation"]["kind"] == "lease_cleanup"
-    assert calls == [("lease-1", "daytona")]
-
-
-def test_request_monitor_lease_cleanup_allows_detached_residue_without_runtime_session(monkeypatch):
-    calls: list[tuple[str, str]] = []
-
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return {
-                "lease_id": lease_id,
-                "provider_name": "daytona",
-                "desired_state": "running",
-                "observed_state": "detached",
-                "updated_at": "2026-04-08T00:00:00Z",
-                "current_instance_id": None,
-                "last_error": None,
-            }
-
-        def query_lease_threads(self, lease_id):
-            return [{"thread_id": "thread-historical"}]
-
-        def query_lease_sessions(self, lease_id):
-            return []
-
-        def query_lease_instance_id(self, lease_id):
-            return None
-
-        def close(self):
-            return None
-
-    def _destroy_sandbox_lease(*, lease_id: str, provider_name: str):
-        calls.append((lease_id, provider_name))
-        return {
-            "ok": True,
-            "action": "destroy",
-            "lease_id": lease_id,
-            "provider": provider_name,
-            "mode": "manager_lease",
-        }
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
     monkeypatch.setattr(
         "backend.web.services.sandbox_service.destroy_sandbox_lease",
-        _destroy_sandbox_lease,
+        _record_destroy(calls),
         raising=False,
     )
 
@@ -473,39 +375,19 @@ def test_request_monitor_lease_cleanup_allows_detached_residue_without_runtime_s
 
 
 def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):
-    class FakeRepo:
-        def query_lease(self, lease_id):
-            return None
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_MISSING))
 
     with pytest.raises(KeyError, match="Lease not found: lease-404"):
         monitor_service.get_monitor_lease_detail("lease-404")
 
 
 def test_list_leases_ignores_stale_thread_refs_when_classifying_triage(monkeypatch):
-    class FakeRepo:
-        def query_leases(self):
-            return [
-                {
-                    "lease_id": "lease-1",
-                    "provider_name": "daytona",
-                    "desired_state": "paused",
-                    "observed_state": "paused",
-                    "current_instance_id": "runtime-1",
-                    "last_error": None,
-                    "updated_at": "2026-04-08T00:00:00Z",
-                    "thread_id": "thread-gone",
-                }
-            ]
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            leases=[_lease_row(desired_state="paused", observed_state="paused", thread_id="thread-gone")]
+        ),
+    )
     monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
 
     payload = monitor_service.list_leases()
@@ -517,32 +399,7 @@ def test_list_leases_ignores_stale_thread_refs_when_classifying_triage(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_get_monitor_thread_detail_exposes_trajectory_truth(monkeypatch):
-    class FakeThreadRepo:
-        def get_by_id(self, thread_id):
-            return {
-                "id": thread_id,
-                "thread_id": thread_id,
-                "title": "Investigate sandbox drift",
-                "status": "active",
-            }
-
-    class FakeMonitorRepo:
-        def query_thread_summary(self, thread_id):
-            return {
-                "provider_name": "daytona",
-                "lease_id": "lease-1",
-                "current_instance_id": "runtime-1",
-                "desired_state": "running",
-                "observed_state": "running",
-            }
-
-        def query_thread_sessions(self, thread_id):
-            return [{"chat_session_id": "session-1", "status": "active"}]
-
-        def close(self):
-            return None
-
+async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
     class FakeBatchService:
         def list_batch_runs_for_thread(self, thread_id):
             return [
@@ -555,39 +412,45 @@ async def test_get_monitor_thread_detail_exposes_trajectory_truth(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
-    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
-    monkeypatch.setattr(
-        monitor_service,
-        "_thread_owners",
-        lambda *_args, **_kwargs: {
-            "thread-1": {
-                "user_id": "user-1",
-                "display_name": "Ada",
-                "email": "ada@example.com",
-            }
-        },
-    )
-    monkeypatch.setattr(
-        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
-        AsyncMock(
-            return_value={
-                "run_id": "run-1",
-                "conversation": [
-                    {"role": "human", "text": "Please inspect the sandbox drift."},
-                    {"role": "tool_call", "tool": "terminal", "args": "{'cmd': 'pwd'}"},
-                    {"role": "tool_result", "tool": "terminal", "text": "/workspace"},
-                    {"role": "assistant", "text": "The sandbox is healthy now."},
-                ],
-                "events": [
-                    {"seq": 1, "event_type": "tool_call", "actor": "tool", "summary": "terminal"},
-                    {"seq": 2, "event_type": "status", "actor": "runtime", "summary": "state=active calls=1"},
-                ],
-            }
+    _use_monitor_repo(
+        monkeypatch,
+        FakeMonitorThreadRepo(
+            summary={
+                "provider_name": "daytona",
+                "lease_id": "lease-1",
+                "current_instance_id": "runtime-1",
+                "desired_state": "running",
+                "observed_state": "running",
+            },
+            sessions=[{"chat_session_id": "session-1", "status": "active"}],
         ),
     )
-
-    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=object()))
+    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+    _stub_thread_detail(
+        monkeypatch,
+        owner={"user_id": "user-1", "display_name": "Ada", "email": "ada@example.com"},
+        trajectory={
+            "run_id": "run-1",
+            "conversation": [
+                {"role": "human", "text": "Please inspect the sandbox drift."},
+                {"role": "tool_call", "tool": "terminal", "args": "{'cmd': 'pwd'}"},
+                {"role": "tool_result", "tool": "terminal", "text": "/workspace"},
+                {"role": "assistant", "text": "The sandbox is healthy now."},
+            ],
+            "events": [
+                {"seq": 1, "event_type": "tool_call", "actor": "tool", "summary": "terminal"},
+                {"seq": 2, "event_type": "status", "actor": "runtime", "summary": "state=active calls=1"},
+            ],
+        },
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=FakeThreadRepo(
+                {"id": "thread-1", "thread_id": "thread-1", "title": "Investigate sandbox drift", "status": "active"}
+            ),
+            user_repo=object(),
+        )
+    )
 
     payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 
@@ -619,17 +482,11 @@ def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():
 
 
 @pytest.mark.asyncio
-async def test_get_monitor_thread_detail_derives_summary_from_session_truth_when_repo_summary_missing(monkeypatch):
-    class FakeThreadRepo:
-        def get_by_id(self, thread_id):
-            return {"id": thread_id, "status": "active"}
-
-    class FakeMonitorRepo:
-        def query_thread_summary(self, thread_id):
-            return None
-
-        def query_thread_sessions(self, thread_id):
-            return [
+async def test_get_monitor_thread_detail_derives_summary_from_session_state_when_repo_summary_missing(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeMonitorThreadRepo(
+            sessions=[
                 {
                     "chat_session_id": "sess-1",
                     "status": "closed",
@@ -643,22 +500,10 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_truth_when
                     "close_reason": "expired",
                 }
             ]
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
-    monkeypatch.setattr(
-        monitor_service,
-        "_thread_owners",
-        lambda _thread_ids, **_kwargs: {"thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad"}},
+        ),
     )
-    monkeypatch.setattr(
-        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
-        AsyncMock(return_value={"run_id": None, "conversation": [], "events": []}),
-    )
-
-    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
+    _stub_thread_detail(monkeypatch, owner={"agent_user_id": "agent-1", "agent_name": "Toad"})
+    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo({"status": "active"}), user_repo=None))
 
     payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 
@@ -673,34 +518,12 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_truth_when
 
 @pytest.mark.asyncio
 async def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(monkeypatch):
-    class FakeThreadRepo:
-        def get_by_id(self, thread_id):
-            return {"id": thread_id, "status": "active"}
-
-    class FakeMonitorRepo:
-        def query_thread_summary(self, thread_id):
-            return None
-
-        def query_thread_sessions(self, thread_id):
-            return []
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
-    monkeypatch.setattr(
-        monitor_service,
-        "_thread_owners",
-        lambda _thread_ids, **_kwargs: {
-            "thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"}
-        },
+    _use_monitor_repo(monkeypatch, FakeMonitorThreadRepo())
+    _stub_thread_detail(
+        monkeypatch,
+        owner={"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"},
     )
-    monkeypatch.setattr(
-        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
-        AsyncMock(return_value={"run_id": None, "conversation": [], "events": []}),
-    )
-
-    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
+    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo({"status": "active"}), user_repo=None))
 
     payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 
@@ -714,28 +537,14 @@ async def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(mon
 
 @pytest.mark.asyncio
 async def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(monkeypatch):
-    class FakeThreadRepo:
-        def get_by_id(self, thread_id):
-            return {"id": thread_id, "title": "Investigate drift", "status": "active"}
-
-    class FakeMonitorRepo:
-        def query_thread_summary(self, thread_id):
-            return None
-
-        def query_thread_sessions(self, thread_id):
-            return []
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
-    monkeypatch.setattr(monitor_service, "_thread_owners", lambda *_args, **_kwargs: {"thread-1": None})
-    monkeypatch.setattr(
-        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
-        AsyncMock(return_value={"run_id": None, "conversation": [], "events": []}),
+    _use_monitor_repo(monkeypatch, FakeMonitorThreadRepo())
+    _stub_thread_detail(monkeypatch, owner=None)
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=FakeThreadRepo({"id": "thread-1", "title": "Investigate drift", "status": "active"}),
+            user_repo=None,
+        )
     )
-
-    app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo(), user_repo=None))
 
     payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.providers.agentbay import AgentBayProvider
@@ -17,8 +17,6 @@ from sandbox.providers.docker import DockerProvider
 from sandbox.providers.e2b import E2BProvider
 from sandbox.providers.local import LocalSessionProvider
 from storage.runtime import build_thread_repo, build_user_repo
-
-_CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
 
 
 def _resource_avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
@@ -42,7 +40,11 @@ CATALOG: dict[str, CatalogEntry] = {
 
 
 def resolve_provider_name(config_name: str, *, sandboxes_dir: Path) -> str:
-    return _CONFIG_LOADER.get_provider_name(config_name)
+    payload = _load_sandbox_config(config_name, sandboxes_dir)
+    provider = str(payload.get("provider") or "").strip()
+    if not provider:
+        raise RuntimeError(f"Sandbox config missing provider: {config_name}")
+    return provider
 
 
 def resolve_provider_type(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str:
@@ -55,7 +57,7 @@ def resolve_provider_type(provider_name: str, config_name: str, *, sandboxes_dir
 
 
 def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str | None:
-    payload = _CONFIG_LOADER.load(config_name)
+    payload = _load_sandbox_config(config_name, sandboxes_dir)
     override = str(payload.get("console_url") or "").strip()
     if override:
         return override
@@ -72,6 +74,16 @@ def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: 
         api_url = str(daytona.get("api_url") or "").strip().rstrip("/")
         return api_url[:-4] if api_url.endswith("/api") else api_url
     return None
+
+
+def _load_sandbox_config(config_name: str, sandboxes_dir: Path) -> dict[str, Any]:
+    if config_name == "local":
+        return {"provider": "local"}
+    config_path = sandboxes_dir / f"{config_name}.json"
+    payload = json.loads(config_path.read_text())
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Sandbox config is not a JSON object: {config_path}")
+    return payload
 
 
 def empty_capabilities() -> dict[str, bool]:

@@ -12,7 +12,7 @@ from backend.web.services.resource_common import resolve_console_url as _resolve
 from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.web.services.sandbox_service import build_provider_from_config_name
-from sandbox.resource_snapshot import ensure_resource_snapshot_table, probe_and_upsert_for_instance, upsert_lease_resource_snapshot
+from sandbox.resource_snapshot import probe_and_upsert_for_instance, upsert_lease_resource_snapshot
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 
@@ -146,7 +146,6 @@ def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
 
 def refresh_resource_snapshots() -> dict[str, Any]:
     """Probe active lease instances and upsert resource snapshots."""
-    ensure_resource_snapshot_table()
     repo = make_sandbox_monitor_repo()
     try:
         probe_targets = repo.list_probe_targets()

@@ -8,16 +8,14 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from backend.web.routers import thread_files as thread_files_router
-from backend.web.services import activity_tracker, file_channel_service
+from backend.web.services import file_channel_service
 
 
-def test_file_channel_and_activity_tracker_no_longer_import_storage_factory() -> None:
-    activity_source = inspect.getsource(activity_tracker)
+def test_file_channel_service_no_longer_imports_storage_factory() -> None:
     file_channel_source = inspect.getsource(file_channel_service)
 
-    assert "backend.web.core.storage_factory" not in activity_source
     assert "backend.web.core.storage_factory" not in file_channel_source
-    assert "storage.runtime" in activity_source
+    assert "storage.runtime" in file_channel_source
     assert "sandbox.control_plane_repos" in file_channel_source
     assert "SQLiteTerminalRepo" not in file_channel_source
     assert "SQLiteLeaseRepo" not in file_channel_source

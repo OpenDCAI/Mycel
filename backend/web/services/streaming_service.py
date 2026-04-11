@@ -1389,17 +1389,6 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         if agent and hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
             agent.runtime.transition(AgentState.IDLE)
 
-        # Check for pending board tasks on idle
-        taskboard_svc = getattr(agent, "_taskboard_service", None)
-        if taskboard_svc is not None and taskboard_svc.auto_claim:
-            try:
-                next_task = await taskboard_svc.on_idle()
-                if next_task:
-                    logger.info("Board task available: %s (id=%s)", next_task.get("title"), next_task["id"])
-                    # V1: log only. Auto-execution requires thread management design (V2).
-            except Exception:
-                logger.debug("Board task idle check failed", exc_info=True)
-
         # Clean up old run events and close repo BEFORE starting followup run,
         # so the new run gets a fresh connection and there is no closed-repo race.
         try:

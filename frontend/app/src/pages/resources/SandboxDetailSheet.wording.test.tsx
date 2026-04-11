@@ -11,6 +11,7 @@ vi.mock("@/components/ui/sheet", () => ({
   SheetContent: ({ children }: { children: ReactNode }) => <>{children}</>,
   SheetHeader: ({ children }: { children: ReactNode }) => <>{children}</>,
   SheetTitle: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SheetDescription: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock("@/components/ui/scroll-area", () => ({

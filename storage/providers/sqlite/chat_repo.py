@@ -7,8 +7,7 @@ import threading
 from pathlib import Path
 
 from storage.contracts import ChatRow
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from storage.providers.sqlite.kernel import retry_on_locked as _retry_on_locked
 
 
@@ -21,7 +20,7 @@ class SQLiteChatRepo:
         else:
             if db_path is None:
                 db_path = resolve_role_db_path(SQLiteDBRole.CHAT)
-            self._conn = create_connection(db_path)
+            self._conn = connect_sqlite(db_path, check_same_thread=False)
         self._ensure_table()
 
     def close(self) -> None:

@@ -37,9 +37,9 @@ export default function EvaluationRunDetailPage() {
   return (
     <div className="page">
       <h1>{`Evaluation Run ${run.run_id ?? runId}`}</h1>
-      <p className="description">Persisted evaluation run truth and thread linkage.</p>
+      <p className="description">Persisted evaluation run state and thread linkage.</p>
       <section className="surface-section">
-        <h2>Run Truth</h2>
+        <h2>Run State</h2>
         <div className="info-grid">
           <div>
             <strong>Thread</strong>
@@ -88,7 +88,7 @@ export default function EvaluationRunDetailPage() {
       </section>
       {limitations.length > 0 ? (
         <section className="surface-section">
-          <h2>Workbench Boundary</h2>
+          <h2>Notes</h2>
           <ul className="surface-list">
             {limitations.map((item) => (
               <li key={item}>{item}</li>

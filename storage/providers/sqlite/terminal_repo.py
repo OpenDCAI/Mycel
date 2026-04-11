@@ -12,8 +12,7 @@ from sandbox.terminal import (
     REQUIRED_ABSTRACT_TERMINAL_COLUMNS,
     REQUIRED_TERMINAL_POINTER_COLUMNS,
 )
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 
 class SQLiteTerminalRepo:
@@ -34,7 +33,7 @@ class SQLiteTerminalRepo:
                 db_path = resolve_role_db_path(SQLiteDBRole.SANDBOX)
             self._db_path = Path(db_path)
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = create_connection(db_path)
+            self._conn = connect_sqlite(db_path, check_same_thread=False)
         self._ensure_tables()
 
     @property

@@ -11,13 +11,13 @@ function joinPath(base: string, name: string): string {
   return `${base}/${name}`;
 }
 
-/** Extract all run_command tool steps from chat entries */
+/** Extract all Bash tool steps from chat entries */
 export function extractCommandSteps(entries: ChatEntry[]): ToolStep[] {
   const steps: ToolStep[] = [];
   for (const entry of entries) {
     if (entry.role !== "assistant") continue;
     for (const seg of entry.segments) {
-      if (seg.type === "tool" && seg.step.name === "run_command") {
+      if (seg.type === "tool" && seg.step.name === "Bash") {
         steps.push(seg.step);
       }
     }
@@ -43,8 +43,8 @@ export function parseCommandArgs(args: unknown): { command?: string; cwd?: strin
   if (args && typeof args === "object") {
     const a = args as Record<string, unknown>;
     return {
-      command: (a.CommandLine ?? a.command ?? a.cmd) as string | undefined,
-      cwd: (a.Cwd ?? a.cwd ?? a.working_directory) as string | undefined,
+      command: a.command as string | undefined,
+      cwd: a.cwd as string | undefined,
       description: a.description as string | undefined,
     };
   }

@@ -10,8 +10,7 @@ import time
 import uuid
 from pathlib import Path
 
-from storage.models import FileOperationRow  # noqa: F401 — re-exported for backwards compat
-from storage.providers.sqlite.connection import create_connection
+from storage.providers.sqlite.kernel import connect_sqlite
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class SQLiteFileOperationRepo:
         else:
             if db_path is None:
                 db_path = Path.home() / ".leon" / "file_ops.db"
-            self._conn = create_connection(db_path, row_factory=sqlite3.Row)
+            self._conn = connect_sqlite(db_path, row_factory=sqlite3.Row, check_same_thread=False)
         self._ensure_table()
 
     @property
@@ -81,120 +80,6 @@ class SQLiteFileOperationRepo:
         if self._own_conn:
             self._conn.close()
 
-    def get_operations_for_thread(self, thread_id: str, status: str = "applied") -> list[FileOperationRow]:
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT * FROM file_operations
-                WHERE thread_id = ? AND status = ?
-                ORDER BY timestamp ASC
-                """,
-                (thread_id, status),
-            )
-            rows = cursor.fetchall()
-        return [self._row_to_operation(row) for row in rows]
-
-    def get_operations_after_checkpoint(self, thread_id: str, checkpoint_id: str) -> list[FileOperationRow]:
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT MIN(timestamp) as ts FROM file_operations
-                WHERE thread_id = ? AND checkpoint_id = ?
-                """,
-                (thread_id, checkpoint_id),
-            )
-            row = cursor.fetchone()
-            if not row or row["ts"] is None:
-                cursor = self._conn.execute(
-                    """
-                    SELECT * FROM file_operations
-                    WHERE thread_id = ? AND status = 'applied'
-                    ORDER BY timestamp DESC
-                    """,
-                    (thread_id,),
-                )
-            else:
-                target_ts = row["ts"]
-                cursor = self._conn.execute(
-                    """
-                    SELECT * FROM file_operations
-                    WHERE thread_id = ? AND timestamp >= ? AND status = 'applied'
-                    ORDER BY timestamp DESC
-                    """,
-                    (thread_id, target_ts),
-                )
-            rows = cursor.fetchall()
-        return [self._row_to_operation(row) for row in rows]
-
-    def get_operations_between_checkpoints(
-        self,
-        thread_id: str,
-        from_checkpoint_id: str,
-        to_checkpoint_id: str,
-    ) -> list[FileOperationRow]:
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT * FROM file_operations
-                WHERE thread_id = ?
-                AND checkpoint_id != ?
-                AND status = 'applied'
-                ORDER BY timestamp DESC
-                """,
-                (thread_id, from_checkpoint_id),
-            )
-            rows = cursor.fetchall()
-
-        result: list[FileOperationRow] = []
-        found_target = False
-        for row in rows:
-            if row["checkpoint_id"] == to_checkpoint_id:
-                found_target = True
-            if found_target:
-                break
-            result.append(self._row_to_operation(row))
-        return result
-
-    def get_operations_for_checkpoint(self, thread_id: str, checkpoint_id: str) -> list[FileOperationRow]:
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT * FROM file_operations
-                WHERE thread_id = ? AND checkpoint_id = ? AND status = 'applied'
-                ORDER BY timestamp ASC
-                """,
-                (thread_id, checkpoint_id),
-            )
-            rows = cursor.fetchall()
-        return [self._row_to_operation(row) for row in rows]
-
-    def count_operations_for_checkpoint(self, thread_id: str, checkpoint_id: str) -> int:
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                SELECT COUNT(*) FROM file_operations
-                WHERE thread_id = ? AND checkpoint_id = ? AND status = 'applied'
-                """,
-                (thread_id, checkpoint_id),
-            )
-            return int(cursor.fetchone()[0])
-
-    def mark_reverted(self, operation_ids: list[str]) -> None:
-        if not operation_ids:
-            return
-        placeholders = ",".join("?" * len(operation_ids))
-        # @@@param_sql - operation ids can originate from runtime state; keep IN-clause parameterized.
-        with self._lock:
-            self._conn.execute(
-                f"""
-                UPDATE file_operations
-                SET status = 'reverted'
-                WHERE id IN ({placeholders})
-                """,
-                operation_ids,
-            )
-            self._conn.commit()
-
     def delete_thread_operations(self, thread_id: str) -> int:
         with self._lock:
             cursor = self._conn.execute(
@@ -234,17 +119,3 @@ class SQLiteFileOperationRepo:
             """
         )
         self._conn.commit()
-
-    def _row_to_operation(self, row: sqlite3.Row) -> FileOperationRow:
-        return FileOperationRow(
-            id=row["id"],
-            thread_id=row["thread_id"],
-            checkpoint_id=row["checkpoint_id"],
-            timestamp=row["timestamp"],
-            operation_type=row["operation_type"],
-            file_path=row["file_path"],
-            before_content=row["before_content"],
-            after_content=row["after_content"],
-            changes=json.loads(row["changes"]) if row["changes"] else None,
-            status=row["status"],
-        )

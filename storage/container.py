@@ -12,13 +12,11 @@ from .contracts import (
     ChatSessionRepo,
     CheckpointRepo,
     ContactRepo,
-    CronJobRepo,
     EvalRepo,
     EvaluationBatchRepo,
     FileOperationRepo,
     InviteCodeRepo,
     LeaseRepo,
-    PanelTaskRepo,
     ProviderEventRepo,
     QueueRepo,
     RecipeRepo,
@@ -48,8 +46,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "lease_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
     "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
     "chat_session_repo": ("storage.providers.supabase.chat_session_repo", "SupabaseChatSessionRepo"),
-    "panel_task_repo": ("storage.providers.supabase.panel_task_repo", "SupabasePanelTaskRepo"),
-    "cron_job_repo": ("storage.providers.supabase.cron_job_repo", "SupabaseCronJobRepo"),
     "agent_registry_repo": ("storage.providers.supabase.agent_registry_repo", "SupabaseAgentRegistryRepo"),
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
     "sync_file_repo": ("storage.providers.supabase.sync_file_repo", "SupabaseSyncFileRepo"),
@@ -115,14 +111,6 @@ class StorageContainer:
 
     def chat_session_repo(self) -> ChatSessionRepo:
         return self._build("chat_session_repo")
-
-    def panel_task_repo(self) -> PanelTaskRepo:
-        # @@@panel-task-public-schema - panel task board is still a public-schema
-        # island, so the live repo must not silently inherit runtime staging schema.
-        return self._build("panel_task_repo", client=self._public_supabase_client)
-
-    def cron_job_repo(self) -> CronJobRepo:
-        return self._build("cron_job_repo")
 
     def agent_registry_repo(self) -> AgentRegistryRepo:
         # @@@agent-registry-public-schema - agent_registry is still a public-schema

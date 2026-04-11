@@ -1,14 +1,4 @@
-"""Command Service - registers Bash tool with ToolRegistry.
-
-Tools:
-- Bash: Execute shell commands (parameter names aligned to CC)
-
-Parameter mapping from old run_command:
-- CommandLine -> command
-- Blocking -> run_in_background (semantics inverted)
-- Timeout (seconds) -> timeout (milliseconds, default 120000)
-- Cwd -> removed
-"""
+"""Command Service - registers the Bash tool with ToolRegistry."""
 
 from __future__ import annotations
 
@@ -21,8 +11,9 @@ from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.runtime.tool_result import ToolResultEnvelope, tool_permission_denied
-from core.tools.command.base import BaseExecutor, describe_execution_exception
+from core.tools.command.base import describe_execution_exception
 from core.tools.command.dispatcher import get_executor
+from sandbox.interfaces.executor import BaseExecutor
 
 logger = logging.getLogger(__name__)
 

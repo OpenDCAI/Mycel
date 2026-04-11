@@ -125,7 +125,7 @@ export default function EvaluationPage() {
   return (
     <div className="page">
       <h1>Evaluation</h1>
-      <p className="description">{data.headline ?? "Evaluation workbench truth."}</p>
+      <p className="description">{data.headline ?? "Evaluation workbench."}</p>
       <section className="surface-section">
         <h2>Workbench Overview</h2>
         <div className="surface-grid">
@@ -360,7 +360,7 @@ export default function EvaluationPage() {
       </section>
       {limitations.length > 0 ? (
         <section className="surface-section">
-          <h2>Workbench Boundary</h2>
+          <h2>Notes</h2>
           <ul className="surface-list">
             {limitations.map((item) => (
               <li key={item}>{item}</li>

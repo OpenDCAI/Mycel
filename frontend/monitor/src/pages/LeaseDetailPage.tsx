@@ -67,10 +67,6 @@ type LeaseCleanupActionPayload = {
     status?: string | null;
     summary?: string | null;
   } | null;
-  current_truth?: {
-    lease_id?: string | null;
-    triage_category?: string | null;
-  } | null;
 };
 
 const CLEANUP_STATUS_CLASS_BY_STATUS: Record<string, string> = {
@@ -112,7 +108,7 @@ export default function LeaseDetailPage() {
   const cleanupActionSummary = cleanup.recommended_action ?? "No managed action";
   const cleanupActionHint = cleanup.allowed
     ? "This lease can enter the managed destroy flow."
-    : "This lease cannot enter the managed flow until operator truth changes.";
+    : "This lease cannot enter the managed flow until its state changes.";
   const cleanupOperationStatus = cleanup.operation?.status ?? "idle";
   const cleanupOperationSummary = cleanup.operation?.summary ?? "No active cleanup operation.";
   const cleanupOperationClass = CLEANUP_STATUS_CLASS_BY_STATUS[cleanupOperationStatus] ?? "cleanup-status cleanup-status--muted";
@@ -147,9 +143,9 @@ export default function LeaseDetailPage() {
   return (
     <div className="page">
       <h1>{`Lease ${leaseData.lease.lease_id}`}</h1>
-      <p className="description">{leaseData.triage?.description ?? "Lease operator truth"}</p>
+      <p className="description">{leaseData.triage?.description ?? "Lease state and cleanup readiness."}</p>
       <section className="surface-section">
-        <h2>Operator Truth</h2>
+        <h2>State</h2>
         <div className="surface-grid">
           <article className="surface-card">
             <p className="surface-card__eyebrow">State</p>
@@ -163,7 +159,7 @@ export default function LeaseDetailPage() {
       </section>
       <section className="surface-section">
         <h2>Cleanup</h2>
-        <p className="description">{cleanup.reason ?? "Managed cleanup truth for this lease."}</p>
+        <p className="description">{cleanup.reason ?? "Managed cleanup readiness for this lease."}</p>
         <div className="surface-grid cleanup-grid">
           <article className="surface-card">
             <p className="surface-card__eyebrow">Decision</p>
@@ -239,7 +235,7 @@ export default function LeaseDetailPage() {
                 leaseData.provider?.name ?? leaseData.lease.provider_name ?? "-"
               )}
             </p>
-            <p className="surface-card__body">Provider surface and capacity truth.</p>
+            <p className="surface-card__body">Provider surface and capacity state.</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Runtime</p>

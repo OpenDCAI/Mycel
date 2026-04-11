@@ -51,7 +51,7 @@ export default function OperationDetailPage() {
   const target = data.target ?? {};
   const result = data.result_truth ?? {};
   const events = data.events ?? [];
-  const description = operation.reason ?? operation.summary ?? "Monitor operation truth";
+  const description = operation.reason ?? operation.summary ?? "Monitor operation state";
   const operationStatus = operation.status ?? "idle";
   const operationStatusClass = OPERATION_STATUS_CLASS_BY_STATUS[operationStatus] ?? "cleanup-status cleanup-status--muted";
   const latestEventMessage = events[events.length - 1]?.message ?? null;
@@ -63,12 +63,12 @@ export default function OperationDetailPage() {
       <h1>{`Operation ${operation.operation_id ?? operationId}`}</h1>
       <p className="description">{description}</p>
       <section className="surface-section">
-        <h2>Operation Truth</h2>
+        <h2>Operation State</h2>
         <div className="surface-grid">
           <article className="surface-card">
             <p className="surface-card__eyebrow">Kind</p>
             <p className="surface-card__value surface-card__value--compact">{operation.kind ?? "-"}</p>
-            <p className="surface-card__body">Managed operator action currently being tracked.</p>
+            <p className="surface-card__body">Managed cleanup action currently being tracked.</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Status</p>
@@ -82,7 +82,7 @@ export default function OperationDetailPage() {
             <p className="surface-card__value surface-card__value--compact">
               <Link to="/leases">Leases</Link>
             </p>
-            <p className="surface-card__body">Operator workbench currently owning this action.</p>
+            <p className="surface-card__body">Lease workbench currently owning this action.</p>
           </article>
         </div>
       </section>
@@ -121,7 +121,7 @@ export default function OperationDetailPage() {
         </div>
       </section>
       <section className="surface-section">
-        <h2>Result Truth</h2>
+        <h2>Result State</h2>
         <div className="surface-grid">
           <article className="surface-card">
             <p className="surface-card__eyebrow">Lease Before</p>
@@ -131,12 +131,12 @@ export default function OperationDetailPage() {
           <article className="surface-card">
             <p className="surface-card__eyebrow">Lease After</p>
             <p className="surface-card__value surface-card__value--compact">{result.lease_state_after ?? "-"}</p>
-            <p className="surface-card__body">Most recent post-operation lease state truth.</p>
+            <p className="surface-card__body">Most recent post-operation lease state.</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Runtime After</p>
             <p className="surface-card__value surface-card__value--compact">{result.runtime_state_after ?? "-"}</p>
-            <p className="surface-card__body">{operation.reason ?? "No operator reason recorded."}</p>
+            <p className="surface-card__body">{operation.reason ?? "No operation reason recorded."}</p>
           </article>
         </div>
       </section>

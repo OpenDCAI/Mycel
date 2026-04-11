@@ -317,12 +317,6 @@ class _NullLock:
         return False
 
 
-class _FakeClearAgent:
-    def __init__(self, state: AgentState = AgentState.IDLE) -> None:
-        self.runtime = SimpleNamespace(current_state=state)
-        self.aclear_thread = AsyncMock()
-
-
 def _make_threads_app(
     *,
     thread_repo=None,
@@ -337,20 +331,6 @@ def _make_threads_app(
     )
 
 
-def _make_clear_thread_app():
-    display_builder = SimpleNamespace(clear=MagicMock())
-    queue_manager = SimpleNamespace(clear_all=MagicMock())
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            agent_pool={},
-            display_builder=display_builder,
-            queue_manager=queue_manager,
-            thread_event_buffers={"thread-1": object()},
-        )
-    )
-    return app, display_builder, queue_manager
-
-
 @contextmanager
 def _patch_create_thread_noop_guards():
     with (
@@ -361,16 +341,6 @@ def _patch_create_thread_noop_guards():
         patch.object(threads_router, "save_last_successful_config", return_value=None),
     ):
         yield create_resources
-
-
-@contextmanager
-def _patch_local_clear_thread_agent(agent):
-    with (
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-        patch.object(threads_router, "get_or_create_agent", AsyncMock(return_value=agent)),
-        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
-    ):
-        yield
 
 
 @pytest.mark.asyncio
@@ -806,6 +776,7 @@ async def test_get_thread_permissions_returns_thread_scoped_pending_requests():
     result = await threads_router.get_thread_permissions(
         "thread-1",
         user_id="owner-1",
+        thread_lock=_NullLock(),
         agent=agent,
     )
 
@@ -837,6 +808,7 @@ async def test_get_thread_permissions_does_not_clear_live_pending_requests_durin
     result = await threads_router.get_thread_permissions(
         "thread-1",
         user_id="owner-1",
+        thread_lock=_NullLock(),
         agent=agent,
     )
 
@@ -919,6 +891,7 @@ async def test_resolve_thread_permission_request_persists_resolution():
         ResolvePermissionRequest(decision="allow", message="go ahead"),
         user_id="owner-1",
         agent=agent,
+        thread_lock=_NullLock(),
     )
 
     assert result == {"ok": True, "thread_id": "thread-1", "request_id": "perm-1"}
@@ -953,10 +926,11 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             "thread-1",
             "perm-ask",
             payload,
-            user_id="owner-1",
-            agent=agent,
-            app=app,
-        )
+                user_id="owner-1",
+                agent=agent,
+                app=app,
+                thread_lock=_NullLock(),
+            )
 
     assert result == {
         "ok": True,
@@ -1022,10 +996,11 @@ async def test_resolve_ask_user_question_request_requires_answers_for_allow():
             "thread-1",
             "perm-ask",
             ResolvePermissionRequest(decision="allow", message=None, answers=None, annotations=None),
-            user_id="owner-1",
-            agent=agent,
-            app=SimpleNamespace(),
-        )
+                user_id="owner-1",
+                agent=agent,
+                app=SimpleNamespace(),
+                thread_lock=_NullLock(),
+            )
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "AskUserQuestion answers are required when approving the request"
@@ -1040,10 +1015,11 @@ async def test_resolve_thread_permission_request_404s_missing_request():
         await threads_router.resolve_thread_permission_request(
             "thread-1",
             "missing",
-            ResolvePermissionRequest(decision="deny", message="no"),
-            user_id="owner-1",
-            agent=agent,
-        )
+                ResolvePermissionRequest(decision="deny", message="no"),
+                user_id="owner-1",
+                agent=agent,
+                thread_lock=_NullLock(),
+            )
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Permission request not found"
@@ -1119,43 +1095,3 @@ async def test_remove_thread_permission_rule_persists_session_rule_change():
     }
     assert agent.rule_remove_calls == [("deny", "Bash")]
     agent.agent.apersist_state.assert_awaited_once_with("thread-1")
-
-
-@pytest.mark.asyncio
-async def test_clear_thread_route_clears_agent_state_and_thread_buffers():
-    agent = _FakeClearAgent()
-    app, display_builder, queue_manager = _make_clear_thread_app()
-
-    with _patch_local_clear_thread_agent(agent):
-        result = await threads_router.clear_thread_history(
-            "thread-1",
-            user_id="owner-1",
-            app=app,
-        )
-
-    assert result == {"ok": True, "thread_id": "thread-1"}
-    agent.aclear_thread.assert_awaited_once_with("thread-1")
-    display_builder.clear.assert_called_once_with("thread-1")
-    queue_manager.clear_all.assert_called_once_with("thread-1")
-    assert app.state.thread_event_buffers == {}
-
-
-@pytest.mark.asyncio
-async def test_clear_thread_route_rejects_active_run():
-    agent = _FakeClearAgent(state=AgentState.ACTIVE)
-    app, display_builder, queue_manager = _make_clear_thread_app()
-
-    with _patch_local_clear_thread_agent(agent):
-        with pytest.raises(threads_router.HTTPException) as exc_info:
-            await threads_router.clear_thread_history(
-                "thread-1",
-                user_id="owner-1",
-                app=app,
-            )
-
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == "Cannot clear thread while run is in progress"
-    agent.aclear_thread.assert_not_awaited()
-    display_builder.clear.assert_not_called()
-    queue_manager.clear_all.assert_not_called()
-    assert "thread-1" in app.state.thread_event_buffers

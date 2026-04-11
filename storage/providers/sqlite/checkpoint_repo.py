@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from storage.providers.sqlite.connection import create_connection
+from storage.providers.sqlite.kernel import connect_sqlite
 
 
 class SQLiteCheckpointRepo:
@@ -21,7 +21,7 @@ class SQLiteCheckpointRepo:
 
         if db_path is None:
             db_path = Path.home() / ".leon" / "leon.db"
-        self._conn = create_connection(db_path)
+        self._conn = connect_sqlite(db_path, check_same_thread=False)
 
     def close(self) -> None:
         if self._own_conn:

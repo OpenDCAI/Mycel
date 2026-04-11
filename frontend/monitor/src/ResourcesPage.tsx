@@ -24,7 +24,6 @@ import type {
   ResourceOverviewResponse,
   ResourceSession,
   SessionMetrics,
-  UsageMetric,
 } from "./resources/types";
 
 const PROVIDER_TYPE_LABEL = {
@@ -71,6 +70,7 @@ const SESSION_STATUS_ORDER: Record<ResourceSession["status"], number> = {
   paused: 2,
   stopped: 3,
 };
+const SANDBOX_FILTER_STATUSES: ResourceSession["status"][] = ["running", "paused", "stopped", "destroying"];
 
 interface LeaseGroup {
   leaseId: string;
@@ -98,9 +98,9 @@ function avatarColor(name: string): { backgroundColor: string; color: string } {
   return { backgroundColor, color };
 }
 
-function formatNumber(value: number | null | undefined, nullText: string = "--"): string {
+function formatNumber(value: number | null | undefined): string {
   if (value == null) {
-    return nullText;
+    return "--";
   }
   if (Number.isInteger(value)) {
     return String(value);
@@ -114,19 +114,6 @@ function formatMetric(value: number | null | undefined, unit: string): string {
     return `${Math.round(value * 1024)}MB`;
   }
   return `${formatNumber(value)}${unit}`;
-}
-
-function formatMetricRange(metric: UsageMetric): string {
-  if (metric.used == null && metric.limit == null) {
-    return "--";
-  }
-  if (metric.used != null && metric.limit != null) {
-    return `${formatMetric(metric.used, metric.unit)} / ${formatMetric(metric.limit, metric.unit)}`;
-  }
-  if (metric.used != null) {
-    return formatMetric(metric.used, metric.unit);
-  }
-  return `limit ${formatMetric(metric.limit, metric.unit)}`;
 }
 
 function formatSessionMetricRange(used: number | null | undefined, limit: number | null | undefined, unit: string): string {
@@ -264,6 +251,35 @@ function defaultProviderStatusFilter(groups: LeaseGroup[]): LeaseGroup["status"]
   return "all";
 }
 
+async function fetchLocalSettingsJson<T>(path: string): Promise<T> {
+  const response = await fetch(path);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`API ${response.status}: ${body || response.statusText}`);
+  }
+  return await response.json() as T;
+}
+
+function countSessions(sessions: ResourceSession[], status: ResourceSession["status"]): number {
+  return sessions.filter((session) => session.status === status).length;
+}
+
+function countProviderSessions(providers: ProviderInfo[], status: ResourceSession["status"]): number {
+  return providers.reduce((total, provider) => total + countSessions(provider.sessions, status), 0);
+}
+
+function countRuntimeUnboundRunning(provider: ProviderInfo): number {
+  return provider.sessions.filter(
+    (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
+  ).length;
+}
+
+function countDetachedResidue(sessions: ResourceSession[]): number {
+  return sessions.filter(
+    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
+  ).length;
+}
+
 export default function ResourcesPage() {
   const [providers, setProviders] = React.useState<ProviderInfo[]>([]);
   const [selectedId, setSelectedId] = React.useState("");
@@ -376,20 +392,9 @@ export default function ResourcesPage() {
   }, [loadSnapshot]);
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
-  const runningSessionCount = providers.reduce(
-    (total, provider) => total + provider.sessions.filter((session) => session.status === "running").length,
-    0,
-  );
-  const pausedSessionCount = providers.reduce(
-    (total, provider) =>
-      total + provider.sessions.filter((session) => session.status === "paused").length,
-    0,
-  );
-  const stoppedSessionCount = providers.reduce(
-    (total, provider) =>
-      total + provider.sessions.filter((session) => session.status === "stopped").length,
-    0,
-  );
+  const runningSessionCount = countProviderSessions(providers, "running");
+  const pausedSessionCount = countProviderSessions(providers, "paused");
+  const stoppedSessionCount = countProviderSessions(providers, "stopped");
   const leaseGroupCount = providers.reduce((total, provider) => total + groupByLease(provider.sessions).length, 0);
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
@@ -484,15 +489,11 @@ function ProviderCard({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const runningCount = provider.sessions.filter((session) => session.status === "running").length;
-  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
-  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
-  const runtimeUnboundRunningCount = provider.sessions.filter(
-    (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
-  ).length;
-  const detachedResidueCount = provider.sessions.filter(
-    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
-  ).length;
+  const runningCount = countSessions(provider.sessions, "running");
+  const pausedCount = countSessions(provider.sessions, "paused");
+  const stoppedCount = countSessions(provider.sessions, "stopped");
+  const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
+  const detachedResidueCount = countDetachedResidue(provider.sessions);
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
@@ -517,11 +518,11 @@ function ProviderCard({
       ].join(" ")}
       onClick={onSelect}
     >
-        <div className="provider-card__header">
-          <div className="provider-card__title">
-            <span className={`provider-status-dot provider-status-dot--${provider.status}`} />
-            <span>{provider.name}</span>
-          </div>
+      <div className="provider-card__header">
+        <div className="provider-card__title">
+          <span className={`provider-status-dot provider-status-dot--${provider.status}`} />
+          <span>{provider.name}</span>
+        </div>
         <span className="provider-card__kind">
           <span className="provider-card__type-glyph" aria-hidden="true">
             {PROVIDER_TYPE_GLYPH[provider.type]}
@@ -531,8 +532,8 @@ function ProviderCard({
       </div>
 
       {provider.status === "unavailable" ? (
-        // @@@unavailable-card-truth - monitor cards must say when a provider is unavailable;
-        // showing a neutral `-- CPU` card hides the real operator actionability.
+        // @@@unavailable-card-state - monitor cards must say when a provider is unavailable;
+        // showing a neutral `-- CPU` card hides the actionable state.
         <div className="provider-card__unavailable">
           <div className="provider-card__unavailable-label">未就绪</div>
           <div className="provider-card__unavailable-reason">{unavailableHint}</div>
@@ -599,15 +600,11 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
       ),
     [groups],
   );
-  const runningCount = provider.sessions.filter((session) => session.status === "running").length;
-  const detachedResidueCount = provider.sessions.filter(
-    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
-  ).length;
-  const runtimeUnboundRunningCount = provider.sessions.filter(
-    (session) => session.status === "running" && !session.runtimeSessionId,
-  ).length;
-  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
-  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
+  const runningCount = countSessions(provider.sessions, "running");
+  const detachedResidueCount = countDetachedResidue(provider.sessions);
+  const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
+  const pausedCount = countSessions(provider.sessions, "paused");
+  const stoppedCount = countSessions(provider.sessions, "stopped");
   const isLocal = provider.type === "local";
   const showUnavailableBanner = provider.status === "unavailable";
   const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
@@ -653,7 +650,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
         ) : (
           <>
             {showUnavailableBanner && (
-              // @@@unavailable-with-sessions - monitor truth differs from the old app resource tab:
+              // @@@unavailable-with-sessions - monitor state differs from the app resource tab:
               // an unavailable provider can still carry historical/live lease rows, so keep the detail
               // surface inspectable instead of hard-disabling the whole card.
               <div className="provider-warning-banner">
@@ -690,54 +687,19 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                   >
                     全部 {groups.length}
                   </button>
-                  {groupCounts.running > 0 && (
+                  {SANDBOX_FILTER_STATUSES.filter((status) => groupCounts[status] > 0).map((status) => (
                     <button
+                      key={status}
                       type="button"
                       className={[
                         "provider-filter-chip",
-                        statusFilter === "running" ? "provider-filter-chip--active" : "",
+                        statusFilter === status ? "provider-filter-chip--active" : "",
                       ].join(" ")}
-                      onClick={() => setStatusFilter("running")}
+                      onClick={() => setStatusFilter(status)}
                     >
-                      运行中 {groupCounts.running}
+                      {STATUS_LABEL[status]} {groupCounts[status]}
                     </button>
-                  )}
-                  {groupCounts.paused > 0 && (
-                    <button
-                      type="button"
-                      className={[
-                        "provider-filter-chip",
-                        statusFilter === "paused" ? "provider-filter-chip--active" : "",
-                      ].join(" ")}
-                      onClick={() => setStatusFilter("paused")}
-                    >
-                      已暂停 {groupCounts.paused}
-                    </button>
-                  )}
-                  {groupCounts.stopped > 0 && (
-                    <button
-                      type="button"
-                      className={[
-                        "provider-filter-chip",
-                        statusFilter === "stopped" ? "provider-filter-chip--active" : "",
-                      ].join(" ")}
-                      onClick={() => setStatusFilter("stopped")}
-                    >
-                      已结束 {groupCounts.stopped}
-                    </button>
-                  )}
-                  {groupCounts.destroying > 0 && (
-                    <button
-                      type="button"
-                      className={[
-                        "provider-filter-chip",
-                        statusFilter === "destroying" ? "provider-filter-chip--active" : "",
-                      ].join(" ")}
-                      onClick={() => setStatusFilter("destroying")}
-                    >
-                      销毁中 {groupCounts.destroying}
-                    </button>
-                  )}
+                  ))}
                 </div>
               )}
               {groups.length === 0 ? (
@@ -834,20 +796,20 @@ function SandboxCard({
     group.status === "running" &&
     Boolean(group.leaseId) &&
     !group.sessions.some((session) => Boolean(session.runtimeSessionId));
-  const showQuotaOnlyDiskTruth =
+  const showQuotaOnlyDiskState =
     metrics != null &&
     metrics.disk == null &&
     metrics.diskLimit != null &&
     Boolean(metrics.diskNote || metrics.probeError);
-  const showDetachedResidueTruth =
+  const showDetachedResidueState =
     group.status === "stopped" &&
     !group.sessions.some((session) => Boolean(session.runtimeSessionId)) &&
     metrics == null;
-  const showMissingLiveTelemetryTruth =
+  const showMissingMetricsState =
     group.status === "running" &&
     !showRuntimeBindingWarning &&
-    !showQuotaOnlyDiskTruth &&
-    !showDetachedResidueTruth &&
+    !showQuotaOnlyDiskState &&
+    !showDetachedResidueState &&
     (metrics == null || (metrics.cpu == null && metrics.memory == null && metrics.disk == null));
 
   return (
@@ -876,12 +838,12 @@ function SandboxCard({
         {showRuntimeBindingWarning && (
           // @@@running-card-without-runtime - a persisted lease row can still say `running`
           // after the live runtime session disappears; the card has to surface that drift
-          // before the operator drills into a guaranteed-failing file browser.
+          // before opening a guaranteed-failing file browser.
           <div className="sandbox-card__warning">未连上运行时</div>
         )}
-        {showQuotaOnlyDiskTruth && <div className="sandbox-card__warning">仅有磁盘配额</div>}
-        {showDetachedResidueTruth && <div className="sandbox-card__warning">历史残留</div>}
-        {showMissingLiveTelemetryTruth && <div className="sandbox-card__warning">等待运行中的沙盒上报指标</div>}
+        {showQuotaOnlyDiskState && <div className="sandbox-card__warning">仅有磁盘配额</div>}
+        {showDetachedResidueState && <div className="sandbox-card__warning">历史残留</div>}
+        {showMissingMetricsState && <div className="sandbox-card__warning">等待运行中的沙盒上报指标</div>}
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
@@ -946,7 +908,7 @@ function SandboxInspector({
         </div>
 
         <div className="sandbox-modal__section">
-            <h4>Agent</h4>
+          <h4>Agent</h4>
           <div className="sandbox-session-list">
             {group.sessions.map((session) => (
               <div key={session.id} className="sandbox-session-row">
@@ -1078,18 +1040,11 @@ function MonitorFileBrowser({
         // @@@local-monitor-browse - local resource sessions are host-bound, not active-instance-bound.
         // Reuse the same settings browse/read endpoints as the app resource surface.
         const data = isLocal
-          ? await (async () => {
-              const response = await fetch(`/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`);
-              if (!response.ok) {
-                const body = await response.text();
-                throw new Error(`API ${response.status}: ${body || response.statusText}`);
-              }
-              return await response.json() as {
+          ? await fetchLocalSettingsJson<{
                 current_path?: string;
                 parent_path?: string | null;
                 items?: BrowseItem[];
-              };
-            })()
+              }>(`/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`)
           : await browseMonitorSandbox(leaseId, path);
         setCurrentPath(data.current_path ?? path);
         setParentPath(data.parent_path ?? null);
@@ -1118,14 +1073,9 @@ function MonitorFileBrowser({
       setFileLoading(true);
       try {
         const data = isLocal
-          ? await (async () => {
-              const response = await fetch(`/api/settings/read?path=${encodeURIComponent(path)}`);
-              if (!response.ok) {
-                const body = await response.text();
-                throw new Error(`API ${response.status}: ${body || response.statusText}`);
-              }
-              return await response.json() as { content: string; truncated: boolean };
-            })()
+          ? await fetchLocalSettingsJson<{ content: string; truncated: boolean }>(
+              `/api/settings/read?path=${encodeURIComponent(path)}`,
+            )
           : await readMonitorSandboxFile(leaseId, path);
         setFileContent(data.content);
         if (data.truncated) {
@@ -1142,7 +1092,6 @@ function MonitorFileBrowser({
 
   const openFile = React.useCallback(
     async (path: string) => {
-      if (!leaseId && !isLocal) return;
       if (selectedFile === path) {
         setSelectedFile(null);
         setFileContent(null);
@@ -1152,12 +1101,8 @@ function MonitorFileBrowser({
       setSelectedFile(path);
       await loadFile(path);
     },
-    [isLocal, leaseId, selectedFile, loadFile],
+    [selectedFile, loadFile],
   );
-
-  if (!leaseId && !isLocal) {
-    return <p className="file-browser__empty">当前沙盒没有 lease id，无法浏览文件。</p>;
-  }
 
   if (unavailableReason) {
     return <p className="file-browser__empty">{unavailableReason}</p>;

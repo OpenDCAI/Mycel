@@ -20,11 +20,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.runtime.tool_result import ToolResultEnvelope, tool_success
-from core.tools.filesystem.backend import FileSystemBackend
 from core.tools.filesystem.read import ReadLimits
 from core.tools.filesystem.read import read_file as read_file_dispatch
 from core.tools.filesystem.read.readers.binary import IMAGE_EXTENSIONS, MAX_IMAGE_SIZE
 from core.tools.filesystem.read.types import FileType, detect_file_type
+from sandbox.interfaces.filesystem import FileSystemBackend
 
 if TYPE_CHECKING:
     from core.operations import FileOperationRecorder

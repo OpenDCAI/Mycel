@@ -31,7 +31,7 @@ export default function ThreadsPage() {
   return (
     <div className="page">
       <h1>Threads</h1>
-      <p className="description">Owner-visible thread truth, trajectory entry points, and runtime linkage.</p>
+      <p className="description">Owner-visible threads, trajectory entry points, and runtime linkage.</p>
       <section className="surface-section">
         <h2>Thread Summary</h2>
         <div className="surface-grid">
@@ -53,7 +53,7 @@ export default function ThreadsPage() {
         <div className="leases-workbench-header">
           <div>
             <h2>Thread Workbench</h2>
-            <p className="description">Pick a thread to inspect its trajectory, runtime links, and operator truth.</p>
+            <p className="description">Pick a thread to inspect its trajectory and runtime links.</p>
           </div>
         </div>
         <table>

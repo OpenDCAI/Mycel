@@ -11,8 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from sandbox.lifecycle import parse_lease_instance_state
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 
 class SQLiteLeaseRepo:
@@ -33,7 +32,7 @@ class SQLiteLeaseRepo:
                 db_path = resolve_role_db_path(SQLiteDBRole.SANDBOX)
             self._db_path = Path(db_path)
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = create_connection(db_path)
+            self._conn = connect_sqlite(db_path, check_same_thread=False)
         self._ensure_tables()
 
     @property

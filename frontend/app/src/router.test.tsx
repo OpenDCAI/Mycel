@@ -13,8 +13,8 @@ function collectPaths(routes: readonly { path?: string; children?: readonly { pa
   return paths;
 }
 
-describe("router legacy contract", () => {
-  it("does not keep removed legacy redirect routes alive", () => {
+describe("router removed route contract", () => {
+  it("does not keep removed redirect routes alive", () => {
     const routePaths = new Set(collectPaths(router.routes));
 
     expect(routePaths.has("/members")).toBe(false);

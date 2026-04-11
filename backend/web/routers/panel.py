@@ -1,4 +1,4 @@
-"""Panel API router — Agents, Tasks, Library, Profile."""
+"""Panel API router — Agents, Library, Profile."""
 
 import asyncio
 from typing import Annotated, Any
@@ -8,40 +8,30 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.panel import (
     AgentConfigPayload,
-    BulkDeleteTasksRequest,
-    BulkTaskStatusRequest,
     CreateAgentRequest,
-    CreateCronJobRequest,
     CreateResourceRequest,
-    CreateTaskRequest,
     PublishAgentRequest,
     UpdateAgentRequest,
-    UpdateCronJobRequest,
     UpdateProfileRequest,
     UpdateResourceContentRequest,
     UpdateResourceRequest,
-    UpdateTaskRequest,
 )
-from backend.web.services import cron_job_service, library_service, member_service, profile_service, task_service
+from backend.web.services import library_service, member_service, profile_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
 
-def _get_owned_agent_or_404(agent_id: str, user_id: str, user_repo: Any) -> dict[str, Any]:
+def _require_owned_agent_user(agent_id: str, user_id: str, user_repo: Any) -> Any:
     user = user_repo.get_by_id(agent_id)
     if user is None or user.type.value != "agent":
         raise HTTPException(404, "Agent not found")
     if user.owner_user_id != user_id:
         raise HTTPException(403, "Forbidden")
-    return {"id": user.id}
+    return user
 
 
 def _get_owned_agent_or_404_with_config(agent_id: str, user_id: str, user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
-    user = user_repo.get_by_id(agent_id)
-    if user is None or user.type.value != "agent":
-        raise HTTPException(404, "Agent not found")
-    if user.owner_user_id != user_id:
-        raise HTTPException(403, "Forbidden")
+    _require_owned_agent_user(agent_id, user_id, user_repo)
     item = member_service.get_member(agent_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if not item:
         raise HTTPException(404, "Agent not found")
@@ -110,7 +100,7 @@ async def update_member(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
-    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     item = await asyncio.to_thread(
         member_service.update_member,
         agent_id,
@@ -131,7 +121,7 @@ async def update_member_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.update_member_config,
@@ -155,7 +145,7 @@ async def publish_member(
     if agent_id == "__leon__":
         raise HTTPException(403, "Cannot publish builtin agent")
     user_repo = request.app.state.user_repo
-    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.publish_member,
@@ -178,7 +168,7 @@ async def delete_member(
     if agent_id == "__leon__":
         raise HTTPException(403, "Cannot delete builtin agent")
     user_repo = request.app.state.user_repo
-    await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     thread_repo = getattr(request.app.state, "thread_repo", None)
     if thread_repo is not None:
         await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
@@ -194,192 +184,6 @@ async def delete_member(
     if not ok:
         raise HTTPException(404, "Agent not found")
     return {"success": True}
-
-
-# ── Tasks ──
-
-
-@router.get("/tasks")
-async def list_tasks(
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    items = await asyncio.to_thread(
-        task_service.list_tasks,
-        owner_user_id=user_id,
-        repo=request.app.state.panel_task_repo,
-    )
-    return {"items": items}
-
-
-@router.post("/tasks")
-async def create_task(
-    req: CreateTaskRequest,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    return await asyncio.to_thread(
-        task_service.create_task,
-        owner_user_id=user_id,
-        repo=request.app.state.panel_task_repo,
-        **req.model_dump(),
-    )
-
-
-@router.put("/tasks/bulk-status")
-async def bulk_update_status(
-    req: BulkTaskStatusRequest,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    count = await asyncio.to_thread(
-        task_service.bulk_update_task_status,
-        req.ids,
-        req.status,
-        owner_user_id=user_id,
-        repo=request.app.state.panel_task_repo,
-    )
-    return {"updated": count}
-
-
-@router.post("/tasks/bulk-delete")
-async def bulk_delete_tasks(
-    req: BulkDeleteTasksRequest,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    count = await asyncio.to_thread(
-        task_service.bulk_delete_tasks,
-        req.ids,
-        owner_user_id=user_id,
-        repo=request.app.state.panel_task_repo,
-    )
-    return {"deleted": count}
-
-
-@router.put("/tasks/{task_id}")
-async def update_task(
-    task_id: str,
-    req: UpdateTaskRequest,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    item = await asyncio.to_thread(
-        task_service.update_task,
-        task_id,
-        owner_user_id=user_id,
-        repo=request.app.state.panel_task_repo,
-        **req.model_dump(),
-    )
-    if not item:
-        raise HTTPException(404, "Task not found")
-    return item
-
-
-@router.delete("/tasks/{task_id}")
-async def delete_task(
-    task_id: str,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    ok = await asyncio.to_thread(
-        task_service.delete_task,
-        task_id,
-        owner_user_id=user_id,
-        repo=request.app.state.panel_task_repo,
-    )
-    if not ok:
-        raise HTTPException(404, "Task not found")
-    return {"success": True}
-
-
-# ── Cron Jobs ──
-
-
-@router.get("/cron-jobs")
-async def list_cron_jobs(
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    items = await asyncio.to_thread(
-        cron_job_service.list_cron_jobs,
-        owner_user_id=user_id,
-        repo=request.app.state.cron_job_repo,
-    )
-    return {"items": items}
-
-
-@router.post("/cron-jobs")
-async def create_cron_job(
-    req: CreateCronJobRequest,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    job = await asyncio.to_thread(
-        cron_job_service.create_cron_job,
-        name=req.name,
-        cron_expression=req.cron_expression,
-        repo=request.app.state.cron_job_repo,
-        description=req.description,
-        task_template=req.task_template,
-        enabled=int(req.enabled),
-        owner_user_id=user_id,
-    )
-    return {"item": job}
-
-
-@router.put("/cron-jobs/{job_id}")
-async def update_cron_job(
-    job_id: str,
-    req: UpdateCronJobRequest,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    fields = req.model_dump(exclude_none=True)
-    if "enabled" in fields:
-        fields["enabled"] = int(fields["enabled"])
-    job = await asyncio.to_thread(
-        cron_job_service.update_cron_job,
-        job_id,
-        owner_user_id=user_id,
-        repo=request.app.state.cron_job_repo,
-        **fields,
-    )
-    if not job:
-        raise HTTPException(404, "Cron job not found")
-    return {"item": job}
-
-
-@router.delete("/cron-jobs/{job_id}")
-async def delete_cron_job(
-    job_id: str,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    ok = await asyncio.to_thread(
-        cron_job_service.delete_cron_job,
-        job_id,
-        owner_user_id=user_id,
-        repo=request.app.state.cron_job_repo,
-    )
-    if not ok:
-        raise HTTPException(404, "Cron job not found")
-    return {"ok": True}
-
-
-@router.post("/cron-jobs/{job_id}/run")
-async def trigger_cron_job(
-    job_id: str,
-    request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-) -> dict[str, Any]:
-    cron_service = getattr(request.app.state, "cron_service", None)
-    if not cron_service:
-        raise HTTPException(503, "Cron service not available")
-    task = await cron_service.trigger_job(job_id, owner_user_id=user_id)
-    if not task:
-        raise HTTPException(404, "Cron job not found or disabled")
-    return {"item": task}
 
 
 # ── Library ──

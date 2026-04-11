@@ -960,7 +960,6 @@ class SQLiteLease(SandboxLease):
                 probe_mode="create_running",
                 provider=provider,
                 instance_id=session_info.session_id,
-                db_path=self.db_path,
             )
             if not probe_result["ok"]:
                 print(f"[lease:{self.lease_id}] create probe error: {probe_result['error']}")

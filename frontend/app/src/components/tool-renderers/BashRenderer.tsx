@@ -3,12 +3,11 @@ import { memo, useCallback, useState } from "react";
 import type { ToolRendererProps } from "./types";
 import { FEEDBACK_BRIEF } from "@/styles/ux-timing";
 
-function parseArgs(args: unknown): { command?: string; cwd?: string; description?: string } {
+function parseArgs(args: unknown): { command?: string; description?: string } {
   if (args && typeof args === "object") {
     const a = args as Record<string, unknown>;
     return {
-      command: (a.CommandLine ?? a.command ?? a.cmd) as string | undefined,
-      cwd: (a.Cwd ?? a.cwd) as string | undefined,
+      command: a.command as string | undefined,
       description: a.description as string | undefined,
     };
   }
@@ -37,7 +36,7 @@ function CopyInline({ text }: { text: string }) {
   );
 }
 
-export default memo(function RunCommandRenderer({ step, expanded }: ToolRendererProps) {
+export default memo(function BashRenderer({ step, expanded }: ToolRendererProps) {
   const { command, description } = parseArgs(step.args);
 
   if (!expanded) {

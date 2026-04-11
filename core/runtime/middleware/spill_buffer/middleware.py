@@ -12,12 +12,12 @@ from typing import Any
 from langchain_core.messages import ToolMessage
 
 from core.runtime.middleware import AgentMiddleware, ModelRequest, ModelResponse, ToolCallRequest
-from core.tools.filesystem.backend import FileSystemBackend
+from sandbox.interfaces.filesystem import FileSystemBackend
 
 from .spill import spill_if_needed
 
 # Tools whose output must never be silently replaced.
-SKIP_TOOLS: set[str] = {"read_file"}
+SKIP_TOOLS: set[str] = {"Read"}
 
 
 class SpillBufferMiddleware(AgentMiddleware):
@@ -26,7 +26,7 @@ class SpillBufferMiddleware(AgentMiddleware):
     Oversized content is written to disk under
     ``{workspace_root}/.leon/tool-results/{tool_call_id}.txt``
     and replaced with a preview + file path so the model can
-    use ``read_file`` to inspect specific sections.
+    use ``Read`` to inspect specific sections.
     """
 
     def __init__(

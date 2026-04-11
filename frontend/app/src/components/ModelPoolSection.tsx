@@ -29,7 +29,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
   const [selectedProvider, setSelectedProvider] = useState("");
   const [addAlias, setAddAlias] = useState("");
   const [addContextLimit, setAddContextLimit] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
   const [editingModel, setEditingModel] = useState<string | null>(null);
   const [editAlias, setEditAlias] = useState("");
   const [editContextLimit, setEditContextLimit] = useState("");
@@ -99,7 +99,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
       setSelectedProvider("");
       setAddAlias("");
       setAddContextLimit("");
-      setShowAdvanced(false);
+      setShowOptional(false);
       setSuccessMessage("模型已添加");
       setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
     } finally {
@@ -159,14 +159,14 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
               {adding ? "添加中..." : "添加"}
             </button>
           </div>
-          {/* Collapsible advanced */}
+          {/* Optional model fields */}
           <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
+            onClick={() => setShowOptional(!showOptional)}
             className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors duration-fast"
           >
-            {showAdvanced ? "▾ 高级选项" : "▸ 高级选项"}
+            {showOptional ? "▾ 可选参数" : "▸ 可选参数"}
           </button>
-          {showAdvanced && (
+          {showOptional && (
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="text"

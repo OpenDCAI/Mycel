@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from eval.models import RunTrajectory
-from storage.providers.sqlite.connection import create_connection
+from storage.providers.sqlite.kernel import connect_sqlite
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS eval_runs (
@@ -76,7 +76,7 @@ class SQLiteEvalRepo:
         if conn is not None:
             self._conn = conn
         else:
-            self._conn = create_connection(db_path, row_factory=sqlite3.Row)
+            self._conn = connect_sqlite(db_path, row_factory=sqlite3.Row)
 
     def close(self) -> None:
         if self._own_conn:

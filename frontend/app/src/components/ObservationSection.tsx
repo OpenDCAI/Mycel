@@ -238,7 +238,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                     {requiredFields.map((field) => renderField(provider.id, field))}
                   </div>
 
-                  {/* Advanced (optional fields) */}
+                  {/* Optional fields */}
                   {hasAdvanced && (
                     <div>
                       <button
@@ -246,7 +246,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                         className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground-secondary transition-colors duration-fast"
                       >
                         <ChevronRight className={`w-3 h-3 transition-transform duration-fast ${advOpen ? "rotate-90" : ""}`} />
-                        高级选项
+                        可选参数
                       </button>
                       <div
                         className="grid transition-[grid-template-rows] duration-fast ease-io"

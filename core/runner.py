@@ -236,6 +236,6 @@ class NonInteractiveRunner:
             qm = getattr(self.agent, "queue_manager", None)
             if qm:
                 sizes = qm.queue_sizes(thread_id=self.thread_id)
-                print(f"\n[QUEUE] steer={sizes['steer']}, followup={sizes['followup']}")
+                print(f"\n[QUEUE] followup={sizes['followup']}")
         except Exception:
             pass

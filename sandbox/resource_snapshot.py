@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from sandbox.provider import SandboxProvider
 from storage.runtime import build_resource_snapshot_repo
-
-
-def ensure_resource_snapshot_table() -> None:
-    """Noop — Supabase tables managed via migrations."""
 
 
 def upsert_lease_resource_snapshot(**kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -21,18 +16,8 @@ def upsert_lease_resource_snapshot(**kwargs) -> None:  # type: ignore[no-untyped
         repo.close()
 
 
-def list_snapshots_by_lease_ids(lease_ids: list[str], **kwargs) -> dict:  # type: ignore[no-untyped-def,type-arg]
-    repo = build_resource_snapshot_repo()
-    try:
-        return repo.list_snapshots_by_lease_ids(lease_ids)
-    finally:
-        repo.close()
-
-
 __all__ = [
-    "ensure_resource_snapshot_table",
     "upsert_lease_resource_snapshot",
-    "list_snapshots_by_lease_ids",
     "probe_and_upsert_for_instance",
 ]
 
@@ -61,7 +46,6 @@ def probe_and_upsert_for_instance(
     provider: SandboxProvider,
     instance_id: str,
     repo: Any | None = None,
-    db_path: Path | None = None,  # deprecated, ignored
 ) -> dict[str, Any]:
     """Probe provider metrics and persist to storage."""
     metrics = None

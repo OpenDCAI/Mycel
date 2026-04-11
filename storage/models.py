@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
 
 # ============================================================================
@@ -91,22 +90,3 @@ def map_lease_to_session_status(observed_state: str | None, desired_state: str |
 
     # Unknown state, treat as stopped
     return SessionDisplayStatus.STOPPED.value
-
-
-# ============================================================================
-# File Operation Models
-# ============================================================================
-
-
-@dataclass
-class FileOperationRow:
-    id: str
-    thread_id: str
-    checkpoint_id: str
-    timestamp: float
-    operation_type: str
-    file_path: str
-    before_content: str | None
-    after_content: str
-    changes: list[dict] | None
-    status: str = "applied"

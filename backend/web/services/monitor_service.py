@@ -115,10 +115,10 @@ def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | No
     }
 
 
-def _normalize_monitor_thread(thread: dict[str, Any], fallback_thread_id: str) -> dict[str, Any]:
+def _normalize_monitor_thread(thread: dict[str, Any], requested_thread_id: str) -> dict[str, Any]:
     return {
         **thread,
-        "thread_id": thread.get("thread_id") or thread.get("id") or fallback_thread_id,
+        "thread_id": thread.get("thread_id") or thread.get("id") or requested_thread_id,
     }
 
 
@@ -126,7 +126,7 @@ def _live_thread_ids(thread_ids: list[str]) -> set[str]:
     unique = sorted({str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()})
     if not unique:
         return set()
-    # @@@monitor-live-thread-truth - monitor triage must validate terminal pointers against live
+    # @@@monitor-live-thread-state - monitor triage must validate terminal pointers against live
     # thread rows, otherwise stale abstract_terminals residue gets misclassified as healthy.
     owners = _thread_owners(unique)
     return {thread_id for thread_id in unique if (owners.get(thread_id) or {}).get("agent_user_id")}
@@ -169,7 +169,7 @@ LEASE_TRIAGE_ORDER = [
 LEASE_TRIAGE_META = {
     "active_drift": {
         "title": "Active Drift",
-        "description": "Leases whose desired and observed state still disagree recently enough to warrant active operator attention.",
+        "description": "Leases whose desired and observed state still disagree recently enough to warrant attention.",
         "tone": "warning",
     },
     "detached_residue": {
@@ -269,130 +269,24 @@ def _classify_lease_triage(
     }
 
 
-def _triage_category_for_row(row: dict[str, Any]) -> str:
-    badge = _make_badge(row.get("desired_state"), row.get("observed_state"))
-    triage = _classify_lease_triage(
-        thread_id=row.get("thread_id"),
-        badge=badge,
-        observed_state=row.get("observed_state"),
-        desired_state=row.get("desired_state"),
-        updated_at=row.get("updated_at"),
-    )
-    return str(triage["category"])
+def _lease_groups(
+    *,
+    items: list[dict[str, Any]],
+    order: list[str],
+    meta_by_key: dict[str, dict[str, Any]],
+    field: str,
+) -> tuple[dict[str, int], list[dict[str, Any]]]:
+    summary = {key: 0 for key in order}
+    for item in items:
+        summary[item[field]["category"]] += 1
+    summary["total"] = len(items)
 
-
-def _evaluation_no_runs_surface() -> dict[str, Any]:
-    return {
-        "status": "idle",
-        "kind": "no_recorded_runs",
-        "tone": "default",
-        "headline": "No persisted evaluation runs are available yet.",
-        "summary": "Evaluation storage is wired, but there are no recorded runs to report yet.",
-        "source": {
-            "kind": "unavailable",
-            "label": "Unavailable",
-        },
-        "subject": {
-            "thread_id": None,
-            "run_id": None,
-            "user_message": None,
-            "started_at": None,
-            "finished_at": None,
-        },
-        "facts": [{"label": "Status", "value": "idle"}],
-        "artifacts": [],
-        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "limitations": [
-            "This page is showing the latest persisted evaluation run, not a live event stream.",
-            "Run an evaluation to populate the operator surface with persisted runtime truth.",
-        ],
-        "raw_notes": None,
-    }
-
-
-def _normalize_persisted_eval_status(raw_status: str | None) -> tuple[str, str, str, str]:
-    status = str(raw_status or "").strip().lower()
-    # @@@eval-status-normalization - persisted eval_runs only record coarse terminal status,
-    # so monitor must normalize them without pretending the old manifest/thread truth still exists.
-    if status == "running":
-        return (
-            "running",
-            "running_recorded",
-            "default",
-            "Latest persisted evaluation run is still marked running.",
-        )
-    if status in {"error", "failed", "cancelled"}:
-        return (
-            "completed_with_errors",
-            "run_recorded_with_errors",
-            "warning",
-            "Latest persisted evaluation run finished with errors.",
-        )
-    if status == "completed":
-        return (
-            "completed",
-            "completed_recorded",
-            "success",
-            "Latest persisted evaluation run completed successfully.",
-        )
-    return (
-        "provisional",
-        "persisted_status_unknown",
-        "warning",
-        "Latest persisted evaluation run reported an unknown status.",
-    )
-
-
-def _build_persisted_evaluation_surface(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    status, kind, tone, headline = _normalize_persisted_eval_status(run.get("status"))
-    metrics_by_tier = {str(row.get("tier") or "").strip().lower(): row.get("metrics") or {} for row in metrics_rows}
-    system_metrics = metrics_by_tier.get("system") or {}
-    objective_metrics = metrics_by_tier.get("objective") or {}
-    facts = [{"label": "Metric Tiers", "value": str(len(metrics_rows))}]
-    user_message = str(run.get("user_message") or "").strip()
-    total_tokens = system_metrics.get("total_tokens")
-    if total_tokens is not None:
-        facts.append({"label": "Total tokens", "value": str(total_tokens)})
-    llm_call_count = system_metrics.get("llm_call_count")
-    if llm_call_count is not None:
-        facts.append({"label": "LLM calls", "value": str(llm_call_count)})
-    tool_call_count = system_metrics.get("tool_call_count")
-    if tool_call_count is not None:
-        facts.append({"label": "Tool calls", "value": str(tool_call_count)})
-    total_duration_ms = objective_metrics.get("total_duration_ms")
-    if total_duration_ms is not None:
-        duration_value = int(total_duration_ms) if float(total_duration_ms).is_integer() else total_duration_ms
-        facts.append({"label": "Duration (ms)", "value": str(duration_value)})
-
-    return {
-        "status": status,
-        "kind": kind,
-        "tone": tone,
-        "headline": headline,
-        "summary": (
-            "Monitor is reading the latest persisted eval run from eval_runs/eval_metrics. "
-            "Legacy manifest, artifact, and thread-materialization detail are not wired in this slice."
-        ),
-        "source": {
-            "kind": "persisted_latest_run",
-            "label": "Latest Persisted Run",
-        },
-        "subject": {
-            "thread_id": str(run.get("thread_id") or "") or None,
-            "run_id": str(run.get("id") or "") or None,
-            "user_message": user_message or None,
-            "started_at": str(run.get("started_at") or "") or None,
-            "finished_at": str(run.get("finished_at") or "") or None,
-        },
-        "facts": facts,
-        "artifacts": [],
-        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
-        "limitations": [
-            "This page is showing the latest persisted evaluation run, not a live event stream.",
-            "Legacy manifest, artifact, and thread-materialization detail are not wired in this slice.",
-        ],
-        "raw_notes": None,
-    }
+    groups = []
+    for key in order:
+        meta = meta_by_key[key]
+        group_items = [item for item in items if item[field]["category"] == key]
+        groups.append({"key": key, **meta, "count": len(group_items), "items": group_items})
+    return summary, groups
 
 
 def _build_monitor_evaluation_run_fact_rows(metrics_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -428,14 +322,6 @@ def _build_monitor_evaluation_run_row(run: dict[str, Any], metrics_rows: list[di
     }
 
 
-def _build_monitor_evaluation_run_detail(run: dict[str, Any], metrics_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "run": _build_monitor_evaluation_run_row(run, metrics_rows),
-        "facts": _build_monitor_evaluation_run_fact_rows(metrics_rows),
-        "limitations": ["Launch/config is not restored yet; this workbench is read-only for now."],
-    }
-
-
 def get_monitor_evaluation_workbench() -> dict[str, Any]:
     store = make_eval_store()
     runs = store.list_runs(limit=25)
@@ -451,7 +337,7 @@ def get_monitor_evaluation_workbench() -> dict[str, Any]:
             },
             "runs": [],
             "selected_run": None,
-            "limitations": ["Run an evaluation to populate the workbench with persisted runtime truth."],
+            "limitations": ["Create and start an evaluation batch to populate persisted runs."],
         }
 
     run_rows = []
@@ -470,7 +356,7 @@ def get_monitor_evaluation_workbench() -> dict[str, Any]:
 
     return {
         "headline": "Evaluation Workbench",
-        "summary": "Recent persisted evaluation runs and their runtime truth.",
+        "summary": "Recent persisted evaluation runs and their runtime state.",
         "overview": {
             "total_runs": len(run_rows),
             "running_runs": running_runs,
@@ -479,7 +365,7 @@ def get_monitor_evaluation_workbench() -> dict[str, Any]:
         },
         "runs": run_rows,
         "selected_run": run_rows[0],
-        "limitations": ["Launch/config is not restored yet; this workbench is read-only for now."],
+        "limitations": [],
     }
 
 
@@ -488,7 +374,8 @@ def get_monitor_evaluation_run_detail(run_id: str) -> dict[str, Any]:
     run = store.get_run(run_id)
     if run is None:
         raise KeyError(f"Evaluation run not found: {run_id}")
-    detail = _build_monitor_evaluation_run_detail(run, store.get_metrics(run_id))
+    run_row = _build_monitor_evaluation_run_row(run, store.get_metrics(run_id))
+    detail = {"run": run_row, "facts": run_row["facts"], "limitations": []}
     detail["batch_run"] = make_eval_batch_service().get_batch_run_for_eval_run(run_id)
     return detail
 
@@ -601,29 +488,6 @@ def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
     return make_eval_batch_service().get_batch_detail(batch_id)
 
 
-def get_monitor_evaluation_truth() -> dict[str, Any]:
-    store = make_eval_store()
-    runs = store.list_runs(limit=1)
-    if not runs:
-        return _evaluation_no_runs_surface()
-    latest_run = runs[0]
-    metrics_rows = store.get_metrics(str(latest_run.get("id") or ""))
-    return _build_persisted_evaluation_surface(latest_run, metrics_rows)
-
-
-def build_monitor_evaluation_dashboard_summary(payload: dict[str, Any]) -> dict[str, Any]:
-    status = str(payload.get("status") or "unavailable")
-    return {
-        "evaluations_running": 1 if status == "running" else 0,
-        "latest_evaluation": {
-            "status": status,
-            "kind": payload.get("kind"),
-            "tone": payload.get("tone"),
-            "headline": payload.get("headline"),
-        },
-    }
-
-
 def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
     live_threads = _live_thread_ids([str(row.get("thread_id") or "").strip() for row in rows])
     items = []
@@ -654,44 +518,18 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
 
-    summary = {key: 0 for key in LEASE_SEMANTIC_ORDER}
-    for item in items:
-        summary[item["semantics"]["category"]] += 1
-    summary["total"] = len(items)
-
-    groups = []
-    for key in LEASE_SEMANTIC_ORDER:
-        meta = LEASE_SEMANTIC_META[key]
-        group_items = [item for item in items if item["semantics"]["category"] == key]
-        groups.append(
-            {
-                "key": key,
-                "title": meta["title"],
-                "description": meta["description"],
-                "count": len(group_items),
-                "items": group_items,
-            }
-        )
-
-    triage_summary = {key: 0 for key in LEASE_TRIAGE_ORDER}
-    for item in items:
-        triage_summary[item["triage"]["category"]] += 1
-    triage_summary["total"] = len(items)
-
-    triage_groups = []
-    for key in LEASE_TRIAGE_ORDER:
-        meta = LEASE_TRIAGE_META[key]
-        group_items = [item for item in items if item["triage"]["category"] == key]
-        triage_groups.append(
-            {
-                "key": key,
-                "title": meta["title"],
-                "description": meta["description"],
-                "tone": meta["tone"],
-                "count": len(group_items),
-                "items": group_items,
-            }
-        )
+    summary, groups = _lease_groups(
+        items=items,
+        order=LEASE_SEMANTIC_ORDER,
+        meta_by_key=LEASE_SEMANTIC_META,
+        field="semantics",
+    )
+    triage_summary, triage_groups = _lease_groups(
+        items=items,
+        order=LEASE_TRIAGE_ORDER,
+        meta_by_key=LEASE_TRIAGE_META,
+        field="triage",
+    )
 
     return {
         "title": "All Leases",
@@ -704,6 +542,7 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "items": items,
     }
+
 
 def list_leases() -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()

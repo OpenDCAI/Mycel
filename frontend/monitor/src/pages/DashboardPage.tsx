@@ -33,7 +33,7 @@ export default function DashboardPage() {
     { label: "Tracked Leases", value: data.infra.leases_total, to: "/leases" },
   ];
 
-  const operatorLinks = [
+  const attentionLinks = [
     {
       label: "Provider Coverage",
       body: `${data.infra.providers_active} active providers, ${data.infra.providers_unavailable} unavailable.`,
@@ -69,7 +69,7 @@ export default function DashboardPage() {
       <section className="surface-section">
         <h2>Operator Attention</h2>
         <div className="surface-grid">
-          {operatorLinks.map((item) => (
+          {attentionLinks.map((item) => (
             <Link className="surface-card" key={item.label} to={item.to}>
               <p className="surface-card__eyebrow">{item.label}</p>
               <p className="surface-card__body">{item.body}</p>

@@ -43,7 +43,6 @@ from backend.web.services.thread_launch_config_service import (
     save_last_confirmed_config,
     save_last_successful_config,
 )
-from backend.web.services.thread_naming import sidebar_label
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
     get_lease_status,
@@ -65,16 +64,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
 
-class _NoopAsyncLock:
-    async def __aenter__(self) -> None:
-        return None
-
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
-        return False
-
-
 def _is_internal_child_thread(thread_id: str) -> bool:
     return thread_id.startswith("subagent-")
+
+
+def _sidebar_label(*, is_main: bool, branch_index: int) -> str | None:
+    if branch_index < 0:
+        raise ValueError(f"branch_index must be >= 0, got {branch_index}")
+    if is_main and branch_index != 0:
+        raise ValueError(f"Default thread must have branch_index=0, got {branch_index}")
+    if not is_main and branch_index == 0:
+        raise ValueError("Child thread must have branch_index>0")
+    if is_main:
+        return None
+    return f"分身{branch_index}"
 
 
 def _invalidate_resource_overview_cache() -> None:
@@ -316,7 +319,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
         "agent_user_id": member.id,
         "agent_name": member.display_name,
         "branch_index": thread["branch_index"],
-        "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
+        "sidebar_label": _sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
         "avatar_url": avatar_url(member.id, bool(member.avatar)),
         "is_main": thread["is_main"],
     }
@@ -634,7 +637,7 @@ def _create_owned_thread(
         "agent_user_id": agent_user_id,
         "agent_name": agent_user.display_name,
         "branch_index": branch_index,
-        "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
+        "sidebar_label": _sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_user_id, bool(agent_user.avatar)),
         "is_main": resolved_is_main,
     }
@@ -763,7 +766,7 @@ def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
                 "agent_name": t.get("agent_name"),
                 "agent_user_id": t.get("agent_user_id"),
                 "branch_index": t.get("branch_index"),
-                "sidebar_label": sidebar_label(
+                "sidebar_label": _sidebar_label(
                     is_main=bool(t.get("is_main", False)),
                     branch_index=int(t.get("branch_index", 0)),
                 ),
@@ -844,28 +847,6 @@ async def delete_thread(
     app.state.agent_pool.pop(pool_key, None)
     _invalidate_resource_overview_cache()
 
-    return {"ok": True, "thread_id": thread_id}
-
-
-@router.post("/{thread_id}/clear")
-async def clear_thread_history(
-    thread_id: str,
-    user_id: Annotated[str, Depends(verify_thread_owner)],
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """Clear replayable thread history while preserving the thread itself."""
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-
-    lock = await get_thread_lock(app, thread_id)
-    async with lock:
-        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-        if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-            raise HTTPException(status_code=409, detail="Cannot clear thread while run is in progress")
-        await agent.aclear_thread(thread_id)
-
-    app.state.display_builder.clear(thread_id)
-    app.state.thread_event_buffers.pop(thread_id, None)
-    app.state.queue_manager.clear_all(thread_id)
     return {"ok": True, "thread_id": thread_id}
 
 
@@ -957,13 +938,13 @@ async def get_thread_history(
 async def get_thread_permissions(
     thread_id: str,
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
-    thread_lock: Annotated[asyncio.Lock | None, Depends(get_thread_lock)] = None,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
     # @@@permission-state-lock - owner polling and resolve can race on idle
     # threads. Serialize the lightweight /permissions read with resolve/persist
     # so stale checkpoint hydration cannot resurrect an already-resolved request.
-    async with thread_lock or _NoopAsyncLock():
+    async with thread_lock:
         await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
         rule_state = agent.get_thread_permission_rules(thread_id)
         return {
@@ -982,9 +963,9 @@ async def resolve_thread_permission_request(
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
-    thread_lock: Annotated[asyncio.Lock | None, Depends(get_thread_lock)] = None,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)] = None,
 ) -> dict[str, Any]:
-    async with thread_lock or _NoopAsyncLock():
+    async with thread_lock:
         await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
         pending_requests = {
             item.get("request_id"): item
@@ -1136,56 +1117,6 @@ async def get_thread_runtime(
         if run_id:
             status["run_start_seq"] = await get_run_start_seq(thread_id, run_id)
     return status
-
-
-# Sandbox control endpoints for threads
-@router.post("/{thread_id}/sandbox/pause")
-async def pause_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Pause sandbox for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.pause_thread, thread_id)
-        if not ok:
-            raise HTTPException(409, f"Failed to pause sandbox for thread {thread_id}")
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
-
-
-@router.post("/{thread_id}/sandbox/resume")
-async def resume_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Resume paused sandbox for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.resume_thread, thread_id)
-        if not ok:
-            raise HTTPException(409, f"Failed to resume sandbox for thread {thread_id}")
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
-
-
-@router.delete("/{thread_id}/sandbox")
-async def destroy_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Destroy sandbox session for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.manager.destroy_session, thread_id)
-        if not ok:
-            raise HTTPException(404, f"No sandbox session found for thread {thread_id}")
-        agent._sandbox._capability_cache.pop(thread_id, None)
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
 
 
 # Session/terminal/lease status endpoints

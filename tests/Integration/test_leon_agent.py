@@ -5,7 +5,6 @@ Uses mock model to verify the full astream pipeline without real API calls.
 
 import json
 import os
-import sys
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -963,12 +962,10 @@ def test_leon_agent_chat_tool_wiring_rejects_legacy_user_id_only_runtime_shape(m
             raise AssertionError("chat tool should not initialize from legacy-only runtime shape")
 
     monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
-    monkeypatch.setattr("core.runtime.agent.CronToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
     monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
-    monkeypatch.setitem(sys.modules, "backend.taskboard.service", SimpleNamespace(TaskBoardService=_NoopService))
     monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
 
     agent = object.__new__(LeonAgent)
@@ -1081,12 +1078,10 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
             captured.update(kwargs)
 
     monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
-    monkeypatch.setattr("core.runtime.agent.CronToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
     monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
-    monkeypatch.setitem(sys.modules, "backend.taskboard.service", SimpleNamespace(TaskBoardService=_NoopService))
     monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
 
     agent = object.__new__(LeonAgent)

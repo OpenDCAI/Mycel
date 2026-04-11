@@ -17,6 +17,25 @@ type ProviderDetailPayload = {
   runtime_session_ids?: string[] | null;
 };
 
+function RelatedIdSection({ title, ids, href }: { title: string; ids: string[]; href: (id: string) => string }) {
+  return (
+    <section className="surface-section">
+      <h2>{title}</h2>
+      {ids.length > 0 ? (
+        <div className="info-grid">
+          {ids.map((id) => (
+            <Link key={id} className="mono" to={href(id)}>
+              {id}
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p>No related {title.toLowerCase()}.</p>
+      )}
+    </section>
+  );
+}
+
 export default function ProviderDetailPage() {
   const params = useParams<{ providerId: string }>();
   const providerId = params.providerId ?? "";
@@ -33,7 +52,7 @@ export default function ProviderDetailPage() {
   return (
     <div className="page">
       <h1>{`Provider ${provider.name ?? provider.id ?? providerId}`}</h1>
-      <p className="description">{provider.description ?? "Provider operator truth"}</p>
+      <p className="description">{provider.description ?? "Provider state, related leases, runtimes, and threads."}</p>
       <section className="surface-section">
         <h2>Relations</h2>
         <div className="info-grid">
@@ -65,48 +84,9 @@ export default function ProviderDetailPage() {
           </div>
         </div>
       </section>
-      <section className="surface-section">
-        <h2>Leases</h2>
-        {leases.length > 0 ? (
-          <div className="info-grid">
-            {leases.map((leaseId) => (
-              <Link key={leaseId} className="mono" to={`/leases/${leaseId}`}>
-                {leaseId}
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p>No related leases.</p>
-        )}
-      </section>
-      <section className="surface-section">
-        <h2>Runtimes</h2>
-        {runtimes.length > 0 ? (
-          <div className="info-grid">
-            {runtimes.map((runtimeSessionId) => (
-              <Link key={runtimeSessionId} className="mono" to={`/runtimes/${runtimeSessionId}`}>
-                {runtimeSessionId}
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p>No related runtimes.</p>
-        )}
-      </section>
-      <section className="surface-section">
-        <h2>Threads</h2>
-        {threads.length > 0 ? (
-          <div className="info-grid">
-            {threads.map((threadId) => (
-              <Link key={threadId} className="mono" to={`/threads/${threadId}`}>
-                {threadId}
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p>No related threads.</p>
-        )}
-      </section>
+      <RelatedIdSection title="Leases" ids={leases} href={(id) => `/leases/${id}`} />
+      <RelatedIdSection title="Runtimes" ids={runtimes} href={(id) => `/runtimes/${id}`} />
+      <RelatedIdSection title="Threads" ids={threads} href={(id) => `/threads/${id}`} />
     </div>
   );
 }

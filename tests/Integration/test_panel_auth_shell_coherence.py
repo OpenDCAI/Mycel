@@ -86,8 +86,8 @@ async def test_panel_members_uses_injected_user_repo_for_owner_scope(monkeypatch
     assert result["items"][0]["config"]["prompt"] == "hello"
 
 
-def test_owned_agent_helper_returns_agent_for_owner(monkeypatch: pytest.MonkeyPatch):
-    result = panel_router._get_owned_agent_or_404(
+def test_owned_agent_helper_returns_agent_for_owner():
+    result = panel_router._require_owned_agent_user(
         "agent-1",
         "user-1",
         SimpleNamespace(
@@ -95,24 +95,20 @@ def test_owned_agent_helper_returns_agent_for_owner(monkeypatch: pytest.MonkeyPa
         ),
     )
 
-    assert result == {"id": "agent-1"}
+    assert result.id == "agent-1"
 
 
-def test_owned_agent_helper_raises_404_for_missing_agent(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(member_service, "get_member", lambda _member_id: None)
-
+def test_owned_agent_helper_raises_404_for_missing_agent():
     with pytest.raises(HTTPException) as excinfo:
-        panel_router._get_owned_agent_or_404("missing", "user-1", SimpleNamespace(get_by_id=lambda _user_id: None))
+        panel_router._require_owned_agent_user("missing", "user-1", SimpleNamespace(get_by_id=lambda _user_id: None))
 
     assert excinfo.value.status_code == 404
     assert excinfo.value.detail == "Agent not found"
 
 
-def test_owned_agent_helper_raises_403_for_wrong_owner(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(member_service, "get_member", lambda _member_id: {"id": "agent-1"})
-
+def test_owned_agent_helper_raises_403_for_wrong_owner():
     with pytest.raises(HTTPException) as excinfo:
-        panel_router._get_owned_agent_or_404(
+        panel_router._require_owned_agent_user(
             "agent-1",
             "user-1",
             SimpleNamespace(get_by_id=lambda _user_id: _agent_user(owner_user_id="user-2")),

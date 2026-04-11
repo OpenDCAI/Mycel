@@ -58,22 +58,6 @@ class AgentLoader:
             project_config.get("runtime", {}),
         )
 
-        # Backward compat: old-style top-level keys fold into runtime
-        for cfg in (system_config, user_config, project_config):
-            for key in (
-                "context_limit",
-                "enable_audit_log",
-                "allowed_extensions",
-                "block_dangerous_commands",
-                "block_network_commands",
-                "queue_mode",
-                "temperature",
-                "max_tokens",
-                "model_kwargs",
-            ):
-                if key in cfg and key not in merged_runtime:
-                    merged_runtime[key] = cfg[key]
-
         merged_memory = self._deep_merge(
             system_config.get("memory", {}),
             user_config.get("memory", {}),
@@ -420,10 +404,6 @@ class AgentLoader:
             # @@@tmp-home-normalization - macOS maps /tmp -> /private/tmp, so compare normalized paths before bootstrap.
             if path.resolve() == default_home_skills.resolve() and not path.exists():
                 path.mkdir(parents=True, exist_ok=True)
-
-
-# Backward compat alias
-ConfigLoader = AgentLoader
 
 
 def load_config(

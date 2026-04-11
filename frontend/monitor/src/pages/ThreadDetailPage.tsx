@@ -119,7 +119,7 @@ export default function ThreadDetailPage() {
     <div className="page">
       <h1>{`Thread ${data.thread?.thread_id ?? threadId}`}</h1>
       <p className="description">
-        {data.thread?.title ?? "Operator thread truth"} · {data.thread?.status ?? "-"}
+        {data.thread?.title ?? "Thread state"} · {data.thread?.status ?? "-"}
       </p>
       <section className="surface-section">
         <h2>Relations</h2>
