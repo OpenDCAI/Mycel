@@ -2,6 +2,7 @@ import { FolderOpen } from "lucide-react";
 import { useState } from "react";
 import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
 import { authFetch } from "@/store/auth-store";
+import { asRecord, recordString } from "@/lib/records";
 
 interface WorkspaceSectionProps {
   defaultWorkspace: string | null;
@@ -13,6 +14,28 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  function applySaveResponse(value: unknown): boolean {
+    const data = asRecord(value);
+    if (!data) {
+      setError("保存失败");
+      return false;
+    }
+    if (data.success === true) {
+      const workspace = recordString(data, "workspace");
+      if (!workspace) {
+        setError("保存失败");
+        return false;
+      }
+      onUpdate(workspace);
+      setPath(workspace);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), FEEDBACK_NORMAL);
+      return true;
+    }
+    setError(recordString(data, "detail") || "保存失败");
+    return false;
+  }
 
   const handleSave = async () => {
     if (!path.trim()) return;
@@ -26,14 +49,7 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
         body: JSON.stringify({ workspace: path.trim() }),
       });
       const data = await res.json();
-      if (data.success) {
-        onUpdate(data.workspace);
-        setPath(data.workspace);
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), FEEDBACK_NORMAL);
-      } else {
-        setError(data.detail || "保存失败");
-      }
+      applySaveResponse(data);
     } catch {
       setError("网络错误");
     } finally {
