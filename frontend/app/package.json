@@ -28,7 +28,6 @@
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-resizable-panels": "^4.2.2",
     "react-router-dom": "^7.13.0",
     "sonner": "^2.0.7",
     "streamdown": "^2.4.0",
