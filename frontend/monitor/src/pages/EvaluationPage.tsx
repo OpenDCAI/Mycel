@@ -32,17 +32,38 @@ type EvaluationPayload = {
   limitations?: string[] | null;
 };
 
+type EvaluationBatchIndexPayload = {
+  items?: Array<{
+    batch_id?: string | null;
+    kind?: string | null;
+    status?: string | null;
+    submitted_by_user_id?: string | null;
+    agent_user_id?: string | null;
+    created_at?: string | null;
+    summary_json?: {
+      total_runs?: number | null;
+      running_runs?: number | null;
+      completed_runs?: number | null;
+      failed_runs?: number | null;
+    } | null;
+  }> | null;
+  count?: number | null;
+};
+
 export default function EvaluationPage() {
   const { data, error } = useMonitorData<EvaluationPayload>("/evaluation");
+  const { data: batchesData, error: batchesError } = useMonitorData<EvaluationBatchIndexPayload>("/evaluation/batches");
 
   if (error) return <ErrorState title="Evaluation" error={error} />;
-  if (!data) return <div>Loading...</div>;
+  if (batchesError) return <ErrorState title="Evaluation batches" error={batchesError} />;
+  if (!data || !batchesData) return <div>Loading...</div>;
 
   const overview = data.overview ?? {};
   const runs = data.runs ?? [];
   const selectedRun = data.selected_run ?? {};
   const facts = selectedRun.facts ?? [];
   const limitations = data.limitations ?? [];
+  const batches = batchesData.items ?? [];
 
   return (
     <div className="page">
@@ -72,6 +93,47 @@ export default function EvaluationPage() {
       <section className="surface-section">
         <h2>Workbench Summary</h2>
         <p className="surface-card__body">{data.summary ?? "No evaluation summary available."}</p>
+      </section>
+      <section className="surface-section">
+        <h2>Batch Queue</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Batch</th>
+              <th>Status</th>
+              <th>Runs</th>
+              <th>Agent</th>
+              <th>Submitted By</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {batches.length > 0 ? (
+              batches.map((batch) => {
+                const summary = batch.summary_json ?? {};
+                const summaryText = `${summary.total_runs ?? 0} total / ${summary.running_runs ?? 0} running / ${
+                  summary.completed_runs ?? 0
+                } completed / ${summary.failed_runs ?? 0} failed`;
+                return (
+                  <tr key={batch.batch_id ?? `${batch.kind}-${batch.created_at}`}>
+                    <td className="mono">
+                      {batch.batch_id ? <Link to={`/evaluation/batches/${batch.batch_id}`}>{batch.batch_id}</Link> : "-"}
+                    </td>
+                    <td>{batch.status ?? "-"}</td>
+                    <td>{summaryText}</td>
+                    <td>{batch.agent_user_id ?? "-"}</td>
+                    <td>{batch.submitted_by_user_id ?? "-"}</td>
+                    <td>{batch.created_at ?? "-"}</td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={6}>No evaluation batches yet.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </section>
       <section className="surface-section">
         <h2>Recent Runs</h2>

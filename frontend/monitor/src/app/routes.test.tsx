@@ -1239,6 +1239,25 @@ describe("MonitorRoutes", () => {
         },
         limitations: ["Launch/config is not restored yet; this workbench is read-only for now."],
       },
+      "/evaluation/batches": {
+        items: [
+          {
+            batch_id: "batch-1",
+            status: "running",
+            kind: "scenario_batch",
+            submitted_by_user_id: "owner-1",
+            agent_user_id: "agent-1",
+            created_at: "2026-04-09T00:00:00Z",
+            summary_json: {
+              total_runs: 10,
+              running_runs: 2,
+              completed_runs: 7,
+              failed_runs: 1,
+            },
+          },
+        ],
+        count: 1,
+      },
       "/evaluation/runs/run-1": {
         run: {
           run_id: "run-1",
@@ -1265,6 +1284,9 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("Evaluation Workbench")).toBeInTheDocument();
+    expect(screen.getByText("Batch Queue")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "batch-1" })).toHaveAttribute("href", "/evaluation/batches/batch-1");
+    expect(screen.getByText("10 total / 2 running / 7 completed / 1 failed")).toBeInTheDocument();
     expect(screen.getByText("Recent Runs")).toBeInTheDocument();
     expect(screen.getByText("Current Run")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "run-1" }).every((link) => link.getAttribute("href") === "/evaluation/runs/run-1")).toBe(true);
@@ -1274,6 +1296,50 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Launch/config is not restored yet; this workbench is read-only for now.")).toBeInTheDocument();
     expect(screen.queryByText("Operator Truth")).not.toBeInTheDocument();
     expect(screen.queryByText("Current Summary")).not.toBeInTheDocument();
+  });
+
+  it("renders evaluation batch detail as a hidden route under the evaluation surface", async () => {
+    mockRoutePayloads({
+      "/evaluation/batches/batch-1": {
+        batch: {
+          batch_id: "batch-1",
+          status: "running",
+          kind: "scenario_batch",
+          config_json: {
+            sandbox: "daytona_selfhost",
+            max_concurrent: 2,
+            scenario_ids: ["scenario-1"],
+          },
+          summary_json: {
+            total_runs: 1,
+            running_runs: 0,
+            completed_runs: 1,
+            failed_runs: 0,
+          },
+        },
+        runs: [
+          {
+            batch_run_id: "batch-run-1",
+            scenario_id: "scenario-1",
+            status: "completed",
+            thread_id: "thread-eval",
+            eval_run_id: "run-1",
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/evaluation/batches/batch-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Evaluation Batch batch-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { current: "page", name: /evaluation/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("daytona_selfhost")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "thread-eval" })).toHaveAttribute("href", "/threads/thread-eval");
+    expect(screen.getByRole("link", { name: "run-1" })).toHaveAttribute("href", "/evaluation/runs/run-1");
   });
 
   it("renders evaluation run detail as a hidden route under the evaluation surface", async () => {
