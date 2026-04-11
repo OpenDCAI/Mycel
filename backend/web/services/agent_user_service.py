@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 
 from backend.web.utils.serializers import avatar_url
+from backend.web.utils.versioning import BumpType, bump_semver
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from config.loader import AgentLoader
 
@@ -483,24 +484,14 @@ def _sync_agent_config_patch_to_repo(
 
 def publish_agent_user(
     agent_user_id: str,
-    bump_type: str = "patch",
+    bump_type: BumpType = "patch",
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> dict[str, Any] | None:
     user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
-    current_version = config.get("version", "0.1.0")
-
-    parts = current_version.split(".")
-    major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
-    if bump_type == "major":
-        major, minor, patch = major + 1, 0, 0
-    elif bump_type == "minor":
-        minor, patch = minor + 1, 0
-    else:
-        patch += 1
-    next_version = f"{major}.{minor}.{patch}"
+    next_version = bump_semver(config.get("version", "0.1.0"), bump_type)
     updated_at = int(time.time() * 1000)
 
     agent_config_repo.save_config(

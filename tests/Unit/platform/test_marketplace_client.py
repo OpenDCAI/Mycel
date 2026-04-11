@@ -8,35 +8,23 @@ from unittest.mock import patch
 import pytest
 
 import backend.web.services.library_service as _lib_svc
+from backend.web.utils.versioning import bump_semver
 
 # ── Version Bump (tested via publish internals) ──
 
 
-def _bump_version(current: str, bump_type: str) -> str:
-    """Reproduce the version bump logic from marketplace_client.publish."""
-    parts = current.split(".")
-    major, minor, p = int(parts[0]), int(parts[1]), int(parts[2])
-    if bump_type == "major":
-        major, minor, p = major + 1, 0, 0
-    elif bump_type == "minor":
-        minor, p = minor + 1, 0
-    else:
-        p += 1
-    return f"{major}.{minor}.{p}"
-
-
 class TestVersionBump:
     def test_patch_bump(self):
-        assert _bump_version("1.2.3", "patch") == "1.2.4"
+        assert bump_semver("1.2.3", "patch") == "1.2.4"
 
     def test_minor_bump(self):
-        assert _bump_version("1.2.3", "minor") == "1.3.0"
+        assert bump_semver("1.2.3", "minor") == "1.3.0"
 
     def test_major_bump(self):
-        assert _bump_version("1.2.3", "major") == "2.0.0"
+        assert bump_semver("1.2.3", "major") == "2.0.0"
 
     def test_initial_version(self):
-        assert _bump_version("0.1.0", "patch") == "0.1.1"
+        assert bump_semver("0.1.0", "patch") == "0.1.1"
 
 
 # ── Hub client contract ──
