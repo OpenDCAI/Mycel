@@ -7,9 +7,9 @@ from typing import Any
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
-from backend.web.services.resource_common import empty_capabilities, resolve_provider_name
 from backend.web.services.resource_common import resolve_console_url as _resolve_console_url
 from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
+from backend.web.services.resource_common import resolve_provider_name
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.resource_snapshot import probe_and_upsert_for_instance, upsert_lease_resource_snapshot
@@ -29,10 +29,7 @@ def get_provider_display_contract(config_name: str) -> dict[str, Any]:
 
 
 def get_provider_capability_contract(config_name: str) -> tuple[dict[str, bool], str | None]:
-    capabilities, capability_error = _resolve_instance_capabilities(config_name)
-    if capability_error:
-        return empty_capabilities(), capability_error
-    return capabilities, None
+    return _resolve_instance_capabilities(config_name)
 
 
 def build_provider_availability_payload(*, available: bool, running_count: int, unavailable_reason: str | None) -> dict[str, Any]:
