@@ -141,6 +141,25 @@ class SupabaseMessagesRepo:
             rows = [r for r in rows if viewer_id not in (r.get("deleted_for") or [])]
         return rows
 
+    def list_latest_by_chat_ids(self, chat_ids: list[str]) -> dict[str, dict[str, Any]]:
+        if not chat_ids:
+            return {}
+        latest_by_chat: dict[str, dict[str, Any]] = {}
+        for chunk in q.value_chunks(chat_ids):
+            query = q.in_(
+                self._client.table("messages").select("*").is_("deleted_at", "null"),
+                "chat_id",
+                chunk,
+                "messages repo",
+                "list_latest_by_chat_ids",
+            )
+            rows = q.order(query, "seq", desc=True, repo="messages repo", operation="list_latest_by_chat_ids").execute().data or []
+            for row in rows:
+                chat_id = str(row.get("chat_id") or "")
+                if chat_id and chat_id not in latest_by_chat:
+                    latest_by_chat[chat_id] = row
+        return latest_by_chat
+
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
         """Messages after user's last_read_seq, excluding own, not deleted."""
         last_read_seq = self._last_read_seq(chat_id, user_id)

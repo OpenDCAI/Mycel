@@ -448,28 +448,47 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
 def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
-            get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z")
+            list_by_ids=lambda chat_ids: [
+                SimpleNamespace(
+                    id=chat_id,
+                    title=None,
+                    status="active",
+                    created_at="2026-04-07T00:00:00Z",
+                    updated_at="2026-04-07T00:00:00Z",
+                )
+                for chat_id in chat_ids
+            ],
+            get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("chat list should not fetch chats one by one")),
         ),
         chat_member_repo=SimpleNamespace(
             list_chats_for_user=lambda _user_id: ["chat-1"],
-            list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "thread-user-1"}],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+            list_members=lambda _chat_id: (_ for _ in ()).throw(AssertionError("chat list should not fetch members one by one")),
         ),
-        messages_repo=SimpleNamespace(list_by_chat=lambda _chat_id, limit=1: [], count_unread=lambda _chat_id, _user_id: 0),
+        messages_repo=SimpleNamespace(
+            list_latest_by_chat_ids=lambda _chat_ids: {},
+            count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {"chat-1": 0},
+            list_by_chat=lambda _chat_id, limit=1: (_ for _ in ()).throw(
+                AssertionError("chat list should not fetch messages one chat at a time")
+            ),
+            count_unread=lambda _chat_id, _user_id: (_ for _ in ()).throw(
+                AssertionError("chat list should not count unread one chat at a time")
+            ),
+        ),
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
+            list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
                 if uid == "human-user-1"
-                else None
-                if uid == "thread-user-1"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
-                if uid == "agent-user-1"
-                else None
-            )
+                for uid in user_ids
+            ],
+            get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("chat list should not fetch users one by one")),
         ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
+        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("agent users are direct chat ids"))),
     )
 
     chats = service.list_chats_for_user("human-user-1")
@@ -482,7 +501,7 @@ def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> No
             "avatar_url": avatar_url("human-user-1", False),
         },
         {
-            "id": "thread-user-1",
+            "id": "agent-user-1",
             "name": "Toad",
             "type": "agent",
             "avatar_url": avatar_url("agent-user-1", False),
@@ -497,39 +516,33 @@ def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> No
 def test_messaging_service_list_chats_ignores_blank_other_names_in_title_fallback() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
-            get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z")
+            list_by_ids=lambda chat_ids: [
+                SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z", updated_at=None)
+                for chat_id in chat_ids
+            ],
         ),
         chat_member_repo=SimpleNamespace(
             list_chats_for_user=lambda _user_id: ["chat-1"],
-            list_members=lambda _chat_id: [
-                {"user_id": "human-user-1"},
-                {"user_id": "thread-user-blank"},
-                {"user_id": "thread-user-1"},
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0},
+                {"chat_id": "chat-1", "user_id": "agent-user-blank", "last_read_seq": 0},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
             ],
         ),
-        messages_repo=SimpleNamespace(list_by_chat=lambda _chat_id, limit=1: [], count_unread=lambda _chat_id, _user_id: 0),
+        messages_repo=SimpleNamespace(
+            list_latest_by_chat_ids=lambda _chat_ids: {},
+            count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {"chat-1": 0},
+        ),
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
+            list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
                 if uid == "human-user-1"
-                else None
-                if uid in {"thread-user-blank", "thread-user-1"}
                 else SimpleNamespace(id=uid, display_name="", type="agent", avatar=None)
                 if uid == "agent-user-blank"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
-                if uid == "agent-user-1"
-                else None
-            )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: (
-                {"id": "thread-blank", "agent_user_id": "agent-user-blank"}
-                if uid == "thread-user-blank"
-                else {"id": "thread-1", "agent_user_id": "agent-user-1"}
-                if uid == "thread-user-1"
-                else None
-            )
+                for uid in user_ids
+            ]
         ),
     )
 
@@ -707,8 +720,11 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
         def list_chats_for_user(self, _user_id: str) -> list[str]:
             return ["chat-1"]
 
-        def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
-            return [{"user_id": "human-user-1"}, {"user_id": "thread-user-1"}]
+        def list_members_for_chats(self, _chat_ids: list[str]) -> list[dict[str, Any]]:
+            return [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": self.last_read_seq("chat-1", "human-user-1")},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ]
 
         def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
             self._rows[(chat_id, user_id)] = {"last_read_seq": last_read_seq}
@@ -732,46 +748,50 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
                     "id": "msg-2",
                     "chat_id": "chat-1",
                     "seq": 2,
-                    "sender_user_id": "thread-user-1",
+                    "sender_user_id": "agent-user-1",
                     "content": "READ_WATERMARK_OK",
                     "created_at": "2026-04-07T00:00:01Z",
                 },
             ]
 
+        def list_latest_by_chat_ids(self, _chat_ids: list[str]) -> dict[str, dict[str, Any]]:
+            return {"chat-1": self._rows[-1]}
+
         def list_by_chat(self, _chat_id: str, limit: int = 50, viewer_id: str | None = None) -> list[dict[str, Any]]:
             del viewer_id
             return self._rows[-limit:]
 
-        def count_unread(self, chat_id: str, user_id: str) -> int:
-            last_read_seq = self._members_repo.last_read_seq(chat_id, user_id)
-            return sum(
-                1
-                for row in self._rows
-                if row["chat_id"] == chat_id and row["sender_user_id"] != user_id and int(row["seq"]) > last_read_seq
-            )
+        def count_unread_by_chat_ids(self, user_id: str, last_read_by_chat: dict[str, int]) -> dict[str, int]:
+            return {
+                chat_id: sum(
+                    1
+                    for row in self._rows
+                    if row["chat_id"] == chat_id and row["sender_user_id"] != user_id and int(row["seq"]) > last_read_seq
+                )
+                for chat_id, last_read_seq in last_read_by_chat.items()
+            }
 
     members_repo = _StatefulChatMemberRepo()
     messages_repo = _StatefulMessagesRepo(members_repo)
     service = MessagingService(
         chat_repo=SimpleNamespace(
-            get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z")
+            list_by_ids=lambda chat_ids: [
+                SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z", updated_at=None)
+                for chat_id in chat_ids
+            ]
         ),
         chat_member_repo=members_repo,
         messages_repo=messages_repo,
         message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
+            list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
                 if uid == "human-user-1"
-                else None
-                if uid == "thread-user-1"
                 else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
                 if uid == "agent-user-1"
                 else None
-            )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+                for uid in user_ids
+            ]
         ),
     )
 

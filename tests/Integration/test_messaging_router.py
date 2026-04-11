@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +28,24 @@ def _route_test_app(state: SimpleNamespace) -> FastAPI:
     app.dependency_overrides[get_current_user_id] = lambda: "human-user-1"
     app.dependency_overrides[get_app] = lambda: app
     return app
+
+
+def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
+    sync_routes = [
+        messaging_router.list_chats,
+        messaging_router.create_chat,
+        messaging_router.get_chat,
+        messaging_router.list_messages,
+        messaging_router.send_message,
+        messaging_router.retract_message,
+        messaging_router.delete_message_for_self,
+        messaging_router.mark_read,
+        messaging_router.delete_chat,
+        messaging_router.mute_chat,
+    ]
+
+    assert [fn.__name__ for fn in sync_routes if inspect.iscoroutinefunction(fn)] == []
+    assert inspect.iscoroutinefunction(messaging_router.stream_chat_events)
 
 
 def test_get_accessible_chat_or_404_returns_chat():
@@ -93,8 +112,7 @@ def test_resolve_display_user_delegates_to_messaging_service(monkeypatch: pytest
     assert seen == [("resolve_display_user", "thread-user-1")]
 
 
-@pytest.mark.asyncio
-async def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
+def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     seen: list[tuple[str, object]] = []
     chat = _chat("chat-1")
 
@@ -125,7 +143,7 @@ async def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         )
     )
 
-    result = await messaging_router.get_chat("chat-1", user_id="user-1", app=app)
+    result = messaging_router.get_chat("chat-1", user_id="user-1", app=app)
 
     assert result == {
         "id": "chat-1",
@@ -137,8 +155,7 @@ async def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     assert seen == [("helper", (app, "chat-1", "user-1"))]
 
 
-@pytest.mark.asyncio
-async def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
+def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     seen: list[tuple[str, object]] = []
     chat = _chat("chat-1")
 
@@ -157,7 +174,7 @@ async def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         )
     )
 
-    result = await messaging_router.delete_chat("chat-1", user_id="user-1", app=app)
+    result = messaging_router.delete_chat("chat-1", user_id="user-1", app=app)
 
     assert result == {"status": "deleted"}
     assert seen == [
@@ -166,8 +183,7 @@ async def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     ]
 
 
-@pytest.mark.asyncio
-async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: pytest.MonkeyPatch):
+def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: pytest.MonkeyPatch):
     chat = _chat("chat-1")
 
     monkeypatch.setattr(messaging_router, "_get_accessible_chat_or_404", lambda _app, _chat_id, _user_id: chat)
@@ -205,7 +221,7 @@ async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeyp
         )
     )
 
-    result = await messaging_router.get_chat("chat-1", user_id="human-user-1", app=app)
+    result = messaging_router.get_chat("chat-1", user_id="human-user-1", app=app)
 
     assert result["entities"] == [
         {
@@ -217,8 +233,7 @@ async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeyp
     ]
 
 
-@pytest.mark.asyncio
-async def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
+def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
     app = SimpleNamespace(
         state=SimpleNamespace(
             messaging_service=SimpleNamespace(
@@ -260,7 +275,7 @@ async def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
         )
     )
 
-    result = await messaging_router.list_messages("chat-1", user_id="human-user-1", app=app)
+    result = messaging_router.list_messages("chat-1", user_id="human-user-1", app=app)
 
     assert result == [
         {
@@ -327,8 +342,7 @@ def test_list_messages_route_resolves_sender_name_via_messaging_service() -> Non
     ]
 
 
-@pytest.mark.asyncio
-async def test_send_message_consumes_service_owned_message_projection() -> None:
+def test_send_message_consumes_service_owned_message_projection() -> None:
     seen: list[tuple[str, str, str]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -371,7 +385,7 @@ async def test_send_message_consumes_service_owned_message_projection() -> None:
         )
     )
 
-    result = await messaging_router.send_message(
+    result = messaging_router.send_message(
         "chat-1",
         messaging_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
@@ -393,8 +407,7 @@ async def test_send_message_consumes_service_owned_message_projection() -> None:
     }
 
 
-@pytest.mark.asyncio
-async def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
+def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
     seen: list[tuple[str, str, str]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -449,7 +462,7 @@ async def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo(
         )
     )
 
-    result = await messaging_router.send_message(
+    result = messaging_router.send_message(
         "chat-1",
         messaging_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
@@ -471,8 +484,7 @@ async def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo(
     }
 
 
-@pytest.mark.asyncio
-async def test_create_chat_rejects_template_member_ids_for_group_participants() -> None:
+def test_create_chat_rejects_template_member_ids_for_group_participants() -> None:
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -491,7 +503,7 @@ async def test_create_chat_rejects_template_member_ids_for_group_participants() 
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await messaging_router.create_chat(
+        messaging_router.create_chat(
             messaging_router.CreateChatBody(
                 user_ids=["human-user-1", "agent-user-1", "agent-user-2"],
                 title="bad-group",
@@ -505,8 +517,7 @@ async def test_create_chat_rejects_template_member_ids_for_group_participants() 
     assert called == []
 
 
-@pytest.mark.asyncio
-async def test_create_chat_rejects_template_member_id_for_direct_participant() -> None:
+def test_create_chat_rejects_template_member_id_for_direct_participant() -> None:
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -523,7 +534,7 @@ async def test_create_chat_rejects_template_member_id_for_direct_participant() -
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await messaging_router.create_chat(
+        messaging_router.create_chat(
             messaging_router.CreateChatBody(
                 user_ids=["human-user-1", "agent-user-1"],
                 title=None,
@@ -537,8 +548,7 @@ async def test_create_chat_rejects_template_member_id_for_direct_participant() -
     assert called == []
 
 
-@pytest.mark.asyncio
-async def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_participants() -> None:
+def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_participants() -> None:
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -556,7 +566,7 @@ async def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_pa
         )
     )
 
-    result = await messaging_router.create_chat(
+    result = messaging_router.create_chat(
         messaging_router.CreateChatBody(
             user_ids=["human-user-1", "thread-user-1", "thread-user-2"],
             title="good-group",
@@ -574,8 +584,7 @@ async def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_pa
     }
 
 
-@pytest.mark.asyncio
-async def test_create_chat_rejects_unknown_participant_ids_instead_of_falling_to_storage_fk() -> None:
+def test_create_chat_rejects_unknown_participant_ids_instead_of_falling_to_storage_fk() -> None:
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -590,7 +599,7 @@ async def test_create_chat_rejects_unknown_participant_ids_instead_of_falling_to
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await messaging_router.create_chat(
+        messaging_router.create_chat(
             messaging_router.CreateChatBody(
                 user_ids=["human-user-1", "thread-id-not-a-user", "thread-user-2"],
                 title="bad-group",
