@@ -190,6 +190,19 @@ def build_resource_snapshot_repo(
     ).resource_snapshot_repo()
 
 
+def build_evaluation_batch_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY,
+        **kwargs,
+    ).evaluation_batch_repo()
+
+
 def build_sandbox_monitor_repo(
     *,
     supabase_client: Any | None = None,
