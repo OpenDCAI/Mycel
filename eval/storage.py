@@ -25,10 +25,6 @@ class TrajectoryStore:
             container = build_storage_container()
             self._repo = container.eval_repo()
 
-    def _init_db(self) -> None:
-        if hasattr(self._repo, "ensure_schema"):
-            self._repo.ensure_schema()
-
     def save_trajectory(self, trajectory: RunTrajectory) -> str:
         """Save a trajectory and its LLM/tool call records. Returns run_id."""
         trajectory_json = trajectory.model_dump_json()

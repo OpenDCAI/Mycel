@@ -239,13 +239,6 @@ class _PyrightSession:
         self._notify("textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "python", "version": 1, "text": text}})
         self._open_files.add(uri)
 
-    def _close_file(self, abs_path: str) -> None:
-        uri = Path(abs_path).as_uri()
-        if uri not in self._open_files:
-            return
-        self._notify("textDocument/didClose", {"textDocument": {"uri": uri}})
-        self._open_files.discard(uri)
-
     def _abs(self, rel_path: str) -> str:
         return str(Path(self._workspace_root) / rel_path)
 

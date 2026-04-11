@@ -680,14 +680,6 @@ class LeonAgent:
             return inferred
         return self.models_config.get_model_provider()
 
-    def _resolve_env_api_key(self) -> str | None:
-        """Resolve API key from environment variables based on model_provider."""
-        return self.models_config.get_api_key()
-
-    def _resolve_env_base_url(self) -> str | None:
-        """Resolve base URL from environment variables based on model_provider."""
-        return self.models_config.get_base_url()
-
     def _normalize_base_url(self, base_url: str, provider: str | None) -> str:
         """Normalize base_url based on provider requirements.
 

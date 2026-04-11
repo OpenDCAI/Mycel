@@ -512,12 +512,6 @@ class DockerProvider(SandboxProvider):
             return 0.0, 0.0
         return self._parse_size_mb(parts[0]), self._parse_size_mb(parts[1])
 
-    def _parse_io(self, value: str) -> tuple[float, float]:
-        parts = [p.strip() for p in value.split("/")]
-        if len(parts) != 2:
-            return 0.0, 0.0
-        return self._parse_size_kb(parts[0]), self._parse_size_kb(parts[1])
-
     def _parse_size_mb(self, value: str) -> float:
         num, unit = self._split_size(value)
         if unit == "b":
@@ -530,20 +524,6 @@ class DockerProvider(SandboxProvider):
             return num * 1024
         if unit == "tb":
             return num * 1024 * 1024
-        return 0.0
-
-    def _parse_size_kb(self, value: str) -> float:
-        num, unit = self._split_size(value)
-        if unit == "b":
-            return num / 1024
-        if unit == "kb":
-            return num
-        if unit == "mb":
-            return num * 1024
-        if unit == "gb":
-            return num * 1024 * 1024
-        if unit == "tb":
-            return num * 1024 * 1024 * 1024
         return 0.0
 
     def _split_size(self, value: str) -> tuple[float, str]:

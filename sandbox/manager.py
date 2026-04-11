@@ -382,12 +382,6 @@ class SandboxManager:
             raise RuntimeError(f"Thread {thread_id} has terminals but no active terminal pointer")
         return None
 
-    def _get_active_session(self, thread_id: str):
-        terminal = self._get_active_terminal(thread_id)
-        if not terminal:
-            return None
-        return self.session_manager.get(thread_id, terminal.terminal_id)
-
     def _get_thread_terminals(self, thread_id: str):
         rows = self.terminal_store.list_by_thread(thread_id)
         return [terminal_from_row(row, self.db_path) for row in rows]
