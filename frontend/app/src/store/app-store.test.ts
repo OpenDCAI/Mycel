@@ -113,7 +113,7 @@ describe("app store agent panel contract", () => {
     );
   });
 
-  it("resets loaded member state when auth identity changes", () => {
+  it("resets loaded agent state when auth identity changes", () => {
     useAppStore.setState({
       agentList: [{ id: "m-old", name: "Old", status: "active" } as never],
       loaded: true,

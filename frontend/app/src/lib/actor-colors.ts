@@ -27,7 +27,7 @@ const ID_HASH_COLORS = [
   "bg-teal-100 text-teal-700",
 ];
 
-/** Deterministic color from member ID hash. Used when type is unavailable. */
+/** Deterministic color from actor ID hash. Used when type is unavailable. */
 export function colorForId(id: string): string {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
