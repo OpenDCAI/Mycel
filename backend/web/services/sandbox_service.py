@@ -48,8 +48,6 @@ def list_user_leases(
     *,
     thread_repo: Any = None,
     user_repo: Any = None,
-    main_db_path: str | Path | None = None,
-    sandbox_db_path: str | Path | None = None,
     include_runtime_session_id: bool = False,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
@@ -57,12 +55,10 @@ def list_user_leases(
         raise RuntimeError("thread_repo and user_repo are required for list_user_leases")
     _thread_repo = thread_repo
     _user_repo = user_repo
-    own_repos = False
     try:
         threads_by_id = {str(thread.get("id") or ""): thread for thread in _thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
         users_by_id = {str(user.id): user for user in _user_repo.list_by_owner_user_id(user_id)}
         rows = monitor_repo.list_leases_with_threads()
-        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None) if include_runtime_session_id else None
         grouped: dict[str, dict[str, Any]] = {}
         runtime_session_ids: dict[str, str | None] = {}
         for row in rows:
@@ -72,8 +68,8 @@ def list_user_leases(
             runtime_session_id = runtime_session_ids.get(lease_id)
             if lease_id not in runtime_session_ids:
                 runtime_session_id = str(row.get("current_instance_id") or "").strip() or None
-                if runtime_session_id is None and callable(query_lease_instance_id):
-                    runtime_session_id = query_lease_instance_id(lease_id)
+                if include_runtime_session_id and runtime_session_id is None:
+                    runtime_session_id = monitor_repo.query_lease_instance_id(lease_id)
                 runtime_session_ids[lease_id] = runtime_session_id
             group = grouped.setdefault(
                 lease_id,
@@ -136,9 +132,6 @@ def list_user_leases(
             leases.append(lease)
         return leases
     finally:
-        if own_repos:
-            _user_repo.close()
-            _thread_repo.close()
         monitor_repo.close()
 
 
@@ -205,11 +198,9 @@ def resolve_owned_lease(
         result["recipe_id"] = recipe_snapshot["id"] or result.get("recipe_id") or default_recipe_id(provider_type)
         result["recipe"] = recipe_snapshot
         result["recipe_name"] = recipe_snapshot["name"]
-        query_lease_instance_id = getattr(monitor_repo, "query_lease_instance_id", None)
-        if callable(query_lease_instance_id):
-            runtime_session_id = query_lease_instance_id(lease_id)
-            if runtime_session_id:
-                result["runtime_session_id"] = runtime_session_id
+        runtime_session_id = monitor_repo.query_lease_instance_id(lease_id)
+        if runtime_session_id:
+            result["runtime_session_id"] = runtime_session_id
         return result
     finally:
         monitor_repo.close()

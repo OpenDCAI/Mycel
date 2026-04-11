@@ -20,7 +20,6 @@ from backend.web.services.resource_common import thread_owners as _thread_owners
 from backend.web.services.resource_common import to_resource_status as _to_resource_status
 from backend.web.services.resource_common import to_session_metrics as _to_session_metrics
 from backend.web.services.sandbox_service import available_sandbox_types
-from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_lease_to_session_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
@@ -42,7 +41,7 @@ def _empty_metric(unit: str) -> dict[str, Any]:
 
 
 def _empty_capabilities() -> dict[str, bool]:
-    return empty_capabilities() if callable(empty_capabilities) else {key: False for key in RESOURCE_CAPABILITY_KEYS}
+    return empty_capabilities()
 
 
 def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict[str, Any]:
@@ -116,10 +115,7 @@ def _query_runtime_session_ids(repo: Any, lease_ids: list[str]) -> dict[str, str
     if not ordered_ids:
         return {}
 
-    query_lease_instance_ids = getattr(repo, "query_lease_instance_ids", None)
-    if not callable(query_lease_instance_ids):
-        raise RuntimeError("sandbox monitor repo must support batch lease runtime lookup")
-    return query_lease_instance_ids(ordered_ids)
+    return repo.query_lease_instance_ids(ordered_ids)
 
 
 def _load_runtime_session_ids(lease_ids: list[str]) -> dict[str, str | None]:
