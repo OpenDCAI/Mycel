@@ -50,4 +50,36 @@ describe("chat event stream", () => {
       { type: "typing_start", data: { user_id: "agent-1" } },
     ]);
   });
+
+  it("parses chat message and typing event data at the API boundary", () => {
+    expect(api.parseChatMessageEventData({
+      id: "msg-1",
+      chat_id: "chat-1",
+      sender_id: "agent-1",
+      sender_name: "Toad",
+      content: "hello",
+      mentioned_ids: ["user-1"],
+      created_at: 1,
+    })).toEqual({
+      id: "msg-1",
+      chat_id: "chat-1",
+      sender_id: "agent-1",
+      sender_name: "Toad",
+      content: "hello",
+      mentioned_ids: ["user-1"],
+      created_at: 1,
+    });
+    expect(api.parseChatTypingUserId({ user_id: "agent-1" })).toBe("agent-1");
+    expect(api.parseChatTypingUserId({})).toBeNull();
+    expect(() => api.parseChatMessageEventData({ id: "msg-1" })).toThrow("chat_id must be a string");
+    expect(() => api.parseChatMessageEventData({
+      id: "msg-1",
+      chat_id: "chat-1",
+      sender_id: "agent-1",
+      sender_name: "Toad",
+      content: "hello",
+      mentioned_ids: ["user-1", 7],
+      created_at: 1,
+    })).toThrow("mentioned_ids must be a string array");
+  });
 });
