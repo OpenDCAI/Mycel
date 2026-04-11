@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, Store, Package, TrendingUp, Clock, Star, RefreshCw, Zap, Users, Trash2 } from "lucide-react";
 import { useMarketplaceStore } from "@/store/marketplace-store";
@@ -7,10 +7,17 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
 import UpdateDialog from "@/components/marketplace/UpdateDialog";
 import type { Agent } from "@/store/types";
+import type { UpdateAvailable } from "@/store/marketplace-store";
 
 type Tab = "explore" | "installed";
 type InstalledSubTab = "member" | "skill" | "agent";
 type TypeFilter = "all" | "member" | "agent" | "skill" | "env";
+type InstalledAgentUser = Agent & {
+  source?: {
+    marketplace_item_id?: string;
+    installed_version?: string;
+  };
+};
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -61,7 +68,7 @@ export default function MarketplacePage() {
 
   // Update dialog
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
-  const [updateTarget, setUpdateTarget] = useState<{ agent: Agent; update: any } | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<{ agent: Agent; update: UpdateAvailable } | null>(null);
 
 
   // Fetch explore items when filters change
@@ -89,10 +96,10 @@ export default function MarketplacePage() {
     }
   }, [tab, fetchLibrary]);
 
-  // Installed members with marketplace source info
-  const installedMembers = agentList.filter((m) => !m.builtin);
-  const filteredMembers = installedMembers.filter((m) =>
-    !installedSearch || m.name.toLowerCase().includes(installedSearch.toLowerCase())
+  // Installed agent users with marketplace source info
+  const installedAgentUsers: InstalledAgentUser[] = agentList.filter((agent) => !agent.builtin);
+  const filteredAgentUsers = installedAgentUsers.filter((agent) =>
+    !installedSearch || agent.name.toLowerCase().includes(installedSearch.toLowerCase())
   );
   const filteredSkills = librarySkills.filter((s) =>
     !installedSearch || s.name.toLowerCase().includes(installedSearch.toLowerCase())
@@ -102,21 +109,23 @@ export default function MarketplacePage() {
   );
 
   const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
-    { id: "member", label: "Agent", icon: Package, count: installedMembers.length },
+    { id: "member", label: "Agent", icon: Package, count: installedAgentUsers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
     { id: "agent", label: "Agent", icon: Users, count: libraryAgents.length },
   ];
 
-  const handleCheckUpdates = useCallback(async () => {
-    // source field comes from meta.json; members without it cannot be checked
-    const payload = installedMembers
-      .filter((m: any) => m.source?.marketplace_item_id)
-      .map((m: any) => ({
-        marketplace_item_id: m.source.marketplace_item_id,
-        installed_version: m.source.installed_version || "0.0.0",
-      }));
+  const handleCheckUpdates = async () => {
+    // source field comes from meta.json; agent users without it cannot be checked
+    const payload = installedAgentUsers.flatMap((agent) => {
+      const source = agent.source;
+      if (!source?.marketplace_item_id) return [];
+      return [{
+        marketplace_item_id: source.marketplace_item_id,
+        installed_version: source.installed_version || "0.0.0",
+      }];
+    });
     if (payload.length > 0) await checkUpdates(payload);
-  }, [installedMembers, checkUpdates]);
+  };
 
   const tabItems = [
     { id: "explore" as Tab, label: "Explore", icon: Store },
@@ -342,29 +351,29 @@ export default function MarketplacePage() {
                   ))}
                 </div>
 
-                {/* Member list */}
+                {/* Agent user list */}
                 {installedSubTab === "member" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
-                      {filteredMembers.map((member) => {
-                        const update = updates.find((u) => u.marketplace_item_id === member.id);
+                      {filteredAgentUsers.map((agent) => {
+                        const update = updates.find((u) => u.marketplace_item_id === agent.id);
                         return (
-                          <div key={member.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/contacts/agents/${member.id}`)}>
+                          <div key={agent.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/contacts/agents/${agent.id}`)}>
                             <div className="flex items-start gap-3">
                               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                 <Package className="w-4 h-4 text-primary" />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{member.name}</h4>
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{member.description}</p>
-                                <p className="text-2xs text-muted-foreground mt-2 font-mono">v{member.version}</p>
+                                <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{agent.name}</h4>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{agent.description}</p>
+                                <p className="text-2xs text-muted-foreground mt-2 font-mono">v{agent.version}</p>
                               </div>
                             </div>
                             {update && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setUpdateTarget({ agent: member, update });
+                                  setUpdateTarget({ agent, update });
                                   setUpdateDialogOpen(true);
                                 }}
                                 className="absolute top-2 right-2 text-2xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors duration-fast"
@@ -376,7 +385,7 @@ export default function MarketplacePage() {
                         );
                       })}
                     </div>
-                    {filteredMembers.length === 0 && (
+                    {filteredAgentUsers.length === 0 && (
                       <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Agent</div>
                     )}
                   </>
