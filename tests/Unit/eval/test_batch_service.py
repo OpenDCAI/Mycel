@@ -2,6 +2,35 @@ from eval.batch_models import EvaluationBatch, EvaluationBatchRun
 from eval.batch_service import EvaluationBatchService
 
 
+def _batch_row(*, batch_id: str = "batch-1", status: str = "pending") -> dict:
+    return {
+        "batch_id": batch_id,
+        "kind": "scenario_batch",
+        "submitted_by_user_id": "user-1",
+        "agent_user_id": "agent-1",
+        "config_json": {"sandbox": "local"},
+        "status": status,
+        "created_at": "2026-04-11T00:00:00Z",
+        "updated_at": "2026-04-11T00:00:00Z",
+        "summary_json": {},
+    }
+
+
+def _batch_run_row(batch_run_id: str, *, batch_id: str = "batch-1", status: str = "pending") -> dict:
+    return {
+        "batch_run_id": batch_run_id,
+        "batch_id": batch_id,
+        "item_key": batch_run_id,
+        "scenario_id": f"scenario-{batch_run_id}",
+        "status": status,
+        "thread_id": None,
+        "eval_run_id": None,
+        "started_at": None,
+        "finished_at": None,
+        "summary_json": {},
+    }
+
+
 def test_evaluation_batch_defaults_to_pending():
     batch = EvaluationBatch(
         batch_id="batch-1",
@@ -88,47 +117,9 @@ def test_batch_service_recomputes_summary():
     repo = _FakeBatchRepo()
     service = EvaluationBatchService(batch_repo=repo)
 
-    batch = repo.create_batch(
-        {
-            "batch_id": "batch-1",
-            "kind": "scenario_batch",
-            "submitted_by_user_id": "user-1",
-            "agent_user_id": "agent-1",
-            "config_json": {"sandbox": "local"},
-            "status": "running",
-            "created_at": "2026-04-11T00:00:00Z",
-            "updated_at": "2026-04-11T00:00:00Z",
-            "summary_json": {},
-        }
-    )
-    repo.create_batch_run(
-        {
-            "batch_run_id": "run-1",
-            "batch_id": batch["batch_id"],
-            "item_key": "s1",
-            "scenario_id": "scenario-1",
-            "status": "completed",
-            "thread_id": None,
-            "eval_run_id": None,
-            "started_at": None,
-            "finished_at": None,
-            "summary_json": {},
-        }
-    )
-    repo.create_batch_run(
-        {
-            "batch_run_id": "run-2",
-            "batch_id": batch["batch_id"],
-            "item_key": "s2",
-            "scenario_id": "scenario-2",
-            "status": "running",
-            "thread_id": None,
-            "eval_run_id": None,
-            "started_at": None,
-            "finished_at": None,
-            "summary_json": {},
-        }
-    )
+    batch = repo.create_batch(_batch_row(status="running"))
+    repo.create_batch_run(_batch_run_row("run-1", batch_id=batch["batch_id"], status="completed"))
+    repo.create_batch_run(_batch_run_row("run-2", batch_id=batch["batch_id"], status="running"))
 
     summary = service.refresh_batch_summary(batch["batch_id"])
     assert summary["completed_runs"] == 1
