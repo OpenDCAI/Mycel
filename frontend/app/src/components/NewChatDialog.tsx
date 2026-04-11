@@ -24,14 +24,14 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
   const filtered = useMemo(() => {
     if (!filter) return agentList;
     const q = filter.toLowerCase();
-    return agentList.filter(m =>
-      m.name.toLowerCase().includes(q) || m.description?.toLowerCase().includes(q)
+    return agentList.filter(agent =>
+      agent.name.toLowerCase().includes(q) || agent.description?.toLowerCase().includes(q)
     );
   }, [agentList, filter]);
 
-  const handleSelect = (member: typeof agentList[0]) => {
+  const handleSelect = (agent: typeof agentList[0]) => {
     onOpenChange(false);
-    navigate(`/chat/hire/${member.id}`);
+    navigate(`/chat/hire/${agent.id}`);
   };
 
   return (
@@ -59,24 +59,24 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
               {agentList.length === 0 ? "暂无 Agent" : "无匹配结果"}
             </p>
           ) : (
-            filtered.map(member => (
+            filtered.map(agent => (
               <button
-                key={member.id}
-                onClick={() => handleSelect(member)}
+                key={agent.id}
+                onClick={() => handleSelect(agent)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors duration-fast"
               >
-                <ActorAvatar name={member.name} avatarUrl={member.avatar_url} type="mycel_agent" size="sm" />
+                <ActorAvatar name={agent.name} avatarUrl={agent.avatar_url} type="mycel_agent" size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{member.name}</span>
+                    <span className="text-sm font-medium truncate">{agent.name}</span>
                     <span className={`text-2xs px-1.5 py-0.5 rounded-full ${
-                      member.status === "active" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+                      agent.status === "active" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
                     }`}>
-                      {member.status === "active" ? "在线" : member.status === "draft" ? "草稿" : "离线"}
+                      {agent.status === "active" ? "在线" : agent.status === "draft" ? "草稿" : "离线"}
                     </span>
                   </div>
-                  {member.description && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{member.description}</p>
+                  {agent.description && (
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{agent.description}</p>
                   )}
                 </div>
                 <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
