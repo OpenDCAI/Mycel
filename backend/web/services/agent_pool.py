@@ -139,25 +139,20 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None
-        if hasattr(app_obj.state, "user_repo") and thread_data:
-            agent_user_id = thread_data.get("agent_user_id")
+        if user_repo is not None and thread_data:
             if not agent_user_id:
                 raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
-            agent_user = agent_user or (user_repo.get_by_id(agent_user_id) if agent_user_id else None)
-            if agent_user:
-                chat_identity_id = agent_user_id
-                # @@@thread-chat-identity-source - agent users are now the stable social
-                # identity root. Runtime threads no longer carry a second dedicated user_id.
-                if not chat_identity_id:
-                    raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
-                owner_id = agent_user.owner_user_id or ""
-                chat_repos = {
-                    "chat_identity_id": chat_identity_id,
-                    "owner_id": owner_id,
-                    "user_repo": user_repo,
-                    "messaging_service": getattr(app_obj.state, "messaging_service", None),
-                    "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
-                }
+            agent_user = agent_user or user_repo.get_by_id(agent_user_id)
+            # @@@thread-chat-identity-source - agent users are now the stable social
+            # identity root. Runtime threads no longer carry a second dedicated user_id.
+            owner_id = agent_user.owner_user_id or ""
+            chat_repos = {
+                "chat_identity_id": agent_user_id,
+                "owner_id": owner_id,
+                "user_repo": user_repo,
+                "messaging_service": getattr(app_obj.state, "messaging_service", None),
+                "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
+            }
 
         # @@@per-thread-file-access - ensure thread files are accessible from agent
         from backend.web.services.file_channel_service import get_file_channel_source
@@ -252,10 +247,9 @@ async def update_agent_config(app_obj: FastAPI, model: str, thread_id: str | Non
     """
     # Get or create lock for this thread
     lock_key = thread_id or "global"
-    if lock_key not in _config_update_locks:
-        _config_update_locks[lock_key] = asyncio.Lock()
+    lock = _config_update_locks.setdefault(lock_key, asyncio.Lock())
 
-    async with _config_update_locks[lock_key]:
+    async with lock:
         if thread_id:
             # Update specific thread's agent
             sandbox_type = resolve_thread_sandbox(app_obj, thread_id)
