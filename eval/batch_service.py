@@ -131,6 +131,19 @@ class EvaluationBatchService:
         self.refresh_batch_summary(batch_id)
         return updated
 
+    def record_eval_error(self, batch_id: str, scenario_id: str, exc: BaseException) -> dict:
+        batch_run = self._find_batch_run_for_scenario(batch_id, scenario_id)
+        updated = self._batch_repo.update_batch_run(
+            batch_run["batch_run_id"],
+            status="failed",
+            finished_at=datetime.now(UTC).isoformat(),
+            summary_json={"error": str(exc)},
+        )
+        if updated is None:
+            raise KeyError(f"Evaluation batch run not found: {batch_run['batch_run_id']}")
+        self.refresh_batch_summary(batch_id)
+        return updated
+
     def _find_batch_run_for_scenario(self, batch_id: str, scenario_id: str) -> dict:
         for batch_run in self._batch_repo.list_batch_runs(batch_id):
             if str(batch_run.get("scenario_id") or "") == scenario_id:

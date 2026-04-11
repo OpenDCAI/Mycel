@@ -19,6 +19,11 @@ class _FakeRunner:
         )
 
 
+class _FailingRunner:
+    async def run_scenario(self, _scenario: EvalScenario) -> EvalResult:
+        raise RuntimeError("runner exploded")
+
+
 @pytest.mark.asyncio
 async def test_batch_executor_runs_scenarios_and_records_results():
     repo = _FakeBatchRepo()
@@ -38,3 +43,24 @@ async def test_batch_executor_runs_scenarios_and_records_results():
     assert [result.scenario_id for result in results] == ["scenario-1"]
     assert batch_run["eval_run_id"] == "eval-run-scenario-1"
     assert repo.get_batch(batch["batch_id"])["summary_json"]["completed_runs"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_executor_records_failed_scenario_before_reraising():
+    repo = _FakeBatchRepo()
+    batch_service = EvaluationBatchService(batch_repo=repo)
+    batch = batch_service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+    executor = EvaluationBatchExecutor(runner=_FailingRunner(), batch_service=batch_service)
+
+    with pytest.raises(RuntimeError, match="runner exploded"):
+        await executor.run_batch(batch["batch_id"], [EvalScenario(id="scenario-1", name="Scenario 1")])
+
+    batch_run = repo.list_batch_runs(batch["batch_id"])[0]
+    assert batch_run["status"] == "failed"
+    assert batch_run["summary_json"] == {"error": "runner exploded"}

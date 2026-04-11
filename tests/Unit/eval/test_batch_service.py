@@ -199,3 +199,21 @@ def test_batch_service_records_eval_result_for_matching_scenario():
     assert updated["thread_id"] == "thread-1"
     assert updated["status"] == "completed"
     assert updated["summary_json"] == {"total_tokens": 42, "tool_call_count": 3}
+
+
+def test_batch_service_records_eval_error_for_matching_scenario():
+    repo = _FakeBatchRepo()
+    service = EvaluationBatchService(batch_repo=repo)
+    batch = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+
+    updated = service.record_eval_error(batch["batch_id"], "scenario-1", RuntimeError("boom"))
+
+    assert updated["status"] == "failed"
+    assert updated["finished_at"]
+    assert updated["summary_json"] == {"error": "boom"}
