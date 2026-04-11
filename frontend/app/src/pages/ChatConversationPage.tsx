@@ -329,7 +329,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                       content={msg.content}
                       senderName={chatMemberDisplayName(member, msg.sender_name)}
                       avatarUrl={member?.avatar_url}
-                      memberType={member?.type}
+                      actorType={member?.type}
                       timestamp={ts}
                       showName
                     />

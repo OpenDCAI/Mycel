@@ -155,7 +155,7 @@ export interface UserLeaseSummary {
   agents: Array<{
     /** Runtime actor identity for this visible lease participant. */
     thread_id: string;
-    /** Display label resolved from the actor's backing member shell. */
+    /** Display label resolved from the actor's backing agent user. */
     agent_name: string;
     avatar_url?: string | null;
   }>;

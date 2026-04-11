@@ -26,8 +26,8 @@ export default function ContactList() {
     void fetchAgents();
   }, [fetchAgents]);
 
-  // Filter agents (non-builtin members)
-  const agents = agentsState.filter((m) => !m.builtin);
+  // Filter user-created agents.
+  const agents = agentsState.filter((agent) => !agent.builtin);
   const filtered = search
     ? agents.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()))
     : agents;
