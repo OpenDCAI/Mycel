@@ -1101,6 +1101,31 @@ def test_delivery_resolver_drops_when_new_contact_edge_is_blocked() -> None:
     assert action is DeliveryAction.DROP
 
 
+def test_delivery_resolver_propagates_contact_repo_failures() -> None:
+    def _raise_get(_owner_id: str, _target_id: str) -> None:
+        raise RuntimeError("contact repo unavailable")
+
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=_raise_get),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
+        relationship_repo=None,
+    )
+
+    with pytest.raises(RuntimeError):
+        resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+
+def test_delivery_resolver_requires_current_chat_member_contract() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(list_entities=lambda _chat_id: []),
+        relationship_repo=None,
+    )
+
+    with pytest.raises(AttributeError):
+        resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+
 def test_delivery_resolver_notifies_when_new_contact_edge_is_muted() -> None:
     resolver = HireVisitDeliveryResolver(
         contact_repo=SimpleNamespace(
@@ -1168,53 +1193,35 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
 
 @pytest.mark.asyncio
 async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and_unread(monkeypatch: pytest.MonkeyPatch) -> None:
-    started: list[tuple[str, str, str]] = []
-    unread_calls: list[tuple[str, str]] = []
-    enqueued: list[tuple[str, str, str | None, str | None]] = []
-
-    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
-        return SimpleNamespace(id=f"agent-for-{thread_id}")
-
-    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
-    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "core.runtime.middleware.queue.formatters.format_chat_notification",
-        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
-    )
-
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None
-            ),
-            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
-            messaging_service=SimpleNamespace(count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or 7),
-            queue_manager=SimpleNamespace(
-                enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
-                    (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
-                )
-            ),
-        )
-    )
-
-    await delivery_module._async_deliver(
-        app,
-        "agent-user-1",
-        cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
-        "Human",
-        "chat-1",
-        "human-user-1",
-        signal="ping",
-    )
+    started, unread_calls, enqueued = await _run_chat_delivery(monkeypatch, chat_id="chat-1", unread_count=7)
 
     assert started == [("thread-1", "chat-1", "agent-user-1")]
     assert unread_calls == [("chat-1", "agent-user-1")]
     assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
 
 
-@pytest.mark.asyncio
-async def test_async_deliver_prefers_unique_active_child_thread_over_default_main(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_recipient_thread_resolution_requires_current_thread_repo_contract() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None
+            ),
+            agent_pool={},
+        )
+    )
+
+    with pytest.raises(AttributeError):
+        delivery_module._resolve_recipient_thread_id(app, "agent-user-1")
+
+
+async def _run_chat_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    threads: list[dict[str, Any]] | None = None,
+    pool: dict[str, Any] | None = None,
+    chat_id: str,
+    unread_count: int,
+) -> tuple[list[tuple[str, str, str]], list[tuple[str, str]], list[tuple[str, str, str | None, str | None]]]:
     started: list[tuple[str, str, str]] = []
     unread_calls: list[tuple[str, str]] = []
     enqueued: list[tuple[str, str, str | None, str | None]] = []
@@ -1230,168 +1237,19 @@ async def test_async_deliver_prefers_unique_active_child_thread_over_default_mai
         lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
     )
 
+    thread_rows = threads or [{"id": "thread-1", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0}]
+    default_thread = next((row for row in thread_rows if row.get("is_main")), thread_rows[0])
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
-                list_by_agent_user=lambda uid: (
-                    [
-                        {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
-                        {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
-                    ]
-                    if uid == "agent-user-1"
-                    else []
-                ),
+                get_by_user_id=lambda uid: default_thread if uid == "agent-user-1" else None,
+                list_by_agent_user=lambda uid: list(thread_rows) if uid == "agent-user-1" else [],
             ),
-            agent_pool={
-                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
-                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
-            },
+            agent_pool=pool or {},
             typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
-            messaging_service=SimpleNamespace(count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or 3),
-            queue_manager=SimpleNamespace(
-                enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
-                    (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
-                )
+            messaging_service=SimpleNamespace(
+                count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or unread_count
             ),
-        )
-    )
-
-    await delivery_module._async_deliver(
-        app,
-        "agent-user-1",
-        cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
-        "Human",
-        "chat-2",
-        "human-user-1",
-        signal="ping",
-    )
-
-    assert started == [("thread-child", "chat-2", "agent-user-1")]
-    assert unread_calls == [("chat-2", "agent-user-1")]
-    assert enqueued == [("Human|chat-2|3|ping", "thread-child", "human-user-1", "Human")]
-
-
-@pytest.mark.asyncio
-async def test_async_deliver_prefers_unique_ready_child_thread_over_default_main(monkeypatch: pytest.MonkeyPatch) -> None:
-    started: list[tuple[str, str, str]] = []
-    enqueued: list[tuple[str, str, str | None, str | None]] = []
-
-    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
-        return SimpleNamespace(id=f"agent-for-{thread_id}")
-
-    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
-    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "core.runtime.middleware.queue.formatters.format_chat_notification",
-        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
-    )
-
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
-                list_by_agent_user=lambda uid: (
-                    [
-                        {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
-                        {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
-                    ]
-                    if uid == "agent-user-1"
-                    else []
-                ),
-            ),
-            agent_pool={
-                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
-                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
-            },
-            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
-            messaging_service=SimpleNamespace(count_unread=lambda _chat_id, _user_id: 1),
-            queue_manager=SimpleNamespace(
-                enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
-                    (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
-                )
-            ),
-        )
-    )
-
-    await delivery_module._async_deliver(
-        app,
-        "agent-user-1",
-        cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
-        "Human",
-        "chat-3",
-        "human-user-1",
-        signal="ping",
-    )
-
-    assert started == [("thread-child", "chat-3", "agent-user-1")]
-    assert enqueued == [("Human|chat-3|1|ping", "thread-child", "human-user-1", "Human")]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("threads", "pool", "chat_id", "expected_thread_id"),
-    [
-        (
-            [
-                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
-                {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
-            ],
-            {
-                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
-                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
-            },
-            "chat-4",
-            "thread-child",
-        ),
-        (
-            [
-                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
-                {"id": "thread-child-old", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
-                {"id": "thread-child-fresh", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 2},
-            ],
-            {
-                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
-                "thread-child-old:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
-                "thread-child-fresh:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
-            },
-            "chat-5",
-            "thread-child-fresh",
-        ),
-    ],
-    ids=["prefer-only-live-child", "prefer-latest-live-child"],
-)
-async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
-    monkeypatch: pytest.MonkeyPatch,
-    threads,
-    pool,
-    chat_id,
-    expected_thread_id,
-) -> None:
-    started: list[tuple[str, str, str]] = []
-    enqueued: list[tuple[str, str, str | None, str | None]] = []
-
-    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
-        return SimpleNamespace(id=f"agent-for-{thread_id}")
-
-    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
-    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "core.runtime.middleware.queue.formatters.format_chat_notification",
-        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
-    )
-
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
-                list_by_agent_user=lambda uid: threads if uid == "agent-user-1" else [],
-            ),
-            agent_pool=pool,
-            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
-            messaging_service=SimpleNamespace(count_unread=lambda _chat_id, _user_id: 1),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
@@ -1410,5 +1268,85 @@ async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
         signal="ping",
     )
 
+    return started, unread_calls, enqueued
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("threads", "pool", "chat_id", "unread_count", "expected_thread_id"),
+    [
+        (
+            [
+                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
+                {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
+            ],
+            {
+                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
+                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
+            },
+            "chat-2",
+            3,
+            "thread-child",
+        ),
+        (
+            [
+                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
+                {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
+            ],
+            {
+                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
+                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
+            },
+            "chat-3",
+            1,
+            "thread-child",
+        ),
+        (
+            [
+                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
+                {"id": "thread-child", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
+            ],
+            {
+                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
+                "thread-child:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
+            },
+            "chat-4",
+            1,
+            "thread-child",
+        ),
+        (
+            [
+                {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
+                {"id": "thread-child-old", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 1},
+                {"id": "thread-child-fresh", "agent_user_id": "agent-user-1", "is_main": False, "branch_index": 2},
+            ],
+            {
+                "thread-main:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE)),
+                "thread-child-old:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
+                "thread-child-fresh:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
+            },
+            "chat-5",
+            1,
+            "thread-child-fresh",
+        ),
+    ],
+    ids=["active-child-main-idle", "ready-child-main-idle", "ready-child-active-main", "latest-live-child"],
+)
+async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
+    monkeypatch: pytest.MonkeyPatch,
+    threads,
+    pool,
+    chat_id,
+    unread_count,
+    expected_thread_id,
+) -> None:
+    started, _, enqueued = await _run_chat_delivery(
+        monkeypatch,
+        threads=threads,
+        pool=pool,
+        chat_id=chat_id,
+        unread_count=unread_count,
+    )
+
     assert started == [(expected_thread_id, chat_id, "agent-user-1")]
-    assert enqueued == [(f"Human|{chat_id}|1|ping", expected_thread_id, "human-user-1", "Human")]
+    assert enqueued == [(f"Human|{chat_id}|{unread_count}|ping", expected_thread_id, "human-user-1", "Human")]

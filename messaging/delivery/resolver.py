@@ -93,12 +93,7 @@ class HireVisitDeliveryResolver:
 
     def _get_contact(self, owner_id: str, target_id: str):
         """Fetch contact row from the directional contacts table."""
-        try:
-            if hasattr(self._contacts, "get"):
-                return self._contacts.get(owner_id, target_id)
-        except Exception:
-            pass
-        return None
+        return self._contacts.get(owner_id, target_id)
 
     def _is_blocked(self, contact: Any | None) -> bool:
         if not contact:
@@ -116,23 +111,14 @@ class HireVisitDeliveryResolver:
 
     def _is_chat_muted(self, user_id: str, chat_id: str) -> bool:
         """Check if user has muted this specific chat."""
-        try:
-            members = self._chat_members.list_members(chat_id)
-        except AttributeError:
-            # Fallback for old ChatParticipantRepo interface
-            try:
-                members = self._chat_members.list_entities(chat_id)
-            except Exception:
-                return False
+        members = self._chat_members.list_members(chat_id)
 
-        for m in members:
-            uid = m.get("user_id") or getattr(m, "user_id", None)
-            if uid != user_id:
+        for member in members:
+            if member.get("user_id") != user_id:
                 continue
-            muted = m.get("muted", False) if isinstance(m, dict) else getattr(m, "muted", False)
-            if not muted:
+            if not member.get("muted", False):
                 return False
-            mute_until = m.get("mute_until") if isinstance(m, dict) else getattr(m, "mute_until", None)
+            mute_until = member.get("mute_until")
             if mute_until is not None:
                 # Handle both timestamp float and ISO string
                 if isinstance(mute_until, (int, float)) and mute_until < time.time():
