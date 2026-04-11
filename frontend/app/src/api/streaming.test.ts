@@ -36,4 +36,19 @@ describe("streaming api contract", () => {
 
     await expect(api.postRun("thread-1", "hello")).rejects.toThrow("Run cancelled");
   });
+
+  it("streams thread events through authenticated fetch without leaking token in the URL", async () => {
+    const ac = new AbortController();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: status\ndata: {"_seq":8}\n\n'));
+        controller.close();
+      },
+    });
+    authFetch.mockResolvedValue(new Response(body));
+
+    await api.streamThreadEvents("thread-1", () => ac.abort(), ac.signal, 7);
+
+    expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1/events?after=7", { signal: ac.signal });
+  });
 });

@@ -80,11 +80,9 @@ export async function streamThreadEvents(
 
   while (!signal?.aborted) {
     try {
-      const { useAuthStore } = await import("../store/auth-store");
-      const token = useAuthStore.getState().token || "";
-      const url = `/api/threads/${encodeURIComponent(threadId)}/events?after=${after}&token=${encodeURIComponent(token)}`;
-      console.log(`[SSE-FETCH] fetching ${url.replace(/token=[^&]+/, "token=***")}`);
-      const res = await fetch(url, { signal: signal });
+      const url = `/api/threads/${encodeURIComponent(threadId)}/events?after=${after}`;
+      console.log(`[SSE-FETCH] fetching ${url}`);
+      const res = await authFetch(url, { signal });
       if (signal?.aborted) return;
       console.log(`[SSE-FETCH] response status=${res.status}, ok=${res.ok}`);
 

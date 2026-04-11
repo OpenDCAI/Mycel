@@ -1185,22 +1185,16 @@ SSE_HEADERS = {
 async def stream_thread_events(
     thread_id: str,
     request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
     after: int = 0,
-    token: str | None = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> EventSourceResponse:
-    """Persistent SSE event stream — uses ?token= for auth (EventSource can't set headers)."""
-    if not token:
-        raise HTTPException(401, "Missing token")
-    try:
-        sse_user_id = app.state.auth_service.verify_token(token)["user_id"]
-    except ValueError as e:
-        raise HTTPException(401, str(e))
+    """Persistent SSE event stream over the standard Authorization header."""
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
     agent_member = app.state.user_repo.get_by_id(thread["agent_user_id"])
-    if not agent_member or agent_member.owner_user_id != sse_user_id:
+    if not agent_member or agent_member.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
 
     last_id = request.headers.get("Last-Event-ID")
