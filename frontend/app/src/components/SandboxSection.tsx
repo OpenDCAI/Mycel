@@ -1,7 +1,7 @@
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { saveSandboxConfig } from "../api";
-import { asRecord } from "../lib/records";
+import { asRecord, recordString } from "../lib/records";
 
 interface SandboxSectionProps {
   sandboxes: Record<string, Record<string, unknown>>;
@@ -49,16 +49,22 @@ const COMMON_FIELDS: FieldDef[] = [
   { key: "init_commands", label: "初始化命令", type: "text", placeholder: "逗号分隔的命令" },
 ];
 
+function fieldValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return "";
+}
+
 function getNestedValue(config: Record<string, unknown>, field: FieldDef): string {
   if (field.nested) {
     const nested = asRecord(config[field.nested]);
-    return String(nested?.[field.key] ?? "");
+    return fieldValue(nested?.[field.key]);
   }
   if (field.key === "init_commands") {
     const cmds = config[field.key];
     return Array.isArray(cmds) ? cmds.join(", ") : "";
   }
-  return String(config[field.key] ?? "");
+  return fieldValue(config[field.key]);
 }
 
 function setNestedValue(config: Record<string, unknown>, field: FieldDef, value: string): Record<string, unknown> {
@@ -167,7 +173,7 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
 
       <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
         {entries.map(([configName, config]) => {
-          const providerType = String(config.provider ?? configName);
+          const providerType = recordString(config, "provider") ?? configName;
           const fields = PROVIDER_FIELDS[providerType] ?? [];
           const isExpanded = expanded === configName;
           const isSaving = saving === configName;
