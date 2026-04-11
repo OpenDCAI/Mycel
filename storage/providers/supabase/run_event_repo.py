@@ -191,12 +191,14 @@ class SupabaseRunEventRepo:
     def delete_runs(self, thread_id: str, run_ids: list[str]) -> int:
         if not run_ids:
             return 0
-        pre = q.rows(
-            q.in_(self._t().select("seq").eq("thread_id", thread_id), "run_id", run_ids, _REPO, "delete_runs").execute(),
+        pre = q.rows_in_chunks(
+            lambda: self._t().select("seq").eq("thread_id", thread_id),
+            "run_id",
+            run_ids,
             _REPO,
             "delete_runs pre-count",
         )
-        q.in_(self._t().delete().eq("thread_id", thread_id), "run_id", run_ids, _REPO, "delete_runs").execute()
+        q.execute_in_chunks(lambda: self._t().delete().eq("thread_id", thread_id), "run_id", run_ids, _REPO, "delete_runs")
         return len(pre)
 
     def delete_thread_events(self, thread_id: str) -> int:

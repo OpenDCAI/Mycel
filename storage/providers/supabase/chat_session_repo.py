@@ -365,9 +365,9 @@ class SupabaseChatSessionRepo:
             command_ids = [str(r["command_id"]) for r in command_rows]
 
             if command_ids:
-                q.in_(self._chunks().delete(), "command_id", command_ids, _REPO, "delete_by_thread chunks").execute()
+                q.execute_in_chunks(lambda: self._chunks().delete(), "command_id", command_ids, _REPO, "delete_by_thread chunks")
 
-            q.in_(self._commands().delete(), "terminal_id", terminal_ids, _REPO, "delete_by_thread commands").execute()
+            q.execute_in_chunks(lambda: self._commands().delete(), "terminal_id", terminal_ids, _REPO, "delete_by_thread commands")
 
         self._sessions().delete().eq("thread_id", thread_id).execute()
 

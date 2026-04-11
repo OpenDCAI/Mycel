@@ -49,3 +49,16 @@ def test_rows_in_chunks_raises_for_invalid_payload() -> None:
 
     with pytest.raises(RuntimeError, match="expected list payload"):
         q.rows_in_chunks(BadQuery, "id", ["item-1"], "test repo", "bad")
+
+
+def test_execute_in_chunks_splits_large_in_filters() -> None:
+    queries: list[_Query] = []
+
+    def make_query() -> _Query:
+        query = _Query([])
+        queries.append(query)
+        return query
+
+    q.execute_in_chunks(make_query, "id", [f"item-{index}" for index in range(175)], "test repo", "delete")
+
+    assert [len(query.in_calls[0][1]) for query in queries] == [80, 80, 15]
