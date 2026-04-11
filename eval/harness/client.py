@@ -61,8 +61,6 @@ class EvalClient:
 
         after = self._thread_event_cursors.get(thread_id, 0)
         stream_path = f"/api/threads/{thread_id}/events?after={after}"
-        if self.token:
-            stream_path = f"{stream_path}&token={self.token}"
 
         # @@@public-thread-sse-handoff - the current public contract starts a run
         # with POST /messages, then delivers lifecycle/text over persistent
@@ -71,7 +69,7 @@ class EvalClient:
         async with self._client.stream(
             "GET",
             stream_path,
-            headers={"Accept": "text/event-stream"},
+            headers={"Accept": "text/event-stream", **self._auth_headers()},
         ) as resp:
             resp.raise_for_status()
             event_type = ""

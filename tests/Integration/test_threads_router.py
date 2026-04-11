@@ -744,26 +744,6 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
 
 
 @pytest.mark.asyncio
-async def test_stream_thread_events_requires_token():
-    app = _make_threads_app(
-        auth_service=_FakeAuthService(),
-        thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: None),
-        thread_event_buffers={},
-    )
-
-    with pytest.raises(threads_router.HTTPException) as exc_info:
-        await threads_router.stream_thread_events(
-            "thread-1",
-            request=_make_request(),
-            token=None,
-            app=app,
-        )
-
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.detail == "Missing token"
-
-
-@pytest.mark.asyncio
 async def test_delete_thread_route_does_not_delete_thread_row_when_resource_destroy_fails():
     deleted_db: list[str] = []
     deleted_rows: list[str] = []
@@ -794,7 +774,7 @@ async def test_delete_thread_route_does_not_delete_thread_row_when_resource_dest
 
 
 @pytest.mark.asyncio
-async def test_stream_thread_events_verifies_token_before_owner_check():
+async def test_stream_thread_events_uses_authenticated_owner_id():
     auth_service = _FakeAuthService()
     thread_repo = SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "member-1"})
     app = _make_threads_app(
@@ -806,11 +786,11 @@ async def test_stream_thread_events_verifies_token_before_owner_check():
     response = await threads_router.stream_thread_events(
         "thread-1",
         request=_make_request(),
-        token="tok-thread",
+        user_id="owner-1",
         app=app,
     )
 
-    assert auth_service.tokens == ["tok-thread"]
+    assert auth_service.tokens == []
     assert response is not None
 
 

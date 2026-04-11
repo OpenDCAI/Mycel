@@ -97,8 +97,8 @@ async def test_run_message_uses_public_messages_path_then_thread_events_stream()
     ]
     assert stream_calls == [
         (
-            "/api/threads/thread-1/events?after=0&token=tok-1",
-            {"Accept": "text/event-stream"},
+            "/api/threads/thread-1/events?after=0",
+            {"Accept": "text/event-stream", "Authorization": "Bearer tok-1"},
         )
     ]
 
