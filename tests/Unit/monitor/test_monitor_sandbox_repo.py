@@ -111,6 +111,27 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
     ]
 
 
+def test_query_threads_chunks_lease_lookup() -> None:
+    sessions = [
+        _session(f"sess-{index}", f"thread-{index}", f"lease-{index}", last_active_at=f"2026-04-05T10:{index % 60:02d}:00")
+        for index in range(175)
+    ]
+    leases = [_lease(f"lease-{index}", current_instance_id=f"instance-{index}") for index in range(175)]
+    repo = SupabaseSandboxMonitorRepo(
+        _MaxInFilterClient(
+            {
+                "chat_sessions": sessions,
+                "sandbox_leases": leases,
+            }
+        )
+    )
+
+    rows = repo.query_threads()
+
+    assert len(rows) == 175
+    assert next(row for row in rows if row["thread_id"] == "thread-174")["current_instance_id"] == "instance-174"
+
+
 def test_query_leases_uses_latest_terminal_binding() -> None:
     repo = _repo(
         {
@@ -203,6 +224,23 @@ def test_query_lease_instance_id_prefers_provider_session_id() -> None:
     )
 
     assert repo.query_lease_instance_id("lease-1") == "provider-session-1"
+
+
+def test_query_lease_instance_ids_chunks_large_lookup() -> None:
+    lease_ids = [f"lease-{index}" for index in range(175)]
+    repo = SupabaseSandboxMonitorRepo(
+        _MaxInFilterClient(
+            {
+                "sandbox_leases": [{"lease_id": lease_id, "current_instance_id": f"fallback-{lease_id}"} for lease_id in lease_ids],
+                "sandbox_instances": [{"lease_id": "lease-174", "provider_session_id": "provider-session-174"}],
+            }
+        )
+    )
+
+    result = repo.query_lease_instance_ids(lease_ids)
+
+    assert result["lease-0"] == "fallback-lease-0"
+    assert result["lease-174"] == "provider-session-174"
 
 
 def test_list_probe_targets_prefers_provider_session_id() -> None:

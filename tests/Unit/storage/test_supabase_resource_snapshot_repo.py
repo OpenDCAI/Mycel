@@ -5,6 +5,7 @@ class _FakeTable:
     def __init__(self) -> None:
         self.upsert_payload = None
         self.in_calls: list[tuple[str, list[str]]] = []
+        self.max_in_values: int | None = None
         self.rows = [{"lease_id": "lease-1", "cpu_used": 1.0}]
 
     def upsert(self, payload):
@@ -15,6 +16,8 @@ class _FakeTable:
         return self
 
     def in_(self, key, values):
+        if self.max_in_values is not None:
+            assert len(values) <= self.max_in_values
         self.in_calls.append((key, list(values)))
         return self
 
@@ -54,3 +57,14 @@ def test_supabase_resource_snapshot_repo_lists_snapshots_by_lease_ids() -> None:
 
     assert rows == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
     assert ("lease_id", ["lease-1", "lease-2"]) in client.table_obj.in_calls
+
+
+def test_supabase_resource_snapshot_repo_chunks_large_snapshot_lookup() -> None:
+    client = _FakeClient()
+    client.table_obj.max_in_values = 80
+    repo = SupabaseResourceSnapshotRepo(client)
+
+    rows = repo.list_snapshots_by_lease_ids([f"lease-{index}" for index in range(175)])
+
+    assert rows == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
+    assert [len(values) for _, values in client.table_obj.in_calls] == [80, 80, 15]
