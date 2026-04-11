@@ -21,6 +21,7 @@ import {
 } from "../api";
 import type { UseThreadStreamResult } from "./use-thread-stream";
 import { makeId } from "./utils";
+import { asRecord } from "../lib/records";
 
 // --- Delta types from backend ---
 
@@ -65,6 +66,14 @@ type DisplayDelta =
 
 type SequencedDisplayDelta = DisplayDelta & { _display_seq?: number };
 
+const DISPLAY_DELTA_TYPES = new Set<string>([
+  "append_entry",
+  "append_segment",
+  "update_segment",
+  "finalize_turn",
+  "full_state",
+]);
+
 // --- Helpers ---
 
 function updateLastTurn(
@@ -80,6 +89,11 @@ function updateLastTurn(
     }
   }
   return entries;
+}
+
+function isSequencedDisplayDelta(value: unknown): value is SequencedDisplayDelta {
+  const delta = asRecord(value);
+  return typeof delta?.type === "string" && DISPLAY_DELTA_TYPES.has(delta.type);
 }
 
 // --- Delta reducer ---
@@ -214,8 +228,8 @@ export function useDisplayDeltas(
   useEffect(() => {
     return subscribe((event) => {
       if (event.type !== "display_delta") return;
-      const delta = event.data as SequencedDisplayDelta | undefined;
-      if (!delta || !delta.type) return;
+      if (!isSequencedDisplayDelta(event.data)) return;
+      const delta = event.data;
 
       // @@@display-seq-dedup — skip stale deltas replayed from ring buffer
       const deltaSeq = delta._display_seq;

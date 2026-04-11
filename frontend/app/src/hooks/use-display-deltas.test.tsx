@@ -116,6 +116,36 @@ describe("useDisplayDeltas", () => {
     expect(entries[0].segments[0].step.status).toBe("done");
   });
 
+  it("ignores display deltas with unknown protocol types", () => {
+    const initialEntries: ChatEntry[] = [
+      {
+        id: "user-1",
+        role: "user",
+        content: "hello",
+        timestamp: Date.now(),
+      },
+    ];
+
+    render(<Harness initialEntries={initialEntries} />);
+
+    act(() => {
+      latestHandler?.({
+        type: "display_delta",
+        data: {
+          type: "unknown_delta_type",
+          entry: {
+            id: "turn-1",
+            role: "assistant",
+            timestamp: Date.now(),
+            segments: [],
+          },
+        },
+      });
+    });
+
+    expect(JSON.parse(screen.getByTestId("entries").textContent || "[]")).toEqual(initialEntries);
+  });
+
   it("stops reporting running after the assistant turn finalizes", () => {
     render(<Harness initialEntries={[]} />);
 
