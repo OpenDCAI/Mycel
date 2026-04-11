@@ -99,3 +99,39 @@ async def test_batch_executor_marks_batch_running_before_first_scenario():
     executor = EvaluationBatchExecutor(runner=InspectingRunner(repo, batch["batch_id"]), batch_service=batch_service)
 
     await executor.run_batch(batch["batch_id"], [EvalScenario(id="scenario-1", name="Scenario 1")])
+
+
+@pytest.mark.asyncio
+async def test_batch_executor_marks_current_batch_run_running_before_scenario():
+    class InspectingRunner:
+        def __init__(self, repo, batch_id):
+            self.repo = repo
+            self.batch_id = batch_id
+
+        async def run_scenario(self, scenario: EvalScenario) -> EvalResult:
+            batch_run = self.repo.list_batch_runs(self.batch_id)[0]
+            assert batch_run["scenario_id"] == scenario.id
+            assert batch_run["status"] == "running"
+            assert batch_run["started_at"]
+            return EvalResult(
+                scenario_id=scenario.id,
+                trajectory=RunTrajectory(
+                    id=f"eval-run-{scenario.id}",
+                    thread_id=f"thread-{scenario.id}",
+                    user_message="",
+                    status="completed",
+                ),
+            )
+
+    repo = _FakeBatchRepo()
+    batch_service = EvaluationBatchService(batch_repo=repo)
+    batch = batch_service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+    executor = EvaluationBatchExecutor(runner=InspectingRunner(repo, batch["batch_id"]), batch_service=batch_service)
+
+    await executor.run_batch(batch["batch_id"], [EvalScenario(id="scenario-1", name="Scenario 1")])

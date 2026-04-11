@@ -62,6 +62,9 @@ export default function EvaluationBatchDetailPage() {
   const config = batch.config_json ?? {};
   const summary = batch.summary_json ?? {};
   const runs = batchData.runs ?? [];
+  const progressSummary = `${summary.completed_runs ?? 0} completed / ${summary.failed_runs ?? 0} failed / ${
+    summary.running_runs ?? 0
+  } running`;
 
   async function startBatch() {
     setStartPending(true);
@@ -111,6 +114,10 @@ export default function EvaluationBatchDetailPage() {
           <div>
             <strong>Total Runs</strong>
             <span>{summary.total_runs ?? runs.length}</span>
+          </div>
+          <div>
+            <strong>Progress</strong>
+            <span>{progressSummary}</span>
           </div>
           <div>
             <strong>Surface</strong>

@@ -13,6 +13,7 @@ class EvaluationBatchExecutor:
         results: list[EvalResult] = []
         try:
             for scenario in scenarios:
+                self._batch_service.mark_batch_run_running_for_scenario(batch_id, scenario.id)
                 try:
                     result = await self._runner.run_scenario(scenario)
                 except Exception as exc:

@@ -1451,6 +1451,7 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("daytona_selfhost")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "thread-eval" })).toHaveAttribute("href", "/threads/thread-eval");
     expect(screen.getByRole("link", { name: "run-1" })).toHaveAttribute("href", "/evaluation/runs/run-1");
+    expect(screen.getByText("1 completed / 0 failed / 0 running")).toBeInTheDocument();
   });
 
   it("starts a pending evaluation batch from batch detail", async () => {
