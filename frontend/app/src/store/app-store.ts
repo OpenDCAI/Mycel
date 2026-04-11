@@ -64,10 +64,13 @@ const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
   recipe: "libraryRecipes",
 };
 
+function isLibraryType(type: string): type is LibraryType {
+  return type in LIBRARY_STATE_KEYS;
+}
+
 function getLibraryStateKey(type: string): LibraryStateKey {
-  const key = LIBRARY_STATE_KEYS[type as LibraryType];
-  if (!key) throw new Error(`Unsupported library type: ${type}`);
-  return key;
+  if (!isLibraryType(type)) throw new Error(`Unsupported library type: ${type}`);
+  return LIBRARY_STATE_KEYS[type];
 }
 
 function emptySessionState() {
