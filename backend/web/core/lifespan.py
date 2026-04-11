@@ -3,12 +3,10 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
-from typing import Any, cast
 
 from fastapi import FastAPI
 from psycopg import AsyncConnection
 
-from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
 from backend.web.services.resource_cache import resource_overview_refresh_loop
 from core.runtime.middleware.queue import MessageQueueManager
@@ -131,22 +129,22 @@ async def lifespan(app: FastAPI):
 
     # ---- Existing state ----
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
-    app.state.agent_pool = cast(dict[str, Any], {})
-    app.state.thread_sandbox = cast(dict[str, str], {})
-    app.state.thread_cwd = cast(dict[str, str], {})
-    app.state.thread_locks = cast(dict[str, asyncio.Lock], {})
+    app.state.agent_pool = {}
+    app.state.thread_sandbox = {}
+    app.state.thread_cwd = {}
+    app.state.thread_locks = {}
     app.state.thread_locks_guard = asyncio.Lock()
-    app.state.thread_tasks = cast(dict[str, asyncio.Task[Any]], {})
-    app.state.thread_event_buffers = cast(dict[str, ThreadEventBuffer], {})
-    app.state.subagent_buffers = cast(dict[str, RunEventBuffer], {})
+    app.state.thread_tasks = {}
+    app.state.thread_event_buffers = {}
+    app.state.subagent_buffers = {}
 
     from backend.web.services.display_builder import DisplayBuilder
 
     app.state.display_builder = DisplayBuilder()
-    app.state.thread_last_active = cast(dict[str, float], {})  # thread_id → epoch timestamp
-    app.state.idle_reaper_task = cast(asyncio.Task[Any] | None, None)
+    app.state.thread_last_active = {}  # thread_id → epoch timestamp
+    app.state.idle_reaper_task = None
     app.state._event_loop = asyncio.get_running_loop()
-    app.state.monitor_resources_task = cast(asyncio.Task[Any] | None, None)
+    app.state.monitor_resources_task = None
 
     try:
         # Start idle reaper background task
