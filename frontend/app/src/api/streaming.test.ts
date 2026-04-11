@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { StreamEvent } from "./types";
 
 const authFetch = vi.fn();
 
@@ -46,9 +47,14 @@ describe("streaming api contract", () => {
       },
     });
     authFetch.mockResolvedValue(new Response(body));
+    const events: StreamEvent[] = [];
 
-    await api.streamThreadEvents("thread-1", () => ac.abort(), ac.signal, 7);
+    await api.streamThreadEvents("thread-1", (event) => {
+      events.push(event);
+      ac.abort();
+    }, ac.signal, 7);
 
     expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1/events?after=7", { signal: ac.signal });
+    expect(events).toEqual([{ type: "status", data: { _seq: 8 } }]);
   });
 });
