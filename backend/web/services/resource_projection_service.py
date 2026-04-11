@@ -323,7 +323,7 @@ def list_resource_providers() -> dict[str, Any]:
                 )
             )
 
-        provider_type = _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
+        provider_type = _resolve_provider_type(provider_name)
         telemetry = _aggregate_provider_telemetry(
             provider_sessions=provider_sessions,
             running_count=running_count,

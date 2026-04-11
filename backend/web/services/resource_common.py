@@ -43,7 +43,7 @@ def resolve_provider_name(config_name: str, *, sandboxes_dir: Path) -> str:
     return provider
 
 
-def resolve_provider_type(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str:
+def resolve_provider_type(provider_name: str) -> str:
     entry = CATALOG.get(provider_name)
     if not entry:
         raise RuntimeError(f"Unsupported provider type: {provider_name}")

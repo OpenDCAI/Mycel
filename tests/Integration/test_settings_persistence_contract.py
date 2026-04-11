@@ -53,13 +53,13 @@ def _request(repo: _FakeSettingsRepo | None):
 def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
     app = FastAPI()
     app.state.user_settings_repo = repo
+    app.dependency_overrides[settings_router.get_current_user_id] = lambda: "user-1"
     app.include_router(settings_router.router)
     return app
 
 
 def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch):
     repo = _FakeSettingsRepo()
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
     monkeypatch.setattr(
         settings_router,
         "_load_merged_models_for_storage",
@@ -89,7 +89,6 @@ def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch
 def test_get_settings_route_does_not_import_preferences_when_repo_row_missing(monkeypatch):
     repo = _FakeSettingsRepo()
     repo.workspace_row = None
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
     monkeypatch.setattr(
         settings_router,
         "_load_merged_models_for_storage",
@@ -109,9 +108,7 @@ def test_get_settings_route_does_not_import_preferences_when_repo_row_missing(mo
     assert response.json()["default_model"] == "leon:large"
 
 
-def test_get_settings_route_requires_repo_backed_storage_contract(monkeypatch):
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
-
+def test_get_settings_route_requires_repo_backed_storage_contract():
     with pytest.raises(RuntimeError, match="user_settings_repo"):
         with TestClient(_settings_test_app(None)) as client:
             client.get("/api/settings")
@@ -127,7 +124,6 @@ def test_get_settings_route_merges_repo_backed_model_pool_over_filesystem_loader
             "custom_config": {"repo-custom": {"based_on": "gpt-4o"}},
         },
     }
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
     with TestClient(_settings_test_app(repo)) as client:
         response = client.get("/api/settings")
 
@@ -147,7 +143,6 @@ def test_get_available_models_route_prefers_repo_backed_model_pool(monkeypatch):
             "custom_providers": {"repo-custom": "openai"},
         }
     }
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
     monkeypatch.setattr(
         settings_router,
         "_load_merged_models_for_storage",
@@ -172,7 +167,6 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
         "providers": {"openai": {"api_key": "repo-key", "base_url": "https://repo.example"}},
         "pool": {"custom_providers": {"repo-custom": "openai"}},
     }
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
     monkeypatch.setattr(
         settings_router,
         "_load_merged_models_for_storage",
@@ -213,7 +207,6 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_observation_settings_keeps_loader_fallback_when_repo_row_missing(monkeypatch):
     req = _request(_FakeSettingsRepo())
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
 
     class _FakeObservationConfig:
         def model_dump(self):
@@ -225,14 +218,12 @@ async def test_get_observation_settings_keeps_loader_fallback_when_repo_row_miss
 
     monkeypatch.setattr("config.observation_loader.ObservationLoader", _FakeObservationLoader)
 
-    result = await settings_router.get_observation_settings(req)
+    result = await settings_router.get_observation_settings(req, "user-1")
 
     assert result == {"active": "langfuse", "langfuse": {"public_key": "pk"}}
 
 
-def test_update_observation_settings_route_requires_repo_backed_storage_contract(monkeypatch):
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
-
+def test_update_observation_settings_route_requires_repo_backed_storage_contract():
     with pytest.raises(RuntimeError, match="user_settings_repo"):
         with TestClient(_settings_test_app(None)) as client:
             client.post("/api/settings/observation", json={"active": "langsmith"})
@@ -243,16 +234,14 @@ async def test_list_sandbox_configs_does_not_import_filesystem_when_repo_row_mis
     monkeypatch,
 ):
     req = _request(_FakeSettingsRepo())
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
 
-    result = await settings_router.list_sandbox_configs(req)
+    result = await settings_router.list_sandbox_configs(req, "user-1")
 
     assert result == {"sandboxes": {}}
 
 
 def test_update_observation_settings_route_does_not_import_filesystem_when_repo_row_missing(monkeypatch):
     repo = _FakeSettingsRepo()
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
 
     with TestClient(_settings_test_app(repo)) as client:
         response = client.post("/api/settings/observation", json={"active": "langsmith"})
@@ -262,11 +251,8 @@ def test_update_observation_settings_route_does_not_import_filesystem_when_repo_
     assert repo.saved_observation == {"active": "langsmith"}
 
 
-def test_save_sandbox_config_route_does_not_import_filesystem_when_repo_row_missing(
-    monkeypatch,
-):
+def test_save_sandbox_config_route_does_not_import_filesystem_when_repo_row_missing():
     repo = _FakeSettingsRepo()
-    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
 
     with TestClient(_settings_test_app(repo)) as client:
         response = client.post(

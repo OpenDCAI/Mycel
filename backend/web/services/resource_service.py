@@ -23,7 +23,7 @@ def get_provider_display_contract(config_name: str) -> dict[str, Any]:
         "provider_name": provider_name,
         "description": catalog.description,
         "vendor": catalog.vendor,
-        "type": _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+        "type": _resolve_provider_type(provider_name),
         "console_url": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
     }
 
