@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { asRecord, recordString } from "@/lib/records";
 import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
 import { authFetch } from "@/store/auth-store";
 
@@ -18,6 +19,14 @@ interface ModelPoolSectionProps {
   onToggle: (modelId: string, enabled: boolean) => void;
   onAddCustomModel: (modelId: string, provider: string, basedOn?: string, contextLimit?: number) => Promise<void>;
   onRemoveCustomModel: (modelId: string) => Promise<void>;
+}
+
+function parseModelTestResult(value: unknown): { status: "ok" | "fail"; error: string } {
+  const data = asRecord(value);
+  if (data?.success === true) {
+    return { status: "ok", error: "" };
+  }
+  return { status: "fail", error: data ? recordString(data, "error") || "测试失败" : "测试失败" };
 }
 
 export default function ModelPoolSection({ models, enabledModels, customConfig, providers, onToggle, onAddCustomModel, onRemoveCustomModel }: ModelPoolSectionProps) {
@@ -61,9 +70,9 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: modelId }),
       });
-      const data = await res.json();
-      setTestStatus((s) => ({ ...s, [modelId]: data.success ? "ok" : "fail" }));
-      if (!data.success) setTestError((s) => ({ ...s, [modelId]: data.error || "测试失败" }));
+      const result = parseModelTestResult(await res.json());
+      setTestStatus((s) => ({ ...s, [modelId]: result.status }));
+      if (result.status === "fail") setTestError((s) => ({ ...s, [modelId]: result.error }));
     } catch {
       setTestStatus((s) => ({ ...s, [modelId]: "fail" }));
       setTestError((s) => ({ ...s, [modelId]: "网络错误" }));
