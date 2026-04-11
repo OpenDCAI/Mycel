@@ -1,7 +1,7 @@
 import { Eye, EyeOff, Check, X, Loader2, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { saveObservationConfig, verifyObservation } from "../api";
-import { asRecord } from "../lib/records";
+import { asRecord, recordString } from "../lib/records";
 import { FEEDBACK_BRIEF } from "@/styles/ux-timing";
 
 interface ObservationSectionProps {
@@ -72,7 +72,7 @@ const PROVIDERS: ProviderDef[] = [
 
 function getNestedValue(config: Record<string, unknown>, field: FieldDef): string {
   const nested = asRecord(config[field.nested]);
-  return String(nested?.[field.key] ?? "");
+  return nested ? recordString(nested, field.key) ?? "" : "";
 }
 
 function setNestedValue(config: Record<string, unknown>, field: FieldDef, value: string): Record<string, unknown> {
