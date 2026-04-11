@@ -1,4 +1,4 @@
-import type { AssistantTurn, ChatEntry, NoticeMessage, StreamStatus } from "../api";
+import { isAssistantTurn, type AssistantTurn, type ChatEntry, type StreamStatus } from "../api";
 import { useStickyScroll } from "../hooks/use-sticky-scroll";
 import type { AskUserQuestionPendingState } from "../pages/ask-user-question";
 import { parseAskUserQuestionAnswerPayload } from "../pages/ask-user-question";
@@ -37,7 +37,7 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
 
   let lastAskAssistantId: string | null = null;
   for (const entry of entries) {
-    if (entry.role === "assistant" && hasAskUserQuestionTool(entry as AssistantTurn)) {
+    if (isAssistantTurn(entry) && hasAskUserQuestionTool(entry)) {
       lastAskAssistantId = entry.id;
       continue;
     }
@@ -53,7 +53,7 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
   if (askUserQuestion) {
     const pendingAssistant = [...entries]
       .reverse()
-      .find((entry): entry is AssistantTurn => entry.role === "assistant" && hasAskUserQuestionTool(entry as AssistantTurn));
+      .find((entry): entry is AssistantTurn => isAssistantTurn(entry) && hasAskUserQuestionTool(entry));
     if (pendingAssistant) {
       askUserQuestionDisplays.set(pendingAssistant.id, { mode: "pending", pending: askUserQuestion });
     }
@@ -69,7 +69,7 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
             const isHidden = "showing" in entry && entry.showing === false;
             if (isHidden) return null;
             if (entry.role === "notice") {
-              return <NoticeBubble key={entry.id} entry={entry as NoticeMessage} onTaskNoticeClick={onTaskNoticeClick} />;
+              return <NoticeBubble key={entry.id} entry={entry} onTaskNoticeClick={onTaskNoticeClick} />;
             }
             if (entry.role === "user") {
               return (
@@ -78,18 +78,17 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
                 </div>
               );
             }
-            const assistantEntry = entry as AssistantTurn;
-            const isStreamingThis = assistantEntry.streaming === true;
+            const isStreamingThis = entry.streaming === true;
             return (
               <div key={entry.id}>
                 <AssistantBlock
-                  entry={assistantEntry}
+                  entry={entry}
                   isStreamingThis={isStreamingThis}
                   runtimeStatus={isStreamingThis ? runtimeStatus : null}
                   onFocusAgent={onFocusAgent}
                   agentName={agentName}
                   agentAvatarUrl={agentAvatarUrl}
-                  askUserQuestion={askUserQuestionDisplays.get(assistantEntry.id)}
+                  askUserQuestion={askUserQuestionDisplays.get(entry.id)}
                 />
               </div>
             );

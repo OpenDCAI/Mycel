@@ -266,6 +266,10 @@ export interface NoticeMessage {
 
 export type ChatEntry = UserMessage | AssistantTurn | NoticeMessage;
 
+export function isAssistantTurn(entry: ChatEntry): entry is AssistantTurn {
+  return entry.role === "assistant";
+}
+
 export interface StreamStatus {
   state: { state: string; flags: Record<string, boolean> };
   tokens: { total_tokens: number; input_tokens: number; output_tokens: number; cost: number };

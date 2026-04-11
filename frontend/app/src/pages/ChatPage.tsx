@@ -3,8 +3,8 @@ import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import { Check, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
-import type { AssistantTurn, AskUserAnswer, AskUserQuestionPrompt, ChatEntry, PermissionRequest } from "../api";
-import { uploadSandboxFile } from "../api";
+import type { AskUserAnswer, AskUserQuestionPrompt, PermissionRequest } from "../api";
+import { isAssistantTurn, uploadSandboxFile } from "../api";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import ComputerPanel from "../components/computer-panel";
@@ -38,10 +38,6 @@ function isAskUserQuestionRequest(
   request: PermissionRequest | null,
 ): request is PermissionRequest & { args: PermissionRequest["args"] & { questions: AskUserQuestionPrompt[] } } {
   return !!request && request.tool_name === "AskUserQuestion" && Array.isArray(request.args?.questions);
-}
-
-function isAssistantTurn(entry: ChatEntry): entry is AssistantTurn {
-  return entry.role === "assistant";
 }
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */

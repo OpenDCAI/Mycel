@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
-import type { AssistantTurn, ToolStep } from "../../api";
+import { isAssistantTurn, type ToolStep } from "../../api";
 import { useThreadData } from "../../hooks/use-thread-data";
 import { useDisplayDeltas } from "../../hooks/use-display-deltas";
 import { useThreadStream } from "../../hooks/use-thread-stream";
@@ -73,8 +73,8 @@ export function AgentsView({ steps }: AgentsViewProps) {
   const flowItems = useMemo<FlowItem[]>(() => {
     const items: FlowItem[] = [];
     for (const entry of entries) {
-      if (entry.role !== "assistant") continue;
-      for (const seg of (entry as AssistantTurn).segments) {
+      if (!isAssistantTurn(entry)) continue;
+      for (const seg of entry.segments) {
         if (seg.type === "tool") {
           items.push({ type: "tool", step: seg.step, turnId: entry.id });
         } else if (seg.type === "text" && seg.content.trim()) {
