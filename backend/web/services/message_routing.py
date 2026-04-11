@@ -45,14 +45,14 @@ async def route_message_to_brain(
         if startup_cancel is not None and startup_cancel.cancelled():
             return {"status": "cancelled", "routing": "cancelled", "thread_id": thread_id}
 
-        state = agent.runtime.current_state if hasattr(agent, "runtime") else "no-runtime"
+        state = agent.runtime.current_state
         logger.debug("[route] thread=%s state=%s source=%s", thread_id[:15], state, source)
 
         # v3: no context shift hints — content passes through as-is
         steer_content = content
         run_content = content
 
-        if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
+        if agent.runtime.current_state == AgentState.ACTIVE:
             qm.enqueue(
                 steer_content,
                 thread_id,
@@ -70,7 +70,7 @@ async def route_message_to_brain(
         async with app.state.thread_locks_guard:
             lock = locks.setdefault(thread_id, asyncio.Lock())
         async with lock:
-            if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
+            if not agent.runtime.transition(AgentState.ACTIVE):
                 qm.enqueue(
                     steer_content,
                     thread_id,

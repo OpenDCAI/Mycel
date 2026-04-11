@@ -529,6 +529,51 @@ async def test_list_threads_hides_internal_subagent_threads():
 
 
 @pytest.mark.asyncio
+async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_per_agent_user():
+    rows = {
+        "main-thread": {
+            "id": "main-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 0,
+            "is_main": True,
+            "agent_avatar": None,
+        },
+        "extra-thread": {
+            "id": "extra-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 1,
+            "is_main": False,
+            "agent_avatar": None,
+        },
+    }
+    app = _make_threads_app(
+        thread_repo=SimpleNamespace(
+            list_by_owner_user_id=lambda _user_id: list(rows.values()),
+            get_by_id=lambda thread_id: rows.get(thread_id),
+        ),
+        terminal_repo=SimpleNamespace(
+            summarize_threads=lambda thread_ids: {
+                thread_id: {"active_terminal_id": "term-1", "latest_terminal_id": "term-1"} for thread_id in thread_ids
+            },
+            get_active=lambda _thread_id: {"terminal_id": "term-1"},
+            list_by_thread=lambda _thread_id: [{"terminal_id": "term-1"}],
+            set_active=lambda _thread_id, _terminal_id: None,
+        ),
+        agent_pool={},
+        thread_last_active={},
+    )
+
+    payload = await threads_router.list_threads("owner-1", app)
+
+    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
+    assert payload["threads"][0]["sidebar_label"] is None
+
+
+@pytest.mark.asyncio
 async def test_list_threads_prefers_batch_terminal_summary_when_available():
     rows = {
         "main-thread": {
@@ -574,7 +619,7 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
 
     payload = await threads_router.list_threads("owner-1", app)
 
-    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread", "child-thread"]
+    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
     assert summarize_calls == [["main-thread", "child-thread"]]
 
 

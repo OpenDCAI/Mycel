@@ -261,7 +261,8 @@ def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
     assert bundle.meta["source"] == {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}
     assert bundle.rules == [{"name": "default", "content": "Be careful."}]
     assert bundle.skills == [{"name": "Search", "content": "search skill"}]
-    assert [agent.name for agent in bundle.agents] == ["Scout"]
+    agent_names = {agent.name for agent in bundle.agents}
+    assert {"bash", "explore", "general", "plan", "Scout"}.issubset(agent_names)
     assert seen == [
         ("config", "cfg-1"),
         ("rules", "cfg-1"),

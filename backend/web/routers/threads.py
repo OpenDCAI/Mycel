@@ -50,6 +50,7 @@ from backend.web.services.thread_state_service import (
     get_session_status,
     get_terminal_status,
 )
+from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
@@ -75,9 +76,7 @@ def _sidebar_label(*, is_main: bool, branch_index: int) -> str | None:
         raise ValueError(f"Default thread must have branch_index=0, got {branch_index}")
     if not is_main and branch_index == 0:
         raise ValueError("Child thread must have branch_index>0")
-    if is_main:
-        return None
-    return f"分身{branch_index}"
+    return None
 
 
 def _invalidate_resource_overview_cache() -> None:
@@ -753,7 +752,7 @@ def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
     raw = app.state.thread_repo.list_by_owner_user_id(user_id)
     pool = app.state.agent_pool
     runtime_states = summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
-    threads = []
+    visible_threads = []
     for t in raw:
         tid = t["id"]
         runtime_state = runtime_states.get(tid) or converge_owner_thread_runtime(app, tid)
@@ -761,6 +760,11 @@ def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
             continue
         if _is_internal_child_thread(tid):
             continue
+        visible_threads.append(t)
+
+    threads = []
+    for t in canonical_owner_threads(visible_threads):
+        tid = t["id"]
         sandbox_type = t.get("sandbox_type", "local")
         running = False
         agent = pool.get(f"{tid}:{sandbox_type}")

@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
+import { authFetch } from "@/store/auth-store";
 
 interface Model {
   id: string;
@@ -39,7 +40,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
     setToggling(modelId);
     onToggle(modelId, enabled);
     try {
-      await fetch("/api/settings/models/toggle", {
+      await authFetch("/api/settings/models/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: modelId, enabled }),
@@ -55,7 +56,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
     setTestStatus((s) => ({ ...s, [modelId]: "testing" }));
     setTestError((s) => ({ ...s, [modelId]: "" }));
     try {
-      const res = await fetch("/api/settings/models/test", {
+      const res = await authFetch("/api/settings/models/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: modelId }),
@@ -70,7 +71,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
   };
 
   const handleSaveConfig = async (modelId: string) => {
-    await fetch("/api/settings/models/custom/config", {
+    await authFetch("/api/settings/models/custom/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

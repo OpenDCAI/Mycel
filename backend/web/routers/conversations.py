@@ -13,6 +13,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 
 from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 
@@ -53,7 +54,7 @@ def _list_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]
     items: list[dict[str, Any]] = []
 
     # ── Hire threads ──
-    raw_threads = app.state.thread_repo.list_by_owner_user_id(user_id)
+    raw_threads = canonical_owner_threads(app.state.thread_repo.list_by_owner_user_id(user_id))
     pool = app.state.agent_pool
     for t in raw_threads:
         tid = t["id"]

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { authFetch } from "../store/auth-store";
 
 interface UserSettings {
   default_workspace: string | null;
@@ -18,7 +19,7 @@ export function useWorkspaceSettings() {
 
   const loadSettings = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch("/api/settings", { signal });
+      const response = await authFetch("/api/settings", { signal });
       if (response.ok) {
         const data = await response.json();
         setSettings(data);
@@ -38,7 +39,7 @@ export function useWorkspaceSettings() {
   }, []);
 
   async function setDefaultWorkspace(workspace: string): Promise<void> {
-    const response = await fetch("/api/settings/workspace", {
+    const response = await authFetch("/api/settings/workspace", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspace }),
@@ -54,7 +55,7 @@ export function useWorkspaceSettings() {
 
   async function addRecentWorkspace(workspace: string): Promise<void> {
     try {
-      await fetch("/api/settings/workspace/recent", {
+      await authFetch("/api/settings/workspace/recent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace }),

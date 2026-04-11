@@ -102,7 +102,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   useEffect(() => {
     if (state?.selectedModel || runtimeStatus?.model || currentModel) return;
     if (threadStream.phase === "connecting" || threadStream.phase === "idle") return;
-    fetch("/api/settings")
+    authFetch("/api/settings")
       .then((r) => r.json())
       .then((settings) => setDefaultModel(settings.default_model || "leon:large"))
       .catch(() => setDefaultModel("leon:large"));
@@ -303,7 +303,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         onModelChange={setCurrentModel}
       />
       <div className="flex-1 flex min-h-0">
-        <div className="flex-1 flex flex-col min-w-[320px]">
+        <div className="flex-1 flex flex-col min-w-[320px] min-h-0">
           {currentPermissionRequest && !isAskUserQuestionRequest(currentPermissionRequest) && (
             <div className="px-3 py-2 border-b border-warning/20 bg-warning/5">
               <div className="max-w-3xl mx-auto">

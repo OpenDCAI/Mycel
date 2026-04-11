@@ -165,6 +165,43 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
 
 
 @pytest.mark.asyncio
+async def test_list_conversations_collapses_hire_threads_to_one_visible_conversation_per_agent_user() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                list_by_owner_user_id=lambda _user_id: [
+                    {
+                        "id": "thread-main",
+                        "agent_user_id": "agent-user-1",
+                        "agent_name": "Morel",
+                        "agent_avatar": "avatars/morel.png",
+                        "sandbox_type": "local",
+                        "is_main": True,
+                        "branch_index": 0,
+                    },
+                    {
+                        "id": "thread-extra",
+                        "agent_user_id": "agent-user-1",
+                        "agent_name": "Morel",
+                        "agent_avatar": "avatars/morel.png",
+                        "sandbox_type": "local",
+                        "is_main": False,
+                        "branch_index": 1,
+                    },
+                ],
+            ),
+            agent_pool={},
+            thread_last_active={"thread-main": 1775540000.0, "thread-extra": 1775541000.0},
+            messaging_service=None,
+        )
+    )
+
+    result = await conversations_router.list_conversations("human-user-1", app=app)
+
+    assert [(item["id"], item["title"]) for item in result] == [("thread-main", "Morel")]
+
+
+@pytest.mark.asyncio
 async def test_list_conversations_does_not_require_member_repo() -> None:
     app = SimpleNamespace(
         state=SimpleNamespace(

@@ -11,6 +11,7 @@ import { fetchInviteCodes, generateInviteCode, revokeInviteCode } from "@/api/cl
 import type { InviteCode } from "@/api/client";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { authFetch } from "../store/auth-store";
 
 interface AvailableModelsData {
   models: Array<{
@@ -291,10 +292,10 @@ export default function SettingsPage() {
     setError(null);
     try {
       const [modelsRes, settingsRes, sandboxesRes, observationRes] = await Promise.all([
-        fetch("/api/settings/available-models"),
-        fetch("/api/settings"),
-        fetch("/api/settings/sandboxes"),
-        fetch("/api/settings/observation"),
+        authFetch("/api/settings/available-models"),
+        authFetch("/api/settings"),
+        authFetch("/api/settings/sandboxes"),
+        authFetch("/api/settings/observation"),
       ]);
 
       if (!modelsRes.ok || !settingsRes.ok) {
@@ -327,7 +328,7 @@ export default function SettingsPage() {
   }, [loadData]);
 
   const handleAddCustomModel = async (modelId: string, provider: string, basedOn?: string, contextLimit?: number) => {
-    const res = await fetch("/api/settings/models/custom", {
+    const res = await authFetch("/api/settings/models/custom", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model_id: modelId, provider, based_on: basedOn || null, context_limit: contextLimit || null }),
@@ -335,8 +336,8 @@ export default function SettingsPage() {
     const data = await res.json();
     if (data.success) {
       const [modelsRes, settingsRes] = await Promise.all([
-        fetch("/api/settings/available-models"),
-        fetch("/api/settings"),
+        authFetch("/api/settings/available-models"),
+        authFetch("/api/settings"),
       ]);
       setAvailableModels(await modelsRes.json());
       setSettings(await settingsRes.json());
@@ -387,7 +388,7 @@ export default function SettingsPage() {
                     key={id}
                     onClick={async () => {
                       setSettings({ ...settings, default_model: id });
-                      await fetch("/api/settings/default-model", {
+                      await authFetch("/api/settings/default-model", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ model: id }),
@@ -425,14 +426,14 @@ export default function SettingsPage() {
             }}
             onAddCustomModel={handleAddCustomModel}
             onRemoveCustomModel={async (modelId) => {
-              const res = await fetch(`/api/settings/models/custom?model_id=${encodeURIComponent(modelId)}`, {
+              const res = await authFetch(`/api/settings/models/custom?model_id=${encodeURIComponent(modelId)}`, {
                 method: "DELETE",
               });
               const data = await res.json();
               if (data.success) {
                 const [modelsRes, settingsRes] = await Promise.all([
-                  fetch("/api/settings/available-models"),
-                  fetch("/api/settings"),
+                  authFetch("/api/settings/available-models"),
+                  authFetch("/api/settings"),
                 ]);
                 setAvailableModels(await modelsRes.json());
                 setSettings(await settingsRes.json());

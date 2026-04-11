@@ -451,20 +451,21 @@ def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> Agent
     rule_rows = agent_config_repo.list_rules(agent_config_id)
     rules = [{"name": r.get("filename", "").replace(".md", ""), "content": r.get("content", "")} for r in rule_rows]
 
-    # Sub-agents from agent_sub_agents table
+    # Sub-agents use the same default layer as filesystem bundles, then repo rows override by name.
+    loader = AgentLoader()
+    agents_by_name = {agent.name: agent for agent in loader._discover_agents(loader._system_defaults_dir)}
     sub_agent_rows = agent_config_repo.list_sub_agents(agent_config_id)
-    agents = []
     for sa in sub_agent_rows:
-        agents.append(
-            AgentConfig(
-                name=sa.get("name", ""),
-                description=sa.get("description", ""),
-                tools=sa.get("tools", ["*"]),
-                system_prompt=sa.get("system_prompt", ""),
-                model=sa.get("model"),
-                source_dir=None,
-            )
+        sub_agent = AgentConfig(
+            name=sa.get("name", ""),
+            description=sa.get("description", ""),
+            tools=sa.get("tools", ["*"]),
+            system_prompt=sa.get("system_prompt", ""),
+            model=sa.get("model"),
+            source_dir=None,
         )
+        if sub_agent.name:
+            agents_by_name[sub_agent.name] = sub_agent
 
     # Skills from agent_skills table
     skill_rows = agent_config_repo.list_skills(agent_config_id)
@@ -487,7 +488,7 @@ def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> Agent
         meta=meta,
         runtime=runtime,
         rules=rules,
-        agents=agents,
+        agents=list(agents_by_name.values()),
         skills=skills,
         mcp=mcp,
     )

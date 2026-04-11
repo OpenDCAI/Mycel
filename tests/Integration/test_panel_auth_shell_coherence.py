@@ -84,6 +84,7 @@ async def test_panel_members_uses_injected_user_repo_for_owner_scope(monkeypatch
     assert result["items"][0]["id"] == "agent-1"
     assert result["items"][0]["name"] == "Toad"
     assert result["items"][0]["config"]["prompt"] == "hello"
+    assert {agent["name"] for agent in result["items"][0]["config"]["subAgents"]} >= {"bash", "explore", "general", "plan"}
 
 
 def test_owned_agent_helper_returns_agent_for_owner():

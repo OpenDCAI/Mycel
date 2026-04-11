@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
+import { authFetch } from "@/store/auth-store";
 
 interface VirtualModel {
   id: string;
@@ -42,7 +43,7 @@ export default function ModelMappingSection({
 
     setSaving(true);
     try {
-      await fetch("/api/settings/model-mapping", {
+      await authFetch("/api/settings/model-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mapping: { [virtualId]: { model: modelId } } }),

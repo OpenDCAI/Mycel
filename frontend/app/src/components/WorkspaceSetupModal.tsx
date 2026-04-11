@@ -12,6 +12,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import FilesystemBrowser from "./FilesystemBrowser";
+import { authFetch } from "@/store/auth-store";
 
 interface WorkspaceSetupModalProps {
   open: boolean;
@@ -50,7 +51,7 @@ export default function WorkspaceSetupModal({
     setError("");
 
     try {
-      const response = await fetch("/api/settings/workspace", {
+      const response = await authFetch("/api/settings/workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace: workspace.trim() }),

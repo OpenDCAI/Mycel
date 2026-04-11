@@ -602,6 +602,7 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
             provider_name=provider_name,
             runtime_session_id=runtime_session_id,
             sessions=sessions,
+            threads=live_thread_refs,
         ),
     }
 

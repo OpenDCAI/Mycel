@@ -90,6 +90,16 @@ def _cleanup_state(reason: str):
     }
 
 
+def _blocked_cleanup_state(reason: str):
+    return {
+        "allowed": False,
+        "recommended_action": None,
+        "reason": reason,
+        "operation": None,
+        "recent_operations": [],
+    }
+
+
 def _record_destroy(calls):
     def _destroy_sandbox_lease(*, lease_id: str, provider_name: str):
         calls.append((lease_id, provider_name))
@@ -324,7 +334,7 @@ def test_get_monitor_lease_detail_exposes_cleanup_state(monkeypatch):
 
 
 @pytest.mark.parametrize("runtime_session_id", ["runtime-1", None])
-def test_get_monitor_lease_detail_allows_detached_residue_cleanup(monkeypatch, runtime_session_id):
+def test_get_monitor_lease_detail_blocks_detached_residue_with_thread_binding(monkeypatch, runtime_session_id):
     _use_monitor_repo(
         monkeypatch,
         FakeLeaseRepo(
@@ -338,7 +348,7 @@ def test_get_monitor_lease_detail_allows_detached_residue_cleanup(monkeypatch, r
 
     assert payload["runtime"] == {"runtime_session_id": runtime_session_id}
     assert payload["triage"]["category"] == "detached_residue"
-    assert payload["cleanup"] == _cleanup_state("Lease is detached residue and can enter managed cleanup.")
+    assert payload["cleanup"] == _blocked_cleanup_state("Lease still has thread bindings and cannot enter managed cleanup.")
 
 
 def test_get_monitor_lease_detail_ignores_stale_thread_refs_when_classifying_triage(monkeypatch):
@@ -359,7 +369,7 @@ def test_get_monitor_lease_detail_ignores_stale_thread_refs_when_classifying_tri
 
 
 @pytest.mark.parametrize("runtime_session_id", ["runtime-1", None])
-def test_request_monitor_lease_cleanup_uses_lease_destroy_for_detached_residue(monkeypatch, runtime_session_id):
+def test_request_monitor_lease_cleanup_rejects_detached_residue_with_thread_binding(monkeypatch, runtime_session_id):
     calls: list[tuple[str, str]] = []
     _use_monitor_repo(
         monkeypatch,
@@ -377,10 +387,10 @@ def test_request_monitor_lease_cleanup_uses_lease_destroy_for_detached_residue(m
 
     payload = monitor_service.request_monitor_lease_cleanup("lease-1")
 
-    assert payload["accepted"] is True
-    assert payload["message"] == "Lease cleanup completed."
-    assert payload["operation"]["kind"] == "lease_cleanup"
-    assert calls == [("lease-1", "daytona")]
+    assert payload["accepted"] is False
+    assert payload["message"] == "Lease still has thread bindings and cannot enter managed cleanup."
+    assert payload["operation"] is None
+    assert calls == []
 
 
 def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):

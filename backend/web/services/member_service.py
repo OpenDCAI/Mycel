@@ -84,7 +84,7 @@ def _rules_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[
 
 
 def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
-    sub_agents = []
+    sub_agents = {item["name"]: item for item in _load_builtin_agents(TOOLS_BY_NAME)}
     for row in agent_config_repo.list_sub_agents(agent_config_id):
         raw_tools = row.get("tools_json") or row.get("tools") or ["*"]
         is_all = raw_tools == ["*"]
@@ -97,16 +97,14 @@ def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[
             }
             for name, info in TOOLS_BY_NAME.items()
         ]
-        sub_agents.append(
-            {
-                "name": row["name"],
-                "desc": row.get("description", ""),
-                "tools": tools,
-                "system_prompt": row.get("system_prompt", ""),
-                "builtin": False,
-            }
-        )
-    return sub_agents
+        sub_agents[row["name"]] = {
+            "name": row["name"],
+            "desc": row.get("description", ""),
+            "tools": tools,
+            "system_prompt": row.get("system_prompt", ""),
+            "builtin": False,
+        }
+    return list(sub_agents.values())
 
 
 def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:

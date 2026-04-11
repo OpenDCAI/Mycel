@@ -10,7 +10,7 @@ from uuid import uuid4
 _LOCK = Lock()
 _OPERATIONS: dict[str, dict[str, Any]] = {}
 _TARGET_INDEX: dict[tuple[str, str], list[str]] = {}
-_ALLOWED_LEASE_CLEANUP_TRIAGE = {"detached_residue", "orphan_cleanup"}
+_ALLOWED_LEASE_CLEANUP_TRIAGE = {"orphan_cleanup"}
 
 
 def _now_iso() -> str:
@@ -71,6 +71,10 @@ def _has_active_sessions(sessions: list[dict[str, Any]]) -> bool:
     return any(str(item.get("status") or "").strip().lower() == "active" for item in sessions)
 
 
+def _has_thread_bindings(threads: list[dict[str, Any]]) -> bool:
+    return any(str(item.get("thread_id") or "").strip() for item in threads)
+
+
 def build_lease_cleanup_truth(
     *,
     lease_id: str,
@@ -78,14 +82,19 @@ def build_lease_cleanup_truth(
     provider_name: str | None,
     runtime_session_id: str | None,
     sessions: list[dict[str, Any]],
+    threads: list[dict[str, Any]],
 ) -> dict[str, Any]:
     category = str((triage or {}).get("category") or "").strip()
     has_active_sessions = _has_active_sessions(sessions)
+    has_thread_bindings = _has_thread_bindings(threads)
     provider = str(provider_name or "").strip()
 
     if has_active_sessions:
         allowed = False
-        reason = "Lease still has active thread bindings and cannot enter managed cleanup."
+        reason = "Lease still has active sessions and cannot enter managed cleanup."
+    elif has_thread_bindings:
+        allowed = False
+        reason = "Lease still has thread bindings and cannot enter managed cleanup."
     elif not provider:
         allowed = False
         reason = "Lease has no provider and cannot enter managed cleanup."
@@ -122,6 +131,7 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         provider_name=str(provider.get("id") or lease.get("provider_name") or ""),
         runtime_session_id=str(runtime.get("runtime_session_id") or ""),
         sessions=lease_detail.get("sessions") or [],
+        threads=threads,
     )
 
     lease_id = str(lease.get("lease_id") or "")
