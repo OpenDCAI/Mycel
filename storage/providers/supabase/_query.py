@@ -69,6 +69,17 @@ def rows_in_chunks(
     return result
 
 
+def execute_in_chunks(
+    query_factory: Callable[[], Any],
+    column: str,
+    values: list[str],
+    repo: str,
+    operation: str,
+) -> None:
+    for chunk in value_chunks(values):
+        in_(query_factory(), column, chunk, repo, operation).execute()
+
+
 def gt(query: Any, column: str, value: Any, repo: str, operation: str) -> Any:
     if not hasattr(query, "gt"):
         raise RuntimeError(f"Supabase {repo} expects query.gt() for {operation}. Use supabase-py.")

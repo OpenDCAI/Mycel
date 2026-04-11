@@ -297,17 +297,20 @@ class SupabaseTerminalRepo:
                 ).eq("thread_id", thread_id).execute()
 
         # Delete associated command chunks and commands (best-effort via chat_session_repo pattern)
-        self._client.table("terminal_command_chunks").delete().in_(
+        command_ids = [
+            r["command_id"]
+            for r in q.rows(
+                self._client.table("terminal_commands").select("command_id").eq("terminal_id", terminal_id).execute(),
+                _REPO,
+                "delete chunks pre-select",
+            )
+        ]
+        q.execute_in_chunks(
+            lambda: self._client.table("terminal_command_chunks").delete(),
             "command_id",
-            # subquery via RPC is not available in supabase-py directly; use a select first
-            [
-                r["command_id"]
-                for r in q.rows(
-                    self._client.table("terminal_commands").select("command_id").eq("terminal_id", terminal_id).execute(),
-                    _REPO,
-                    "delete chunks pre-select",
-                )
-            ],
-        ).execute()
+            command_ids,
+            _REPO,
+            "delete chunks",
+        )
         self._client.table("terminal_commands").delete().eq("terminal_id", terminal_id).execute()
         self._terminals().delete().eq("terminal_id", terminal_id).execute()
