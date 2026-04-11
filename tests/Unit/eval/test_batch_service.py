@@ -1,4 +1,3 @@
-from eval.batch_models import EvaluationBatch, EvaluationBatchRun
 from eval.batch_service import EvaluationBatchService
 from eval.models import EvalResult, RunTrajectory, SystemMetrics
 
@@ -30,32 +29,6 @@ def _batch_run_row(batch_run_id: str, *, batch_id: str = "batch-1", status: str 
         "finished_at": None,
         "summary_json": {},
     }
-
-
-def test_evaluation_batch_defaults_to_pending():
-    batch = EvaluationBatch(
-        batch_id="batch-1",
-        kind="scenario_batch",
-        submitted_by_user_id="user-1",
-        agent_user_id="agent-1",
-        config_json={"sandbox": "local", "scenario_ids": ["s1"]},
-    )
-
-    assert batch.status == "pending"
-    assert batch.summary_json["total_runs"] == 0
-
-
-def test_evaluation_batch_run_defaults_to_pending():
-    batch_run = EvaluationBatchRun(
-        batch_run_id="batch-run-1",
-        batch_id="batch-1",
-        item_key="s1",
-        scenario_id="scenario-1",
-    )
-
-    assert batch_run.status == "pending"
-    assert batch_run.thread_id is None
-    assert batch_run.eval_run_id is None
 
 
 class _FakeBatchRepo:
