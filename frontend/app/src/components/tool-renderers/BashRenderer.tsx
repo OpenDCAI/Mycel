@@ -38,6 +38,10 @@ function CopyInline({ text }: { text: string }) {
 
 export default memo(function BashRenderer({ step, expanded }: ToolRendererProps) {
   const { command, description } = parseArgs(step.args);
+  const [outputExpanded, setOutputExpanded] = useState(false);
+  const outputLines = step.result?.split("\n") || [];
+  const needsOutputExpansion = outputLines.length > 15;
+  const displayOutput = outputExpanded ? step.result : outputLines.slice(0, 15).join("\n");
 
   if (!expanded) {
     return (
@@ -57,11 +61,6 @@ export default memo(function BashRenderer({ step, expanded }: ToolRendererProps)
       </div>
     );
   }
-
-  const [outputExpanded, setOutputExpanded] = useState(false);
-  const outputLines = step.result?.split('\n') || [];
-  const needsOutputExpansion = outputLines.length > 15;
-  const displayOutput = outputExpanded ? step.result : outputLines.slice(0, 15).join('\n');
 
   return (
     <div className="space-y-1.5">
@@ -89,7 +88,7 @@ export default memo(function BashRenderer({ step, expanded }: ToolRendererProps)
                 onClick={() => setOutputExpanded(!outputExpanded)}
                 className="text-xs text-muted-foreground hover:text-foreground-secondary hover:underline"
               >
-                {outputExpanded ? '收起' : `展开全部 (${outputLines.length} 行)`}
+                {outputExpanded ? "收起" : `展开全部 (${outputLines.length} 行)`}
               </button>
             </div>
           )}

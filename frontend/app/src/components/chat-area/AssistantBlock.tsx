@@ -1,6 +1,15 @@
 import { memo } from "react";
 import { Loader2 } from "lucide-react";
-import type { AssistantTurn, NoticeSegment, NotificationType, RetrySegment, StreamStatus, ToolSegment, TurnSegment } from "../../api";
+import {
+  isNoticeSegment,
+  isRetrySegment,
+  isTextSegment,
+  isToolSegment,
+  type AssistantTurn,
+  type NotificationType,
+  type StreamStatus,
+  type TurnSegment,
+} from "../../api";
 import MarkdownContent from "../MarkdownContent";
 import ActorAvatar from "../ActorAvatar";
 import { CopyButton } from "./CopyButton";
@@ -21,10 +30,9 @@ function splitPhases(segments: TurnSegment[]): Phase[] {
   const phases: Phase[] = [];
   let buf: TurnSegment[] = [];
   for (const seg of segments) {
-    if (seg.type === "notice") {
+    if (isNoticeSegment(seg)) {
       if (buf.length > 0) { phases.push({ kind: "content", segments: buf }); buf = []; }
-      const ns = seg as NoticeSegment;
-      phases.push({ kind: "notice", content: ns.content, notificationType: ns.notification_type });
+      phases.push({ kind: "notice", content: seg.content, notificationType: seg.notification_type });
     } else {
       buf.push(seg);
     }
@@ -51,13 +59,13 @@ function ContentPhaseBlock({
   onFocusAgent?: (taskId: string) => void;
   askUserQuestion?: { mode: "pending"; pending: AskUserQuestionPendingState } | { mode: "answered"; answered: AskUserQuestionAnsweredPayload };
 }) {
-  const toolSegs = segments.filter((s) => s.type === "tool") as ToolSegment[];
+  const toolSegs = segments.filter(isToolSegment);
   const visibleToolSegs = askUserQuestion
     ? toolSegs.filter((segment) => segment.step.name !== "AskUserQuestion")
     : toolSegs;
-  const textSegs = segments.filter((s) => s.type === "text");
+  const textSegs = segments.filter(isTextSegment);
   const visibleText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
-  const retrySeg = segments.find((s) => s.type === "retry") as RetrySegment | undefined;
+  const retrySeg = segments.find(isRetrySegment);
 
   return (
     <>
@@ -70,7 +78,7 @@ function ContentPhaseBlock({
         />
       )}
       {askUserQuestion ? <AskUserQuestionCard {...askUserQuestion} /> : null}
-      {visibleText && visibleText.type === "text" && (
+      {visibleText && (
         <MarkdownContent content={visibleText.content} />
       )}
       {retrySeg && (
@@ -107,12 +115,12 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
   const elapsed = entry.endTimestamp ? entry.endTimestamp - entry.timestamp : null;
 
   const fullText = entry.segments
-    .filter((s) => s.type === "text")
-    .map((s) => s.type === "text" ? s.content : "")
+    .filter(isTextSegment)
+    .map((s) => s.content)
     .join("\n");
 
-  const toolSegs = entry.segments.filter((s) => s.type === "tool") as ToolSegment[];
-  const textSegs = entry.segments.filter((s) => s.type === "text");
+  const toolSegs = entry.segments.filter(isToolSegment);
+  const textSegs = entry.segments.filter(isTextSegment);
 
   const hasVisible = toolSegs.length > 0 || textSegs.length > 0;
 
@@ -141,7 +149,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
             phase.kind === "notice"
               ? <NoticeDivider key={`notice-${i}-${phase.content.slice(0, 32)}`} content={phase.content} notificationType={phase.notificationType} />
               : <ContentPhaseBlock
-                  key={phase.segments[0]?.type === "tool" ? `tool-${(phase.segments[0] as ToolSegment).step.id}` : `content-${i}`}
+                  key={phase.segments[0] && isToolSegment(phase.segments[0]) ? `tool-${phase.segments[0].step.id}` : `content-${i}`}
                   segments={phase.segments}
                   allSegments={entry.segments}
                   isStreaming={!!isStreamingThis}
