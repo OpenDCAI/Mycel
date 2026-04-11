@@ -1,6 +1,6 @@
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor, resources
@@ -255,7 +255,13 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
     assert start_calls[0]["token"] == "token-1"
 
 
-@pytest.mark.parametrize(("verb", "path", "service_name"), [("get", "/api/monitor/sandbox/lease-1/browse", "sandbox_browse"), ("get", "/api/monitor/sandbox/lease-1/read?path=/README.md", "sandbox_read")])
+@pytest.mark.parametrize(
+    ("verb", "path", "service_name"),
+    [
+        ("get", "/api/monitor/sandbox/lease-1/browse", "sandbox_browse"),
+        ("get", "/api/monitor/sandbox/lease-1/read?path=/README.md", "sandbox_read"),
+    ],
+)
 def test_monitor_sandbox_routes_map_runtime_failures_to_503(monkeypatch, verb, path, service_name):
     def _raise(*_args, **_kwargs):
         raise RuntimeError("provider unavailable")

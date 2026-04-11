@@ -41,11 +41,7 @@ class _FakeQuery:
             payloads = self._insert_payload if isinstance(self._insert_payload, list) else [self._insert_payload]
             self._table.rows.extend(dict(payload) for payload in payloads)
             return _FakeExec([dict(payload) for payload in payloads])
-        rows = [
-            row
-            for row in self._table.rows
-            if all(row.get(key) == value for key, value in self._filters)
-        ]
+        rows = [row for row in self._table.rows if all(row.get(key) == value for key, value in self._filters)]
         if self._update_payload is not None:
             for row in rows:
                 row.update(self._update_payload)

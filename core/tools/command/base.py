@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 def describe_execution_exception(exc: Exception) -> str:
     detail = str(exc).strip()
     if detail:

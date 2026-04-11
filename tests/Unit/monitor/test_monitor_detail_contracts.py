@@ -303,7 +303,16 @@ def test_get_monitor_lease_detail_merges_monitor_repo_state(monkeypatch):
     assert payload["provider"] == {"id": "daytona", "name": "daytona"}
     assert payload["runtime"] == {"runtime_session_id": "runtime-1"}
     assert payload["threads"] == [{"thread_id": "thread-1"}]
-    assert payload["sessions"] == [{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active", "started_at": None, "ended_at": None, "close_reason": None}]
+    assert payload["sessions"] == [
+        {
+            "chat_session_id": "session-1",
+            "thread_id": "thread-1",
+            "status": "active",
+            "started_at": None,
+            "ended_at": None,
+            "close_reason": None,
+        }
+    ]
 
 
 def test_get_monitor_lease_detail_exposes_cleanup_state(monkeypatch):
@@ -384,9 +393,7 @@ def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):
 def test_list_leases_ignores_stale_thread_refs_when_classifying_triage(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
-            leases=[_lease_row(desired_state="paused", observed_state="paused", thread_id="thread-gone")]
-        ),
+        FakeLeaseRepo(leases=[_lease_row(desired_state="paused", observed_state="paused", thread_id="thread-gone")]),
     )
     monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
 

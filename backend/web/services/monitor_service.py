@@ -630,11 +630,7 @@ def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
     lease_ids = sorted({str(item.get("leaseId") or "").strip() for item in sessions if str(item.get("leaseId") or "").strip()})
     thread_ids = sorted({str(item.get("threadId") or "").strip() for item in sessions if str(item.get("threadId") or "").strip()})
     runtime_session_ids = sorted(
-        {
-            str(item.get("runtimeSessionId") or "").strip()
-            for item in sessions
-            if str(item.get("runtimeSessionId") or "").strip()
-        }
+        {str(item.get("runtimeSessionId") or "").strip() for item in sessions if str(item.get("runtimeSessionId") or "").strip()}
     )
 
     return {

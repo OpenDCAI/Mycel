@@ -926,11 +926,11 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             "thread-1",
             "perm-ask",
             payload,
-                user_id="owner-1",
-                agent=agent,
-                app=app,
-                thread_lock=_NullLock(),
-            )
+            user_id="owner-1",
+            agent=agent,
+            app=app,
+            thread_lock=_NullLock(),
+        )
 
     assert result == {
         "ok": True,
@@ -996,11 +996,11 @@ async def test_resolve_ask_user_question_request_requires_answers_for_allow():
             "thread-1",
             "perm-ask",
             ResolvePermissionRequest(decision="allow", message=None, answers=None, annotations=None),
-                user_id="owner-1",
-                agent=agent,
-                app=SimpleNamespace(),
-                thread_lock=_NullLock(),
-            )
+            user_id="owner-1",
+            agent=agent,
+            app=SimpleNamespace(),
+            thread_lock=_NullLock(),
+        )
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "AskUserQuestion answers are required when approving the request"
@@ -1015,11 +1015,11 @@ async def test_resolve_thread_permission_request_404s_missing_request():
         await threads_router.resolve_thread_permission_request(
             "thread-1",
             "missing",
-                ResolvePermissionRequest(decision="deny", message="no"),
-                user_id="owner-1",
-                agent=agent,
-                thread_lock=_NullLock(),
-            )
+            ResolvePermissionRequest(decision="deny", message="no"),
+            user_id="owner-1",
+            agent=agent,
+            thread_lock=_NullLock(),
+        )
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Permission request not found"

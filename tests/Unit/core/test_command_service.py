@@ -173,6 +173,7 @@ class _BlankErrorExecutor(BaseExecutor):
     async def wait_for(self, command_id: str, timeout: float | None = None):
         return None
 
+
 class TestFailLoudBlankExceptions:
     @pytest.mark.asyncio
     async def test_command_service_surfaces_exception_type_when_message_is_blank(self, tmp_path):

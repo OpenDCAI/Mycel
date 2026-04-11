@@ -77,12 +77,7 @@ def _merge_trace_events(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             last["summary"] = f"{last['summary']}{item['summary']}"
             last["payload"] = item["payload"]
             continue
-        if (
-            last is not None
-            and item["event_type"] == "status"
-            and last["event_type"] == "status"
-            and last["run_id"] == item["run_id"]
-        ):
+        if last is not None and item["event_type"] == "status" and last["event_type"] == "status" and last["run_id"] == item["run_id"]:
             merged[-1] = item
             continue
         merged.append(item)

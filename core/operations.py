@@ -1,5 +1,6 @@
 """File operation recorder."""
 
+
 class FileOperationRecorder:
     """Records file operations."""
 

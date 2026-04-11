@@ -188,6 +188,7 @@ class _CommandWrapper(BaseExecutor):
         session = self._resolve_session_for_command(command_id)
         return await session.runtime.wait_for_command(command_id, timeout=timeout)
 
+
 class _FileSystemWrapper(FileSystemBackend):
     """Wrapper that delegates to provider via lease."""
 
