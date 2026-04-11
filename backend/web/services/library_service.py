@@ -275,25 +275,16 @@ def update_resource(
             created_at=int(row["created_at"]),
         )
         return _normalize_recipe_item(current, builtin=False)
-    if resource_type == "skill":
-        meta_path = LIBRARY_DIR / "skills" / resource_id / "meta.json"
-        if not meta_path.exists():
+    if resource_type in {"skill", "agent"}:
+        meta_path = _file_resource_meta_path(resource_type, resource_id)
+        if meta_path is None or not meta_path.exists():
             return None
         meta = _read_json(meta_path, {})
         meta.update(updates)
         meta["updated_at"] = now
         _write_json(meta_path, meta)
-        return _library_resource_item("skill", resource_id, meta, updated_at=now)
-    elif resource_type == "agent":
-        meta_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
-        if not meta_path.exists():
-            return None
-        meta = _read_json(meta_path, {})
-        meta.update(updates)
-        meta["updated_at"] = now
-        _write_json(meta_path, meta)
-        return _library_resource_item("agent", resource_id, meta, updated_at=now)
-    elif resource_type == "mcp":
+        return _library_resource_item(resource_type, resource_id, meta, updated_at=now)
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         if resource_id not in mcp_data.get("mcpServers", {}):
@@ -364,41 +355,9 @@ def list_library_names(
     ]
 
 
-def get_mcp_server_config(name: str) -> dict[str, Any] | None:
-    """Get a single MCP server config from Library .mcp.json."""
-    mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
-    return mcp_data.get("mcpServers", {}).get(name)
-
-
 def get_library_skill_desc(name: str) -> str:
     """Get skill description from Library by name."""
-    skills_dir = LIBRARY_DIR / "skills"
-    if not skills_dir.exists():
-        return ""
-    for d in skills_dir.iterdir():
-        if d.is_dir():
-            meta = _read_json(d / "meta.json", {})
-            if meta.get("name") == name:
-                return meta.get("desc", "")
-    return ""
-
-
-def get_library_agent_desc(name: str) -> str:
-    """Get agent description from Library by name."""
-    agents_dir = LIBRARY_DIR / "agents"
-    if not agents_dir.exists():
-        return ""
-    # Try exact match on filename stem
-    json_path = agents_dir / f"{name}.json"
-    if json_path.exists():
-        meta = _read_json(json_path, {})
-        return meta.get("desc", "")
-    # Try matching by name field
-    for f in agents_dir.glob("*.json"):
-        meta = _read_json(f, {})
-        if meta.get("name") == name:
-            return meta.get("desc", "")
-    return ""
+    return next((item["desc"] for item in list_library("skill") if item["name"] == name), "")
 
 
 def get_resource_used_by(

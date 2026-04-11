@@ -582,18 +582,11 @@ async def update_provider(
     pool = getattr(req.app.state, "agent_pool", {})
     reloaded = 0
     for agent in pool.values():
-        try:
-            agent.update_config()
-            reloaded += 1
-        except Exception:
-            pass
+        agent.update_config()
+        reloaded += 1
 
     return {"success": True, "provider": request.provider, "agents_reloaded": reloaded}
 
-
-# ============================================================================
-# Sandboxes (unchanged)
-# ============================================================================
 
 # ============================================================================
 # Observation provider (observation.json)

@@ -204,13 +204,7 @@ def resolve_owned_lease(
 
 def _is_user_visible_lease_thread(thread_id: str | None) -> bool:
     raw = str(thread_id or "").strip()
-    if not raw:
-        return False
-    if raw.startswith("subagent-"):
-        return False
-    if is_virtual_thread_id(raw):
-        return False
-    return True
+    return bool(raw) and not raw.startswith("subagent-") and not is_virtual_thread_id(raw)
 
 
 def _is_user_visible_lease_state(lease: dict[str, Any]) -> bool:
@@ -446,7 +440,7 @@ def mutate_sandbox_session(
     ok = False
     mode = "lease_enforced"
 
-    if manager and thread_id and not is_virtual_thread_id(thread_id):
+    if thread_id and not is_virtual_thread_id(thread_id):
         mode = "manager_thread"
         if action == "pause":
             ok = manager.pause_session(thread_id)
