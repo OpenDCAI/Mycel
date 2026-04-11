@@ -16,7 +16,7 @@ from backend.web.models.panel import (
     UpdateResourceContentRequest,
     UpdateResourceRequest,
 )
-from backend.web.services import library_service, member_service, profile_service
+from backend.web.services import agent_user_service, library_service, profile_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
@@ -33,7 +33,7 @@ def _require_owned_agent_user(agent_id: str, user_id: str, user_repo: Any) -> An
 
 def _get_owned_agent_or_404_with_config(agent_id: str, user_id: str, user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
     _require_owned_agent_user(agent_id, user_id, user_repo)
-    item = member_service.get_member(agent_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    item = agent_user_service.get_agent_user(agent_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if not item:
         raise HTTPException(404, "Agent not found")
     return item
@@ -49,18 +49,18 @@ def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None
 
 
 @router.get("/agents")
-async def list_members(
+async def list_agents(
     user_id: CurrentUserId,
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
-    items = await asyncio.to_thread(member_service.list_members, user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    items = await asyncio.to_thread(agent_user_service.list_agent_users, user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     return {"items": items}
 
 
 @router.get("/agents/{agent_id}")
-async def get_member(
+async def get_agent(
     agent_id: str,
     request: Request,
     user_id: CurrentUserId,
@@ -75,7 +75,7 @@ async def get_member(
 
 
 @router.post("/agents")
-async def create_member(
+async def create_agent(
     req: CreateAgentRequest,
     user_id: CurrentUserId,
     request: Request,
@@ -83,7 +83,7 @@ async def create_member(
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     return await asyncio.to_thread(
-        member_service.create_member,
+        agent_user_service.create_agent_user,
         req.name,
         req.description,
         owner_user_id=user_id,
@@ -93,7 +93,7 @@ async def create_member(
 
 
 @router.put("/agents/{agent_id}")
-async def update_member(
+async def update_agent(
     agent_id: str,
     req: UpdateAgentRequest,
     request: Request,
@@ -103,7 +103,7 @@ async def update_member(
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     item = await asyncio.to_thread(
-        member_service.update_member,
+        agent_user_service.update_agent_user,
         agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
@@ -115,7 +115,7 @@ async def update_member(
 
 
 @router.put("/agents/{agent_id}/config")
-async def update_member_config(
+async def update_agent_config(
     agent_id: str,
     req: AgentConfigPayload,
     request: Request,
@@ -125,7 +125,7 @@ async def update_member_config(
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
-        member_service.update_member_config,
+        agent_user_service.update_agent_user_config,
         agent_id,
         req.model_dump(),
         user_repo=user_repo,
@@ -137,7 +137,7 @@ async def update_member_config(
 
 
 @router.put("/agents/{agent_id}/publish")
-async def publish_member(
+async def publish_agent(
     agent_id: str,
     req: PublishAgentRequest,
     request: Request,
@@ -149,7 +149,7 @@ async def publish_member(
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
-        member_service.publish_member,
+        agent_user_service.publish_agent_user,
         agent_id,
         req.bump_type,
         user_repo=user_repo,
@@ -161,7 +161,7 @@ async def publish_member(
 
 
 @router.delete("/agents/{agent_id}")
-async def delete_member(
+async def delete_agent(
     agent_id: str,
     request: Request,
     user_id: CurrentUserId,
@@ -176,7 +176,7 @@ async def delete_member(
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     thread_launch_pref_repo = getattr(request.app.state, "thread_launch_pref_repo", None)
     ok = await asyncio.to_thread(
-        member_service.delete_member,
+        agent_user_service.delete_agent_user,
         agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,

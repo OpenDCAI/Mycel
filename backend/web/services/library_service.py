@@ -365,16 +365,16 @@ def get_resource_used_by(
     agent_config_repo: Any = None,
 ) -> list[str]:
     """Return agent user names under the owner that use a given resource."""
-    from backend.web.services.member_service import list_members
+    from backend.web.services.agent_user_service import list_agent_users
 
     config_key = {"skill": "skills", "mcp": "mcps", "agent": "subAgents"}.get(resource_type, "")
     if not config_key:
         return []
     names: list[str] = []
-    for member in list_members(owner_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo):
-        items = member.get("config", {}).get(config_key, [])
+    for agent in list_agent_users(owner_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo):
+        items = agent.get("config", {}).get(config_key, [])
         if any(i.get("name") == resource_name for i in items):
-            names.append(member.get("name", member.get("id", "unknown")))
+            names.append(agent.get("name", agent.get("id", "unknown")))
     return names
 
 

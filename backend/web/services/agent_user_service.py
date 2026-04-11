@@ -1,4 +1,4 @@
-"""Member CRUD over repo-backed agent users/configs."""
+"""Agent-user CRUD over repo-backed users/configs."""
 
 import re
 import time
@@ -122,7 +122,7 @@ def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _member_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
+def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
     config = agent_config_repo.get_config(user.agent_config_id)
@@ -153,7 +153,7 @@ def _member_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
 
 
 def _leon_builtin() -> dict[str, Any]:
-    """Build Leon builtin member dict with full tool catalog."""
+    """Build Leon builtin agent-user dict with full tool catalog."""
     tools = [{"name": k, "enabled": v.default, "desc": v.desc, "group": v.group} for k, v in TOOLS_BY_NAME.items()]
     # Load built-in sub-agents (read-only display)
     builtin_agents = _load_builtin_agents(TOOLS_BY_NAME)
@@ -198,8 +198,8 @@ def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
 # ── CRUD operations ──
 
 
-def list_members(owner_user_id: str | None = None, user_repo: Any = None, agent_config_repo: Any = None) -> list[dict[str, Any]]:
-    """List agent members. If owner_user_id given, only that user's agents (no builtin Leon).
+def list_agent_users(owner_user_id: str | None = None, user_repo: Any = None, agent_config_repo: Any = None) -> list[dict[str, Any]]:
+    """List agent users. If owner_user_id given, only that user's agents (no builtin Leon).
 
     Args:
         owner_user_id: Filter to agents owned by this user.
@@ -210,24 +210,24 @@ def list_members(owner_user_id: str | None = None, user_repo: Any = None, agent_
         if user_repo is None or agent_config_repo is None:
             raise RuntimeError("user_repo and agent_config_repo are required when owner_user_id is provided")
         agents = user_repo.list_by_owner_user_id(owner_user_id)
-        return [_member_from_repos(agent, agent_config_repo) for agent in agents]
+        return [_agent_user_from_repos(agent, agent_config_repo) for agent in agents]
 
     # Unscoped path is builtin-only. Owner-scoped callers must use repos.
     return [_leon_builtin()]
 
 
-def get_member(member_id: str, *, user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
-    if member_id == "__leon__":
+def get_agent_user(agent_user_id: str, *, user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
+    if agent_user_id == "__leon__":
         return _leon_builtin()
     if user_repo is None or agent_config_repo is None:
-        raise RuntimeError("user_repo and agent_config_repo are required for agent member reads")
-    user = user_repo.get_by_id(member_id)
+        raise RuntimeError("user_repo and agent_config_repo are required for agent user reads")
+    user = user_repo.get_by_id(agent_user_id)
     if user is None:
         return None
-    return _member_from_repos(user, agent_config_repo)
+    return _agent_user_from_repos(user, agent_config_repo)
 
 
-def create_member(
+def create_agent_user(
     name: str,
     description: str = "",
     owner_user_id: str | None = None,
@@ -272,31 +272,31 @@ def create_member(
             updated_at=now_ms,
         )
 
-    return get_member(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)  # type: ignore
+    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)  # type: ignore
 
 
-def _require_repo_backed_member_ops(user_repo: Any = None, agent_config_repo: Any = None) -> None:
+def _require_repo_backed_agent_ops(user_repo: Any = None, agent_config_repo: Any = None) -> None:
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required for owner-scoped agent operations")
 
 
-def update_member(
-    member_id: str,
+def update_agent_user(
+    agent_user_id: str,
     user_repo: Any = None,
     agent_config_repo: Any = None,
     **fields: Any,
 ) -> dict[str, Any] | None:
-    if member_id == "__leon__":
+    if agent_user_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
-    user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
-        return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+        return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if "name" in updates:
-        user_repo.update(member_id, display_name=updates["name"])
+        user_repo.update(agent_user_id, display_name=updates["name"])
     agent_config_repo.save_config(
         user.agent_config_id,
         {
@@ -308,18 +308,18 @@ def update_member(
         },
     )
 
-    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
-def update_member_config(
-    member_id: str,
+def update_agent_user_config(
+    agent_user_id: str,
     config_patch: dict[str, Any],
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> dict[str, Any] | None:
-    if member_id == "__leon__":
+    if agent_user_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
-    return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
+    return _sync_agent_config_patch_to_repo(agent_user_id, config_patch, user_repo, agent_config_repo)
 
 
 # ── Agent config repo helpers ──
@@ -449,12 +449,12 @@ def _sync_repo_children(agent_config_id: str, config_patch: dict[str, Any], agen
             )
 
 
-def _sync_member_patch_to_repo(
-    member_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any
+def _sync_agent_config_patch_to_repo(
+    agent_user_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any
 ) -> dict[str, Any] | None:
     # @@@repo-only-agent-shell - fresh register now creates DB-only agents. Owner-scoped
-    # panel edits must keep working even when no legacy member dir exists.
-    user, current_config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    # panel edits must keep working even when no legacy agent dir exists.
+    user, current_config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or current_config is None:
         return None
 
@@ -475,14 +475,19 @@ def _sync_member_patch_to_repo(
     }
     agent_config_repo.save_config(user.agent_config_id, updated_config)
     _sync_repo_children(user.agent_config_id, config_patch, agent_config_repo)
-    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 # ── Publish / Delete ──
 
 
-def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
-    user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+def publish_agent_user(
+    agent_user_id: str,
+    bump_type: str = "patch",
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+) -> dict[str, Any] | None:
+    user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
     current_version = config.get("version", "0.1.0")
@@ -508,47 +513,47 @@ def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = No
         },
     )
 
-    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 def _resolve_repo_backed_agent(
-    member_id: str, user_repo: Any = None, agent_config_repo: Any = None
+    agent_user_id: str, user_repo: Any = None, agent_config_repo: Any = None
 ) -> tuple[Any | None, dict[str, Any] | None]:
-    _require_repo_backed_member_ops(user_repo, agent_config_repo)
-    user = user_repo.get_by_id(member_id)
+    _require_repo_backed_agent_ops(user_repo, agent_config_repo)
+    user = user_repo.get_by_id(agent_user_id)
     if user is None or user.agent_config_id is None:
         return None, None
     # @@@repo-backed-agent-wins - repo-backed agent users must not silently fall
-    # back to legacy member-dir writes just because an old shell still exists.
+    # back to legacy agent-dir writes just because an old shell still exists.
     config = agent_config_repo.get_config(user.agent_config_id)
     if config is None:
-        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {agent_user_id}")
     return user, config
 
 
-def delete_member(
-    member_id: str,
+def delete_agent_user(
+    agent_user_id: str,
     user_repo: Any = None,
     agent_config_repo: Any = None,
     thread_launch_pref_repo: Any = None,
 ) -> bool:
-    if member_id == "__leon__":
+    if agent_user_id == "__leon__":
         return False
-    _require_repo_backed_member_ops(user_repo, agent_config_repo)
+    _require_repo_backed_agent_ops(user_repo, agent_config_repo)
     if thread_launch_pref_repo is None:
         raise RuntimeError("thread_launch_pref_repo is required for agent delete")
-    user = user_repo.get_by_id(member_id)
+    user = user_repo.get_by_id(agent_user_id)
     if user is None:
         return False
 
     if user.agent_config_id is None:
-        raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
-    # @@@delete-member-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
+        raise RuntimeError(f"Agent user {agent_user_id} is missing agent_config_id")
+    # @@@delete-agent-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
     agent_config_repo.delete_config(user.agent_config_id)
-    thread_launch_pref_repo.delete_by_agent_user_id(member_id)
+    thread_launch_pref_repo.delete_by_agent_user_id(agent_user_id)
 
     # Also remove from unified users table
-    user_repo.delete(member_id)
+    user_repo.delete(agent_user_id)
 
     return True
 
@@ -614,8 +619,8 @@ def install_from_snapshot(
         )
         user_repo.create(row)
 
-    # @@@snapshot-install-repo-only - marketplace member installs no longer materialize
-    # a member dir. The DB is now the live shell; marketplace lineage still needs
+    # @@@snapshot-install-repo-only - marketplace agent installs no longer materialize
+    # a local agent directory. The DB is now the live shell; marketplace lineage still needs
     # a separate repo-rooted home because publish used to read meta.json.source.
     _save_config_to_repo(
         agent_config_repo,

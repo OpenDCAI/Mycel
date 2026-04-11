@@ -270,7 +270,7 @@ def download(
         if user_repo is None or agent_config_repo is None:
             raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
 
-        from backend.web.services.member_service import install_from_snapshot
+        from backend.web.services.agent_user_service import install_from_snapshot
 
         user_id = install_from_snapshot(
             snapshot=snapshot,
@@ -296,7 +296,7 @@ def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = Non
     snapshot = result["snapshot"]
     installed_version = result["version"]
 
-    from backend.web.services.member_service import install_from_snapshot
+    from backend.web.services.agent_user_service import install_from_snapshot
 
     install_from_snapshot(
         snapshot=snapshot,

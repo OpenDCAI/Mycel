@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from backend.web.models import panel as panel_models
 from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest, UpdateProfileRequest
 from backend.web.routers import panel as panel_router
-from backend.web.services import library_service, member_service, profile_service
+from backend.web.services import agent_user_service, library_service, profile_service
 from storage.contracts import UserRow, UserType
 
 
@@ -43,7 +43,7 @@ def test_panel_models_expose_agent_requests_not_member_or_staff_aliases():
 
 
 @pytest.mark.asyncio
-async def test_panel_members_uses_injected_user_repo_for_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+async def test_panel_agents_uses_injected_user_repo_for_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,
@@ -75,7 +75,7 @@ async def test_panel_members_uses_injected_user_repo_for_owner_scope(monkeypatch
         list_sub_agents=lambda _agent_config_id: [],
     )
 
-    result = await panel_router.list_members(
+    result = await panel_router.list_agents(
         user_id="user-1",
         request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo, agent_config_repo=fake_agent_config_repo))),
     )
@@ -120,11 +120,11 @@ def test_owned_agent_helper_raises_403_for_wrong_owner():
 
 
 @pytest.mark.asyncio
-async def test_update_member_route_returns_404_for_missing_member(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(member_service, "get_member", lambda _member_id: None)
+async def test_update_agent_route_returns_404_for_missing_agent(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(agent_user_service, "get_agent_user", lambda _agent_user_id: None)
 
     with pytest.raises(HTTPException) as excinfo:
-        await panel_router.update_member(
+        await panel_router.update_agent(
             "missing",
             UpdateAgentRequest(name="new-name"),
             request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=SimpleNamespace(get_by_id=lambda _user_id: None)))),
@@ -136,14 +136,14 @@ async def test_update_member_route_returns_404_for_missing_member(monkeypatch: p
 
 
 @pytest.mark.asyncio
-async def test_delete_member_route_keeps_builtin_guard_before_owner_lookup(monkeypatch: pytest.MonkeyPatch):
-    def explode(_member_id: str):
-        raise AssertionError("member lookup should not run for builtin guard")
+async def test_delete_agent_route_keeps_builtin_guard_before_owner_lookup(monkeypatch: pytest.MonkeyPatch):
+    def explode(_agent_user_id: str):
+        raise AssertionError("agent lookup should not run for builtin guard")
 
-    monkeypatch.setattr(member_service, "get_member", explode)
+    monkeypatch.setattr(agent_user_service, "get_agent_user", explode)
 
     with pytest.raises(HTTPException) as excinfo:
-        await panel_router.delete_member(
+        await panel_router.delete_agent(
             "__leon__",
             request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=SimpleNamespace()))),
             user_id="user-1",
@@ -154,14 +154,14 @@ async def test_delete_member_route_keeps_builtin_guard_before_owner_lookup(monke
 
 
 @pytest.mark.asyncio
-async def test_delete_member_route_rejects_agent_with_existing_threads(monkeypatch: pytest.MonkeyPatch):
+async def test_delete_agent_route_rejects_agent_with_existing_threads(monkeypatch: pytest.MonkeyPatch):
     def explode(*_args, **_kwargs):
-        raise AssertionError("delete_member should not run when agent still owns threads")
+        raise AssertionError("delete_agent should not run when agent still owns threads")
 
-    monkeypatch.setattr(member_service, "delete_member", explode)
+    monkeypatch.setattr(agent_user_service, "delete_agent_user", explode)
 
     with pytest.raises(HTTPException) as excinfo:
-        await panel_router.delete_member(
+        await panel_router.delete_agent(
             "agent-1",
             request=SimpleNamespace(
                 app=SimpleNamespace(
@@ -179,18 +179,18 @@ async def test_delete_member_route_rejects_agent_with_existing_threads(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_delete_member_route_passes_thread_launch_pref_repo(monkeypatch: pytest.MonkeyPatch):
+async def test_delete_agent_route_passes_thread_launch_pref_repo(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, object] = {}
 
-    def _fake_delete_member(agent_id: str, **kwargs: object) -> bool:
+    def _fake_delete_agent_user(agent_id: str, **kwargs: object) -> bool:
         seen["agent_id"] = agent_id
         seen["thread_launch_pref_repo"] = kwargs.get("thread_launch_pref_repo")
         return True
 
-    monkeypatch.setattr(member_service, "delete_member", _fake_delete_member)
+    monkeypatch.setattr(agent_user_service, "delete_agent_user", _fake_delete_agent_user)
 
     thread_launch_pref_repo = object()
-    result = await panel_router.delete_member(
+    result = await panel_router.delete_agent(
         "agent-1",
         request=SimpleNamespace(
             app=SimpleNamespace(
@@ -210,14 +210,14 @@ async def test_delete_member_route_passes_thread_launch_pref_repo(monkeypatch: p
 
 
 @pytest.mark.asyncio
-async def test_publish_member_route_keeps_builtin_guard_before_owner_lookup(monkeypatch: pytest.MonkeyPatch):
-    def explode(_member_id: str):
-        raise AssertionError("member lookup should not run for builtin guard")
+async def test_publish_agent_route_keeps_builtin_guard_before_owner_lookup(monkeypatch: pytest.MonkeyPatch):
+    def explode(_agent_user_id: str):
+        raise AssertionError("agent lookup should not run for builtin guard")
 
-    monkeypatch.setattr(member_service, "get_member", explode)
+    monkeypatch.setattr(agent_user_service, "get_agent_user", explode)
 
     with pytest.raises(HTTPException) as excinfo:
-        await panel_router.publish_member(
+        await panel_router.publish_agent(
             "__leon__",
             PublishAgentRequest(),
             request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=SimpleNamespace()))),
@@ -334,8 +334,8 @@ def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytes
     seen: list[tuple[str, object]] = []
 
     monkeypatch.setattr(
-        member_service,
-        "list_members",
+        agent_user_service,
+        "list_agent_users",
         lambda owner_user_id=None, user_repo=None, agent_config_repo=None: (
             seen.append((owner_user_id, user_repo, agent_config_repo))
             or [
@@ -393,9 +393,9 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
     }
 
 
-def test_builtin_member_surface_exposes_chat_tools():
-    member = member_service._leon_builtin()
-    tools = {item["name"]: item for item in member["config"]["tools"]}
+def test_builtin_agent_surface_exposes_chat_tools():
+    agent = agent_user_service._leon_builtin()
+    tools = {item["name"]: item for item in agent["config"]["tools"]}
 
     for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
         assert tool_name in tools

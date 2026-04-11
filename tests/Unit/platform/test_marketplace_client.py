@@ -164,7 +164,7 @@ class TestDownloadUser:
         seen: dict[str, object] = {}
 
         monkeypatch.setattr(
-            "backend.web.services.member_service.install_from_snapshot",
+            "backend.web.services.agent_user_service.install_from_snapshot",
             lambda **kwargs: seen.update(kwargs) or "agent-user-1",
         )
 
@@ -222,7 +222,7 @@ def test_upgrade_returns_user_id_contract(monkeypatch):
     seen: dict[str, object] = {}
 
     monkeypatch.setattr(
-        "backend.web.services.member_service.install_from_snapshot",
+        "backend.web.services.agent_user_service.install_from_snapshot",
         lambda **kwargs: seen.update(kwargs) or "agent-user-1",
     )
 
@@ -252,7 +252,7 @@ def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
         return "agent-user-1"
 
     monkeypatch.setattr(
-        "backend.web.services.member_service.install_from_snapshot",
+        "backend.web.services.agent_user_service.install_from_snapshot",
         fake_install_from_snapshot,
     )
 

@@ -1,7 +1,7 @@
 """Tool catalog — single source of truth for all available agent tools.
 
 Each entry is a ToolDef with fully-typed fields.  The catalog is the
-authoritative registry consumed by member_service to build tool lists
+authoritative registry consumed by agent_user_service to build tool lists
 for the panel UI.
 
 Adding a new tool:  append an entry below.
