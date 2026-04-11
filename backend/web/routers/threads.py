@@ -953,8 +953,8 @@ async def get_thread_history(
 @router.get("/{thread_id}/permissions")
 async def get_thread_permissions(
     thread_id: str,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)],
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
-    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
     # @@@permission-state-lock - owner polling and resolve can race on idle
@@ -976,10 +976,10 @@ async def resolve_thread_permission_request(
     thread_id: str,
     request_id: str,
     payload: ResolvePermissionRequest,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)],
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
-    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)] = None,
 ) -> dict[str, Any]:
     async with thread_lock:
         await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
