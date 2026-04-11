@@ -13,6 +13,7 @@ import {
 
 import {
   browseMonitorSandbox,
+  fetchJsonOrThrow,
   fetchMonitorResources,
   readMonitorSandboxFile,
   refreshMonitorResources,
@@ -250,15 +251,6 @@ function defaultProviderStatusFilter(groups: LeaseGroup[]): LeaseGroup["status"]
     return "paused";
   }
   return "all";
-}
-
-async function fetchLocalSettingsJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`API ${response.status}: ${body || response.statusText}`);
-  }
-  return await response.json() as T;
 }
 
 function countSessions(sessions: ResourceSession[], status: ResourceSession["status"]): number {
@@ -1035,7 +1027,7 @@ function MonitorFileBrowser({
         // @@@local-monitor-browse - local resource sessions are host-bound, not active-instance-bound.
         // Reuse the same settings browse/read endpoints as the app resource surface.
         const data = isLocal
-          ? await fetchLocalSettingsJson<{
+          ? await fetchJsonOrThrow<{
                 current_path?: string;
                 parent_path?: string | null;
                 items?: BrowseItem[];
@@ -1068,7 +1060,7 @@ function MonitorFileBrowser({
       setFileLoading(true);
       try {
         const data = isLocal
-          ? await fetchLocalSettingsJson<{ content: string; truncated: boolean }>(
+          ? await fetchJsonOrThrow<{ content: string; truncated: boolean }>(
               `/api/settings/read?path=${encodeURIComponent(path)}`,
             )
           : await readMonitorSandboxFile(leaseId, path);

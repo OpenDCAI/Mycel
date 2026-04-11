@@ -201,22 +201,18 @@ def create_resource(
             created_at=now,
         )
         return item
-    if resource_type == "skill":
+    if resource_type in {"skill", "agent"}:
         rid = name.lower().replace(" ", "-")
-        skill_dir = LIBRARY_DIR / "skills" / rid
-        skill_dir.mkdir(parents=True, exist_ok=True)
+        content_path = _file_resource_content_path(resource_type, rid)
+        meta_path = _file_resource_meta_path(resource_type, rid)
+        if content_path is None or meta_path is None:
+            raise ValueError(f"Unknown resource type: {resource_type}")
+        content_path.parent.mkdir(parents=True, exist_ok=True)
         meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
-        _write_json(skill_dir / "meta.json", meta)
-        (skill_dir / "SKILL.md").write_text(f"# {name}\n\n{desc}\n", encoding="utf-8")
-        return _library_resource_item("skill", rid, meta)
-    elif resource_type == "agent":
-        rid = name.lower().replace(" ", "-")
-        agents_dir = LIBRARY_DIR / "agents"
-        agents_dir.mkdir(parents=True, exist_ok=True)
-        meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
-        _write_json(agents_dir / f"{rid}.json", meta)
-        (agents_dir / f"{rid}.md").write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
-        return _library_resource_item("agent", rid, meta)
+        _write_json(meta_path, meta)
+        content = f"# {name}\n\n{desc}\n" if resource_type == "skill" else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
+        content_path.write_text(content, encoding="utf-8")
+        return _library_resource_item(resource_type, rid, meta)
     elif resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
