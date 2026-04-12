@@ -426,7 +426,29 @@ function parseSessionStatus(value: unknown): SessionStatus {
 }
 
 export async function getThreadTerminal(threadId: string): Promise<TerminalStatus> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/terminal`);
+  return parseTerminalStatus(await request(`/api/threads/${encodeURIComponent(threadId)}/terminal`));
+}
+
+function stringMap(value: unknown): Record<string, string> | null {
+  const payload = asRecord(value);
+  if (!payload) return null;
+  return Object.values(payload).every((item) => typeof item === "string") ? payload as Record<string, string> : null;
+}
+
+function parseTerminalStatus(value: unknown): TerminalStatus {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const terminal_id = payload ? recordString(payload, "terminal_id") : undefined;
+  const lease_id = payload ? recordString(payload, "lease_id") : undefined;
+  const cwd = payload ? recordString(payload, "cwd") : undefined;
+  const env_delta = stringMap(payload?.env_delta);
+  const version = payload?.version;
+  const created_at = payload ? recordString(payload, "created_at") : undefined;
+  const updated_at = payload ? recordString(payload, "updated_at") : undefined;
+  if (!payload || !thread_id || !terminal_id || !lease_id || !cwd || !env_delta || typeof version !== "number" || !created_at || !updated_at) {
+    throw new Error("Malformed terminal status");
+  }
+  return { ...payload, thread_id, terminal_id, lease_id, cwd, env_delta, version, created_at, updated_at } as TerminalStatus;
 }
 
 export async function getThreadLease(threadId: string): Promise<LeaseStatus | null> {
