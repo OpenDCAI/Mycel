@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.models.panel import (
     AgentConfigPayload,
     CreateAgentRequest,
@@ -20,6 +20,7 @@ from backend.web.services import agent_user_service, library_service, profile_se
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
+CurrentUser = Annotated[Any, Depends(get_current_user)]
 
 
 def _require_owned_agent_user(agent_id: str, user_id: str, user_repo: Any) -> Any:
@@ -43,11 +44,6 @@ def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None
     rows = thread_repo.list_by_agent_user(agent_id)
     if rows:
         raise HTTPException(409, "Cannot delete agent with existing threads")
-
-
-def _get_profile_for_user(user_id: str, user_repo: Any) -> dict[str, Any]:
-    user = user_repo.get_by_id(user_id)
-    return profile_service.get_profile(user)
 
 
 # ── Agents ──
@@ -337,10 +333,9 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 
 @router.get("/profile")
 async def get_profile(
-    user_id: CurrentUserId,
-    request: Request,
+    user: CurrentUser,
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(_get_profile_for_user, user_id, request.app.state.user_repo)
+    return profile_service.get_profile(user)
 
 
 @router.put("/profile")

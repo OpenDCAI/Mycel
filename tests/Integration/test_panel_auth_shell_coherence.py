@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -289,7 +288,7 @@ def test_profile_service_prefers_authenticated_member_over_config_defaults():
 
 
 @pytest.mark.asyncio
-async def test_profile_route_uses_user_repo_instead_of_member_repo():
+async def test_profile_route_uses_authenticated_user_row_instead_of_requerying_repo():
     user = UserRow(
         id="user-1",
         type=UserType.HUMAN,
@@ -299,47 +298,10 @@ async def test_profile_route_uses_user_repo_instead_of_member_repo():
     )
 
     result = await panel_router.get_profile(
-        user_id="user-1",
-        request=SimpleNamespace(
-            app=SimpleNamespace(
-                state=SimpleNamespace(
-                    user_repo=SimpleNamespace(get_by_id=lambda seen_user_id: user if seen_user_id == "user-1" else None),
-                    member_repo=SimpleNamespace(
-                        get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("member_repo should not back profile shell"))
-                    ),
-                )
-            )
-        ),
+        user=user,
     )
 
     assert result == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
-
-
-@pytest.mark.asyncio
-async def test_profile_route_reads_user_repo_off_event_loop_thread():
-    event_loop_thread_id = threading.get_ident()
-    seen_thread_ids: list[int] = []
-    user = UserRow(
-        id="user-1",
-        type=UserType.HUMAN,
-        display_name="codex",
-        email="codex@example.com",
-        created_at=1.0,
-    )
-
-    class _UserRepo:
-        def get_by_id(self, seen_user_id: str):
-            seen_thread_ids.append(threading.get_ident())
-            return user if seen_user_id == "user-1" else None
-
-    result = await panel_router.get_profile(
-        user_id="user-1",
-        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=_UserRepo()))),
-    )
-
-    assert result == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
-    assert seen_thread_ids
-    assert seen_thread_ids[0] != event_loop_thread_id
 
 
 def test_profile_service_updates_user_repo_shell_fields_only():

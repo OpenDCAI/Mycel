@@ -65,12 +65,28 @@ async def _get_user_row_for_auth(request: Request, user_id: str, user_repo: Any)
                     del inflight[user_id]
 
 
-async def get_current_user_id(request: Request) -> str:
-    """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
+async def _resolve_current_user(request: Request) -> tuple[str, Any | None]:
     user_id = _extract_jwt_payload(request)["user_id"]
     user_repo = getattr(request.app.state, "user_repo", None)
-    if user_repo and await _get_user_row_for_auth(request, user_id, user_repo) is None:
+    if user_repo is None:
+        return user_id, None
+    user = await _get_user_row_for_auth(request, user_id, user_repo)
+    if user is None:
         raise HTTPException(401, "User no longer exists — please re-login")
+    return user_id, user
+
+
+async def get_current_user(request: Request) -> Any:
+    """Return the authenticated user row when a route needs user fields."""
+    _, user = await _resolve_current_user(request)
+    if user is None:
+        raise HTTPException(500, "User repo not initialized")
+    return user
+
+
+async def get_current_user_id(request: Request) -> str:
+    """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
+    user_id, _ = await _resolve_current_user(request)
     return user_id
 
 

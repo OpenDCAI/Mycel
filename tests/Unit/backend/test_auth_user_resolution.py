@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from types import SimpleNamespace
 
@@ -40,6 +41,32 @@ async def test_get_current_user_id_uses_user_repo_instead_of_member_repo():
     request = _Request(token="tok-1", payload={"user_id": "user-1"}, user_exists=True)
 
     assert await dependencies.get_current_user_id(request) == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_returns_user_row_off_event_loop_thread():
+    event_loop_thread_id = threading.get_ident()
+    seen_thread_ids: list[int] = []
+    user = SimpleNamespace(id="user-1")
+
+    class _UserRepo:
+        def get_by_id(self, seen_user_id: str):
+            seen_thread_ids.append(threading.get_ident())
+            return user if seen_user_id == "user-1" else None
+
+    request = SimpleNamespace(
+        headers={"Authorization": "Bearer tok-1"},
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"}),
+                user_repo=_UserRepo(),
+            )
+        ),
+    )
+
+    assert await dependencies.get_current_user(request) is user
+    assert seen_thread_ids
+    assert seen_thread_ids[0] != event_loop_thread_id
 
 
 @pytest.mark.asyncio
