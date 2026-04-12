@@ -31,7 +31,7 @@ function conversationTitle(item: ConversationItem, threads: ThreadSummary[]): st
   return thread?.sidebar_label || item.title;
 }
 
-export default function ConversationList({ threads }: { threads: ThreadSummary[] }) {
+export default function ConversationList({ threads, bootstrapError }: { threads: ThreadSummary[]; bootstrapError?: string | null }) {
   const { conversations, loading, fetchConversations } = useConversationStore();
   const [search, setSearch] = useState("");
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -58,6 +58,7 @@ export default function ConversationList({ threads }: { threads: ThreadSummary[]
       <div className="px-4 pt-3 pb-1 flex items-center justify-between">
         <span className="text-sm font-semibold text-foreground">对话</span>
         <button
+          aria-label="新建对话"
           onClick={() => setNewChatOpen(true)}
           className="text-xs text-muted-foreground/50 hover:text-foreground transition-colors duration-fast"
         >
@@ -81,7 +82,12 @@ export default function ConversationList({ threads }: { threads: ThreadSummary[]
       <div className="h-px mx-3 bg-border" />
 
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pt-2 space-y-0.5 custom-scrollbar">
-        {loading && conversations.length === 0 ? (
+        {bootstrapError ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <p className="text-xs text-destructive">对话加载失败</p>
+            <p className="mt-1 text-2xs text-muted-foreground break-all">{bootstrapError}</p>
+          </div>
+        ) : loading && conversations.length === 0 ? (
           <div className="space-y-0.5">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="px-3 py-2.5 rounded-lg animate-pulse">

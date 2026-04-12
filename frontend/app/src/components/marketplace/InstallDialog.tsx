@@ -17,11 +17,13 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
   const downloading = useMarketplaceStore((s) => s.downloading);
 
   const latestVersion = item.versions?.[0]?.version || "latest";
+  const itemTypeLabel = item.type === "member" ? "Agent" : item.type === "agent" ? "Subagent" : item.type;
 
   const handleDownload = async () => {
     try {
       const result = await download(item.id);
-      toast.success(`${item.name} downloaded to library (${result.type})`);
+      const resultTypeLabel = result.type === "user" ? "Agent" : result.type;
+      toast.success(`${item.name} downloaded to library (${resultTypeLabel})`);
       onOpenChange(false);
     } catch (e) {
       toast.error(`Download failed: ${e instanceof Error ? e.message : "unknown error"}`);
@@ -47,7 +49,7 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
 
         <div className="py-3">
           <p className="text-sm text-muted-foreground">
-            这将把该 {item.type} 保存到本地库，之后可以在 Agent 配置页中添加使用。
+            这将把该 {itemTypeLabel} 保存到本地库，之后可以在 Agent 配置页中添加使用。
           </p>
           {item.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">

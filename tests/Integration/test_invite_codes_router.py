@@ -14,6 +14,7 @@ class _FakeInviteCodeRepo:
         self.revoke_calls: list[str] = []
         self.is_valid_calls: list[str] = []
         self.generate_result = {"code": "invite-2"}
+        self.list_all_result: list[dict] = []
         self.revoke_result = True
         self.is_valid_result = True
         self.generate_error: Exception | None = None
@@ -25,6 +26,9 @@ class _FakeInviteCodeRepo:
         if self.generate_error is not None:
             raise self.generate_error
         return self.generate_result
+
+    def list_all(self):
+        return self.list_all_result
 
     def revoke(self, code: str):
         self.revoke_calls.append(code)
@@ -90,3 +94,75 @@ async def test_revoke_invite_code_raises_404_when_repo_reports_missing():
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "邀请码不存在"
     assert repo.revoke_calls == ["invite-1"]
+
+
+@pytest.mark.asyncio
+async def test_list_invite_codes_returns_app_contract_from_repo_rows():
+    repo = _FakeInviteCodeRepo()
+    repo.list_all_result = [
+        {
+            "code": "USED",
+            "used_by": "user-2",
+            "used_at": "2026-04-12T00:01:00Z",
+            "expires_at": None,
+            "created_at": "2026-04-12T00:00:00Z",
+        },
+        {
+            "code": "OPEN",
+            "used_by": None,
+            "used_at": None,
+            "expires_at": "2026-04-19T00:00:00Z",
+            "created_at": "2026-04-12T00:00:00Z",
+        },
+    ]
+
+    result = await invite_codes_router.list_invite_codes(request=_request(repo), user_id="user-1")
+
+    assert result == {
+        "codes": [
+            {
+                "code": "USED",
+                "used": True,
+                "used_by": "user-2",
+                "used_at": "2026-04-12T00:01:00Z",
+                "expires_at": None,
+                "created_at": "2026-04-12T00:00:00Z",
+            },
+            {
+                "code": "OPEN",
+                "used": False,
+                "used_by": None,
+                "used_at": None,
+                "expires_at": "2026-04-19T00:00:00Z",
+                "created_at": "2026-04-12T00:00:00Z",
+            },
+        ]
+    }
+
+
+@pytest.mark.asyncio
+async def test_generate_invite_code_returns_app_contract_from_repo_row():
+    repo = _FakeInviteCodeRepo()
+    repo.generate_result = {
+        "code": "NEW",
+        "used_by": None,
+        "used_at": None,
+        "expires_at": "2026-04-19T00:00:00Z",
+        "created_at": "2026-04-12T00:00:00Z",
+    }
+
+    result = await invite_codes_router.generate_invite_code(
+        invite_codes_router.GenerateInviteCodeRequest(expires_days=7),
+        request=_request(repo),
+        user_id="user-1",
+    )
+
+    assert result == {
+        "code": "NEW",
+        "used": False,
+        "used_by": None,
+        "used_at": None,
+        "expires_at": "2026-04-19T00:00:00Z",
+        "created_at": "2026-04-12T00:00:00Z",
+    }
+    assert repo.generate_calls == [("user-1", 7)]

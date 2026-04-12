@@ -58,3 +58,17 @@ async def test_browse_and_read_keep_route_specific_path_errors(tmp_path: Path):
     assert read_missing_exc.value.detail == "File not found"
     assert read_wrong_type_exc.value.status_code == 400
     assert read_wrong_type_exc.value.detail == "Path is a directory"
+
+
+@pytest.mark.asyncio
+async def test_browse_filesystem_reports_permission_denied(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    def _raise_permission_denied(_path: Path):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(Path, "iterdir", _raise_permission_denied)
+
+    with pytest.raises(HTTPException) as exc:
+        await settings_router.browse_filesystem(path=str(tmp_path), include_files=False)
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Permission denied"

@@ -62,6 +62,7 @@ describe("InstallDialog wording contract", () => {
       />,
     );
 
-    expect(screen.getByText("这将把该 member 保存到本地库，之后可以在 Agent 配置页中添加使用。")).toBeTruthy();
+    expect(screen.getByText("这将把该 Agent 保存到本地库，之后可以在 Agent 配置页中添加使用。")).toBeTruthy();
+    expect(screen.queryByText(/member/)).toBeNull();
   });
 });

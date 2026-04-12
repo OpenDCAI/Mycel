@@ -67,13 +67,17 @@ def normalize_recipe_snapshot(provider_type: str, recipe: dict[str, Any] | None 
             if key in FEATURE_CATALOG:
                 normalized_features[key] = bool(value)
 
+    builtin = recipe.get("builtin", base["builtin"])
+    if builtin is None:
+        builtin = base["builtin"]
+
     return {
         **base,
         "id": str(recipe.get("id") or base["id"]),
         "name": str(recipe.get("name") or base["name"]),
         "desc": str(recipe.get("desc") or base["desc"]),
         "features": normalized_features,
-        "builtin": bool(recipe.get("builtin", base["builtin"])),
+        "builtin": bool(builtin),
     }
 
 

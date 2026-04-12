@@ -427,6 +427,58 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["models_config_override"] = kwargs.get("models_config_override")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-11")
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-11",
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-11", agent_config_id="cfg-11")
+
+    class _UserSettingsRepo:
+        def get(self, user_id: str):
+            assert user_id == "owner-11"
+            return {"default_model": "leon:large"}
+
+        def get_models_config(self, user_id: str):
+            assert user_id == "owner-11"
+            return {"providers": {"openai": {"credential_source": "user", "api_key": "repo-key"}}}
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            user_settings_repo=_UserSettingsRepo(),
+            agent_config_repo=SimpleNamespace(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-11")
+
+    assert captured["models_config_override"] == {"providers": {"openai": {"credential_source": "user", "api_key": "repo-key"}}}
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_agent_does_not_fallback_to_local_preferences_when_repo_missing(
     monkeypatch: pytest.MonkeyPatch,
 ):

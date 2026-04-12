@@ -11,7 +11,7 @@ SANDBOXES_DIR = user_home_path("sandboxes")
 SANDBOX_VOLUME_ROOT = Path(os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))).expanduser().resolve()
 
 # Workspace
-LOCAL_WORKSPACE_ROOT = Path.cwd().resolve()
+LOCAL_WORKSPACE_ROOT = Path(os.environ.get("LEON_LOCAL_WORKSPACE_ROOT", str(Path.home()))).expanduser().resolve()
 
 # Idle reaper
 IDLE_REAPER_INTERVAL_SEC = 30

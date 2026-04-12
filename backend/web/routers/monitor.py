@@ -61,6 +61,11 @@ def leases_snapshot():
     return monitor_service.list_leases()
 
 
+@router.get("/provider-sessions")
+def provider_sessions_snapshot():
+    return monitor_service.list_monitor_provider_sessions()
+
+
 @router.get("/threads")
 def threads_snapshot(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -84,6 +89,11 @@ def lease_cleanup_action(lease_id: str):
     return _or_404(monitor_service.request_monitor_lease_cleanup, lease_id)
 
 
+@router.post("/provider-sessions/{provider_id}/{session_id}/cleanup")
+def provider_session_cleanup_action(provider_id: str, session_id: str):
+    return monitor_service.request_monitor_provider_session_cleanup(provider_id, session_id)
+
+
 @router.get("/operations/{operation_id}")
 def operation_detail_snapshot(operation_id: str):
     return _or_404(monitor_service.get_monitor_operation_detail, operation_id)
@@ -92,6 +102,11 @@ def operation_detail_snapshot(operation_id: str):
 @router.get("/runtimes/{runtime_session_id}")
 def runtime_detail_snapshot(runtime_session_id: str):
     return _or_404(monitor_service.get_monitor_runtime_detail, runtime_session_id)
+
+
+@router.get("/sandbox-configs")
+def sandbox_configs_snapshot():
+    return monitor_service.get_monitor_sandbox_configs()
 
 
 @router.get("/threads/{thread_id}")

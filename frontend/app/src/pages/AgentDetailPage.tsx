@@ -31,6 +31,10 @@ const modules: ModuleDef[] = [
   { id: "subagents", label: "子 Agent", icon: Users, count: c => c.subAgents.length },
 ];
 
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 // ==================== Main Component ====================
 
 export default function AgentDetail() {
@@ -40,6 +44,7 @@ export default function AgentDetail() {
   const [activeModule, setActiveModule] = useState<ModuleId>("role");
 
   const agent = useAppStore(s => s.getAgentById(id || ""));
+  const fetchAgent = useAppStore(s => s.fetchAgent);
   const updateAgent = useAppStore(s => s.updateAgent);
   const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
   const librarySkills = useAppStore(s => s.librarySkills);
@@ -49,7 +54,19 @@ export default function AgentDetail() {
   const [pickerType, setPickerType] = useState<"skill" | "mcp" | "agent" | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [loadFailure, setLoadFailure] = useState<{ id: string; message: string } | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!id || agent?.config_loaded) return;
+    let cancelled = false;
+    fetchAgent(id).catch((err) => {
+      if (!cancelled) setLoadFailure({ id, message: errorText(err) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [agent?.config_loaded, fetchAgent, id]);
 
   const startRename = () => {
     if (!agent) return;
@@ -63,15 +80,18 @@ export default function AgentDetail() {
     if (!agent || !trimmed || trimmed === agent.name) return;
     try {
       await updateAgent(agent.id, { name: trimmed });
-    } catch { toast.error("重命名失败"); }
+    } catch (err) { toast.error(`重命名失败：${errorText(err)}`); }
   };
 
   const statusLabels: Record<string, string> = { active: "在岗", draft: "草稿", inactive: "离线" };
+  const loadError = loadFailure && loadFailure.id === id ? loadFailure.message : null;
 
-  if (!agent) {
+  if (!agent?.config_loaded) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">加载中...</p>
+        <p className={`text-sm ${loadError ? "text-destructive" : "text-muted-foreground"}`}>
+          {loadError ? `加载失败：${loadError}` : "加载中..."}
+        </p>
       </div>
     );
   }
@@ -86,7 +106,7 @@ export default function AgentDetail() {
       } else if (mod === "skills") {
         await updateAgentConfig(agent.id, { skills: agent.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i) });
       }
-    } catch { toast.error("更新失败"); }
+    } catch (err) { toast.error(`更新失败：${errorText(err)}`); }
   };
 
   const handleAssign = async (type: "skill" | "mcp" | "agent", names: string[]) => {
@@ -115,7 +135,7 @@ export default function AgentDetail() {
         if (newAgents.length) await updateAgentConfig(agent.id, { subAgents: [...agent.config.subAgents, ...newAgents] });
       }
       toast.success("已添加");
-    } catch { toast.error("添加失败"); }
+    } catch (err) { toast.error(`添加失败：${errorText(err)}`); }
   };
 
   const handleRemove = async (mod: string, itemName: string) => {
@@ -126,7 +146,7 @@ export default function AgentDetail() {
       else if (mod === "subagents") await updateAgentConfig(agent.id, { subAgents: agent.config.subAgents.filter(i => i.name !== itemName) });
       else if (mod === "rules") await updateAgentConfig(agent.id, { rules: agent.config.rules.filter(i => i.name !== itemName) });
       toast.success("已移除");
-    } catch { toast.error("移除失败"); }
+    } catch (err) { toast.error(`移除失败：${errorText(err)}`); }
   };
 
   const renderContent = () => {

@@ -13,10 +13,12 @@ vi.mock("@/store/auth-store", () => ({
   authFetch,
 }));
 
-function response(body: unknown, ok = true) {
+function response(body: unknown, ok = true, status = ok ? 200 : 500, text = JSON.stringify(body)) {
   return {
     ok,
+    status,
     json: async () => body,
+    text: async () => text,
   };
 }
 
@@ -75,5 +77,17 @@ describe("ModelSelector", () => {
       expect(authFetch).toHaveBeenCalledWith("/api/settings");
     });
     expect(screen.queryByText("[object Object]")).toBeNull();
+  });
+
+  it("does not render custom models from a failed settings response", async () => {
+    authFetch.mockResolvedValue(response({ enabled_models: ["custom:model"] }, false, 503, "down"));
+
+    render(<ModelSelector currentModel="leon:medium" threadId="thread-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Medium/ }));
+    fireEvent.click(await screen.findByText("自定义"));
+
+    expect(await screen.findByText("加载模型失败：API 503: down")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "custom:model" })).toBeNull();
   });
 });

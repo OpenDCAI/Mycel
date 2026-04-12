@@ -1943,10 +1943,13 @@ async def test_memory_middleware_emits_runtime_compaction_notice():
 
     compact_events = [event for event in runtime.events if event.get("event") == "notice"]
 
-    assert len(compact_events) == 1
-    payload = json.loads(compact_events[0]["data"])
-    assert payload["notification_type"] == "compact"
-    assert "Conversation compacted" in payload["content"]
+    assert len(compact_events) == 2
+    start_payload = json.loads(compact_events[0]["data"])
+    done_payload = json.loads(compact_events[1]["data"])
+    assert start_payload["notification_type"] == "compact_start"
+    assert "Compacting conversation" in start_payload["content"]
+    assert done_payload["notification_type"] == "compact"
+    assert "Conversation compacted" in done_payload["content"]
 
 
 @pytest.mark.asyncio

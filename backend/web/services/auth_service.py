@@ -25,6 +25,7 @@ class AuthService:
         supabase_auth_client=None,
         supabase_auth_client_factory: Callable[[], object] | None = None,
         invite_codes: InviteCodeRepo | None = None,
+        contact_repo=None,
     ) -> None:
         self._users = users
         self._agent_configs = agent_configs
@@ -32,6 +33,7 @@ class AuthService:
         self._sb_auth = supabase_auth_client  # end-user auth client
         self._sb_auth_factory = supabase_auth_client_factory
         self._invite_codes = invite_codes
+        self._contact_repo = contact_repo
 
     # ------------------------------------------------------------------
     # Registration flow (standard Supabase signUp)
@@ -235,6 +237,7 @@ class AuthService:
             raise RuntimeError("Agent config repo required for initial agent creation during schema cutover.")
         from pathlib import Path
 
+        from backend.web.services.contact_bootstrap_service import ensure_owner_agent_contact
         from storage.utils import generate_agent_config_id, generate_agent_user_id
 
         initial_agents = [
@@ -276,6 +279,7 @@ class AuthService:
 
             avatar_path = process_and_save_avatar(src_avatar, agent_id)
             self._users.update(agent_id, avatar=avatar_path)
+            ensure_owner_agent_contact(self._contact_repo, owner_user_id, agent_id, now=now)
             if i == 0:
                 first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "agent", "avatar": avatar_path}
 

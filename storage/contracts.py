@@ -165,14 +165,8 @@ class SandboxMonitorRepo(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Member-Chat — enums + row types
+# User / Agent / Chat — enums + row types
 # ---------------------------------------------------------------------------
-
-
-class MemberType(StrEnum):
-    HUMAN = "human"
-    MYCEL_AGENT = "mycel_agent"
-    OPENCLAW_AGENT = "openclaw_agent"
 
 
 class UserType(StrEnum):
@@ -519,10 +513,7 @@ class UserSettingsRepo(Protocol):
     def set_default_model(self, user_id: str, model: str) -> None: ...
     def get_models_config(self, user_id: str) -> dict[str, Any] | None: ...
     def set_models_config(self, user_id: str, config: dict[str, Any]) -> None: ...
-    def get_observation_config(self, user_id: str) -> dict[str, Any] | None: ...
-    def set_observation_config(self, user_id: str, config: dict[str, Any]) -> None: ...
-    def get_sandbox_configs(self, user_id: str) -> dict[str, Any] | None: ...
-    def set_sandbox_configs(self, user_id: str, configs: dict[str, Any]) -> None: ...
+    def get_account_resource_limits(self, user_id: str) -> dict[str, Any] | None: ...
 
 
 class AgentConfigRepo(Protocol):

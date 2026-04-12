@@ -15,7 +15,7 @@ interface ModelPoolSectionProps {
   models: Model[];
   enabledModels: string[];
   customConfig: Record<string, { based_on?: string | null; context_limit?: number | null }>;
-  providers: Record<string, { api_key: string | null; base_url: string | null }>;
+  providers: Record<string, { api_key: string | null; has_api_key?: boolean; credential_source?: "platform" | "user"; base_url: string | null }>;
   onToggle: (modelId: string, enabled: boolean) => void;
   onAddCustomModel: (modelId: string, provider: string, basedOn?: string, contextLimit?: number) => Promise<void>;
   onRemoveCustomModel: (modelId: string) => Promise<void>;
@@ -33,6 +33,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
   const [toggling, setToggling] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [testStatus, setTestStatus] = useState<Record<string, "idle" | "testing" | "ok" | "fail">>({});
   const [testError, setTestError] = useState<Record<string, string>>({});
@@ -47,15 +48,21 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
 
   const handleToggle = async (modelId: string, enabled: boolean) => {
     setToggling(modelId);
-    onToggle(modelId, enabled);
+    setErrorMessage(null);
     try {
-      await authFetch("/api/settings/models/toggle", {
+      const response = await authFetch("/api/settings/models/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: modelId, enabled }),
       });
+      if (!response.ok) {
+        throw new Error(`API ${response.status}: ${await response.text()}`);
+      }
+      onToggle(modelId, enabled);
       setSuccessMessage(enabled ? "模型已启用" : "模型已禁用");
       setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
+    } catch (err) {
+      setErrorMessage(`模型保存失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setToggling(null);
     }
@@ -70,34 +77,45 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: modelId }),
       });
+      if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
       const result = parseModelTestResult(await res.json());
       setTestStatus((s) => ({ ...s, [modelId]: result.status }));
       if (result.status === "fail") setTestError((s) => ({ ...s, [modelId]: result.error }));
-    } catch {
+    } catch (err) {
       setTestStatus((s) => ({ ...s, [modelId]: "fail" }));
-      setTestError((s) => ({ ...s, [modelId]: "网络错误" }));
+      setTestError((s) => ({ ...s, [modelId]: err instanceof Error ? err.message : "网络错误" }));
     }
   };
 
   const handleSaveConfig = async (modelId: string) => {
-    await authFetch("/api/settings/models/custom/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model_id: modelId,
-        based_on: editAlias || null,
-        context_limit: editContextLimit ? parseInt(editContextLimit) : null,
-        provider: editProvider || null,
-      }),
-    });
-    setEditingModel(null);
-    setSuccessMessage("配置已保存");
-    setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
+    setErrorMessage(null);
+    try {
+      const response = await authFetch("/api/settings/models/custom/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model_id: modelId,
+          based_on: editAlias || null,
+          context_limit: editContextLimit ? parseInt(editContextLimit) : null,
+          provider: editProvider || null,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`API ${response.status}: ${await response.text()}`);
+      }
+      setEditingModel(null);
+      setSuccessMessage("配置已保存");
+      setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
+    } catch (err) {
+      setErrorMessage(`配置保存失败：${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
   };
 
   const handleAdd = async () => {
     if (!searchQuery.trim() || !selectedProvider) return;
     setAdding(true);
+    setErrorMessage(null);
     try {
       await onAddCustomModel(
         searchQuery.trim(),
@@ -112,8 +130,21 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
       setShowOptional(false);
       setSuccessMessage("模型已添加");
       setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
+    } catch (err) {
+      setErrorMessage(`模型添加失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleRemove = async (modelId: string) => {
+    setErrorMessage(null);
+    try {
+      await onRemoveCustomModel(modelId);
+      setSuccessMessage("模型已移除");
+      setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
+    } catch (err) {
+      setErrorMessage(`模型移除失败：${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -136,6 +167,9 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
         </div>
         {successMessage && (
           <span className="text-xs text-success bg-success/10 px-2 py-1 rounded">{successMessage}</span>
+        )}
+        {errorMessage && (
+          <span className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">{errorMessage}</span>
         )}
       </div>
 
@@ -236,7 +270,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                         {isEditing ? "关闭" : "配置"}
                       </button>
                       <button
-                        onClick={() => onRemoveCustomModel(model.id)}
+                        onClick={() => void handleRemove(model.id)}
                         className="text-xs px-2 py-0.5 rounded border border-border text-destructive hover:border-destructive transition-colors duration-fast"
                       >
                         移除

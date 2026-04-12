@@ -66,6 +66,7 @@ class CompactionConfig(BaseModel):
     reserve_tokens: Annotated[int, Field(gt=0, description="Reserve space for new messages")] = 16384
     keep_recent_tokens: Annotated[int, Field(gt=0, description="Keep recent messages verbatim")] = 20000
     min_messages: Annotated[int, Field(gt=0, description="Minimum messages before compaction")] = 20
+    trigger_tokens: Annotated[int | None, Field(gt=0, description="Absolute token count that triggers compaction")] = None
 
 
 class MemoryConfig(BaseModel):

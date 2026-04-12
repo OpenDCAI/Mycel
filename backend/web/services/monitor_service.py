@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from backend.web.services import monitor_operation_service
+from backend.web.core import config as web_config
+from backend.web.services import monitor_operation_service, sandbox_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from eval.batch_executor import EvaluationBatchExecutor
 from eval.batch_service import EvaluationBatchService
@@ -32,6 +33,16 @@ def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
     from backend.web.routers.threads import build_owner_thread_workbench
 
     return build_owner_thread_workbench(app, user_id)
+
+
+def get_monitor_sandbox_configs() -> dict[str, Any]:
+    providers = sandbox_service.available_sandbox_types()
+    return {
+        "source": "runtime_sandbox_inventory",
+        "default_local_cwd": str(web_config.LOCAL_WORKSPACE_ROOT),
+        "count": len(providers),
+        "providers": providers,
+    }
 
 
 def get_resource_overview_snapshot() -> dict[str, Any]:
@@ -539,6 +550,23 @@ def list_leases() -> dict[str, Any]:
         repo.close()
 
 
+def list_monitor_provider_sessions() -> dict[str, Any]:
+    _, managers = sandbox_service.init_providers_and_managers()
+    sessions = []
+    for item in sandbox_service.load_all_sessions(managers):
+        if item.get("source") != "provider_orphan":
+            continue
+        sessions.append(
+            {
+                "session_id": str(item.get("session_id") or ""),
+                "provider": str(item.get("provider") or ""),
+                "status": str(item.get("status") or "unknown"),
+                "source": "provider_orphan",
+            }
+        )
+    return {"count": len(sessions), "sessions": sessions}
+
+
 def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
@@ -686,6 +714,10 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
 
 def request_monitor_lease_cleanup(lease_id: str) -> dict[str, Any]:
     return monitor_operation_service.request_lease_cleanup(get_monitor_lease_detail(lease_id))
+
+
+def request_monitor_provider_session_cleanup(provider_name: str, session_id: str) -> dict[str, Any]:
+    return monitor_operation_service.request_provider_session_cleanup(provider_name, session_id)
 
 
 def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:

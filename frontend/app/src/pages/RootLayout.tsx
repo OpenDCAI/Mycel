@@ -62,6 +62,7 @@ function AuthenticatedLayout() {
   const loadAll = useAppStore((s) => s.loadAll);
   const resetSessionData = useAppStore((s) => s.resetSessionData);
   const lastLoadedUserIdRef = useRef<string | null>(null);
+  const shouldBootstrapPanel = !location.pathname.startsWith("/settings");
 
   useEffect(() => {
     const userId = authUser?.id ?? null;
@@ -72,8 +73,12 @@ function AuthenticatedLayout() {
     // agents/resources and the sidebar mixes identities.
     lastLoadedUserIdRef.current = userId;
     resetSessionData();
+  }, [authUser?.id, resetSessionData]);
+
+  useEffect(() => {
+    if (!authUser?.id || !shouldBootstrapPanel) return;
     void loadAll();
-  }, [authUser?.id, loadAll, resetSessionData]);
+  }, [authUser?.id, loadAll, shouldBootstrapPanel]);
 
   const [expanded, setExpanded] = useState(() => {
     const saved = localStorage.getItem("sidebar-expanded");
@@ -230,6 +235,7 @@ function AuthenticatedLayout() {
           <div className={`relative ${showLabels ? "px-3" : "flex justify-center"} mb-4`}>
             <button
               ref={createBtnRef}
+              aria-label="新建"
               onClick={() => setShowCreate(!showCreate)}
               className={`rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-fast ${
                 showLabels ? "w-full h-9 rounded-lg gap-2" : "w-10 h-10"
