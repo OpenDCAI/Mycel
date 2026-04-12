@@ -314,8 +314,7 @@ class CostCalculator:
         import re
 
         name = re.sub(r"-\d{8}$", "", name)
-        name = re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", name)
-        return name
+        return re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", name)
 
     def calculate(self, tokens: dict) -> dict:
         """返回各项成本（USD）
