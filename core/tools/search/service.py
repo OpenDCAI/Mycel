@@ -7,12 +7,15 @@ Tools:
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_EXCLUDES: list[str] = [
     "node_modules",
@@ -231,7 +234,7 @@ class SearchService:
                     line_numbers=line_numbers,
                 )
             except Exception:
-                pass  # fallback to Python
+                logger.warning("ripgrep search failed; using Python search", exc_info=True)
 
         return self._python_grep(
             resolved,
