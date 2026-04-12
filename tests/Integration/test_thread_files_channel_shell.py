@@ -36,7 +36,7 @@ async def test_call_channel_file_service_maps_value_error_to_400():
         raise ValueError("bad path")
 
     with pytest.raises(HTTPException) as exc_info:
-        await thread_files_router._call_channel_file_service(fake_method, "thread-1")
+        await thread_files_router._call_channel_file_service(fake_method, thread_id="thread-1")
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "bad path"
@@ -50,7 +50,7 @@ async def test_call_channel_file_service_maps_missing_file_to_404():
     with pytest.raises(HTTPException) as exc_info:
         await thread_files_router._call_channel_file_service(
             fake_method,
-            "thread-1",
+            thread_id="thread-1",
             missing_status=404,
         )
 
