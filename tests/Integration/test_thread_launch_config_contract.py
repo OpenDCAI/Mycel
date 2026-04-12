@@ -501,7 +501,6 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
         agent_user_id="member-2",
         create_mode="new",
         provider_config="local",
-        recipe=None,
         lease_id=None,
         model="gpt-5.4-mini",
         workspace="/tmp/demo",

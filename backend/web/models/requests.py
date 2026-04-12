@@ -7,18 +7,6 @@ from pydantic import AliasChoices, BaseModel, Field
 from sandbox.config import MountSpec
 
 
-class RecipeSnapshotRequest(BaseModel):
-    id: str
-    name: str
-    provider_name: str | None = None
-    provider_type: str
-    desc: str | None = None
-    features: dict[str, bool] = Field(default_factory=dict)
-    configurable_features: dict[str, bool] = Field(default_factory=dict)
-    feature_options: list[dict] = Field(default_factory=list)
-    builtin: bool | None = None
-
-
 class CreateThreadRequest(BaseModel):
     agent_user_id: str
     sandbox: str = Field(default="local", validation_alias=AliasChoices("sandbox", "sandbox_type"))
