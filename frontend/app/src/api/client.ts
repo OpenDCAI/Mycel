@@ -15,6 +15,7 @@ import type {
   ThreadPermissionRules,
   PermissionRuleBehavior,
   AskUserAnswer,
+  SandboxFileEntry,
   SandboxFileResult,
   SandboxFilesListResult,
   SandboxUploadResult,
@@ -538,7 +539,36 @@ function sandboxFilesBase(threadId: string): string {
 
 export async function listSandboxFiles(threadId: string, path?: string): Promise<SandboxFilesListResult> {
   const q = path ? `?path=${encodeURIComponent(path)}` : "";
-  return request(`${sandboxFilesBase(threadId)}/list${q}`);
+  return parseSandboxFilesList(await request(`${sandboxFilesBase(threadId)}/list${q}`));
+}
+
+function parseSandboxFilesList(value: unknown): SandboxFilesListResult {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const path = payload ? recordString(payload, "path") : undefined;
+  const entries = payload?.entries;
+  if (!payload || !thread_id || !path || !Array.isArray(entries)) {
+    throw new Error("Malformed sandbox file list");
+  }
+  return { thread_id, path, entries: entries.map(parseSandboxFileEntry) };
+}
+
+function parseSandboxFileEntry(value: unknown): SandboxFileEntry {
+  const payload = asRecord(value);
+  const name = payload ? recordString(payload, "name") : undefined;
+  const is_dir = payload?.is_dir;
+  const size = payload?.size;
+  const children_count = payload?.children_count;
+  if (
+    !payload ||
+    !name ||
+    typeof is_dir !== "boolean" ||
+    typeof size !== "number" ||
+    (children_count !== undefined && children_count !== null && typeof children_count !== "number")
+  ) {
+    throw new Error("Malformed sandbox file list");
+  }
+  return children_count === undefined ? { name, is_dir, size } : { name, is_dir, size, children_count };
 }
 
 export async function readSandboxFile(threadId: string, path: string): Promise<SandboxFileResult> {
