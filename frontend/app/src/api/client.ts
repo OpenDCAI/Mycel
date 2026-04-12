@@ -407,7 +407,22 @@ export async function destroySandboxSession(sessionId: string, provider: string)
 // --- Session/Terminal/Lease API ---
 
 export async function getThreadSession(threadId: string): Promise<SessionStatus> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/session`);
+  return parseSessionStatus(await request(`/api/threads/${encodeURIComponent(threadId)}/session`));
+}
+
+function parseSessionStatus(value: unknown): SessionStatus {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const session_id = payload ? recordString(payload, "session_id") : undefined;
+  const terminal_id = payload ? recordString(payload, "terminal_id") : undefined;
+  const status = payload ? recordString(payload, "status") : undefined;
+  const started_at = payload ? recordString(payload, "started_at") : undefined;
+  const last_active_at = payload ? recordString(payload, "last_active_at") : undefined;
+  const expires_at = payload ? recordString(payload, "expires_at") : undefined;
+  if (!payload || !thread_id || !session_id || !terminal_id || !status || !started_at || !last_active_at || !expires_at) {
+    throw new Error("Malformed session status");
+  }
+  return { ...payload, thread_id, session_id, terminal_id, status, started_at, last_active_at, expires_at } as SessionStatus;
 }
 
 export async function getThreadTerminal(threadId: string): Promise<TerminalStatus> {

@@ -159,6 +159,20 @@ describe("thread api client contract", () => {
     await expect(api.getThreadLease("thread-1")).rejects.toThrow("Malformed lease status");
   });
 
+  it("getThreadSession rejects malformed session identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      thread_id: "thread-1",
+      session_id: "session-1",
+      terminal_id: { value: "terminal-1" },
+      status: "active",
+      started_at: "2026-04-12T00:00:00",
+      last_active_at: "2026-04-12T00:01:00",
+      expires_at: "2026-04-12T01:00:00",
+    }));
+
+    await expect(api.getThreadSession("thread-1")).rejects.toThrow("Malformed session status");
+  });
+
   it("getThreadPermissions rejects malformed permission payload identities", async () => {
     authFetch.mockResolvedValue(okJson({
       thread_id: { value: "thread-1" },
