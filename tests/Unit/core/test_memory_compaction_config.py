@@ -22,6 +22,7 @@ def _mock_request(messages: list):
     config = MagicMock()
     config.configurable = {"thread_id": "thread-compact-trigger"}
     request.config = config
+    request.override = lambda messages: SimpleNamespace(messages=messages, prepared_request=None)
     return request
 
 
@@ -54,11 +55,17 @@ async def test_explicit_trigger_tokens_controls_compaction_independent_of_contex
     )
     model = _mock_model()
     middleware.set_model(model)
+    handler_messages = None
 
     async def _handler(req):
+        nonlocal handler_messages
+        handler_messages = req.messages
         return MagicMock()
 
     await middleware.awrap_model_call(_mock_request(_large_messages()), _handler)
 
     assert model.summary_calls == 1
     assert middleware.compact_boundary_index > 0
+    assert handler_messages is not None
+    assert isinstance(handler_messages[-1], HumanMessage)
+    assert handler_messages[-1].content.startswith("continue ")

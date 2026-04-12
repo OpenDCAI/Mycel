@@ -81,6 +81,11 @@ class ContextCompactor:
         else:
             return [], messages
 
+        # @@@keep-current-turn - compact may summarize history, but the active
+        # model call still needs the current user turn as real input.
+        if split_idx >= len(messages):
+            split_idx = len(messages) - 1
+
         # Adjust boundary to avoid splitting tool_calls from ToolMessages
         split_idx = self._adjust_boundary(messages, split_idx)
 
