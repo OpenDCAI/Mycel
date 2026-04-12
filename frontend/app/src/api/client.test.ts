@@ -190,6 +190,14 @@ describe("thread api client contract", () => {
     await expect(api.listSandboxSessions()).rejects.toThrow("Malformed sandbox sessions");
   });
 
+  it("listSandboxTypes rejects malformed sandbox type identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      types: [{ name: { value: "local" }, available: true }],
+    }));
+
+    await expect(api.listSandboxTypes()).rejects.toThrow("Malformed sandbox types");
+  });
+
   it("listMyLeases rejects malformed lease participant identities", async () => {
     authFetch.mockResolvedValue(okJson({
       leases: [{

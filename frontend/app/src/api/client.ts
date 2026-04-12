@@ -237,8 +237,22 @@ export async function sendMessage(threadId: string, message: string): Promise<{ 
 // --- Sandbox API ---
 
 export async function listSandboxTypes(): Promise<SandboxType[]> {
-  const payload = await request<{ types: SandboxType[] }>("/api/sandbox/types");
-  return payload.types;
+  return parseSandboxTypes(await request("/api/sandbox/types"));
+}
+
+function parseSandboxTypes(value: unknown): SandboxType[] {
+  const payload = asRecord(value);
+  const types = payload?.types;
+  if (!Array.isArray(types)) throw new Error("Malformed sandbox types");
+  return types.map((type) => {
+    const data = asRecord(type);
+    const name = data ? recordString(data, "name") : undefined;
+    const available = data?.available;
+    if (!data || !name || typeof available !== "boolean") {
+      throw new Error("Malformed sandbox types");
+    }
+    return { ...data, name, available } as SandboxType;
+  });
 }
 
 export async function pickFolder(): Promise<string | null> {
