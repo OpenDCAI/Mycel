@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -519,6 +520,24 @@ async def test_list_threads_hides_internal_subagent_threads():
     payload = await threads_router.list_threads("owner-1", app)
 
     assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
+
+
+@pytest.mark.asyncio
+async def test_list_threads_runs_owner_workbench_off_event_loop_thread(monkeypatch: pytest.MonkeyPatch):
+    event_loop_thread_id = threading.get_ident()
+    seen_thread_ids: list[int] = []
+
+    def _build_owner_thread_workbench(_app, _user_id):
+        seen_thread_ids.append(threading.get_ident())
+        return {"threads": []}
+
+    monkeypatch.setattr(threads_router, "build_owner_thread_workbench", _build_owner_thread_workbench)
+
+    payload = await threads_router.list_threads("owner-1", SimpleNamespace())
+
+    assert payload == {"threads": []}
+    assert seen_thread_ids
+    assert seen_thread_ids[0] != event_loop_thread_id
 
 
 @pytest.mark.asyncio

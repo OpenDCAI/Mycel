@@ -854,7 +854,7 @@ async def list_threads(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
-    return build_owner_thread_workbench(app, user_id)
+    return await asyncio.to_thread(build_owner_thread_workbench, app, user_id)
 
 
 @router.get("/{thread_id}")
