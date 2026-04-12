@@ -524,12 +524,10 @@ def _create_thread_sandbox_resources(
 
     from backend.web.core.config import SANDBOX_VOLUME_ROOT
     from backend.web.utils.helpers import _get_container
-    from sandbox.control_plane_repos import resolve_sandbox_db_path
     from sandbox.volume_source import HostVolume
     from storage.runtime import build_lease_repo as make_lease_repo
     from storage.runtime import build_terminal_repo as make_terminal_repo
 
-    sandbox_db = resolve_sandbox_db_path()
     now_str = datetime.now().isoformat()
     volume_id = str(uuid.uuid4())
     vol_path = SANDBOX_VOLUME_ROOT / volume_id
@@ -541,7 +539,7 @@ def _create_thread_sandbox_resources(
     finally:
         vol_repo.close()
 
-    lease_repo = make_lease_repo(db_path=sandbox_db)
+    lease_repo = make_lease_repo()
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
         normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
@@ -555,7 +553,7 @@ def _create_thread_sandbox_resources(
     finally:
         lease_repo.close()
 
-    terminal_repo = make_terminal_repo(db_path=sandbox_db)
+    terminal_repo = make_terminal_repo()
     try:
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
         # @@@initial-cwd - local threads own their requested cwd; remote threads start from provider defaults.
