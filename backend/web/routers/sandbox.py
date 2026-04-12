@@ -1,8 +1,6 @@
 """Sandbox management endpoints."""
 
 import asyncio
-import subprocess
-import sys
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -36,79 +34,6 @@ async def list_sandbox_types() -> dict[str, Any]:
     """List available sandbox types."""
     types = await asyncio.to_thread(sandbox_service.available_sandbox_types)
     return {"types": types}
-
-
-@router.get("/pick-folder")
-async def pick_folder() -> dict[str, Any]:
-    """Open system folder picker dialog and return selected path."""
-    try:
-        if sys.platform == "darwin":  # macOS
-            result = subprocess.run(
-                [
-                    "osascript",
-                    "-e",
-                    'POSIX path of (choose folder with prompt "选择工作目录")',
-                ],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode == 0:
-                path = result.stdout.strip()
-                return {"path": path}
-            raise HTTPException(400, "User cancelled folder selection")
-        if sys.platform == "win32":  # Windows
-            # Use PowerShell folder browser
-            ps_script = """
-            Add-Type -AssemblyName System.Windows.Forms
-            $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-            $dialog.Description = "选择工作目录"
-            $dialog.ShowNewFolderButton = $true
-            if ($dialog.ShowDialog() -eq 'OK') {
-                Write-Output $dialog.SelectedPath
-            }
-            """
-            result = subprocess.run(
-                ["powershell", "-Command", ps_script],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                path = result.stdout.strip()
-                return {"path": path}
-            raise HTTPException(400, "User cancelled folder selection")
-        # Linux
-        # Try zenity first, fallback to kdialog
-        try:
-            result = subprocess.run(
-                ["zenity", "--file-selection", "--directory", "--title=选择工作目录"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode == 0:
-                path = result.stdout.strip()
-                return {"path": path}
-        except FileNotFoundError:
-            # Try kdialog
-            result = subprocess.run(
-                ["kdialog", "--getexistingdirectory", ".", "--title", "选择工作目录"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode == 0:
-                path = result.stdout.strip()
-                return {"path": path}
-        raise HTTPException(400, "User cancelled folder selection")
-    except subprocess.TimeoutExpired:
-        raise HTTPException(408, "Folder selection timed out")
-    # @@@http_passthrough - keep explicit business/status errors from selection branches intact
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Failed to open folder picker: {str(e)}") from e
 
 
 @router.get("/sessions")
