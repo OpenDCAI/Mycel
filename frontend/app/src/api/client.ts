@@ -171,13 +171,13 @@ export async function pickFolder(): Promise<string | null> {
 }
 
 export async function listSandboxSessions(): Promise<SandboxSession[]> {
-  const payload = await request<{ sessions: SandboxSession[] }>("/api/sandbox/sessions");
+  const sessions = parseSandboxSessions(await request("/api/sandbox/sessions"));
   const toTs = (value?: string): number => {
     if (!value) return 0;
     const ts = Date.parse(value);
     return Number.isFinite(ts) ? ts : 0;
   };
-  return [...payload.sessions].sort((a, b) => {
+  return [...sessions].sort((a, b) => {
     const createdDiff = toTs(b.created_at) - toTs(a.created_at);
     if (createdDiff !== 0) return createdDiff;
     const activeDiff = toTs(b.last_active) - toTs(a.last_active);
@@ -187,6 +187,23 @@ export async function listSandboxSessions(): Promise<SandboxSession[]> {
     const threadDiff = a.thread_id.localeCompare(b.thread_id);
     if (threadDiff !== 0) return threadDiff;
     return a.session_id.localeCompare(b.session_id);
+  });
+}
+
+function parseSandboxSessions(value: unknown): SandboxSession[] {
+  const payload = asRecord(value);
+  const sessions = payload?.sessions;
+  if (!Array.isArray(sessions)) throw new Error("Malformed sandbox sessions");
+  return sessions.map((session) => {
+    const data = asRecord(session);
+    const session_id = data ? recordString(data, "session_id") : undefined;
+    const thread_id = data ? recordString(data, "thread_id") : undefined;
+    const provider = data ? recordString(data, "provider") : undefined;
+    const status = data ? recordString(data, "status") : undefined;
+    if (!data || !session_id || !thread_id || !provider || !status) {
+      throw new Error("Malformed sandbox sessions");
+    }
+    return { ...data, session_id, thread_id, provider, status } as SandboxSession;
   });
 }
 
