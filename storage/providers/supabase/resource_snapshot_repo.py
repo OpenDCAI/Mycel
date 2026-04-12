@@ -81,8 +81,39 @@ class SupabaseResourceSnapshotRepo:
     def close(self) -> None:
         return None
 
-    def upsert_lease_resource_snapshot(self, **kwargs: Any) -> None:
-        upsert_lease_resource_snapshot(**kwargs, client=self._client)
+    def upsert_lease_resource_snapshot(
+        self,
+        *,
+        lease_id: str,
+        provider_name: str,
+        observed_state: str,
+        probe_mode: str,
+        cpu_used: float | None = None,
+        cpu_limit: float | None = None,
+        memory_used_mb: float | None = None,
+        memory_total_mb: float | None = None,
+        disk_used_gb: float | None = None,
+        disk_total_gb: float | None = None,
+        network_rx_kbps: float | None = None,
+        network_tx_kbps: float | None = None,
+        probe_error: str | None = None,
+    ) -> None:
+        upsert_lease_resource_snapshot(
+            lease_id=lease_id,
+            provider_name=provider_name,
+            observed_state=observed_state,
+            probe_mode=probe_mode,
+            cpu_used=cpu_used,
+            cpu_limit=cpu_limit,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+            network_rx_kbps=network_rx_kbps,
+            network_tx_kbps=network_tx_kbps,
+            probe_error=probe_error,
+            client=self._client,
+        )
 
     def list_snapshots_by_lease_ids(self, lease_ids: list[str]) -> dict[str, dict[str, Any]]:
         return list_snapshots_by_lease_ids(lease_ids, client=self._client)
