@@ -297,7 +297,7 @@ class LeonAgent:
             self.checkpointer = None
 
         # Initialize ToolRegistry and Services (new architecture)
-        blocked = self._get_member_blocked_tools()
+        blocked = self._get_agent_blocked_tools()
         if extra_blocked_tools:
             blocked = blocked | extra_blocked_tools
         self._tool_registry = ToolRegistry(
@@ -488,7 +488,7 @@ class LeonAgent:
 
         return _placeholder
 
-    def _get_member_blocked_tools(self) -> set[str]:
+    def _get_agent_blocked_tools(self) -> set[str]:
         """Return disabled tool names, respecting catalog defaults.
 
         Logic:

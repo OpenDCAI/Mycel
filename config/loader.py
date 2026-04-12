@@ -228,14 +228,14 @@ class AgentLoader:
         return rules
 
     def _merge_agents(self, agent_dir: Path) -> list[AgentConfig]:
-        """Two-layer merge: system defaults → member-specific (override by name)."""
+        """Two-layer merge: system defaults → repo/user agent configs (override by name)."""
         merged: dict[str, AgentConfig] = {}
 
         # Layer 1: system built-in agents
         for agent in self._discover_agents(self._system_defaults_dir):
             merged[agent.name] = agent
 
-        # Layer 2: member-specific agents (override by name)
+        # Layer 2: repo/user agent configs (override by name)
         for agent in self._discover_agents(agent_dir):
             merged[agent.name] = agent
 
