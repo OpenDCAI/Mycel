@@ -1,25 +1,22 @@
 import { useCallback, useState } from "react";
-import {
-  sendMessage,
-} from "../api";
+import { sendMessage } from "../api";
 import type { TabType } from "../components/computer-panel/types";
-
 
 interface AppActionsDeps {
   activeThreadId: string | null;
 }
 
-export interface AppActionsState {
+interface AppActionsState {
   computerOpen: boolean;
   computerTab: TabType;
 }
 
-export interface AppActionsSetters {
+interface AppActionsSetters {
   setComputerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setComputerTab: (tab: TabType) => void;
 }
 
-export interface AppActionsHandlers {
+interface AppActionsHandlers {
   handleFocusAgent: () => void;
   handleSendQueueMessage: (message: string) => Promise<void>;
 }
