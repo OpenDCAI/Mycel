@@ -24,17 +24,17 @@ from storage.contracts import UserRow, UserType
 class _FakeUserRepo:
     def __init__(self) -> None:
         self._users = {
-            "member-1": UserRow(
-                id="member-1",
+            "agent-user-1": UserRow(
+                id="agent-user-1",
                 type=UserType.AGENT,
                 display_name="Toad",
                 owner_user_id="owner-1",
                 agent_config_id="cfg-1",
-                avatar="avatars/member-1.png",
+                avatar="avatars/agent-user-1.png",
                 created_at=1.0,
             )
         }
-        self._seq = {"member-1": 0}
+        self._seq = {"agent-user-1": 0}
 
     def get_by_id(self, user_id: str):
         return self._users.get(user_id)
@@ -369,7 +369,7 @@ async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "sandbox_type": "daytona_selfhost",
             "model": "gpt-5.4-mini",
         }
@@ -388,7 +388,7 @@ async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadat
     thread_repo = _FakeThreadRepo()
     thread_repo.create(
         thread_id="thread-1",
-        agent_user_id="member-1",
+        agent_user_id="agent-user-1",
         owner_user_id="owner-1",
         sandbox_type="local",
         is_main=True,
@@ -397,12 +397,12 @@ async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadat
     empty_user_repo = SimpleNamespace(get_by_id=lambda _mid: None)
     app = _make_threads_app(thread_repo=thread_repo, user_repo=empty_user_repo)
 
-    payload = threads_router.ResolveMainThreadRequest(agent_user_id="member-1")
+    payload = threads_router.ResolveMainThreadRequest(agent_user_id="agent-user-1")
 
     result = await threads_router.resolve_main_thread(payload, "owner-1", app)
 
     assert result == {
-        "agent_user_id": "member-1",
+        "agent_user_id": "agent-user-1",
         "default_thread_id": None,
         "thread": None,
     }
@@ -411,19 +411,19 @@ async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadat
 @pytest.mark.asyncio
 async def test_resolve_main_thread_exposes_default_thread_identity_without_hiding_thread_payload():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
-    payload = threads_router.ResolveMainThreadRequest(agent_user_id="member-1")
+    payload = threads_router.ResolveMainThreadRequest(agent_user_id="agent-user-1")
 
     with _patch_create_thread_noop_guards():
         created = _require_thread_result(
-            await threads_router.create_thread(payload=CreateThreadRequest(agent_user_id="member-1"), user_id="owner-1", app=app)
+            await threads_router.create_thread(payload=CreateThreadRequest(agent_user_id="agent-user-1"), user_id="owner-1", app=app)
         )
 
     result = await threads_router.resolve_main_thread(payload, "owner-1", app)
 
-    assert result["agent_user_id"] == "member-1"
+    assert result["agent_user_id"] == "agent-user-1"
     assert result["default_thread_id"] == created["thread_id"]
     assert result["thread"]["thread_id"] == created["thread_id"]
-    assert result["thread"]["agent_user_id"] == "member-1"
+    assert result["thread"]["agent_user_id"] == "agent-user-1"
 
 
 @pytest.mark.asyncio
@@ -433,14 +433,14 @@ async def test_create_thread_persists_agent_user_id():
     with _patch_create_thread_noop_guards():
         created = _require_thread_result(
             await threads_router.create_thread(
-                payload=CreateThreadRequest(agent_user_id="member-1"),
+                payload=CreateThreadRequest(agent_user_id="agent-user-1"),
                 user_id="owner-1",
                 app=app,
             )
         )
 
     row = app.state.thread_repo.rows[created["thread_id"]]
-    assert row["agent_user_id"] == "member-1"
+    assert row["agent_user_id"] == "agent-user-1"
 
 
 @pytest.mark.asyncio
@@ -448,7 +448,7 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "lease_id": "lease-1",
             "cwd": "/workspace/reused",
         }
@@ -480,7 +480,7 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "cwd": "/tmp/fresh-local-thread",
         }
     )
@@ -503,7 +503,7 @@ async def test_list_threads_hides_internal_subagent_threads():
             "id": "main-thread",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 0,
             "is_main": True,
             "agent_avatar": None,
@@ -512,7 +512,7 @@ async def test_list_threads_hides_internal_subagent_threads():
             "id": "subagent-deadbeef",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 1,
             "is_main": False,
             "agent_avatar": None,
@@ -547,7 +547,7 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
             "id": "main-thread",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 0,
             "is_main": True,
             "agent_avatar": None,
@@ -556,7 +556,7 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
             "id": "extra-thread",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 1,
             "is_main": False,
             "agent_avatar": None,
@@ -592,7 +592,7 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
             "id": "main-thread",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 0,
             "is_main": True,
             "agent_avatar": None,
@@ -601,7 +601,7 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
             "id": "child-thread",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 1,
             "is_main": False,
             "agent_avatar": None,
@@ -644,7 +644,7 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
             "id": "broken-thread",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 0,
             "is_main": True,
             "agent_avatar": None,
@@ -653,7 +653,7 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
             "id": "healthy-thread",
             "sandbox_type": "local",
             "agent_name": "Toad",
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "branch_index": 1,
             "is_main": False,
             "agent_avatar": None,
@@ -708,7 +708,7 @@ async def test_create_thread_route_rejects_unavailable_provider():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "sandbox": "daytona",
         }
     )
@@ -730,7 +730,7 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "lease_id": "lease-1",
         }
     )
@@ -788,7 +788,7 @@ async def test_delete_thread_route_does_not_delete_thread_row_when_resource_dest
 @pytest.mark.asyncio
 async def test_stream_thread_events_uses_authenticated_owner_id():
     auth_service = _FakeAuthService()
-    thread_repo = SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "member-1"})
+    thread_repo = SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-user-1"})
     app = _make_threads_app(
         auth_service=auth_service,
         thread_repo=thread_repo,
@@ -889,18 +889,13 @@ async def test_get_thread_history_does_not_clear_live_pending_requests_during_ac
 
     with (
         patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-        patch.object(
-            threads_router,
-            "get_or_create_agent",
-            AsyncMock(return_value=agent),
-        ),
     ):
         result = await threads_router.get_thread_history(
             "thread-1",
             limit=20,
             truncate=0,
             user_id="owner-1",
-            app=SimpleNamespace(state=SimpleNamespace()),
+            app=SimpleNamespace(state=SimpleNamespace(agent_pool={"thread-1:local": agent})),
         )
 
     assert result["messages"] == [
