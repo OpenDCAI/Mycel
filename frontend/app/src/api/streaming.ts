@@ -1,6 +1,7 @@
 import type { StreamEvent } from "./types";
 import { processChunk } from "./sse-processor";
 import { authFetch } from "../store/auth-store";
+import { asRecord, recordString } from "../lib/records";
 
 /** Read an SSE response body, dispatch events, return { lastSeq, runEnded }. */
 async function consumeSSEStream(
@@ -57,14 +58,16 @@ export async function postRun(
   signal?: AbortSignal,
   options?: { model?: string; enable_trajectory?: boolean; attachments?: string[] },
 ): Promise<{ run_id: string; thread_id: string }> {
-  const payload = await postJSON<{ run_id?: string; thread_id: string; status?: string }>(
+  const payload = asRecord(await postJSON(
     `/api/threads/${encodeURIComponent(threadId)}/messages`,
     { message, ...options },
     signal,
-  );
-  if (payload.status === "cancelled") throw new Error("Run cancelled");
-  if (!payload.run_id) throw new Error("Run did not start");
-  return { run_id: payload.run_id, thread_id: payload.thread_id };
+  ));
+  if (payload?.status === "cancelled") throw new Error("Run cancelled");
+  const runId = payload ? recordString(payload, "run_id") : undefined;
+  const responseThreadId = payload ? recordString(payload, "thread_id") : undefined;
+  if (!runId || !responseThreadId) throw new Error("Run did not start");
+  return { run_id: runId, thread_id: responseThreadId };
 }
 
 /** Persistent SSE connection to a thread's event stream. */
@@ -121,6 +124,6 @@ export async function streamThreadEvents(
 export async function cancelRun(threadId: string): Promise<void> {
   const res = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
   if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`);
-  const payload = await res.json();
-  if (payload?.ok === false) throw new Error(payload.message || "Cancel failed");
+  const payload = asRecord(await res.json());
+  if (payload?.ok === false) throw new Error(recordString(payload, "message") || "Cancel failed");
 }

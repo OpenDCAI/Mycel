@@ -27,6 +27,12 @@ interface ProviderDef {
   fields: FieldDef[];
 }
 
+interface VerifyResult {
+  success: boolean;
+  error?: string;
+  traces: unknown[];
+}
+
 function LangfuseIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -93,7 +99,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
   const [savedFields, setSavedFields] = useState<Record<string, boolean>>({});
   const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
   const [verifying, setVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<{ success: boolean; error?: string; traces?: unknown[] } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
 
   const active = (config.active as string | null) ?? null;
 
@@ -132,7 +138,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
       const result = await verifyObservation();
       setVerifyResult(result);
     } catch (err) {
-      setVerifyResult({ success: false, error: err instanceof Error ? err.message : "验证失败" });
+      setVerifyResult({ success: false, error: err instanceof Error ? err.message : "验证失败", traces: [] });
     } finally {
       setVerifying(false);
     }
@@ -270,7 +276,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                         : "bg-destructive/10 border border-destructive/20 text-destructive"
                     }`}>
                       {verifyResult.success
-                        ? <><span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" /> 已连接 · {(verifyResult.traces as unknown[])?.length ?? 0} 条近期追踪</>
+                        ? <><span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" /> 已连接 · {verifyResult.traces.length} 条近期追踪</>
                         : <><X className="w-3.5 h-3.5 shrink-0" /> 连接失败：{verifyResult.error}</>
                       }
                     </div>

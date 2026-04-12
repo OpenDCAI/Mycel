@@ -12,6 +12,7 @@ import type { InviteCode } from "@/api/client";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { authFetch } from "../store/auth-store";
+import { asRecord } from "@/lib/records";
 
 interface AvailableModelsData {
   models: Array<{
@@ -80,6 +81,10 @@ function InviteStatusBadge({ code }: { code: InviteCode }) {
       未使用
     </span>
   );
+}
+
+function isSuccessResponse(value: unknown): boolean {
+  return asRecord(value)?.success === true;
 }
 
 function InviteCopyButton({ text }: { text: string }) {
@@ -334,7 +339,7 @@ export default function SettingsPage() {
       body: JSON.stringify({ model_id: modelId, provider, based_on: basedOn || null, context_limit: contextLimit || null }),
     });
     const data = await res.json();
-    if (data.success) {
+    if (isSuccessResponse(data)) {
       const [modelsRes, settingsRes] = await Promise.all([
         authFetch("/api/settings/available-models"),
         authFetch("/api/settings"),
@@ -430,7 +435,7 @@ export default function SettingsPage() {
                 method: "DELETE",
               });
               const data = await res.json();
-              if (data.success) {
+              if (isSuccessResponse(data)) {
                 const [modelsRes, settingsRes] = await Promise.all([
                   authFetch("/api/settings/available-models"),
                   authFetch("/api/settings"),

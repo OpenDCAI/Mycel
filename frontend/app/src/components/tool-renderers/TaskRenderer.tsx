@@ -40,6 +40,15 @@ function getTaskLabel(name: string, args: ReturnType<typeof parseArgs>): string 
   }
 }
 
+function taskOutputText(value: unknown): string {
+  const data = asRecord(value);
+  if (!data) return JSON.stringify(value, null, 2);
+  const result = data.result;
+  if (typeof result === "string") return result;
+  if (result !== undefined && result !== null) return JSON.stringify(result, null, 2);
+  return recordString(data, "text") ?? JSON.stringify(value, null, 2);
+}
+
 export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps) {
   const { threadId } = useParams<{ threadId?: string }>();
   const args = parseArgs(step.args);
@@ -53,8 +62,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
     setLoadingOutput(true);
     try {
       const res = await fetch(`/api/threads/${threadId}/tasks/${stream.task_id}`);
-      const data = await res.json();
-      setTaskOutput(data.result ?? data.text ?? JSON.stringify(data, null, 2));
+      setTaskOutput(taskOutputText(await res.json()));
     } catch {
       setTaskOutput("加载失败");
     } finally {

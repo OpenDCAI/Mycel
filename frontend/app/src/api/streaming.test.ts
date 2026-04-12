@@ -32,10 +32,22 @@ describe("streaming api contract", () => {
     await expect(api.cancelRun("thread-1")).rejects.toThrow("No active run found");
   });
 
+  it("cancelRun ignores non-string backend messages", async () => {
+    authFetch.mockResolvedValue(okJson({ ok: false, message: { text: "No active run found" } }));
+
+    await expect(api.cancelRun("thread-1")).rejects.toThrow(/^Cancel failed$/);
+  });
+
   it("postRun reports startup cancellation as a cancelled run", async () => {
     authFetch.mockResolvedValue(okJson({ status: "cancelled", routing: "cancelled", thread_id: "thread-1" }));
 
     await expect(api.postRun("thread-1", "hello")).rejects.toThrow("Run cancelled");
+  });
+
+  it("postRun rejects non-string run ids", async () => {
+    authFetch.mockResolvedValue(okJson({ run_id: { value: "run-1" }, thread_id: "thread-1" }));
+
+    await expect(api.postRun("thread-1", "hello")).rejects.toThrow("Run did not start");
   });
 
   it("streams thread events through authenticated fetch without leaking token in the URL", async () => {
