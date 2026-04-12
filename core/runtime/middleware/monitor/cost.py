@@ -8,12 +8,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from config.user_paths import preferred_existing_user_home_path, user_home_path
+
+logger = logging.getLogger(__name__)
 
 # 定价数据（运行时填充）
 _pricing_data: dict[str, dict[str, Decimal]] = {}
@@ -120,6 +123,7 @@ def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, 
         provs = data.get("providers", {})
         return models, ctx, provs
     except Exception:
+        logger.warning("Failed to load pricing cache from %s", cache_path, exc_info=True)
         return None
 
 
@@ -130,7 +134,7 @@ def _save_cache(models: dict[str, dict[str, str]], context_limits: dict[str, int
         data = {"timestamp": time.time(), "models": models, "context_limits": context_limits, "providers": providers}
         _CACHE_PATH.write_text(json.dumps(data), encoding="utf-8")
     except Exception:
-        pass
+        logger.warning("Failed to save pricing cache to %s", _CACHE_PATH, exc_info=True)
 
 
 def _deserialize_costs(raw: dict[str, dict[str, str]]) -> dict[str, dict[str, Decimal]]:
@@ -214,7 +218,7 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
             _save_cache(_serialize_costs(result), ctx_result, prov_result)
             return result
     except Exception:
-        pass
+        logger.warning("Failed to fetch OpenRouter pricing; bundled pricing will be used", exc_info=True)
 
     return None
 
