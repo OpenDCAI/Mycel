@@ -90,7 +90,51 @@ function parseThreadSummary(value: unknown): ThreadSummary {
 }
 
 export async function getDefaultThreadConfig(agentUserId: string, signal?: AbortSignal): Promise<ThreadLaunchConfigResponse> {
-  return request(`/api/threads/default-config?agent_user_id=${encodeURIComponent(agentUserId)}`, { signal });
+  return parseDefaultThreadConfig(await request(`/api/threads/default-config?agent_user_id=${encodeURIComponent(agentUserId)}`, { signal }));
+}
+
+function isDefaultConfigSource(value: unknown): value is ThreadLaunchConfigResponse["source"] {
+  return value === "last_successful" || value === "last_confirmed" || value === "derived";
+}
+
+function isLaunchCreateMode(value: unknown): value is ThreadLaunchConfig["create_mode"] {
+  return value === "new" || value === "existing";
+}
+
+function isStringOrNullish(value: unknown): value is string | null | undefined {
+  return value === undefined || value === null || typeof value === "string";
+}
+
+function parseThreadLaunchConfig(value: unknown): ThreadLaunchConfig | null {
+  const payload = asRecord(value);
+  const create_mode = payload?.create_mode;
+  const provider_config = payload ? recordString(payload, "provider_config") : undefined;
+  const recipe = payload?.recipe;
+  const lease_id = payload?.lease_id;
+  const model = payload?.model;
+  const workspace = payload?.workspace;
+  if (
+    !payload ||
+    !isLaunchCreateMode(create_mode) ||
+    !provider_config ||
+    (recipe !== undefined && recipe !== null && asRecord(recipe) === null) ||
+    !isStringOrNullish(lease_id) ||
+    !isStringOrNullish(model) ||
+    !isStringOrNullish(workspace)
+  ) {
+    return null;
+  }
+  return { ...payload, create_mode, provider_config, recipe, lease_id, model, workspace } as ThreadLaunchConfig;
+}
+
+function parseDefaultThreadConfig(value: unknown): ThreadLaunchConfigResponse {
+  const payload = asRecord(value);
+  const source = payload?.source;
+  const config = parseThreadLaunchConfig(payload?.config);
+  if (!payload || !isDefaultConfigSource(source) || !config) {
+    throw new Error("Malformed default thread config");
+  }
+  return { source, config };
 }
 
 export async function saveDefaultThreadConfig(
