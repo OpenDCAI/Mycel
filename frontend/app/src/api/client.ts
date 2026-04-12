@@ -21,6 +21,7 @@ import type {
 } from "./types";
 
 import { authFetch } from "../store/auth-store";
+import { asRecord, recordString } from "../lib/records";
 
 async function checkedResponse(url: string, init?: RequestInit): Promise<Response> {
   const response = await authFetch(url, init);
@@ -220,7 +221,20 @@ export async function getThreadLease(threadId: string): Promise<LeaseStatus | nu
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
   }
-  return (await response.json()) as LeaseStatus;
+  return parseLeaseStatus(await response.json());
+}
+
+function parseLeaseStatus(value: unknown): LeaseStatus {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const lease_id = payload ? recordString(payload, "lease_id") : undefined;
+  const provider_name = payload ? recordString(payload, "provider_name") : undefined;
+  const created_at = payload ? recordString(payload, "created_at") : undefined;
+  const updated_at = payload ? recordString(payload, "updated_at") : undefined;
+  if (!payload || !thread_id || !lease_id || !provider_name || !created_at || !updated_at) {
+    throw new Error("Malformed lease status");
+  }
+  return { ...payload, thread_id, lease_id, provider_name, created_at, updated_at } as LeaseStatus;
 }
 
 // --- Sandbox Files API ---
