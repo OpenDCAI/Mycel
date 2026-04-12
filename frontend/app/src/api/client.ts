@@ -268,7 +268,61 @@ function parsePermissionRulesMutation(
 }
 
 export async function getThreadRuntime(threadId: string): Promise<StreamStatus> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/runtime`);
+  return parseRuntimeStatus(await request(`/api/threads/${encodeURIComponent(threadId)}/runtime`));
+}
+
+function booleanMap(value: unknown): Record<string, boolean> | null {
+  const payload = asRecord(value);
+  if (!payload) return null;
+  return Object.values(payload).every((item) => typeof item === "boolean") ? payload as Record<string, boolean> : null;
+}
+
+function parseRuntimeStatus(value: unknown): StreamStatus {
+  const payload = asRecord(value);
+  const state = asRecord(payload?.state);
+  const tokens = asRecord(payload?.tokens);
+  const context = asRecord(payload?.context);
+  const stateValue = state ? recordString(state, "state") : undefined;
+  const flags = booleanMap(state?.flags);
+  const last_seq = payload?.last_seq;
+  const run_start_seq = payload?.run_start_seq;
+  if (
+    !payload ||
+    !stateValue ||
+    !flags ||
+    !tokens ||
+    typeof tokens.total_tokens !== "number" ||
+    typeof tokens.input_tokens !== "number" ||
+    typeof tokens.output_tokens !== "number" ||
+    typeof tokens.cost !== "number" ||
+    !context ||
+    typeof context.message_count !== "number" ||
+    typeof context.estimated_tokens !== "number" ||
+    typeof context.usage_percent !== "number" ||
+    typeof context.near_limit !== "boolean" ||
+    (payload.model !== undefined && typeof payload.model !== "string") ||
+    (payload.current_tool !== undefined && typeof payload.current_tool !== "string") ||
+    (last_seq !== undefined && typeof last_seq !== "number") ||
+    (run_start_seq !== undefined && typeof run_start_seq !== "number")
+  ) {
+    throw new Error("Malformed runtime status");
+  }
+  return {
+    ...payload,
+    state: { ...state, state: stateValue, flags },
+    tokens: {
+      total_tokens: tokens.total_tokens,
+      input_tokens: tokens.input_tokens,
+      output_tokens: tokens.output_tokens,
+      cost: tokens.cost,
+    },
+    context: {
+      message_count: context.message_count,
+      estimated_tokens: context.estimated_tokens,
+      usage_percent: context.usage_percent,
+      near_limit: context.near_limit,
+    },
+  } as StreamStatus;
 }
 
 export async function sendMessage(threadId: string, message: string): Promise<{ status: string; routing: string }> {
