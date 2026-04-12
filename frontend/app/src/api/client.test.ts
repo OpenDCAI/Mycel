@@ -60,6 +60,17 @@ describe("thread api client contract", () => {
     await expect(api.listThreads()).rejects.toThrow("Malformed thread summaries");
   });
 
+  it("getThread rejects malformed thread detail display data", async () => {
+    authFetch.mockResolvedValue(okJson({
+      thread_id: "thread-1",
+      entries: {},
+      display_seq: "3",
+      sandbox: null,
+    }));
+
+    await expect(api.getThread("thread-1")).rejects.toThrow("Malformed thread detail");
+  });
+
   it("getDefaultThread resolves through agent_user_id", async () => {
     authFetch.mockResolvedValue(okJson({ thread: null }));
 

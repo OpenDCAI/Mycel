@@ -108,7 +108,25 @@ export async function deleteThread(threadId: string): Promise<void> {
 }
 
 export async function getThread(threadId: string): Promise<ThreadDetail> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}`);
+  return parseThreadDetail(await request(`/api/threads/${encodeURIComponent(threadId)}`));
+}
+
+function parseThreadDetail(value: unknown): ThreadDetail {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const entries = payload?.entries;
+  const display_seq = payload?.display_seq;
+  const sandbox = payload?.sandbox;
+  if (
+    !payload ||
+    !thread_id ||
+    !Array.isArray(entries) ||
+    typeof display_seq !== "number" ||
+    (sandbox !== null && asRecord(sandbox) === null)
+  ) {
+    throw new Error("Malformed thread detail");
+  }
+  return { ...payload, thread_id, entries, display_seq, sandbox } as ThreadDetail;
 }
 
 export async function getThreadPermissions(threadId: string, signal?: AbortSignal): Promise<ThreadPermissions> {
