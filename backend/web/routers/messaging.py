@@ -1,7 +1,6 @@
 """Messaging API router — replaces chats.py.
 
 All operations go through MessagingService (Supabase-backed).
-No legacy fallback.
 """
 
 from __future__ import annotations
