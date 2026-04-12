@@ -165,10 +165,6 @@ export async function saveDefaultThreadConfig(
   });
 }
 
-export async function deleteThread(threadId: string): Promise<void> {
-  await requestOk(`/api/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
-}
-
 export async function getThread(threadId: string): Promise<ThreadDetail> {
   return parseThreadDetail(await request(`/api/threads/${encodeURIComponent(threadId)}`));
 }

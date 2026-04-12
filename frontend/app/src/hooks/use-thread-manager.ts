@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   createThread,
-  deleteThread,
   getDefaultThread,
   listSandboxTypes,
   listThreads,
@@ -23,8 +22,6 @@ export interface ThreadManagerState {
 }
 
 export interface ThreadManagerActions {
-  setSelectedSandbox: (name: string) => void;
-  setThreads: React.Dispatch<React.SetStateAction<ThreadSummary[]>>;
   refreshThreads: () => Promise<void>;
   handleCreateThread: (
     sandbox?: string,
@@ -35,7 +32,6 @@ export interface ThreadManagerActions {
     recipeId?: string,
   ) => Promise<string>;
   handleGetDefaultThread: (agentUserId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
-  handleDeleteThread: (threadId: string) => Promise<void>;
 }
 
 function upsertThread(prev: ThreadSummary[], thread: ThreadSummary): ThreadSummary[] {
@@ -122,17 +118,8 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     return thread;
   }, []);
 
-  const handleDeleteThread = useCallback(
-    async (threadId: string) => {
-      await deleteThread(threadId);
-      setThreads(prev => prev.filter((t) => t.thread_id !== threadId));
-    },
-    [],
-  );
-
   return {
     threads, sandboxTypes, selectedSandbox, loading, bootstrapError,
-    setSelectedSandbox, setThreads,
-    refreshThreads, handleCreateThread, handleGetDefaultThread, handleDeleteThread,
+    refreshThreads, handleCreateThread, handleGetDefaultThread,
   };
 }
