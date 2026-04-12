@@ -17,8 +17,7 @@ def _resolve_supabase_url() -> str:
 
 
 def _resolve_supabase_auth_url() -> str:
-    url = os.getenv("SUPABASE_AUTH_URL") or _resolve_supabase_url()
-    return url
+    return os.getenv("SUPABASE_AUTH_URL") or _resolve_supabase_url()
 
 
 def _create_storage_client(*, schema: str):
