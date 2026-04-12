@@ -668,16 +668,42 @@ export interface InviteCode {
   created_at: string;
 }
 
+function parseInviteCode(value: unknown, errorMessage = "Malformed invite code"): InviteCode {
+  const payload = asRecord(value);
+  const code = payload ? recordString(payload, "code") : undefined;
+  const used = payload?.used;
+  const used_by = payload?.used_by;
+  const expires_at = payload?.expires_at;
+  const created_at = payload ? recordString(payload, "created_at") : undefined;
+  if (
+    !payload ||
+    !code ||
+    typeof used !== "boolean" ||
+    !created_at ||
+    !isStringOrNullish(used_by) ||
+    !isStringOrNullish(expires_at)
+  ) {
+    throw new Error(errorMessage);
+  }
+  return { ...payload, code, used, used_by, expires_at, created_at };
+}
+
+function parseInviteCodes(value: unknown): InviteCode[] {
+  const payload = asRecord(value);
+  const codes = payload?.codes;
+  if (!Array.isArray(codes)) throw new Error("Malformed invite codes");
+  return codes.map((code) => parseInviteCode(code, "Malformed invite codes"));
+}
+
 export async function fetchInviteCodes(): Promise<InviteCode[]> {
-  const payload = await request<{ codes: InviteCode[] }>("/api/invite-codes");
-  return payload.codes;
+  return parseInviteCodes(await request("/api/invite-codes"));
 }
 
 export async function generateInviteCode(expiresDays = 7): Promise<InviteCode> {
-  return request<InviteCode>("/api/invite-codes", {
+  return parseInviteCode(await request("/api/invite-codes", {
     method: "POST",
     body: JSON.stringify({ expires_days: expiresDays }),
-  });
+  }));
 }
 
 export async function revokeInviteCode(code: string): Promise<void> {

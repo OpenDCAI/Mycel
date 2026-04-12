@@ -307,6 +307,28 @@ describe("thread api client contract", () => {
     );
   });
 
+  it("fetchInviteCodes rejects malformed invite code rows", async () => {
+    authFetch.mockResolvedValue(okJson({
+      codes: [{
+        code: { value: "INVITE" },
+        used: false,
+        created_at: "2026-04-12T00:00:00Z",
+      }],
+    }));
+
+    await expect(api.fetchInviteCodes()).rejects.toThrow("Malformed invite codes");
+  });
+
+  it("generateInviteCode rejects malformed invite code payloads", async () => {
+    authFetch.mockResolvedValue(okJson({
+      code: "INVITE",
+      used: "false",
+      created_at: "2026-04-12T00:00:00Z",
+    }));
+
+    await expect(api.generateInviteCode()).rejects.toThrow("Malformed invite code");
+  });
+
   it("uploadUserAvatar sends user avatar path instead of members path", async () => {
     authFetch.mockResolvedValue(okJson({ ok: true }));
 
