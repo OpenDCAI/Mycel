@@ -133,20 +133,4 @@ class SQLiteQueueRepo:
             ")"
         )
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_mq_thread ON message_queue (thread_id, id)")
-        # Migration: add columns to existing tables
-        for col, col_type in [
-            ("notification_type", "TEXT NOT NULL DEFAULT 'steer'"),
-            ("source", "TEXT"),
-            ("sender_id", "TEXT"),
-            ("sender_name", "TEXT"),
-        ]:
-            try:
-                self._conn.execute(f"ALTER TABLE message_queue ADD COLUMN {col} {col_type}")
-            except sqlite3.OperationalError:
-                pass
-        # @@@sender-column-migration - old local DBs used the removed sender_entity_id column.
-        try:
-            self._conn.execute("ALTER TABLE message_queue RENAME COLUMN sender_entity_id TO sender_id")
-        except sqlite3.OperationalError:
-            pass
         self._conn.commit()
