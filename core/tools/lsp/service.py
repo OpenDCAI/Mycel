@@ -751,7 +751,7 @@ class LSPService:
                     return "No references found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
 
-            elif operation == "hover":
+            if operation == "hover":
                 if not file_path or zero_line is None or zero_character is None:
                     return "hover requires: file_path, line, character"
                 assert session is not None
@@ -760,7 +760,7 @@ class LSPService:
                     return "No hover info."
                 return self._fmt_hover(result)
 
-            elif operation == "documentSymbol":
+            if operation == "documentSymbol":
                 if not file_path:
                     return "documentSymbol requires: file_path"
                 assert session is not None
@@ -769,7 +769,7 @@ class LSPService:
                     return "No symbols found."
                 return json.dumps([self._fmt_symbol(s) for s in symbols], indent=2)
 
-            elif operation == "workspaceSymbol":
+            if operation == "workspaceSymbol":
                 if not query:
                     return "workspaceSymbol requires: query"
                 assert session is not None
@@ -778,7 +778,7 @@ class LSPService:
                     return f"No symbols matching '{query}'."
                 return json.dumps([self._fmt_symbol(s) for s in symbols], indent=2)
 
-            elif operation == "goToImplementation":
+            if operation == "goToImplementation":
                 if not file_path or zero_line is None or zero_character is None:
                     return "goToImplementation requires: file_path, line, character"
                 src = pyright if use_pyright else session
@@ -789,7 +789,7 @@ class LSPService:
                     return "No implementation found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
 
-            elif operation == "prepareCallHierarchy":
+            if operation == "prepareCallHierarchy":
                 if not file_path or zero_line is None or zero_character is None:
                     return "prepareCallHierarchy requires: file_path, line, character"
                 src = pyright if use_pyright else session
@@ -799,7 +799,7 @@ class LSPService:
                     return "No call hierarchy items found."
                 return json.dumps([self._fmt_call_hierarchy_item(i) for i in items], indent=2)
 
-            elif operation == "incomingCalls":
+            if operation == "incomingCalls":
                 if not item:
                     return "incomingCalls requires: item (CallHierarchyItem from prepareCallHierarchy)"
                 src = pyright if use_pyright else session
@@ -809,7 +809,7 @@ class LSPService:
                     return "No incoming calls found."
                 return json.dumps([self._fmt_call_hierarchy_call(c, "incoming") for c in calls], indent=2)
 
-            elif operation == "outgoingCalls":
+            if operation == "outgoingCalls":
                 if not item:
                     return "outgoingCalls requires: item (CallHierarchyItem from prepareCallHierarchy)"
                 src = pyright if use_pyright else session
@@ -819,12 +819,11 @@ class LSPService:
                     return "No outgoing calls found."
                 return json.dumps([self._fmt_call_hierarchy_call(c, "outgoing") for c in calls], indent=2)
 
-            else:
-                return (
-                    f"Unknown operation '{operation}'. "
-                    "Valid: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
-                    "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls"
-                )
+            return (
+                f"Unknown operation '{operation}'. "
+                "Valid: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
+                "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls"
+            )
 
         except Exception as e:
             logger.exception("[LSPService] operation=%s failed", operation)
