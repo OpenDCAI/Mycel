@@ -373,7 +373,6 @@ class MessagingService:
                     "members": member_info,
                     "last_message": self._project_latest_message(latest_messages.get(chat.id), users_by_id),
                     "unread_count": int(unread_by_chat.get(chat.id, 0)),
-                    "has_mention": False,  # TODO: implement mention tracking
                 }
             )
         return result
