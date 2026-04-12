@@ -597,13 +597,12 @@ class SandboxManager:
                 state_version=inherited.state_version,
             )
         )
-        session = self.session_manager.create(
+        return self.session_manager.create(
             session_id=f"sess-{uuid.uuid4().hex[:12]}",
             thread_id=thread_id,
             terminal=terminal,
             lease=lease,
         )
-        return session
 
     def _terminal_is_busy(self, terminal_id: str) -> bool:
         """Return True if this terminal has a running command."""
