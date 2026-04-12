@@ -22,7 +22,7 @@ export interface MarketplaceItemSummary {
   updated_at: string;
 }
 
-export interface VersionInfo {
+interface VersionInfo {
   id: string;
   version: string;
   release_notes: string | null;
@@ -48,7 +48,7 @@ export interface UpdateAvailable {
   release_notes: string;
 }
 
-export interface MarketplaceVersionSnapshot {
+interface MarketplaceVersionSnapshot {
   content?: string;
   meta?: Record<string, unknown>;
 }

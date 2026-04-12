@@ -1,4 +1,4 @@
-export type AgentStatus = "active" | "draft" | "inactive";
+type AgentStatus = "active" | "draft" | "inactive";
 
 export interface CrudItem {
   id?: string;
@@ -21,7 +21,7 @@ export interface RuleItem {
   content: string;
 }
 
-export interface McpItem {
+interface McpItem {
   name: string;
   command: string;
   args: string[];
