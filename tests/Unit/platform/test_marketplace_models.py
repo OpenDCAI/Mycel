@@ -7,64 +7,57 @@ from backend.web.models.marketplace import (
     CheckUpdatesRequest,
     InstalledItemInfo,
     InstallFromMarketplaceRequest,
-    PublishToMarketplaceRequest,
+    PublishAgentUserToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
 
-# ── PublishToMarketplaceRequest ──
+# ── PublishAgentUserToMarketplaceRequest ──
 
 
-class TestPublishToMarketplaceRequest:
+class TestPublishAgentUserToMarketplaceRequest:
     def test_valid_minimal(self):
-        req = PublishToMarketplaceRequest(user_id="my-agent_01")
+        req = PublishAgentUserToMarketplaceRequest(user_id="my-agent_01")
         assert req.user_id == "my-agent_01"
-        assert req.type == "member"
         assert req.bump_type == "patch"
         assert req.visibility == "public"
         assert req.release_notes == ""
         assert req.tags == []
 
     def test_valid_all_fields(self):
-        req = PublishToMarketplaceRequest(
+        req = PublishAgentUserToMarketplaceRequest(
             user_id="agent-x",
-            type="skill",
             bump_type="minor",
             release_notes="New feature",
             tags=["ai", "tool"],
             visibility="private",
         )
-        assert req.type == "skill"
         assert req.bump_type == "minor"
         assert req.visibility == "private"
         assert req.tags == ["ai", "tool"]
 
-    def test_invalid_type_raises(self):
-        with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest.model_validate({"user_id": "ok", "type": "unknown"})
-
     def test_invalid_bump_type_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest.model_validate({"user_id": "ok", "bump_type": "hotfix"})
+            PublishAgentUserToMarketplaceRequest.model_validate({"user_id": "ok", "bump_type": "hotfix"})
 
     def test_invalid_visibility_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest.model_validate({"user_id": "ok", "visibility": "unlisted"})
+            PublishAgentUserToMarketplaceRequest.model_validate({"user_id": "ok", "visibility": "unlisted"})
 
     def test_invalid_user_id_path_traversal(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(user_id="../evil")
+            PublishAgentUserToMarketplaceRequest(user_id="../evil")
 
     def test_invalid_user_id_slash(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(user_id="foo/bar")
+            PublishAgentUserToMarketplaceRequest(user_id="foo/bar")
 
     def test_invalid_user_id_spaces(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(user_id="has space")
+            PublishAgentUserToMarketplaceRequest(user_id="has space")
 
     def test_empty_user_id_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(user_id="")
+            PublishAgentUserToMarketplaceRequest(user_id="")
 
 
 # ── InstallFromMarketplaceRequest ──

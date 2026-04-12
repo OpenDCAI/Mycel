@@ -105,4 +105,26 @@ describe("useMarketplaceStore", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(consoleError).not.toHaveBeenCalled();
   });
+
+  it("publishes agent users through the semantic backend endpoint without a type field", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await useMarketplaceStore.getState().publishAgentUserToMarketplace("agent-1", "patch", "notes", ["coding"], "public");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/marketplace/publish-agent-user");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      user_id: "agent-1",
+      bump_type: "patch",
+      release_notes: "notes",
+      tags: ["coding"],
+      visibility: "public",
+    });
+  });
 });

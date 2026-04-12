@@ -9,7 +9,7 @@ from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.marketplace import (
     CheckUpdatesRequest,
     InstallFromMarketplaceRequest,
-    PublishToMarketplaceRequest,
+    PublishAgentUserToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
 from backend.web.services import marketplace_client
@@ -31,9 +31,9 @@ async def _verify_user_ownership(agent_user_id: str, user_id: str, user_repo: An
     await asyncio.to_thread(_check)
 
 
-@router.post("/publish")
-async def publish_to_marketplace(
-    req: PublishToMarketplaceRequest,
+@router.post("/publish-agent-user")
+async def publish_agent_user_to_marketplace(
+    req: PublishAgentUserToMarketplaceRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
@@ -50,7 +50,7 @@ async def publish_to_marketplace(
     return await asyncio.to_thread(
         marketplace_client.publish,
         user_id=req.user_id,
-        type_=req.type,
+        type_="member",
         bump_type=req.bump_type,
         release_notes=req.release_notes,
         tags=req.tags,

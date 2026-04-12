@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth-store";
-import { HUB_AGENT_USER_TYPE } from "@/lib/marketplace-types";
 
 const HUB_URL = import.meta.env.VITE_MYCEL_HUB_URL || "http://localhost:8090";
 const API = "/api/marketplace";
@@ -273,11 +272,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   },
 
   publishAgentUserToMarketplace: async (userId, bumpType, releaseNotes, tags, visibility) => {
-    return backendApi("/publish", {
+    return backendApi("/publish-agent-user", {
       method: "POST",
       body: JSON.stringify({
         user_id: userId,
-        type: HUB_AGENT_USER_TYPE,
         bump_type: bumpType,
         release_notes: releaseNotes,
         tags,
