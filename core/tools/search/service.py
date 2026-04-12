@@ -172,7 +172,7 @@ class SearchService:
 
         try:
             resolved = Path(path).resolve()
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             return False, f"Invalid path: {path} ({e})", self.workspace_root
 
         try:
