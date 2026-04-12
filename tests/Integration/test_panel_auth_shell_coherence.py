@@ -464,6 +464,67 @@ def test_create_agent_user_persists_owner_contact_edge():
     ]
 
 
+def test_agent_config_exposes_and_persists_compaction_trigger_tokens():
+    agent = UserRow(
+        id="agent-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="user-1",
+        agent_config_id="cfg-1",
+        created_at=1.0,
+    )
+    configs = {
+        "cfg-1": {
+            "agent_user_id": "agent-1",
+            "name": "Toad",
+            "description": "probe",
+            "model": "leon:large",
+            "tools": ["*"],
+            "system_prompt": "",
+            "status": "draft",
+            "version": "0.1.0",
+            "created_at": 1,
+            "updated_at": 1,
+            "runtime": {"tools:Bash": {"enabled": True, "desc": "shell"}},
+            "memory": {"compaction": {"trigger_tokens": 80000}},
+            "mcp": {},
+        }
+    }
+
+    class _AgentConfigRepo:
+        def get_config(self, agent_config_id: str):
+            return configs.get(agent_config_id)
+
+        def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
+            configs[agent_config_id] = data
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None)
+    agent_config_repo = _AgentConfigRepo()
+
+    before = agent_user_service.get_agent_user("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
+    assert before["config"]["memory"] == {"compaction": {"trigger_tokens": 80000}}
+
+    after = agent_user_service.update_agent_user_config(
+        "agent-1",
+        {"memory": {"compaction": {"trigger_tokens": 100000}}},
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
+
+    assert after["config"]["memory"] == {"compaction": {"trigger_tokens": 100000}}
+    assert configs["cfg-1"]["memory"] == {"compaction": {"trigger_tokens": 100000}}
+    assert configs["cfg-1"]["runtime"] == {"tools:Bash": {"enabled": True, "desc": "shell"}}
+
+
 @pytest.mark.asyncio
 async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, object] = {}

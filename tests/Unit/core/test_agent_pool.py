@@ -14,6 +14,11 @@ class _FakeThreadRepo:
         return {"id": thread_id, "cwd": "/tmp", "model": "leon:large"}
 
 
+class _EmptyAgentConfigRepo:
+    def get_config(self, _agent_config_id: str):
+        return {}
+
+
 @pytest.mark.asyncio
 async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.MonkeyPatch):
     created: list[object] = []
@@ -210,7 +215,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1")
             ),
-            agent_config_repo=SimpleNamespace(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -268,7 +273,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            agent_config_repo=SimpleNamespace(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -351,7 +356,7 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            agent_config_repo=SimpleNamespace(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -415,7 +420,7 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
             user_settings_repo=_UserSettingsRepo(),
-            agent_config_repo=SimpleNamespace(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -467,7 +472,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
             user_settings_repo=_UserSettingsRepo(),
-            agent_config_repo=SimpleNamespace(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -476,6 +481,53 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-11")
 
     assert captured["models_config_override"] == {"providers": {"openai": {"credential_source": "user", "api_key": "repo-key"}}}
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_passes_repo_backed_memory_config_to_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["memory_config_override"] = kwargs.get("memory_config_override")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-12")
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-12",
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-12", agent_config_id="cfg-12")
+
+    class _AgentConfigRepo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-12"
+            return {"memory": {"compaction": {"trigger_tokens": 80000}}}
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            agent_config_repo=_AgentConfigRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-12")
+
+    assert captured["memory_config_override"] == {"compaction": {"trigger_tokens": 80000}}
 
 
 @pytest.mark.asyncio
@@ -509,7 +561,7 @@ async def test_get_or_create_agent_does_not_fallback_to_local_preferences_when_r
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            agent_config_repo=SimpleNamespace(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
         )

@@ -35,6 +35,7 @@ def create_agent_sync(
     extra_allowed_paths: list[str] | None = None,
     web_app: Any = None,
     models_config_override: dict[str, Any] | None = None,
+    memory_config_override: dict[str, Any] | None = None,
 ) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container()
@@ -54,6 +55,7 @@ def create_agent_sync(
         chat_repos=chat_repos,
         web_app=web_app,
         models_config_override=models_config_override,
+        memory_config_override=memory_config_override,
         verbose=True,
         agent=agent,
         bundle_dir=bundle_dir,
@@ -134,6 +136,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         agent_name = agent  # explicit caller-provided type only; None → default Leon agent
         bundle_dir = None
         agent_config_id = None
+        memory_config_override = None
         agent_config_repo = getattr(app_obj.state, "agent_config_repo", None)
         if thread_data and thread_data.get("agent_user_id"):
             if user_repo is None:
@@ -142,6 +145,15 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             if agent_user is None or getattr(agent_user, "agent_config_id", None) is None:
                 raise RuntimeError(f"thread.agent_user_id is missing agent_config_id for runtime startup: {thread_id}")
             agent_config_id = agent_user.agent_config_id
+            if agent_config_repo is None:
+                raise RuntimeError(f"agent_config_repo is required to resolve runtime config for thread {thread_id}")
+            agent_config = agent_config_repo.get_config(agent_config_id)
+            if agent_config is None:
+                raise RuntimeError(f"Agent config {agent_config_id} is missing for runtime startup: {thread_id}")
+            raw_memory = agent_config.get("memory")
+            if raw_memory is not None and not isinstance(raw_memory, dict):
+                raise RuntimeError(f"agent config memory must be a JSON object for runtime startup: {agent_config_id}")
+            memory_config_override = raw_memory
 
         # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None
@@ -197,6 +209,8 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         }
         if models_config_override is not None:
             create_kwargs["models_config_override"] = models_config_override
+        if memory_config_override is not None:
+            create_kwargs["memory_config_override"] = memory_config_override
         if agent_config_id is not None:
             create_kwargs["agent_config_id"] = agent_config_id
             create_kwargs["agent_config_repo"] = agent_config_repo
