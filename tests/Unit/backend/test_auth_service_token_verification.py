@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
 from typing import Any, cast
 
+import jwt
 import pytest
 
 from backend.web.services.auth_service import AuthService
@@ -114,21 +116,33 @@ def _service(
     )
 
 
-def test_verify_token_prefers_supabase_get_user_over_local_jwt_secret(monkeypatch: pytest.MonkeyPatch):
+def test_verify_token_uses_local_jwt_secret_without_remote_auth_call(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    sb = _FakeSupabaseClient(user_id="user-supabase")
+    token = jwt.encode({"sub": "user-local"}, "secret-1", algorithm="HS256")
+
+    payload = _service(supabase_auth_client=sb).verify_token(token)
+
+    assert sb.auth.tokens == []
+    assert payload == {"user_id": "user-local"}
+
+
+def test_verify_token_accepts_supabase_iat_clock_boundary(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    token = jwt.encode({"sub": "user-local", "iat": int(time.time()) + 30}, "secret-1", algorithm="HS256")
+
+    payload = _service().verify_token(token)
+
+    assert payload == {"user_id": "user-local"}
+
+
+def test_verify_token_fails_loudly_when_secret_missing_even_with_auth_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
     sb = _FakeSupabaseClient(user_id="user-supabase")
 
-    payload = _service(supabase_auth_client=sb).verify_token("tok-live")
-
-    assert sb.auth.tokens == ["tok-live"]
-    assert payload == {"user_id": "user-supabase"}
-
-
-def test_verify_token_without_supabase_client_still_fails_loudly_when_secret_missing(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
-
     with pytest.raises(RuntimeError, match="SUPABASE_JWT_SECRET env var required"):
-        _service().verify_token("tok-live")
+        _service(supabase_auth_client=sb).verify_token("tok-live")
+    assert sb.auth.tokens == []
 
 
 def test_login_uses_dedicated_auth_client_instead_of_storage_client():
@@ -202,7 +216,7 @@ def test_login_uses_fresh_auth_client_from_factory_per_call():
     assert created[1].calls == [{"email": "codex@example.com", "password": "pw-2"}]
 
 
-def test_verify_token_uses_fresh_auth_client_from_factory_per_call(monkeypatch: pytest.MonkeyPatch):
+def test_verify_token_does_not_use_auth_client_factory(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
     created: list[_FactoryBackedAuthClient] = []
 
@@ -213,11 +227,9 @@ def test_verify_token_uses_fresh_auth_client_from_factory_per_call(monkeypatch: 
 
     service = _service(supabase_auth_client_factory=factory)
 
-    assert service.verify_token("tok-1") == {"user_id": "user-1"}
-    assert service.verify_token("tok-2") == {"user_id": "user-1"}
-    assert len(created) == 2
-    assert created[0].tokens == ["tok-1"]
-    assert created[1].tokens == ["tok-2"]
+    with pytest.raises(RuntimeError, match="SUPABASE_JWT_SECRET env var required"):
+        service.verify_token("tok-1")
+    assert created == []
 
 
 def test_login_accepts_direct_gotrue_client_without_auth_wrapper():
@@ -237,14 +249,14 @@ def test_login_accepts_direct_gotrue_client_without_auth_wrapper():
     assert result["token"] == "tok-1"
 
 
-def test_verify_token_accepts_direct_gotrue_client_without_auth_wrapper(monkeypatch: pytest.MonkeyPatch):
+def test_verify_token_does_not_use_direct_gotrue_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
     auth_client = _DirectAuthClient()
 
-    payload = _service(supabase_auth_client=auth_client).verify_token("tok-direct")
+    with pytest.raises(RuntimeError, match="SUPABASE_JWT_SECRET env var required"):
+        _service(supabase_auth_client=auth_client).verify_token("tok-direct")
 
-    assert auth_client.tokens == ["tok-direct"]
-    assert payload == {"user_id": "user-1"}
+    assert auth_client.tokens == []
 
 
 def test_send_otp_accepts_direct_gotrue_client_without_auth_wrapper():
@@ -273,8 +285,6 @@ def test_verify_register_otp_accepts_direct_gotrue_client_without_auth_wrapper()
 
 
 def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.MonkeyPatch):
-    import jwt
-
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
     monkeypatch.setattr(
         "backend.web.routers.entities.process_and_save_avatar",
