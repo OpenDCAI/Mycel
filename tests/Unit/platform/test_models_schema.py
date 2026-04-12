@@ -1,3 +1,4 @@
+from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig, ProviderConfig
 
 
@@ -40,3 +41,14 @@ def test_openai_base_url_does_not_read_anthropic_base_url(monkeypatch):
 
     assert config.resolve_base_url("openai") == "https://openai.example"
     assert config.resolve_base_url("anthropic") == "https://anthropic.example"
+
+
+def test_repo_backed_empty_user_config_uses_platform_default_mapping(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
+    config = ModelsLoader().load_with_user_config({})
+
+    model_name, overrides = config.resolve_model("leon:large")
+
+    assert model_name == "gpt-5.4"
+    assert overrides["model_provider"] == "openai"
+    assert config.resolve_api_key("openai") == "platform-key"
