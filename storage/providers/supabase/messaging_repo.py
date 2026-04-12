@@ -259,28 +259,6 @@ class SupabaseMessagesRepo:
         return res.data or []
 
 
-class SupabaseMessageReadRepo:
-    """message_reads is intentionally not part of the current v1 root contract."""
-
-    def __init__(self, client: Any) -> None:
-        self._client = client
-
-    def close(self) -> None:
-        pass
-
-    def mark_read(self, message_id: str, user_id: str) -> None:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-    def mark_chat_read(self, chat_id: str, user_id: str, message_ids: list[str]) -> None:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-    def get_read_count(self, message_id: str) -> int:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-    def has_read(self, message_id: str, user_id: str) -> bool:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-
 class SupabaseRelationshipRepo:
     """relationships table — Hire/Visit state machine persistence."""
 

@@ -105,7 +105,6 @@ async def lifespan(app: FastAPI):
     from messaging.service import MessagingService
     from storage.providers.supabase.messaging_repo import (
         SupabaseChatMemberRepo,
-        SupabaseMessageReadRepo,
         SupabaseMessagesRepo,
         SupabaseRelationshipRepo,
     )
@@ -113,7 +112,6 @@ async def lifespan(app: FastAPI):
     _msg_supabase = create_messaging_supabase_client()
     _chat_member_repo = SupabaseChatMemberRepo(_msg_supabase)
     _messages_repo = SupabaseMessagesRepo(_msg_supabase)
-    _message_read_repo = SupabaseMessageReadRepo(_msg_supabase)
     app.state.relationship_repo = SupabaseRelationshipRepo(_msg_supabase)
     app.state.chat_member_repo = _chat_member_repo
     app.state.messages_repo = _messages_repo
@@ -130,7 +128,6 @@ async def lifespan(app: FastAPI):
         chat_repo=app.state.chat_repo,
         chat_member_repo=_chat_member_repo,
         messages_repo=_messages_repo,
-        message_read_repo=_message_read_repo,
         user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
         event_bus=app.state.chat_event_bus,

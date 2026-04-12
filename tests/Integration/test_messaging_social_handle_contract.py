@@ -95,7 +95,6 @@ def test_deliver_to_agents_does_not_require_main_thread_id():
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
@@ -290,7 +289,6 @@ def test_messaging_service_resolves_sender_name_from_agent_user_id() -> None:
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
         messages_repo=SimpleNamespace(create=lambda row: row),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -316,7 +314,6 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
         messages_repo=SimpleNamespace(create=lambda row: row),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -354,7 +351,6 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_agen
                 }
             ]
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
         ),
@@ -399,7 +395,6 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
         chat_repo=SimpleNamespace(),
         chat_member_repo=_StatefulChatMemberRepo(),
         messages_repo=_MessagesRepo(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
         ),
@@ -446,7 +441,6 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
                 AssertionError("chat list should not count unread one chat at a time")
             ),
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -501,7 +495,6 @@ def test_messaging_service_list_chats_ignores_blank_other_names_in_title_default
             list_latest_by_chat_ids=lambda _chat_ids: {},
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {"chat-1": 0},
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -572,7 +565,6 @@ def test_messaging_service_conversation_summaries_use_bulk_projection_repos() ->
                 AssertionError("conversation summaries must not count unread one by one")
             ),
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: calls.append(f"users:{','.join(user_ids)}") or [user_rows[user_id] for user_id in user_ids],
             get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch users one by one")),
@@ -615,7 +607,6 @@ def test_messaging_service_conversation_summaries_fail_on_unknown_member_identit
             ],
         ),
         messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
         ),
@@ -656,7 +647,6 @@ def test_messaging_service_conversation_summaries_loads_users_and_unread_counts_
             ],
         ),
         messages_repo=SimpleNamespace(count_unread_by_chat_ids=_count_unread),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(list_by_ids=_list_users),
     )
 
@@ -672,7 +662,6 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
             list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "agent-user-1"}],
         ),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -785,7 +774,6 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
         ),
         chat_member_repo=members_repo,
         messages_repo=messages_repo,
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -1064,7 +1052,6 @@ def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
@@ -1103,7 +1090,6 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
             ]
         ),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)
@@ -1214,7 +1200,6 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
             ]
         ),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)

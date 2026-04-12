@@ -32,7 +32,6 @@ class MessagingService:
         chat_repo: Any,  # chat repo compatible with MessagingService create/list/delete operations
         chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
         messages_repo: Any,  # SupabaseMessagesRepo
-        message_read_repo: Any,  # SupabaseMessageReadRepo
         user_repo: Any,  # UserRepo (for name + avatar lookup)
         thread_repo: Any | None = None,
         delivery_resolver: Any | None = None,
@@ -46,7 +45,6 @@ class MessagingService:
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
-        self._reads = message_read_repo
 
     def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
