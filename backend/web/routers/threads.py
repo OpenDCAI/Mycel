@@ -30,6 +30,7 @@ from backend.web.services import account_resource_service, sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_source
+from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
@@ -800,9 +801,13 @@ async def save_default_thread_config(
 
 
 def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
+    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
+    return build_owner_thread_workbench_from_rows(app, raw)
+
+
+def build_owner_thread_workbench_from_rows(app: Any, raw: list[dict[str, Any]]) -> dict[str, Any]:
     from core.runtime.middleware.monitor import AgentState
 
-    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
     pool = app.state.agent_pool
     runtime_states = summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
     visible_threads = []
@@ -854,7 +859,8 @@ async def list_threads(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
-    return await asyncio.to_thread(build_owner_thread_workbench, app, user_id)
+    raw = await list_owner_thread_rows_for_auth_burst(app, user_id)
+    return await asyncio.to_thread(build_owner_thread_workbench_from_rows, app, raw)
 
 
 @router.get("/{thread_id}")

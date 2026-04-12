@@ -527,13 +527,14 @@ async def test_list_threads_runs_owner_workbench_off_event_loop_thread(monkeypat
     event_loop_thread_id = threading.get_ident()
     seen_thread_ids: list[int] = []
 
-    def _build_owner_thread_workbench(_app, _user_id):
+    def _build_owner_thread_workbench_from_rows(_app, _raw):
         seen_thread_ids.append(threading.get_ident())
         return {"threads": []}
 
-    monkeypatch.setattr(threads_router, "build_owner_thread_workbench", _build_owner_thread_workbench)
+    monkeypatch.setattr(threads_router, "build_owner_thread_workbench_from_rows", _build_owner_thread_workbench_from_rows)
 
-    payload = await threads_router.list_threads("owner-1", SimpleNamespace())
+    app = SimpleNamespace(state=SimpleNamespace(thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: [])))
+    payload = await threads_router.list_threads("owner-1", app)
 
     assert payload == {"threads": []}
     assert seen_thread_ids

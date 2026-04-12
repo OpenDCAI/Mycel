@@ -271,10 +271,8 @@ async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatc
     monkeypatch.setattr(conversations_router.asyncio, "to_thread", _fake_to_thread)
 
     assert await conversations_router.list_conversations("human-user-1", app=app) == []
-    assert to_thread_calls == [
-        ("_list_hire_conversations_for_user", (app, "human-user-1")),
-        ("_list_visit_conversations_for_user", (app, "human-user-1")),
-    ]
+    assert ("_list_visit_conversations_for_user", (app, "human-user-1")) in to_thread_calls
+    assert ("_list_hire_conversations_from_threads", (app, [])) in to_thread_calls
 
 
 @pytest.mark.asyncio

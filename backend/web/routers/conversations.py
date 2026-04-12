@@ -13,6 +13,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 
 from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
@@ -46,17 +47,23 @@ async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> list[dict[str, Any]]:
-    hire_items, visit_items = await asyncio.gather(
-        asyncio.to_thread(_list_hire_conversations_for_user, app, user_id),
+    raw_threads, visit_items = await asyncio.gather(
+        list_owner_thread_rows_for_auth_burst(app, user_id),
         asyncio.to_thread(_list_visit_conversations_for_user, app, user_id),
     )
+    hire_items = await asyncio.to_thread(_list_hire_conversations_from_threads, app, raw_threads)
     return _sort_conversation_items([*hire_items, *visit_items])
 
 
 def _list_hire_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
     """Return hire thread rows for the unified conversation sidebar."""
+    return _list_hire_conversations_from_threads(app, app.state.thread_repo.list_by_owner_user_id(user_id))
+
+
+def _list_hire_conversations_from_threads(app: Any, raw_thread_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return hire thread rows for the unified conversation sidebar."""
     items: list[dict[str, Any]] = []
-    raw_threads = canonical_owner_threads(app.state.thread_repo.list_by_owner_user_id(user_id))
+    raw_threads = canonical_owner_threads(raw_thread_rows)
     pool = app.state.agent_pool
     for t in raw_threads:
         tid = t["id"]
