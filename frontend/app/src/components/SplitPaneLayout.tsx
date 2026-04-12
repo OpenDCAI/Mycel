@@ -5,12 +5,20 @@ import type { ReactNode } from "react";
 interface SplitPaneLayoutProps {
   sidebar: ReactNode;
   hasDetail: boolean;
+  sidebarCollapsed?: boolean;
   emptyMessage?: string;
   outletContext?: unknown;
 }
 
-export default function SplitPaneLayout({ sidebar, hasDetail, emptyMessage = "选择一项查看详情", outletContext }: SplitPaneLayoutProps) {
+export default function SplitPaneLayout({
+  sidebar,
+  hasDetail,
+  sidebarCollapsed = false,
+  emptyMessage = "选择一项查看详情",
+  outletContext,
+}: SplitPaneLayoutProps) {
   const isMobile = useIsMobile();
+  const showSidebar = !sidebarCollapsed || !hasDetail;
 
   if (isMobile) {
     return (
@@ -28,7 +36,7 @@ export default function SplitPaneLayout({ sidebar, hasDetail, emptyMessage = "�
 
   return (
     <div className="h-full w-full flex overflow-hidden">
-      <div className="w-72 shrink-0 h-full">{sidebar}</div>
+      <div className={showSidebar ? "w-72 shrink-0 h-full" : "hidden"}>{sidebar}</div>
       <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
         {hasDetail ? (
           <Outlet context={outletContext} />
