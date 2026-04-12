@@ -44,8 +44,10 @@ export async function requestOk(url: string, init?: RequestInit): Promise<void> 
 // --- Thread API ---
 
 export async function listThreads(): Promise<ThreadSummary[]> {
-  const payload = await request<{ threads: ThreadSummary[] }>("/api/threads");
-  return payload.threads;
+  const payload = asRecord(await request("/api/threads"));
+  const threads = payload?.threads;
+  if (!Array.isArray(threads)) throw new Error("Malformed thread summaries");
+  return threads.map(parseThreadSummary);
 }
 
 export interface CreateThreadOptions {
@@ -65,7 +67,7 @@ export async function createThread(opts: CreateThreadOptions): Promise<ThreadSum
   if (opts.cwd) body.cwd = opts.cwd;
   if (opts.model) body.model = opts.model;
   if (opts.agent) body.agent = opts.agent;
-  return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
+  return parseThreadSummary(await request("/api/threads", { method: "POST", body: JSON.stringify(body) }));
 }
 
 export async function getDefaultThread(agentUserId: string, signal?: AbortSignal): Promise<ThreadSummary | null> {
@@ -77,7 +79,14 @@ export async function getDefaultThread(agentUserId: string, signal?: AbortSignal
     body: JSON.stringify({ agent_user_id: agentUserId }),
     signal,
   });
-  return payload.thread ?? null;
+  return payload.thread ? parseThreadSummary(payload.thread) : null;
+}
+
+function parseThreadSummary(value: unknown): ThreadSummary {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  if (!payload || !thread_id) throw new Error("Malformed thread summaries");
+  return { ...payload, thread_id } as ThreadSummary;
 }
 
 export async function getDefaultThreadConfig(agentUserId: string, signal?: AbortSignal): Promise<ThreadLaunchConfigResponse> {
