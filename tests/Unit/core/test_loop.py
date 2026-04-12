@@ -1594,14 +1594,14 @@ class _SplitAnyOfStreamingIdentifierCompletionModel:
                 tool_calls=[
                     {
                         "name": "read_messages",
-                        "args": {"user_id": "", "range": "-10:"},
+                        "args": {"participant_id": "", "range": "-10:"},
                         "id": "tc-chat-read",
                     }
                 ],
                 tool_call_chunks=[
                     {
                         "name": "read_messages",
-                        "args": '{"user_id":"","range":"-10:",',
+                        "args": '{"participant_id":"","range":"-10:",',
                         "id": "tc-chat-read",
                         "index": 0,
                     }
@@ -3144,13 +3144,13 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
     model = _SplitAnyOfStreamingToolModel()
     seen_calls = []
 
-    def read_messages_handler(user_id: str | None = None, chat_id: str | None = None) -> str:
-        seen_calls.append({"user_id": user_id, "chat_id": chat_id})
+    def read_messages_handler(participant_id: str | None = None, chat_id: str | None = None) -> str:
+        seen_calls.append({"participant_id": participant_id, "chat_id": chat_id})
         if chat_id:
             return f"chat:{chat_id}"
-        if user_id:
-            return f"user:{user_id}"
-        return "Provide user_id or chat_id."
+        if participant_id:
+            return f"user:{participant_id}"
+        return "Provide participant_id or chat_id."
 
     entry = ToolEntry(
         name="read_messages",
@@ -3162,11 +3162,11 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
                 "type": "object",
                 "required": [],
                 "properties": {
-                    "user_id": {"type": "string"},
+                    "participant_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                 },
                 "x-leon-required-any-of": [
-                    ["user_id"],
+                    ["participant_id"],
                     ["chat_id"],
                 ],
             },
@@ -3185,9 +3185,9 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
     result = await loop.ainvoke({"messages": [{"role": "user", "content": "read chat"}]})
 
     tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
-    assert seen_calls == [{"user_id": None, "chat_id": "chat-1"}]
+    assert seen_calls == [{"participant_id": None, "chat_id": "chat-1"}]
     assert any(msg.tool_call_id == "tc-chat-read" and msg.content == "chat:chat-1" for msg in tool_messages)
-    assert not any(msg.content == "Provide user_id or chat_id." for msg in tool_messages)
+    assert not any(msg.content == "Provide participant_id or chat_id." for msg in tool_messages)
 
 
 @pytest.mark.asyncio
@@ -3195,13 +3195,13 @@ async def test_streaming_overlap_waits_for_non_empty_anyof_identifier_before_exe
     model = _SplitAnyOfStreamingIdentifierCompletionModel()
     seen_calls = []
 
-    def read_messages_handler(user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
-        seen_calls.append({"user_id": user_id, "chat_id": chat_id, "range": range})
+    def read_messages_handler(participant_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+        seen_calls.append({"participant_id": participant_id, "chat_id": chat_id, "range": range})
         if chat_id:
             return f"chat:{chat_id}"
-        if user_id:
-            return f"user:{user_id}"
-        return "Provide user_id or chat_id."
+        if participant_id:
+            return f"user:{participant_id}"
+        return "Provide participant_id or chat_id."
 
     entry = ToolEntry(
         name="read_messages",
@@ -3213,12 +3213,12 @@ async def test_streaming_overlap_waits_for_non_empty_anyof_identifier_before_exe
                 "type": "object",
                 "required": [],
                 "properties": {
-                    "user_id": {"type": "string"},
+                    "participant_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                     "range": {"type": "string"},
                 },
                 "x-leon-required-any-of": [
-                    ["user_id"],
+                    ["participant_id"],
                     ["chat_id"],
                 ],
             },
@@ -3237,9 +3237,9 @@ async def test_streaming_overlap_waits_for_non_empty_anyof_identifier_before_exe
     result = await loop.ainvoke({"messages": [{"role": "user", "content": "read chat"}]})
 
     tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
-    assert seen_calls == [{"user_id": "", "chat_id": "chat-1", "range": "-10:"}]
+    assert seen_calls == [{"participant_id": "", "chat_id": "chat-1", "range": "-10:"}]
     assert any(msg.tool_call_id == "tc-chat-read" and msg.content == "chat:chat-1" for msg in tool_messages)
-    assert not any(msg.content == "Provide user_id or chat_id." for msg in tool_messages)
+    assert not any(msg.content == "Provide participant_id or chat_id." for msg in tool_messages)
 
 
 def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_empty():
@@ -3253,11 +3253,11 @@ def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_emp
                 "type": "object",
                 "required": [],
                 "properties": {
-                    "entity_id": {"type": "string"},
+                    "participant_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                 },
                 "x-leon-required-any-of": [
-                    ["entity_id"],
+                    ["participant_id"],
                     ["chat_id"],
                 ],
             },
@@ -3296,12 +3296,12 @@ def test_normalize_stream_tool_call_keeps_aggregate_args_when_raw_chunks_are_par
                 "type": "object",
                 "required": [],
                 "properties": {
-                    "user_id": {"type": "string"},
+                    "participant_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                     "range": {"type": "string"},
                 },
                 "x-leon-required-any-of": [
-                    ["user_id"],
+                    ["participant_id"],
                     ["chat_id"],
                 ],
             },
@@ -3320,13 +3320,13 @@ def test_normalize_stream_tool_call_keeps_aggregate_args_when_raw_chunks_are_par
     normalized = loop._normalize_stream_tool_call(
         {
             "name": "read_messages",
-            "args": {"chat_id": "chat-1", "user_id": "", "range": "-10:"},
+            "args": {"chat_id": "chat-1", "participant_id": "", "range": "-10:"},
             "id": "tc-chat-read",
         },
         [
             {
                 "name": "read_messages",
-                "args": '{"user_id":"","range":"-10:"}',
+                "args": '{"participant_id":"","range":"-10:"}',
                 "id": "tc-chat-read",
                 "index": 0,
             }
@@ -3335,6 +3335,6 @@ def test_normalize_stream_tool_call_keeps_aggregate_args_when_raw_chunks_are_par
 
     assert normalized == {
         "name": "read_messages",
-        "args": {"chat_id": "chat-1", "user_id": "", "range": "-10:"},
+        "args": {"chat_id": "chat-1", "participant_id": "", "range": "-10:"},
         "id": "tc-chat-read",
     }

@@ -198,7 +198,7 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
         assert registry.get(removed_name) is None
 
 
-def test_send_message_schema_marks_user_id_name_as_legacy() -> None:
+def test_send_message_schema_uses_participant_id_for_direct_chat() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -210,9 +210,11 @@ def test_send_message_schema_marks_user_id_name_as_legacy() -> None:
 
     send_message_schema = send_message.get_schema()
 
-    assert "legacy" in send_message_schema["parameters"]["properties"]["user_id"]["description"].lower()
+    assert "participant_id" in send_message_schema["parameters"]["properties"]
+    assert "user_id" not in send_message_schema["parameters"]["properties"]
+    assert "legacy" not in send_message_schema["description"].lower()
     assert "directory" not in send_message_schema["description"].lower()
-    assert send_message_schema["parameters"]["x-leon-required-any-of"] == [["user_id"], ["chat_id"]]
+    assert send_message_schema["parameters"]["x-leon-required-any-of"] == [["participant_id"], ["chat_id"]]
 
 
 def test_read_messages_schema_requires_non_empty_chat_or_user_identifier() -> None:
@@ -227,12 +229,13 @@ def test_read_messages_schema_requires_non_empty_chat_or_user_identifier() -> No
 
     params = read_messages.get_schema()["parameters"]
 
-    assert params["x-leon-required-any-of"] == [["user_id"], ["chat_id"]]
-    assert params["properties"]["user_id"]["minLength"] == 1
+    assert params["x-leon-required-any-of"] == [["participant_id"], ["chat_id"]]
+    assert params["properties"]["participant_id"]["minLength"] == 1
+    assert "user_id" not in params["properties"]
     assert params["properties"]["chat_id"]["minLength"] == 1
 
 
-def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> None:
+def test_chat_tool_service_accepts_chat_identity_id_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -835,7 +838,7 @@ def test_chat_tool_send_accepts_agent_user_target_id() -> None:
     send_message = registry.get("send_message")
     assert send_message is not None
 
-    result = send_message.handler(content="hello", user_id="agent-user-1")
+    result = send_message.handler(content="hello", participant_id="agent-user-1")
 
     assert result == "Message sent to Toad."
     assert sent == [("chat-1", "human-user-1", "hello")]
@@ -966,7 +969,7 @@ def test_read_messages_uses_agent_user_target_name_on_no_history() -> None:
     read_messages = registry.get("read_messages")
     assert read_messages is not None
 
-    result = read_messages.handler(user_id="agent-user-1")
+    result = read_messages.handler(participant_id="agent-user-1")
 
     assert result == "No chat history with Toad."
 
@@ -984,7 +987,7 @@ def test_read_messages_uses_messaging_service_direct_chat_lookup_without_member_
     read_messages = registry.get("read_messages")
     assert read_messages is not None
 
-    result = read_messages.handler(user_id="agent-user-1")
+    result = read_messages.handler(participant_id="agent-user-1")
 
     assert result == "No chat history with Toad."
 
@@ -1028,7 +1031,7 @@ def test_chat_tool_search_does_not_fall_back_to_global_search_for_agent_user_tar
     search_messages = registry.get("search_messages")
     assert search_messages is not None
 
-    result = search_messages.handler(query="hello", user_id="agent-user-1")
+    result = search_messages.handler(query="hello", participant_id="agent-user-1")
 
     assert result == "No messages matching 'hello' with Toad."
     assert search_calls == []
@@ -1049,7 +1052,7 @@ def test_chat_tool_search_uses_messaging_service_direct_chat_lookup_without_memb
     search_messages = registry.get("search_messages")
     assert search_messages is not None
 
-    result = search_messages.handler(query="hello", user_id="agent-user-1")
+    result = search_messages.handler(query="hello", participant_id="agent-user-1")
 
     assert result == "No messages matching 'hello'."
     assert search_calls == [("hello", "chat-1")]

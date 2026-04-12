@@ -905,7 +905,7 @@ def test_build_rules_section_unifies_core_risk_and_tool_preferences():
     assert "Background Task Description" not in rules
 
 
-def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
+def test_leon_agent_chat_identity_prompt_uses_participant_id_tool_wording():
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
@@ -924,7 +924,7 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     prompt = LeonAgent._compose_system_prompt(agent)
 
     assert "- Your chat identity id: agent-user-1" in prompt
-    assert "- The chat tools still use the parameter name user_id for legacy reasons." in prompt
+    assert "- For 1:1 chat tools, use participant_id for the other user's social id." in prompt
     assert "- Your owner: Owner (human user_id: human-user-1)" in prompt
     assert "- Your user_id:" not in prompt
 
