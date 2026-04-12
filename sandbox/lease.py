@@ -48,6 +48,7 @@ REQUIRED_LEASE_COLUMNS = {
     "instance_created_at",
     "desired_state",
     "observed_state",
+    "instance_status",
     "version",
     "observed_at",
     "last_error",
