@@ -17,6 +17,7 @@ from core.runtime.loop import QueryLoop
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
+from sandbox.recipes import default_recipe_snapshot, provider_type_from_name
 from storage.contracts import UserRow, UserType
 
 
@@ -74,6 +75,15 @@ class _FakeAuthService:
     def verify_token(self, token: str) -> dict:
         self.tokens.append(token)
         return {"user_id": "owner-1"}
+
+
+class _FakeRecipeRepo:
+    def get(self, owner_user_id: str, recipe_id: str):
+        if owner_user_id != "owner-1" or not recipe_id.endswith(":default"):
+            return None
+        provider_name = recipe_id.removesuffix(":default")
+        recipe = default_recipe_snapshot(provider_type_from_name(provider_name), provider_name=provider_name)
+        return {"data": recipe} if recipe["id"] == recipe_id else None
 
 
 @pytest.mark.asyncio
@@ -326,6 +336,7 @@ def _make_threads_app(
         state=SimpleNamespace(
             user_repo=state_overrides.pop("user_repo", _FakeUserRepo()),
             thread_repo=thread_repo or _FakeThreadRepo(),
+            recipe_repo=state_overrides.pop("recipe_repo", _FakeRecipeRepo()),
             **state_overrides,
         )
     )
@@ -480,7 +491,7 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
     create_resources.assert_called_once_with(
         result["thread_id"],
         "local",
-        None,
+        default_recipe_snapshot("local"),
         "/tmp/fresh-local-thread",
     )
 

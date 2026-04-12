@@ -54,9 +54,10 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
     assert lease["lease_id"] == "lease-1"
     assert lease["provider_name"] == "daytona_selfhost"
     assert lease["thread_ids"] == ["thread-1"]
-    assert lease["recipe_id"] == "daytona:default"
-    assert lease["recipe_name"] == "Daytona Default"
-    assert lease["recipe"]["id"] == "daytona:default"
+    assert lease["recipe_id"] == "daytona_selfhost:default"
+    assert lease["recipe_name"] == "Daytona Selfhost Default"
+    assert lease["recipe"]["id"] == "daytona_selfhost:default"
+    assert lease["recipe"]["provider_name"] == "daytona_selfhost"
     assert lease["recipe"]["provider_type"] == "daytona"
     assert lease["agents"] == [
         {

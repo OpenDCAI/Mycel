@@ -1,10 +1,18 @@
 """Pydantic models for panel API."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.web.utils.versioning import BumpType
 
 # ── Agents ──
+
+
+class MemoryCompactionPayload(BaseModel):
+    trigger_tokens: int | None = Field(default=None, gt=0)
+
+
+class MemoryConfigPayload(BaseModel):
+    compaction: MemoryCompactionPayload | None = None
 
 
 class AgentConfigPayload(BaseModel):
@@ -14,6 +22,7 @@ class AgentConfigPayload(BaseModel):
     mcps: list[dict] | None = None
     skills: list[dict] | None = None
     subAgents: list[dict] | None = None  # noqa: N815
+    memory: MemoryConfigPayload | None = None
 
 
 class CreateAgentRequest(BaseModel):

@@ -5,15 +5,25 @@ import RecipeEditor from "@/components/RecipeEditor";
 import { useAppStore } from "@/store/app-store";
 import type { ResourceItem } from "@/store/types";
 
+type DetailLibraryType = "skill" | "agent" | "recipe";
+
+function detailLibraryType(value: string | undefined): DetailLibraryType | null {
+  return value === "skill" || value === "agent" || value === "recipe" ? value : null;
+}
+
 export default function LibraryItemDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>();
   const navigate = useNavigate();
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
   const libraryRecipes = useAppStore((s) => s.libraryRecipes);
+  const librariesLoaded = useAppStore((s) => s.librariesLoaded);
+  const ensureLibrary = useAppStore((s) => s.ensureLibrary);
   const fetchResourceContent = useAppStore((s) => s.fetchResourceContent);
+  const libraryType = detailLibraryType(type);
 
   const contentKey = type && id ? `${type}:${id}` : "";
+  const [libraryError, setLibraryError] = useState<string | null>(null);
   const [contentState, setContentState] = useState<{ key: string; content: string; error: string | null }>({
     key: "",
     content: "",
@@ -25,6 +35,19 @@ export default function LibraryItemDetailPage() {
     const list = type === "skill" ? librarySkills : type === "agent" ? libraryAgents : type === "recipe" ? libraryRecipes : [];
     return list.find((i) => i.id === id) ?? null;
   }, [librarySkills, libraryAgents, libraryRecipes, type, id]);
+
+  useEffect(() => {
+    if (!libraryType || librariesLoaded[libraryType]) return;
+    let cancelled = false;
+    ensureLibrary(libraryType).catch((err: unknown) => {
+      if (!cancelled) {
+        setLibraryError(err instanceof Error ? err.message : "加载失败");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureLibrary, librariesLoaded, libraryType]);
 
   useEffect(() => {
     if (!type || !id || type === "recipe") return;
@@ -53,9 +76,10 @@ export default function LibraryItemDetailPage() {
   const isSkill = type === "skill";
   const isRecipe = type === "recipe";
   const filename = isSkill ? "SKILL.md" : "agent.md";
-  const loading = !isRecipe && !!contentKey && contentState.key !== contentKey;
+  const loadingLibrary = !!libraryType && !librariesLoaded[libraryType] && !libraryError;
+  const loading = loadingLibrary || (!isRecipe && !!contentKey && contentState.key !== contentKey);
   const content = contentState.key === contentKey ? contentState.content : "";
-  const error = contentState.key === contentKey ? contentState.error : null;
+  const error = libraryError ?? (contentState.key === contentKey ? contentState.error : null);
 
   if (!item && !loading) {
     return (

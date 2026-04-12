@@ -30,19 +30,21 @@ def humanize_recipe_provider(name: str) -> str:
     return " ".join(part[:1].upper() + part[1:] for part in name.replace("-", "_").split("_") if part)
 
 
-def default_recipe_id(provider_type: str) -> str:
-    return f"{provider_type}:default"
+def default_recipe_id(provider_name: str) -> str:
+    return f"{provider_name}:default"
 
 
-def default_recipe_name(provider_type: str) -> str:
-    return f"{humanize_recipe_provider(provider_type)} Default"
+def default_recipe_name(provider_name: str) -> str:
+    return f"{humanize_recipe_provider(provider_name)} Default"
 
 
-def default_recipe_snapshot(provider_type: str) -> dict[str, Any]:
+def default_recipe_snapshot(provider_type: str, *, provider_name: str | None = None) -> dict[str, Any]:
+    provider_name = provider_name or provider_type
     return {
-        "id": default_recipe_id(provider_type),
-        "name": default_recipe_name(provider_type),
-        "desc": f"Default recipe for {provider_type}",
+        "id": default_recipe_id(provider_name),
+        "name": default_recipe_name(provider_name),
+        "desc": f"Default recipe for {provider_name}",
+        "provider_name": provider_name,
         "provider_type": provider_type,
         "features": {"lark_cli": False},
         "configurable_features": {"lark_cli": True},
@@ -51,8 +53,17 @@ def default_recipe_snapshot(provider_type: str) -> dict[str, Any]:
     }
 
 
-def normalize_recipe_snapshot(provider_type: str, recipe: dict[str, Any] | None = None) -> dict[str, Any]:
-    base = default_recipe_snapshot(provider_type)
+def normalize_recipe_snapshot(
+    provider_type: str,
+    recipe: dict[str, Any] | None = None,
+    *,
+    provider_name: str | None = None,
+) -> dict[str, Any]:
+    if recipe is not None and provider_name is None:
+        raw_provider_name = recipe.get("provider_name")
+        if isinstance(raw_provider_name, str) and raw_provider_name.strip():
+            provider_name = raw_provider_name.strip()
+    base = default_recipe_snapshot(provider_type, provider_name=provider_name)
     if recipe is None:
         return base
 
@@ -76,6 +87,7 @@ def normalize_recipe_snapshot(provider_type: str, recipe: dict[str, Any] | None 
         "id": str(recipe.get("id") or base["id"]),
         "name": str(recipe.get("name") or base["name"]),
         "desc": str(recipe.get("desc") or base["desc"]),
+        "provider_name": str(recipe.get("provider_name") or base["provider_name"]),
         "features": normalized_features,
         "builtin": bool(builtin),
     }
@@ -92,24 +104,21 @@ def recipe_features(recipe: dict[str, Any] | None) -> dict[str, bool]:
 
 def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    providers_by_type: dict[str, dict[str, Any]] = {}
+    providers_by_name: dict[str, dict[str, Any]] = {}
     for sandbox in sandbox_types:
         provider_name = str(sandbox["name"])
-        provider_type = str(sandbox.get("provider") or provider_type_from_name(provider_name))
-        existing = providers_by_type.get(provider_type)
-        if existing and not existing.get("available", False) and sandbox.get("available", False):
-            providers_by_type[provider_type] = sandbox
+        if not provider_name or provider_name in providers_by_name:
             continue
-        if existing:
-            continue
-        providers_by_type[provider_type] = sandbox
+        providers_by_name[provider_name] = sandbox
 
-    for provider_type, sandbox in providers_by_type.items():
+    for provider_name, sandbox in providers_by_name.items():
+        provider_type = str(sandbox.get("provider") or provider_type_from_name(provider_name))
         available = bool(sandbox.get("available", False))
-        item = default_recipe_snapshot(provider_type)
+        item = default_recipe_snapshot(provider_type, provider_name=provider_name)
         items.append(
             {
                 **item,
+                "provider_name": provider_name,
                 "provider_type": provider_type,
                 "type": "recipe",
                 "available": available,

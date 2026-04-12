@@ -263,6 +263,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
           id: item.id,
           name: item.name,
           desc: item.desc,
+          provider_name: item.provider_name,
           provider_type: item.provider_type as string,
           features: (item as { features?: Record<string, boolean> }).features ?? {},
           configurable_features: (item as { configurable_features?: Record<string, boolean> }).configurable_features ?? {},
@@ -405,7 +406,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         decodedAgentId,
         model,
         undefined,
-        selectedRecipeSnapshot,
+        selectedRecipeSnapshot.id,
       );
     }
     postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {
@@ -477,7 +478,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     await saveDefaultThreadConfig(decodedAgentId, {
       create_mode: createMode,
       provider_config: selectedProviderConfig,
-      recipe: selectedRecipeSnapshot,
+      recipe_id: selectedRecipeSnapshot?.id || null,
       lease_id: createMode === "existing" ? selectedLeaseId || null : null,
       model: draftModel,
       workspace,

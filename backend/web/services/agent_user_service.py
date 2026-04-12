@@ -123,6 +123,20 @@ def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _memory_from_repo(config: dict[str, Any]) -> dict[str, Any]:
+    memory = config.get("memory")
+    if memory is None:
+        return {"compaction": {"trigger_tokens": None}}
+    if not isinstance(memory, dict):
+        raise RuntimeError("agent config memory must be a JSON object")
+    compaction = memory.get("compaction")
+    if compaction is None:
+        return {"compaction": {"trigger_tokens": None}}
+    if not isinstance(compaction, dict):
+        raise RuntimeError("agent config memory.compaction must be a JSON object")
+    return {"compaction": {"trigger_tokens": compaction.get("trigger_tokens")}}
+
+
 def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
@@ -144,6 +158,7 @@ def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
             "mcps": _mcps_from_repo(config),
             "skills": _skills_from_repo(user.agent_config_id, config, agent_config_repo),
             "subAgents": _sub_agents_from_repo(user.agent_config_id, agent_config_repo),
+            "memory": _memory_from_repo(config),
         },
         "created_at": config.get("created_at", 0),
         "updated_at": config.get("updated_at", 0),
@@ -430,6 +445,37 @@ def _runtime_and_tools_from_patch(current_config: dict[str, Any], config_patch: 
     return runtime, tools
 
 
+def _memory_from_patch(current_config: dict[str, Any], config_patch: dict[str, Any]) -> dict[str, Any]:
+    current = current_config.get("memory")
+    if current is None:
+        memory: dict[str, Any] = {}
+    elif isinstance(current, dict):
+        memory = dict(current)
+    else:
+        raise RuntimeError("agent config memory must be a JSON object")
+
+    if "memory" not in config_patch or config_patch["memory"] is None:
+        return memory
+
+    patch = config_patch["memory"]
+    if not isinstance(patch, dict):
+        raise RuntimeError("agent config patch memory must be a JSON object")
+
+    if "compaction" in patch and patch["compaction"] is not None:
+        compaction_patch = patch["compaction"]
+        if not isinstance(compaction_patch, dict):
+            raise RuntimeError("agent config patch memory.compaction must be a JSON object")
+        compaction = dict(memory.get("compaction", {}) if isinstance(memory.get("compaction"), dict) else {})
+        if "trigger_tokens" in compaction_patch:
+            trigger_tokens = compaction_patch["trigger_tokens"]
+            if trigger_tokens is not None and not isinstance(trigger_tokens, int):
+                raise RuntimeError("agent config patch memory.compaction.trigger_tokens must be an integer or null")
+            compaction["trigger_tokens"] = trigger_tokens
+        memory["compaction"] = compaction
+
+    return memory
+
+
 def _mcp_from_patch(config_patch: dict[str, Any], current_config: dict[str, Any]) -> dict[str, Any]:
     if "mcps" not in config_patch or config_patch["mcps"] is None:
         return dict(current_config.get("mcp", {}) if isinstance(current_config.get("mcp"), dict) else {})
@@ -511,6 +557,7 @@ def _sync_agent_config_patch_to_repo(
         "created_at": current_config.get("created_at", 0),
         "updated_at": int(time.time() * 1000),
         "runtime": runtime,
+        "memory": _memory_from_patch(current_config, config_patch),
         "mcp": _mcp_from_patch(config_patch, current_config),
     }
     agent_config_repo.save_config(user.agent_config_id, updated_config)

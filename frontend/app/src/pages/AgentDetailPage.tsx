@@ -157,9 +157,14 @@ export default function AgentDetail() {
             prompt={agent.config.prompt || ""}
             tools={agent.config.tools}
             rules={agent.config.rules}
+            memory={agent.config.memory}
             onSavePrompt={async (val) => {
               await updateAgentConfig(agent.id, { prompt: val });
               toast.success("System Prompt 已保存");
+            }}
+            onSaveMemory={async (triggerTokens) => {
+              await updateAgentConfig(agent.id, { memory: { compaction: { trigger_tokens: triggerTokens } } });
+              toast.success("压缩设置已保存");
             }}
             onToggleTool={(name, en) => handleToggle("tools", name, en)}
             onSaveRule={async (name, content) => {
@@ -294,11 +299,13 @@ export default function AgentDetail() {
 
 // ==================== RolePanel (Prompt + Tools + Rules) ====================
 
-function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRule, onAddRule, onDeleteRule }: {
+function RolePanel({ prompt, tools, rules, memory, onSavePrompt, onSaveMemory, onToggleTool, onSaveRule, onAddRule, onDeleteRule }: {
   prompt: string;
   tools: CrudItem[];
   rules: RuleItem[];
+  memory?: AgentConfig["memory"];
   onSavePrompt: (v: string) => Promise<void>;
+  onSaveMemory: (triggerTokens: number | null) => Promise<void>;
   onToggleTool: (name: string, enabled: boolean) => void;
   onSaveRule: (name: string, content: string) => Promise<void>;
   onAddRule: (name: string) => Promise<void>;
@@ -309,13 +316,27 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
   const [toolFilter, setToolFilter] = useState("");
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [addRuleName, setAddRuleName] = useState("");
+  const triggerTokens = memory?.compaction?.trigger_tokens ?? null;
+  const [triggerDraft, setTriggerDraft] = useState(triggerTokens?.toString() ?? "");
+  const [savingMemory, setSavingMemory] = useState(false);
 
   const promptDirty = promptText !== prompt;
   useEffect(() => { setPromptText(prompt); }, [prompt]);
+  useEffect(() => { setTriggerDraft(triggerTokens?.toString() ?? ""); }, [triggerTokens]);
 
   const savePrompt = async () => {
     setSavingPrompt(true);
     try { await onSavePrompt(promptText); } finally { setSavingPrompt(false); }
+  };
+
+  const parsedTrigger = triggerDraft.trim() ? Number(triggerDraft) : null;
+  const triggerValid = parsedTrigger === null || (Number.isInteger(parsedTrigger) && parsedTrigger > 0);
+  const memoryDirty = (parsedTrigger ?? null) !== triggerTokens;
+
+  const saveMemory = async () => {
+    if (!triggerValid) return;
+    setSavingMemory(true);
+    try { await onSaveMemory(parsedTrigger); } finally { setSavingMemory(false); }
   };
 
   const toolGroups = useMemo(() => {
@@ -356,7 +377,38 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
         />
       </section>
 
-      {/* Section 2: Tools */}
+      {/* Section 2: Memory */}
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-medium">上下文压缩</h3>
+          <div className="flex-1" />
+          <Button size="sm" className="h-7" disabled={!memoryDirty || !triggerValid || savingMemory} onClick={saveMemory}>
+            <Save className="h-3.5 w-3.5 mr-1" /> {savingMemory ? "..." : "保存压缩设置"}
+          </Button>
+        </div>
+        <div className="rounded-md border bg-card px-3 py-3">
+          <label htmlFor="memory-compaction-trigger" className="text-xs font-medium text-muted-foreground">
+            压缩触发 Token
+          </label>
+          <Input
+            id="memory-compaction-trigger"
+            className="mt-2 max-w-xs"
+            type="number"
+            min={1}
+            step={1000}
+            value={triggerDraft}
+            onChange={e => setTriggerDraft(e.target.value)}
+            placeholder="留空使用模型上下文自动阈值"
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            达到该 Token 数后开始压缩旧上下文；留空时使用模型上下文自动阈值。
+          </p>
+          {!triggerValid && <p className="mt-2 text-xs text-destructive">请输入正整数，或留空。</p>}
+        </div>
+      </section>
+
+      {/* Section 3: Tools */}
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-muted-foreground" />
@@ -384,7 +436,7 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
         ))}
       </section>
 
-      {/* Section 3: Rules */}
+      {/* Section 4: Rules */}
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-muted-foreground" />

@@ -57,7 +57,7 @@ from core.agents.service import _background_run_cancelled, _background_run_resul
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_lease
-from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
+from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,10 @@ def _save_default_config_for_owned_agent(
     payload: SaveThreadLaunchConfigRequest,
 ) -> dict[str, bool]:
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
-    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, payload.model_dump())
+    config = payload.model_dump()
+    if payload.create_mode == "new":
+        _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.recipe_id)
+    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, config)
     return {"ok": True}
 
 
@@ -541,7 +544,7 @@ def _create_thread_sandbox_resources(
     lease_repo = make_lease_repo(db_path=sandbox_db)
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-        normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe)
+        normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
         lease_repo.create(
             lease_id,
             sandbox_type,
@@ -576,6 +579,34 @@ def _create_thread_sandbox_resources(
         terminal_repo.close()
 
 
+def _resolve_owned_recipe_snapshot(
+    app: Any,
+    owner_user_id: str,
+    sandbox_type: str,
+    recipe_id: str | None,
+) -> dict[str, Any]:
+    resolved_recipe_id = str(recipe_id or default_recipe_id(sandbox_type)).strip()
+    if not resolved_recipe_id:
+        raise HTTPException(400, "Recipe id is required")
+
+    recipe_repo = getattr(app.state, "recipe_repo", None)
+    if recipe_repo is None:
+        raise RuntimeError("recipe_repo is required for thread recipe resolution")
+
+    row = recipe_repo.get(owner_user_id, resolved_recipe_id)
+    if row is None:
+        raise HTTPException(400, "Recipe not found")
+
+    data = row.get("data")
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Recipe is malformed")
+
+    snapshot = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), data)
+    if snapshot.get("provider_name") != sandbox_type:
+        raise HTTPException(400, "Recipe provider mismatch")
+    return snapshot
+
+
 def _create_owned_thread(
     app: Any,
     owner_user_id: str,
@@ -603,6 +634,9 @@ def _create_owned_thread(
         if owned_lease is None:
             raise HTTPException(403, "Lease not authorized")
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
+    selected_recipe = None
+    if not selected_lease_id:
+        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.recipe_id)
 
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     # @@@user-owned-thread-seq - thread ids are now allocated from the unified
@@ -644,7 +678,7 @@ def _create_owned_thread(
         _create_thread_sandbox_resources(
             new_thread_id,
             sandbox_type,
-            payload.recipe.model_dump() if payload.recipe else None,
+            selected_recipe,
             payload.cwd,
         )
 
@@ -657,7 +691,7 @@ def _create_owned_thread(
     else:
         successful_config = build_new_launch_config(
             provider_config=sandbox_type,
-            recipe=payload.recipe.model_dump() if payload.recipe else None,
+            recipe_id=selected_recipe["id"] if selected_recipe else None,
             model=payload.model,
             workspace=app.state.thread_cwd.get(new_thread_id) or payload.cwd,
         )

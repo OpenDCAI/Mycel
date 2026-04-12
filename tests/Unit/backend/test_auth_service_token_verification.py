@@ -100,6 +100,7 @@ def _service(
     agent_configs=None,
     invite_codes=None,
     contact_repo=None,
+    recipe_repo=None,
 ) -> AuthService:
     return AuthService(
         users=cast(Any, user_repo or SimpleNamespace()),
@@ -109,6 +110,7 @@ def _service(
         supabase_auth_client_factory=supabase_auth_client_factory,
         invite_codes=invite_codes,
         contact_repo=contact_repo,
+        recipe_repo=recipe_repo,
     )
 
 
@@ -144,6 +146,34 @@ def test_login_uses_dedicated_auth_client_instead_of_storage_client():
 
     assert auth_client.auth.calls == [{"email": "codex@example.com", "password": "pw-1"}]
     assert result["token"] == "tok-1"
+
+
+def test_login_repairs_existing_user_sandbox_recipes(monkeypatch: pytest.MonkeyPatch):
+    auth_client = _FakeAuthClient()
+    monkeypatch.setattr(
+        "backend.web.services.library_service.sandbox_service.available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "provider": "daytona", "available": True}],
+    )
+    recipe_rows: dict[tuple[str, str], dict] = {}
+    recipe_repo = SimpleNamespace(
+        get=lambda owner_user_id, recipe_id: recipe_rows.get((owner_user_id, recipe_id)),
+        upsert=lambda **payload: recipe_rows.setdefault(
+            (payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}
+        ),
+    )
+    user_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: SimpleNamespace(display_name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+        list_by_owner_user_id=lambda _user_id: [],
+    )
+
+    _service(
+        supabase_client=SimpleNamespace(auth=None),
+        supabase_auth_client=auth_client,
+        user_repo=user_repo,
+        recipe_repo=recipe_repo,
+    ).login("codex@example.com", "pw-1")
+
+    assert sorted(recipe_id for (_owner, recipe_id) in recipe_rows) == ["daytona_selfhost:default"]
 
 
 def test_login_uses_fresh_auth_client_from_factory_per_call():
@@ -240,6 +270,58 @@ def test_verify_register_otp_accepts_direct_gotrue_client_without_auth_wrapper()
 
     assert auth_client.calls == [{"email": "fresh@example.com", "token": "123456", "type": "signup"}]
     assert result == {"temp_token": "temp-token-1"}
+
+
+def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.MonkeyPatch):
+    import jwt
+
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    monkeypatch.setattr(
+        "backend.web.routers.entities.process_and_save_avatar",
+        lambda _source, user_id: f"avatars/{user_id}.png",
+    )
+    monkeypatch.setattr(
+        "backend.web.services.library_service.sandbox_service.available_sandbox_types",
+        lambda: [
+            {"name": "local", "provider": "local", "available": True},
+            {"name": "daytona_selfhost", "provider": "daytona", "available": True},
+        ],
+    )
+    user_ids = iter(["agent-toad", "agent-morel"])
+    config_ids = iter(["cfg-toad", "cfg-morel"])
+    monkeypatch.setattr("storage.utils.generate_agent_user_id", lambda: next(user_ids))
+    monkeypatch.setattr("storage.utils.generate_agent_config_id", lambda: next(config_ids))
+
+    created_users: dict[str, object] = {}
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: created_users.get(user_id),
+        create=lambda row: created_users.setdefault(row.id, row),
+        update=lambda _user_id, **_fields: None,
+        list_by_owner_user_id=lambda _user_id: [],
+    )
+    agent_configs = SimpleNamespace(save_config=lambda _config_id, _payload: None)
+    invite_codes = SimpleNamespace(is_valid=lambda code: code == "invite-1", use=lambda _code, _user_id: None)
+    contact_repo = SimpleNamespace(upsert=lambda _row: None)
+    recipe_rows: dict[str, dict] = {}
+    recipe_repo = SimpleNamespace(
+        get=lambda owner_user_id, recipe_id: recipe_rows.get((owner_user_id, recipe_id)),
+        upsert=lambda **payload: recipe_rows.setdefault(
+            (payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}
+        ),
+    )
+    supabase_client = SimpleNamespace(rpc=lambda _name: SimpleNamespace(execute=lambda: SimpleNamespace(data=10001)))
+    token = jwt.encode({"sub": "owner-1", "email": "fresh@example.com"}, "secret-1", algorithm="HS256")
+
+    _service(
+        supabase_client=supabase_client,
+        user_repo=user_repo,
+        agent_configs=agent_configs,
+        invite_codes=invite_codes,
+        contact_repo=contact_repo,
+        recipe_repo=recipe_repo,
+    ).complete_register(token, "invite-1")
+
+    assert sorted(recipe_id for (_owner, recipe_id) in recipe_rows) == ["daytona_selfhost:default", "local:default"]
 
 
 def test_create_initial_agents_persists_default_agent_avatars(monkeypatch: pytest.MonkeyPatch):

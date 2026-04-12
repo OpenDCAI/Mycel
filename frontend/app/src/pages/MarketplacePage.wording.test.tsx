@@ -35,11 +35,25 @@ vi.mock("@/store/marketplace-store", () => ({
 
 const appStoreFetchLibrary = vi.fn();
 const appStoreDeleteResource = vi.fn();
+let appStoreState: Record<string, unknown>;
 
 vi.mock("@/store/app-store", () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
+    selector(appStoreState),
+}));
+
+afterEach(() => {
+  cleanup();
+});
+
+describe("MarketplacePage wording contract", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    appStoreFetchLibrary.mockReset();
+    appStoreDeleteResource.mockReset();
+    appStoreState = {
       agentList: [],
+      agentsLoaded: true,
       librarySkills: [],
       libraryAgents: [],
       libraryRecipes: [
@@ -52,20 +66,10 @@ vi.mock("@/store/app-store", () => ({
           provider_name: "daytona_selfhost",
         },
       ],
+      librariesLoaded: { skill: true, mcp: true, agent: true, recipe: true },
       fetchLibrary: appStoreFetchLibrary,
       deleteResource: appStoreDeleteResource,
-    }),
-}));
-
-afterEach(() => {
-  cleanup();
-});
-
-describe("MarketplacePage wording contract", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    appStoreFetchLibrary.mockReset();
-    appStoreDeleteResource.mockReset();
+    };
   });
 
   it("uses Agent wording for the installed local agent tab", () => {
@@ -119,7 +123,26 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByRole("button", { name: /Sandbox/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Recipe/ })).toBeNull();
     expect(screen.getByText("Self-host Daytona")).toBeTruthy();
-    expect(screen.getByText("Sandbox recipe · daytona")).toBeTruthy();
+    expect(screen.getByText("Sandbox · daytona_selfhost")).toBeTruthy();
+  });
+
+  it("does not show installed sandbox empty state before recipe library is loaded", () => {
+    appStoreState = {
+      ...appStoreState,
+      libraryRecipes: [],
+      librariesLoaded: { skill: true, mcp: true, agent: true, recipe: false },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=recipe"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("暂无已安装的 Sandbox")).toBeNull();
+    expect(screen.getByText("正在加载已安装内容...")).toBeTruthy();
   });
 
   it("uses Agent wording for marketplace member resources", () => {

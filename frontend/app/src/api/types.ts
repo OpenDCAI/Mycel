@@ -122,6 +122,7 @@ export interface RecipeSnapshot {
   id: string;
   name: string;
   desc?: string;
+  provider_name?: string;
   provider_type: string;
   features: Record<string, boolean>;
   configurable_features?: Record<string, boolean>;
@@ -131,6 +132,7 @@ export interface RecipeSnapshot {
 export interface ThreadLaunchConfig {
   create_mode: "new" | "existing";
   provider_config: string;
+  recipe_id?: string | null;
   recipe?: RecipeSnapshot | null;
   lease_id?: string | null;
   model?: string | null;

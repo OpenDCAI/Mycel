@@ -46,9 +46,10 @@ def _agent_user(user_id: str, display_name: str, *, owner_user_id: str, avatar: 
 
 
 def _assert_daytona_recipe(lease: dict, *, runtime_session_id: str | None = None) -> None:
-    assert lease["recipe_id"] == "daytona:default"
-    assert lease["recipe_name"] == "Daytona Default"
-    assert lease["recipe"]["id"] == "daytona:default"
+    assert lease["recipe_id"] == "daytona_selfhost:default"
+    assert lease["recipe_name"] == "Daytona Selfhost Default"
+    assert lease["recipe"]["id"] == "daytona_selfhost:default"
+    assert lease["recipe"]["provider_name"] == "daytona_selfhost"
     assert lease["recipe"]["provider_type"] == "daytona"
     if runtime_session_id is None:
         assert "runtime_session_id" not in lease
@@ -136,7 +137,7 @@ class _FakeUserRepo:
                     "avatar_url": "/api/users/agent-1/avatar",
                 }
             ],
-            "daytona:default",
+            "daytona_selfhost:default",
         ),
         (
             [

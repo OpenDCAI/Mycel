@@ -133,7 +133,7 @@ async def update_agent_config(
     item = await asyncio.to_thread(
         agent_user_service.update_agent_user_config,
         agent_id,
-        req.model_dump(),
+        req.model_dump(exclude_unset=True),
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )

@@ -132,4 +132,34 @@ describe("AgentDetailPage wording contract", () => {
       expect(toast.error).toHaveBeenCalledWith("重命名失败：name already exists");
     });
   });
+
+  it("shows and saves the compaction trigger token setting", async () => {
+    getAgentById.mockReturnValue({
+      ...agentFixture,
+      config: {
+        ...agentFixture.config,
+        memory: { compaction: { trigger_tokens: 80000 } },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const input = screen.getByLabelText("压缩触发 Token");
+    expect((input as HTMLInputElement).value).toBe("80000");
+
+    fireEvent.change(input, { target: { value: "100000" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存压缩设置/ }));
+
+    await waitFor(() => {
+      expect(updateAgentConfig).toHaveBeenCalledWith("agent-1", {
+        memory: { compaction: { trigger_tokens: 100000 } },
+      });
+    });
+  });
 });

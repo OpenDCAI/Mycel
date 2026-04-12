@@ -81,12 +81,35 @@ class _FakeThreadLaunchPrefRepo:
         self.successful.append((owner_user_id, agent_user_id, config))
 
 
+class _FakeRecipeRepo:
+    def __init__(self) -> None:
+        local = default_recipe_snapshot("local")
+        self.rows: dict[tuple[str, str], dict[str, object]] = {
+            ("owner-1", str(local["id"])): {
+                "owner_user_id": "owner-1",
+                "recipe_id": local["id"],
+                "kind": "custom",
+                "provider_type": "local",
+                "data": local,
+                "created_at": 0,
+                "updated_at": 0,
+            }
+        }
+
+    def get(self, owner_user_id: str, recipe_id: str):
+        return self.rows.get((owner_user_id, recipe_id))
+
+    def list_by_owner(self, owner_user_id: str):
+        return [row for (owner, _recipe_id), row in self.rows.items() if owner == owner_user_id]
+
+
 def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=_FakeUserRepo(),
             thread_repo=_FakeThreadRepo(),
             thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
+            recipe_repo=_FakeRecipeRepo(),
             thread_sandbox={},
             thread_cwd={},
         )
@@ -127,7 +150,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
         payload={
             "create_mode": "wat",
             "provider_config": "  local  ",
-            "recipe": "nope",
+            "recipe_id": "  local:default  ",
             "lease_id": "  ",
             "model": "  gpt-5.4-mini  ",
             "workspace": "  /tmp/demo  ",
@@ -141,7 +164,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
             {
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": None,
+                "recipe_id": "local:default",
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -155,7 +178,6 @@ def test_build_existing_launch_config_uses_canonical_shape() -> None:
         lease={
             "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
-            "recipe": {"id": "daytona:recipe-1"},
         },
         model="gpt-5.4",
         workspace="/workspace/reused",
@@ -164,22 +186,17 @@ def test_build_existing_launch_config_uses_canonical_shape() -> None:
     assert config == {
         "create_mode": "existing",
         "provider_config": "daytona_selfhost",
-        "recipe": {"id": "daytona:recipe-1"},
+        "recipe_id": None,
         "lease_id": "lease-1",
         "model": "gpt-5.4",
         "workspace": "/workspace/reused",
     }
 
 
-def test_build_new_launch_config_normalizes_recipe_snapshot() -> None:
+def test_build_new_launch_config_uses_recipe_id() -> None:
     config = thread_launch_config_service.build_new_launch_config(
         provider_config="local",
-        recipe={
-            "id": "local:custom",
-            "name": "Custom Local",
-            "provider_type": "local",
-            "features": {"lark_cli": True},
-        },
+        recipe_id="local:custom",
         model="gpt-5.4-mini",
         workspace="/tmp/custom",
     )
@@ -187,15 +204,7 @@ def test_build_new_launch_config_normalizes_recipe_snapshot() -> None:
     assert config == {
         "create_mode": "new",
         "provider_config": "local",
-        "recipe": normalize_recipe_snapshot(
-            "local",
-            {
-                "id": "local:custom",
-                "name": "Custom Local",
-                "provider_type": "local",
-                "features": {"lark_cli": True},
-            },
-        ),
+        "recipe_id": "local:custom",
         "lease_id": None,
         "model": "gpt-5.4-mini",
         "workspace": "/tmp/custom",
@@ -218,7 +227,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
                     "last_confirmed": {
                         "create_mode": "new",
                         "provider_config": "local",
-                        "recipe": default_recipe_snapshot("local"),
+                        "recipe_id": "local:default",
                         "lease_id": None,
                         "model": "gpt-4.1",
                         "workspace": "/tmp/draft",
@@ -291,7 +300,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
                     "last_confirmed": {
                         "create_mode": "new",
                         "provider_config": "local",
-                        "recipe": default_recipe_snapshot("local"),
+                        "recipe_id": "local:default",
                         "lease_id": None,
                         "model": "gpt-4.1",
                         "workspace": "/tmp/draft",
@@ -396,7 +405,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
         {
             "create_mode": "existing",
             "provider_config": "daytona_selfhost",
-            "recipe": {"id": "daytona:recipe-1"},
+            "recipe_id": None,
             "lease_id": "lease-1",
             "model": "gpt-5.4",
             "workspace": "/workspace/reused",
@@ -478,7 +487,6 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
         agent_user_id="member-2",
         create_mode="new",
         provider_config="local",
-        recipe=None,
         lease_id=None,
         model="gpt-5.4-mini",
         workspace="/tmp/demo",
@@ -506,7 +514,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
         agent_user_id="member-1",
         create_mode="new",
         provider_config="local",
-        recipe=None,
+        recipe_id="local:default",
         lease_id=None,
         model="gpt-5.4-mini",
         workspace="/tmp/demo",
@@ -530,7 +538,22 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
 
     assert result == {"ok": True}
     assert to_thread_calls == [("_save_default_config_for_owned_agent", (app, "owner-1", payload))]
-    assert saved == [(app, "owner-1", "member-1", payload.model_dump())]
+    assert saved == [
+        (
+            app,
+            "owner-1",
+            "member-1",
+            {
+                "agent_user_id": "member-1",
+                "create_mode": "new",
+                "provider_config": "local",
+                "recipe_id": "local:default",
+                "lease_id": None,
+                "model": "gpt-5.4-mini",
+                "workspace": "/tmp/demo",
+            },
+        )
+    ]
 
 
 def test_get_default_thread_config_route_rejects_unowned_agent() -> None:
@@ -579,7 +602,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "agent_user_id": "member-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": None,
+                "recipe_id": "local:default",
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -597,7 +620,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "agent_user_id": "member-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": None,
+                "recipe_id": "local:default",
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -634,7 +657,7 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
         {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe": default_recipe_snapshot("local"),
+            "recipe_id": "local:default",
             "lease_id": None,
             "model": "gpt-5.4-mini",
             "workspace": "/tmp/fresh-local-thread",
@@ -646,23 +669,34 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
 @pytest.mark.asyncio
 async def test_create_thread_carries_recipe_snapshot_into_resources_and_successful_config() -> None:
     app = _make_threads_app()
-    recipe = {
+    repo_recipe = {
         "id": "local:custom:lark",
-        "name": "Local With Lark",
+        "name": "Repo Local With Lark",
+        "provider_name": "local",
         "provider_type": "local",
         "features": {"lark_cli": True},
         "configurable_features": {"lark_cli": True},
         "feature_options": [{"key": "lark_cli", "name": "Lark CLI", "description": "Install Lark CLI"}],
+        "builtin": False,
+    }
+    app.state.recipe_repo.rows[("owner-1", "local:custom:lark")] = {
+        "owner_user_id": "owner-1",
+        "recipe_id": "local:custom:lark",
+        "kind": "custom",
+        "provider_type": "local",
+        "data": repo_recipe,
+        "created_at": 0,
+        "updated_at": 0,
     }
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "member-1",
             "model": "gpt-5.4-mini",
             "sandbox": "local",
-            "recipe": recipe,
+            "recipe_id": "local:custom:lark",
         }
     )
-    normalized_recipe = normalize_recipe_snapshot("local", recipe)
+    normalized_recipe = normalize_recipe_snapshot("local", repo_recipe)
 
     with (
         patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
@@ -677,7 +711,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
     create_resources.assert_called_once_with(
         result["thread_id"],
         "local",
-        payload.recipe.model_dump(),
+        normalized_recipe,
         None,
     )
     save_successful.assert_called_once_with(
@@ -687,12 +721,38 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe": normalized_recipe,
+            "recipe_id": "local:custom:lark",
             "lease_id": None,
             "model": "gpt-5.4-mini",
             "workspace": None,
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_create_thread_rejects_unowned_recipe_snapshot() -> None:
+    app = _make_threads_app()
+    payload = CreateThreadRequest.model_validate(
+        {
+            "agent_user_id": "member-1",
+            "model": "gpt-5.4-mini",
+            "sandbox": "local",
+            "recipe_id": "local:custom:foreign",
+        }
+    )
+
+    with (
+        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
+        patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
+        patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
+        patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
+    ):
+        with pytest.raises(threads_router.HTTPException) as excinfo:
+            await threads_router.create_thread(payload, "owner-1", app)
+
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == "Recipe not found"
+    create_resources.assert_not_called()
 
 
 @pytest.mark.asyncio

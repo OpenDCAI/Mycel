@@ -42,3 +42,18 @@ def test_close_skips_sandbox_cleanup_and_stays_idempotent():
     agent._mark_terminated.assert_called_once()
     agent._cleanup_mcp_client.assert_called_once()
     agent._cleanup_sqlite_connection.assert_called_once()
+
+
+def test_memory_config_override_updates_compaction_trigger_without_losing_defaults():
+    from config.schema import LeonSettings
+
+    settings = LeonSettings()
+
+    updated = LeonAgent._with_memory_config_override(
+        settings,
+        {"compaction": {"trigger_tokens": 80000}},
+    )
+
+    assert updated.memory.compaction.trigger_tokens == 80000
+    assert updated.memory.compaction.reserve_tokens == settings.memory.compaction.reserve_tokens
+    assert updated.memory.pruning.soft_trim_chars == settings.memory.pruning.soft_trim_chars

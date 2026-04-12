@@ -168,6 +168,7 @@ class LeonAgent:
         extra_blocked_tools: set[str] | None = None,
         allowed_tools: set[str] | None = None,
         models_config_override: dict[str, Any] | None = None,
+        memory_config_override: dict[str, Any] | None = None,
         permission_resolver_scope: str = "none",
         verbose: bool = False,
     ):
@@ -226,6 +227,7 @@ class LeonAgent:
             enable_audit_log=enable_audit_log,
             enable_web_tools=enable_web_tools,
             models_config_override=models_config_override,
+            memory_config_override=memory_config_override,
         )
         # Load observation config (langfuse / langsmith)
         self._observation_config = ObservationLoader(workspace_root=workspace_root).load()
@@ -546,6 +548,7 @@ class LeonAgent:
         enable_audit_log: bool | None,
         enable_web_tools: bool | None,
         models_config_override: dict[str, Any] | None,
+        memory_config_override: dict[str, Any] | None,
     ) -> tuple[LeonSettings, ModelsConfig]:
         """Load configuration using new config system.
 
@@ -583,6 +586,8 @@ class LeonAgent:
         # Load runtime config
         loader = AgentLoader(workspace_root=workspace_root)
         config = loader.load(cli_overrides=cli_overrides if cli_overrides else None)
+        if memory_config_override is not None:
+            config = self._with_memory_config_override(config, memory_config_override)
 
         # Load models config
         models_cli: dict = {}
@@ -633,6 +638,23 @@ class LeonAgent:
             print(f"[LeonAgent] Config: agent={agent_name or 'default'}, model={active_name}")
 
         return config, models_config
+
+    @staticmethod
+    def _with_memory_config_override(config: LeonSettings, memory_config_override: dict[str, Any]) -> LeonSettings:
+        if not isinstance(memory_config_override, dict):
+            raise TypeError("memory_config_override must be a JSON object")
+
+        def merge_dict(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+            merged = dict(base)
+            for key, value in patch.items():
+                if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                    merged[key] = merge_dict(merged[key], value)
+                else:
+                    merged[key] = value
+            return merged
+
+        memory_data = merge_dict(config.memory.model_dump(), memory_config_override)
+        return config.model_copy(update={"memory": type(config.memory)(**memory_data)})
 
     def _resolve_workspace_root(self) -> Path:
         """Resolve workspace root from config or current directory."""

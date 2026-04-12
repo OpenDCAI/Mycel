@@ -67,6 +67,7 @@ export default function RecipeEditor({ item, onDeleted }: RecipeEditorProps) {
   }
 
   const featureOptions = featureOptionsFor(item);
+  const providerLabel = item.provider_name || item.provider_type || "unknown";
 
   return (
     <section className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -77,7 +78,7 @@ export default function RecipeEditor({ item, onDeleted }: RecipeEditorProps) {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-foreground">{item.name}</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Sandbox Recipe · {item.provider_type ?? "unknown"} · {item.builtin ? "默认模板" : "自定义模板"}
+            Sandbox · {providerLabel} · {item.builtin ? "默认模板" : "自定义模板"}
           </p>
         </div>
       </div>

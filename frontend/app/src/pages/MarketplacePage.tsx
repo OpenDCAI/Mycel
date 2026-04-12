@@ -68,6 +68,8 @@ export default function MarketplacePage() {
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
   const libraryRecipes = useAppStore((s) => s.libraryRecipes);
+  const agentsLoaded = useAppStore((s) => s.agentsLoaded);
+  const librariesLoaded = useAppStore((s) => s.librariesLoaded);
   const deleteResource = useAppStore((s) => s.deleteResource);
   const updates = useMarketplaceStore((s) => s.updates);
   const checkUpdates = useMarketplaceStore((s) => s.checkUpdates);
@@ -119,6 +121,7 @@ export default function MarketplacePage() {
     { id: "agent", label: "Subagent", icon: Users, count: libraryAgents.length },
     { id: "recipe", label: "Sandbox", icon: Box, count: libraryRecipes.length },
   ];
+  const installedSubTabLoaded = installedSubTab === "member" ? agentsLoaded : librariesLoaded[installedSubTab];
 
   const handleCheckUpdates = async () => {
     // source field comes from meta.json; agent users without it cannot be checked
@@ -357,8 +360,12 @@ export default function MarketplacePage() {
                   ))}
                 </div>
 
+                {!installedSubTabLoaded && (
+                  <div className="text-center py-12 text-sm text-muted-foreground">正在加载已安装内容...</div>
+                )}
+
                 {/* Agent user list */}
-                {installedSubTab === "member" && (
+                {installedSubTabLoaded && installedSubTab === "member" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredAgentUsers.map((agent) => {
@@ -398,7 +405,7 @@ export default function MarketplacePage() {
                 )}
 
                 {/* Skill list */}
-                {installedSubTab === "skill" && (
+                {installedSubTabLoaded && installedSubTab === "skill" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredSkills.map((skill) => (
@@ -433,7 +440,7 @@ export default function MarketplacePage() {
                 )}
 
                 {/* Subagent list */}
-                {installedSubTab === "agent" && (
+                {installedSubTabLoaded && installedSubTab === "agent" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredAgents.map((agent) => (
@@ -468,7 +475,7 @@ export default function MarketplacePage() {
                 )}
 
                 {/* Sandbox recipe list */}
-                {installedSubTab === "recipe" && (
+                {installedSubTabLoaded && installedSubTab === "recipe" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredRecipes.map((recipe) => (
@@ -485,7 +492,7 @@ export default function MarketplacePage() {
                               <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{recipe.name}</h4>
                               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{recipe.desc || "暂无描述"}</p>
                               <p className="text-2xs text-muted-foreground mt-2 font-mono truncate">
-                                Sandbox recipe · {recipe.provider_type || "unknown"}
+                                Sandbox · {recipe.provider_name || recipe.provider_type || "unknown"}
                               </p>
                             </div>
                           </div>

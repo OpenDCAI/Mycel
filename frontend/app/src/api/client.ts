@@ -2,7 +2,6 @@ import type {
   SandboxSession,
   SandboxType,
   UserLeaseSummary,
-  RecipeSnapshot,
   ThreadLaunchConfig,
   ThreadLaunchConfigResponse,
   SessionStatus,
@@ -66,7 +65,7 @@ export async function listThreads(): Promise<ThreadSummary[]> {
 
 export interface CreateThreadOptions {
   sandbox: string;
-  recipe?: RecipeSnapshot;
+  recipeId?: string;
   leaseId?: string;
   cwd?: string;
   agentUserId: string;
@@ -76,7 +75,7 @@ export interface CreateThreadOptions {
 
 export async function createThread(opts: CreateThreadOptions): Promise<ThreadSummary> {
   const body: Record<string, unknown> = { sandbox: opts.sandbox, agent_user_id: opts.agentUserId };
-  if (opts.recipe) body.recipe = opts.recipe;
+  if (opts.recipeId) body.recipe_id = opts.recipeId;
   if (opts.leaseId) body.lease_id = opts.leaseId;
   if (opts.cwd) body.cwd = opts.cwd;
   if (opts.model) body.model = opts.model;

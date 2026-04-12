@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import jwt
 
+from backend.web.services import library_service
 from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class AuthService:
         supabase_auth_client_factory: Callable[[], object] | None = None,
         invite_codes: InviteCodeRepo | None = None,
         contact_repo=None,
+        recipe_repo=None,
     ) -> None:
         self._users = users
         self._agent_configs = agent_configs
@@ -34,6 +36,7 @@ class AuthService:
         self._sb_auth_factory = supabase_auth_client_factory
         self._invite_codes = invite_codes
         self._contact_repo = contact_repo
+        self._recipe_repo = recipe_repo
 
     # ------------------------------------------------------------------
     # Registration flow (standard Supabase signUp)
@@ -115,9 +118,11 @@ class AuthService:
 
             # Initial agents
             first_agent_info = self._create_initial_agents(auth_user_id, now)
+            self._seed_default_recipes(auth_user_id)
         else:
             display_name = existing.display_name
             mycel_id = existing.mycel_id
+            self._seed_default_recipes(auth_user_id)
             owned_agents = self._users.list_by_owner_user_id(auth_user_id)
             first_agent_info = None
             if owned_agents:
@@ -159,6 +164,8 @@ class AuthService:
         user = self._users.get_by_id(auth_user_id)
         if user is None:
             raise ValueError("账号数据异常，请联系支持")
+        if self._recipe_repo is not None:
+            self._seed_default_recipes(auth_user_id)
 
         # Load entities + agents
         owned_agents = self._users.list_by_owner_user_id(auth_user_id)
@@ -230,6 +237,11 @@ class AuthService:
 
     def _auth_api(self, auth_client):
         return getattr(auth_client, "auth", auth_client)
+
+    def _seed_default_recipes(self, owner_user_id: str) -> None:
+        if self._recipe_repo is None:
+            raise RuntimeError("Recipe repo required for initial sandbox recipe creation during schema cutover.")
+        library_service.seed_default_recipes(owner_user_id, recipe_repo=self._recipe_repo)
 
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
         """Create Toad and Morel agents for a new user. Returns first agent info."""
