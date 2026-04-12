@@ -93,15 +93,15 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                     {
                         "id": "chat-1",
                         "title": "Toad",
-                        "avatar_url": avatar_url("member-agent-2", False),
+                        "avatar_url": avatar_url("agent-user-2", False),
                         "updated_at": 1775540100.0,
                         "unread_count": 0,
                         "members": [
                             {
-                                "id": "member-agent-2",
+                                "id": "agent-user-2",
                                 "name": "Toad",
                                 "type": "agent",
-                                "avatar_url": avatar_url("member-agent-2", False),
+                                "avatar_url": avatar_url("agent-user-2", False),
                             }
                         ],
                     }
@@ -235,7 +235,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
                 ),
             ),
             user_repo=SimpleNamespace(
-                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit members"))
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit participants"))
             ),
             chat_repo=SimpleNamespace(
                 get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))
