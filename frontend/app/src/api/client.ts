@@ -604,7 +604,20 @@ export async function uploadSandboxFile(
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
   }
-  return (await response.json()) as SandboxUploadResult;
+  return parseSandboxUploadResult(await response.json());
+}
+
+function parseSandboxUploadResult(value: unknown): SandboxUploadResult {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const relative_path = payload ? recordString(payload, "relative_path") : undefined;
+  const absolute_path = payload ? recordString(payload, "absolute_path") : undefined;
+  const size_bytes = payload?.size_bytes;
+  const sha256 = payload ? recordString(payload, "sha256") : undefined;
+  if (!payload || !thread_id || !relative_path || !absolute_path || typeof size_bytes !== "number" || !sha256) {
+    throw new Error("Malformed sandbox upload result");
+  }
+  return { thread_id, relative_path, absolute_path, size_bytes, sha256 };
 }
 
 export function getSandboxDownloadUrl(
