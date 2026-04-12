@@ -30,9 +30,9 @@ def read_file(
     Dispatches to appropriate reader based on file type:
     - TEXT: read_text with triple limits
     - BINARY: read_binary (metadata only)
-    - DOCUMENT: placeholder (PDF/DOCX support planned)
-    - NOTEBOOK: placeholder (.ipynb support planned)
-    - ARCHIVE: placeholder (list contents planned)
+    - DOCUMENT: PDF/PPTX readers, unsupported summary for other documents
+    - NOTEBOOK: notebook reader
+    - ARCHIVE: unsupported summary
 
     Args:
         path: Absolute path to file
@@ -77,7 +77,20 @@ def read_file(
         return read_notebook(path, limits, start_cell=offset, limit_cells=limit)
 
     if file_type == FileType.ARCHIVE:
-        return _read_archive_placeholder(path)
+        stat = path.stat()
+        ext = path.suffix.lstrip(".").lower()
+        content = (
+            f"Archive file: {path.name}\n"
+            f"  Type: {ext.upper()}\n"
+            f"  Size: {stat.st_size:,} bytes\n\n"
+            f"Archive content listing not yet implemented."
+        )
+        return ReadResult(
+            file_path=str(path),
+            file_type=FileType.ARCHIVE,
+            content=content,
+            total_size=stat.st_size,
+        )
 
     return read_text(path, limits, offset, limit)
 
@@ -135,23 +148,6 @@ def _read_document(
     return ReadResult(
         file_path=str(path),
         file_type=FileType.DOCUMENT,
-        content=content,
-        total_size=stat.st_size,
-    )
-
-
-def _read_archive_placeholder(path: Path) -> ReadResult:
-    """Placeholder for archive reading."""
-    ext = path.suffix.lstrip(".").lower()
-    stat = path.stat()
-
-    content = (
-        f"Archive file: {path.name}\n  Type: {ext.upper()}\n  Size: {stat.st_size:,} bytes\n\nArchive content listing not yet implemented."
-    )
-
-    return ReadResult(
-        file_path=str(path),
-        file_type=FileType.ARCHIVE,
         content=content,
         total_size=stat.st_size,
     )
