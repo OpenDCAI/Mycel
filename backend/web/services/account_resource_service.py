@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from typing import Any
 
 from backend.web.services import sandbox_service
@@ -75,12 +74,14 @@ def _sandbox_limits(app: Any, user_id: str) -> dict[str, int]:
 
 def list_account_resource_limits(app: Any, user_id: str) -> dict[str, list[dict[str, Any]]]:
     thread_repo = getattr(app.state, "thread_repo", None)
-    user_repo = getattr(app.state, "user_repo", None)
-    if thread_repo is None or user_repo is None:
-        raise RuntimeError("thread_repo and user_repo are required for account resource limits")
+    if thread_repo is None:
+        raise RuntimeError("thread_repo is required for account resource limits")
 
-    leases = sandbox_service.list_user_leases(user_id, thread_repo=thread_repo, user_repo=user_repo)
-    used_by_provider = Counter(str(lease.get("provider_name") or "local") for lease in leases)
+    count_kwargs = {"thread_repo": thread_repo}
+    supabase_client = getattr(app.state, "_supabase_client", None)
+    if supabase_client is not None:
+        count_kwargs["supabase_client"] = supabase_client
+    used_by_provider = sandbox_service.count_user_visible_leases_by_provider(user_id, **count_kwargs)
     raw_limits = _settings_repo(app).get_account_resource_limits(user_id)
     limits = {**DEFAULT_SANDBOX_LIMITS, **_normalized_user_sandbox_limits(raw_limits)}
     providers = sorted(
@@ -91,7 +92,7 @@ def list_account_resource_limits(app: Any, user_id: str) -> dict[str, list[dict[
     items = []
     for provider_name in providers:
         limit = limits.get(provider_name, 0)
-        used = used_by_provider[provider_name]
+        used = used_by_provider.get(provider_name, 0)
         remaining = max(limit - used, 0)
         items.append(
             {

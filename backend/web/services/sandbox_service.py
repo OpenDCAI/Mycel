@@ -5,6 +5,7 @@ import logging
 import os
 import threading
 import uuid
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -143,6 +144,43 @@ def list_user_leases(
             _apply_lease_recipe(lease, provider_name, lease["recipe"])
             leases.append(lease)
         return leases
+    finally:
+        monitor_repo.close()
+
+
+def count_user_visible_leases_by_provider(
+    user_id: str,
+    *,
+    thread_repo: Any = None,
+    supabase_client: Any | None = None,
+) -> dict[str, int]:
+    if thread_repo is None:
+        raise RuntimeError("thread_repo is required for count_user_visible_leases_by_provider")
+    monitor_repo = (
+        make_sandbox_monitor_repo(supabase_client=supabase_client)
+        if supabase_client is not None
+        else make_sandbox_monitor_repo()
+    )
+    try:
+        owned_thread_ids = {
+            str(thread.get("id") or "").strip()
+            for thread in thread_repo.list_by_owner_user_id(user_id)
+            if str(thread.get("id") or "").strip()
+        }
+        counts: Counter[str] = Counter()
+        counted_lease_ids: set[str] = set()
+        for row in monitor_repo.list_leases_with_threads():
+            lease_id = str(row.get("lease_id") or "").strip()
+            if not lease_id or lease_id in counted_lease_ids:
+                continue
+            thread_id = str(row.get("thread_id") or "").strip()
+            if not _is_user_visible_lease_thread(thread_id) or thread_id not in owned_thread_ids:
+                continue
+            if not _is_user_visible_lease_state(row):
+                continue
+            counts[str(row.get("provider_name") or "local")] += 1
+            counted_lease_ids.add(lease_id)
+        return dict(counts)
     finally:
         monitor_repo.close()
 

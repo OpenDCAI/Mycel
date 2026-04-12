@@ -204,20 +204,18 @@ def test_update_provider_platform_source_removes_stored_user_key():
 def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     app = _settings_test_app(_FakeSettingsRepo())
     app.state.thread_repo = object()
-    app.state.user_repo = object()
     seen: dict[str, object] = {}
 
-    def _fake_list_user_leases(user_id: str, **kwargs):
+    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
         seen["user_id"] = user_id
         seen["kwargs"] = kwargs
-        return [
-            {"lease_id": "lease-local", "provider_name": "local"},
-            {"lease_id": "lease-daytona-1", "provider_name": "daytona_selfhost"},
-            {"lease_id": "lease-daytona-2", "provider_name": "daytona_selfhost"},
-            {"lease_id": "lease-e2b", "provider_name": "e2b"},
-        ]
+        return {"local": 1, "daytona_selfhost": 2, "e2b": 1}
 
-    monkeypatch.setattr(settings_router.account_resource_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+    monkeypatch.setattr(
+        settings_router.account_resource_service.sandbox_service,
+        "count_user_visible_leases_by_provider",
+        _fake_count_user_visible_leases_by_provider,
+    )
 
     with TestClient(app) as client:
         response = client.get("/api/settings/account-resources")
@@ -253,7 +251,39 @@ def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     }
     assert seen == {
         "user_id": "user-1",
-        "kwargs": {"thread_repo": app.state.thread_repo, "user_repo": app.state.user_repo},
+        "kwargs": {"thread_repo": app.state.thread_repo},
+    }
+
+
+def test_account_resources_route_uses_provider_counts_without_full_lease_projection(monkeypatch):
+    app = _settings_test_app(_FakeSettingsRepo())
+    app.state.thread_repo = object()
+    app.state._supabase_client = object()
+    seen: dict[str, object] = {}
+
+    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
+        seen["user_id"] = user_id
+        seen["kwargs"] = kwargs
+        return {"local": 1, "daytona_selfhost": 2, "e2b": 1}
+
+    monkeypatch.setattr(
+        settings_router.account_resource_service.sandbox_service,
+        "count_user_visible_leases_by_provider",
+        _fake_count_user_visible_leases_by_provider,
+        raising=False,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/account-resources")
+
+    assert response.status_code == 200
+    items = {item["provider_name"]: item for item in response.json()["items"]}
+    assert items["local"]["used"] == 1
+    assert items["daytona_selfhost"]["used"] == 2
+    assert items["e2b"]["used"] == 1
+    assert seen == {
+        "user_id": "user-1",
+        "kwargs": {"thread_repo": app.state.thread_repo, "supabase_client": app.state._supabase_client},
     }
 
 
@@ -262,16 +292,17 @@ def test_account_resources_route_applies_user_limit_overrides(monkeypatch):
     repo.account_resource_limits = {"sandbox": {"daytona_selfhost": 5, "docker": 3}, "token": {"weekly": 50_000_000}}
     app = _settings_test_app(repo)
     app.state.thread_repo = object()
-    app.state.user_repo = object()
 
-    def _fake_list_user_leases(user_id: str, **kwargs):
+    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
         assert user_id == "user-1"
-        return [
-            {"lease_id": "lease-daytona-1", "provider_name": "daytona_selfhost"},
-            {"lease_id": "lease-daytona-2", "provider_name": "daytona_selfhost"},
-        ]
+        assert kwargs == {"thread_repo": app.state.thread_repo}
+        return {"daytona_selfhost": 2}
 
-    monkeypatch.setattr(settings_router.account_resource_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+    monkeypatch.setattr(
+        settings_router.account_resource_service.sandbox_service,
+        "count_user_visible_leases_by_provider",
+        _fake_count_user_visible_leases_by_provider,
+    )
 
     with TestClient(app) as client:
         response = client.get("/api/settings/account-resources")

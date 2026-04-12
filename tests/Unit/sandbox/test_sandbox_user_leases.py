@@ -231,6 +231,58 @@ def test_list_user_leases_uses_owner_bulk_repo_surfaces(monkeypatch):
     assert user_repo.list_by_owner_calls == ["owner-1"]
 
 
+def test_count_user_visible_leases_by_provider_uses_narrow_owner_surface(monkeypatch):
+    rows = [
+        _lease_row("lease-local", "thread-a", provider_name="local"),
+        _lease_row("lease-daytona", "thread-b", provider_name="daytona_selfhost"),
+        _lease_row("lease-subagent", "subagent-hidden", provider_name="daytona_selfhost"),
+        _lease_row("lease-other-owner", "thread-other", provider_name="e2b"),
+        _lease_row("lease-destroying", "thread-c", provider_name="docker", desired_state="destroyed"),
+    ]
+
+    class _BulkOnlyThreadRepo(_FakeThreadRepo):
+        def get_by_id(self, thread_id: str):
+            raise AssertionError(f"unexpected per-thread lookup: {thread_id}")
+
+    thread_repo = _BulkOnlyThreadRepo(
+        {
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            "thread-b": {"agent_user_id": "agent-2", "owner_user_id": "owner-1"},
+            "thread-c": {"agent_user_id": "agent-3", "owner_user_id": "owner-1"},
+            "thread-other": {"agent_user_id": "agent-4", "owner_user_id": "owner-2"},
+        }
+    )
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
+
+    counts = sandbox_service.count_user_visible_leases_by_provider("owner-1", thread_repo=thread_repo)
+
+    assert counts == {"local": 1, "daytona_selfhost": 1}
+    assert thread_repo.list_by_owner_calls == ["owner-1"]
+
+
+def test_count_user_visible_leases_by_provider_reuses_supabase_client(monkeypatch):
+    monitor_repo = _FakeMonitorRepo([_lease_row("lease-local", "thread-a", provider_name="local")])
+    thread_repo, _ = _single_agent_repos("thread-a")
+    supabase_client = object()
+    seen: dict[str, object] = {}
+
+    def _fake_make_sandbox_monitor_repo(**kwargs):
+        seen.update(kwargs)
+        return monitor_repo
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", _fake_make_sandbox_monitor_repo)
+
+    counts = sandbox_service.count_user_visible_leases_by_provider(
+        "owner-1",
+        thread_repo=thread_repo,
+        supabase_client=supabase_client,
+    )
+
+    assert counts == {"local": 1}
+    assert seen == {"supabase_client": supabase_client}
+
+
 @pytest.mark.parametrize(
     ("rows", "include_runtime_session_id", "instance_ids", "expected_runtime_session_id", "expected_calls"),
     [
