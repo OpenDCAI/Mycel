@@ -14,7 +14,7 @@ def test_create_thread_request_rejects_removed_sandbox_type_key() -> None:
         )
 
 
-def test_create_thread_request_rejects_legacy_member_id_field() -> None:
+def test_create_thread_request_rejects_removed_member_id_field() -> None:
     with pytest.raises(Exception):
         CreateThreadRequest.model_validate(
             {
