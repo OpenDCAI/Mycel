@@ -641,7 +641,7 @@ def _create_owned_thread(
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     # @@@user-owned-thread-seq - thread ids are now allocated from the unified
     # user identity root, so create-path sequencing must fail loudly through
-    # user_repo instead of silently reaching back into a legacy member repo.
+    # user_repo instead of inventing a second agent identity source.
     seq = app.state.user_repo.increment_thread_seq(agent_user_id)
     new_thread_id = f"{agent_user_id}-{seq}"
     has_main = app.state.thread_repo.get_default_thread(agent_user_id) is not None

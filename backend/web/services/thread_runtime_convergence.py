@@ -1,7 +1,7 @@
 """Owner-visible thread runtime convergence.
 
 This service keeps owner-facing thread surfaces aligned with the current
-thread runtime contract instead of leaking legacy half-bound thread rows.
+thread runtime contract instead of leaking incomplete thread rows.
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ from backend.web.utils.helpers import delete_thread_in_db
 
 
 def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
-    # @@@legacy-thread-purge - legacy visible threads that cannot satisfy the
+    # @@@incomplete-thread-purge - visible threads that cannot satisfy the
     # current thread->terminal->lease->volume contract should be removed once,
-    # not kept alive behind endpoint-level fallbacks.
+    # not kept alive behind endpoint-level repair guesses.
     delete_thread_in_db(thread_id)
     app.state.thread_repo.delete(thread_id)
 
@@ -40,7 +40,7 @@ def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
     - ``missing``: no thread row exists
     - ``ready``: active terminal already present
     - ``repaired_pointer``: terminal rows exist and active pointer was restored
-    - ``purged``: legacy incomplete thread was deleted
+    - ``purged``: incomplete thread was deleted
     """
 
     thread = app.state.thread_repo.get_by_id(thread_id)
