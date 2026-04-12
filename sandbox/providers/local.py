@@ -396,15 +396,15 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
             cwd=state.cwd,
             env=os.environ.copy(),
         )
-        env_fallback = dict(self._baseline_env or os.environ.copy())
+        previous_env = dict(self._baseline_env or os.environ.copy())
         new_cwd, env_map, stdout = _extract_state_from_output(
             completed.stdout,
             start,
             end,
-            cwd_fallback=state.cwd,
-            env_fallback=env_fallback,
+            previous_cwd=state.cwd,
+            previous_env=previous_env,
         )
-        env_delta = _compute_env_delta(env_map, env_fallback, state.env_delta)
+        env_delta = _compute_env_delta(env_map, previous_env, state.env_delta)
 
         from sandbox.terminal import TerminalState
 

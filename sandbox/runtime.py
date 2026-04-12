@@ -82,16 +82,16 @@ def _extract_state_from_output(
     start_marker: str,
     end_marker: str,
     *,
-    cwd_fallback: str,
-    env_fallback: dict[str, str],
+    previous_cwd: str,
+    previous_env: dict[str, str],
 ) -> tuple[str, dict[str, str], str]:
     pattern = re.compile(rf"{re.escape(start_marker)}(.*?){re.escape(end_marker)}", re.S)
     matches = list(pattern.finditer(raw_output))
     if not matches:
-        # @@@markerless-empty-output-fallback - Some lightweight providers/tests return empty stdout on successful exec.
+        # @@@markerless-empty-output-preserve-state - Some lightweight providers/tests return empty stdout on successful exec.
         # Keep previous terminal snapshot only for truly-empty output; any non-empty markerless output still fails loudly.
         if not _sanitize_shell_output(raw_output).strip():
-            return cwd_fallback, dict(env_fallback), ""
+            return previous_cwd, dict(previous_env), ""
         raise RuntimeError("Failed to parse terminal state: state markers not found")
 
     match = matches[-1]
@@ -963,8 +963,8 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
                 raw_output,
                 start_marker,
                 end_marker,
-                cwd_fallback=state.cwd,
-                env_fallback=state.env_delta,
+                previous_cwd=state.cwd,
+                previous_env=state.env_delta,
             )
         except Exception as exc:
             print(

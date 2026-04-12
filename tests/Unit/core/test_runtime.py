@@ -723,8 +723,8 @@ def test_extract_state_from_output_ignores_prompt_noise():
         raw,
         start,
         end,
-        cwd_fallback="/home/daytona",
-        env_fallback={},
+        previous_cwd="/home/daytona",
+        previous_env={},
     )
     assert cwd == "/home/daytona/snake-fullstack"
     assert env_map.get("PWD") == "/home/daytona/snake-fullstack"
