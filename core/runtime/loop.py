@@ -697,9 +697,8 @@ class QueryLoop:
         transition: ContinueState | None = None
 
         # @@@ainvoke-drains-astream
-        # QueryLoop is generator-first. ainvoke exists only as a compatibility
-        # adapter for callers like LeonAgent.invoke/ainvoke and must not invent
-        # a separate execution path.
+        # QueryLoop is generator-first. ainvoke drains the generator for callers
+        # like LeonAgent.invoke/ainvoke and must not invent a separate execution path.
         async for event in self.query(input, config=config):
             if "terminal" in event:
                 terminal = event["terminal"]
