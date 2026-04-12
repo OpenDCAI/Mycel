@@ -75,12 +75,19 @@ export async function getDefaultThread(agentUserId: string, signal?: AbortSignal
   // @@@default-thread-wire-main-route - frontend now treats this as a template ->
   // default-thread resolver, but the backend endpoint name stays `/threads/main`
   // until the route contract is renamed in a later slice.
-  const payload = await request<{ thread: ThreadSummary | null }>("/api/threads/main", {
+  return parseDefaultThread(await request("/api/threads/main", {
     method: "POST",
     body: JSON.stringify({ agent_user_id: agentUserId }),
     signal,
-  });
-  return payload.thread ? parseThreadSummary(payload.thread) : null;
+  }));
+}
+
+function parseDefaultThread(value: unknown): ThreadSummary | null {
+  const payload = asRecord(value);
+  if (!payload || !("thread" in payload)) throw new Error("Malformed default thread");
+  if (payload.thread === null) return null;
+  if (asRecord(payload.thread) === null) throw new Error("Malformed default thread");
+  return parseThreadSummary(payload.thread);
 }
 
 function parseThreadSummary(value: unknown): ThreadSummary {

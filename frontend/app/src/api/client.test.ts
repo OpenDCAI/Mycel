@@ -85,6 +85,12 @@ describe("thread api client contract", () => {
     );
   });
 
+  it("getDefaultThread rejects malformed default-thread envelopes", async () => {
+    authFetch.mockResolvedValue(okJson({ thread: false }));
+
+    await expect(api.getDefaultThread("agent-1")).rejects.toThrow("Malformed default thread");
+  });
+
   it("getDefaultThreadConfig queries by agent_user_id", async () => {
     authFetch.mockResolvedValue(okJson({
       source: "derived",
