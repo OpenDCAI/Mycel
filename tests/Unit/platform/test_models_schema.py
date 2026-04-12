@@ -10,6 +10,15 @@ def test_provider_qualified_model_id_resolves_provider_and_model_name():
     assert overrides == {"model_provider": "openai"}
 
 
+def test_provider_qualified_model_id_does_not_require_user_provider_row():
+    config = ModelsConfig()
+
+    model_name, overrides = config.resolve_model("openai:gpt-4o")
+
+    assert model_name == "gpt-4o"
+    assert overrides == {"model_provider": "openai"}
+
+
 def test_user_credential_source_does_not_fallback_to_platform_env(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
     config = ModelsConfig(providers={"openai": ProviderConfig(credential_source="user")})

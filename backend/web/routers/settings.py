@@ -81,6 +81,13 @@ def _load_merged_models_for_storage(repo: Any, user_id: str) -> ModelsConfig:
     return loader.load_with_user_config(repo.get_models_config(user_id) or {})
 
 
+def _normalize_model_base_url(base_url: str, provider_name: str | None) -> str:
+    url = base_url.rstrip("/").removesuffix("/v1")
+    if provider_name != "anthropic":
+        url = f"{url}/v1"
+    return url
+
+
 # ============================================================================
 # Settings endpoint (returns workspace + models combined for frontend compat)
 # ============================================================================
@@ -490,12 +497,9 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
         api_key = mc.resolve_api_key(provider_name)
         if api_key:
             kwargs["api_key"] = api_key
-        if p and p.base_url:
-            url = p.base_url.rstrip("/")
-            url = url.removesuffix("/v1")
-            if provider_name != "anthropic":
-                url = f"{url}/v1"
-            kwargs["base_url"] = url
+        base_url = (p.base_url if p else None) or mc.get_base_url()
+        if base_url:
+            kwargs["base_url"] = _normalize_model_base_url(base_url, provider_name)
 
         kwargs = normalize_model_kwargs(resolved, kwargs)
         model = init_chat_model(resolved, **kwargs)

@@ -371,3 +371,35 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
         "api_key": "repo-key",
         "base_url": "https://repo.example/v1",
     }
+
+
+def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {}
+    monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://platform.example")
+
+    captured: dict[str, object] = {}
+
+    class _FakeModel:
+        async def ainvoke(self, _prompt):
+            return SimpleNamespace(content="ok")
+
+    def _fake_init_chat_model(model_name: str, **kwargs):
+        captured["model"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeModel()
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post("/api/settings/models/test", json={"model_id": "openai:gpt-4o"})
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert captured["model"] == "gpt-4o"
+    assert captured["kwargs"] == {
+        "model_provider": "openai",
+        "api_key": "platform-key",
+        "base_url": "https://platform.example/v1",
+    }
