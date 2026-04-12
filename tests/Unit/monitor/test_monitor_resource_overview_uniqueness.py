@@ -73,7 +73,7 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
 
-def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch):
+def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch):
     rows = [
         {
             "provider": "local",

@@ -215,7 +215,7 @@ def test_query_lease_instance_id_prefers_provider_session_id() -> None:
     repo = _repo(
         {
             "sandbox_leases": [
-                _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-fallback")
+                _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-lease")
             ],
             "sandbox_instances": [
                 {"lease_id": "lease-1", "provider_session_id": "provider-session-1"},
@@ -231,7 +231,7 @@ def test_query_lease_instance_ids_chunks_large_lookup() -> None:
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {
-                "sandbox_leases": [{"lease_id": lease_id, "current_instance_id": f"fallback-{lease_id}"} for lease_id in lease_ids],
+                "sandbox_leases": [{"lease_id": lease_id, "current_instance_id": f"lease-instance-{lease_id}"} for lease_id in lease_ids],
                 "sandbox_instances": [{"lease_id": "lease-174", "provider_session_id": "provider-session-174"}],
             }
         )
@@ -239,7 +239,7 @@ def test_query_lease_instance_ids_chunks_large_lookup() -> None:
 
     result = repo.query_lease_instance_ids(lease_ids)
 
-    assert result["lease-0"] == "fallback-lease-0"
+    assert result["lease-0"] == "lease-instance-lease-0"
     assert result["lease-174"] == "provider-session-174"
 
 
@@ -251,7 +251,7 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
                     "lease-running",
                     provider_name="daytona_selfhost",
                     observed_state="detached",
-                    current_instance_id="instance-fallback",
+                    current_instance_id="instance-lease",
                     updated_at="2026-04-05T10:10:00",
                 ),
                 _lease(
@@ -301,7 +301,7 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
     ids=["query-lease-instance-id", "list-probe-targets"],
 )
 def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
-    lease = _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-fallback")
+    lease = _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-lease")
     if include_updated_at:
         lease["updated_at"] = "2026-04-05T10:10:00"
     repo = SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient({"sandbox_leases": [lease]}))
@@ -310,7 +310,7 @@ def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
         caller(repo)
 
 
-def test_list_sessions_with_leases_keeps_active_terminal_and_recent_session_fallbacks() -> None:
+def test_list_sessions_with_leases_keeps_active_terminal_and_latest_closed_session_rows() -> None:
     repo = _repo(
         {
             "sandbox_leases": [
