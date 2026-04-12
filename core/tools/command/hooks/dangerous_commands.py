@@ -73,9 +73,8 @@ class DangerousCommandsHook(BashHook):
         block_network: bool = False,
         custom_blocked: list[str] | None = None,
         verbose: bool = True,
-        **kwargs,
     ):
-        super().__init__(workspace_root, **kwargs)
+        super().__init__(workspace_root)
         self.verbose = verbose
 
         patterns = self.DEFAULT_BLOCKED_COMMANDS.copy()
