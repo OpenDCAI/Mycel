@@ -912,18 +912,18 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
     agent._chat_repos = {
-        "chat_identity_id": "agent-member-1",
+        "chat_identity_id": "agent-user-1",
         "owner_id": "human-user-1",
         "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
-                SimpleNamespace(id=uid, display_name="Toad") if uid == "agent-member-1" else SimpleNamespace(id=uid, display_name="Owner")
+                SimpleNamespace(id=uid, display_name="Toad") if uid == "agent-user-1" else SimpleNamespace(id=uid, display_name="Owner")
             )
         ),
     }
 
     prompt = LeonAgent._compose_system_prompt(agent)
 
-    assert "- Your chat identity id: agent-member-1" in prompt
+    assert "- Your chat identity id: agent-user-1" in prompt
     assert "- The chat tools still use the parameter name user_id for legacy reasons." in prompt
     assert "- Your owner: Owner (human user_id: human-user-1)" in prompt
     assert "- Your user_id:" not in prompt
@@ -936,7 +936,7 @@ def test_leon_agent_chat_identity_prompt_rejects_legacy_user_id_only_runtime_sha
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
     agent._chat_repos = {
-        "user_id": "agent-member-legacy",
+        "user_id": "agent-user-legacy",
         "owner_id": "human-user-legacy",
         "user_repo": SimpleNamespace(get_by_id=lambda uid: SimpleNamespace(id=uid, display_name=f"resolved:{uid}")),
     }
@@ -1012,12 +1012,12 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
     agent._chat_repos = {
-        "chat_identity_id": "agent-member-2",
+        "chat_identity_id": "agent-user-2",
         "owner_id": "human-user-2",
         "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Morel")
-                if uid == "agent-member-2"
+                if uid == "agent-user-2"
                 else SimpleNamespace(id=uid, display_name="Owner 2")
             )
         ),
@@ -1025,7 +1025,7 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy
 
     prompt = LeonAgent._compose_system_prompt(agent)
 
-    assert "- Your chat identity id: agent-member-2" in prompt
+    assert "- Your chat identity id: agent-user-2" in prompt
     assert "- Your owner: Owner 2 (human user_id: human-user-2)" in prompt
 
 
@@ -1044,7 +1044,7 @@ def test_leon_agent_chat_identity_prompt_does_not_bridge_legacy_thread_user_id()
                 None
                 if uid == "thread-user-3"
                 else SimpleNamespace(id=uid, display_name="Truffle")
-                if uid == "member-agent-3"
+                if uid == "agent-user-3"
                 else SimpleNamespace(id=uid, display_name="Owner 3")
             )
         ),

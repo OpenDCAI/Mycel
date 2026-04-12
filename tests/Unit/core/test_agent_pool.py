@@ -169,7 +169,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
     tmp_path: Path,
 ):
     captured: dict[str, object] = {}
-    legacy_member_dir = tmp_path / "members" / "member-1"
+    legacy_member_dir = tmp_path / "members" / "agent-user-1"
     legacy_member_dir.mkdir(parents=True)
     (legacy_member_dir / "agent.md").write_text(
         "---\nname: Legacy Toad\ndescription: stale shell\n---\nYou are the wrong source.\n",
@@ -202,7 +202,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
                 "id": thread_id,
                 "cwd": None,
                 "model": "leon:large",
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
             }
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
