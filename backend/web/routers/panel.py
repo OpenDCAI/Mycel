@@ -248,7 +248,9 @@ async def update_resource(
         resource_id,
         user_id,
         request.app.state.recipe_repo,
-        **req.model_dump(),
+        name=req.name,
+        desc=req.desc,
+        features=req.features,
     )
     if not item:
         raise HTTPException(404, "Resource not found")
