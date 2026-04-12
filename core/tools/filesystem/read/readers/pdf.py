@@ -62,7 +62,7 @@ def read_pdf(
         result.error = f"Start page {start_page} exceeds total pages {total_pages}"
         return result
 
-    effective_limit = limit_pages if limit_pages else 10
+    effective_limit = limit_pages or 10
     end_idx = min(start_idx + effective_limit, total_pages)
 
     output_parts: list[str] = []
