@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ComputerPanelProps, TabType } from "./types";
+import type { ChatEntry } from "../../api";
+import type { TabType } from "./types";
 import { extractAgentSteps } from "./utils";
 import { useRemoteWorkspaceRoot } from "./use-remote-workspace-root";
 import { useFileExplorer } from "./use-file-explorer";
@@ -9,7 +10,16 @@ import { TabBar } from "./TabBar";
 import { AgentsView } from "./AgentsView";
 import { FilesView } from "./FilesView";
 
-export type { ComputerPanelProps };
+interface ComputerPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  threadId: string | null;
+  sandboxType: string | null;
+  chatEntries: ChatEntry[];
+  width?: number;
+  activeTab?: TabType;
+  onTabChange?: (tab: TabType) => void;
+}
 
 export default function ComputerPanel({
   isOpen,
