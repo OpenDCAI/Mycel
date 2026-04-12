@@ -2,8 +2,8 @@
 
 Combines:
 - Three-tier runtime config merge (system > user > project) — for default agent
-- Agent .md parsing (YAML frontmatter + system prompt) — from old core/task/loader
-- Bundle discovery (meta.json, rules/, agents/, skills/, .mcp.json, runtime.json) — for members
+- Agent .md parsing (YAML frontmatter + system prompt)
+- Bundle discovery (meta.json, rules/, agents/, skills/, .mcp.json, runtime.json)
 
 Configuration priority (highest to lowest):
 1. CLI overrides
@@ -11,7 +11,7 @@ Configuration priority (highest to lowest):
 3. User config (~/.leon/runtime.json)
 4. System defaults (config/defaults/runtime.json)
 
-Member loading: system defaults + member bundle (no user/project inheritance).
+Bundle loading: explicit bundle path or repo-backed agent_config_id only.
 """
 
 from __future__ import annotations
@@ -95,17 +95,12 @@ class AgentLoader:
 
     # ── Agent .md parsing (merged from core/task/loader) ──
 
-    def load_all_agents(self) -> dict[str, AgentConfig]:
-        """Load all agents by priority, including local member filesystem shells."""
-        self._load_agent_layers(include_members=True)
-        return self._agents
-
     def load_runtime_agents(self) -> dict[str, AgentConfig]:
-        """Load only runtime-facing agent definitions, excluding member shells."""
-        self._load_agent_layers(include_members=False)
+        """Load runtime-facing agent definitions."""
+        self._load_agent_layers()
         return self._agents
 
-    def _load_agent_layers(self, *, include_members: bool) -> None:
+    def _load_agent_layers(self) -> None:
         self._agents = {}
 
         # 1. Built-in agents (lowest priority)
@@ -119,13 +114,6 @@ class AgentLoader:
         if self.workspace_root:
             self._load_agents_from_dir(self.workspace_root / ".leon" / "agents")
 
-        if not include_members:
-            return
-        # @@@local-member-discovery-only - keep filesystem member shells available for
-        # explicit local discovery, but never let web/runtime live config read from them.
-        for path in user_home_read_candidates("members"):
-            self._load_agents_from_members(path)
-
     def _load_agents_from_dir(self, dir_path: Path) -> None:
         """Load all .md files from a directory."""
         if not dir_path.exists():
@@ -133,21 +121,6 @@ class AgentLoader:
         for md_file in dir_path.glob("*.md"):
             config = self.parse_agent_file(md_file)
             if config:
-                self._agents[config.name] = config
-
-    def _load_agents_from_members(self, members_dir: Path) -> None:
-        """Load members as agents — each member lives in members/<id>/agent.md."""
-        if not members_dir.exists():
-            return
-        for member_dir in sorted(members_dir.iterdir()):
-            if not member_dir.is_dir():
-                continue
-            agent_md = member_dir / "agent.md"
-            if not agent_md.exists():
-                continue
-            config = self.parse_agent_file(agent_md)
-            if config:
-                config.source_dir = member_dir.resolve()
                 self._agents[config.name] = config
 
     @staticmethod
@@ -189,13 +162,13 @@ class AgentLoader:
         """List all available agent names."""
         return list(self._agents.keys())
 
-    # ── Bundle discovery (for members / standalone agents) ──
+    # ── Bundle discovery ──
 
     def load_bundle(self, agent_dir: Path) -> AgentBundle:
         """Load a complete agent bundle from a directory.
 
-        Used for members: system defaults + member bundle (no user/project inheritance).
-        Sub-agents use two-layer merge: system defaults → member-specific (override by name).
+        Used by explicit bundle_dir startup and repo-backed agent_config snapshots.
+        Sub-agents use two-layer merge: system defaults → bundle-specific (override by name).
         """
         agent_dir = agent_dir.resolve()
         agent = self.parse_agent_file(agent_dir / "agent.md")
