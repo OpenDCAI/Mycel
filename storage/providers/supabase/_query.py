@@ -13,7 +13,7 @@ def validate_client(client: Any, repo: str) -> Any:
     if client is None:
         raise RuntimeError(f"Supabase {repo} requires a client. Pass supabase_client=... into StorageContainer.")
     if not hasattr(client, "table"):
-        raise RuntimeError(f"Supabase {repo} requires a client with table(name). Use supabase-py client or a compatible adapter.")
+        raise RuntimeError(f"Supabase {repo} requires a supabase-py style client with table(name).")
     return client
 
 
@@ -24,7 +24,7 @@ def rows(response: Any, repo: str, operation: str) -> list[dict[str, Any]]:
     else:
         payload = getattr(response, "data", None)
     if payload is None:
-        raise RuntimeError(f"Supabase {repo} expected `.data` payload for {operation}. Check Supabase client compatibility.")
+        raise RuntimeError(f"Supabase {repo} expected supabase-py `.data` payload for {operation}.")
     if not isinstance(payload, list):
         raise RuntimeError(f"Supabase {repo} expected list payload for {operation}, got {type(payload).__name__}.")
     for row in payload:
