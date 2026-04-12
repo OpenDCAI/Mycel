@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Box, Search, Store, Package, TrendingUp, Clock, Star, RefreshCw, Zap, Users, Trash2 } from "lucide-react";
+import { Box, Search, Store, Package, TrendingUp, Clock, Star, RefreshCw, Zap, Users, Trash2, Plus, X } from "lucide-react";
 import { useMarketplaceStore } from "@/store/marketplace-store";
 import { useAppStore } from "@/store/app-store";
 import { useIsMobile } from "@/hooks/use-mobile";
 import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
 import UpdateDialog from "@/components/marketplace/UpdateDialog";
-import type { Agent } from "@/store/types";
+import RecipeEditor from "@/components/RecipeEditor";
+import type { Agent, ResourceItem } from "@/store/types";
 import type { UpdateAvailable } from "@/store/marketplace-store";
 
 type Tab = "explore" | "installed";
@@ -81,6 +82,7 @@ export default function MarketplacePage() {
   // Update dialog
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateTarget, setUpdateTarget] = useState<{ agent: Agent; update: UpdateAvailable } | null>(null);
+  const [recipeCreateOpen, setRecipeCreateOpen] = useState(false);
 
 
   // Fetch explore items when filters change
@@ -114,6 +116,15 @@ export default function MarketplacePage() {
   const filteredRecipes = libraryRecipes.filter((recipe) =>
     !installedSearch || recipe.name.toLowerCase().includes(installedSearch.toLowerCase())
   );
+  const recipeProviderOptions = useMemo<ResourceItem[]>(() => {
+    const seen = new Set<string>();
+    return libraryRecipes.filter((recipe) => {
+      const providerName = recipe.provider_name;
+      if (!providerName || seen.has(providerName)) return false;
+      seen.add(providerName);
+      return true;
+    });
+  }, [libraryRecipes]);
 
   const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
     { id: "member", label: "Agent", icon: Package, count: installedAgentUsers.length },
@@ -360,6 +371,24 @@ export default function MarketplacePage() {
                   ))}
                 </div>
 
+                {installedSubTabLoaded && installedSubTab === "recipe" && (
+                  <div className="mb-4 flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Sandbox 模板</p>
+                      <p className="text-xs text-muted-foreground">为当前账号创建可复用的 sandbox recipe。</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={recipeProviderOptions.length === 0}
+                      onClick={() => setRecipeCreateOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      新建 Sandbox
+                    </button>
+                  </div>
+                )}
+
                 {!installedSubTabLoaded && (
                   <div className="text-center py-12 text-sm text-muted-foreground">正在加载已安装内容...</div>
                 )}
@@ -528,6 +557,28 @@ export default function MarketplacePage() {
           update={updateTarget.update}
           agentName={updateTarget.agent.name}
         />
+      )}
+
+      {recipeCreateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4" onClick={() => setRecipeCreateOpen(false)}>
+          <div className="w-full max-w-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                aria-label="关闭"
+                onClick={() => setRecipeCreateOpen(false)}
+                className="rounded-full bg-card p-2 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <RecipeEditor
+              item={null}
+              providerOptions={recipeProviderOptions}
+              onCreated={() => setRecipeCreateOpen(false)}
+            />
+          </div>
+        </div>
       )}
 
     </div>

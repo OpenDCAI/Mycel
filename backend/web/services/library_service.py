@@ -182,12 +182,27 @@ def _recipe_row_needs_repair(row: dict[str, Any], *, provider_name: str, provide
     )
 
 
+def _resolve_recipe_provider(provider_name: str | None) -> tuple[str, str]:
+    name = str(provider_name or "").strip()
+    if not name:
+        raise ValueError("Recipe provider_name is required")
+    for sandbox in sandbox_service.available_sandbox_types():
+        if str(sandbox.get("name") or "").strip() != name:
+            continue
+        provider_type = str(sandbox.get("provider") or "").strip()
+        if not provider_type:
+            raise ValueError(f"Sandbox provider {name!r} is missing provider type")
+        return name, provider_type
+    raise ValueError(f"Unknown sandbox provider: {name}")
+
+
 def create_resource(
     resource_type: str,
     name: str,
     desc: str = "",
     category: str = "",
     features: dict[str, bool] | None = None,
+    provider_name: str | None = None,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
 ) -> dict[str, Any]:
@@ -196,17 +211,16 @@ def create_resource(
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        provider_type = cat.strip()
-        if not provider_type:
-            raise ValueError("Recipe provider_type is required")
+        provider_name, provider_type = _resolve_recipe_provider(provider_name)
         feature_source = features if isinstance(features, dict) else {}
         feature_values = {key: bool(feature_source.get(key, False)) for key in FEATURE_CATALOG}
-        recipe_id = f"{provider_type}:custom:{uuid.uuid4().hex[:8]}"
+        recipe_id = f"{provider_name}:custom:{uuid.uuid4().hex[:8]}"
         item = _normalize_recipe_item(
             {
                 "id": recipe_id,
                 "name": name,
                 "desc": desc,
+                "provider_name": provider_name,
                 "provider_type": provider_type,
                 "features": feature_values,
                 "created_at": now,

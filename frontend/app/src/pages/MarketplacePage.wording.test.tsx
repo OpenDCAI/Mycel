@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,6 +35,7 @@ vi.mock("@/store/marketplace-store", () => ({
 
 const appStoreFetchLibrary = vi.fn();
 const appStoreDeleteResource = vi.fn();
+const appStoreAddResource = vi.fn();
 let appStoreState: Record<string, unknown>;
 
 vi.mock("@/store/app-store", () => ({
@@ -51,6 +52,18 @@ describe("MarketplacePage wording contract", () => {
     vi.restoreAllMocks();
     appStoreFetchLibrary.mockReset();
     appStoreDeleteResource.mockReset();
+    appStoreAddResource.mockReset();
+    appStoreAddResource.mockResolvedValue({
+      id: "daytona_selfhost:custom:probe",
+      name: "Selfhost Custom",
+      desc: "custom self-host sandbox",
+      type: "recipe",
+      provider_name: "daytona_selfhost",
+      provider_type: "daytona",
+      features: { lark_cli: false },
+      created_at: 1,
+      updated_at: 1,
+    });
     appStoreState = {
       agentList: [],
       agentsLoaded: true,
@@ -64,11 +77,18 @@ describe("MarketplacePage wording contract", () => {
           type: "recipe",
           provider_type: "daytona",
           provider_name: "daytona_selfhost",
+          features: { lark_cli: false },
+          feature_options: [{
+            key: "lark_cli",
+            name: "Lark CLI",
+            description: "Install lark-cli during sandbox bootstrap",
+          }],
         },
       ],
       librariesLoaded: { skill: true, mcp: true, agent: true, recipe: true },
       fetchLibrary: appStoreFetchLibrary,
       deleteResource: appStoreDeleteResource,
+      addResource: appStoreAddResource,
     };
   });
 
@@ -120,7 +140,7 @@ describe("MarketplacePage wording contract", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("button", { name: /Sandbox/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Sandbox/ }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /Recipe/ })).toBeNull();
     expect(screen.getByText("Self-host Daytona")).toBeTruthy();
     expect(screen.getByText("Sandbox · daytona_selfhost")).toBeTruthy();
@@ -143,6 +163,28 @@ describe("MarketplacePage wording contract", () => {
 
     expect(screen.queryByText("暂无已安装的 Sandbox")).toBeNull();
     expect(screen.getByText("正在加载已安装内容...")).toBeTruthy();
+  });
+
+  it("creates sandbox recipes with concrete provider_name from backend-loaded recipes", async () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=recipe"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "新建 Sandbox" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Selfhost Custom" } });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "custom self-host sandbox" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建" }));
+
+    await waitFor(() => {
+      expect(appStoreAddResource).toHaveBeenCalledWith("recipe", "Selfhost Custom", "custom self-host sandbox", {
+        provider_name: "daytona_selfhost",
+        features: { lark_cli: false },
+      });
+    });
   });
 
   it("uses Agent wording for marketplace member resources", () => {
