@@ -741,7 +741,7 @@ class LSPService:
                     return "No definition found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
 
-            elif operation == "findReferences":
+            if operation == "findReferences":
                 if not file_path or zero_line is None or zero_character is None:
                     return "findReferences requires: file_path, line, character"
                 assert session is not None
