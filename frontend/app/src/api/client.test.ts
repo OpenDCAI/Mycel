@@ -282,6 +282,17 @@ describe("thread api client contract", () => {
     await expect(api.listSandboxFiles("thread-1")).rejects.toThrow("Malformed sandbox file list");
   });
 
+  it("readSandboxFile rejects malformed file content payloads", async () => {
+    authFetch.mockResolvedValue(okJson({
+      thread_id: "thread-1",
+      path: "/workspace/app.py",
+      content: { text: "print(1)" },
+      size: "8",
+    }));
+
+    await expect(api.readSandboxFile("thread-1", "/workspace/app.py")).rejects.toThrow("Malformed sandbox file read");
+  });
+
   it("uploadUserAvatar sends user avatar path instead of members path", async () => {
     authFetch.mockResolvedValue(okJson({ ok: true }));
 

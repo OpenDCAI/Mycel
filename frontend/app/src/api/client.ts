@@ -572,7 +572,19 @@ function parseSandboxFileEntry(value: unknown): SandboxFileEntry {
 }
 
 export async function readSandboxFile(threadId: string, path: string): Promise<SandboxFileResult> {
-  return request(`${sandboxFilesBase(threadId)}/read?path=${encodeURIComponent(path)}`);
+  return parseSandboxFileRead(await request(`${sandboxFilesBase(threadId)}/read?path=${encodeURIComponent(path)}`));
+}
+
+function parseSandboxFileRead(value: unknown): SandboxFileResult {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const path = payload ? recordString(payload, "path") : undefined;
+  const content = payload ? recordString(payload, "content") : undefined;
+  const size = payload?.size;
+  if (!payload || !thread_id || !path || content === undefined || typeof size !== "number") {
+    throw new Error("Malformed sandbox file read");
+  }
+  return { thread_id, path, content, size };
 }
 
 export async function uploadSandboxFile(
