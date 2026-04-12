@@ -175,19 +175,6 @@ export interface UserLeaseSummary {
   }>;
 }
 
-export interface SandboxSession {
-  session_id: string;
-  thread_id: string;
-  provider: string;
-  status: string;
-  created_at?: string;
-  last_active?: string;
-  lease_id?: string | null;
-  instance_id?: string | null;
-  chat_session_id?: string | null;
-  source?: string;
-}
-
 export interface SandboxInfo {
   type: string;
   status: string | null;

@@ -274,19 +274,6 @@ describe("thread api client contract", () => {
     );
   });
 
-  it("listSandboxSessions rejects malformed session identities", async () => {
-    authFetch.mockResolvedValue(okJson({
-      sessions: [{
-        session_id: "session-1",
-        thread_id: "thread-1",
-        provider: { name: "local" },
-        status: "running",
-      }],
-    }));
-
-    await expect(api.listSandboxSessions()).rejects.toThrow("Malformed sandbox sessions");
-  });
-
   it("listSandboxTypes rejects malformed sandbox type identities", async () => {
     authFetch.mockResolvedValue(okJson({
       types: [{ name: { value: "local" }, available: true }],
