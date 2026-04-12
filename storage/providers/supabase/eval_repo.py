@@ -19,7 +19,6 @@ class SupabaseEvalRepo:
 
     def ensure_schema(self) -> None:
         """Supabase schema is managed via migrations, not runtime DDL."""
-        return None
 
     def upsert_run_header(
         self,
