@@ -89,7 +89,7 @@ def _normalize_model_base_url(base_url: str, provider_name: str | None) -> str:
 
 
 # ============================================================================
-# Settings endpoint (returns workspace + models combined for frontend compat)
+# Settings endpoint (returns workspace + models as one frontend settings bundle)
 # ============================================================================
 
 
@@ -101,7 +101,7 @@ class ProviderConfig(BaseModel):
 
 
 class UserSettings(BaseModel):
-    """Combined settings for frontend compatibility."""
+    """Combined settings bundle for the app settings page."""
 
     default_workspace: str | None = None
     recent_workspaces: list[str] = []
@@ -120,7 +120,7 @@ async def get_settings(request: Request, user_id: CurrentUserId) -> UserSettings
     ws = _load_workspace_settings(repo, user_id)
     models = _load_merged_models_for_storage(repo, user_id)
 
-    # Build compat view
+    # Build the app-facing settings bundle.
     mapping = {k: v.model for k, v in models.mapping.items()}
     providers = {}
     for name, provider in models.providers.items():
