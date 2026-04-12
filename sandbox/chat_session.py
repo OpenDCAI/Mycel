@@ -186,7 +186,7 @@ class ChatSessionManager:
         if terminal_id is None:
             from sandbox.terminal import terminal_from_row
 
-            # @@@thread-get-back-compat - Legacy callers query by thread only; route to current active terminal.
+            # @@@thread-scoped-get - Thread-level callers resolve through the current active terminal.
             _term_repo = self._terminal_repo
             own_term_repo = _term_repo is None
             if _term_repo is None:
@@ -199,8 +199,6 @@ class ChatSessionManager:
             if _term_row is None:
                 return None
             terminal_id = _require_row_text(dict(_term_row), "terminal_id")
-        if terminal_id is None:
-            return None
         terminal_key = str(terminal_id)
         live = self._live_sessions.get(terminal_key)
         if live:

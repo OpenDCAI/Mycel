@@ -24,7 +24,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Preset + backward-compat classes (comma-grouped) --- */
+/* --- Preset aliases (comma-grouped) --- */
 .motion-fade-in,
 .animate-fade-in,
 .animate-fadeIn        { animation: motionFadeIn    var(--duration-normal) var(--ease-out) forwards; }
