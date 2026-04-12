@@ -19,7 +19,7 @@ def set_current_thread_id(thread_id: str) -> None:
 
 def get_current_thread_id() -> str | None:
     value = _current_thread_id.get()
-    return value if value else None
+    return value or None
 
 
 def set_current_run_id(run_id: str) -> None:
@@ -28,7 +28,7 @@ def set_current_run_id(run_id: str) -> None:
 
 def get_current_run_id() -> str | None:
     value = _current_run_id.get()
-    return value if value else None
+    return value or None
 
 
 def set_current_messages(messages: list[Any]) -> None:
