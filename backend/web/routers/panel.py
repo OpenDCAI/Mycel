@@ -45,6 +45,11 @@ def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None
         raise HTTPException(409, "Cannot delete agent with existing threads")
 
 
+def _get_profile_for_user(user_id: str, user_repo: Any) -> dict[str, Any]:
+    user = user_repo.get_by_id(user_id)
+    return profile_service.get_profile(user)
+
+
 # ── Agents ──
 
 
@@ -335,8 +340,7 @@ async def get_profile(
     user_id: CurrentUserId,
     request: Request,
 ) -> dict[str, Any]:
-    user = request.app.state.user_repo.get_by_id(user_id)
-    return await asyncio.to_thread(profile_service.get_profile, user)
+    return await asyncio.to_thread(_get_profile_for_user, user_id, request.app.state.user_repo)
 
 
 @router.put("/profile")
