@@ -81,12 +81,35 @@ class _FakeThreadLaunchPrefRepo:
         self.successful.append((owner_user_id, agent_user_id, config))
 
 
+class _FakeRecipeRepo:
+    def __init__(self) -> None:
+        local = default_recipe_snapshot("local")
+        self.rows: dict[tuple[str, str], dict[str, object]] = {
+            ("owner-1", str(local["id"])): {
+                "owner_user_id": "owner-1",
+                "recipe_id": local["id"],
+                "kind": "custom",
+                "provider_type": "local",
+                "data": local,
+                "created_at": 0,
+                "updated_at": 0,
+            }
+        }
+
+    def get(self, owner_user_id: str, recipe_id: str):
+        return self.rows.get((owner_user_id, recipe_id))
+
+    def list_by_owner(self, owner_user_id: str):
+        return [row for (owner, _recipe_id), row in self.rows.items() if owner == owner_user_id]
+
+
 def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=_FakeUserRepo(),
             thread_repo=_FakeThreadRepo(),
             thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
+            recipe_repo=_FakeRecipeRepo(),
             thread_sandbox={},
             thread_cwd={},
         )
@@ -646,11 +669,30 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
 @pytest.mark.asyncio
 async def test_create_thread_carries_recipe_snapshot_into_resources_and_successful_config() -> None:
     app = _make_threads_app()
-    recipe = {
+    repo_recipe = {
         "id": "local:custom:lark",
-        "name": "Local With Lark",
+        "name": "Repo Local With Lark",
+        "provider_name": "local",
         "provider_type": "local",
         "features": {"lark_cli": True},
+        "configurable_features": {"lark_cli": True},
+        "feature_options": [{"key": "lark_cli", "name": "Lark CLI", "description": "Install Lark CLI"}],
+        "builtin": False,
+    }
+    app.state.recipe_repo.rows[("owner-1", "local:custom:lark")] = {
+        "owner_user_id": "owner-1",
+        "recipe_id": "local:custom:lark",
+        "kind": "custom",
+        "provider_type": "local",
+        "data": repo_recipe,
+        "created_at": 0,
+        "updated_at": 0,
+    }
+    recipe = {
+        "id": "local:custom:lark",
+        "name": "Tampered Client Name",
+        "provider_type": "local",
+        "features": {"lark_cli": False},
         "configurable_features": {"lark_cli": True},
         "feature_options": [{"key": "lark_cli", "name": "Lark CLI", "description": "Install Lark CLI"}],
     }
@@ -662,7 +704,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
             "recipe": recipe,
         }
     )
-    normalized_recipe = normalize_recipe_snapshot("local", recipe)
+    normalized_recipe = normalize_recipe_snapshot("local", repo_recipe)
 
     with (
         patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
@@ -677,7 +719,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
     create_resources.assert_called_once_with(
         result["thread_id"],
         "local",
-        payload.recipe.model_dump(),
+        normalized_recipe,
         None,
     )
     save_successful.assert_called_once_with(
@@ -693,6 +735,37 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
             "workspace": None,
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_create_thread_rejects_unowned_recipe_snapshot() -> None:
+    app = _make_threads_app()
+    payload = CreateThreadRequest.model_validate(
+        {
+            "agent_user_id": "member-1",
+            "model": "gpt-5.4-mini",
+            "sandbox": "local",
+            "recipe": {
+                "id": "local:custom:foreign",
+                "name": "Foreign Recipe",
+                "provider_type": "local",
+                "features": {},
+            },
+        }
+    )
+
+    with (
+        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
+        patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
+        patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
+        patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
+    ):
+        with pytest.raises(threads_router.HTTPException) as excinfo:
+            await threads_router.create_thread(payload, "owner-1", app)
+
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == "Recipe not found"
+    create_resources.assert_not_called()
 
 
 @pytest.mark.asyncio
