@@ -929,7 +929,7 @@ def test_leon_agent_chat_identity_prompt_uses_participant_id_tool_wording():
     assert "- Your user_id:" not in prompt
 
 
-def test_leon_agent_chat_identity_prompt_rejects_legacy_user_id_only_runtime_shape() -> None:
+def test_leon_agent_chat_identity_prompt_rejects_user_id_only_runtime_shape() -> None:
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
@@ -945,7 +945,7 @@ def test_leon_agent_chat_identity_prompt_rejects_legacy_user_id_only_runtime_sha
         LeonAgent._compose_system_prompt(agent)
 
 
-def test_leon_agent_chat_tool_wiring_rejects_legacy_user_id_only_runtime_shape(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_leon_agent_chat_tool_wiring_rejects_user_id_only_runtime_shape(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     from core.runtime.agent import LeonAgent
     from core.runtime.registry import ToolRegistry
 
@@ -959,7 +959,7 @@ def test_leon_agent_chat_tool_wiring_rejects_legacy_user_id_only_runtime_shape(m
 
     class _FakeChatToolService:
         def __init__(self, *args, **kwargs) -> None:
-            raise AssertionError("chat tool should not initialize from legacy-only runtime shape")
+            raise AssertionError("chat tool should not initialize from user_id-only runtime shape")
 
     monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)

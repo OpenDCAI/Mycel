@@ -1396,7 +1396,7 @@ class LeonAgent:
         if chat_identity_id:
             return str(chat_identity_id)
         if self._chat_repos.get("user_id"):
-            raise RuntimeError("legacy chat_repos.user_id is no longer supported; use chat_identity_id")
+            raise RuntimeError("chat_repos.user_id is no longer supported; use chat_identity_id")
         return None
 
     def _compose_system_prompt(self) -> str:
@@ -1413,9 +1413,9 @@ class LeonAgent:
             owner_uid = repos.get("owner_id", "")
             if uid:
                 user_repo = repos.get("user_repo")
-                self_member = user_repo.get_by_id(uid) if user_repo else None
+                self_user = user_repo.get_by_id(uid) if user_repo else None
                 owner_row = user_repo.get_by_id(owner_uid) if user_repo and owner_uid else None
-                name = self_member.display_name if self_member else uid
+                name = self_user.display_name if self_user else uid
                 owner_name = owner_row.display_name if owner_row else "unknown"
                 prompt += (
                     f"\n\n**Chat Identity:**\n"
