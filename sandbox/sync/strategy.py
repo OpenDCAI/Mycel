@@ -165,7 +165,6 @@ class SyncStrategy(ABC):
 
     def clear_state(self, state_key: str):
         """Remove all sync state for a key. Default no-op."""
-        pass
 
 
 class NoOpStrategy(SyncStrategy):
