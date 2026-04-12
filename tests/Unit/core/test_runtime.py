@@ -34,7 +34,7 @@ def terminal_store(temp_db):
     repo.close()
 
 
-class _LeaseStoreCompat:
+class _LeaseStoreAdapter:
     """Thin wrapper: repo returns dicts, tests expect domain objects from create/get."""
 
     def __init__(self, repo: SQLiteLeaseRepo):
@@ -54,10 +54,10 @@ class _LeaseStoreCompat:
 
 @pytest.fixture
 def lease_store(temp_db):
-    """Create SQLiteLeaseRepo with compat wrapper for tests."""
+    """Create SQLiteLeaseRepo with domain-object adapter for tests."""
     repo = SQLiteLeaseRepo(db_path=temp_db)
-    compat = _LeaseStoreCompat(repo)
-    yield compat
+    adapter = _LeaseStoreAdapter(repo)
+    yield adapter
     repo.close()
 
 
