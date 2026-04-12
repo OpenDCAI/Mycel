@@ -21,7 +21,7 @@ def parse_runtime_datetime(raw: str | datetime) -> datetime:
     if isinstance(raw, datetime):
         parsed = raw
     else:
-        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(raw))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed
