@@ -11,7 +11,6 @@ export interface ComputerPanelProps {
   width?: number;
   activeTab?: TabType;
   onTabChange?: (tab: TabType) => void;
-  isStreaming?: boolean;
 }
 
 export interface TreeNode {

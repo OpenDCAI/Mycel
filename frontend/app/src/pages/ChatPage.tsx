@@ -458,7 +458,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               width={computerResize.width}
               activeTab={computerTab}
               onTabChange={setComputerTab}
-              isStreaming={isStreaming}
             />
           </>
         )}
