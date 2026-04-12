@@ -310,16 +310,6 @@ export interface StreamStatus {
   run_start_seq?: number;
 }
 
-export interface SessionStatus {
-  thread_id: string;
-  session_id: string;
-  terminal_id: string;
-  status: string;
-  started_at: string;
-  last_active_at: string;
-  expires_at: string;
-}
-
 export interface TerminalStatus {
   thread_id: string;
   terminal_id: string;
