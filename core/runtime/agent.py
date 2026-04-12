@@ -585,7 +585,7 @@ class LeonAgent:
 
         # Load runtime config
         loader = AgentLoader(workspace_root=workspace_root)
-        config = loader.load(cli_overrides=cli_overrides if cli_overrides else None)
+        config = loader.load(cli_overrides=cli_overrides or None)
         if memory_config_override is not None:
             config = self._with_memory_config_override(config, memory_config_override)
 
@@ -595,11 +595,11 @@ class LeonAgent:
             models_cli["active"] = {"model": model_name}
         models_loader = ModelsLoader(workspace_root=workspace_root)
         if models_config_override is None:
-            models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
+            models_config = models_loader.load(cli_overrides=models_cli or None)
         else:
             models_config = models_loader.load_with_user_config(
                 models_config_override,
-                cli_overrides=models_cli if models_cli else None,
+                cli_overrides=models_cli or None,
             )
 
         # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from
@@ -731,8 +731,7 @@ class LeonAgent:
         base_url = base_url.rstrip("/")
 
         # Remove /v1 suffix if present (we'll add it back if needed)
-        if base_url.endswith("/v1"):
-            base_url = base_url[:-3]
+        base_url = base_url.removesuffix("/v1")
 
         # Add /v1 for OpenAI-compatible providers
         if provider in ("openai", None):  # None defaults to OpenAI
@@ -887,7 +886,7 @@ class LeonAgent:
             **overrides: Fields to override (e.g. active="langfuse" or active=None)
         """
         self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(
-            cli_overrides=overrides if overrides else None
+            cli_overrides=overrides or None
         )
 
         if self.verbose:
@@ -1318,7 +1317,7 @@ class LeonAgent:
             for tool in tools:
                 # Extract server name from tool metadata or connection
                 server_name = None
-                for name in configs.keys():
+                for name in configs:
                     if hasattr(tool, "metadata") and tool.metadata:
                         server_name = name
                         break
@@ -1352,7 +1351,6 @@ class LeonAgent:
         self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
         self.checkpointer = await self._pg_saver_ctx.__aenter__()
         await self.checkpointer.setup()
-        return None  # no SQLite conn to track
 
     def _is_tool_allowed(self, tool) -> bool:
         # Extract original tool name without mcp__ prefix
