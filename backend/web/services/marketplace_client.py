@@ -19,6 +19,9 @@ from config.types import AgentBundle
 logger = logging.getLogger(__name__)
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "http://localhost:8090")
+# @@@hub-agent-user-item-type - Hub still names published Agent users "member";
+# local Mycel domain code must keep exposing them as Agent users.
+HUB_AGENT_USER_ITEM_TYPE = "member"
 
 _hub_client = httpx.Client(timeout=30.0, trust_env=False)
 
@@ -257,7 +260,7 @@ def download(
         logger.info("Downloaded agent %s to library", slug)
         return {"resource_id": slug, "type": "agent", "version": installed_version}
 
-    if item_type == "member":
+    if item_type == HUB_AGENT_USER_ITEM_TYPE:
         if user_repo is None or agent_config_repo is None:
             raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
 

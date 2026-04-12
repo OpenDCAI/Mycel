@@ -50,7 +50,7 @@ async def publish_agent_user_to_marketplace(
     return await asyncio.to_thread(
         marketplace_client.publish,
         user_id=req.user_id,
-        type_="member",
+        type_=marketplace_client.HUB_AGENT_USER_ITEM_TYPE,
         bump_type=req.bump_type,
         release_notes=req.release_notes,
         tags=req.tags,

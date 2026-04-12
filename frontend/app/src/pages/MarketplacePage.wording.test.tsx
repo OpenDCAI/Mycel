@@ -207,7 +207,7 @@ describe("MarketplacePage wording contract", () => {
     });
   });
 
-  it("uses Agent wording for marketplace member resources", () => {
+  it("uses Agent wording for the Hub agent-user item type", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace"]}>
         <Routes>

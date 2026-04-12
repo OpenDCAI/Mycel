@@ -8,7 +8,7 @@ import MarketplaceCard from "./MarketplaceCard";
 afterEach(() => cleanup());
 
 describe("MarketplaceCard wording contract", () => {
-  it("renders marketplace member type as Agent", () => {
+  it("renders the Hub agent-user item type as Agent", () => {
     render(
       <MarketplaceCard
         item={{

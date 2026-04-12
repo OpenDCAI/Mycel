@@ -9,11 +9,11 @@ import UpdateDialog from "@/components/marketplace/UpdateDialog";
 import RecipeEditor from "@/components/RecipeEditor";
 import type { Agent, ResourceItem } from "@/store/types";
 import type { UpdateAvailable } from "@/store/marketplace-store";
-import { HUB_AGENT_USER_TYPE } from "@/lib/marketplace-types";
+import { HUB_AGENT_USER_ITEM_TYPE } from "@/lib/marketplace-types";
 
 type Tab = "explore" | "installed";
 type InstalledSubTab = "agent-user" | "skill" | "agent" | "recipe";
-type TypeFilter = "all" | typeof HUB_AGENT_USER_TYPE | "agent" | "skill" | "env";
+type TypeFilter = "all" | typeof HUB_AGENT_USER_ITEM_TYPE | "agent" | "skill" | "env";
 type InstalledAgentUser = Agent & {
   source?: {
     marketplace_item_id?: string;
@@ -31,7 +31,7 @@ function isInstalledSubTab(value: string | null): value is InstalledSubTab {
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: HUB_AGENT_USER_TYPE, label: "Agent" },
+  { id: HUB_AGENT_USER_ITEM_TYPE, label: "Agent" },
   { id: "agent", label: "Subagent" },
   { id: "skill", label: "Skill" },
   { id: "env", label: "Env" },

@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe("InstallDialog wording contract", () => {
-  it("uses Agent wording for local member installs", () => {
+  it("uses Agent wording for Hub agent-user installs", () => {
     render(
       <InstallDialog
         open

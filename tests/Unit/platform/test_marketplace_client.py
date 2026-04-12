@@ -323,7 +323,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
 
     result = marketplace_client.publish(
         user_id="agent-user-1",
-        type_="member",
+        type_=marketplace_client.HUB_AGENT_USER_ITEM_TYPE,
         bump_type="patch",
         release_notes="repo publish",
         tags=["repo"],
@@ -417,7 +417,7 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
 
     result = marketplace_client.publish(
         user_id="agent-user-1",
-        type_="member",
+        type_=marketplace_client.HUB_AGENT_USER_ITEM_TYPE,
         bump_type="patch",
         release_notes="repo publish",
         tags=["repo"],
@@ -446,7 +446,7 @@ def test_publish_requires_repos():
     with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
         marketplace_client.publish(
             user_id="agent-user-1",
-            type_="member",
+            type_=marketplace_client.HUB_AGENT_USER_ITEM_TYPE,
             bump_type="patch",
             release_notes="repo publish",
             tags=["repo"],
