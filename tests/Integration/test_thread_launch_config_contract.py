@@ -341,6 +341,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
         "config": {
             "create_mode": "new",
             "provider_config": "local",
+            "recipe_id": "local:default",
             "recipe": default_recipe_snapshot("local"),
             "lease_id": None,
             "model": "gpt-4.1",

@@ -424,8 +424,9 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "new",
         provider_config: "local",
+        recipe_id: "local-recipe",
         recipe: {
-          id: "local-recipe",
+          id: "stale-display-snapshot",
           name: "Local",
           provider_type: "local",
           features: { lark_cli: false },
@@ -439,6 +440,18 @@ describe("NewChatPage", () => {
     });
     useAppStore.setState({
       libraryRecipes: [{
+        id: "other-recipe",
+        type: "recipe",
+        name: "Other Local",
+        desc: "",
+        provider_type: "local",
+        features: {},
+        configurable_features: {},
+        feature_options: [],
+        available: true,
+        created_at: 0,
+        updated_at: 0,
+      }, {
         id: "local-recipe",
         type: "recipe",
         name: "Local",
