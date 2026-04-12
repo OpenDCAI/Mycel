@@ -44,6 +44,12 @@ describe("streaming api contract", () => {
     await expect(api.postRun("thread-1", "hello")).rejects.toThrow("Run cancelled");
   });
 
+  it("postRun rejects non-string run ids", async () => {
+    authFetch.mockResolvedValue(okJson({ run_id: { value: "run-1" }, thread_id: "thread-1" }));
+
+    await expect(api.postRun("thread-1", "hello")).rejects.toThrow("Run did not start");
+  });
+
   it("streams thread events through authenticated fetch without leaking token in the URL", async () => {
     const ac = new AbortController();
     const body = new ReadableStream({
