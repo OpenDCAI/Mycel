@@ -1,6 +1,7 @@
 """Authentication endpoints — 3-step registration + login."""
 
 import asyncio
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,11 +12,10 @@ from backend.web.core.dependencies import _get_auth_service, get_app
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-async def _call_auth_service(app: Any, status_code: int, method_name: str, *args: Any) -> Any:
+async def _call_auth_service(app: Any, status_code: int, call: Callable[[Any], Any]) -> Any:
     try:
         service = _get_auth_service(app)
-        method = getattr(service, method_name)
-        return await asyncio.to_thread(method, *args)
+        return await asyncio.to_thread(call, service)
     except ValueError as e:
         raise HTTPException(status_code, str(e))
 
@@ -31,7 +31,11 @@ class SendOtpRequest(BaseModel):
 
 @router.post("/send-otp")
 async def send_otp(payload: SendOtpRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    await _call_auth_service(app, 400, "send_otp", payload.email, payload.password, payload.invite_code)
+    await _call_auth_service(
+        app,
+        400,
+        lambda service: service.send_otp(payload.email, payload.password, payload.invite_code),
+    )
     return {"ok": True}
 
 
@@ -45,7 +49,11 @@ class VerifyOtpRequest(BaseModel):
 
 @router.post("/verify-otp")
 async def verify_otp(payload: VerifyOtpRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    return await _call_auth_service(app, 400, "verify_register_otp", payload.email, payload.token)
+    return await _call_auth_service(
+        app,
+        400,
+        lambda service: service.verify_register_otp(payload.email, payload.token),
+    )
 
 
 # ── Registration step 3: set password + invite code ────────────────────────
@@ -58,7 +66,11 @@ class CompleteRegisterRequest(BaseModel):
 
 @router.post("/complete-register")
 async def complete_register(payload: CompleteRegisterRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    return await _call_auth_service(app, 400, "complete_register", payload.temp_token, payload.invite_code)
+    return await _call_auth_service(
+        app,
+        400,
+        lambda service: service.complete_register(payload.temp_token, payload.invite_code),
+    )
 
 
 # ── Login ───────────────────────────────────────────────────────────────────
@@ -71,4 +83,8 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 async def login(payload: LoginRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    return await _call_auth_service(app, 401, "login", payload.identifier, payload.password)
+    return await _call_auth_service(
+        app,
+        401,
+        lambda service: service.login(payload.identifier, payload.password),
+    )

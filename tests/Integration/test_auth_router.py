@@ -137,9 +137,7 @@ async def test_call_auth_service_returns_service_result():
     result = await auth_router._call_auth_service(
         app,
         400,
-        "verify_register_otp",
-        "fresh@example.com",
-        "123456",
+        lambda service: service.verify_register_otp("fresh@example.com", "123456"),
     )
 
     assert result == {"temp_token": "temp-otp"}
@@ -156,9 +154,7 @@ async def test_call_auth_service_maps_value_error_to_given_status():
         await auth_router._call_auth_service(
             app,
             400,
-            "complete_register",
-            "temp-otp",
-            "invite-1",
+            lambda service: service.complete_register("temp-otp", "invite-1"),
         )
 
     assert exc_info.value.status_code == 400
