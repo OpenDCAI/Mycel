@@ -53,27 +53,11 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
   }, [agentList, filter]);
 
   const groupCandidates = useMemo(() => {
-    const byId = new Map<string, EntityItem>();
-    for (const agent of agentList) {
-      byId.set(agent.id, {
-        user_id: agent.id,
-        name: agent.name,
-        type: "agent",
-        avatar_url: agent.avatar_url ?? null,
-        owner_name: "我的 Agent",
-        is_owned: true,
-        relationship_state: "none",
-        can_chat: true,
-      });
-    }
-    for (const entity of entities) {
-      if (!byId.has(entity.user_id)) byId.set(entity.user_id, entity);
-    }
     const query = filter.trim().toLowerCase();
-    const items = [...byId.values()].filter((item) => item.user_id !== myUserId && (item.is_owned || item.can_chat));
+    const items = entities.filter((item) => item.user_id !== myUserId && (item.is_owned || item.can_chat));
     if (!query) return items;
     return items.filter((item) => [item.name, item.owner_name ?? "", item.type].join(" ").toLowerCase().includes(query));
-  }, [agentList, entities, filter, myUserId]);
+  }, [entities, filter, myUserId]);
 
   useEffect(() => {
     if (!open) return;

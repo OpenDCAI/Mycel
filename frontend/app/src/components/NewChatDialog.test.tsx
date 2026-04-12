@@ -134,7 +134,6 @@ describe("NewChatDialog", () => {
 
     expect(await screen.findByRole("button", { name: /Ada/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Pending User/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Morel/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Ada/ }));
     fireEvent.click(screen.getByRole("button", { name: /Toad/ }));
     fireEvent.change(screen.getByPlaceholderText("群聊名称（可选）"), { target: { value: "Trial group" } });
@@ -151,5 +150,70 @@ describe("NewChatDialog", () => {
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(navigate).toHaveBeenCalledWith("/chat/visit/chat-1");
+  });
+
+  it("uses entities as the group-chat participant source of truth", async () => {
+    useAppStore.setState({
+      agentList: [
+        {
+          id: "agent-config-1",
+          name: "Morel",
+          description: "configuration identity",
+          status: "active",
+          version: "1.0.0",
+          config: { prompt: "", rules: [], tools: [], mcps: [], skills: [], subAgents: [] },
+          created_at: 0,
+          updated_at: 0,
+        },
+      ],
+    });
+    authFetch
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "actor-agent-1",
+          name: "Morel",
+          type: "agent",
+          avatar_url: null,
+          owner_name: "我的 Agent",
+          agent_name: "Morel",
+          default_thread_id: "thread-morel",
+          is_owned: true,
+          relationship_state: "none",
+          can_chat: true,
+        },
+        {
+          user_id: "human-2",
+          name: "Ada",
+          type: "human",
+          avatar_url: null,
+          owner_name: null,
+          agent_name: "Ada",
+          is_owned: false,
+          relationship_state: "visit",
+          can_chat: true,
+        },
+      ]))
+      .mockResolvedValueOnce(okJson({ id: "chat-entity-source", status: "active", created_at: 1 }));
+
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "创建群聊" }));
+
+    expect(await screen.findByRole("button", { name: /Morel/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Morel/ })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Morel/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Ada/ }));
+    fireEvent.click(screen.getByRole("button", { name: "创建群聊（2）" }));
+
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenLastCalledWith(
+        "/api/chats",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ user_ids: ["human-1", "actor-agent-1", "human-2"] }),
+        }),
+      );
+    });
   });
 });
