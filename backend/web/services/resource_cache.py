@@ -109,7 +109,7 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
         if _snapshot_drifted_from_live_sessions(cached):
             return refresh_resource_overview_sync()
         return cached
-    # @@@cold-start-cache-fill - route fallback fills cache once to keep first call deterministic.
+    # @@@cold-start-cache-fill - cold route fills cache once to keep first call deterministic.
     return refresh_resource_overview_sync()
 
 

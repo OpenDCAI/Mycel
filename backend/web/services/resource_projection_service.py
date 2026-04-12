@@ -191,7 +191,7 @@ def _resource_session_identity(session: dict[str, Any]) -> str:
     thread_id = str(session.get("thread_id") or "")
     if lease_id and thread_id:
         # @@@resource-session-contract - resource cards are lease/thread scoped, not chat-session scoped.
-        # Terminal fallback rows can carry distinct session ids for the same visible lease+thread binding.
+        # Terminal-derived rows can carry distinct session ids for the same visible lease+thread binding.
         return f"{lease_id}:{thread_id}"
     session_id = str(session.get("session_id") or "")
     if session_id:

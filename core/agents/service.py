@@ -85,7 +85,7 @@ def _resolve_subagent_model(
     subagent_type: str,
     requested_model: str | None,
     inherited_model: str,
-    fallback_model: str | None = None,
+    service_default_model: str | None = None,
 ) -> str:
     def _is_inherit_marker(value: str | None) -> bool:
         return value is None or value.lower() in {"default", "inherit"}
@@ -102,8 +102,8 @@ def _resolve_subagent_model(
 
     if inherited_model and not _is_inherit_marker(inherited_model):
         return inherited_model
-    if fallback_model and not _is_inherit_marker(fallback_model):
-        return fallback_model
+    if service_default_model and not _is_inherit_marker(service_default_model):
+        return service_default_model
     return inherited_model
 
 
@@ -1090,10 +1090,10 @@ class AgentService:
         parent_bootstrap.total_tool_duration_ms = int(getattr(parent_bootstrap, "total_tool_duration_ms", 0)) + child_tool_duration_delta
 
     @staticmethod
-    def _summarize_progress(text: str, fallback: str) -> str:
+    def _summarize_progress(text: str, default_text: str) -> str:
         collapsed = " ".join(text.split()).strip()
         if not collapsed:
-            return fallback
+            return default_text
         return collapsed[:120]
 
     async def _emit_background_progress(

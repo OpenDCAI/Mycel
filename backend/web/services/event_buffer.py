@@ -63,7 +63,7 @@ class ThreadEventBuffer:
     """Per-thread persistent event buffer — survives across runs.
 
     Ring buffer mode: keeps the most recent `maxlen` events in memory.
-    Older events are available via SQLite fallback (event_store).
+    Older events are available via the persistent event_store.
     Never calls mark_done() — the connection lifecycle is managed by client disconnect.
     """
 

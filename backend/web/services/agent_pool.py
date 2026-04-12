@@ -87,7 +87,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         if pool_key in pool:
             return pool[pool_key]
 
-        # For local sandbox, check if thread has custom cwd (memory → SQLite fallback)
+        # For local sandbox, check if thread has custom cwd (live map → persisted thread config).
         workspace_root = None
         thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
         if sandbox_type == "local":
@@ -99,7 +99,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 path = Path(cwd).expanduser()
                 # @@@fresh-local-cwd-owns-workspace - a cwd chosen in this live backend session is
                 # the caller contract for local threads; create it instead of silently falling
-                # back to the repo root. Persisted paths from another host stay advisory.
+                # using the repo root. Persisted paths from another host stay advisory.
                 if cwd_from_live_map:
                     path.mkdir(parents=True, exist_ok=True)
                     workspace_root = path.resolve()

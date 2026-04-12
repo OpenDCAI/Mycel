@@ -105,7 +105,7 @@ def resolve_local_workspace_path(
     if local_workspace_root is None:
         local_workspace_root = LOCAL_WORKSPACE_ROOT
 
-    # Use thread-specific workspace root if available (memory → SQLite fallback)
+    # Use thread-specific workspace root if available (live map → persisted thread config).
     thread_cwd = None
     if thread_id:
         if thread_cwd_map:
