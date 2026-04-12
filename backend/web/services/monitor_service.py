@@ -553,9 +553,7 @@ def list_leases() -> dict[str, Any]:
 def list_monitor_provider_sessions() -> dict[str, Any]:
     _, managers = sandbox_service.init_providers_and_managers()
     sessions = []
-    for item in sandbox_service.load_all_sessions(managers):
-        if item.get("source") != "provider_orphan":
-            continue
+    for item in sandbox_service.load_provider_orphan_sessions(managers):
         sessions.append(
             {
                 "session_id": str(item.get("session_id") or ""),

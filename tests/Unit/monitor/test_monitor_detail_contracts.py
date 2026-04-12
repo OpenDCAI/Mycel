@@ -547,9 +547,8 @@ def test_list_monitor_provider_sessions_returns_provider_orphans(monkeypatch):
     monkeypatch.setattr(monitor_service.sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": object()}))
     monkeypatch.setattr(
         monitor_service.sandbox_service,
-        "load_all_sessions",
+        "load_provider_orphan_sessions",
         lambda _managers: [
-            {"session_id": "lease-backed", "provider": "daytona", "source": "lease", "status": "running"},
             {"session_id": "orphan-1", "provider": "daytona", "source": "provider_orphan", "status": "running"},
         ],
     )

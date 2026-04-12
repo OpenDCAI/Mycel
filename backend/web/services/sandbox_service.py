@@ -420,6 +420,48 @@ def load_all_sessions(managers: dict) -> list[dict]:
     return sessions
 
 
+def load_provider_orphan_sessions(managers: dict) -> list[dict]:
+    """Load provider-visible sessions that are not backed by a known lease."""
+    sessions: list[dict] = []
+    for provider_name, manager in managers.items():
+        provider = getattr(manager, "provider", None)
+        list_provider_sessions = getattr(provider, "list_provider_sessions", None)
+        if not callable(list_provider_sessions):
+            continue
+        provider_slug = getattr(provider, "name", provider_name)
+
+        seen_instance_ids = {
+            str(row.get("current_instance_id") or "").strip()
+            for row in manager.lease_store.list_by_provider(provider_slug)
+            if str(row.get("current_instance_id") or "").strip()
+        }
+        raw_provider_sessions = list_provider_sessions()
+        provider_sessions = raw_provider_sessions if isinstance(raw_provider_sessions, list) else []
+
+        inspect_visible = manager.provider_capability.inspect_visible
+        for ps in provider_sessions:
+            instance_id = getattr(ps, "session_id", None)
+            status = getattr(ps, "status", None) or "unknown"
+            if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
+                continue
+            sessions.append(
+                {
+                    "session_id": instance_id,
+                    "thread_id": "(orphan)",
+                    "provider": provider_slug,
+                    "status": status,
+                    "created_at": None,
+                    "last_active": None,
+                    "lease_id": None,
+                    "instance_id": instance_id,
+                    "chat_session_id": None,
+                    "source": "provider_orphan",
+                    "inspect_visible": inspect_visible,
+                }
+            )
+    return sessions
+
+
 def find_session_and_manager(
     sessions: list[dict],
     managers: dict,
