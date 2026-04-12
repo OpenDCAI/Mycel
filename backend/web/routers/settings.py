@@ -483,9 +483,6 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
 
         provider_name = _attempt_infer_model_provider(resolved)
 
-    # Get credentials from providers config
-    p = mc.get_provider(provider_name) if provider_name else None
-
     try:
         from langchain.chat_models import init_chat_model
 
@@ -497,7 +494,7 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
         api_key = mc.resolve_api_key(provider_name)
         if api_key:
             kwargs["api_key"] = api_key
-        base_url = (p.base_url if p else None) or mc.get_base_url()
+        base_url = mc.resolve_base_url(provider_name)
         if base_url:
             kwargs["base_url"] = _normalize_model_base_url(base_url, provider_name)
 

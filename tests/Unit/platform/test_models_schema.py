@@ -31,3 +31,12 @@ def test_platform_credential_source_reads_provider_env(monkeypatch):
     config = ModelsConfig(providers={"openai": ProviderConfig(credential_source="platform", api_key="stale-user-key")})
 
     assert config.resolve_api_key("openai") == "platform-key"
+
+
+def test_openai_base_url_does_not_read_anthropic_base_url(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://anthropic.example")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.example")
+    config = ModelsConfig()
+
+    assert config.resolve_base_url("openai") == "https://openai.example"
+    assert config.resolve_base_url("anthropic") == "https://anthropic.example"

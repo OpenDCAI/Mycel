@@ -171,6 +171,18 @@ class ModelsConfig(BaseModel):
         return os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
 
     @staticmethod
+    def _platform_base_url(provider_name: str | None) -> str | None:
+        if provider_name == "anthropic":
+            return os.getenv("ANTHROPIC_BASE_URL")
+        if provider_name == "openai":
+            return os.getenv("OPENAI_BASE_URL")
+        if provider_name == "openrouter":
+            return os.getenv("OPENROUTER_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        if provider_name:
+            return os.getenv(f"{provider_name.upper()}_BASE_URL")
+        return os.getenv("ANTHROPIC_BASE_URL") or os.getenv("OPENAI_BASE_URL") or os.getenv("OPENROUTER_BASE_URL")
+
+    @staticmethod
     def credential_source_for(provider: ProviderConfig | None) -> CredentialSource:
         if provider is None:
             return "platform"
@@ -199,6 +211,19 @@ class ModelsConfig(BaseModel):
                     return key
         return self._platform_api_key(None)
 
+    def resolve_base_url(self, provider_name: str | None = None) -> str | None:
+        """Resolve a base URL without crossing provider boundaries."""
+        if provider_name:
+            provider = self.providers.get(provider_name)
+            if provider and provider.base_url:
+                return provider.base_url
+            return self._platform_base_url(provider_name)
+
+        if self.active and self.active.provider:
+            return self.resolve_base_url(self.active.provider)
+
+        return self._platform_base_url(None)
+
     def get_active_provider(self) -> ProviderConfig | None:
         """Get provider credentials for the active model's provider."""
         if self.active and self.active.provider:
@@ -211,12 +236,7 @@ class ModelsConfig(BaseModel):
 
     def get_base_url(self) -> str | None:
         """Get base URL: active provider → env vars."""
-        p = self.get_active_provider()
-        if p and p.base_url:
-            return p.base_url
-
-        # From environment
-        return os.getenv("ANTHROPIC_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        return self.resolve_base_url()
 
     def get_model_provider(self) -> str | None:
         """Get model provider: active.provider → auto-detect from env."""

@@ -343,6 +343,7 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
             resolve_model=lambda _model_id: ("repo-custom", {}),
             get_provider=lambda _provider_name: SimpleNamespace(api_key="repo-key", base_url="https://repo.example"),
             resolve_api_key=lambda _provider_name: "repo-key",
+            resolve_base_url=lambda _provider_name: "https://repo.example",
         ),
     )
     monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
@@ -376,6 +377,7 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
 def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monkeypatch):
     repo = _FakeSettingsRepo()
     repo.models_config = {}
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://anthropic.example")
     monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://platform.example")
 

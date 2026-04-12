@@ -767,13 +767,12 @@ class LeonAgent:
         if provider:
             kwargs["model_provider"] = provider
 
-        p = self.models_config.get_provider(provider) if provider else None
         api_key = self.models_config.resolve_api_key(provider) or getattr(self, "api_key", None)
         if not api_key:
             raise RuntimeError("API key required for WebFetch extraction model")
         kwargs["api_key"] = api_key
 
-        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        base_url = self.models_config.resolve_base_url(provider)
         if base_url:
             kwargs["base_url"] = self._normalize_base_url(base_url, provider)
         return init_chat_model(model_name, **kwargs)
@@ -791,18 +790,7 @@ class LeonAgent:
         if provider:
             kwargs["model_provider"] = provider
 
-        # Get credentials from the resolved provider
-        p = self.models_config.get_provider(provider) if provider else None
-        env_base_url = os.getenv("ANTHROPIC_BASE_URL") or os.getenv("OPENAI_BASE_URL")
-
-        # @@@explicit-api-key-base-url
-        # Real-model verification must not be silently redirected to a provider
-        # config endpoint when the caller explicitly injected credentials for a
-        # different OpenAI-compatible endpoint.
-        if self._explicit_api_key and env_base_url:
-            base_url = env_base_url
-        else:
-            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        base_url = self.models_config.resolve_base_url(provider)
         if base_url:
             kwargs["base_url"] = self._normalize_base_url(base_url, provider)
 
@@ -839,9 +827,8 @@ class LeonAgent:
         if model is None:
             # @@@api-key-reload — no model change, just refresh credentials from disk
             provider_name = self._resolve_provider_name(self.model_name, self._model_overrides)
-            p = self.models_config.get_provider(provider_name) if provider_name else None
             self.api_key = self.models_config.resolve_api_key(provider_name)
-            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+            base_url = self.models_config.resolve_base_url(provider_name)
             if base_url:
                 base_url = self._normalize_base_url(base_url, provider_name)
             self._current_model_config.update(
@@ -860,9 +847,8 @@ class LeonAgent:
 
         # Resolve provider credentials
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
-        p = self.models_config.get_provider(provider_name) if provider_name else None
         self.api_key = self.models_config.resolve_api_key(provider_name)
-        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        base_url = self.models_config.resolve_base_url(provider_name)
         if base_url:
             base_url = self._normalize_base_url(base_url, provider_name)
 
