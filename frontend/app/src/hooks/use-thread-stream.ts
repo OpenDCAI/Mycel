@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useState } from "react";
 import { getThreadRuntime, streamThreadEvents, type StreamStatus } from "../api";
 import type { StreamEvent } from "../api/types";
 
-export type ConnectionPhase =
+type ConnectionPhase =
   | "idle"            // not connected
   | "connecting"      // establishing SSE
   | "connected"       // receiving events, may or may not be running

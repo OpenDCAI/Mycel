@@ -6,7 +6,7 @@ interface NoticeBubbleProps {
   onTaskNoticeClick?: (taskId: string) => void;
 }
 
-export interface ParsedNotice {
+interface ParsedNotice {
   text: string;
   status?: "completed" | "error" | "pending";
   taskId?: string;
