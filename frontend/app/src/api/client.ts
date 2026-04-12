@@ -48,7 +48,7 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function requestOk(url: string, init?: RequestInit): Promise<void> {
+async function requestOk(url: string, init?: RequestInit): Promise<void> {
   await checkedResponse(url, init);
 }
 
