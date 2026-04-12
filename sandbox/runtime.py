@@ -69,8 +69,7 @@ def _sanitize_shell_output(raw: str) -> str:
             break
         cleaned = next_cleaned
     cleaned = cleaned.replace("\x08", "")
-    cleaned = "".join(ch for ch in cleaned if ch in "\n\t" or 32 <= ord(ch))
-    return cleaned
+    return "".join(ch for ch in cleaned if ch in "\n\t" or ord(ch) >= 32)
 
 
 def _normalize_pty_result(output: str, command: str | None = None) -> str:
@@ -85,7 +84,7 @@ def _extract_state_from_output(
     previous_cwd: str,
     previous_env: dict[str, str],
 ) -> tuple[str, dict[str, str], str]:
-    pattern = re.compile(rf"{re.escape(start_marker)}(.*?){re.escape(end_marker)}", re.S)
+    pattern = re.compile(rf"{re.escape(start_marker)}(.*?){re.escape(end_marker)}", re.DOTALL)
     matches = list(pattern.finditer(raw_output))
     if not matches:
         # @@@markerless-empty-output-preserve-state - Some lightweight providers/tests return empty stdout on successful exec.
@@ -225,13 +224,12 @@ class _SubprocessPtySession:
             if marker_done_re.search(decoded):
                 cleaned, exit_code = _extract_marker_exit(decoded, marker, command)
                 return cleaned, "", exit_code
-            if on_stdout_chunk is not None:
-                if len(decoded) > emitted_raw_len:
-                    delta_raw = decoded[emitted_raw_len:]
-                    emitted_raw_len = len(decoded)
-                    delta = _sanitize_shell_output(delta_raw)
-                    if delta:
-                        on_stdout_chunk(delta)
+            if on_stdout_chunk is not None and len(decoded) > emitted_raw_len:
+                delta_raw = decoded[emitted_raw_len:]
+                emitted_raw_len = len(decoded)
+                delta = _sanitize_shell_output(delta_raw)
+                if delta:
+                    on_stdout_chunk(delta)
 
     def interrupt_and_recover(self, recover_timeout: float = 3.0) -> bool:
         """Send Ctrl+C to interrupt the current command and recover the session.
@@ -1009,4 +1007,3 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
 
     async def close(self) -> None:
         """No-op for remote runtime - instance lifecycle managed by lease."""
-        pass
