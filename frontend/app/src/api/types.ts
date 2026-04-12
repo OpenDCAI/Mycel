@@ -142,6 +142,18 @@ export interface ThreadLaunchConfigResponse {
   config: ThreadLaunchConfig;
 }
 
+export interface AccountResourceLimit {
+  resource: string;
+  provider_name: string;
+  label: string;
+  limit: number;
+  used: number;
+  remaining: number;
+  can_create: boolean;
+  period?: string;
+  unit?: string;
+}
+
 export interface UserLeaseSummary {
   lease_id: string;
   provider_name: string;

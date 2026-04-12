@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -619,6 +620,7 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
     with (
         patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
         patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
+        patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
         patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None) as save_successful,
@@ -639,3 +641,53 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
         },
     )
     assert app.state.thread_cwd[result["thread_id"]] == "/tmp/fresh-local-thread"
+
+
+@pytest.mark.asyncio
+async def test_create_thread_rejects_new_lease_when_account_resource_limit_is_reached() -> None:
+    app = _make_threads_app()
+    payload = CreateThreadRequest.model_validate(
+        {
+            "agent_user_id": "member-1",
+            "model": "gpt-5.4-mini",
+            "sandbox": "daytona_selfhost",
+        }
+    )
+
+    def _raise_limit(*_args, **_kwargs):
+        raise threads_router.account_resource_service.AccountResourceLimitExceededError(
+            {
+                "resource": "sandbox",
+                "provider_name": "daytona_selfhost",
+                "label": "Self-host Daytona",
+                "limit": 2,
+                "used": 2,
+                "remaining": 0,
+                "can_create": False,
+            }
+        )
+
+    with (
+        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
+        patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
+        patch.object(threads_router.account_resource_service, "assert_can_create_sandbox", side_effect=_raise_limit),
+        patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
+    ):
+        result = await threads_router.create_thread(payload, "owner-1", app)
+
+    assert isinstance(result, threads_router.JSONResponse)
+    assert result.status_code == 409
+    assert json.loads(result.body) == {
+        "error": "sandbox_quota_exceeded",
+        "message": "Self-host Daytona sandbox quota exceeded",
+        "resource": {
+            "resource": "sandbox",
+            "provider_name": "daytona_selfhost",
+            "label": "Self-host Daytona",
+            "limit": 2,
+            "used": 2,
+            "remaining": 0,
+            "can_create": False,
+        },
+    }
+    create_resources.assert_not_called()

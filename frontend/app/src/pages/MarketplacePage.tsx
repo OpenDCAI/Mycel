@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Search, Store, Package, TrendingUp, Clock, Star, RefreshCw, Zap, Users, Trash2 } from "lucide-react";
+import { Box, Search, Store, Package, TrendingUp, Clock, Star, RefreshCw, Zap, Users, Trash2 } from "lucide-react";
 import { useMarketplaceStore } from "@/store/marketplace-store";
 import { useAppStore } from "@/store/app-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -10,7 +10,7 @@ import type { Agent } from "@/store/types";
 import type { UpdateAvailable } from "@/store/marketplace-store";
 
 type Tab = "explore" | "installed";
-type InstalledSubTab = "member" | "skill" | "agent";
+type InstalledSubTab = "member" | "skill" | "agent" | "recipe";
 type TypeFilter = "all" | "member" | "agent" | "skill" | "env";
 type InstalledAgentUser = Agent & {
   source?: {
@@ -24,13 +24,13 @@ function isTab(value: string | null): value is Tab {
 }
 
 function isInstalledSubTab(value: string | null): value is InstalledSubTab {
-  return value === "member" || value === "skill" || value === "agent";
+  return value === "member" || value === "skill" || value === "agent" || value === "recipe";
 }
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "member", label: "Member" },
-  { id: "agent", label: "Agent" },
+  { id: "member", label: "Agent" },
+  { id: "agent", label: "Subagent" },
   { id: "skill", label: "Skill" },
   { id: "env", label: "Env" },
 ];
@@ -67,7 +67,7 @@ export default function MarketplacePage() {
   const agentList = useAppStore((s) => s.agentList);
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
-  const fetchLibrary = useAppStore((s) => s.fetchLibrary);
+  const libraryRecipes = useAppStore((s) => s.libraryRecipes);
   const deleteResource = useAppStore((s) => s.deleteResource);
   const updates = useMarketplaceStore((s) => s.updates);
   const checkUpdates = useMarketplaceStore((s) => s.checkUpdates);
@@ -98,14 +98,6 @@ export default function MarketplacePage() {
     setFilter("type", type === "all" ? null : type);
   };
 
-  // Load library on installed tab open
-  useEffect(() => {
-    if (tab === "installed") {
-      fetchLibrary("skill");
-      fetchLibrary("agent");
-    }
-  }, [tab, fetchLibrary]);
-
   // Installed agent users with marketplace source info
   const installedAgentUsers: InstalledAgentUser[] = agentList.filter((agent) => !agent.builtin);
   const filteredAgentUsers = installedAgentUsers.filter((agent) =>
@@ -117,11 +109,15 @@ export default function MarketplacePage() {
   const filteredAgents = libraryAgents.filter((a) =>
     !installedSearch || a.name.toLowerCase().includes(installedSearch.toLowerCase())
   );
+  const filteredRecipes = libraryRecipes.filter((recipe) =>
+    !installedSearch || recipe.name.toLowerCase().includes(installedSearch.toLowerCase())
+  );
 
   const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
     { id: "member", label: "Agent", icon: Package, count: installedAgentUsers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
-    { id: "agent", label: "Agent", icon: Users, count: libraryAgents.length },
+    { id: "agent", label: "Subagent", icon: Users, count: libraryAgents.length },
+    { id: "recipe", label: "Sandbox", icon: Box, count: libraryRecipes.length },
   ];
 
   const handleCheckUpdates = async () => {
@@ -436,7 +432,7 @@ export default function MarketplacePage() {
                   </>
                 )}
 
-                {/* Agent list */}
+                {/* Subagent list */}
                 {installedSubTab === "agent" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
@@ -466,7 +462,47 @@ export default function MarketplacePage() {
                       ))}
                     </div>
                     {filteredAgents.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Agent</div>
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Subagent</div>
+                    )}
+                  </>
+                )}
+
+                {/* Sandbox recipe list */}
+                {installedSubTab === "recipe" && (
+                  <>
+                    <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
+                      {filteredRecipes.map((recipe) => (
+                        <div
+                          key={recipe.id}
+                          onClick={() => navigate(`/library/recipe/${recipe.id}`)}
+                          className="surface-interactive p-4 cursor-pointer group relative"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                              <Box className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="min-w-0 flex-1 pr-8">
+                              <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{recipe.name}</h4>
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{recipe.desc || "暂无描述"}</p>
+                              <p className="text-2xs text-muted-foreground mt-2 font-mono truncate">
+                                Sandbox recipe · {recipe.provider_type || "unknown"}
+                              </p>
+                            </div>
+                          </div>
+                          {!recipe.builtin && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deleteResource("recipe", recipe.id); }}
+                              className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
+                              title="删除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {filteredRecipes.length === 0 && (
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Sandbox</div>
                     )}
                   </>
                 )}

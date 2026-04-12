@@ -75,31 +75,15 @@ class SupabaseUserSettingsRepo:
     def set_models_config(self, user_id: str, config: dict[str, Any]) -> None:
         self._upsert(user_id, {"models_config": config})
 
-    # ------------------------------------------------------------------
-    # Observation config (JSONB)
-    # ------------------------------------------------------------------
-
-    def get_observation_config(self, user_id: str) -> dict[str, Any] | None:
-        rows = q.rows(self._table().select("observation_config").eq("user_id", user_id).execute(), _REPO, "get_observation_config")
+    def get_account_resource_limits(self, user_id: str) -> dict[str, Any] | None:
+        rows = q.rows(
+            self._table().select("account_resource_limits").eq("user_id", user_id).execute(),
+            _REPO,
+            "get_account_resource_limits",
+        )
         if not rows:
             return None
-        return rows[0].get("observation_config")
-
-    def set_observation_config(self, user_id: str, config: dict[str, Any]) -> None:
-        self._upsert(user_id, {"observation_config": config})
-
-    # ------------------------------------------------------------------
-    # Sandbox configs (JSONB)
-    # ------------------------------------------------------------------
-
-    def get_sandbox_configs(self, user_id: str) -> dict[str, Any] | None:
-        rows = q.rows(self._table().select("sandbox_configs").eq("user_id", user_id).execute(), _REPO, "get_sandbox_configs")
-        if not rows:
-            return None
-        return rows[0].get("sandbox_configs")
-
-    def set_sandbox_configs(self, user_id: str, configs: dict[str, Any]) -> None:
-        self._upsert(user_id, {"sandbox_configs": configs})
+        return rows[0].get("account_resource_limits")
 
     def _upsert(self, user_id: str, updates: dict[str, Any]) -> None:
         now = datetime.now(UTC).isoformat()

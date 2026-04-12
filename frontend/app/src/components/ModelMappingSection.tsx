@@ -36,18 +36,21 @@ export default function ModelMappingSection({
 }: ModelMappingSectionProps) {
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleMappingChange = async (virtualId: string, modelId: string) => {
     const newMapping = { ...modelMapping, [virtualId]: modelId };
-    onUpdate(newMapping);
 
     setSaving(true);
+    setErrorMessage(null);
     try {
-      await authFetch("/api/settings/model-mapping", {
+      const response = await authFetch("/api/settings/model-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mapping: { [virtualId]: { model: modelId } } }),
       });
+      if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
+      onUpdate(newMapping);
       setSuccessMessage(true);
       setTimeout(() => setSuccessMessage(false), FEEDBACK_NORMAL);
     } catch (error) {
@@ -56,6 +59,7 @@ export default function ModelMappingSection({
       // active; otherwise this is stale UI noise.
       if (!isActiveSettingsRoute()) return;
       console.error("Failed to save mapping:", error);
+      setErrorMessage(`保存失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSaving(false);
     }
@@ -84,6 +88,11 @@ export default function ModelMappingSection({
           </div>
         )}
       </div>
+      {errorMessage && (
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          {errorMessage}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {virtualModels.map((vm, index) => {

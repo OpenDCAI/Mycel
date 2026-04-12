@@ -56,6 +56,8 @@ class MemoryMiddleware(AgentMiddleware):
         self.verbose = verbose
         self._context_limit = context_limit
         self._compaction_threshold = compaction_threshold
+        trigger_tokens = getattr(compaction_config, "trigger_tokens", None)
+        self._compaction_trigger_tokens = int(trigger_tokens) if trigger_tokens else None
 
         # Layer 1: Pruner
         if pruning_config:
@@ -148,6 +150,12 @@ class MemoryMiddleware(AgentMiddleware):
     def compact_boundary_index(self) -> int:
         return self._compact_up_to_index
 
+    def _compaction_threshold_tokens(self) -> int:
+        return self._compaction_trigger_tokens or int(self._context_limit * self._compaction_threshold)
+
+    def _should_compact(self, estimated_tokens: int) -> bool:
+        return estimated_tokens > self._compaction_threshold_tokens()
+
     # ========== AgentMiddleware interface ==========
 
     async def awrap_model_call(
@@ -191,8 +199,8 @@ class MemoryMiddleware(AgentMiddleware):
         # Layer 2: Compaction
         estimated = self._estimate_tokens(messages) + sys_tokens
         if self.verbose:
-            threshold = int(self._context_limit * self._compaction_threshold)
-            should_compact = self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold)
+            threshold = self._compaction_threshold_tokens()
+            should_compact = self._should_compact(estimated)
             print(
                 f"[Memory] Context: ~{estimated} tokens "
                 f"(sys={sys_tokens}, msgs={estimated - sys_tokens}), "
@@ -200,7 +208,7 @@ class MemoryMiddleware(AgentMiddleware):
                 f"compact={'YES' if should_compact else 'no'}"
             )
 
-        if self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold) and self._model:
+        if self._should_compact(estimated) and self._model:
             compacted = await self._attempt_compaction(messages, thread_id=thread_id)
             if compacted is not None:
                 messages = compacted
@@ -534,7 +542,7 @@ class MemoryMiddleware(AgentMiddleware):
                 return
 
             estimated = self._estimate_tokens(messages)
-            if not self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold):
+            if not self._should_compact(estimated):
                 if self.verbose:
                     print("[Memory] Context below threshold, no rebuild needed")
                 return

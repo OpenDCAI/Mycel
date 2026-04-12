@@ -28,7 +28,20 @@ async function checkedResponse(url: string, init?: RequestInit): Promise<Respons
   const response = await authFetch(url, init);
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`API ${response.status}: ${body || response.statusText}`);
+    let payload: Record<string, unknown> | null = null;
+    if (body) {
+      try {
+        payload = asRecord(JSON.parse(body));
+      } catch {
+        payload = null;
+      }
+    }
+    const message = typeof payload?.message === "string"
+      ? payload.message
+      : typeof payload?.detail === "string"
+        ? payload.detail
+        : `API ${response.status}: ${body || response.statusText}`;
+    throw new Error(message);
   }
   return response;
 }
@@ -623,56 +636,6 @@ export function getSandboxDownloadUrl(
 ): string {
   const query = new URLSearchParams({ path });
   return `${sandboxFilesBase(threadId)}/download?${query.toString()}`;
-}
-
-// --- Settings API ---
-
-export async function saveSandboxConfig(name: string, config: Record<string, unknown>): Promise<void> {
-  await requestOk("/api/settings/sandboxes", {
-    method: "POST",
-    body: JSON.stringify({ name, config }),
-  });
-}
-
-// --- Observation API ---
-
-export async function saveObservationConfig(
-  active: string | null,
-  config?: Record<string, unknown>,
-): Promise<void> {
-  await requestOk("/api/settings/observation", {
-    method: "POST",
-    body: JSON.stringify({ active, ...config }),
-  });
-}
-
-export interface ObservationVerifyResult {
-  success: boolean;
-  provider?: string;
-  traces: unknown[];
-  error?: string;
-}
-
-function parseObservationVerifyResult(value: unknown): ObservationVerifyResult {
-  const payload = asRecord(value);
-  const success = payload?.success;
-  const provider = payload?.provider;
-  const traces = payload?.traces;
-  const error = payload?.error;
-  if (!payload || typeof success !== "boolean" || !isStringOrNullish(provider)) {
-    throw new Error("Malformed observation verify result");
-  }
-  const admittedProvider = provider ?? undefined;
-  if (success) {
-    if (!Array.isArray(traces)) throw new Error("Malformed observation verify result");
-    return { success, provider: admittedProvider, traces };
-  }
-  if (typeof error !== "string") throw new Error("Malformed observation verify result");
-  return { success, provider: admittedProvider, traces: [], error };
-}
-
-export async function verifyObservation(): Promise<ObservationVerifyResult> {
-  return parseObservationVerifyResult(await request("/api/settings/observation/verify"));
 }
 
 // --- Invite Code API ---

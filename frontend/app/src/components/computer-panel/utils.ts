@@ -20,20 +20,6 @@ function firstString(args: Record<string, unknown>, keys: string[]): string | un
   return undefined;
 }
 
-/** Extract all Bash tool steps from chat entries */
-export function extractCommandSteps(entries: ChatEntry[]): ToolStep[] {
-  const steps: ToolStep[] = [];
-  for (const entry of entries) {
-    if (entry.role !== "assistant") continue;
-    for (const seg of entry.segments) {
-      if (seg.type === "tool" && seg.step.name === "Bash") {
-        steps.push(seg.step);
-      }
-    }
-  }
-  return steps;
-}
-
 /** Extract all Agent tool steps from chat entries */
 export function extractAgentSteps(entries: ChatEntry[]): ToolStep[] {
   const steps: ToolStep[] = [];
@@ -46,19 +32,6 @@ export function extractAgentSteps(entries: ChatEntry[]): ToolStep[] {
     }
   }
   return steps;
-}
-
-export function parseCommandArgs(args: unknown): { command?: string; cwd?: string; description?: string } {
-  const a = asRecord(args);
-  if (!a) return {};
-  const command = recordString(a, "command");
-  const cwd = recordString(a, "cwd");
-  const description = recordString(a, "description");
-  return {
-    ...(command !== undefined ? { command } : {}),
-    ...(cwd !== undefined ? { cwd } : {}),
-    ...(description !== undefined ? { description } : {}),
-  };
 }
 
 export function parseAgentArgs(args: unknown): { description?: string; prompt?: string; subagent_type?: string } {

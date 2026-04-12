@@ -1,8 +1,15 @@
-import type { BrowseItem, ResourceOverviewResponse } from "./types";
+import type { BrowseItem, ProviderOrphanSessionsResponse, ResourceOverviewResponse } from "./types";
 
 function ensureProviderCardContract(payload: ResourceOverviewResponse): ResourceOverviewResponse {
   if (!payload || !payload.summary || !Array.isArray(payload.providers)) {
     throw new Error("Unexpected /api/monitor/resources response shape");
+  }
+  return payload;
+}
+
+function ensureProviderOrphanContract(payload: ProviderOrphanSessionsResponse): ProviderOrphanSessionsResponse {
+  if (!payload || !Array.isArray(payload.sessions)) {
+    throw new Error("Unexpected /api/monitor/provider-sessions response shape");
   }
   return payload;
 }
@@ -32,6 +39,31 @@ export async function refreshMonitorResources(): Promise<ResourceOverviewRespons
     headers: { "Content-Type": "application/json" },
   });
   return ensureProviderCardContract(payload);
+}
+
+export async function fetchMonitorProviderSessions(): Promise<ProviderOrphanSessionsResponse> {
+  const payload = await fetchJsonOrThrow<ProviderOrphanSessionsResponse>("/api/monitor/provider-sessions", {
+    headers: { "Content-Type": "application/json" },
+  });
+  return ensureProviderOrphanContract(payload);
+}
+
+export async function cleanupMonitorProviderSession(
+  providerId: string,
+  sessionId: string,
+): Promise<{
+  accepted: boolean;
+  message?: string | null;
+  operation?: {
+    operation_id?: string | null;
+    status?: string | null;
+    summary?: string | null;
+  } | null;
+}> {
+  return fetchJsonOrThrow(`/api/monitor/provider-sessions/${encodeURIComponent(providerId)}/${encodeURIComponent(sessionId)}/cleanup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export async function browseMonitorSandbox(leaseId: string, path: string): Promise<{

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { postRun } from "../api";
 import CenteredInputBox from "../components/CenteredInputBox";
-import WorkspaceSetupModal from "../components/WorkspaceSetupModal";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 import { useWorkspaceSettings } from "../hooks/use-workspace-settings";
 import { useAuthStore } from "../store/auth-store";
@@ -10,7 +9,8 @@ import { useAppStore } from "../store/app-store";
 import ActorAvatar from "../components/ActorAvatar";
 import FilesystemBrowser from "../components/FilesystemBrowser";
 import { getDefaultThreadConfig, listMyLeases, saveDefaultThreadConfig } from "../api/client";
-import type { RecipeFeatureOption, RecipeSnapshot, ThreadLaunchConfig, UserLeaseSummary } from "../api/types";
+import { fetchAccountResourceLimits } from "../api/settings";
+import type { AccountResourceLimit, RecipeFeatureOption, RecipeSnapshot, ThreadLaunchConfig, UserLeaseSummary } from "../api/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 import { cn } from "../lib/utils";
@@ -123,13 +123,12 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   const { agentId } = useParams<{ agentId: string }>();
   const { tm } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetDefaultThread } = tm;
-  const { settings, loading, hasWorkspace, refreshSettings, setDefaultWorkspace } = useWorkspaceSettings();
+  const { settings, loading, setDefaultWorkspace } = useWorkspaceSettings();
   const shouldResolveDefaultThread = mode === "agent";
   const [error, setError] = useState<string | null>(null);
   const [resolveState, setResolveState] = useState<"resolving" | "ready" | "error">(
     shouldResolveDefaultThread ? "resolving" : "ready",
   );
-  const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [createMode, setCreateMode] = useState<"new" | "existing">("new");
   const [leaseOptions, setLeaseOptions] = useState<UserLeaseSummary[]>([]);
   const [leaseError, setLeaseError] = useState<string | null>(null);
@@ -144,6 +143,9 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   const [createModeInitialized, setCreateModeInitialized] = useState(false);
   const [configDefaultsLoading, setConfigDefaultsLoading] = useState(true);
   const [configSnapshot, setConfigSnapshot] = useState<ConfigSnapshot | null>(null);
+  const [accountResources, setAccountResources] = useState<AccountResourceLimit[]>([]);
+  const [accountResourcesLoading, setAccountResourcesLoading] = useState(true);
+  const [accountResourcesError, setAccountResourcesError] = useState<string | null>(null);
 
   const authAgent = useAuthStore(s => s.agent);
   const agentList = useAppStore(s => s.agentList);
@@ -200,6 +202,33 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     let cancelled = false;
     const ac = new AbortController();
 
+    async function loadAccountResources() {
+      setAccountResourcesLoading(true);
+      setAccountResourcesError(null);
+      try {
+        const resources = await fetchAccountResourceLimits(ac.signal);
+        if (cancelled) return;
+        setAccountResources(resources);
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setAccountResourcesError(err instanceof Error ? err.message : "Failed to load account resources");
+      } finally {
+        if (!cancelled && !ac.signal.aborted) setAccountResourcesLoading(false);
+      }
+    }
+
+    void loadAccountResources();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ac = new AbortController();
+
     async function loadLeases() {
       setLeaseLoading(true);
       setLeaseError(null);
@@ -242,6 +271,13 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
       }))
   ), [libraryRecipes]);
   const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedLeaseId) ?? null;
+  const sandboxResourceByProvider = useMemo(() => {
+    const map = new Map<string, AccountResourceLimit>();
+    for (const item of accountResources) {
+      if (item.resource === "sandbox") map.set(item.provider_name, item);
+    }
+    return map;
+  }, [accountResources]);
   const providerConfigOptions = useMemo(
     () =>
       sandboxTypes
@@ -250,8 +286,9 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
           value: item.name,
           label: providerConfigLabel(item.name),
           providerType: item.provider || providerTypeFromName(item.name),
+          resource: sandboxResourceByProvider.get(item.name),
         })),
-    [sandboxTypes],
+    [sandboxResourceByProvider, sandboxTypes],
   );
   useEffect(() => {
     if (!selectedRecipeId && recipeOptions[0]?.value) {
@@ -338,16 +375,9 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     : null;
   const activeWorkspace = selectedWorkspace || settings?.default_workspace || "";
   const localRecipeSelected = createMode === "new" && selectedRecipe?.provider_type === "local";
-  const workspaceRequired = createMode === "new"
-    && selectedRecipe?.provider_type === "local"
-    && !activeWorkspace;
 
   async function handleSend(message: string, model: string) {
     const workspace = selectedWorkspace || settings?.default_workspace || undefined;
-    if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && !workspace && !hasWorkspace) {
-      setShowWorkspaceSetup(true);
-      return;
-    }
     if (!decodedAgentId) {
       throw new Error("Cannot create thread without agent ID");
     }
@@ -384,11 +414,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     navigate(`/chat/hire/thread/${threadId}`, {
       state: { selectedModel: model, runStarted: true, message },
     });
-  }
-
-  async function handleWorkspaceSet() {
-    await refreshSettings();
-    setShowWorkspaceSetup(false);
   }
 
   function applyResolvedConfig(config: ThreadLaunchConfig) {
@@ -509,6 +534,10 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     ? providerConfigLabel(selectedProviderConfig)
     : "未选择 provider";
   const recipeSummaryLabel = selectedRecipe?.name ?? "未选择 recipe";
+  const selectedProviderResource = selectedProviderConfig
+    ? sandboxResourceByProvider.get(selectedProviderConfig)
+    : undefined;
+  const newSandboxQuotaBlocked = createMode === "new" && selectedProviderResource?.can_create === false;
   const stepSummary = createMode === "existing"
     ? `复用 ${providerSummaryLabel} 的现有 sandbox`
     : `新建 ${providerSummaryLabel} sandbox · ${recipeSummaryLabel}`;
@@ -563,8 +592,8 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
           environmentControl={{
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),
-            applyDisabled: (configStep === 2 && createMode === "existing" && !selectedLeaseId)
-              || (configStep === 3 && workspaceRequired),
+            applyDisabled: (configStep === 1 && newSandboxQuotaBlocked)
+              || (configStep === 2 && createMode === "existing" && !selectedLeaseId),
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
@@ -687,11 +716,28 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                           <SelectContent>
                             {providerConfigOptions.map((item) => (
                               <SelectItem key={item.value} value={item.value}>
-                                {item.label}
+                                {item.resource?.can_create === false ? `${item.label} · 已达上限` : item.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {accountResourcesLoading && (
+                          <p className="mt-2 text-xs text-muted-foreground">正在读取账号资源...</p>
+                        )}
+                        {accountResourcesError && (
+                          <p className="mt-2 text-xs text-destructive">{accountResourcesError}</p>
+                        )}
+                        {!accountResourcesLoading && selectedProviderResource && (
+                          <p className={cn(
+                            "mt-2 text-xs",
+                            selectedProviderResource.can_create ? "text-muted-foreground" : "text-destructive",
+                          )}
+                          >
+                            {selectedProviderResource.can_create
+                              ? `${selectedProviderResource.label} 已用 ${selectedProviderResource.used}/${selectedProviderResource.limit}，剩余 ${selectedProviderResource.remaining}`
+                              : `${selectedProviderResource.label} 已达上限`}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ) : null}
@@ -863,12 +909,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                           initialPath={activeWorkspace || "~"}
                         />
                       </div>
-
-                      {workspaceRequired && (
-                        <div className="text-xs text-destructive">
-                          Local sandbox 需要先选择一个工作区，才能确认配置。
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -878,14 +918,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
           onSend={handleSend}
         />
       </div>
-
-      <WorkspaceSetupModal
-        open={showWorkspaceSetup}
-        onClose={() => setShowWorkspaceSetup(false)}
-        onWorkspaceSet={() => {
-          void handleWorkspaceSet();
-        }}
-      />
     </div>
   );
 }

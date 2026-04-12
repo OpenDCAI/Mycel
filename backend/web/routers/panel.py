@@ -55,7 +55,12 @@ async def list_agents(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
-    items = await asyncio.to_thread(agent_user_service.list_agent_users, user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    items = await asyncio.to_thread(
+        agent_user_service.list_agent_user_summaries,
+        user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
     return {"items": items}
 
 
@@ -89,6 +94,7 @@ async def create_agent(
         owner_user_id=user_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
+        contact_repo=getattr(request.app.state, "contact_repo", None),
     )
 
 

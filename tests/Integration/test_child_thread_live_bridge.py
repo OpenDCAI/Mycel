@@ -92,10 +92,8 @@ class _FakeRuntime:
     def get_status_dict(self) -> dict:
         return {
             "state": {"state": self.current_state.value, "flags": {}},
-            "tokens": {"total": self.tokens},
-            "context": {"percent": self.ctx_percent},
-            "calls": self.calls,
-            "cost": self.cost,
+            "tokens": {"total_tokens": self.tokens, "input_tokens": 0, "output_tokens": 0, "cost": self.cost, "call_count": self.calls},
+            "context": {"message_count": 0, "estimated_tokens": 0, "usage_percent": self.ctx_percent, "near_limit": False},
         }
 
 
@@ -281,6 +279,11 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
     detail = await threads_router.get_thread_messages(child_thread_id, user_id="owner-1", app=app)
 
     assert runtime["state"]["state"] == "active"
+    assert runtime["tokens"]["total_tokens"] == 0
+    assert runtime["tokens"]["input_tokens"] == 0
+    assert runtime["tokens"]["output_tokens"] == 0
+    assert runtime["tokens"]["cost"] == 0.0
+    assert runtime["context"] == {"message_count": 0, "estimated_tokens": 0, "usage_percent": 0.0, "near_limit": False}
     assert detail["entries"]
     assert detail["entries"][0]["role"] == "user"
     assert detail["entries"][0]["content"] == "child prompt"
@@ -358,6 +361,24 @@ async def test_run_child_thread_live_closes_and_detaches_completed_child_agent_w
     assert detail["entries"][0]["content"] == "child prompt"
     assert detail["entries"][1]["role"] == "assistant"
     assert runtime["state"]["state"] == "idle"
+
+
+@pytest.mark.asyncio
+async def test_thread_runtime_omits_model_when_thread_has_no_model(monkeypatch):
+    _patch_event_store(monkeypatch)
+    runtime = _FakeRuntime()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_sandbox={"thread-without-model": "local"},
+            thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {} if thread_id == "thread-without-model" else None),
+        )
+    )
+    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=SimpleNamespace(runtime=runtime)))
+
+    result = await threads_router.get_thread_runtime("thread-without-model", stream=False, user_id="owner-1", app=app)
+
+    assert "model" not in result
+    assert result["tokens"]["total_tokens"] == 0
 
 
 @pytest.mark.asyncio

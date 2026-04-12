@@ -30,8 +30,8 @@ export default function CreateAgentDialog({ open, onOpenChange }: Props) {
       setName("");
       setDescription("");
       navigate(`/contacts/agents/${agent.id}`);
-    } catch {
-      toast.error("创建失败，请重试");
+    } catch (err) {
+      toast.error(`创建失败：${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 

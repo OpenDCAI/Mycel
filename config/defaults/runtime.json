@@ -19,7 +19,8 @@
       "enabled": true,
       "reserve_tokens": 16384,
       "keep_recent_tokens": 20000,
-      "min_messages": 20
+      "min_messages": 20,
+      "trigger_tokens": null
     }
   },
   "system_prompt": null,

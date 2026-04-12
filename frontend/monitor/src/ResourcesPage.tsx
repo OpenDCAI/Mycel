@@ -13,7 +13,9 @@ import {
 
 import {
   browseMonitorSandbox,
+  cleanupMonitorProviderSession,
   fetchJsonOrThrow,
+  fetchMonitorProviderSessions,
   fetchMonitorResources,
   readMonitorSandboxFile,
   refreshMonitorResources,
@@ -23,6 +25,7 @@ import type {
   BrowseItem,
   ProviderCapabilities,
   ProviderInfo,
+  ProviderOrphanSession,
   ResourceOverviewResponse,
   ResourceSession,
   SessionMetrics,
@@ -280,6 +283,11 @@ export default function ResourcesPage() {
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [providerOrphans, setProviderOrphans] = React.useState<ProviderOrphanSession[]>([]);
+  const [providerOrphansLoading, setProviderOrphansLoading] = React.useState(false);
+  const [providerOrphansError, setProviderOrphansError] = React.useState<string | null>(null);
+  const [providerCleanupPendingId, setProviderCleanupPendingId] = React.useState<string | null>(null);
+  const [providerCleanupMessage, setProviderCleanupMessage] = React.useState<string | null>(null);
 
   const applyPayload = React.useCallback((payload: ResourceOverviewResponse) => {
     setProviders(payload.providers);
@@ -290,6 +298,19 @@ export default function ResourcesPage() {
       }
       return payload.providers[0]?.id ?? "";
     });
+  }, []);
+
+  const loadProviderOrphans = React.useCallback(async () => {
+    setProviderOrphansLoading(true);
+    setProviderOrphansError(null);
+    try {
+      const payload = await fetchMonitorProviderSessions();
+      setProviderOrphans(payload.sessions);
+    } catch (exc) {
+      setProviderOrphansError(exc instanceof Error ? exc.message : "Provider 运行时检查失败");
+    } finally {
+      setProviderOrphansLoading(false);
+    }
   }, []);
 
   const loadSnapshot = React.useCallback(async () => {
@@ -316,18 +337,20 @@ export default function ResourcesPage() {
       const payload = await fetchMonitorResources();
       applyPayload(payload);
       setError(null);
+      void loadProviderOrphans();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "资源加载失败");
     } finally {
       setRefreshing(false);
     }
-  }, [applyPayload]);
+  }, [applyPayload, loadProviderOrphans]);
 
   const refreshNow = React.useCallback(async () => {
     setRefreshing(true);
     try {
       const payload = await refreshMonitorResources();
       applyPayload(payload);
+      await loadProviderOrphans();
       setError(null);
     } catch (exc) {
       const message = exc instanceof Error ? exc.message : "资源刷新失败";
@@ -347,7 +370,25 @@ export default function ResourcesPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [applyPayload, providers.length]);
+  }, [applyPayload, loadProviderOrphans, providers.length]);
+
+  const cleanupProviderOrphan = React.useCallback(
+    async (session: ProviderOrphanSession) => {
+      const pendingId = `${session.provider}:${session.session_id}`;
+      setProviderCleanupPendingId(pendingId);
+      setProviderCleanupMessage(null);
+      try {
+        const result = await cleanupMonitorProviderSession(session.provider, session.session_id);
+        setProviderCleanupMessage(result.message ?? "Provider 运行时清理已完成");
+        await loadProviderOrphans();
+      } catch (exc) {
+        setProviderCleanupMessage(exc instanceof Error ? exc.message : "Provider 运行时清理失败");
+      } finally {
+        setProviderCleanupPendingId(null);
+      }
+    },
+    [loadProviderOrphans],
+  );
 
   React.useEffect(() => {
     let cancelled = false;
@@ -372,10 +413,11 @@ export default function ResourcesPage() {
     }
 
     void loadInitial();
+    void loadProviderOrphans();
     return () => {
       cancelled = true;
     };
-  }, [applyPayload]);
+  }, [applyPayload, loadProviderOrphans]);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
@@ -385,6 +427,7 @@ export default function ResourcesPage() {
   }, [loadSnapshot]);
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
+  const selectedProviderOrphans = selected ? providerOrphans.filter((session) => session.provider === selected.id) : [];
   const runningSessionCount = countProviderSessions(providers, "running");
   const pausedSessionCount = countProviderSessions(providers, "paused");
   const stoppedSessionCount = countProviderSessions(providers, "stopped");
@@ -436,6 +479,7 @@ export default function ResourcesPage() {
           <div className="resources-summary-pill">{runningSessionCount} 运行中</div>
           {pausedSessionCount > 0 && <div className="resources-summary-pill">{pausedSessionCount} 已暂停</div>}
           {stoppedSessionCount > 0 && <div className="resources-summary-pill">{stoppedSessionCount} 已结束</div>}
+          {providerOrphans.length > 0 && <div className="resources-summary-pill">{providerOrphans.length} 未绑定运行时</div>}
           <div className="resources-summary-pill">
             <span
               className={cx(
@@ -463,12 +507,21 @@ export default function ResourcesPage() {
             key={provider.id}
             provider={provider}
             selected={provider.id === selectedId}
+            orphanCount={providerOrphans.filter((session) => session.provider === provider.id).length}
             onSelect={() => setSelectedId(provider.id)}
           />
         ))}
       </div>
 
-      <ProviderDetail provider={selected} />
+      <ProviderDetail
+        provider={selected}
+        providerOrphans={selectedProviderOrphans}
+        providerOrphansLoading={providerOrphansLoading}
+        providerOrphansError={providerOrphansError}
+        providerCleanupPendingId={providerCleanupPendingId}
+        providerCleanupMessage={providerCleanupMessage}
+        onCleanupProviderOrphan={cleanupProviderOrphan}
+      />
     </div>
   );
 }
@@ -476,10 +529,12 @@ export default function ResourcesPage() {
 function ProviderCard({
   provider,
   selected,
+  orphanCount,
   onSelect,
 }: {
   provider: ProviderInfo;
   selected: boolean;
+  orphanCount: number;
   onSelect: () => void;
 }) {
   const runningCount = countSessions(provider.sessions, "running");
@@ -559,6 +614,7 @@ function ProviderCard({
         )}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 未连上沙盒</span>}
         {detachedResidueCount > 0 && <span>{detachedResidueCount} 历史残留</span>}
+        {orphanCount > 0 && <span>{orphanCount} 未绑定运行时</span>}
       </div>
 
       <CapabilityStrip capabilities={provider.capabilities} />
@@ -566,7 +622,23 @@ function ProviderCard({
   );
 }
 
-function ProviderDetail({ provider }: { provider: ProviderInfo }) {
+function ProviderDetail({
+  provider,
+  providerOrphans,
+  providerOrphansLoading,
+  providerOrphansError,
+  providerCleanupPendingId,
+  providerCleanupMessage,
+  onCleanupProviderOrphan,
+}: {
+  provider: ProviderInfo;
+  providerOrphans: ProviderOrphanSession[];
+  providerOrphansLoading: boolean;
+  providerOrphansError: string | null;
+  providerCleanupPendingId: string | null;
+  providerCleanupMessage: string | null;
+  onCleanupProviderOrphan: (session: ProviderOrphanSession) => Promise<void>;
+}) {
   const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<LeaseGroup["status"] | "all">("all");
   const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
@@ -660,6 +732,15 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
               </div>
             </div>
 
+            <ProviderOrphanSection
+              sessions={providerOrphans}
+              loading={providerOrphansLoading}
+              error={providerOrphansError}
+              cleanupPendingId={providerCleanupPendingId}
+              cleanupMessage={providerCleanupMessage}
+              onCleanup={onCleanupProviderOrphan}
+            />
+
             <div className="provider-section">
               <div className="provider-section__header">
                 <h3>沙盒</h3>
@@ -716,6 +797,69 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
         onClose={() => setSelectedGroup(null)}
       />
     </>
+  );
+}
+
+function ProviderOrphanSection({
+  sessions,
+  loading,
+  error,
+  cleanupPendingId,
+  cleanupMessage,
+  onCleanup,
+}: {
+  sessions: ProviderOrphanSession[];
+  loading: boolean;
+  error: string | null;
+  cleanupPendingId: string | null;
+  cleanupMessage: string | null;
+  onCleanup: (session: ProviderOrphanSession) => Promise<void>;
+}) {
+  if (!loading && !error && sessions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="provider-section provider-orphan-panel">
+      <div className="provider-section__header">
+        <h3>未绑定运行时</h3>
+        <span>{sessions.length} 个</span>
+      </div>
+      <p className="provider-orphan-note">
+        这些运行时存在于 provider，但没有 lease/thread 绑定。暂停态可以直接走 Monitor 清理；运行中或未知状态先保留。
+      </p>
+      {loading && <p className="provider-empty-state">正在检查 provider 运行时...</p>}
+      {error && <p className="provider-orphan-error">{error}</p>}
+      {cleanupMessage && <p className="provider-orphan-message">{cleanupMessage}</p>}
+      {sessions.length > 0 && (
+        <div className="provider-orphan-list">
+          {sessions.map((session) => {
+            const pendingId = `${session.provider}:${session.session_id}`;
+            const cleanupAllowed = session.status === "paused";
+            return (
+              <div key={pendingId} className="provider-orphan-row">
+                <div className="provider-orphan-row__main">
+                  <span className={`provider-status-dot provider-status-dot--${session.status}`} />
+                  <div>
+                    <div className="provider-orphan-row__id">{session.session_id}</div>
+                    <div className="provider-orphan-row__meta">{session.status}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="provider-orphan-cleanup-button"
+                  disabled={!cleanupAllowed || cleanupPendingId === pendingId}
+                  title={cleanupAllowed ? "清理暂停态未绑定运行时" : "运行中或未知状态需要先确认归属"}
+                  onClick={() => void onCleanup(session)}
+                >
+                  {cleanupPendingId === pendingId ? "清理中..." : cleanupAllowed ? "清理" : "先保留"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

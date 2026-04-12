@@ -4,6 +4,8 @@ import { useAuthStore } from "./auth-store";
 
 const API = "/api/panel";
 let loadAllInflight: Promise<void> | null = null;
+let ensureAgentsInflight: Promise<void> | null = null;
+const ensureLibraryInflight: Partial<Record<LibraryType, Promise<void>>> = {};
 
 interface AppState {
   // ── Data ──
@@ -14,6 +16,8 @@ interface AppState {
   libraryRecipes: ResourceItem[];
   userProfile: UserProfile;
   loaded: boolean;
+  agentsLoaded: boolean;
+  librariesLoaded: Record<LibraryType, boolean>;
   error: string | null;
 
   // ── Init ──
@@ -22,7 +26,9 @@ interface AppState {
   resetSessionData: () => void;
 
   // ── Agents ──
+  ensureAgents: () => Promise<void>;
   fetchAgents: () => Promise<void>;
+  fetchAgent: (id: string) => Promise<Agent>;
   addAgent: (name: string, description?: string) => Promise<Agent>;
   updateAgent: (id: string, fields: Partial<Agent>) => Promise<void>;
   updateAgentConfig: (id: string, patch: Partial<AgentConfig>) => Promise<void>;
@@ -31,6 +37,7 @@ interface AppState {
   getAgentById: (id: string) => Agent | undefined;
 
   // ── Library ──
+  ensureLibrary: (type: string) => Promise<void>;
   fetchLibrary: (type: string) => Promise<void>;
   fetchLibraryNames: (type: string) => Promise<{ name: string; desc: string }[]>;
   addResource: (
@@ -63,6 +70,20 @@ const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
   agent: "libraryAgents",
   recipe: "libraryRecipes",
 };
+const EMPTY_LIBRARY_LOADED: Record<LibraryType, boolean> = {
+  skill: false,
+  mcp: false,
+  agent: false,
+  recipe: false,
+};
+const EMPTY_AGENT_CONFIG: Agent["config"] = {
+  prompt: "",
+  rules: [],
+  tools: [],
+  mcps: [],
+  skills: [],
+  subAgents: [],
+};
 
 function isLibraryType(type: string): type is LibraryType {
   return type in LIBRARY_STATE_KEYS;
@@ -82,8 +103,37 @@ function emptySessionState() {
     libraryRecipes: [],
     userProfile: DEFAULT_PROFILE,
     loaded: false,
+    agentsLoaded: false,
+    librariesLoaded: { ...EMPTY_LIBRARY_LOADED },
     error: null,
   };
+}
+
+function normalizeAgentSummary(agent: Agent): Agent {
+  return {
+    ...agent,
+    config: agent.config ?? EMPTY_AGENT_CONFIG,
+    config_loaded: Boolean(agent.config),
+  };
+}
+
+function normalizeAgentDetail(agent: Agent): Agent {
+  return {
+    ...agent,
+    config_loaded: true,
+  };
+}
+
+async function fetchAgentSummaries(): Promise<Agent[]> {
+  const data = await api<{ items: Agent[] }>("/agents");
+  return data.items.map(normalizeAgentSummary);
+}
+
+async function fetchLibraryItems(type: string): Promise<{ key: LibraryStateKey; items: ResourceItem[]; libraryType: LibraryType }> {
+  const libraryType = isLibraryType(type) ? type : null;
+  if (!libraryType) throw new Error(`Unsupported library type: ${type}`);
+  const data = await api<{ items: ResourceItem[] }>(`/library/${libraryType}`);
+  return { key: getLibraryStateKey(libraryType), items: data.items, libraryType };
 }
 
 async function api<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
@@ -108,11 +158,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
         // @@@load-all-singleflight - RootLayout can mount twice in dev StrictMode and /threads
         // index redirect now avoids AppLayout, so keep the global panel bootstrap idempotent.
         await Promise.all([
-          get().fetchAgents(),
-          get().fetchLibrary("skill"),
-          get().fetchLibrary("mcp"),
-          get().fetchLibrary("agent"),
-          get().fetchLibrary("recipe"),
+          get().ensureAgents(),
+          get().ensureLibrary("skill"),
+          get().ensureLibrary("mcp"),
+          get().ensureLibrary("agent"),
+          get().ensureLibrary("recipe"),
           get().fetchProfile(),
         ]);
         set({ loaded: true });
@@ -139,13 +189,47 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   resetSessionData: () => {
     loadAllInflight = null;
+    ensureAgentsInflight = null;
+    for (const key of Object.keys(ensureLibraryInflight)) {
+      delete ensureLibraryInflight[key as LibraryType];
+    }
     set(emptySessionState());
   },
 
   // ── Agents ──
+  ensureAgents: async () => {
+    if (get().agentsLoaded) return;
+    if (ensureAgentsInflight) return ensureAgentsInflight;
+
+    const pending = Promise.resolve().then(async () => {
+      const agentList = await fetchAgentSummaries();
+      set({ agentList, agentsLoaded: true });
+    }).finally(() => {
+      if (ensureAgentsInflight === pending) {
+        ensureAgentsInflight = null;
+      }
+    });
+
+    ensureAgentsInflight = pending;
+    return pending;
+  },
+
   fetchAgents: async () => {
-    const data = await api<{ items: Agent[] }>("/agents");
-    set({ agentList: data.items });
+    const agentList = await fetchAgentSummaries();
+    set({ agentList, agentsLoaded: true });
+  },
+
+  fetchAgent: async (id) => {
+    const agent = normalizeAgentDetail(await api<Agent>(`/agents/${id}`));
+    set((s) => {
+      const exists = s.agentList.some((item) => item.id === id);
+      return {
+        agentList: exists
+          ? s.agentList.map((item) => (item.id === id ? agent : item))
+          : [agent, ...s.agentList],
+      };
+    });
+    return agent;
   },
 
   addAgent: async (name, description = "") => {
@@ -190,10 +274,34 @@ export const useAppStore = create<AppState>()((set, get) => ({
   getAgentById: (id) => get().agentList.find((x) => x.id === id),
 
   // ── Library ──
+  ensureLibrary: async (type) => {
+    const libraryType = isLibraryType(type) ? type : null;
+    if (!libraryType) throw new Error(`Unsupported library type: ${type}`);
+    if (get().librariesLoaded[libraryType]) return;
+    if (ensureLibraryInflight[libraryType]) return ensureLibraryInflight[libraryType];
+
+    const pending = Promise.resolve().then(async () => {
+      const { key, items } = await fetchLibraryItems(libraryType);
+      set((s) => ({
+        [key]: items,
+        librariesLoaded: { ...s.librariesLoaded, [libraryType]: true },
+      }) as Pick<AppState, typeof key | "librariesLoaded">);
+    }).finally(() => {
+      if (ensureLibraryInflight[libraryType] === pending) {
+        delete ensureLibraryInflight[libraryType];
+      }
+    });
+
+    ensureLibraryInflight[libraryType] = pending;
+    return pending;
+  },
+
   fetchLibrary: async (type) => {
-    const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
-    const key = getLibraryStateKey(type);
-    set({ [key]: data.items } as Pick<AppState, typeof key>);
+    const { key, items, libraryType } = await fetchLibraryItems(type);
+    set((s) => ({
+      [key]: items,
+      librariesLoaded: { ...s.librariesLoaded, [libraryType]: true },
+    }) as Pick<AppState, typeof key | "librariesLoaded">);
   },
 
   fetchLibraryNames: async (type) => {

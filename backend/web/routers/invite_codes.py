@@ -11,6 +11,10 @@ from backend.web.core.dependencies import get_current_user_id
 router = APIRouter(prefix="/api/invite-codes", tags=["invite-codes"])
 
 
+def _invite_code_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {**row, "used": bool(row.get("used_by"))}
+
+
 async def _call_invite_code_repo(
     request: Request,
     error_prefix: str,
@@ -42,7 +46,7 @@ async def list_invite_codes(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
     codes = await _call_invite_code_repo(request, "获取邀请码列表失败：", "list_all")
-    return {"codes": codes}
+    return {"codes": [_invite_code_payload(code) for code in codes]}
 
 
 # ── Generate a new invite code ───────────────────────────────────────────────
@@ -58,13 +62,14 @@ async def generate_invite_code(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
-    return await _call_invite_code_repo(
+    code = await _call_invite_code_repo(
         request,
         "生成邀请码失败：",
         "generate",
         created_by=user_id,
         expires_days=payload.expires_days,
     )
+    return _invite_code_payload(code)
 
 
 # ── Revoke (delete) an invite code ──────────────────────────────────────────

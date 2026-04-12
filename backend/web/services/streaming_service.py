@@ -1540,7 +1540,8 @@ async def run_child_thread_live(
             if msg.__class__.__name__ == "AIMessage" and extract_text_content(getattr(msg, "content", "")).strip()
         ]
         runtime_status = agent.runtime.get_status_dict() if hasattr(agent, "runtime") and hasattr(agent.runtime, "get_status_dict") else {}
-        runtime_calls = runtime_status.get("calls") if isinstance(runtime_status, dict) else None
+        runtime_tokens = runtime_status.get("tokens") if isinstance(runtime_status, dict) else None
+        runtime_calls = runtime_tokens.get("call_count") if isinstance(runtime_tokens, dict) else None
         if not visible_ai and runtime_calls == 0:
             raise RuntimeError(f"Child thread {thread_id} failed before first model call")
         return "\n".join(visible_ai) if visible_ai else "(Agent completed with no text output)"

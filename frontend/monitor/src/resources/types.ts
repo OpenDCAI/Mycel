@@ -83,6 +83,18 @@ export interface ResourceOverviewResponse {
   };
 }
 
+export interface ProviderOrphanSession {
+  session_id: string;
+  provider: string;
+  status: string;
+  source: "provider_orphan";
+}
+
+export interface ProviderOrphanSessionsResponse {
+  count: number;
+  sessions: ProviderOrphanSession[];
+}
+
 export interface BrowseItem {
   name: string;
   path: string;

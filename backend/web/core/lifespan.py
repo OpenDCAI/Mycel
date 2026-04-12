@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
     _require_web_runtime_contract()
     await _validate_web_checkpointer_contract()
 
-    # ---- Member-Chat repos + services ----
+    # ---- Chat repos + services ----
     from backend.web.core.supabase_factory import create_public_supabase_client, create_supabase_auth_client, create_supabase_client
     from storage.runtime import build_storage_container
 
@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
     app.state.invite_code_repo = storage_container.invite_code_repo()
     app.state.user_settings_repo = storage_container.user_settings_repo()
     app.state.agent_config_repo = storage_container.agent_config_repo()
+    app.state.contact_repo = storage_container.contact_repo()
     app.state._supabase_client = _supabase_client
     app.state._public_supabase_client = _public_supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
@@ -75,6 +76,7 @@ async def lifespan(app: FastAPI):
         supabase_client=_supabase_client,
         supabase_auth_client_factory=create_supabase_auth_client,
         invite_codes=app.state.invite_code_repo,
+        contact_repo=app.state.contact_repo,
     )
 
     from backend.web.services.chat_events import ChatEventBus
@@ -82,8 +84,6 @@ async def lifespan(app: FastAPI):
 
     app.state.chat_event_bus = ChatEventBus()
     app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
-
-    app.state.contact_repo = storage_container.contact_repo()
 
     # Wire chat delivery after event loop is available
     # ---- Messaging system (Supabase-backed, required) ----

@@ -101,8 +101,8 @@ def _blocked_cleanup_state(reason: str):
 
 
 def _record_destroy(calls):
-    def _destroy_sandbox_lease(*, lease_id: str, provider_name: str):
-        calls.append((lease_id, provider_name))
+    def _destroy_sandbox_lease(*, lease_id: str, provider_name: str, detach_thread_bindings: bool = False):
+        calls.append((lease_id, provider_name, detach_thread_bindings))
         return {
             "ok": True,
             "action": "destroy",
@@ -173,6 +173,30 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
     assert payload["lease_ids"] == ["lease-1", "lease-2"]
     assert payload["thread_ids"] == ["thread-1", "thread-2"]
     assert payload["runtime_session_ids"] == ["runtime-1"]
+
+
+def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_path):
+    monkeypatch.setattr(monitor_service.web_config, "LOCAL_WORKSPACE_ROOT", tmp_path)
+    monkeypatch.setattr(
+        monitor_service.sandbox_service,
+        "available_sandbox_types",
+        lambda: [
+            {"name": "local", "provider": "local", "available": True},
+            {"name": "daytona_selfhost", "provider": "daytona", "available": False, "reason": "missing key"},
+        ],
+    )
+
+    payload = monitor_service.get_monitor_sandbox_configs()
+
+    assert payload == {
+        "source": "runtime_sandbox_inventory",
+        "default_local_cwd": str(tmp_path),
+        "count": 2,
+        "providers": [
+            {"name": "local", "provider": "local", "available": True},
+            {"name": "daytona_selfhost", "provider": "daytona", "available": False, "reason": "missing key"},
+        ],
+    }
 
 
 def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monkeypatch):
@@ -334,7 +358,7 @@ def test_get_monitor_lease_detail_exposes_cleanup_state(monkeypatch):
 
 
 @pytest.mark.parametrize("runtime_session_id", ["runtime-1", None])
-def test_get_monitor_lease_detail_blocks_detached_residue_with_thread_binding(monkeypatch, runtime_session_id):
+def test_get_monitor_lease_detail_allows_detached_residue_cleanup_with_thread_binding(monkeypatch, runtime_session_id):
     _use_monitor_repo(
         monkeypatch,
         FakeLeaseRepo(
@@ -348,7 +372,7 @@ def test_get_monitor_lease_detail_blocks_detached_residue_with_thread_binding(mo
 
     assert payload["runtime"] == {"runtime_session_id": runtime_session_id}
     assert payload["triage"]["category"] == "detached_residue"
-    assert payload["cleanup"] == _blocked_cleanup_state("Lease still has thread bindings and cannot enter managed cleanup.")
+    assert payload["cleanup"] == _cleanup_state("Lease is detached residue and can detach stale thread bindings before cleanup.")
 
 
 def test_get_monitor_lease_detail_ignores_stale_thread_refs_when_classifying_triage(monkeypatch):
@@ -368,9 +392,27 @@ def test_get_monitor_lease_detail_ignores_stale_thread_refs_when_classifying_tri
     assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
 
 
+def test_get_monitor_lease_detail_allows_orphan_cleanup_with_stale_active_session(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_lease_row(desired_state="paused", observed_state="paused"),
+            threads=[{"thread_id": "thread-gone"}],
+            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-gone", "status": "active"}],
+        ),
+    )
+    monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
+
+    payload = monitor_service.get_monitor_lease_detail("lease-1")
+
+    assert payload["threads"] == []
+    assert payload["triage"]["category"] == "orphan_cleanup"
+    assert payload["cleanup"] == _cleanup_state("Lease has only stale active sessions and can close them before cleanup.")
+
+
 @pytest.mark.parametrize("runtime_session_id", ["runtime-1", None])
-def test_request_monitor_lease_cleanup_rejects_detached_residue_with_thread_binding(monkeypatch, runtime_session_id):
-    calls: list[tuple[str, str]] = []
+def test_request_monitor_lease_cleanup_accepts_detached_residue_with_thread_binding(monkeypatch, runtime_session_id):
+    calls: list[tuple[str, str, bool]] = []
     _use_monitor_repo(
         monkeypatch,
         FakeLeaseRepo(
@@ -387,10 +429,93 @@ def test_request_monitor_lease_cleanup_rejects_detached_residue_with_thread_bind
 
     payload = monitor_service.request_monitor_lease_cleanup("lease-1")
 
-    assert payload["accepted"] is False
-    assert payload["message"] == "Lease still has thread bindings and cannot enter managed cleanup."
-    assert payload["operation"] is None
-    assert calls == []
+    assert payload["accepted"] is True
+    assert payload["message"] == "Lease cleanup completed."
+    assert payload["operation"]["status"] == "succeeded"
+    assert calls == [("lease-1", "daytona", True)]
+
+
+def test_request_monitor_lease_cleanup_closes_stale_active_sessions(monkeypatch):
+    calls: list[tuple[str, str, bool]] = []
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_lease_row(desired_state="paused", observed_state="paused"),
+            threads=[{"thread_id": "thread-gone"}],
+            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-gone", "status": "active"}],
+        ),
+    )
+    monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        _record_destroy(calls),
+        raising=False,
+    )
+
+    payload = monitor_service.request_monitor_lease_cleanup("lease-1")
+
+    assert payload["accepted"] is True
+    assert payload["message"] == "Lease cleanup completed."
+    assert payload["operation"]["status"] == "succeeded"
+    assert calls == [("lease-1", "daytona", True)]
+
+
+def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypatch):
+    calls: list[tuple[str, str, str, str | None]] = []
+
+    def _mutate_sandbox_session(*, session_id: str, action: str, provider_hint: str | None = None):
+        calls.append((session_id, action, provider_hint or "", provider_hint))
+        return {
+            "ok": True,
+            "action": action,
+            "session_id": session_id,
+            "provider": provider_hint,
+            "lease_id": "lease-adopt-1",
+            "mode": "manager_lease",
+        }
+
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.mutate_sandbox_session",
+        _mutate_sandbox_session,
+        raising=False,
+    )
+
+    payload = monitor_service.request_monitor_provider_session_cleanup("daytona_selfhost", "sandbox-1")
+
+    assert payload["accepted"] is True
+    assert payload["message"] == "Provider session cleanup completed."
+    assert payload["operation"]["status"] == "succeeded"
+    assert payload["current_truth"] == {
+        "provider_id": "daytona_selfhost",
+        "session_id": "sandbox-1",
+    }
+    assert calls == [("sandbox-1", "destroy", "daytona_selfhost", "daytona_selfhost")]
+
+
+def test_list_monitor_provider_sessions_returns_provider_orphans(monkeypatch):
+    monkeypatch.setattr(monitor_service.sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": object()}))
+    monkeypatch.setattr(
+        monitor_service.sandbox_service,
+        "load_all_sessions",
+        lambda _managers: [
+            {"session_id": "lease-backed", "provider": "daytona", "source": "lease", "status": "running"},
+            {"session_id": "orphan-1", "provider": "daytona", "source": "provider_orphan", "status": "running"},
+        ],
+    )
+
+    payload = monitor_service.list_monitor_provider_sessions()
+
+    assert payload == {
+        "count": 1,
+        "sessions": [
+            {
+                "session_id": "orphan-1",
+                "provider": "daytona",
+                "status": "running",
+                "source": "provider_orphan",
+            }
+        ],
+    }
 
 
 def test_get_monitor_lease_detail_fails_loudly_when_lease_missing(monkeypatch):

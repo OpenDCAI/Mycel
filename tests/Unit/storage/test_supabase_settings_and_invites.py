@@ -27,6 +27,23 @@ def test_user_settings_recent_workspace_parser_does_not_hide_unexpected_json_fai
         repo.get("user-1")
 
 
+def test_user_settings_reads_account_resource_limits() -> None:
+    repo = SupabaseUserSettingsRepo(
+        FakeSupabaseClient(
+            tables={
+                "user_settings": [
+                    {
+                        "user_id": "user-1",
+                        "account_resource_limits": {"sandbox": {"daytona_selfhost": 5}},
+                    }
+                ]
+            }
+        )
+    )
+
+    assert repo.get_account_resource_limits("user-1") == {"sandbox": {"daytona_selfhost": 5}}
+
+
 def test_invite_code_expiry_does_not_hide_non_string_expires_at() -> None:
     repo = SupabaseInviteCodeRepo(
         FakeSupabaseClient(

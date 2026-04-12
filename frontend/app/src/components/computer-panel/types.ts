@@ -1,6 +1,6 @@
 import type { ChatEntry } from "../../api";
 
-export type TabType = "terminal" | "files" | "agents";
+export type TabType = "files" | "agents";
 
 export interface ComputerPanelProps {
   isOpen: boolean;

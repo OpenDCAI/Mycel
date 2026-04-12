@@ -99,6 +99,7 @@ def _service(
     user_repo=None,
     agent_configs=None,
     invite_codes=None,
+    contact_repo=None,
 ) -> AuthService:
     return AuthService(
         users=cast(Any, user_repo or SimpleNamespace()),
@@ -107,6 +108,7 @@ def _service(
         supabase_auth_client=supabase_auth_client,
         supabase_auth_client_factory=supabase_auth_client_factory,
         invite_codes=invite_codes,
+        contact_repo=contact_repo,
     )
 
 
@@ -244,6 +246,7 @@ def test_create_initial_agents_persists_default_agent_avatars(monkeypatch: pytes
     created_users: list[SimpleNamespace] = []
     updates: list[tuple[str, dict[str, object]]] = []
     saved_configs: list[tuple[str, dict[str, object]]] = []
+    contact_edges: list[object] = []
     user_ids = iter(["agent-toad", "agent-morel"])
     config_ids = iter(["cfg-toad", "cfg-morel"])
 
@@ -259,8 +262,9 @@ def test_create_initial_agents_persists_default_agent_avatars(monkeypatch: pytes
         update=lambda user_id, **fields: updates.append((user_id, fields)),
     )
     agent_configs = SimpleNamespace(save_config=lambda config_id, payload: saved_configs.append((config_id, payload)))
+    contact_repo = SimpleNamespace(upsert=lambda row: contact_edges.append(row))
 
-    result = _service(user_repo=user_repo, agent_configs=agent_configs)._create_initial_agents("owner-1", 123.0)
+    result = _service(user_repo=user_repo, agent_configs=agent_configs, contact_repo=contact_repo)._create_initial_agents("owner-1", 123.0)
 
     assert [row.id for row in created_users] == ["agent-toad", "agent-morel"]
     assert [row.display_name for row in created_users] == ["Toad", "Morel"]
@@ -268,6 +272,10 @@ def test_create_initial_agents_persists_default_agent_avatars(monkeypatch: pytes
     assert updates == [
         ("agent-toad", {"avatar": "avatars/agent-toad.png"}),
         ("agent-morel", {"avatar": "avatars/agent-morel.png"}),
+    ]
+    assert [(row.source_user_id, row.target_user_id, row.kind, row.state) for row in contact_edges] == [
+        ("owner-1", "agent-toad", "normal", "active"),
+        ("owner-1", "agent-morel", "normal", "active"),
     ]
     assert result == {"id": "agent-toad", "name": "Toad", "type": "agent", "avatar": "avatars/agent-toad.png"}
 

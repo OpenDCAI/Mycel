@@ -39,7 +39,7 @@ export function useAppActions(deps: AppActionsDeps): AppActionsState & AppAction
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [computerOpen, setComputerOpen] = useState(false);
-  const [computerTab, setComputerTab] = useState<TabType>("terminal");
+  const [computerTab, setComputerTab] = useState<TabType>("files");
   const [focusedAgentStepId, setFocusedAgentStepId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);

@@ -83,8 +83,50 @@ async def test_panel_agents_uses_injected_user_repo_for_owner_scope(monkeypatch:
     assert seen == ["user-1"]
     assert result["items"][0]["id"] == "agent-1"
     assert result["items"][0]["name"] == "Toad"
-    assert result["items"][0]["config"]["prompt"] == "hello"
-    assert {agent["name"] for agent in result["items"][0]["config"]["subAgents"]} >= {"bash", "explore", "general", "plan"}
+    assert "config" not in result["items"][0]
+
+
+@pytest.mark.asyncio
+async def test_panel_agent_detail_keeps_full_config_for_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    agent = UserRow(
+        id="agent-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="user-1",
+        agent_config_id="cfg-1",
+        created_at=1.0,
+    )
+    fake_repo = SimpleNamespace(
+        get_by_id=lambda agent_id: agent if agent_id == "agent-1" else None,
+    )
+    fake_agent_config_repo = SimpleNamespace(
+        get_config=lambda agent_config_id: {
+            "id": agent_config_id,
+            "name": "Toad",
+            "description": "",
+            "tools": ["*"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {},
+            "mcp": {},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+        list_rules=lambda _agent_config_id: [],
+        list_skills=lambda _agent_config_id: [],
+        list_sub_agents=lambda _agent_config_id: [],
+    )
+
+    result = await panel_router.get_agent(
+        "agent-1",
+        user_id="user-1",
+        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo, agent_config_repo=fake_agent_config_repo))),
+    )
+
+    assert result["id"] == "agent-1"
+    assert result["config"]["prompt"] == "hello"
+    assert {agent["name"] for agent in result["config"]["subAgents"]} >= {"bash", "explore", "general", "plan"}
 
 
 def test_owned_agent_helper_returns_agent_for_owner():
@@ -377,6 +419,49 @@ def test_create_agent_user_fails_loudly_when_created_row_is_not_readable():
 
     assert len(created_rows) == 1
     assert len(saved_configs) == 1
+
+
+def test_create_agent_user_persists_owner_contact_edge():
+    created_rows: dict[str, UserRow] = {}
+    saved_configs: list[tuple[str, dict[str, object]]] = []
+    contact_edges: list[object] = []
+
+    class _UserRepo:
+        def create(self, row: UserRow) -> None:
+            created_rows[row.id] = row
+
+        def get_by_id(self, user_id: str):
+            return created_rows.get(user_id)
+
+    class _AgentConfigRepo:
+        def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
+            saved_configs.append((agent_config_id, data))
+
+        def get_config(self, agent_config_id: str):
+            return saved_configs[-1][1] if saved_configs and saved_configs[-1][0] == agent_config_id else None
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.create_agent_user(
+        "Dryad",
+        "probe",
+        owner_user_id="user-1",
+        user_repo=_UserRepo(),
+        agent_config_repo=_AgentConfigRepo(),
+        contact_repo=SimpleNamespace(upsert=lambda row: contact_edges.append(row)),
+    )
+
+    assert result["name"] == "Dryad"
+    assert [(row.source_user_id, row.target_user_id, row.kind, row.state) for row in contact_edges] == [
+        ("user-1", result["id"], "normal", "active"),
+    ]
 
 
 @pytest.mark.asyncio

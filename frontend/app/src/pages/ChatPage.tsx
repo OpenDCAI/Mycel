@@ -25,6 +25,7 @@ import { useThreadData } from "../hooks/use-thread-data";
 import { useThreadPermissions } from "../hooks/use-thread-permissions";
 import { useThreadStream } from "../hooks/use-thread-stream";
 import { asRecord } from "../lib/records";
+import { fetchDefaultModel } from "../api/settings";
 import type { PermissionRuleBehavior } from "../api";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
@@ -103,10 +104,11 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   useEffect(() => {
     if (state?.selectedModel || runtimeStatus?.model || currentModel) return;
     if (threadStream.phase === "connecting" || threadStream.phase === "idle") return;
-    authFetch("/api/settings")
-      .then((r) => r.json())
-      .then((settings) => setDefaultModel(settings.default_model || "leon:large"))
-      .catch(() => setDefaultModel("leon:large"));
+    void fetchDefaultModel()
+      .then(setDefaultModel)
+      .catch((err) => {
+        toast.error(`默认模型加载失败: ${err instanceof Error ? err.message : String(err)}`);
+      });
   }, [currentModel, runtimeStatus?.model, state?.selectedModel, threadStream.phase]);
 
   const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, subscribe: threadStream.subscribe });

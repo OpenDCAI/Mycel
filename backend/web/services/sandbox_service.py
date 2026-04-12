@@ -432,6 +432,7 @@ def mutate_sandbox_session(
 
     ok = False
     mode = "lease_enforced"
+    adopted_provider_orphan = False
 
     if thread_id and not is_virtual_thread_id(thread_id):
         mode = "manager_thread"
@@ -446,6 +447,7 @@ def mutate_sandbox_session(
     else:
         lease = manager.get_lease(lease_id) if lease_id else None
         if not lease:
+            adopted_provider_orphan = True
             adopt_lease_id = str(lease_id or f"lease-adopt-{uuid.uuid4().hex[:12]}")
             adopt_status = str(session.get("status") or "unknown")
             from sandbox.lease import lease_from_row
@@ -456,7 +458,7 @@ def mutate_sandbox_session(
                 instance_id=target_session_id,
                 status=adopt_status,
             )
-            lease = lease_from_row(adopt_row, manager.lease_store.db_path)
+            lease = lease_from_row(adopt_row, manager.db_path)
             lease_id = lease.lease_id
 
         mode = "manager_lease"
@@ -467,6 +469,8 @@ def mutate_sandbox_session(
         elif action == "destroy":
             lease.destroy_instance(manager.provider, source="api")
             ok = True
+            if adopted_provider_orphan and lease_id:
+                manager.lease_store.delete(lease_id)
         else:
             raise RuntimeError(f"Unknown action: {action}")
 
@@ -484,7 +488,7 @@ def mutate_sandbox_session(
     }
 
 
-def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any]:
+def destroy_sandbox_lease(*, lease_id: str, provider_name: str, detach_thread_bindings: bool = False) -> dict[str, Any]:
     """Destroy a lease through the manager-owned lease state machine."""
     _, managers = init_providers_and_managers()
     manager = managers.get(provider_name)
@@ -498,6 +502,8 @@ def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any
     # @@@lease-destroy-seam - detached residue may have no visible live session,
     # so cleanup must target the lease state machine directly rather than session lookup.
     _prune_stale_lease_terminals(manager, lease_id)
+    if detach_thread_bindings:
+        _detach_lease_terminals(manager, lease_id)
     if not manager.destroy_lease_resources(lease_id):
         raise RuntimeError(f"Lease not found: {lease_id}")
     return {
@@ -507,6 +513,19 @@ def destroy_sandbox_lease(*, lease_id: str, provider_name: str) -> dict[str, Any
         "provider": provider_name,
         "mode": "manager_lease",
     }
+
+
+def _detach_lease_terminals(manager: Any, lease_id: str) -> None:
+    for row in list(manager.terminal_store.list_all()):
+        if str(row.get("lease_id") or "") != lease_id:
+            continue
+        thread_id = str(row.get("thread_id") or "").strip()
+        terminal_id = str(row.get("terminal_id") or "").strip()
+        if not terminal_id:
+            raise RuntimeError(f"Lease {lease_id} has terminal row without terminal_id")
+        if thread_id:
+            manager.session_manager.delete_thread(thread_id, reason="detached_lease_cleanup")
+        manager.terminal_store.delete(terminal_id)
 
 
 def _prune_stale_lease_terminals(manager: Any, lease_id: str) -> None:
