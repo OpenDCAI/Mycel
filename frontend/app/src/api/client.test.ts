@@ -140,6 +140,17 @@ describe("thread api client contract", () => {
     await expect(api.getThreadLease("thread-1")).rejects.toThrow("Malformed lease status");
   });
 
+  it("getThreadPermissions rejects malformed permission payload identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      thread_id: { value: "thread-1" },
+      requests: [],
+      session_rules: { allow: [], deny: [], ask: [] },
+      managed_only: true,
+    }));
+
+    await expect(api.getThreadPermissions("thread-1")).rejects.toThrow("Malformed thread permissions");
+  });
+
   it("listSandboxSessions rejects malformed session identities", async () => {
     authFetch.mockResolvedValue(okJson({
       sessions: [{
