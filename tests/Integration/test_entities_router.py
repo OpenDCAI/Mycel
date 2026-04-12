@@ -17,9 +17,62 @@ from fastapi import HTTPException
 from backend.web.routers import entities as entities_router
 from storage.contracts import ContactEdgeRow, UserRow, UserType
 
+NOW = 1_775_223_756.0
+
 
 def _empty_contact_repo() -> SimpleNamespace:
     return SimpleNamespace(list_for_user=lambda _user_id: [])
+
+
+def _human(user_id: str, name: str) -> UserRow:
+    return UserRow(id=user_id, display_name=name, type=UserType.HUMAN, created_at=NOW)
+
+
+def _agent(user_id: str, name: str, owner_user_id: str) -> UserRow:
+    return UserRow(
+        id=user_id,
+        display_name=name,
+        type=UserType.AGENT,
+        owner_user_id=owner_user_id,
+        agent_config_id=f"cfg-{user_id}",
+        created_at=NOW,
+    )
+
+
+def _active_contact_repo(source_user_id: str, target_user_id: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        list_for_user=lambda _user_id: [
+            ContactEdgeRow(
+                source_user_id=source_user_id,
+                target_user_id=target_user_id,
+                kind="normal",
+                state="active",
+                created_at=NOW,
+            )
+        ]
+    )
+
+
+def _entities_app(
+    users: list[UserRow],
+    *,
+    thread_repo: object | None = None,
+    relationships: dict[str, str] | None = None,
+    contact_repo: object | None = None,
+) -> SimpleNamespace:
+    relationships = relationships or {}
+    return SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(list_all=lambda: users),
+            thread_repo=thread_repo or _FakeThreadRepo(),
+            relationship_service=SimpleNamespace(
+                list_for_user=lambda _user_id: [
+                    SimpleNamespace(other_user_id=other_user_id, state=state) for other_user_id, state in relationships.items()
+                ]
+            ),
+            contact_repo=contact_repo or _empty_contact_repo(),
+        )
+    )
 
 
 class _FakeThreadRepo:
@@ -39,44 +92,20 @@ class _FakeThreadRepo:
 
 @pytest.mark.asyncio
 async def test_list_entities_excludes_current_user_and_returns_all_others():
-    now = 1_775_223_756.0
-    current_user = UserRow(id="u1", display_name="owner", type=UserType.HUMAN, created_at=now)
-    other_human = UserRow(id="u2", display_name="other", type=UserType.HUMAN, created_at=now)
-    main_agent = UserRow(
-        id="a-main",
-        display_name="Toad",
-        type=UserType.AGENT,
-        owner_user_id="u2",
-        agent_config_id="cfg-a-main",
-        created_at=now,
-    )
-    child_agent = UserRow(
-        id="a-child",
-        display_name="Toad Branch",
-        type=UserType.AGENT,
-        owner_user_id="u2",
-        agent_config_id="cfg-a-child",
-        created_at=now,
-    )
-
+    current_user = _human("u1", "owner")
+    other_human = _human("u2", "other")
+    main_agent = _agent("a-main", "Toad", "u2")
+    child_agent = _agent("a-child", "Toad Branch", "u2")
     thread_repo = _FakeThreadRepo(
         {
             "a-main": {"id": "thread-main", "is_main": True, "branch_index": 0},
             "a-child": {"id": "thread-child", "is_main": False, "branch_index": 1},
         }
     )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, main_agent, child_agent]),
-            thread_repo=thread_repo,
-            relationship_service=SimpleNamespace(
-                list_for_user=lambda _user_id: [
-                    SimpleNamespace(other_user_id="u2", state="visit"),
-                    SimpleNamespace(other_user_id="a-main", state="pending"),
-                ]
-            ),
-            contact_repo=_empty_contact_repo(),
-        )
+    app = _entities_app(
+        [current_user, other_human, main_agent, child_agent],
+        thread_repo=thread_repo,
+        relationships={"u2": "visit", "a-main": "pending"},
     )
 
     result = await entities_router.list_entities(user_id="u1", app=app)
@@ -129,23 +158,9 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
 
 @pytest.mark.asyncio
 async def test_list_entities_marks_owned_agents_as_chat_candidates_without_relationship():
-    now = 1_775_223_756.0
-    current_user = UserRow(id="u1", display_name="owner", type=UserType.HUMAN, created_at=now)
-    owned_agent = UserRow(
-        id="a-owned",
-        display_name="Morel",
-        type=UserType.AGENT,
-        owner_user_id="u1",
-        agent_config_id="cfg-a-owned",
-        created_at=now,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(list_all=lambda: [current_user, owned_agent]),
-            thread_repo=_FakeThreadRepo({"a-owned": {"id": "thread-owned", "is_main": True, "branch_index": 0}}),
-            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
-            contact_repo=_empty_contact_repo(),
-        )
+    app = _entities_app(
+        [_human("u1", "owner"), _agent("a-owned", "Morel", "u1")],
+        thread_repo=_FakeThreadRepo({"a-owned": {"id": "thread-owned", "is_main": True, "branch_index": 0}}),
     )
 
     result = await entities_router.list_entities(user_id="u1", app=app)
@@ -158,26 +173,9 @@ async def test_list_entities_marks_owned_agents_as_chat_candidates_without_relat
 
 @pytest.mark.asyncio
 async def test_list_entities_marks_normal_active_contacts_as_chat_candidates():
-    now = 1_775_223_756.0
-    current_user = UserRow(id="u1", display_name="owner", type=UserType.HUMAN, created_at=now)
-    other_human = UserRow(id="u2", display_name="other", type=UserType.HUMAN, created_at=now)
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human]),
-            thread_repo=_FakeThreadRepo(),
-            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
-            contact_repo=SimpleNamespace(
-                list_for_user=lambda _user_id: [
-                    ContactEdgeRow(
-                        source_user_id="u1",
-                        target_user_id="u2",
-                        kind="normal",
-                        state="active",
-                        created_at=now,
-                    )
-                ]
-            ),
-        )
+    app = _entities_app(
+        [_human("u1", "owner"), _human("u2", "other")],
+        contact_repo=_active_contact_repo("u1", "u2"),
     )
 
     result = await entities_router.list_entities(user_id="u1", app=app)
@@ -202,34 +200,9 @@ async def test_list_entities_marks_normal_active_contacts_as_chat_candidates():
 
 @pytest.mark.asyncio
 async def test_list_entities_marks_agents_owned_by_active_contacts_as_chat_candidates():
-    now = 1_775_223_756.0
-    current_user = UserRow(id="u1", display_name="owner", type=UserType.HUMAN, created_at=now)
-    other_human = UserRow(id="u2", display_name="other", type=UserType.HUMAN, created_at=now)
-    other_agent = UserRow(
-        id="a-other",
-        display_name="Toad",
-        type=UserType.AGENT,
-        owner_user_id="u2",
-        agent_config_id="cfg-a-other",
-        created_at=now,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, other_agent]),
-            thread_repo=_FakeThreadRepo(),
-            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
-            contact_repo=SimpleNamespace(
-                list_for_user=lambda _user_id: [
-                    ContactEdgeRow(
-                        source_user_id="u1",
-                        target_user_id="u2",
-                        kind="normal",
-                        state="active",
-                        created_at=now,
-                    )
-                ]
-            ),
-        )
+    app = _entities_app(
+        [_human("u1", "owner"), _human("u2", "other"), _agent("a-other", "Toad", "u2")],
+        contact_repo=_active_contact_repo("u1", "u2"),
     )
 
     result = await entities_router.list_entities(user_id="u1", app=app)
@@ -244,15 +217,7 @@ async def test_list_entities_marks_agents_owned_by_active_contacts_as_chat_candi
 
 @pytest.mark.asyncio
 async def test_get_agent_thread_reads_main_thread_from_thread_repo_via_user_repo():
-    now = 1_775_223_756.0
-    agent = UserRow(
-        id="a-main",
-        display_name="Toad",
-        type=UserType.AGENT,
-        owner_user_id="u2",
-        agent_config_id="cfg-a-main",
-        created_at=now,
-    )
+    agent = _agent("a-main", "Toad", "u2")
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "a-main" else None),
@@ -270,15 +235,7 @@ async def test_get_agent_thread_reads_main_thread_from_thread_repo_via_user_repo
 
 
 def test_get_user_or_404_returns_user():
-    now = 1_775_223_756.0
-    agent = UserRow(
-        id="a-main",
-        display_name="Toad",
-        type=UserType.AGENT,
-        owner_user_id="u2",
-        agent_config_id="cfg-a-main",
-        created_at=now,
-    )
+    agent = _agent("a-main", "Toad", "u2")
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "a-main" else None),

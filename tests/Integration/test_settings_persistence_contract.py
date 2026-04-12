@@ -44,6 +44,22 @@ def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
     return app
 
 
+def _patch_chat_model(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    captured: dict[str, object] = {}
+
+    class _FakeModel:
+        async def ainvoke(self, _prompt):
+            return SimpleNamespace(content="ok")
+
+    def _fake_init_chat_model(model_name: str, **kwargs):
+        captured["model"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeModel()
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+    return captured
+
+
 def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch):
     repo = _FakeSettingsRepo()
     monkeypatch.setattr(
@@ -348,18 +364,7 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
     )
     monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
 
-    captured: dict[str, object] = {}
-
-    class _FakeModel:
-        async def ainvoke(self, _prompt):
-            return SimpleNamespace(content="ok")
-
-    def _fake_init_chat_model(model_name: str, **kwargs):
-        captured["model"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeModel()
-
-    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+    captured = _patch_chat_model(monkeypatch)
 
     with TestClient(_settings_test_app(repo)) as client:
         response = client.post("/api/settings/models/test", json={"model_id": "repo-custom"})
@@ -381,18 +386,7 @@ def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monke
     monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://platform.example")
 
-    captured: dict[str, object] = {}
-
-    class _FakeModel:
-        async def ainvoke(self, _prompt):
-            return SimpleNamespace(content="ok")
-
-    def _fake_init_chat_model(model_name: str, **kwargs):
-        captured["model"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeModel()
-
-    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+    captured = _patch_chat_model(monkeypatch)
 
     with TestClient(_settings_test_app(repo)) as client:
         response = client.post("/api/settings/models/test", json={"model_id": "openai:gpt-4o"})

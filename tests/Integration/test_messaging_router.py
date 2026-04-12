@@ -35,6 +35,58 @@ def _empty_contact_repo() -> SimpleNamespace:
     return SimpleNamespace(get=lambda _owner_id, _target_id: None, list_for_user=lambda _owner_id: [])
 
 
+def _contact_repo(active_pairs: set[tuple[str, str]] | None = None) -> SimpleNamespace:
+    active_pairs = active_pairs or set()
+
+    def get(owner_id: str, target_id: str):
+        if (owner_id, target_id) not in active_pairs:
+            return None
+        return ContactEdgeRow(
+            source_user_id=owner_id,
+            target_user_id=target_id,
+            kind="normal",
+            state="active",
+            created_at=1.0,
+        )
+
+    return SimpleNamespace(
+        get=get,
+        list_for_user=lambda owner_id: [get(owner_id, target_id) for source_id, target_id in active_pairs if source_id == owner_id],
+    )
+
+
+def _create_chat_route_state(
+    *,
+    users: dict[str, SimpleNamespace] | None = None,
+    thread_user_ids: set[str] | None = None,
+    relationship_state: str | dict[str, str] = "visit",
+    active_contact_pairs: set[tuple[str, str]] | None = None,
+    group_route: bool = True,
+) -> tuple[SimpleNamespace, list[tuple[list[str], str | None]]]:
+    called: list[tuple[list[str], str | None]] = []
+    users = users or {}
+    thread_user_ids = thread_user_ids or set()
+
+    def chat_factory(user_ids: list[str], title: str | None):
+        called.append((user_ids, title))
+        return {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
+
+    def get_state(_viewer: str, participant: str) -> str:
+        return relationship_state.get(participant, "none") if isinstance(relationship_state, dict) else relationship_state
+
+    messaging_entrypoint = {"create_group_chat" if group_route else "find_or_create_chat": chat_factory}
+    state = SimpleNamespace(
+        user_repo=SimpleNamespace(get_by_id=lambda uid: users.get(uid)),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": f"thread-{uid}"} if uid in thread_user_ids else None,
+        ),
+        relationship_service=SimpleNamespace(get_state=get_state),
+        contact_repo=_contact_repo(active_contact_pairs),
+        messaging_service=SimpleNamespace(**messaging_entrypoint),
+    )
+    return state, called
+
+
 def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
     sync_routes = [
         messaging_router.list_chats,
@@ -490,22 +542,14 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
 
 
 def test_create_chat_rejects_template_member_ids_for_group_participants() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    SimpleNamespace(id=uid, type="agent", owner_user_id="owner-user-1") if uid in {"agent-user-1", "agent-user-2"} else None
-                )
-            ),
-            thread_repo=SimpleNamespace(get_by_user_id=lambda uid: {"id": "thread-owned"} if uid == "owned-agent-1" else None),
-            messaging_service=SimpleNamespace(
-                create_group_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-        )
+    state, called = _create_chat_route_state(
+        users={
+            "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", owner_user_id="owner-user-1"),
+            "agent-user-2": SimpleNamespace(id="agent-user-2", type="agent", owner_user_id="owner-user-1"),
+        },
+        thread_user_ids={"owned-agent-1"},
     )
+    app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
         messaging_router.create_chat(
@@ -523,20 +567,12 @@ def test_create_chat_rejects_template_member_ids_for_group_participants() -> Non
 
 
 def test_create_chat_rejects_template_member_id_for_direct_participant() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: SimpleNamespace(id=uid, type="agent", owner_user_id="owner-user-1") if uid == "agent-user-1" else None
-            ),
-            thread_repo=SimpleNamespace(get_by_user_id=lambda uid: {"id": "thread-owned"} if uid == "owned-agent-1" else None),
-            messaging_service=SimpleNamespace(
-                find_or_create_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-        )
+    state, called = _create_chat_route_state(
+        users={"agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", owner_user_id="owner-user-1")},
+        thread_user_ids={"owned-agent-1"},
+        group_route=False,
     )
+    app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
         messaging_router.create_chat(
@@ -554,24 +590,8 @@ def test_create_chat_rejects_template_member_id_for_direct_participant() -> None
 
 
 def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_participants() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: (
-                    {"id": f"thread-{uid}", "agent_user_id": "agent-user-1"} if uid in {"thread-user-1", "thread-user-2"} else None
-                )
-            ),
-            messaging_service=SimpleNamespace(
-                create_group_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-            relationship_service=SimpleNamespace(get_state=lambda _viewer, _participant: "visit"),
-            contact_repo=_empty_contact_repo(),
-        )
-    )
+    state, called = _create_chat_route_state(thread_user_ids={"thread-user-1", "thread-user-2"})
+    app = SimpleNamespace(state=state)
 
     result = messaging_router.create_chat(
         messaging_router.CreateChatBody(
@@ -592,28 +612,15 @@ def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_particip
 
 
 def test_create_group_chat_rejects_external_participant_without_active_relationship() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    SimpleNamespace(id=uid, owner_user_id="human-user-1")
-                    if uid == "owned-agent-1"
-                    else SimpleNamespace(id=uid, owner_user_id=None)
-                    if uid == "human-user-2"
-                    else None
-                )
-            ),
-            thread_repo=SimpleNamespace(get_by_user_id=lambda uid: {"id": "thread-owned"} if uid == "owned-agent-1" else None),
-            relationship_service=SimpleNamespace(get_state=lambda _viewer, _participant: "pending"),
-            contact_repo=_empty_contact_repo(),
-            messaging_service=SimpleNamespace(
-                create_group_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-        )
+    state, called = _create_chat_route_state(
+        users={
+            "owned-agent-1": SimpleNamespace(id="owned-agent-1", owner_user_id="human-user-1"),
+            "human-user-2": SimpleNamespace(id="human-user-2", owner_user_id=None),
+        },
+        thread_user_ids={"owned-agent-1"},
+        relationship_state="pending",
     )
+    app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
         messaging_router.create_chat(
@@ -631,40 +638,16 @@ def test_create_group_chat_rejects_external_participant_without_active_relations
 
 
 def test_create_group_chat_accepts_external_active_contact_without_relationship() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    SimpleNamespace(id=uid, owner_user_id="human-user-1")
-                    if uid == "owned-agent-1"
-                    else SimpleNamespace(id=uid, owner_user_id=None)
-                    if uid == "human-user-2"
-                    else None
-                )
-            ),
-            thread_repo=SimpleNamespace(get_by_user_id=lambda uid: {"id": "thread-owned"} if uid == "owned-agent-1" else None),
-            relationship_service=SimpleNamespace(get_state=lambda _viewer, _participant: "none"),
-            contact_repo=SimpleNamespace(
-                get=lambda owner_id, target_id: (
-                    ContactEdgeRow(
-                        source_user_id=owner_id,
-                        target_user_id=target_id,
-                        kind="normal",
-                        state="active",
-                        created_at=1.0,
-                    )
-                    if (owner_id, target_id) == ("human-user-1", "human-user-2")
-                    else None
-                )
-            ),
-            messaging_service=SimpleNamespace(
-                create_group_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-        )
+    state, called = _create_chat_route_state(
+        users={
+            "owned-agent-1": SimpleNamespace(id="owned-agent-1", owner_user_id="human-user-1"),
+            "human-user-2": SimpleNamespace(id="human-user-2", owner_user_id=None),
+        },
+        thread_user_ids={"owned-agent-1"},
+        relationship_state="none",
+        active_contact_pairs={("human-user-1", "human-user-2")},
     )
+    app = SimpleNamespace(state=state)
 
     result = messaging_router.create_chat(
         messaging_router.CreateChatBody(
@@ -680,44 +663,17 @@ def test_create_group_chat_accepts_external_active_contact_without_relationship(
 
 
 def test_create_group_chat_accepts_agent_owned_by_external_active_contact() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    SimpleNamespace(id=uid, owner_user_id="human-user-1")
-                    if uid == "owned-agent-1"
-                    else SimpleNamespace(id=uid, owner_user_id="human-user-2")
-                    if uid == "external-agent-1"
-                    else SimpleNamespace(id=uid, owner_user_id=None)
-                    if uid == "human-user-2"
-                    else None
-                )
-            ),
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": f"thread-{uid}"} if uid in {"owned-agent-1", "external-agent-1"} else None
-            ),
-            relationship_service=SimpleNamespace(get_state=lambda _viewer, _participant: "none"),
-            contact_repo=SimpleNamespace(
-                get=lambda owner_id, target_id: (
-                    ContactEdgeRow(
-                        source_user_id=owner_id,
-                        target_user_id=target_id,
-                        kind="normal",
-                        state="active",
-                        created_at=1.0,
-                    )
-                    if (owner_id, target_id) == ("human-user-1", "human-user-2")
-                    else None
-                )
-            ),
-            messaging_service=SimpleNamespace(
-                create_group_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-        )
+    state, called = _create_chat_route_state(
+        users={
+            "owned-agent-1": SimpleNamespace(id="owned-agent-1", owner_user_id="human-user-1"),
+            "external-agent-1": SimpleNamespace(id="external-agent-1", owner_user_id="human-user-2"),
+            "human-user-2": SimpleNamespace(id="human-user-2", owner_user_id=None),
+        },
+        thread_user_ids={"owned-agent-1", "external-agent-1"},
+        relationship_state="none",
+        active_contact_pairs={("human-user-1", "human-user-2")},
     )
+    app = SimpleNamespace(state=state)
 
     result = messaging_router.create_chat(
         messaging_router.CreateChatBody(
@@ -733,30 +689,15 @@ def test_create_group_chat_accepts_agent_owned_by_external_active_contact() -> N
 
 
 def test_create_group_chat_accepts_owned_agent_without_relationship() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    SimpleNamespace(id=uid, owner_user_id="human-user-1")
-                    if uid == "owned-agent-1"
-                    else SimpleNamespace(id=uid, owner_user_id=None)
-                    if uid == "human-user-2"
-                    else None
-                )
-            ),
-            thread_repo=SimpleNamespace(get_by_user_id=lambda uid: {"id": "thread-owned"} if uid == "owned-agent-1" else None),
-            relationship_service=SimpleNamespace(
-                get_state=lambda _viewer, participant: "visit" if participant == "human-user-2" else "none"
-            ),
-            contact_repo=_empty_contact_repo(),
-            messaging_service=SimpleNamespace(
-                create_group_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-        )
+    state, called = _create_chat_route_state(
+        users={
+            "owned-agent-1": SimpleNamespace(id="owned-agent-1", owner_user_id="human-user-1"),
+            "human-user-2": SimpleNamespace(id="human-user-2", owner_user_id=None),
+        },
+        thread_user_ids={"owned-agent-1"},
+        relationship_state={"human-user-2": "visit"},
     )
+    app = SimpleNamespace(state=state)
 
     result = messaging_router.create_chat(
         messaging_router.CreateChatBody(
@@ -772,19 +713,8 @@ def test_create_group_chat_accepts_owned_agent_without_relationship() -> None:
 
 
 def test_create_chat_rejects_unknown_participant_ids_instead_of_falling_to_storage_fk() -> None:
-    called: list[tuple[list[str], str | None]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
-            thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None),
-            relationship_service=SimpleNamespace(get_state=lambda _viewer, _participant: "visit"),
-            messaging_service=SimpleNamespace(
-                create_group_chat=lambda user_ids, title: (
-                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
-                )
-            ),
-        )
-    )
+    state, called = _create_chat_route_state()
+    app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
         messaging_router.create_chat(
