@@ -119,6 +119,27 @@ class SupabaseThreadRepo:
             return None
         return _to_dict(rows[0])
 
+    def list_default_threads(self, agent_user_ids: list[str]) -> dict[str, dict[str, Any]]:
+        ordered_ids: list[str] = []
+        seen: set[str] = set()
+        for agent_user_id in agent_user_ids:
+            normalized = str(agent_user_id or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered_ids.append(normalized)
+        if not ordered_ids:
+            return {}
+        select = ", ".join(_COLS)
+        rows = q.rows_in_chunks(
+            lambda: self._t().select(select).eq("is_main", 1),
+            "agent_user_id",
+            ordered_ids,
+            _REPO,
+            "list_default_threads",
+        )
+        return {str(row["agent_user_id"]): _to_dict(row) for row in rows}
+
     def get_next_branch_index(self, agent_user_id: str) -> int:
         response = self._t().select("branch_index").eq("agent_user_id", agent_user_id).execute()
         rows = q.rows(response, _REPO, "get_next_branch_index")

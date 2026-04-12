@@ -182,6 +182,9 @@ async def list_entities(
     users = user_repo.list_all()
     user_map = {user.id: user for user in users}
     relationship_states = _relationship_states_for_user(app, user_id)
+    default_threads = app.state.thread_repo.list_default_threads(
+        [user.id for user in users if user.id != user_id and user.type is UserType.AGENT]
+    )
     try:
         contact_targets = active_contact_target_ids(getattr(app.state, "contact_repo", None), user_id)
     except RuntimeError as exc:
@@ -221,7 +224,7 @@ async def list_entities(
             )
         else:
             owner = user_map.get(user.owner_user_id) if user.owner_user_id else None
-            default_thread = app.state.thread_repo.get_default_thread(user.id)
+            default_thread = default_threads.get(user.id)
             items.append(
                 {
                     "user_id": user.id,

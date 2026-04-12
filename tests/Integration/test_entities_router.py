@@ -22,6 +22,21 @@ def _empty_contact_repo() -> SimpleNamespace:
     return SimpleNamespace(list_for_user=lambda _user_id: [])
 
 
+class _FakeThreadRepo:
+    def __init__(self, default_threads: dict[str, dict] | None = None) -> None:
+        self.default_threads = default_threads or {}
+        self.batch_calls: list[list[str]] = []
+        self.single_calls: list[str] = []
+
+    def list_default_threads(self, agent_user_ids: list[str]) -> dict[str, dict]:
+        self.batch_calls.append(list(agent_user_ids))
+        return {agent_user_id: self.default_threads[agent_user_id] for agent_user_id in agent_user_ids if agent_user_id in self.default_threads}
+
+    def get_default_thread(self, agent_user_id: str) -> dict | None:
+        self.single_calls.append(agent_user_id)
+        return self.default_threads.get(agent_user_id)
+
+
 @pytest.mark.asyncio
 async def test_list_entities_excludes_current_user_and_returns_all_others():
     now = 1_775_223_756.0
@@ -44,16 +59,16 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
         created_at=now,
     )
 
+    thread_repo = _FakeThreadRepo(
+        {
+            "a-main": {"id": "thread-main", "is_main": True, "branch_index": 0},
+            "a-child": {"id": "thread-child", "is_main": False, "branch_index": 1},
+        }
+    )
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, main_agent, child_agent]),
-            thread_repo=SimpleNamespace(
-                get_default_thread=lambda user_id: (
-                    {"id": "thread-main", "is_main": True, "branch_index": 0}
-                    if user_id == "a-main"
-                    else {"id": "thread-child", "is_main": False, "branch_index": 1}
-                )
-            ),
+            thread_repo=thread_repo,
             relationship_service=SimpleNamespace(
                 list_for_user=lambda _user_id: [
                     SimpleNamespace(other_user_id="u2", state="visit"),
@@ -65,6 +80,9 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
     )
 
     result = await entities_router.list_entities(user_id="u1", app=app)
+
+    assert thread_repo.batch_calls == [["a-main", "a-child"]]
+    assert thread_repo.single_calls == []
 
     # Current user (u1) is excluded; all other users are returned.
     identities = [(item["type"], item.get("user_id")) for item in result]
@@ -124,7 +142,7 @@ async def test_list_entities_marks_owned_agents_as_chat_candidates_without_relat
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [current_user, owned_agent]),
-            thread_repo=SimpleNamespace(get_default_thread=lambda _user_id: {"id": "thread-owned", "is_main": True, "branch_index": 0}),
+            thread_repo=_FakeThreadRepo({"a-owned": {"id": "thread-owned", "is_main": True, "branch_index": 0}}),
             relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
             contact_repo=_empty_contact_repo(),
         )
@@ -146,7 +164,7 @@ async def test_list_entities_marks_normal_active_contacts_as_chat_candidates():
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human]),
-            thread_repo=SimpleNamespace(get_default_thread=lambda _user_id: None),
+            thread_repo=_FakeThreadRepo(),
             relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
             contact_repo=SimpleNamespace(
                 list_for_user=lambda _user_id: [
@@ -198,7 +216,7 @@ async def test_list_entities_marks_agents_owned_by_active_contacts_as_chat_candi
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, other_agent]),
-            thread_repo=SimpleNamespace(get_default_thread=lambda _user_id: None),
+            thread_repo=_FakeThreadRepo(),
             relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
             contact_repo=SimpleNamespace(
                 list_for_user=lambda _user_id: [

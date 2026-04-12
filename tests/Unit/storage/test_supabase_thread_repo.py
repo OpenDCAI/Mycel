@@ -44,6 +44,8 @@ class _FakeTable:
 
     def execute(self):
         rows = self.rows
+        for key, value in self.eq_calls:
+            rows = [row for row in rows if row.get(key) == value]
         if self.in_calls:
             key, values = self.in_calls[-1]
             rows = [row for row in rows if row.get(key) in values]
@@ -138,12 +140,12 @@ def test_supabase_thread_repo_get_by_user_id_reads_thread_identity() -> None:
     client = _FakeClient()
     repo = SupabaseThreadRepo(client)
 
-    result = repo.get_by_user_id("thread-1")
+    result = repo.get_by_user_id("agent-1")
 
     assert result is not None
     assert result["id"] == "thread-1"
     assert result["agent_user_id"] == "agent-1"
-    assert ("agent_user_id", "thread-1") in client.table_obj.eq_calls
+    assert ("agent_user_id", "agent-1") in client.table_obj.eq_calls
 
 
 def test_supabase_thread_repo_get_by_user_id_targets_default_main_thread() -> None:
@@ -164,6 +166,46 @@ def test_supabase_thread_repo_list_by_ids_reads_threads_in_batch() -> None:
 
     assert [row["id"] for row in rows] == ["thread-1"]
     assert ("id", ["thread-1", "thread-2"]) in client.table_obj.in_calls
+
+
+def test_supabase_thread_repo_list_default_threads_reads_agent_users_in_batch() -> None:
+    client = _FakeClient()
+    client.table_obj.rows = [
+        {
+            "id": "thread-1",
+            "agent_user_id": "agent-1",
+            "sandbox_type": "local",
+            "model": None,
+            "cwd": None,
+            "status": "active",
+            "is_main": 1,
+            "branch_index": 0,
+            "created_at": 1.0,
+            "updated_at": None,
+            "last_active_at": None,
+        },
+        {
+            "id": "thread-2",
+            "agent_user_id": "agent-2",
+            "sandbox_type": "local",
+            "model": None,
+            "cwd": None,
+            "status": "active",
+            "is_main": 0,
+            "branch_index": 1,
+            "created_at": 2.0,
+            "updated_at": None,
+            "last_active_at": None,
+        },
+    ]
+    repo = SupabaseThreadRepo(client)
+
+    rows = repo.list_default_threads(["agent-1", "agent-2"])
+
+    assert list(rows) == ["agent-1"]
+    assert rows["agent-1"]["id"] == "thread-1"
+    assert ("agent_user_id", ["agent-1", "agent-2"]) in client.table_obj.in_calls
+    assert ("is_main", 1) in client.table_obj.eq_calls
 
 
 def test_supabase_thread_repo_list_by_ids_chunks_large_in_filters() -> None:
