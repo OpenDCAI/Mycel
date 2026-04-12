@@ -79,9 +79,6 @@ from core.tools.search.service import SearchService  # noqa: E402
 from core.tools.skills.service import SkillsService  # noqa: E402
 from core.tools.task.service import TaskService  # noqa: E402
 from core.tools.tool_search.service import ToolSearchService  # noqa: E402
-
-# Multi-agent team coordination
-# from core.agents.teams.service import TeamService  # @@@teams-removed - module doesn't exist
 from core.tools.web.service import WebService  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
 
@@ -1239,12 +1236,6 @@ class LeonAgent:
             web_app=self._web_app,
             child_agent_factory=create_leon_agent,
         )
-
-        # Team coordination (TeamCreate/TeamDelete — deferred mode)
-        # @@@teams-removed - TeamService module doesn't exist, feature not implemented
-        # self._team_service = TeamService(
-        #     tool_registry=self._tool_registry,
-        # )
 
         # @@@chat-tools - register chat tools for agents with user identity (v2 messaging)
         if self._chat_repos:
