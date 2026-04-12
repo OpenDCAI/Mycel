@@ -30,7 +30,6 @@ export default function ChatConversationPage() {
 
 function ChatConversationInner({ chatId }: { chatId: string }) {
   const { setSidebarCollapsed, refreshChatList: _refreshRaw } = useOutletContext<{
-    sidebarCollapsed: boolean;
     setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
     refreshChatList: () => void;
   }>();

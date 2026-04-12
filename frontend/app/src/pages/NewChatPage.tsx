@@ -17,9 +17,6 @@ import { cn } from "../lib/utils";
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
-  sidebarCollapsed: boolean;
-  setSidebarCollapsed: (value: boolean) => void;
-  setSessionsOpen: (value: boolean) => void;
 }
 
 function ResolveStateCard({

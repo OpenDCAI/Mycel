@@ -10,12 +10,11 @@ export default function ChatLayout() {
   const hasActiveConversation = Boolean(params.threadId || params.chatId || params.agentId);
   const tm = useThreadManager();
   const refreshChatList = useConversationStore((s) => s.fetchConversations);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [, setSessionsOpen] = useState(false);
+  const [, setSidebarCollapsed] = useState(false);
 
   const outletContext = useMemo(
-    () => ({ tm, sidebarCollapsed, setSidebarCollapsed, setSessionsOpen, refreshChatList }),
-    [tm, sidebarCollapsed, refreshChatList],
+    () => ({ tm, setSidebarCollapsed, refreshChatList }),
+    [tm, refreshChatList],
   );
 
   return (

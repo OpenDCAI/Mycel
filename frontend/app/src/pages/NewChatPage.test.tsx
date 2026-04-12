@@ -107,9 +107,6 @@ function ContextOutlet() {
           handleCreateThread,
           handleGetDefaultThread,
         },
-        sidebarCollapsed: false,
-        setSidebarCollapsed: vi.fn(),
-        setSessionsOpen: vi.fn(),
       }}
     />
   );

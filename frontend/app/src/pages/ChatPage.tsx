@@ -31,9 +31,7 @@ import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thre
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
-  sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
-  setSessionsOpen: (value: boolean) => void;
 }
 
 function isAskUserQuestionRequest(
