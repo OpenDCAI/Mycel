@@ -1,6 +1,6 @@
 type PortEnv = Partial<Record<"LEON_BACKEND_PORT" | "LEON_MONITOR_PORT" | "LEON_MONITOR_PREVIEW_PORT", string>>;
 
-type WorktreePortReader = (key: string, fallback: string) => string;
+type WorktreePortReader = (key: string, defaultPort: string) => string;
 
 type ResolveMonitorPortsOptions = {
   env: PortEnv;

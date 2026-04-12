@@ -2,11 +2,11 @@ import { execSync } from "child_process";
 
 import { resolveMonitorPorts } from "./src/monitor-ports";
 
-export function getWorktreePort(key: string, fallback: string): string {
+export function getWorktreePort(key: string, defaultPort: string): string {
   try {
     return execSync(`git config --worktree --get ${key}`, { encoding: "utf-8" }).trim();
   } catch {
-    return fallback;
+    return defaultPort;
   }
 }
 
