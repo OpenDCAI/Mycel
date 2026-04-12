@@ -1159,7 +1159,7 @@ def test_delivery_resolver_propagates_contact_repo_failures() -> None:
 def test_delivery_resolver_requires_current_chat_member_contract() -> None:
     resolver = HireVisitDeliveryResolver(
         contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
-        chat_member_repo=SimpleNamespace(list_entities=lambda _chat_id: []),
+        chat_member_repo=SimpleNamespace(),
         relationship_repo=None,
     )
 
