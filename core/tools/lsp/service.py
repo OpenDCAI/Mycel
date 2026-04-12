@@ -302,7 +302,7 @@ class _PyrightSession:
                 await asyncio.wait_for(self._request("shutdown", {}), timeout=5)
                 self._notify("exit", {})
             except Exception:
-                pass
+                logger.exception("Pyright LSP shutdown request failed for workspace %s", self._workspace_root)
             try:
                 self._proc.terminate()
                 await asyncio.wait_for(self._proc.wait(), timeout=5)
