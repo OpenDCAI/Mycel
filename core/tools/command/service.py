@@ -123,8 +123,7 @@ class CommandService:
 
         if not run_in_background:
             return await self._execute_blocking(command, work_dir, timeout_secs)
-        else:
-            return await self._execute_async(command, work_dir, timeout_secs, description=description)
+        return await self._execute_async(command, work_dir, timeout_secs, description=description)
 
     async def _execute_blocking(self, command: str, work_dir: str | None, timeout_secs: float) -> str:
         try:
