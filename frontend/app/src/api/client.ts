@@ -208,8 +208,42 @@ function parseSandboxSessions(value: unknown): SandboxSession[] {
 }
 
 export async function listMyLeases(signal?: AbortSignal): Promise<UserLeaseSummary[]> {
-  const payload = await request<{ leases: UserLeaseSummary[] }>("/api/sandbox/leases/mine", { signal });
-  return payload.leases;
+  return parseUserLeases(await request("/api/sandbox/leases/mine", { signal }));
+}
+
+function parseUserLeases(value: unknown): UserLeaseSummary[] {
+  const payload = asRecord(value);
+  const leases = payload?.leases;
+  if (!Array.isArray(leases)) throw new Error("Malformed user leases");
+  return leases.map((lease) => {
+    const data = asRecord(lease);
+    const lease_id = data ? recordString(data, "lease_id") : undefined;
+    const provider_name = data ? recordString(data, "provider_name") : undefined;
+    const recipe_id = data ? recordString(data, "recipe_id") : undefined;
+    const recipe_name = data ? recordString(data, "recipe_name") : undefined;
+    const thread_ids = data?.thread_ids;
+    const agents = data?.agents;
+    if (
+      !data ||
+      !lease_id ||
+      !provider_name ||
+      !recipe_id ||
+      !recipe_name ||
+      !Array.isArray(thread_ids) ||
+      !thread_ids.every((id) => typeof id === "string") ||
+      !Array.isArray(agents)
+    ) {
+      throw new Error("Malformed user leases");
+    }
+    const admittedAgents = agents.map((agent) => {
+      const agentData = asRecord(agent);
+      const thread_id = agentData ? recordString(agentData, "thread_id") : undefined;
+      const agent_name = agentData ? recordString(agentData, "agent_name") : undefined;
+      if (!agentData || !thread_id || !agent_name) throw new Error("Malformed user leases");
+      return { ...agentData, thread_id, agent_name };
+    });
+    return { ...data, lease_id, provider_name, recipe_id, recipe_name, thread_ids, agents: admittedAgents } as UserLeaseSummary;
+  });
 }
 
 export async function destroySandboxSession(sessionId: string, provider: string): Promise<void> {
