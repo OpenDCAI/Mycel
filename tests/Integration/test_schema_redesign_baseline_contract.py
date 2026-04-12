@@ -92,7 +92,7 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
                     {
                         "thread_id": "thread-1",
                         "agent_name": "Morel",
-                        "avatar_url": avatar_url("member-1", True),
+                        "avatar_url": avatar_url("agent-user-1", True),
                     }
                 ],
                 "observed_state": "running",
@@ -130,7 +130,7 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
     session = payload["providers"][0]["sessions"][0]
     assert session["threadId"] == "thread-1"
     assert session["agentName"] == "Morel"
-    assert session["avatarUrl"] == avatar_url("member-1", True)
+    assert session["avatarUrl"] == avatar_url("agent-user-1", True)
     assert "memberId" not in session
 
 
