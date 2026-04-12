@@ -134,10 +134,14 @@ def _build_export_block(env_delta: dict[str, str]) -> str:
     return "\n".join(f"export {k}={shlex.quote(str(v))}" for k, v in env_delta.items())
 
 
-def _build_state_snapshot_cmd() -> tuple[str, str, str]:
-    """Returns (start_marker, end_marker, full_cmd)."""
+def _build_state_markers() -> tuple[str, str]:
     start = f"__LEON_STATE_START_{uuid.uuid4().hex[:8]}__"
     end = f"__LEON_STATE_END_{uuid.uuid4().hex[:8]}__"
+    return start, end
+
+
+def _build_state_snapshot_cmd() -> tuple[str, str, str]:
+    start, end = _build_state_markers()
     cmd = "\n".join([f"echo {shlex.quote(start)}", "pwd", "env", f"echo {shlex.quote(end)}"])
     return start, end, cmd
 
@@ -923,9 +927,7 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
             f"command={command[:200]!r}",
             flush=True,
         )
-        # @@@ _build_state_snapshot_cmd returns (start, end, cmd) but RemoteWrappedRuntime
-        # builds its own inline block to interleave cd/exports/command, so the pre-built cmd is unused.
-        start_marker, end_marker, _ = _build_state_snapshot_cmd()
+        start_marker, end_marker = _build_state_markers()
         exports = _build_export_block(state.env_delta)
         wrapped = "\n".join(
             part
