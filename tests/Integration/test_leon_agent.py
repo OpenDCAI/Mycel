@@ -533,16 +533,16 @@ async def test_leon_agent_astream_raises_loudly_on_empty_stream(tmp_path):
 @pytest.mark.asyncio
 @_patch_env_api_key()
 async def test_leon_agent_bundle_dir_registers_mcp_resource_tools(tmp_path):
-    """Member bundle MCP config should surface MCP resource tools in the live registry."""
+    """Agent bundle MCP config should surface MCP resource tools in the live registry."""
     from core.runtime.agent import LeonAgent
 
-    member_dir = tmp_path / "members" / "toad"
-    member_dir.mkdir(parents=True)
-    (member_dir / "agent.md").write_text(
-        "---\nname: Toad\ndescription: Demo member\n---\nYou are Toad.\n",
+    bundle_dir = tmp_path / "agent-bundles" / "toad"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "agent.md").write_text(
+        "---\nname: Toad\ndescription: Demo agent\n---\nYou are Toad.\n",
         encoding="utf-8",
     )
-    (member_dir / ".mcp.json").write_text(
+    (bundle_dir / ".mcp.json").write_text(
         '{"mcpServers":{"nu50demo":{"transport":"stdio","command":"uv","args":["run","python","/tmp/nu50_mcp_server.py"]}}}',
         encoding="utf-8",
     )
@@ -556,7 +556,7 @@ async def test_leon_agent_bundle_dir_registers_mcp_resource_tools(tmp_path):
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            bundle_dir=str(member_dir),
+            bundle_dir=str(bundle_dir),
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -579,7 +579,7 @@ async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path)
             return {
                 "id": "cfg-1",
                 "name": "Toad",
-                "description": "Demo member",
+                "description": "Demo agent",
                 "tools": ["*"],
                 "system_prompt": "You are Toad.",
                 "status": "active",
@@ -644,7 +644,7 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_legacy_member_shel
             return {
                 "id": "cfg-1",
                 "name": "Repo Toad",
-                "description": "Repo-backed member",
+                "description": "Repo-backed agent",
                 "tools": ["*"],
                 "system_prompt": "You are Repo Toad.",
                 "status": "active",
@@ -698,15 +698,15 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_legacy_member_shel
 async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_on_change(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    member_dir = tmp_path / "members" / "toad"
-    member_dir.mkdir(parents=True)
-    (member_dir / "agent.md").write_text(
-        "---\nname: Toad\ndescription: Demo member\n---\nYou are Toad.\n",
+    bundle_dir = tmp_path / "agent-bundles" / "toad"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "agent.md").write_text(
+        "---\nname: Toad\ndescription: Demo agent\n---\nYou are Toad.\n",
         encoding="utf-8",
     )
 
     def _write_mcp(instructions: str) -> None:
-        (member_dir / ".mcp.json").write_text(
+        (bundle_dir / ".mcp.json").write_text(
             json.dumps(
                 {
                     "mcpServers": {
@@ -749,7 +749,7 @@ async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_o
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            bundle_dir=str(member_dir),
+            bundle_dir=str(bundle_dir),
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -782,7 +782,7 @@ async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_o
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            bundle_dir=str(member_dir),
+            bundle_dir=str(bundle_dir),
             api_key="sk-test-integration",
         )
         await agent.ainit()

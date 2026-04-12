@@ -74,7 +74,7 @@ def make_chat_delivery_fn(app: Any):
 
     def _deliver(
         recipient_id: str,
-        member: UserRow,
+        recipient_user: UserRow,
         content: str,
         sender_name: str,
         chat_id: str,
@@ -82,9 +82,9 @@ def make_chat_delivery_fn(app: Any):
         sender_avatar_url: str | None = None,
         signal: str | None = None,
     ) -> None:
-        logger.info("[delivery] _deliver called: recipient=%s member=%s", recipient_id, member.id)
+        logger.info("[delivery] _deliver called: recipient=%s user=%s", recipient_id, recipient_user.id)
         future = asyncio.run_coroutine_threadsafe(
-            _async_deliver(app, recipient_id, member, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal),
+            _async_deliver(app, recipient_id, recipient_user, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal),
             loop,
         )
 
@@ -105,7 +105,7 @@ def _log_delivery_result(recipient_id: str, f: Any) -> None:
 async def _async_deliver(
     app: Any,
     recipient_id: str,
-    member: UserRow,
+    recipient_user: UserRow,
     sender_name: str,
     chat_id: str,
     sender_id: str,
@@ -123,7 +123,13 @@ async def _async_deliver(
     # @@@thread-delivery-route - delivery target must come from the recipient social handle,
     # never from the template default-thread shortcut.
     thread_id = _resolve_recipient_thread_id(app, recipient_id)
-    logger.info("[delivery] _async_deliver: recipient=%s member=%s thread=%s from=%s", recipient_id, member.id, thread_id, sender_name)
+    logger.info(
+        "[delivery] _async_deliver: recipient=%s user=%s thread=%s from=%s",
+        recipient_id,
+        recipient_user.id,
+        thread_id,
+        sender_name,
+    )
     from core.runtime.middleware.queue.formatters import format_chat_notification
 
     if not thread_id:

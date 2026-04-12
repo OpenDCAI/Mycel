@@ -623,7 +623,7 @@ class LeonAgent:
             if not agent_def:
                 available = ", ".join(sorted(all_agents.keys()))
                 raise ValueError(f"Unknown agent: {agent_name}. Available: {available}")
-            # If agent has source_dir (member), load full bundle
+            # If agent has source_dir, load the full bundle.
             if agent_def.source_dir:
                 self._agent_bundle = loader.load_bundle(agent_def.source_dir)
             else:
@@ -1198,7 +1198,7 @@ class LeonAgent:
 
         # Skills tools
         if self.config.skills.enabled and self.config.skills.paths:
-            # Use member bundle's skills enabled/disabled state if available
+            # Use the agent bundle's skills enabled/disabled state if available.
             enabled_skills = self.config.skills.skills
             if hasattr(self, "_agent_bundle") and self._agent_bundle:
                 bundle_skill_entries = {k.split(":", 1)[1]: v for k, v in self._agent_bundle.runtime.items() if k.startswith("skills:")}
@@ -1371,7 +1371,7 @@ class LeonAgent:
 
     def _build_system_prompt(self) -> str:
         """Build system prompt based on sandbox mode."""
-        # If agent override is set, use member's system_prompt + rules
+        # If agent override is set, use its system_prompt + rules.
         if hasattr(self, "_agent_override") and self._agent_override:
             prompt = self._agent_override.system_prompt
             # Append bundle rules (from rules/*.md) to system prompt
