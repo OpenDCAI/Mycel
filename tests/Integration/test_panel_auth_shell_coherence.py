@@ -337,7 +337,6 @@ def test_profile_service_updates_user_repo_shell_fields_only():
         user_repo=_UserRepo(),
         user_id="user-1",
         name="renamed",
-        initials="RN",
         email="renamed@example.com",
     )
 

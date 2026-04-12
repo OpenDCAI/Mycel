@@ -345,5 +345,6 @@ async def update_profile(
         profile_service.update_profile,
         user_repo=request.app.state.user_repo,
         user_id=user_id,
-        **req.model_dump(),
+        name=req.name,
+        email=req.email,
     )
