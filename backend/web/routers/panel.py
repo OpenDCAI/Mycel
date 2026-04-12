@@ -113,7 +113,9 @@ async def update_agent(
         agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
-        **req.model_dump(),
+        name=req.name,
+        description=req.description,
+        status=req.status,
     )
     if not item:
         raise HTTPException(404, "Agent not found")

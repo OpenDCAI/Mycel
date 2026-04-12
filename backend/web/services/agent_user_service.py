@@ -334,15 +334,21 @@ def update_agent_user(
     agent_user_id: str,
     user_repo: Any = None,
     agent_config_repo: Any = None,
-    **fields: Any,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    status: str | None = None,
 ) -> dict[str, Any] | None:
     if agent_user_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
     user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
-    allowed = {"name", "description", "status"}
-    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    updates = {
+        key: value
+        for key, value in {"name": name, "description": description, "status": status}.items()
+        if value is not None
+    }
     if not updates:
         return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if "name" in updates:
