@@ -1083,8 +1083,8 @@ class LeonAgent:
 
     def _add_memory_middleware(self, middleware: list) -> None:
         """Add memory middleware to stack."""
-        # @@@context-limit-fallback — prefer mapping override (e.g. leon:tiny → 8000),
-        # then Monitor's resolved value (model API → 128000 fallback).
+        # @@@context-limit-default - prefer mapping override (e.g. leon:tiny -> 8000),
+        # then Monitor's resolved value (model API or its 128000 default).
         context_limit = self._model_overrides.get("context_limit") or self._monitor_middleware._context_monitor.context_limit
         pruning_config = self.config.memory.pruning
         compaction_config = self.config.memory.compaction
