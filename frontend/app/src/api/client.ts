@@ -272,10 +272,22 @@ export async function getThreadRuntime(threadId: string): Promise<StreamStatus> 
 }
 
 export async function sendMessage(threadId: string, message: string): Promise<{ status: string; routing: string }> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
+  return parseSendMessageResult(await request(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
     method: "POST",
     body: JSON.stringify({ message }),
-  });
+  }));
+}
+
+function parseSendMessageResult(value: unknown): { status: string; routing: string; thread_id: string; run_id?: string } {
+  const payload = asRecord(value);
+  const status = payload ? recordString(payload, "status") : undefined;
+  const routing = payload ? recordString(payload, "routing") : undefined;
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const run_id = payload?.run_id;
+  if (!payload || !status || !routing || !thread_id || (run_id !== undefined && typeof run_id !== "string")) {
+    throw new Error("Malformed send message result");
+  }
+  return run_id === undefined ? { status, routing, thread_id } : { status, routing, thread_id, run_id };
 }
 
 // --- Sandbox API ---
