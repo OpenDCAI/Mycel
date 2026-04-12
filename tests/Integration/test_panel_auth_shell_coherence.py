@@ -393,6 +393,42 @@ def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytes
     assert seen == [("user-1", "repo-1", "cfg-repo")]
 
 
+def test_library_service_create_recipe_uses_provider_name_identity(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        library_service.sandbox_service,
+        "available_sandbox_types",
+        lambda: [
+            {"name": "daytona", "provider": "daytona", "available": True},
+            {"name": "daytona_selfhost", "provider": "daytona", "available": True},
+        ],
+    )
+
+    rows: dict[tuple[str, str], dict[str, object]] = {}
+
+    class _RecipeRepo:
+        def get(self, owner_user_id: str, recipe_id: str):
+            return rows.get((owner_user_id, recipe_id))
+
+        def upsert(self, **payload: object):
+            rows[(str(payload["owner_user_id"]), str(payload["recipe_id"]))] = {"data": payload["data"], **payload}
+
+    item = library_service.create_resource(
+        "recipe",
+        "Selfhost Custom",
+        "custom self-host sandbox",
+        features={"lark_cli": True},
+        provider_name="daytona_selfhost",
+        owner_user_id="user-1",
+        recipe_repo=_RecipeRepo(),
+    )
+
+    assert item["id"].startswith("daytona_selfhost:custom:")
+    assert item["provider_name"] == "daytona_selfhost"
+    assert item["provider_type"] == "daytona"
+    assert rows[("user-1", item["id"])]["provider_type"] == "daytona"
+    assert rows[("user-1", item["id"])]["data"]["provider_name"] == "daytona_selfhost"
+
+
 def test_create_agent_user_fails_loudly_when_created_row_is_not_readable():
     created_rows: list[UserRow] = []
     saved_configs: list[tuple[str, dict[str, object]]] = []

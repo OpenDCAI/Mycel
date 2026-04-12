@@ -44,7 +44,7 @@ interface AppState {
     type: string,
     name: string,
     desc?: string,
-    extra?: { provider_type?: string; features?: Record<string, boolean> },
+    extra?: { provider_name?: string; provider_type?: string; features?: Record<string, boolean> },
   ) => Promise<ResourceItem>;
   updateResource: (type: string, id: string, fields: Partial<ResourceItem>) => Promise<void>;
   deleteResource: (type: string, id: string) => Promise<void>;

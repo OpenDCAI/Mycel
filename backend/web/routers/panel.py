@@ -214,16 +214,20 @@ async def create_resource(
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
     category = req.provider_type or ""
-    return await asyncio.to_thread(
-        library_service.create_resource,
-        resource_type,
-        req.name,
-        req.desc,
-        category,
-        req.features,
-        user_id,
-        request.app.state.recipe_repo,
-    )
+    try:
+        return await asyncio.to_thread(
+            library_service.create_resource,
+            resource_type,
+            req.name,
+            req.desc,
+            category,
+            req.features,
+            req.provider_name,
+            user_id,
+            request.app.state.recipe_repo,
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 @router.put("/library/{resource_type}/{resource_id}")
