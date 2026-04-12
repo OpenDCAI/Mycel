@@ -43,7 +43,7 @@ async function checkedResponse(url: string, init?: RequestInit): Promise<Respons
   return response;
 }
 
-export async function request<T>(url: string, init?: RequestInit): Promise<T> {
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await checkedResponse(url, init);
   return (await response.json()) as T;
 }
