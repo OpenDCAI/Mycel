@@ -108,6 +108,19 @@ describe("thread api client contract", () => {
     expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1", { method: "DELETE" });
   });
 
+  it("getThreadLease rejects malformed lease identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      thread_id: "thread-1",
+      lease_id: { value: "lease-1" },
+      provider_name: "local",
+      instance: null,
+      created_at: "2026-04-12T00:00:00Z",
+      updated_at: "2026-04-12T00:00:00Z",
+    }));
+
+    await expect(api.getThreadLease("thread-1")).rejects.toThrow("Malformed lease status");
+  });
+
   it("uploadUserAvatar sends user avatar path instead of members path", async () => {
     authFetch.mockResolvedValue(okJson({ ok: true }));
 
