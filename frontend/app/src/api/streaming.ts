@@ -1,6 +1,7 @@
 import type { StreamEvent } from "./types";
 import { processChunk } from "./sse-processor";
 import { authFetch } from "../store/auth-store";
+import { asRecord, recordString } from "../lib/records";
 
 /** Read an SSE response body, dispatch events, return { lastSeq, runEnded }. */
 async function consumeSSEStream(
@@ -121,6 +122,6 @@ export async function streamThreadEvents(
 export async function cancelRun(threadId: string): Promise<void> {
   const res = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
   if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`);
-  const payload = await res.json();
-  if (payload?.ok === false) throw new Error(payload.message || "Cancel failed");
+  const payload = asRecord(await res.json());
+  if (payload?.ok === false) throw new Error(recordString(payload, "message") || "Cancel failed");
 }
