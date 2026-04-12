@@ -50,6 +50,16 @@ async def lifespan(app: FastAPI):
         supabase_client=_supabase_client,
         public_supabase_client=_public_supabase_client,
     )
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore
+
+    pg_url = os.environ["LEON_POSTGRES_URL"]
+    app.state._thread_checkpoint_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
+    app.state._thread_checkpoint_saver = await app.state._thread_checkpoint_saver_ctx.__aenter__()
+    await app.state._thread_checkpoint_saver.setup()
+    app.state.thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
+
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.lease_repo = storage_container.lease_repo()
@@ -168,6 +178,10 @@ async def lifespan(app: FastAPI):
 
         if hasattr(app.state, "recipe_repo"):
             app.state.recipe_repo.close()
+
+        checkpoint_saver_ctx = getattr(app.state, "_thread_checkpoint_saver_ctx", None)
+        if checkpoint_saver_ctx is not None:
+            await checkpoint_saver_ctx.__aexit__(None, None, None)
 
         # Cleanup: close all agents
         for agent in app.state.agent_pool.values():

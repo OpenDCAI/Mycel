@@ -129,7 +129,29 @@ class ContextCompactor:
             bound_model = model
 
         response = await bound_model.ainvoke(summary_messages)
-        return response.content if hasattr(response, "content") else str(response)
+        return self._extract_summary_text(response)
+
+    def _extract_summary_text(self, response: Any) -> str:
+        content = getattr(response, "content", None)
+        if isinstance(content, str):
+            summary = content.strip()
+        elif isinstance(content, list):
+            parts: list[str] = []
+            for block in content:
+                if isinstance(block, dict):
+                    text = block.get("text") or block.get("content") or ""
+                    if isinstance(text, str):
+                        parts.append(text)
+                elif isinstance(block, str):
+                    parts.append(block)
+            summary = "".join(parts).strip()
+        elif content is None:
+            summary = ""
+        else:
+            summary = str(content).strip()
+        if not summary:
+            raise RuntimeError("Compaction summary was empty")
+        return summary
 
     def _estimate_msg_tokens(self, msg: Any) -> int:
         """Estimate tokens for a single message (chars // 2)."""
@@ -228,7 +250,7 @@ class ContextCompactor:
             HumanMessage(content=f"Here is the turn prefix to summarize:\n\n{formatted_prefix}"),
         ]
         response = await model.ainvoke(prefix_messages)
-        prefix_summary = response.content if hasattr(response, "content") else str(response)
+        prefix_summary = self._extract_summary_text(response)
 
         combined = f"{history_summary}\n\n---\n\n**Turn Context (split turn):**\n\n{prefix_summary}"
         return combined, prefix_summary
