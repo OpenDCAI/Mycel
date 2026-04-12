@@ -73,14 +73,7 @@ async def get_thread_history_payload(
         if checkpoint_store is None:
             raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
         checkpoint_state = await checkpoint_store.load(thread_id)
-        values = {
-            "messages": list(checkpoint_state.messages) if checkpoint_state is not None else [],
-            "tool_permission_context": dict(checkpoint_state.tool_permission_context) if checkpoint_state is not None else {},
-            "pending_permission_requests": dict(checkpoint_state.pending_permission_requests) if checkpoint_state is not None else {},
-            "resolved_permission_requests": dict(checkpoint_state.resolved_permission_requests) if checkpoint_state is not None else {},
-            "memory_compaction_state": dict(checkpoint_state.memory_compaction_state) if checkpoint_state is not None else {},
-            "mcp_instruction_state": dict(checkpoint_state.mcp_instruction_state) if checkpoint_state is not None else {},
-        }
+        values = {"messages": list(checkpoint_state.messages) if checkpoint_state is not None else []}
     all_messages = values.get("messages", []) if isinstance(values, dict) else []
     total = len(all_messages)
     messages = all_messages[-limit:] if limit > 0 else all_messages

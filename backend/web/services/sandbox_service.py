@@ -156,11 +156,8 @@ def count_user_visible_leases_by_provider(
 ) -> dict[str, int]:
     if thread_repo is None:
         raise RuntimeError("thread_repo is required for count_user_visible_leases_by_provider")
-    monitor_repo = (
-        make_sandbox_monitor_repo(supabase_client=supabase_client)
-        if supabase_client is not None
-        else make_sandbox_monitor_repo()
-    )
+    repo_kwargs = {"supabase_client": supabase_client} if supabase_client is not None else {}
+    monitor_repo = make_sandbox_monitor_repo(**repo_kwargs)
     try:
         owned_thread_ids = {
             str(thread.get("id") or "").strip()
