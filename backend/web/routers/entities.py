@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.core.paths import avatars_dir
-from backend.web.services.social_access_service import active_contact_target_ids, can_chat_with
+from backend.web.services.social_access_service import active_contact_target_ids, can_chat_with_owner_scope
 from backend.web.utils.serializers import avatar_url
 from storage.contracts import UserType
 
@@ -194,10 +194,13 @@ async def list_entities(
             continue
         is_owned = user.type is UserType.AGENT and user.owner_user_id == user_id
         relationship_state = relationship_states.get(user.id, "none")
-        can_chat = can_chat_with(
+        owner_user_id = str(user.owner_user_id) if user.type is UserType.AGENT and user.owner_user_id else None
+        can_chat = can_chat_with_owner_scope(
             is_owned=is_owned,
             relationship_state=relationship_state,
             has_contact=user.id in contact_targets,
+            owner_relationship_state=relationship_states.get(owner_user_id, "none") if owner_user_id else None,
+            owner_has_contact=owner_user_id in contact_targets if owner_user_id else False,
         )
         if user.type is UserType.HUMAN:
             items.append(

@@ -96,7 +96,7 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
     assert main_item["branch_index"] == 0
     assert main_item["is_owned"] is False
     assert main_item["relationship_state"] == "pending"
-    assert main_item["can_chat"] is False
+    assert main_item["can_chat"] is True
 
     # Child agent: also returned (frontend decides whether to hide it).
     child_item = next(i for i in result if i.get("user_id") == "a-child")
@@ -106,7 +106,7 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
     assert child_item["is_default_thread"] is False
     assert child_item["branch_index"] == 1
     assert child_item["relationship_state"] == "none"
-    assert child_item["can_chat"] is False
+    assert child_item["can_chat"] is True
 
 
 @pytest.mark.asyncio
@@ -180,6 +180,48 @@ async def test_list_entities_marks_normal_active_contacts_as_chat_candidates():
             "can_chat": True,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_list_entities_marks_agents_owned_by_active_contacts_as_chat_candidates():
+    now = 1_775_223_756.0
+    current_user = UserRow(id="u1", display_name="owner", type=UserType.HUMAN, created_at=now)
+    other_human = UserRow(id="u2", display_name="other", type=UserType.HUMAN, created_at=now)
+    other_agent = UserRow(
+        id="a-other",
+        display_name="Toad",
+        type=UserType.AGENT,
+        owner_user_id="u2",
+        agent_config_id="cfg-a-other",
+        created_at=now,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, other_agent]),
+            thread_repo=SimpleNamespace(get_default_thread=lambda _user_id: None),
+            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
+            contact_repo=SimpleNamespace(
+                list_for_user=lambda _user_id: [
+                    ContactEdgeRow(
+                        source_user_id="u1",
+                        target_user_id="u2",
+                        kind="normal",
+                        state="active",
+                        created_at=now,
+                    )
+                ]
+            ),
+        )
+    )
+
+    result = await entities_router.list_entities(user_id="u1", app=app)
+
+    human_item = next(item for item in result if item["user_id"] == "u2")
+    agent_item = next(item for item in result if item["user_id"] == "a-other")
+    assert human_item["can_chat"] is True
+    assert agent_item["owner_name"] == "other"
+    assert agent_item["relationship_state"] == "none"
+    assert agent_item["can_chat"] is True
 
 
 @pytest.mark.asyncio

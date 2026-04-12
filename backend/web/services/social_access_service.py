@@ -30,3 +30,16 @@ def has_active_contact(contact_repo: Any, owner_user_id: str, target_user_id: st
 
 def can_chat_with(*, is_owned: bool, relationship_state: str, has_contact: bool) -> bool:
     return is_owned or has_contact or relationship_state in ACTIVE_CHAT_RELATIONSHIP_STATES
+
+
+def can_chat_with_owner_scope(
+    *,
+    is_owned: bool,
+    relationship_state: str,
+    has_contact: bool,
+    owner_relationship_state: str | None,
+    owner_has_contact: bool,
+) -> bool:
+    return can_chat_with(is_owned=is_owned, relationship_state=relationship_state, has_contact=has_contact) or (
+        not is_owned and (owner_has_contact or owner_relationship_state in ACTIVE_CHAT_RELATIONSHIP_STATES)
+    )

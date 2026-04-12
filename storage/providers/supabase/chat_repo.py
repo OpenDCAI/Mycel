@@ -49,6 +49,8 @@ class SupabaseChatRepo:
         return [by_id[chat_id] for chat_id in chat_ids if chat_id in by_id]
 
     def delete(self, chat_id: str) -> None:
+        self._client.table("messages").delete().eq("chat_id", chat_id).execute()
+        self._client.table("chat_members").delete().eq("chat_id", chat_id).execute()
         self._t().delete().eq("id", chat_id).execute()
 
     def _t(self) -> Any:

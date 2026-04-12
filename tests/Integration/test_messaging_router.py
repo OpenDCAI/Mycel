@@ -679,6 +679,59 @@ def test_create_group_chat_accepts_external_active_contact_without_relationship(
     assert result["id"] == "chat-1"
 
 
+def test_create_group_chat_accepts_agent_owned_by_external_active_contact() -> None:
+    called: list[tuple[list[str], str | None]] = []
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(
+                get_by_id=lambda uid: (
+                    SimpleNamespace(id=uid, owner_user_id="human-user-1")
+                    if uid == "owned-agent-1"
+                    else SimpleNamespace(id=uid, owner_user_id="human-user-2")
+                    if uid == "external-agent-1"
+                    else SimpleNamespace(id=uid, owner_user_id=None)
+                    if uid == "human-user-2"
+                    else None
+                )
+            ),
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": f"thread-{uid}"} if uid in {"owned-agent-1", "external-agent-1"} else None
+            ),
+            relationship_service=SimpleNamespace(get_state=lambda _viewer, _participant: "none"),
+            contact_repo=SimpleNamespace(
+                get=lambda owner_id, target_id: (
+                    ContactEdgeRow(
+                        source_user_id=owner_id,
+                        target_user_id=target_id,
+                        kind="normal",
+                        state="active",
+                        created_at=1.0,
+                    )
+                    if (owner_id, target_id) == ("human-user-1", "human-user-2")
+                    else None
+                )
+            ),
+            messaging_service=SimpleNamespace(
+                create_group_chat=lambda user_ids, title: (
+                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
+                )
+            ),
+        )
+    )
+
+    result = messaging_router.create_chat(
+        messaging_router.CreateChatBody(
+            user_ids=["human-user-1", "owned-agent-1", "external-agent-1"],
+            title="owner-contact-agent-group",
+        ),
+        user_id="human-user-1",
+        app=app,
+    )
+
+    assert called == [(["human-user-1", "owned-agent-1", "external-agent-1"], "owner-contact-agent-group")]
+    assert result["id"] == "chat-1"
+
+
 def test_create_group_chat_accepts_owned_agent_without_relationship() -> None:
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
