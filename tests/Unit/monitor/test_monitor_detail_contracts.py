@@ -462,6 +462,21 @@ def test_request_monitor_lease_cleanup_closes_stale_active_sessions(monkeypatch)
 
 def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypatch):
     calls: list[tuple[str, str, str, str | None]] = []
+    monkeypatch.setattr(
+        monitor_service,
+        "list_monitor_provider_sessions",
+        lambda: {
+            "count": 1,
+            "sessions": [
+                {
+                    "session_id": "sandbox-1",
+                    "provider": "daytona_selfhost",
+                    "status": "paused",
+                    "source": "provider_orphan",
+                }
+            ],
+        },
+    )
 
     def _mutate_sandbox_session(*, session_id: str, action: str, provider_hint: str | None = None):
         calls.append((session_id, action, provider_hint or "", provider_hint))
@@ -490,6 +505,42 @@ def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypat
         "session_id": "sandbox-1",
     }
     assert calls == [("sandbox-1", "destroy", "daytona_selfhost", "daytona_selfhost")]
+
+
+def test_request_monitor_provider_session_cleanup_rejects_running_orphan(monkeypatch):
+    calls: list[tuple[str, str, str | None]] = []
+    monkeypatch.setattr(
+        monitor_service,
+        "list_monitor_provider_sessions",
+        lambda: {
+            "count": 1,
+            "sessions": [
+                {
+                    "session_id": "sandbox-1",
+                    "provider": "daytona_selfhost",
+                    "status": "running",
+                    "source": "provider_orphan",
+                }
+            ],
+        },
+    )
+
+    def _mutate_sandbox_session(*, session_id: str, action: str, provider_hint: str | None = None):
+        calls.append((session_id, action, provider_hint))
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.mutate_sandbox_session",
+        _mutate_sandbox_session,
+        raising=False,
+    )
+
+    payload = monitor_service.request_monitor_provider_session_cleanup("daytona_selfhost", "sandbox-1")
+
+    assert payload["accepted"] is False
+    assert payload["operation"] is None
+    assert "paused" in payload["message"]
+    assert calls == []
 
 
 def test_list_monitor_provider_sessions_returns_provider_orphans(monkeypatch):

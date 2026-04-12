@@ -717,7 +717,12 @@ def request_monitor_lease_cleanup(lease_id: str) -> dict[str, Any]:
 
 
 def request_monitor_provider_session_cleanup(provider_name: str, session_id: str) -> dict[str, Any]:
-    return monitor_operation_service.request_provider_session_cleanup(provider_name, session_id)
+    provider = str(provider_name or "").strip()
+    session = str(session_id or "").strip()
+    for item in list_monitor_provider_sessions().get("sessions", []):
+        if str(item.get("provider") or "").strip() == provider and str(item.get("session_id") or "").strip() == session:
+            return monitor_operation_service.request_provider_session_cleanup(provider, session, item)
+    raise KeyError(f"Provider session not found: {provider}:{session}")
 
 
 def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
