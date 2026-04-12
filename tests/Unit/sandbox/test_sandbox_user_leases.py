@@ -252,24 +252,12 @@ def test_count_user_visible_leases_by_provider_uses_narrow_owner_surface(monkeyp
             "thread-other": {"agent_user_id": "agent-4", "owner_user_id": "owner-2"},
         }
     )
-
-    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
-
-    counts = sandbox_service.count_user_visible_leases_by_provider("owner-1", thread_repo=thread_repo)
-
-    assert counts == {"local": 1, "daytona_selfhost": 1}
-    assert thread_repo.list_by_owner_calls == ["owner-1"]
-
-
-def test_count_user_visible_leases_by_provider_reuses_supabase_client(monkeypatch):
-    monitor_repo = _FakeMonitorRepo([_lease_row("lease-local", "thread-a", provider_name="local")])
-    thread_repo, _ = _single_agent_repos("thread-a")
     supabase_client = object()
     seen: dict[str, object] = {}
 
     def _fake_make_sandbox_monitor_repo(**kwargs):
         seen.update(kwargs)
-        return monitor_repo
+        return _FakeMonitorRepo(rows)
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", _fake_make_sandbox_monitor_repo)
 
@@ -279,7 +267,8 @@ def test_count_user_visible_leases_by_provider_reuses_supabase_client(monkeypatc
         supabase_client=supabase_client,
     )
 
-    assert counts == {"local": 1}
+    assert counts == {"local": 1, "daytona_selfhost": 1}
+    assert thread_repo.list_by_owner_calls == ["owner-1"]
     assert seen == {"supabase_client": supabase_client}
 
 
