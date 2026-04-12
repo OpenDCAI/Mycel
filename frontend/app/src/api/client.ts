@@ -130,7 +130,32 @@ function parseThreadDetail(value: unknown): ThreadDetail {
 }
 
 export async function getThreadPermissions(threadId: string, signal?: AbortSignal): Promise<ThreadPermissions> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions`, { signal });
+  return parseThreadPermissions(await request(`/api/threads/${encodeURIComponent(threadId)}/permissions`, { signal }));
+}
+
+function stringArray(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : null;
+}
+
+function parseThreadPermissionRules(value: unknown): ThreadPermissionRules | null {
+  const payload = asRecord(value);
+  const allow = payload ? stringArray(payload.allow) : null;
+  const deny = payload ? stringArray(payload.deny) : null;
+  const ask = payload ? stringArray(payload.ask) : null;
+  if (!payload || !allow || !deny || !ask) return null;
+  return { allow, deny, ask };
+}
+
+function parseThreadPermissions(value: unknown): ThreadPermissions {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const requests = payload?.requests;
+  const session_rules = parseThreadPermissionRules(payload?.session_rules);
+  const managed_only = payload?.managed_only;
+  if (!payload || !thread_id || !Array.isArray(requests) || !session_rules || typeof managed_only !== "boolean") {
+    throw new Error("Malformed thread permissions");
+  }
+  return { ...payload, thread_id, requests, session_rules, managed_only } as ThreadPermissions;
 }
 
 export async function resolveThreadPermission(
