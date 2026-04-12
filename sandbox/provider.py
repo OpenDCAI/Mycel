@@ -132,7 +132,6 @@ class SandboxProvider(ABC):
     @abstractmethod
     def get_capability(self) -> ProviderCapability:
         """Return lifecycle capability contract for this provider."""
-        pass
 
     @abstractmethod
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
@@ -197,7 +196,6 @@ class SandboxProvider(ABC):
     @abstractmethod
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         """Create the appropriate PhysicalTerminalRuntime for this provider."""
-        pass
 
     def get_metrics_via_commands(self, session_id: str) -> Metrics | None:
         """Get metrics by running Linux shell commands inside the sandbox."""
@@ -262,11 +260,9 @@ class SandboxProvider(ABC):
 
     def wait_managed_volume_ready(self, backend_ref: str) -> None:
         """Block until a previously created managed volume is reusable."""
-        return None
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
         """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
-        pass
 
     def list_provider_sessions(self) -> list[SessionInfo]:
         """List raw provider sessions for monitor/orphan visibility. Empty by default."""
