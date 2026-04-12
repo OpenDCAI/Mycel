@@ -47,23 +47,20 @@ describe("ObservationSection", () => {
     expect(screen.queryByDisplayValue("[object Object]")).toBeNull();
   });
 
-  it("ignores non-string verify errors", async () => {
-    verifyObservation.mockResolvedValue({
-      success: false,
-      error: { message: "not a string" },
-    });
+  it("shows verify API errors", async () => {
+    verifyObservation.mockRejectedValue(new Error("Malformed observation verify result"));
 
     renderActiveLangfuse();
 
     fireEvent.click(screen.getAllByRole("button", { name: "测试连接" })[0]);
 
-    expect((await screen.findAllByText("连接失败：验证失败")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("[object Object]")).toBeNull();
+    expect((await screen.findAllByText("连接失败：Malformed observation verify result")).length).toBeGreaterThan(0);
   });
 
-  it("does not treat non-boolean verify success as connected", async () => {
+  it("shows failed verification results", async () => {
     verifyObservation.mockResolvedValue({
-      success: "yes",
+      success: false,
+      error: "Langfuse keys not configured",
       traces: [],
     });
 
@@ -72,7 +69,7 @@ describe("ObservationSection", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "测试连接" })[0]);
 
     await waitFor(() => {
-      expect(screen.getAllByText("连接失败：验证失败").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("连接失败：Langfuse keys not configured").length).toBeGreaterThan(0);
     });
     expect(screen.queryByText(/已连接/)).toBeNull();
   });

@@ -646,13 +646,33 @@ export async function saveObservationConfig(
   });
 }
 
-export async function verifyObservation(): Promise<{
+export interface ObservationVerifyResult {
   success: boolean;
   provider?: string;
-  traces?: unknown[];
+  traces: unknown[];
   error?: string;
-}> {
-  return request("/api/settings/observation/verify");
+}
+
+function parseObservationVerifyResult(value: unknown): ObservationVerifyResult {
+  const payload = asRecord(value);
+  const success = payload?.success;
+  const provider = payload?.provider;
+  const traces = payload?.traces;
+  const error = payload?.error;
+  if (!payload || typeof success !== "boolean" || !isStringOrNullish(provider)) {
+    throw new Error("Malformed observation verify result");
+  }
+  const admittedProvider = provider ?? undefined;
+  if (success) {
+    if (!Array.isArray(traces)) throw new Error("Malformed observation verify result");
+    return { success, provider: admittedProvider, traces };
+  }
+  if (typeof error !== "string") throw new Error("Malformed observation verify result");
+  return { success, provider: admittedProvider, traces: [], error };
+}
+
+export async function verifyObservation(): Promise<ObservationVerifyResult> {
+  return parseObservationVerifyResult(await request("/api/settings/observation/verify"));
 }
 
 // --- Invite Code API ---

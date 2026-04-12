@@ -29,7 +29,7 @@ interface ProviderDef {
 
 interface VerifyResult {
   success: boolean;
-  error: string;
+  error?: string;
   traces: unknown[];
 }
 
@@ -89,22 +89,6 @@ function setNestedValue(config: Record<string, unknown>, field: FieldDef, value:
   return updated;
 }
 
-function parseVerifyResult(result: unknown): VerifyResult {
-  const data = asRecord(result);
-  if (data?.success === true) {
-    return {
-      success: true,
-      error: "",
-      traces: Array.isArray(data.traces) ? data.traces : [],
-    };
-  }
-  return {
-    success: false,
-    error: data ? recordString(data, "error") || "验证失败" : "验证失败",
-    traces: [],
-  };
-}
-
 function maskValue(val: string) {
   if (!val || val.length <= 8) return "•".repeat(val?.length || 0);
   return val.slice(0, 4) + "•".repeat(Math.min(val.length - 8, 20)) + val.slice(-4);
@@ -152,7 +136,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
     setVerifyResult(null);
     try {
       const result = await verifyObservation();
-      setVerifyResult(parseVerifyResult(result));
+      setVerifyResult(result);
     } catch (err) {
       setVerifyResult({ success: false, error: err instanceof Error ? err.message : "验证失败", traces: [] });
     } finally {

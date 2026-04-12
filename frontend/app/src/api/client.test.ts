@@ -335,6 +335,18 @@ describe("thread api client contract", () => {
     await expect(api.generateInviteCode()).rejects.toThrow("Malformed invite code");
   });
 
+  it("verifyObservation rejects malformed success fields", async () => {
+    authFetch.mockResolvedValue(okJson({ success: "yes", traces: [] }));
+
+    await expect(api.verifyObservation()).rejects.toThrow("Malformed observation verify result");
+  });
+
+  it("verifyObservation rejects malformed error fields", async () => {
+    authFetch.mockResolvedValue(okJson({ success: false, error: { message: "not a string" } }));
+
+    await expect(api.verifyObservation()).rejects.toThrow("Malformed observation verify result");
+  });
+
   it("uploadUserAvatar sends user avatar path instead of members path", async () => {
     authFetch.mockResolvedValue(okJson({ ok: true }));
 
