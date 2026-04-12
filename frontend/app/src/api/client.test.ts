@@ -136,6 +136,16 @@ describe("thread api client contract", () => {
     expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1", { method: "DELETE" });
   });
 
+  it("sendMessage rejects malformed routing payload identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      status: "started",
+      routing: "direct",
+      thread_id: { value: "thread-1" },
+    }));
+
+    await expect(api.sendMessage("thread-1", "hello")).rejects.toThrow("Malformed send message result");
+  });
+
   it("getThreadLease rejects malformed lease identities", async () => {
     authFetch.mockResolvedValue(okJson({
       thread_id: "thread-1",
