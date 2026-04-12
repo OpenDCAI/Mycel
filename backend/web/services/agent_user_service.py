@@ -528,7 +528,7 @@ def _sync_agent_config_patch_to_repo(
     agent_user_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any
 ) -> dict[str, Any] | None:
     # @@@repo-only-agent-shell - fresh register now creates DB-only agents. Owner-scoped
-    # panel edits must keep working even when no legacy agent dir exists.
+    # panel edits must use the repo config even when no stale local agent dir exists.
     user, current_config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or current_config is None:
         return None
@@ -589,8 +589,8 @@ def _resolve_repo_backed_agent(
     user = user_repo.get_by_id(agent_user_id)
     if user is None or user.agent_config_id is None:
         return None, None
-    # @@@repo-backed-agent-wins - repo-backed agent users must not silently fall
-    # back to legacy agent-dir writes just because an old shell still exists.
+    # @@@repo-backed-agent-wins - repo-backed agent users must not silently write
+    # to stale local agent dirs just because an old shell still exists.
     config = agent_config_repo.get_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {agent_user_id}")
@@ -693,7 +693,7 @@ def install_from_snapshot(
 
     # @@@snapshot-install-repo-only - marketplace agent installs no longer materialize
     # a local agent directory. The DB is now the live shell; marketplace lineage still needs
-    # a separate repo-rooted home because publish used to read meta.json.source.
+    # a separate repo-rooted home because publish records source lineage.
     _save_config_to_repo(
         agent_config_repo,
         agent_config_id,
