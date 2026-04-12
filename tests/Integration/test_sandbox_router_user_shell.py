@@ -7,6 +7,12 @@ import pytest
 from backend.web.routers import sandbox as sandbox_router
 
 
+def test_sandbox_router_does_not_expose_local_folder_picker() -> None:
+    paths = {route.path for route in sandbox_router.router.routes}
+
+    assert "/api/sandbox/pick-folder" not in paths
+
+
 @pytest.mark.asyncio
 async def test_list_my_leases_uses_user_repo_not_member_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}

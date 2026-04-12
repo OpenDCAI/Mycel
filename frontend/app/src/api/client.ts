@@ -373,16 +373,6 @@ function parseSandboxTypes(value: unknown): SandboxType[] {
   });
 }
 
-export async function pickFolder(): Promise<string | null> {
-  try {
-    const payload = await request<{ path: string }>("/api/sandbox/pick-folder");
-    return payload.path;
-  } catch (err) {
-    console.log("Folder selection cancelled or failed:", err);
-    return null;
-  }
-}
-
 export async function listSandboxSessions(): Promise<SandboxSession[]> {
   const sessions = parseSandboxSessions(await request("/api/sandbox/sessions"));
   const toTs = (value?: string): number => {
