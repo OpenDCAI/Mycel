@@ -23,7 +23,7 @@ async def test_publish_agent_user_to_marketplace_uses_user_repo_not_member_repo(
     monkeypatch.setattr(
         "backend.web.services.profile_service.get_profile",
         lambda user=None: (
-            (_ for _ in ()).throw(AssertionError("config profile fallback not allowed")) if user is None else {"name": user.display_name}
+            (_ for _ in ()).throw(AssertionError("profile lookup must be user-scoped")) if user is None else {"name": user.display_name}
         ),
     )
 

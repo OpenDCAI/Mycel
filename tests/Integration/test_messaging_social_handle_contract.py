@@ -481,7 +481,7 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
     assert chats[0]["unread_count"] == 0
 
 
-def test_messaging_service_list_chats_ignores_blank_other_names_in_title_fallback() -> None:
+def test_messaging_service_list_chats_ignores_blank_other_names_in_title_default() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
             list_by_ids=lambda chat_ids: [

@@ -16,7 +16,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
             thread_repo=SimpleNamespace(
                 list_by_owner_user_id=lambda _user_id: [],
                 get_by_user_id=lambda _uid: (_ for _ in ()).throw(
-                    AssertionError("visit rows should use messaging summary, not thread fallback")
+                    AssertionError("visit rows should use messaging summary, not thread lookup")
                 ),
             ),
             agent_pool={},
