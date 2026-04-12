@@ -307,10 +307,6 @@ class LeonAgent:
         # Build middleware stack
         middleware = self._build_middleware_stack()
 
-        # Ensure the bound model still sees at least one BaseTool-compatible entry.
-        if not mcp_tools and not self._has_middleware_tools(middleware):
-            mcp_tools = [self._create_placeholder_tool()]
-
         self._system_prompt_section_cache: dict[str, str] = {}
         self.system_prompt = self._compose_system_prompt()
 
@@ -460,10 +456,6 @@ class LeonAgent:
 
             return None, mcp_tools
 
-    def _has_middleware_tools(self, middleware: list) -> bool:
-        """Check if any middleware has BaseTool instances."""
-        return any(getattr(m, "tools", None) for m in middleware)
-
     def _register_mcp_tools(self, mcp_tools: list) -> None:
         if not mcp_tools:
             return
@@ -472,17 +464,6 @@ class LeonAgent:
                 self._tool_registry.register(_make_mcp_tool_entry(tool))
             except Exception as exc:
                 logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
-
-    def _create_placeholder_tool(self):
-        """Create placeholder tool so the bound model still has a BaseTool."""
-        from langchain_core.tools import tool
-
-        @tool
-        def _placeholder() -> str:
-            """Internal placeholder for the empty-tool edge."""
-            return ""
-
-        return _placeholder
 
     def _get_agent_blocked_tools(self) -> set[str]:
         """Return disabled tool names, respecting catalog defaults.
