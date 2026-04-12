@@ -151,6 +151,32 @@ describe("thread api client contract", () => {
     await expect(api.getThreadPermissions("thread-1")).rejects.toThrow("Malformed thread permissions");
   });
 
+  it("resolveThreadPermission rejects malformed permission mutation identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      ok: true,
+      thread_id: "thread-1",
+      request_id: { value: "request-1" },
+    }));
+
+    await expect(api.resolveThreadPermission("thread-1", "request-1", "allow")).rejects.toThrow(
+      "Malformed permission mutation",
+    );
+  });
+
+  it("addThreadPermissionRule rejects malformed rule mutation payloads", async () => {
+    authFetch.mockResolvedValue(okJson({
+      ok: true,
+      thread_id: "thread-1",
+      scope: "session",
+      rules: { allow: "bash", deny: [], ask: [] },
+      managed_only: true,
+    }));
+
+    await expect(api.addThreadPermissionRule("thread-1", "allow", "bash")).rejects.toThrow(
+      "Malformed permission rules mutation",
+    );
+  });
+
   it("listSandboxSessions rejects malformed session identities", async () => {
     authFetch.mockResolvedValue(okJson({
       sessions: [{
