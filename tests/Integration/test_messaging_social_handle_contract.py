@@ -72,7 +72,7 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     assert resolved.display_name == "Human"
 
 
-def test_messaging_display_user_resolver_does_not_bridge_legacy_thread_user_id() -> None:
+def test_messaging_display_user_resolver_does_not_bridge_removed_thread_user_id() -> None:
     resolved = resolve_messaging_display_user(
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
@@ -246,7 +246,7 @@ def test_chat_tool_service_accepts_chat_identity_id_contract() -> None:
     assert registry.get("list_chats") is not None
 
 
-def test_chat_tool_service_rejects_legacy_constructor_user_id() -> None:
+def test_chat_tool_service_rejects_removed_constructor_user_id() -> None:
     registry = ToolRegistry()
 
     with pytest.raises(TypeError, match="user_id"):
@@ -578,7 +578,7 @@ def test_messaging_service_conversation_summaries_use_bulk_projection_repos() ->
             get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch users one by one")),
         ),
         thread_repo=SimpleNamespace(
-            get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("direct user ids should not need thread fallback"))
+            get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("direct user ids should not query threads"))
         ),
     )
 

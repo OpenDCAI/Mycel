@@ -208,7 +208,7 @@ def test_get_user_or_404_raises_for_missing_user():
     assert exc_info.value.detail == "User not found"
 
 
-def test_user_router_exposes_chat_candidates_not_legacy_entities_path():
+def test_user_router_exposes_chat_candidates_not_removed_entities_path():
     paths = {route.path for route in users_router.users_router.routes}
 
     assert "/api/users/chat-candidates" in paths
