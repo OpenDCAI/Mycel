@@ -162,8 +162,7 @@ class ToolRegistry:
         # --- select:<names> exact lookup ---
         if q.lower().startswith("select:"):
             names = [n.strip() for n in q[len("select:") :].split(",") if n.strip()]
-            results = [self._tools[n] for n in names if n in self._tools and (modes is None or self._tools[n].mode in modes)]
-            return results
+            return [self._tools[n] for n in names if n in self._tools and (modes is None or self._tools[n].mode in modes)]
 
         # --- keyword search with ranking ---
         keywords = q.lower().split()
