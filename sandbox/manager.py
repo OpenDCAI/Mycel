@@ -213,7 +213,7 @@ class SandboxManager:
         # @@@volume-repo-align - thread creation persists volume metadata through the
         # active storage container; sandbox startup must read the same repo instead
         # of hardcoding SQLite or Supabase-backed threads lose their volume row.
-        container = build_storage_container(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+        container = build_storage_container()
         return container.sandbox_volume_repo()
 
     def _requires_volume_bootstrap(self) -> bool:

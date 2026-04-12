@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
@@ -17,8 +16,6 @@ from core.tools.task.types import Task, TaskStatus
 from storage.runtime import build_tool_task_repo
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_DB_PATH = Path.home() / ".leon" / "tasks.db"
 
 TASK_CREATE_SCHEMA = make_tool_schema(
     name="TaskCreate",
@@ -131,11 +128,10 @@ class TaskService:
     def __init__(
         self,
         registry: ToolRegistry,
-        db_path: Path | None = None,
         thread_id: str | None = None,
         repo: Any | None = None,
     ):
-        self._repo = repo or build_tool_task_repo(db_path=db_path or DEFAULT_DB_PATH)
+        self._repo = repo or build_tool_task_repo()
         self._default_thread_id = thread_id  # override for tests / single-agent TUI
         self._register(registry)
         logger.info("TaskService initialized")
