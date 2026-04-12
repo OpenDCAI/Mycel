@@ -146,6 +146,17 @@ describe("thread api client contract", () => {
     await expect(api.sendMessage("thread-1", "hello")).rejects.toThrow("Malformed send message result");
   });
 
+  it("getThreadRuntime rejects malformed runtime counters", async () => {
+    authFetch.mockResolvedValue(okJson({
+      state: { state: "idle", flags: {} },
+      tokens: { total_tokens: "0", input_tokens: 0, output_tokens: 0, cost: 0 },
+      context: { message_count: 0, estimated_tokens: 0, usage_percent: 0, near_limit: false },
+      last_seq: 1,
+    }));
+
+    await expect(api.getThreadRuntime("thread-1")).rejects.toThrow("Malformed runtime status");
+  });
+
   it("getThreadLease rejects malformed lease identities", async () => {
     authFetch.mockResolvedValue(okJson({
       thread_id: "thread-1",
