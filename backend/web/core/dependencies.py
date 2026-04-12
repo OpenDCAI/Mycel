@@ -35,11 +35,41 @@ def _extract_jwt_payload(request: Request) -> dict:
         raise HTTPException(401, str(e))
 
 
+async def _get_user_row_for_auth(request: Request, user_id: str, user_repo: Any) -> Any:
+    state = request.app.state
+    guard = getattr(state, "_auth_user_check_guard", None)
+    if guard is None:
+        guard = asyncio.Lock()
+        setattr(state, "_auth_user_check_guard", guard)
+    inflight = getattr(state, "_auth_user_check_inflight", None)
+    if inflight is None:
+        inflight = {}
+        setattr(state, "_auth_user_check_inflight", inflight)
+
+    async with guard:
+        task = inflight.get(user_id)
+        owns_task = task is None
+        if task is None:
+            # @@@auth-user-check-singleflight - Login fan-out starts many
+            # authenticated requests at once; coalesce the same user existence
+            # check without caching the result after this burst.
+            task = asyncio.create_task(asyncio.to_thread(user_repo.get_by_id, user_id))
+            inflight[user_id] = task
+
+    try:
+        return await task
+    finally:
+        if owns_task:
+            async with guard:
+                if inflight.get(user_id) is task:
+                    del inflight[user_id]
+
+
 async def get_current_user_id(request: Request) -> str:
     """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
     user_id = _extract_jwt_payload(request)["user_id"]
     user_repo = getattr(request.app.state, "user_repo", None)
-    if user_repo and user_repo.get_by_id(user_id) is None:
+    if user_repo and await _get_user_row_for_auth(request, user_id, user_repo) is None:
         raise HTTPException(401, "User no longer exists — please re-login")
     return user_id
 

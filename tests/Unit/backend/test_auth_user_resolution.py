@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -38,6 +40,30 @@ async def test_get_current_user_id_uses_user_repo_instead_of_member_repo():
     request = _Request(token="tok-1", payload={"user_id": "user-1"}, user_exists=True)
 
     assert await dependencies.get_current_user_id(request) == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_id_coalesces_concurrent_user_existence_checks():
+    class CountingUserRepo:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get_by_id(self, _user_id: str):
+            self.calls += 1
+            time.sleep(0.02)
+            return object()
+
+    repo = CountingUserRepo()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"}),
+            user_repo=repo,
+        )
+    )
+    requests = [SimpleNamespace(headers={"Authorization": "Bearer tok-1"}, app=app) for _ in range(5)]
+
+    assert await asyncio.gather(*(dependencies.get_current_user_id(request) for request in requests)) == ["user-1"] * 5
+    assert repo.calls == 1
 
 
 @pytest.mark.asyncio
