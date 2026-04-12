@@ -44,15 +44,12 @@ class BashHook(ABC):
     @abstractmethod
     def check_command(self, command: str, context: dict[str, Any]) -> HookResult:
         """Check if command is allowed to execute."""
-        pass
 
     def on_command_success(self, command: str, output: str, context: dict[str, Any]) -> None:
         """Optional callback after successful command execution."""
-        pass
 
     def on_command_error(self, command: str, error: str, context: dict[str, Any]) -> None:
         """Optional callback after failed command execution."""
-        pass
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(name={self.name}, priority={self.priority}, enabled={self.enabled})>"
