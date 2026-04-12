@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from messaging._utils import now_iso
+from messaging.contracts import RelationshipState
 from storage.providers.supabase import _query as q
 
 logger = logging.getLogger(__name__)
@@ -313,12 +314,20 @@ class SupabaseRelationshipRepo:
             return None
         return self._normalize(res.data[0])
 
-    def upsert(self, user_a: str, user_b: str, **fields: Any) -> dict[str, Any]:
+    def upsert(
+        self,
+        user_a: str,
+        user_b: str,
+        *,
+        state: RelationshipState,
+        initiator_user_id: str | None,
+    ) -> dict[str, Any]:
         user_low, user_high = self._ordered(user_a, user_b)
         existing = self.get(user_a, user_b)
         now = time.time()
         if existing:
-            if fields.get("state") == "none":
+            fields = {"state": state, "initiator_user_id": initiator_user_id}
+            if state == "none":
                 (
                     self._client.table("relationships")
                     .delete()
@@ -344,7 +353,8 @@ class SupabaseRelationshipRepo:
             "kind": "hire_visit",
             "created_at": now,
             "updated_at": now,
-            **fields,
+            "state": state,
+            "initiator_user_id": initiator_user_id,
         }
         res = self._client.table("relationships").insert(row).execute()
         return self._normalize(res.data[0] if res.data else row)

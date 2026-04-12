@@ -38,10 +38,10 @@ class _FakeRelationshipRepo:
         key = cast(tuple[str, str], tuple(sorted((actor_id, target_id))))
         return self._existing.get(key)
 
-    def upsert(self, actor_id: str, target_id: str, **fields):
+    def upsert(self, actor_id: str, target_id: str, *, state: str, initiator_user_id: str | None):
         key = cast(tuple[str, str], tuple(sorted((actor_id, target_id))))
         row = dict(self._existing[key])
-        row.update(fields)
+        row.update({"state": state, "initiator_user_id": initiator_user_id})
         row["updated_at"] = "2026-04-07T00:01:00Z"
         self._existing[key] = row
         return row

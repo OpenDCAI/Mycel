@@ -52,12 +52,7 @@ class RelationshipService:
             event,
         )
 
-        fields: dict[str, Any] = {
-            "state": new_state,
-            "initiator_user_id": initiator_user_id,
-        }
-
-        row = self._repo.upsert(actor_id, target_id, **fields)
+        row = self._repo.upsert(actor_id, target_id, state=new_state, initiator_user_id=initiator_user_id)
         return RelationshipRow.model_validate(row)
 
     def request(self, requester_id: str, target_id: str) -> RelationshipRow:
