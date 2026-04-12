@@ -112,16 +112,14 @@ def test_supabase_thread_repo_create_uses_agent_user_id_not_member_id() -> None:
     assert "member_id" not in client.table_obj.insert_payload
 
 
-def test_supabase_thread_repo_update_writes_integer_main_flag():
+def test_supabase_thread_repo_update_writes_model_only():
     client = _FakeClient()
-    client.table_obj.rows[0]["branch_index"] = 1
-    client.table_obj.rows[0]["is_main"] = 0
     repo = SupabaseThreadRepo(client)
 
-    repo.update("thread-1", is_main=False)
+    repo.update("thread-1", model="openai/gpt-5.4")
 
     assert client.table_obj.update_payload is not None
-    assert client.table_obj.update_payload["is_main"] == 0
+    assert client.table_obj.update_payload == {"model": "openai/gpt-5.4"}
 
 
 def test_supabase_thread_repo_get_default_thread_reads_by_agent_user_and_main_flag():

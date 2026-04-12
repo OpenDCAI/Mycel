@@ -213,24 +213,8 @@ class SupabaseThreadRepo:
             result.append(d)
         return result
 
-    def update(self, thread_id: str, **fields: Any) -> None:
-        allowed = {"sandbox_type", "model", "cwd", "status", "is_main", "branch_index", "updated_at", "last_active_at"}
-        updates = {k: v for k, v in fields.items() if k in allowed}
-        if not updates:
-            return
-        next_is_main = bool(updates["is_main"]) if "is_main" in updates else None
-        next_branch_index = int(updates["branch_index"]) if "branch_index" in updates else None
-        if next_is_main is not None or next_branch_index is not None:
-            current = self.get_by_id(thread_id)
-            if current is None:
-                raise ValueError(f"Thread {thread_id} not found")
-            _validate_thread_identity(
-                is_main=next_is_main if next_is_main is not None else bool(current["is_main"]),
-                branch_index=next_branch_index if next_branch_index is not None else int(current["branch_index"]),
-            )
-        if "is_main" in updates:
-            updates["is_main"] = int(bool(updates["is_main"]))
-        self._t().update(updates).eq("id", thread_id).execute()
+    def update(self, thread_id: str, *, model: str) -> None:
+        self._t().update({"model": model}).eq("id", thread_id).execute()
 
     def delete(self, thread_id: str) -> None:
         self._t().delete().eq("id", thread_id).execute()
