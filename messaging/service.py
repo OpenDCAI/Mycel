@@ -40,7 +40,7 @@ class MessagingService:
         event_bus: Any | None = None,  # ChatEventBus-compatible publisher (optional)
     ) -> None:
         self._chats = chat_repo
-        self._members_repo = chat_member_repo
+        self._chat_members_repo = chat_member_repo
         self._messages = messages_repo
         self._user_repo = user_repo
         self._delivery_resolver = delivery_resolver
@@ -89,7 +89,7 @@ class MessagingService:
 
     def _build_chat_members(self, chat_id: str) -> list[dict[str, Any]]:
         member_info = []
-        for member in self._members_repo.list_members(chat_id):
+        for member in self._chat_members_repo.list_members(chat_id):
             social_user_id = member.get("user_id")
             user = self._resolve_display_user(social_user_id) if social_user_id else None
             if user is None:
@@ -116,7 +116,7 @@ class MessagingService:
     def find_or_create_chat(self, user_ids: list[str], title: str | None = None) -> dict[str, Any]:
         if len(user_ids) != 2:
             raise ValueError("Use create_group_chat() for 3+ users")
-        existing_id = self._members_repo.find_chat_between(user_ids[0], user_ids[1])
+        existing_id = self._chat_members_repo.find_chat_between(user_ids[0], user_ids[1])
         if existing_id:
             chat = self._chats.get_by_id(existing_id)
             return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at}
@@ -144,7 +144,7 @@ class MessagingService:
             )
         )
         for uid in user_ids:
-            self._members_repo.add_member(chat_id, uid)
+            self._chat_members_repo.add_member(chat_id, uid)
         return {"id": chat_id, "title": title, "status": "active", "created_at": now}
 
     # ------------------------------------------------------------------
@@ -185,7 +185,7 @@ class MessagingService:
             row["ai_metadata_json"] = ai_metadata
 
         if enforce_caught_up:
-            last_read_seq = getattr(self._members_repo, "last_read_seq", None)
+            last_read_seq = getattr(self._chat_members_repo, "last_read_seq", None)
             if last_read_seq is None:
                 raise RuntimeError("chat_member_repo must expose last_read_seq for caught-up sends")
             created_row = self._messages.create(row, expected_read_seq=int(last_read_seq(chat_id, sender_id)))
@@ -219,7 +219,7 @@ class MessagingService:
         signal: str | None = None,
     ) -> None:
         mention_set = set(mentions)
-        members = self._members_repo.list_members(chat_id)
+        members = self._chat_members_repo.list_members(chat_id)
         sender_user = self._resolve_display_user(sender_id)
         sender_name = sender_user.display_name if sender_user else "unknown"
         sender_avatar_url = avatar_url(sender_user.id if sender_user else sender_id, bool(sender_user.avatar if sender_user else None))
@@ -278,7 +278,7 @@ class MessagingService:
         """Mark all messages in a chat as read for user."""
         msgs = self._messages.list_by_chat(chat_id, limit=1, viewer_id=user_id)
         last_read_seq = int(msgs[-1].get("seq") or 0) if msgs else 0
-        self._members_repo.update_last_read(chat_id, user_id, last_read_seq)
+        self._chat_members_repo.update_last_read(chat_id, user_id, last_read_seq)
 
     # ------------------------------------------------------------------
     # Queries
@@ -313,16 +313,16 @@ class MessagingService:
         return self._messages.count_unread(chat_id, user_id)
 
     def find_direct_chat_id(self, actor_id: str, target_id: str) -> str | None:
-        return self._members_repo.find_chat_between(actor_id, target_id)
+        return self._chat_members_repo.find_chat_between(actor_id, target_id)
 
     def search_messages(self, query: str, *, chat_id: str | None = None) -> list[dict[str, Any]]:
         return self._messages.search(query, chat_id=chat_id)
 
     def list_chat_members(self, chat_id: str) -> list[dict[str, Any]]:
-        return self._members_repo.list_members(chat_id)
+        return self._chat_members_repo.list_members(chat_id)
 
     def is_chat_member(self, chat_id: str, user_id: str) -> bool:
-        return self._members_repo.is_member(chat_id, user_id)
+        return self._chat_members_repo.is_member(chat_id, user_id)
 
     def list_messages_by_time_range(
         self,
@@ -335,7 +335,7 @@ class MessagingService:
         return [self._normalize_message_row(row) for row in rows]
 
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None) -> None:
-        self._members_repo.update_mute(chat_id, user_id, muted, mute_until)
+        self._chat_members_repo.update_mute(chat_id, user_id, muted, mute_until)
 
     def get_chat_detail(self, chat: Any) -> dict[str, Any]:
         return {
@@ -400,7 +400,7 @@ class MessagingService:
         self,
         user_id: str,
     ) -> tuple[list[Any], dict[str, list[dict[str, Any]]], dict[str, Any], dict[str, int]]:
-        chat_ids = self._members_repo.list_chats_for_user(user_id)
+        chat_ids = self._chat_members_repo.list_chats_for_user(user_id)
         if not chat_ids:
             return [], {}, {}, {}
 
@@ -411,7 +411,7 @@ class MessagingService:
 
         members_by_chat: dict[str, list[dict[str, Any]]] = {chat_id: [] for chat_id in active_chat_ids}
         last_read_by_chat: dict[str, int] = {}
-        for member in self._members_repo.list_members_for_chats(active_chat_ids):
+        for member in self._chat_members_repo.list_members_for_chats(active_chat_ids):
             chat_id = str(member.get("chat_id") or "")
             if chat_id not in members_by_chat:
                 continue
@@ -431,10 +431,10 @@ class MessagingService:
                 if member.get("user_id")
             }
         )
-        users_by_id, unread_by_chat = self._load_member_users_and_unread_counts(user_id, user_ids, last_read_by_chat)
+        users_by_id, unread_by_chat = self._load_chat_users_and_unread_counts(user_id, user_ids, last_read_by_chat)
         return visible_chats, members_by_chat, users_by_id, unread_by_chat
 
-    def _load_member_users_and_unread_counts(
+    def _load_chat_users_and_unread_counts(
         self,
         user_id: str,
         user_ids: list[str],

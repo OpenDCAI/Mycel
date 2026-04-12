@@ -602,8 +602,8 @@ class LeonAgent:
                 cli_overrides=models_cli if models_cli else None,
             )
 
-        # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from the
-        # repo-rooted agent_config_id path, not from ~/.leon/members filesystem shells.
+        # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from
+        # the repo-rooted agent_config_id path, not stale local filesystem shells.
         if agent_config_id is not None:
             if agent_config_repo is None:
                 raise RuntimeError("agent_config_repo is required when agent_config_id is provided")
