@@ -377,7 +377,7 @@ function RolePanel({ prompt, tools, rules, compact, onSavePrompt, onSaveCompact,
         />
       </section>
 
-      {/* Section 2: Memory */}
+      {/* Section 2: Context compaction */}
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" />
