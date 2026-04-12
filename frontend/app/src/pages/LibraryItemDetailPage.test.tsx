@@ -44,6 +44,7 @@ describe("LibraryItemDetailPage", () => {
         name: "Daytona Default",
         desc: "Default recipe for daytona",
         type: "recipe",
+        provider_name: "daytona_selfhost",
         provider_type: "daytona",
         features: { lark_cli: false },
         configurable_features: { lark_cli: true },
@@ -88,7 +89,7 @@ describe("LibraryItemDetailPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Daytona Default" })).toBeTruthy();
-    expect(screen.getByText(/Sandbox Recipe/)).toBeTruthy();
+    expect(screen.getByText("Sandbox · daytona_selfhost · 默认模板")).toBeTruthy();
     expect(screen.getByDisplayValue("Default recipe for daytona")).toBeTruthy();
     expect(screen.getByText("Lark CLI")).toBeTruthy();
     expect(fetchResourceContent).not.toHaveBeenCalled();

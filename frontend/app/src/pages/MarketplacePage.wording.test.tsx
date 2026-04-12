@@ -119,7 +119,7 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByRole("button", { name: /Sandbox/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Recipe/ })).toBeNull();
     expect(screen.getByText("Self-host Daytona")).toBeTruthy();
-    expect(screen.getByText("Sandbox recipe · daytona")).toBeTruthy();
+    expect(screen.getByText("Sandbox · daytona_selfhost")).toBeTruthy();
   });
 
   it("uses Agent wording for marketplace member resources", () => {

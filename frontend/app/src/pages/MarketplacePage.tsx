@@ -485,7 +485,7 @@ export default function MarketplacePage() {
                               <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{recipe.name}</h4>
                               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{recipe.desc || "暂无描述"}</p>
                               <p className="text-2xs text-muted-foreground mt-2 font-mono truncate">
-                                Sandbox recipe · {recipe.provider_type || "unknown"}
+                                Sandbox · {recipe.provider_name || recipe.provider_type || "unknown"}
                               </p>
                             </div>
                           </div>
