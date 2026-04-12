@@ -31,6 +31,10 @@ def _batch_run_row(batch_run_id: str, *, batch_id: str = "batch-1", status: str 
     }
 
 
+def _updates(fields: dict) -> dict:
+    return {key: value for key, value in fields.items() if value is not None}
+
+
 class _FakeBatchRepo:
     def __init__(self) -> None:
         self.batches: dict[str, dict] = {}
@@ -48,11 +52,18 @@ class _FakeBatchRepo:
         rows = list(self.batches.values())
         return [dict(row) for row in rows[:limit]]
 
-    def update_batch(self, batch_id: str, **fields) -> dict | None:
+    def update_batch(
+        self,
+        batch_id: str,
+        *,
+        status: str | None = None,
+        updated_at: str | None = None,
+        summary_json: dict | None = None,
+    ) -> dict | None:
         row = self.batches.get(batch_id)
         if row is None:
             return None
-        row.update(fields)
+        row.update(_updates({"status": status, "updated_at": updated_at, "summary_json": summary_json}))
         return dict(row)
 
     def create_batch_run(self, batch_run: dict) -> dict:
@@ -70,11 +81,32 @@ class _FakeBatchRepo:
     def list_batch_runs_by_thread_id(self, thread_id: str) -> list[dict]:
         return [dict(row) for row in self.batch_runs.values() if row.get("thread_id") == thread_id]
 
-    def update_batch_run(self, batch_run_id: str, **fields) -> dict | None:
+    def update_batch_run(
+        self,
+        batch_run_id: str,
+        *,
+        status: str | None = None,
+        thread_id: str | None = None,
+        eval_run_id: str | None = None,
+        started_at: str | None = None,
+        finished_at: str | None = None,
+        summary_json: dict | None = None,
+    ) -> dict | None:
         row = self.batch_runs.get(batch_run_id)
         if row is None:
             return None
-        row.update(fields)
+        row.update(
+            _updates(
+                {
+                    "status": status,
+                    "thread_id": thread_id,
+                    "eval_run_id": eval_run_id,
+                    "started_at": started_at,
+                    "finished_at": finished_at,
+                    "summary_json": summary_json,
+                }
+            )
+        )
         return dict(row)
 
 

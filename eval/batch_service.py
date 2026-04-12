@@ -112,16 +112,13 @@ class EvaluationBatchService:
         eval_run_id: str,
         status: str,
     ) -> dict:
-        updates = {
-            "thread_id": thread_id,
-            "eval_run_id": eval_run_id,
-            "status": status,
-        }
-        if status in {"completed", "failed", "cancelled"}:
-            updates["finished_at"] = datetime.now(UTC).isoformat()
+        finished_at = datetime.now(UTC).isoformat() if status in {"completed", "failed", "cancelled"} else None
         updated = self._batch_repo.update_batch_run(
             batch_run_id,
-            **updates,
+            thread_id=thread_id,
+            eval_run_id=eval_run_id,
+            status=status,
+            finished_at=finished_at,
         )
         if updated is None:
             raise KeyError(f"Evaluation batch run not found: {batch_run_id}")

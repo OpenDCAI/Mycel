@@ -9,6 +9,10 @@ _BATCH_TABLE = "evaluation_batches"
 _BATCH_RUN_TABLE = "evaluation_batch_runs"
 
 
+def _updates(fields: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in fields.items() if value is not None}
+
+
 class SupabaseEvaluationBatchRepo:
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
@@ -42,8 +46,15 @@ class SupabaseEvaluationBatchRepo:
         query = q.limit(query, limit, _REPO, "list_batches")
         return [self._map_batch(row) for row in q.rows(query.execute(), _REPO, "list_batches")]
 
-    def update_batch(self, batch_id: str, **fields: Any) -> dict[str, Any] | None:
-        updates = {key: value for key, value in fields.items() if value is not None}
+    def update_batch(
+        self,
+        batch_id: str,
+        *,
+        status: str | None = None,
+        updated_at: str | None = None,
+        summary_json: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        updates = _updates({"status": status, "updated_at": updated_at, "summary_json": summary_json})
         if not updates:
             return self.get_batch(batch_id)
         rows = q.rows(
@@ -85,8 +96,27 @@ class SupabaseEvaluationBatchRepo:
         query = q.order(query, "started_at", desc=True, repo=_REPO, operation="list_batch_runs_by_thread_id")
         return [self._map_batch_run(row) for row in q.rows(query.execute(), _REPO, "list_batch_runs_by_thread_id")]
 
-    def update_batch_run(self, batch_run_id: str, **fields: Any) -> dict[str, Any] | None:
-        updates = {key: value for key, value in fields.items() if value is not None}
+    def update_batch_run(
+        self,
+        batch_run_id: str,
+        *,
+        status: str | None = None,
+        thread_id: str | None = None,
+        eval_run_id: str | None = None,
+        started_at: str | None = None,
+        finished_at: str | None = None,
+        summary_json: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        updates = _updates(
+            {
+                "status": status,
+                "thread_id": thread_id,
+                "eval_run_id": eval_run_id,
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "summary_json": summary_json,
+            }
+        )
         if not updates:
             rows = q.rows(
                 self._client.table(_BATCH_RUN_TABLE).select("*").eq("batch_run_id", batch_run_id).execute(),
