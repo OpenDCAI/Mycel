@@ -238,7 +238,7 @@ class AgentRuntime:
             self._event_callback(enriched_event)
         else:
             self._dispatch_to_sink(enriched_event)
-            # Batch fallback (backward compat for TUI / non-SSE callers)
+            # Batch buffer for TUI / non-SSE callers.
             self._subagent_event_buffer.setdefault(parent_tool_call_id, []).append(enriched_event)
 
     def get_pending_subagent_events(self) -> list[tuple[str, list[dict[str, Any]]]]:
