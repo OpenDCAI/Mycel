@@ -330,6 +330,28 @@ class _BrokenStreamGraphAgent(_StreamingGraphAgent):
         raise self._error
 
 
+class _ActivityThenBrokenStreamGraphAgent(_StreamingGraphAgent):
+    def __init__(self, runtime: Any, error: Exception | None = None) -> None:
+        self._runtime = runtime
+        self._error = error or RuntimeError("stream boom")
+
+    async def astream(self, *_args, **_kwargs):
+        if False:
+            yield None
+        self._runtime.emit_activity_event(
+            {
+                "event": "notice",
+                "data": json.dumps(
+                    {
+                        "content": "Compacting conversation. A summary is being prepared.",
+                        "notification_type": "compact_start",
+                    }
+                ),
+            }
+        )
+        raise self._error
+
+
 class _BlockingSecondPullGraphAgent(_StreamingGraphAgent):
     def __init__(self) -> None:
         self.second_pull_started = asyncio.Event()
@@ -357,6 +379,10 @@ class _StreamingRuntime:
 
     def set_event_callback(self, cb) -> None:
         self._event_callback = cb
+
+    def emit_activity_event(self, event: dict[str, Any]) -> None:
+        if self._event_callback is not None:
+            self._event_callback(event)
 
     def bind_thread(self, *, activity_sink=None) -> None:
         self._activity_sink = activity_sink
@@ -2144,6 +2170,48 @@ async def test_run_agent_to_buffer_logs_real_stream_error_without_none_traceback
     assert len(error_events) == 1
     assert error_events[0]["error"] == "stream blew up"
     assert "NoneType: None" not in capsys.readouterr().err
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_drains_activity_notice_before_stream_error(monkeypatch, tmp_path):
+    _patch_direct_streaming(monkeypatch)
+
+    runtime = _StreamingRuntime()
+    agent = SimpleNamespace(
+        agent=_ActivityThenBrokenStreamGraphAgent(runtime, RuntimeError("summary upstream failed")),
+        runtime=runtime,
+        storage_container=_fake_storage_container(),
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-stream-error-notice",
+        "hello",
+        app,
+        False,
+        thread_buf,
+        "run-stream-error-notice",
+    )
+
+    events, _ = await thread_buf.read_with_timeout(0, timeout=0.01)
+    assert events is not None
+    typed_events = [(event.get("event"), json.loads(event["data"])) for event in events if event.get("event") in {"notice", "error"}]
+    assert typed_events[0][0] == "notice"
+    assert typed_events[0][1]["notification_type"] == "compact_start"
+    assert typed_events[1][0] == "error"
+    assert typed_events[1][1]["error"] == "summary upstream failed"
 
 
 @pytest.mark.asyncio
