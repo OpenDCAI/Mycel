@@ -20,7 +20,7 @@ export interface AppActionsSetters {
 }
 
 export interface AppActionsHandlers {
-  handleFocusAgent: (stepId: string) => void;
+  handleFocusAgent: () => void;
   handleSendQueueMessage: (message: string) => Promise<void>;
 }
 

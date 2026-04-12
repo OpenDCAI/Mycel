@@ -133,7 +133,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         if (!isAssistantTurn(entry)) continue;
         for (const seg of entry.segments) {
           if (seg.type === "tool" && seg.step.name === "Agent" && seg.step.subagent_stream?.task_id === taskId) {
-            handleFocusAgent(seg.step.id);
+            handleFocusAgent();
             return;
           }
         }

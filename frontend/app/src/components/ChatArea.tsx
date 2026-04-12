@@ -11,7 +11,7 @@ interface ChatAreaProps {
   entries: ChatEntry[];
   runtimeStatus: StreamStatus | null;
   loading?: boolean;
-  onFocusAgent?: (taskId: string) => void;
+  onFocusAgent?: () => void;
   onTaskNoticeClick?: (taskId: string) => void;
   agentName?: string;
   agentAvatarUrl?: string;

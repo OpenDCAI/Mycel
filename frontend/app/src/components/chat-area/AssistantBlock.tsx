@@ -56,7 +56,7 @@ function ContentPhaseBlock({
   /** All segments in the full turn (passed to DetailBoxModal). */
   allSegments?: TurnSegment[];
   isStreaming: boolean;
-  onFocusAgent?: (taskId: string) => void;
+  onFocusAgent?: () => void;
   askUserQuestion?: { mode: "pending"; pending: AskUserQuestionPendingState } | { mode: "answered"; answered: AskUserQuestionAnsweredPayload };
 }) {
   const toolSegs = segments.filter(isToolSegment);
@@ -97,7 +97,7 @@ interface AssistantBlockProps {
   entry: AssistantTurn;
   isStreamingThis?: boolean;
   runtimeStatus?: StreamStatus | null;
-  onFocusAgent?: (taskId: string) => void;
+  onFocusAgent?: () => void;
   agentName?: string;
   agentAvatarUrl?: string;
   askUserQuestion?: { mode: "pending"; pending: AskUserQuestionPendingState } | { mode: "answered"; answered: AskUserQuestionAnsweredPayload };
