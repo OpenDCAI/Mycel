@@ -63,9 +63,9 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
     try {
       const payload = await getThreadPermissions(threadId, controller.signal);
       if (refreshGenerationRef.current !== generation) return;
-      setRequests(payload.requests ?? []);
-      setSessionRules(payload.session_rules ?? { allow: [], deny: [], ask: [] });
-      setManagedOnly(payload.managed_only ?? false);
+      setRequests(payload.requests);
+      setSessionRules(payload.session_rules);
+      setManagedOnly(payload.managed_only);
     } catch (err) {
       if (controller.signal.aborted) return;
       if (refreshGenerationRef.current !== generation) return;

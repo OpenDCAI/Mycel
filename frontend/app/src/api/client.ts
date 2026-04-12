@@ -166,10 +166,24 @@ export async function resolveThreadPermission(
   answers?: AskUserAnswer[],
   annotations?: Record<string, unknown>,
 ): Promise<{ ok: boolean; thread_id: string; request_id: string }> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions/${encodeURIComponent(requestId)}/resolve`, {
-    method: "POST",
-    body: JSON.stringify({ decision, message, answers, annotations }),
-  });
+  return parsePermissionMutation(await request(
+    `/api/threads/${encodeURIComponent(threadId)}/permissions/${encodeURIComponent(requestId)}/resolve`,
+    {
+      method: "POST",
+      body: JSON.stringify({ decision, message, answers, annotations }),
+    },
+  ));
+}
+
+function parsePermissionMutation(value: unknown): { ok: boolean; thread_id: string; request_id: string } {
+  const payload = asRecord(value);
+  const ok = payload?.ok;
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const request_id = payload ? recordString(payload, "request_id") : undefined;
+  if (!payload || typeof ok !== "boolean" || !thread_id || !request_id) {
+    throw new Error("Malformed permission mutation");
+  }
+  return { ok, thread_id, request_id };
 }
 
 export async function addThreadPermissionRule(
@@ -177,10 +191,10 @@ export async function addThreadPermissionRule(
   behavior: PermissionRuleBehavior,
   toolName: string,
 ): Promise<{ ok: boolean; thread_id: string; scope: string; rules: ThreadPermissionRules; managed_only: boolean }> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions/rules`, {
+  return parsePermissionRulesMutation(await request(`/api/threads/${encodeURIComponent(threadId)}/permissions/rules`, {
     method: "POST",
     body: JSON.stringify({ behavior, tool_name: toolName }),
-  });
+  }));
 }
 
 export async function removeThreadPermissionRule(
@@ -188,10 +202,25 @@ export async function removeThreadPermissionRule(
   behavior: PermissionRuleBehavior,
   toolName: string,
 ): Promise<{ ok: boolean; thread_id: string; scope: string; rules: ThreadPermissionRules; managed_only: boolean }> {
-  return request(
+  return parsePermissionRulesMutation(await request(
     `/api/threads/${encodeURIComponent(threadId)}/permissions/rules/${encodeURIComponent(behavior)}/${encodeURIComponent(toolName)}`,
     { method: "DELETE" },
-  );
+  ));
+}
+
+function parsePermissionRulesMutation(
+  value: unknown,
+): { ok: boolean; thread_id: string; scope: string; rules: ThreadPermissionRules; managed_only: boolean } {
+  const payload = asRecord(value);
+  const ok = payload?.ok;
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const scope = payload ? recordString(payload, "scope") : undefined;
+  const rules = parseThreadPermissionRules(payload?.rules);
+  const managed_only = payload?.managed_only;
+  if (!payload || typeof ok !== "boolean" || !thread_id || !scope || !rules || typeof managed_only !== "boolean") {
+    throw new Error("Malformed permission rules mutation");
+  }
+  return { ok, thread_id, scope, rules, managed_only };
 }
 
 export async function getThreadRuntime(threadId: string): Promise<StreamStatus> {
