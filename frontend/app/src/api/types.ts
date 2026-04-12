@@ -132,6 +132,7 @@ export interface RecipeSnapshot {
 export interface ThreadLaunchConfig {
   create_mode: "new" | "existing";
   provider_config: string;
+  recipe_id?: string | null;
   recipe?: RecipeSnapshot | null;
   lease_id?: string | null;
   model?: string | null;

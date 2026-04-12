@@ -161,6 +161,7 @@ describe("thread api client contract", () => {
     await api.saveDefaultThreadConfig("agent-1", {
       create_mode: "new",
       provider_config: "local",
+      recipe_id: "local:default",
       model: "gpt-5.4-mini",
     });
 
@@ -172,6 +173,7 @@ describe("thread api client contract", () => {
           agent_user_id: "agent-1",
           create_mode: "new",
           provider_config: "local",
+          recipe_id: "local:default",
           model: "gpt-5.4-mini",
         }),
       }),

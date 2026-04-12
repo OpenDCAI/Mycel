@@ -529,7 +529,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
         agent_user_id="member-1",
         create_mode="new",
         provider_config="local",
-        recipe=None,
+        recipe_id="local:default",
         lease_id=None,
         model="gpt-5.4-mini",
         workspace="/tmp/demo",
@@ -553,7 +553,22 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
 
     assert result == {"ok": True}
     assert to_thread_calls == [("_save_default_config_for_owned_agent", (app, "owner-1", payload))]
-    assert saved == [(app, "owner-1", "member-1", payload.model_dump())]
+    assert saved == [
+        (
+            app,
+            "owner-1",
+            "member-1",
+            {
+                "agent_user_id": "member-1",
+                "create_mode": "new",
+                "provider_config": "local",
+                "recipe": default_recipe_snapshot("local"),
+                "lease_id": None,
+                "model": "gpt-5.4-mini",
+                "workspace": "/tmp/demo",
+            },
+        )
+    ]
 
 
 def test_get_default_thread_config_route_rejects_unowned_agent() -> None:
@@ -602,7 +617,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "agent_user_id": "member-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": None,
+                "recipe_id": "local:default",
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -620,7 +635,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "agent_user_id": "member-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": None,
+                "recipe": default_recipe_snapshot("local"),
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",

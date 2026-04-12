@@ -478,7 +478,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     await saveDefaultThreadConfig(decodedAgentId, {
       create_mode: createMode,
       provider_config: selectedProviderConfig,
-      recipe: selectedRecipeSnapshot,
+      recipe_id: selectedRecipeSnapshot?.id || null,
       lease_id: createMode === "existing" ? selectedLeaseId || null : null,
       model: draftModel,
       workspace,

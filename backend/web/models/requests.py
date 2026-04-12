@@ -38,7 +38,7 @@ class SaveThreadLaunchConfigRequest(BaseModel):
     agent_user_id: str
     create_mode: Literal["new", "existing"]
     provider_config: str
-    recipe: RecipeSnapshotRequest | None = None
+    recipe_id: str | None = None
     lease_id: str | None = None
     model: str | None = None
     workspace: str | None = None
