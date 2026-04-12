@@ -354,7 +354,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
 
 
-def test_publish_prefers_repo_lineage_even_when_legacy_member_dir_exists(tmp_path, monkeypatch):
+def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path, monkeypatch):
     import backend.web.services.marketplace_client as marketplace_client
 
     saved: dict[str, object] = {}
@@ -362,14 +362,14 @@ def test_publish_prefers_repo_lineage_even_when_legacy_member_dir_exists(tmp_pat
     members_root = tmp_path / "members"
     member_dir = members_root / "agent-user-1"
     member_dir.mkdir(parents=True)
-    legacy_meta = {
+    stale_meta = {
         "status": "draft",
         "version": "9.9.9",
         "created_at": 1,
         "updated_at": 2,
-        "source": {"marketplace_item_id": "legacy-item", "installed_version": "9.9.9"},
+        "source": {"marketplace_item_id": "stale-item", "installed_version": "9.9.9"},
     }
-    (member_dir / "meta.json").write_text(json.dumps(legacy_meta, indent=2), encoding="utf-8")
+    (member_dir / "meta.json").write_text(json.dumps(stale_meta, indent=2), encoding="utf-8")
 
     user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1"))
 
@@ -437,7 +437,7 @@ def test_publish_prefers_repo_lineage_even_when_legacy_member_dir_exists(tmp_pat
     assert saved["agent_config_id"] == "cfg-1"
     assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
     assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
-    assert json.loads((member_dir / "meta.json").read_text(encoding="utf-8")) == legacy_meta
+    assert json.loads((member_dir / "meta.json").read_text(encoding="utf-8")) == stale_meta
 
 
 def test_publish_requires_repos():

@@ -531,7 +531,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_does_not_fallback_to_local_preferences_when_repo_missing(
+async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_missing(
     monkeypatch: pytest.MonkeyPatch,
 ):
     captured: dict[str, object] = {}

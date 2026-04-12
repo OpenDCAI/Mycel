@@ -749,7 +749,7 @@ def test_normalize_pty_result_strips_prompt_echo_and_tail_prompt():
 async def test_daytona_runtime_sanitizes_corrupted_terminal_state_before_create(terminal_store, lease_store):
     pytest.importorskip("daytona_sdk")
     terminal = terminal_from_row(terminal_store.create("term-4", "thread-4", "lease-4", "/tmp"), terminal_store.db_path)
-    # Simulate legacy-corrupted snapshot.
+    # Simulate corrupted persisted snapshot.
     terminal.update_state(
         TerminalState(
             cwd="\x1b>",

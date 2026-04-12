@@ -936,8 +936,8 @@ def test_leon_agent_chat_identity_prompt_rejects_user_id_only_runtime_shape() ->
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
     agent._chat_repos = {
-        "user_id": "agent-user-legacy",
-        "owner_id": "human-user-legacy",
+        "user_id": "agent-user-removed",
+        "owner_id": "human-user-removed",
         "user_repo": SimpleNamespace(get_by_id=lambda uid: SimpleNamespace(id=uid, display_name=f"resolved:{uid}")),
     }
 
@@ -985,8 +985,8 @@ def test_leon_agent_chat_tool_wiring_rejects_user_id_only_runtime_shape(monkeypa
     agent.verbose = False
     agent._get_mcp_server_configs = lambda: {}
     agent._chat_repos = {
-        "user_id": "thread-user-legacy",
-        "owner_id": "human-user-legacy",
+        "user_id": "thread-user-removed",
+        "owner_id": "human-user-removed",
         "messaging_service": SimpleNamespace(),
         "user_repo": SimpleNamespace(),
         "relationship_repo": SimpleNamespace(),
