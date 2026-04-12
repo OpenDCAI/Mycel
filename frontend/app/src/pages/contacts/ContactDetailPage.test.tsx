@@ -86,9 +86,6 @@ describe("ContactDetailPage", () => {
           is_owned: false,
           relationship_state: "hire",
           can_chat: true,
-          default_thread_id: "thread-toad",
-          is_default_thread: true,
-          branch_index: 0,
         },
       ]))
       .mockResolvedValueOnce(okJson({ id: "chat-agent-2" }));
@@ -110,6 +107,8 @@ describe("ContactDetailPage", () => {
       });
     });
     expect(navigate).toHaveBeenCalledWith("/chat/visit/chat-agent-2");
+    expect(screen.queryByText("默认线程")).toBeNull();
+    expect(screen.queryByText("分支")).toBeNull();
   });
 
   it("shows chat-capable contacts as contacts instead of exposing raw none state", async () => {

@@ -6,9 +6,6 @@ export type UserChatCandidate = {
   type: string;
   avatar_url?: string | null;
   owner_name?: string | null;
-  default_thread_id?: string | null;
-  is_default_thread?: boolean | null;
-  branch_index?: number | null;
   is_owned: boolean;
   relationship_state: string;
   can_chat: boolean;
@@ -35,9 +32,6 @@ export function parseUserChatCandidates(value: unknown): UserChatCandidate[] {
       type: row.type,
       avatar_url: typeof row.avatar_url === "string" ? row.avatar_url : null,
       owner_name: typeof row.owner_name === "string" ? row.owner_name : null,
-      default_thread_id: typeof row.default_thread_id === "string" ? row.default_thread_id : null,
-      is_default_thread: typeof row.is_default_thread === "boolean" ? row.is_default_thread : null,
-      branch_index: typeof row.branch_index === "number" ? row.branch_index : null,
       is_owned: row.is_owned,
       relationship_state: row.relationship_state,
       can_chat: row.can_chat,

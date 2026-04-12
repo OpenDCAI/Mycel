@@ -176,9 +176,6 @@ async def list_chat_candidates(
     users = user_repo.list_all()
     user_map = {user.id: user for user in users}
     relationship_states = _relationship_states_for_user(app, user_id)
-    default_threads = app.state.thread_repo.list_default_threads(
-        [user.id for user in users if user.id != user_id and user.type is UserType.AGENT]
-    )
     try:
         contact_targets = active_contact_target_ids(getattr(app.state, "contact_repo", None), user_id)
     except RuntimeError as exc:
@@ -208,9 +205,6 @@ async def list_chat_candidates(
                     "avatar_url": avatar_url(user.id, bool(user.avatar)),
                     "owner_name": None,
                     "agent_name": user.display_name,
-                    "default_thread_id": None,
-                    "is_default_thread": None,
-                    "branch_index": None,
                     "is_owned": False,
                     "relationship_state": relationship_state,
                     "can_chat": can_chat,
@@ -218,7 +212,6 @@ async def list_chat_candidates(
             )
         else:
             owner = user_map.get(user.owner_user_id) if user.owner_user_id else None
-            default_thread = default_threads.get(user.id)
             items.append(
                 {
                     "user_id": user.id,
@@ -227,9 +220,6 @@ async def list_chat_candidates(
                     "avatar_url": avatar_url(user.id, bool(user.avatar)),
                     "owner_name": owner.display_name if owner else None,
                     "agent_name": user.display_name,
-                    "default_thread_id": default_thread["id"] if default_thread else None,
-                    "is_default_thread": default_thread["is_main"] if default_thread else None,
-                    "branch_index": default_thread["branch_index"] if default_thread else None,
                     "is_owned": is_owned,
                     "relationship_state": relationship_state,
                     "can_chat": can_chat,

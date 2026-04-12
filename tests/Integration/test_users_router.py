@@ -5,7 +5,6 @@ from __future__ import annotations
 # group-chat creation. The test below verifies the current production behaviour:
 #   • current user is excluded
 #   • other humans and agents are all included (no branch filtering)
-#   • thread metadata (is_main, branch_index) is attached from thread_repo
 #   • chat/contact eligibility is computed by backend ownership + relationship state
 from types import SimpleNamespace
 
@@ -54,7 +53,6 @@ def _active_contact_repo(source_user_id: str, target_user_id: str) -> SimpleName
 def _users_app(
     users: list[UserRow],
     *,
-    thread_repo: object | None = None,
     relationships: dict[str, str] | None = None,
     contact_repo: object | None = None,
 ) -> SimpleNamespace:
@@ -62,7 +60,6 @@ def _users_app(
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: users),
-            thread_repo=thread_repo or _FakeThreadRepo(),
             relationship_service=SimpleNamespace(
                 list_for_user=lambda _user_id: [
                     SimpleNamespace(other_user_id=other_user_id, state=state) for other_user_id, state in relationships.items()
@@ -73,43 +70,18 @@ def _users_app(
     )
 
 
-class _FakeThreadRepo:
-    def __init__(self, default_threads: dict[str, dict] | None = None) -> None:
-        self.default_threads = default_threads or {}
-        self.batch_calls: list[list[str]] = []
-        self.single_calls: list[str] = []
-
-    def list_default_threads(self, agent_user_ids: list[str]) -> dict[str, dict]:
-        self.batch_calls.append(list(agent_user_ids))
-        return {agent_user_id: self.default_threads[agent_user_id] for agent_user_id in agent_user_ids if agent_user_id in self.default_threads}
-
-    def get_default_thread(self, agent_user_id: str) -> dict | None:
-        self.single_calls.append(agent_user_id)
-        return self.default_threads.get(agent_user_id)
-
-
 @pytest.mark.asyncio
 async def test_list_chat_candidates_excludes_current_user_and_returns_all_others():
     current_user = _human("u1", "owner")
     other_human = _human("u2", "other")
     main_agent = _agent("a-main", "Toad", "u2")
     child_agent = _agent("a-child", "Toad Branch", "u2")
-    thread_repo = _FakeThreadRepo(
-        {
-            "a-main": {"id": "thread-main", "is_main": True, "branch_index": 0},
-            "a-child": {"id": "thread-child", "is_main": False, "branch_index": 1},
-        }
-    )
     app = _users_app(
         [current_user, other_human, main_agent, child_agent],
-        thread_repo=thread_repo,
         relationships={"u2": "visit", "a-main": "pending"},
     )
 
     result = await users_router.list_chat_candidates(user_id="u1", app=app)
-
-    assert thread_repo.batch_calls == [["a-main", "a-child"]]
-    assert thread_repo.single_calls == []
 
     # Current user (u1) is excluded; all other users are returned.
     candidates = [(item["type"], item.get("user_id")) for item in result]
@@ -125,20 +97,22 @@ async def test_list_chat_candidates_excludes_current_user_and_returns_all_others
     assert "id" not in human_item
     assert human_item["agent_name"] == "other"
     assert "member_name" not in human_item
-    assert human_item["default_thread_id"] is None
+    assert "default_thread_id" not in human_item
+    assert "is_default_thread" not in human_item
+    assert "branch_index" not in human_item
     assert human_item["is_owned"] is False
     assert human_item["relationship_state"] == "visit"
     assert human_item["can_chat"] is True
 
-    # Agent entry is keyed by unified user identity plus explicit default thread.
+    # Agent entry is keyed by unified user identity, not private thread metadata.
     main_item = next(i for i in result if i.get("user_id") == "a-main")
     assert "id" not in main_item
     assert "member_id" not in main_item
     assert main_item["agent_name"] == "Toad"
     assert "member_name" not in main_item
-    assert main_item["default_thread_id"] == "thread-main"
-    assert main_item["is_default_thread"] is True
-    assert main_item["branch_index"] == 0
+    assert "default_thread_id" not in main_item
+    assert "is_default_thread" not in main_item
+    assert "branch_index" not in main_item
     assert main_item["is_owned"] is False
     assert main_item["relationship_state"] == "pending"
     assert main_item["can_chat"] is True
@@ -147,19 +121,16 @@ async def test_list_chat_candidates_excludes_current_user_and_returns_all_others
     child_item = next(i for i in result if i.get("user_id") == "a-child")
     assert child_item["agent_name"] == "Toad Branch"
     assert "member_name" not in child_item
-    assert child_item["default_thread_id"] == "thread-child"
-    assert child_item["is_default_thread"] is False
-    assert child_item["branch_index"] == 1
+    assert "default_thread_id" not in child_item
+    assert "is_default_thread" not in child_item
+    assert "branch_index" not in child_item
     assert child_item["relationship_state"] == "none"
     assert child_item["can_chat"] is True
 
 
 @pytest.mark.asyncio
 async def test_list_chat_candidates_marks_owned_agents_as_chat_candidates_without_relationship():
-    app = _users_app(
-        [_human("u1", "owner"), _agent("a-owned", "Morel", "u1")],
-        thread_repo=_FakeThreadRepo({"a-owned": {"id": "thread-owned", "is_main": True, "branch_index": 0}}),
-    )
+    app = _users_app([_human("u1", "owner"), _agent("a-owned", "Morel", "u1")])
 
     result = await users_router.list_chat_candidates(user_id="u1", app=app)
 
@@ -186,9 +157,6 @@ async def test_list_chat_candidates_marks_normal_active_contacts_as_chat_candida
             "avatar_url": None,
             "owner_name": None,
             "agent_name": "other",
-            "default_thread_id": None,
-            "is_default_thread": None,
-            "branch_index": None,
             "is_owned": False,
             "relationship_state": "none",
             "can_chat": True,

@@ -145,20 +145,6 @@ export default function ContactDetailPage() {
                 <dt className="text-xs text-muted-foreground">可对话</dt>
                 <dd className="mt-1 text-foreground">{contact.can_chat ? "是" : "否"}</dd>
               </div>
-              {isAgent && (
-                <>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">默认线程</dt>
-                    <dd className="mt-1 break-all text-foreground">{contact.default_thread_id ?? "未配置"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">分支</dt>
-                    <dd className="mt-1 text-foreground">
-                      {contact.branch_index == null ? "未配置" : contact.is_default_thread ? "默认" : `#${contact.branch_index}`}
-                    </dd>
-                  </div>
-                </>
-              )}
             </dl>
           </section>
 
