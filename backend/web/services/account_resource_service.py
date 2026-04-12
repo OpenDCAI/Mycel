@@ -67,11 +67,6 @@ def _weekly_token_limit(raw_limits: dict[str, Any] | None) -> int:
     return weekly
 
 
-def _sandbox_limits(app: Any, user_id: str) -> dict[str, int]:
-    repo = _settings_repo(app)
-    return {**DEFAULT_SANDBOX_LIMITS, **_normalized_user_sandbox_limits(repo.get_account_resource_limits(user_id))}
-
-
 def list_account_resource_limits(app: Any, user_id: str) -> dict[str, list[dict[str, Any]]]:
     thread_repo = getattr(app.state, "thread_repo", None)
     if thread_repo is None:
