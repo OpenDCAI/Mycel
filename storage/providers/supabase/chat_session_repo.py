@@ -53,7 +53,7 @@ class SupabaseChatSessionRepo:
 
     @staticmethod
     def _normalize_session(row: dict[str, Any]) -> dict[str, Any]:
-        """Rename chat_session_id -> session_id for caller compatibility."""
+        """Project storage chat_session_id to the repo row's session_id field."""
         result = dict(row)
         if "chat_session_id" in result and "session_id" not in result:
             result["session_id"] = result.pop("chat_session_id")
