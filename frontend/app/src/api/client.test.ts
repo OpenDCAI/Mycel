@@ -52,6 +52,14 @@ describe("thread api client contract", () => {
     );
   });
 
+  it("listThreads rejects malformed thread identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      threads: [{ thread_id: { value: "thread-1" }, agent_user_id: "agent-1" }],
+    }));
+
+    await expect(api.listThreads()).rejects.toThrow("Malformed thread summaries");
+  });
+
   it("getDefaultThread resolves through agent_user_id", async () => {
     authFetch.mockResolvedValue(okJson({ thread: null }));
 
