@@ -783,21 +783,7 @@ class QueryLoop:
             """Actual model call — innermost of the chain."""
             tools = request.tools or []
             model = request.model
-
-            # Bind tools to model if any
-            if tools:
-                try:
-                    bound = model.bind_tools(tools)
-                except Exception:
-                    bound = model
-            else:
-                bound = model
-
-            if max_output_tokens_override is not None and hasattr(bound, "bind"):
-                try:
-                    bound = bound.bind(max_tokens=max_output_tokens_override)
-                except Exception:
-                    pass
+            bound = self._bind_model(model, tools, max_output_tokens_override=max_output_tokens_override)
 
             # Build message list: system + conversation
             call_messages = []
@@ -847,8 +833,8 @@ class QueryLoop:
         if max_output_tokens_override is not None and hasattr(bound, "bind"):
             try:
                 bound = bound.bind(max_tokens=max_output_tokens_override)
-            except Exception:
-                pass
+            except Exception as exc:
+                raise RuntimeError(f"Failed to bind max_tokens={max_output_tokens_override}") from exc
         return bound
 
     def _can_stream_tools(self) -> bool:
