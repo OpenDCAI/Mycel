@@ -301,7 +301,6 @@ def test_leon_agent_destructor_does_not_reenable_skipped_sandbox_cleanup():
     agent._session_started = False
     agent._mark_terminated = MagicMock()
     agent._cleanup_mcp_client = MagicMock()
-    agent._cleanup_sqlite_connection = MagicMock()
     agent._cleanup_sandbox = MagicMock()
 
     LeonAgent.close(agent, cleanup_sandbox=False)

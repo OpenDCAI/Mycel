@@ -373,7 +373,6 @@ class LeonAgent:
         self._cleanup_registry.register(self._cleanup_sandbox, priority=2)
         self._cleanup_registry.register(self._mark_terminated, priority=3)
         self._cleanup_registry.register(self._cleanup_mcp_client, priority=4)
-        self._cleanup_registry.register(self._cleanup_sqlite_connection, priority=5)
 
         # Mark agent as ready (checkpointer is None when async init still pending)
         if self.checkpointer is not None:
@@ -918,7 +917,6 @@ class LeonAgent:
                 cleanup_steps = [
                     ("monitor", self._mark_terminated),
                     ("MCP client", self._cleanup_mcp_client),
-                    ("SQLite connection", self._cleanup_sqlite_connection),
                 ]
                 if cleanup_sandbox:
                     cleanup_steps.insert(0, ("sandbox", self._cleanup_sandbox))
@@ -1004,9 +1002,6 @@ class LeonAgent:
         except Exception as e:
             print(f"[LeonAgent] MCP cleanup error: {e}")
         self._mcp_client = None
-
-    def _cleanup_sqlite_connection(self) -> None:
-        """No-op: SQLite checkpointer removed; Postgres cleanup handled by _pg_saver_ctx."""
 
     def __del__(self):
         self.close()
