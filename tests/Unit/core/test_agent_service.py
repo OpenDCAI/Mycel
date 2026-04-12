@@ -75,16 +75,19 @@ class _FakeThreadRepo:
         sandbox_type: str,
         cwd: str | None,
         created_at: float,
-        **extra,
+        *,
+        model: str | None,
+        is_main: bool,
+        branch_index: int,
     ):
         row = {
             "id": thread_id,
             "agent_user_id": agent_user_id,
             "sandbox_type": sandbox_type,
             "cwd": cwd,
-            "model": extra.get("model"),
-            "is_main": bool(extra.get("is_main", False)),
-            "branch_index": int(extra["branch_index"]),
+            "model": model,
+            "is_main": is_main,
+            "branch_index": branch_index,
             "created_at": created_at,
         }
         self.rows[thread_id] = row
@@ -152,6 +155,7 @@ class _FakeChildAgent:
 class _FakeAsyncCommand:
     def __init__(self):
         self.done = False
+        self.cancelled = False
         self.stdout_buffer = []
         self.stderr_buffer = []
         self.exit_code = None

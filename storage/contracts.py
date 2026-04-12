@@ -740,11 +740,16 @@ class ThreadRepo(Protocol):
         self,
         thread_id: str,
         agent_user_id: str,
-        user_id: str,
         sandbox_type: str,
-        cwd: str | None,
-        created_at: float,
-        **extra: Any,
+        cwd: str | None = None,
+        created_at: float = 0,
+        *,
+        model: str | None = None,
+        is_main: bool,
+        branch_index: int,
+        status: str = "active",
+        updated_at: float | None = None,
+        last_active_at: float | None = None,
     ) -> None: ...
     def list_by_ids(self, thread_ids: list[str]) -> list[dict[str, Any]]: ...
     def get_by_id(self, thread_id: str) -> dict[str, Any] | None: ...

@@ -54,10 +54,14 @@ class SupabaseThreadRepo:
         sandbox_type: str,
         cwd: str | None = None,
         created_at: float = 0,
-        **extra: Any,
+        *,
+        model: str | None = None,
+        is_main: bool,
+        branch_index: int,
+        status: str = "active",
+        updated_at: float | None = None,
+        last_active_at: float | None = None,
     ) -> None:
-        is_main = bool(extra.get("is_main", False))
-        branch_index = int(extra["branch_index"])
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
         self._t().insert(
             {
@@ -65,13 +69,13 @@ class SupabaseThreadRepo:
                 "agent_user_id": agent_user_id,
                 "sandbox_type": sandbox_type,
                 "cwd": cwd,
-                "model": extra.get("model"),
-                "status": extra.get("status", "active"),
+                "model": model,
+                "status": status,
                 "is_main": int(is_main),
                 "branch_index": branch_index,
                 "created_at": created_at,
-                "updated_at": extra.get("updated_at"),
-                "last_active_at": extra.get("last_active_at"),
+                "updated_at": updated_at,
+                "last_active_at": last_active_at,
             }
         ).execute()
 
