@@ -157,7 +157,9 @@ def test_login_repairs_existing_user_sandbox_recipes(monkeypatch: pytest.MonkeyP
     recipe_rows: dict[tuple[str, str], dict] = {}
     recipe_repo = SimpleNamespace(
         get=lambda owner_user_id, recipe_id: recipe_rows.get((owner_user_id, recipe_id)),
-        upsert=lambda **payload: recipe_rows.setdefault((payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}),
+        upsert=lambda **payload: recipe_rows.setdefault(
+            (payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}
+        ),
     )
     user_repo = SimpleNamespace(
         get_by_id=lambda _user_id: SimpleNamespace(display_name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
@@ -303,7 +305,9 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
     recipe_rows: dict[str, dict] = {}
     recipe_repo = SimpleNamespace(
         get=lambda owner_user_id, recipe_id: recipe_rows.get((owner_user_id, recipe_id)),
-        upsert=lambda **payload: recipe_rows.setdefault((payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}),
+        upsert=lambda **payload: recipe_rows.setdefault(
+            (payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}
+        ),
     )
     supabase_client = SimpleNamespace(rpc=lambda _name: SimpleNamespace(execute=lambda: SimpleNamespace(data=10001)))
     token = jwt.encode({"sub": "owner-1", "email": "fresh@example.com"}, "secret-1", algorithm="HS256")
