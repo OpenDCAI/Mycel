@@ -70,13 +70,13 @@ def lookup_sandbox_for_thread(
 
 def resolve_existing_lease_cwd(
     lease_id: str,
-    fallback_cwd: str | None = None,
+    requested_cwd: str | None = None,
     db_path: Path | None = None,
     *,
     terminal_repo: Any | None = None,
 ) -> str:
-    if fallback_cwd:
-        return fallback_cwd
+    if requested_cwd:
+        return requested_cwd
 
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     _terminal_repo = terminal_repo
@@ -229,7 +229,7 @@ class SandboxManager:
         volume_id = str(uuid.uuid4())
         self._create_volume_entry(thread_id, volume_id)
 
-        # @@@remote-volume-self-heal - legacy threads can lose their eager-created lease row
+        # @@@remote-volume-self-heal - incomplete remote lease bindings can miss their volume row
         # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
         self.lease_store.set_volume_id(lease.lease_id, volume_id)
         lease.volume_id = volume_id
