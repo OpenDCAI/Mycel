@@ -134,6 +134,21 @@ describe("thread api client contract", () => {
     await expect(api.listSandboxSessions()).rejects.toThrow("Malformed sandbox sessions");
   });
 
+  it("listMyLeases rejects malformed lease participant identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      leases: [{
+        lease_id: "lease-1",
+        provider_name: "local",
+        recipe_id: "recipe-1",
+        recipe_name: "Local",
+        thread_ids: ["thread-1"],
+        agents: [{ thread_id: { value: "thread-1" }, agent_name: "Toad" }],
+      }],
+    }));
+
+    await expect(api.listMyLeases()).rejects.toThrow("Malformed user leases");
+  });
+
   it("uploadUserAvatar sends user avatar path instead of members path", async () => {
     authFetch.mockResolvedValue(okJson({ ok: true }));
 
