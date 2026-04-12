@@ -85,7 +85,6 @@ class ChatSessionRepo(Protocol):
     """Chat session + terminal command persistence."""
 
     def close(self) -> None: ...
-    def ensure_tables(self) -> None: ...
     def create_session(
         self,
         session_id: str,
@@ -674,7 +673,6 @@ class SandboxVolumeRepo(Protocol):
 
 
 class EvalRepo(Protocol):
-    def ensure_schema(self) -> None: ...
     def upsert_run_header(
         self,
         *,
@@ -703,7 +701,6 @@ class EvalRepo(Protocol):
 
 
 class EvaluationBatchRepo(Protocol):
-    def ensure_schema(self) -> None: ...
     def create_batch(self, batch: dict[str, Any]) -> dict[str, Any]: ...
     def get_batch(self, batch_id: str) -> dict[str, Any] | None: ...
     def list_batches(self, limit: int = 50) -> list[dict[str, Any]]: ...

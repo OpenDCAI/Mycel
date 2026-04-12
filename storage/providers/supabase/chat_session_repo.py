@@ -29,10 +29,6 @@ class SupabaseChatSessionRepo:
     def close(self) -> None:
         return None
 
-    def ensure_tables(self) -> None:
-        # Tables are managed by Supabase migrations; no-op here.
-        return None
-
     def _sessions(self) -> Any:
         return self._client.table(_SESSIONS_TABLE)
 

@@ -16,9 +16,6 @@ class SupabaseEvaluationBatchRepo:
     def close(self) -> None:
         return None
 
-    def ensure_schema(self) -> None:
-        return None
-
     def create_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
         rows = q.rows(
             self._client.table(_BATCH_TABLE).insert(batch).execute(),
