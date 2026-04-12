@@ -421,7 +421,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     setCreateMode(config.create_mode);
     setSelectedProviderConfig(config.provider_config || "");
     setSelectedLeaseId(config.lease_id || "");
-    setSelectedRecipeId(config.recipe?.id || "");
+    setSelectedRecipeId(config.recipe_id || config.recipe?.id || "");
     setSelectedRecipeFeatures(config.recipe?.features ?? {});
     setSelectedWorkspace(config.workspace || "");
     setSelectedModel(config.model || settings?.default_model || "leon:large");

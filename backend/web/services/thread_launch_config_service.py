@@ -133,6 +133,7 @@ def _validate_saved_config(
     return {
         "create_mode": "new",
         "provider_config": provider_config,
+        "recipe_id": recipe_id,
         "recipe": recipe_snapshot,
         "lease_id": None,
         "model": config.get("model"),
@@ -188,6 +189,7 @@ def _derive_default_config(
     return {
         "create_mode": "new",
         "provider_config": provider_config,
+        "recipe_id": str(recipe["id"]) if recipe is not None else None,
         "recipe": recipe_snapshot,
         "lease_id": None,
         "model": None,
