@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from config.models_schema import ModelsConfig
-from config.user_paths import remap_legacy_user_home_string, user_home_read_candidates
+from config.user_paths import remap_default_user_home_string, user_home_read_candidates
 
 
 class ModelsLoader:
@@ -139,7 +139,7 @@ class ModelsLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return remap_legacy_user_home_string(obj)
+            return remap_default_user_home_string(obj)
         return obj
 
 

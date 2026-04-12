@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-def legacy_user_home_dir() -> Path:
+def default_user_home_dir() -> Path:
     return (Path.home() / ".leon").resolve()
 
 
@@ -14,15 +14,15 @@ def preferred_user_home_dir() -> Path:
         main_db = os.getenv("LEON_DB_PATH")
         if main_db:
             return Path(main_db).expanduser().resolve().parent
-    return legacy_user_home_dir()
+    return default_user_home_dir()
 
 
 def user_home_read_roots() -> tuple[Path, ...]:
     preferred = preferred_user_home_dir()
-    legacy = legacy_user_home_dir()
-    if preferred == legacy:
+    default_home = default_user_home_dir()
+    if preferred == default_home:
         return (preferred,)
-    return (legacy, preferred)
+    return (default_home, preferred)
 
 
 def user_home_path(*parts: str) -> Path:
@@ -52,18 +52,18 @@ def preferred_existing_user_home_path(*parts: str) -> Path:
     return preferred
 
 
-def remap_legacy_user_home_string(value: str) -> str:
+def remap_default_user_home_string(value: str) -> str:
     expanded = os.path.expandvars(os.path.expanduser(value))
     preferred = preferred_user_home_dir()
-    legacy = legacy_user_home_dir()
-    if preferred == legacy:
+    default_home = default_user_home_dir()
+    if preferred == default_home:
         return expanded
 
     expanded_norm = expanded.replace("\\", "/")
-    legacy_norm = str(legacy).replace("\\", "/")
-    if expanded_norm == legacy_norm:
+    default_norm = str(default_home).replace("\\", "/")
+    if expanded_norm == default_norm:
         return str(preferred)
-    if expanded_norm.startswith(f"{legacy_norm}/"):
-        relative = Path(expanded).relative_to(legacy)
+    if expanded_norm.startswith(f"{default_norm}/"):
+        relative = Path(expanded).relative_to(default_home)
         return str(preferred / relative)
     return expanded

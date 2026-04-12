@@ -30,7 +30,7 @@ from config.types import (
     McpServerConfig,
     RuntimeResourceConfig,
 )
-from config.user_paths import remap_legacy_user_home_string, user_home_path, user_home_read_candidates
+from config.user_paths import remap_default_user_home_string, user_home_path, user_home_read_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +350,7 @@ class AgentLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return remap_legacy_user_home_string(obj)
+            return remap_default_user_home_string(obj)
         return obj
 
     def _remove_none_values(self, obj: Any) -> Any:
