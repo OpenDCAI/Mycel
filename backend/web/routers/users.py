@@ -256,20 +256,6 @@ async def get_user_profile(
     }
 
 
-@users_router.get("/{user_id}/agent-thread")
-async def get_agent_thread(
-    user_id: str,
-    current_user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
-):
-    """Get the default representative thread for an agent user."""
-    user = _get_user_or_404(app, user_id)
-    default_thread = app.state.thread_repo.get_default_thread(user_id)
-    if user.type is UserType.AGENT and default_thread is not None:
-        return {"user_id": user_id, "default_thread_id": default_thread["id"]}
-    raise HTTPException(404, "No agent thread found")
-
-
 def _get_user_or_404(app: Any, user_id: str) -> Any:
     user = app.state.user_repo.get_by_id(user_id)
     if not user:

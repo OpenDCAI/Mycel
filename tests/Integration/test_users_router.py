@@ -213,25 +213,6 @@ async def test_list_chat_candidates_marks_agents_owned_by_active_contacts_as_cha
     assert agent_item["can_chat"] is True
 
 
-@pytest.mark.asyncio
-async def test_get_agent_thread_reads_main_thread_from_thread_repo_via_user_repo():
-    agent = _agent("a-main", "Toad", "u2")
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "a-main" else None),
-            thread_repo=SimpleNamespace(
-                get_default_thread=lambda user_id: (
-                    {"id": "thread-main", "is_main": True, "branch_index": 0} if user_id == "a-main" else None
-                )
-            ),
-        )
-    )
-
-    result = await users_router.get_agent_thread("a-main", current_user_id="u2", app=app)
-
-    assert result == {"user_id": "a-main", "default_thread_id": "thread-main"}
-
-
 def test_get_user_or_404_returns_user():
     agent = _agent("a-main", "Toad", "u2")
     app = SimpleNamespace(
@@ -263,4 +244,5 @@ def test_user_router_exposes_chat_candidates_not_legacy_entities_path():
     paths = {route.path for route in users_router.users_router.routes}
 
     assert "/api/users/chat-candidates" in paths
+    assert "/api/users/{user_id}/agent-thread" not in paths
     assert "/api/entities" not in paths
