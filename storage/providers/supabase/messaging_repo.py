@@ -326,7 +326,7 @@ class SupabaseRelationshipRepo:
         existing = self.get(user_a, user_b)
         now = time.time()
         if existing:
-            fields = {"state": state, "initiator_user_id": initiator_user_id}
+            relationship_updates = {"state": state, "initiator_user_id": initiator_user_id}
             if state == "none":
                 (
                     self._client.table("relationships")
@@ -336,16 +336,16 @@ class SupabaseRelationshipRepo:
                     .eq("kind", "hire_visit")
                     .execute()
                 )
-                return self._normalize({**existing, "updated_at": now, **fields})
+                return self._normalize({**existing, "updated_at": now, **relationship_updates})
             res = (
                 self._client.table("relationships")
-                .update({"updated_at": now, **fields})
+                .update({"updated_at": now, **relationship_updates})
                 .eq("user_low", user_low)
                 .eq("user_high", user_high)
                 .eq("kind", "hire_visit")
                 .execute()
             )
-            return self._normalize(res.data[0] if res.data else {**existing, "updated_at": now, **fields})
+            return self._normalize(res.data[0] if res.data else {**existing, "updated_at": now, **relationship_updates})
 
         row = {
             "user_low": user_low,
