@@ -1918,6 +1918,41 @@ async def test_query_loop_persists_compaction_notice_when_boundary_advances():
 
 
 @pytest.mark.asyncio
+async def test_query_loop_reuses_compacted_context_across_tool_turns():
+    memory, summary_model = _make_summary_memory_middleware(context_limit=200, compaction_threshold=0.6)
+    model = mock_model_with_tool_call(tool_name="echo", args={"message": "ctx"}, then_text="done")
+
+    entry = make_inline_tool("echo", lambda message: f"echo: {message}")
+    app_state = AppState()
+    loop = make_loop(
+        model,
+        registry=make_registry(entry),
+        middleware=[memory],
+        app_state=app_state,
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    history = [
+        HumanMessage(content="A" * 80),
+        AIMessage(content="B" * 80),
+        HumanMessage(content="C" * 80),
+        HumanMessage(content="call echo"),
+    ]
+
+    async for _ in loop.query({"messages": history}):
+        pass
+
+    compact_notices = [
+        msg
+        for msg in app_state.messages
+        if msg.__class__.__name__ == "HumanMessage" and ((getattr(msg, "metadata", None) or {}).get("notification_type") == "compact")
+    ]
+
+    assert summary_model.ainvoke.call_count == 1
+    assert len(compact_notices) == 1
+
+
+@pytest.mark.asyncio
 async def test_memory_middleware_emits_runtime_compaction_notice():
     memory, _summary_model = _make_summary_memory_middleware()
     runtime = SimpleNamespace(cost=0.0, events=[], set_flag=lambda *_args, **_kwargs: None)
