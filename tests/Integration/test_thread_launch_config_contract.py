@@ -150,7 +150,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
         payload={
             "create_mode": "wat",
             "provider_config": "  local  ",
-            "recipe": "nope",
+            "recipe_id": "  local:default  ",
             "lease_id": "  ",
             "model": "  gpt-5.4-mini  ",
             "workspace": "  /tmp/demo  ",
@@ -164,7 +164,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
             {
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": None,
+                "recipe_id": "local:default",
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -178,7 +178,6 @@ def test_build_existing_launch_config_uses_canonical_shape() -> None:
         lease={
             "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
-            "recipe": {"id": "daytona:recipe-1"},
         },
         model="gpt-5.4",
         workspace="/workspace/reused",
@@ -187,22 +186,17 @@ def test_build_existing_launch_config_uses_canonical_shape() -> None:
     assert config == {
         "create_mode": "existing",
         "provider_config": "daytona_selfhost",
-        "recipe": {"id": "daytona:recipe-1"},
+        "recipe_id": None,
         "lease_id": "lease-1",
         "model": "gpt-5.4",
         "workspace": "/workspace/reused",
     }
 
 
-def test_build_new_launch_config_normalizes_recipe_snapshot() -> None:
+def test_build_new_launch_config_uses_recipe_id() -> None:
     config = thread_launch_config_service.build_new_launch_config(
         provider_config="local",
-        recipe={
-            "id": "local:custom",
-            "name": "Custom Local",
-            "provider_type": "local",
-            "features": {"lark_cli": True},
-        },
+        recipe_id="local:custom",
         model="gpt-5.4-mini",
         workspace="/tmp/custom",
     )
@@ -210,15 +204,7 @@ def test_build_new_launch_config_normalizes_recipe_snapshot() -> None:
     assert config == {
         "create_mode": "new",
         "provider_config": "local",
-        "recipe": normalize_recipe_snapshot(
-            "local",
-            {
-                "id": "local:custom",
-                "name": "Custom Local",
-                "provider_type": "local",
-                "features": {"lark_cli": True},
-            },
-        ),
+        "recipe_id": "local:custom",
         "lease_id": None,
         "model": "gpt-5.4-mini",
         "workspace": "/tmp/custom",
@@ -241,7 +227,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
                     "last_confirmed": {
                         "create_mode": "new",
                         "provider_config": "local",
-                        "recipe": default_recipe_snapshot("local"),
+                        "recipe_id": "local:default",
                         "lease_id": None,
                         "model": "gpt-4.1",
                         "workspace": "/tmp/draft",
@@ -314,7 +300,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
                     "last_confirmed": {
                         "create_mode": "new",
                         "provider_config": "local",
-                        "recipe": default_recipe_snapshot("local"),
+                        "recipe_id": "local:default",
                         "lease_id": None,
                         "model": "gpt-4.1",
                         "workspace": "/tmp/draft",
@@ -419,7 +405,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
         {
             "create_mode": "existing",
             "provider_config": "daytona_selfhost",
-            "recipe": {"id": "daytona:recipe-1"},
+            "recipe_id": None,
             "lease_id": "lease-1",
             "model": "gpt-5.4",
             "workspace": "/workspace/reused",
@@ -561,7 +547,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
                 "agent_user_id": "member-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": default_recipe_snapshot("local"),
+                "recipe_id": "local:default",
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -634,7 +620,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "agent_user_id": "member-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe": default_recipe_snapshot("local"),
+                "recipe_id": "local:default",
                 "lease_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -671,7 +657,7 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
         {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe": default_recipe_snapshot("local"),
+            "recipe_id": "local:default",
             "lease_id": None,
             "model": "gpt-5.4-mini",
             "workspace": "/tmp/fresh-local-thread",
@@ -735,7 +721,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe": normalized_recipe,
+            "recipe_id": "local:custom:lark",
             "lease_id": None,
             "model": "gpt-5.4-mini",
             "workspace": None,

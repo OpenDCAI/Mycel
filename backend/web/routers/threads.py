@@ -112,8 +112,7 @@ def _save_default_config_for_owned_agent(
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
     config = payload.model_dump()
     if payload.create_mode == "new":
-        config["recipe"] = _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.recipe_id)
-        config.pop("recipe_id", None)
+        _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.recipe_id)
     save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, config)
     return {"ok": True}
 
@@ -692,7 +691,7 @@ def _create_owned_thread(
     else:
         successful_config = build_new_launch_config(
             provider_config=sandbox_type,
-            recipe=selected_recipe,
+            recipe_id=selected_recipe["id"] if selected_recipe else None,
             model=payload.model,
             workspace=app.state.thread_cwd.get(new_thread_id) or payload.cwd,
         )

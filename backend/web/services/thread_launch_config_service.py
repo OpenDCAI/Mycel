@@ -13,7 +13,7 @@ def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "create_mode": "existing" if payload.get("create_mode") == "existing" else "new",
         "provider_config": str(payload.get("provider_config") or "").strip(),
-        "recipe": payload.get("recipe") if isinstance(payload.get("recipe"), dict) else None,
+        "recipe_id": str(payload.get("recipe_id") or "").strip() or None,
         "lease_id": str(payload.get("lease_id") or "").strip() or None,
         "model": str(payload.get("model") or "").strip() or None,
         "workspace": str(payload.get("workspace") or "").strip() or None,
@@ -26,13 +26,21 @@ def build_existing_launch_config(
     model: str | None,
     workspace: str | None,
 ) -> dict[str, Any]:
-    return normalize_launch_config_payload(_existing_config_from_lease(lease, model=model, workspace=workspace))
+    return normalize_launch_config_payload(
+        {
+            "create_mode": "existing",
+            "provider_config": lease.get("provider_name"),
+            "lease_id": lease.get("lease_id"),
+            "model": model,
+            "workspace": workspace,
+        }
+    )
 
 
 def build_new_launch_config(
     *,
     provider_config: str,
-    recipe: dict[str, Any] | None,
+    recipe_id: str | None,
     model: str | None,
     workspace: str | None,
 ) -> dict[str, Any]:
@@ -40,7 +48,7 @@ def build_new_launch_config(
         {
             "create_mode": "new",
             "provider_config": provider_config,
-            "recipe": normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe, provider_name=provider_config),
+            "recipe_id": recipe_id,
             "lease_id": None,
             "model": model,
             "workspace": workspace,
@@ -112,19 +120,20 @@ def _validate_saved_config(
         return _existing_config_from_lease(lease, model=config.get("model"), workspace=lease.get("cwd"))
 
     provider_config = config.get("provider_config")
-    recipe = config.get("recipe")
-    if not provider_config or provider_config not in provider_names or not isinstance(recipe, dict):
+    recipe_id = str(config.get("recipe_id") or "").strip()
+    if not provider_config or provider_config not in provider_names or not recipe_id:
         return None
-    recipe_id = str(recipe.get("id") or "").strip()
     if not recipe_id or recipe_id not in recipes_by_id:
         return None
+    recipe = recipes_by_id[recipe_id]
     if not _recipe_matches_provider(recipe, provider_config):
         return None
+    recipe_snapshot = normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe, provider_name=provider_config)
 
     return {
         "create_mode": "new",
         "provider_config": provider_config,
-        "recipe": recipe,
+        "recipe": recipe_snapshot,
         "lease_id": None,
         "model": config.get("model"),
         "workspace": config.get("workspace"),
@@ -171,10 +180,15 @@ def _derive_default_config(
         (item for item in recipes if item.get("available", True) and _recipe_matches_provider(item, provider_config)),
         None,
     )
+    recipe_snapshot = (
+        normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe, provider_name=provider_config)
+        if recipe is not None
+        else None
+    )
     return {
         "create_mode": "new",
         "provider_config": provider_config,
-        "recipe": recipe,
+        "recipe": recipe_snapshot,
         "lease_id": None,
         "model": None,
         "workspace": None,
