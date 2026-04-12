@@ -164,6 +164,8 @@ class AuthService:
         user = self._users.get_by_id(auth_user_id)
         if user is None:
             raise ValueError("账号数据异常，请联系支持")
+        if self._recipe_repo is not None:
+            self._seed_default_recipes(auth_user_id)
 
         # Load entities + agents
         owned_agents = self._users.list_by_owner_user_id(auth_user_id)
