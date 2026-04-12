@@ -1536,7 +1536,7 @@ class TestToolRunnerErrorNormalization:
             name="Write",
             mode=ToolMode.INLINE,
             schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
-            handler=lambda: "sync-only fallback",
+            handler=lambda: "sync-only result",
             source="test",
         )
         runner = _make_runner([entry])
