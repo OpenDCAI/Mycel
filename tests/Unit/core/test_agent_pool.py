@@ -484,7 +484,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_passes_repo_backed_memory_config_to_runtime(
+async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ):
     captured: dict[str, object] = {}
@@ -512,7 +512,7 @@ async def test_get_or_create_agent_passes_repo_backed_memory_config_to_runtime(
     class _AgentConfigRepo:
         def get_config(self, agent_config_id: str):
             assert agent_config_id == "cfg-12"
-            return {"memory": {"compaction": {"trigger_tokens": 80000}}}
+            return {"compact": {"trigger_tokens": 80000}}
 
     app = SimpleNamespace(
         state=SimpleNamespace(

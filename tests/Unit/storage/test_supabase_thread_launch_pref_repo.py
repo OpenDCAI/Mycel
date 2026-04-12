@@ -7,6 +7,7 @@ class _FakeTable:
         self.upsert_payload = None
         self.upsert_conflict = None
         self.mode = "select"
+        self.delete_returns_data = True
         self.rows = [
             {
                 "owner_user_id": "owner-1",
@@ -37,6 +38,8 @@ class _FakeTable:
 
     def execute(self):
         if self.mode == "delete":
+            if not self.delete_returns_data:
+                return type("Resp", (), {"data": None})()
             return type("Resp", (), {"data": list(self.rows)})()
         return type("Resp", (), {"data": self.rows})()
 
@@ -82,3 +85,14 @@ def test_supabase_thread_launch_pref_repo_delete_filters_on_agent_user_id() -> N
     assert deleted == 1
     assert ("agent_user_id", "agent-1") in client.table_obj.eq_calls
     assert ("member_id", "agent-1") not in client.table_obj.eq_calls
+
+
+def test_supabase_thread_launch_pref_repo_delete_accepts_no_representation_response() -> None:
+    client = _FakeClient()
+    client.table_obj.delete_returns_data = False
+    repo = SupabaseThreadLaunchPrefRepo(client)
+
+    deleted = repo.delete_by_agent_user_id("agent-1")
+
+    assert deleted == 0
+    assert ("agent_user_id", "agent-1") in client.table_obj.eq_calls

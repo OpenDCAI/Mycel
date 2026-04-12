@@ -181,12 +181,14 @@ async def delete_agent(
         await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     thread_launch_pref_repo = getattr(request.app.state, "thread_launch_pref_repo", None)
+    contact_repo = getattr(request.app.state, "contact_repo", None)
     ok = await asyncio.to_thread(
         agent_user_service.delete_agent_user,
         agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
         thread_launch_pref_repo=thread_launch_pref_repo,
+        contact_repo=contact_repo,
     )
     if not ok:
         raise HTTPException(404, "Agent not found")

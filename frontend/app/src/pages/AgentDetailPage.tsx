@@ -157,13 +157,13 @@ export default function AgentDetail() {
             prompt={agent.config.prompt || ""}
             tools={agent.config.tools}
             rules={agent.config.rules}
-            memory={agent.config.memory}
+            compact={agent.config.compact}
             onSavePrompt={async (val) => {
               await updateAgentConfig(agent.id, { prompt: val });
               toast.success("System Prompt 已保存");
             }}
-            onSaveMemory={async (triggerTokens) => {
-              await updateAgentConfig(agent.id, { memory: { compaction: { trigger_tokens: triggerTokens } } });
+            onSaveCompact={async (triggerTokens) => {
+              await updateAgentConfig(agent.id, { compact: { trigger_tokens: triggerTokens } });
               toast.success("压缩设置已保存");
             }}
             onToggleTool={(name, en) => handleToggle("tools", name, en)}
@@ -299,13 +299,13 @@ export default function AgentDetail() {
 
 // ==================== RolePanel (Prompt + Tools + Rules) ====================
 
-function RolePanel({ prompt, tools, rules, memory, onSavePrompt, onSaveMemory, onToggleTool, onSaveRule, onAddRule, onDeleteRule }: {
+function RolePanel({ prompt, tools, rules, compact, onSavePrompt, onSaveCompact, onToggleTool, onSaveRule, onAddRule, onDeleteRule }: {
   prompt: string;
   tools: CrudItem[];
   rules: RuleItem[];
-  memory?: AgentConfig["memory"];
+  compact?: AgentConfig["compact"];
   onSavePrompt: (v: string) => Promise<void>;
-  onSaveMemory: (triggerTokens: number | null) => Promise<void>;
+  onSaveCompact: (triggerTokens: number | null) => Promise<void>;
   onToggleTool: (name: string, enabled: boolean) => void;
   onSaveRule: (name: string, content: string) => Promise<void>;
   onAddRule: (name: string) => Promise<void>;
@@ -316,9 +316,9 @@ function RolePanel({ prompt, tools, rules, memory, onSavePrompt, onSaveMemory, o
   const [toolFilter, setToolFilter] = useState("");
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [addRuleName, setAddRuleName] = useState("");
-  const triggerTokens = memory?.compaction?.trigger_tokens ?? null;
+  const triggerTokens = compact?.trigger_tokens ?? null;
   const [triggerDraft, setTriggerDraft] = useState(triggerTokens?.toString() ?? "");
-  const [savingMemory, setSavingMemory] = useState(false);
+  const [savingCompact, setSavingCompact] = useState(false);
 
   const promptDirty = promptText !== prompt;
   useEffect(() => { setPromptText(prompt); }, [prompt]);
@@ -331,12 +331,12 @@ function RolePanel({ prompt, tools, rules, memory, onSavePrompt, onSaveMemory, o
 
   const parsedTrigger = triggerDraft.trim() ? Number(triggerDraft) : null;
   const triggerValid = parsedTrigger === null || (Number.isInteger(parsedTrigger) && parsedTrigger > 0);
-  const memoryDirty = (parsedTrigger ?? null) !== triggerTokens;
+  const compactDirty = (parsedTrigger ?? null) !== triggerTokens;
 
-  const saveMemory = async () => {
+  const saveCompact = async () => {
     if (!triggerValid) return;
-    setSavingMemory(true);
-    try { await onSaveMemory(parsedTrigger); } finally { setSavingMemory(false); }
+    setSavingCompact(true);
+    try { await onSaveCompact(parsedTrigger); } finally { setSavingCompact(false); }
   };
 
   const toolGroups = useMemo(() => {
@@ -383,16 +383,16 @@ function RolePanel({ prompt, tools, rules, memory, onSavePrompt, onSaveMemory, o
           <FileText className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-medium">上下文压缩</h3>
           <div className="flex-1" />
-          <Button size="sm" className="h-7" disabled={!memoryDirty || !triggerValid || savingMemory} onClick={saveMemory}>
-            <Save className="h-3.5 w-3.5 mr-1" /> {savingMemory ? "..." : "保存压缩设置"}
+          <Button size="sm" className="h-7" disabled={!compactDirty || !triggerValid || savingCompact} onClick={saveCompact}>
+            <Save className="h-3.5 w-3.5 mr-1" /> {savingCompact ? "..." : "保存压缩设置"}
           </Button>
         </div>
         <div className="rounded-md border bg-card px-3 py-3">
-          <label htmlFor="memory-compaction-trigger" className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="compact-trigger" className="text-xs font-medium text-muted-foreground">
             压缩触发 Token
           </label>
           <Input
-            id="memory-compaction-trigger"
+            id="compact-trigger"
             className="mt-2 max-w-xs"
             type="number"
             min={1}

@@ -36,10 +36,8 @@ export interface AgentConfig {
   mcps: McpItem[];
   skills: CrudItem[];
   subAgents: SubAgent[];
-  memory?: {
-    compaction?: {
-      trigger_tokens?: number | null;
-    };
+  compact?: {
+    trigger_tokens?: number | null;
   };
 }
 
