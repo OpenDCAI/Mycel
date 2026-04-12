@@ -1028,7 +1028,7 @@ class AgentService:
                     if asyncio.iscoroutine(emission):
                         await emission
                 except Exception:
-                    pass
+                    logger.exception("Failed to emit background agent task_error event for task %s", task_id)
             if run_in_background and self._queue_manager and parent_thread_id:
                 label = description or agent_name
                 notification = format_background_notification(
@@ -1062,7 +1062,7 @@ class AgentService:
                         # shared lease mid-owner-turn.
                         agent.close(cleanup_sandbox=False)
                 except Exception:
-                    pass
+                    logger.exception("Failed to clean up child agent after task %s", task_id)
 
     @staticmethod
     def _merge_child_bootstrap_accumulators(

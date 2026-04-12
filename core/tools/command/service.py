@@ -241,7 +241,7 @@ class CommandService:
                 if asyncio.iscoroutine(emission):
                     await emission
             except Exception:
-                pass
+                logger.exception("Failed to emit background command task_error event for task %s", task_id)
 
         if self._queue_manager:
             from core.runtime.middleware.queue.formatters import format_command_notification
