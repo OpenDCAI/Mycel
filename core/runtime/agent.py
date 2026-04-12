@@ -698,7 +698,7 @@ class LeonAgent:
         raise TypeError(f"sandbox must be Sandbox, str, or None, got {type(sandbox)}")
 
     def _resolve_provider_name(self, model_name: str, overrides: dict | None = None) -> str | None:
-        """Resolve provider: overrides → custom_providers → infer from model name → env fallback."""
+        """Resolve provider: overrides → active config → infer from model name → configured default."""
         if overrides and overrides.get("model_provider"):
             return overrides["model_provider"]
         if self.models_config.active and self.models_config.active.provider:
