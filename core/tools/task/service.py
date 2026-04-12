@@ -1,4 +1,4 @@
-"""TaskService - SQLite-backed task management tools.
+"""TaskService - repository-backed task management tools.
 
 Provides TaskCreate/TaskGet/TaskList/TaskUpdate as DEFERRED tools.
 Tasks are partitioned by thread_id so all agents in the same thread share

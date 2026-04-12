@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class SupabaseChatMemberRepo:
-    """chat_members table — replaces SQLiteChatParticipantRepo for Supabase backend."""
+    """chat_members table for Supabase messaging."""
 
     def __init__(self, client: Any) -> None:
         self._client = client

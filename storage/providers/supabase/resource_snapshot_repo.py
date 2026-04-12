@@ -1,4 +1,4 @@
-"""Supabase resource snapshot repo (module-level functions, mirrors SQLite interface)."""
+"""Supabase resource snapshot repo."""
 
 from __future__ import annotations
 
