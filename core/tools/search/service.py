@@ -1,21 +1,18 @@
 """Search Service - registers Grep and Glob tools with ToolRegistry.
 
 Tools:
-- Grep: Content search using regex (ripgrep preferred, Python fallback)
+- Grep: Content search using regex (ripgrep when available, Python implementation otherwise)
 - Glob: File pattern matching sorted by modification time
 """
 
 from __future__ import annotations
 
-import logging
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_EXCLUDES: list[str] = [
     "node_modules",
@@ -217,24 +214,21 @@ class SearchService:
             return f"Path not found: {path or self.workspace_root}"
 
         if self.has_ripgrep:
-            try:
-                return self._ripgrep_search(
-                    resolved,
-                    pattern,
-                    glob=glob,
-                    type_filter=type,
-                    case_insensitive=case_insensitive,
-                    after_context=after_context,
-                    before_context=before_context,
-                    context=context,
-                    output_mode=output_mode,
-                    head_limit=head_limit,
-                    offset=offset,
-                    multiline=multiline,
-                    line_numbers=line_numbers,
-                )
-            except Exception:
-                logger.warning("ripgrep search failed; using Python search", exc_info=True)
+            return self._ripgrep_search(
+                resolved,
+                pattern,
+                glob=glob,
+                type_filter=type,
+                case_insensitive=case_insensitive,
+                after_context=after_context,
+                before_context=before_context,
+                context=context,
+                output_mode=output_mode,
+                head_limit=head_limit,
+                offset=offset,
+                multiline=multiline,
+                line_numbers=line_numbers,
+            )
 
         return self._python_grep(
             resolved,
