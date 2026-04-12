@@ -561,7 +561,7 @@ class LSPService:
         try:
             return str(Path(file_path).relative_to(self._workspace_root))
         except ValueError:
-            return file_path  # fallback: pass as-is
+            return file_path
 
     # ── pre-flight checks ─────────────────────────────────────────────
 
