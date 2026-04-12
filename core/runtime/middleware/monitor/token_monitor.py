@@ -31,7 +31,6 @@ class TokenMonitor(BaseMonitor):
 
     def on_request(self, request: dict[str, Any]) -> None:
         """请求前：无操作（call_count 在 on_response 中计数）"""
-        pass
 
     def on_response(self, request: dict[str, Any], response: dict[str, Any]) -> None:
         """响应后：从 usage_metadata 提取 token 统计，回退到 response_metadata"""
