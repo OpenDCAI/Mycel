@@ -40,7 +40,7 @@ def build_new_launch_config(
         {
             "create_mode": "new",
             "provider_config": provider_config,
-            "recipe": normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe),
+            "recipe": normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe, provider_name=provider_config),
             "lease_id": None,
             "model": model,
             "workspace": workspace,
@@ -115,11 +115,10 @@ def _validate_saved_config(
     recipe = config.get("recipe")
     if not provider_config or provider_config not in provider_names or not isinstance(recipe, dict):
         return None
-    provider_type = provider_type_from_name(provider_config)
     recipe_id = str(recipe.get("id") or "").strip()
     if not recipe_id or recipe_id not in recipes_by_id:
         return None
-    if str(recipe.get("provider_type") or "") != provider_type:
+    if not _recipe_matches_provider(recipe, provider_config):
         return None
 
     return {
@@ -168,9 +167,8 @@ def _derive_default_config(
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
-    provider_type = provider_type_from_name(provider_config)
     recipe = next(
-        (item for item in recipes if item.get("available", True) and str(item.get("provider_type") or "") == provider_type),
+        (item for item in recipes if item.get("available", True) and _recipe_matches_provider(item, provider_config)),
         None,
     )
     return {
@@ -181,3 +179,11 @@ def _derive_default_config(
         "model": None,
         "workspace": None,
     }
+
+
+def _recipe_matches_provider(recipe: dict[str, Any], provider_config: str) -> bool:
+    provider_name = str(recipe.get("provider_name") or "").strip()
+    if provider_name:
+        return provider_name == provider_config
+    provider_type = provider_type_from_name(provider_config)
+    return str(recipe.get("provider_type") or "") == provider_type

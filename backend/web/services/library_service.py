@@ -9,7 +9,7 @@ from typing import Any
 
 from backend.web.core.paths import library_dir
 from backend.web.services import sandbox_service
-from sandbox.recipes import FEATURE_CATALOG, normalize_recipe_snapshot
+from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
 
 LIBRARY_DIR = library_dir()
@@ -41,34 +41,18 @@ def _normalize_recipe_item(data: dict[str, Any], *, builtin: bool) -> dict[str, 
     provider_type = str(data.get("provider_type") or "").strip()
     if not provider_type:
         raise ValueError("recipe.provider_type is required")
-    snapshot = normalize_recipe_snapshot(provider_type, data)
+    provider_name = str(data.get("provider_name") or data.get("id", "").split(":")[0] or provider_type).strip()
+    snapshot = normalize_recipe_snapshot(provider_type, {**data, "provider_name": provider_name})
     return {
         **snapshot,
         "type": "recipe",
+        "provider_name": provider_name,
         "provider_type": provider_type,
         "created_at": int(data.get("created_at") or 0),
         "updated_at": int(data.get("updated_at") or 0),
         "available": True,
         "builtin": builtin,
     }
-
-
-def _merge_recipe_override(base: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
-    if not override:
-        return base
-    return _normalize_recipe_item(
-        {
-            **base,
-            **override,
-            "features": {
-                **(base.get("features") or {}),
-                **(override.get("features") or {}),
-            },
-            "created_at": base.get("created_at", 0),
-            "updated_at": override.get("updated_at", base.get("updated_at", 0)),
-        },
-        builtin=True,
-    )
 
 
 def _require_recipe_repo(recipe_repo: RecipeRepo | None) -> RecipeRepo:
@@ -120,22 +104,10 @@ def list_library(
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        stored_rows = {row["recipe_id"]: row for row in recipe_repo.list_by_owner(owner_user_id)}
-        items = []
-        builtin_ids: set[str] = set()
-        for recipe in list_default_recipes():
-            builtin_ids.add(str(recipe["id"]))
-            override_row = stored_rows.get(str(recipe["id"]))
-            override = override_row["data"] if override_row and override_row["kind"] == "override" else None
-            items.append(_merge_recipe_override(recipe, override))
-        for row in stored_rows.values():
-            if row["kind"] != "custom":
-                continue
-            recipe_id = str(row["recipe_id"]).strip()
-            if not recipe_id or recipe_id in builtin_ids:
-                continue
-            items.append(_normalize_recipe_item(row["data"], builtin=False))
-        return items
+        return [
+            _normalize_recipe_item(row["data"], builtin=bool(row["data"].get("builtin")))
+            for row in sorted(recipe_repo.list_by_owner(owner_user_id), key=lambda item: str(item["recipe_id"]))
+        ]
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():
@@ -156,8 +128,58 @@ def list_library(
     return results
 
 
-def list_default_recipes() -> list[dict[str, Any]]:
-    return sandbox_service.list_default_recipes()
+def seed_default_recipes(
+    owner_user_id: str,
+    *,
+    recipe_repo: RecipeRepo | None = None,
+    sandbox_types: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    owner_user_id = _require_recipe_owner(owner_user_id)
+    recipe_repo = _require_recipe_repo(recipe_repo)
+    now = int(time.time() * 1000)
+    items: list[dict[str, Any]] = []
+    source_sandboxes = sandbox_types if sandbox_types is not None else sandbox_service.available_sandbox_types()
+    for sandbox in source_sandboxes:
+        provider_name = str(sandbox.get("name") or "").strip()
+        if not provider_name:
+            continue
+        provider_type = str(sandbox.get("provider") or provider_type_from_name(provider_name)).strip()
+        recipe = {
+            **default_recipe_snapshot(provider_type, provider_name=provider_name),
+            "type": "recipe",
+            "provider_name": provider_name,
+            "provider_type": provider_type,
+            "available": bool(sandbox.get("available", True)),
+            "created_at": now,
+            "updated_at": now,
+        }
+        existing = recipe_repo.get(owner_user_id, str(recipe["id"]))
+        if existing is None or _recipe_row_needs_repair(existing, provider_name=provider_name, provider_type=provider_type):
+            recipe_repo.upsert(
+                owner_user_id=owner_user_id,
+                recipe_id=str(recipe["id"]),
+                kind="custom",
+                provider_type=provider_type,
+                data=recipe,
+                created_at=now,
+            )
+        row = recipe_repo.get(owner_user_id, str(recipe["id"]))
+        if row is None:
+            raise RuntimeError(f"failed to seed recipe {recipe['id']}")
+        items.append(_normalize_recipe_item(row["data"], builtin=bool(row["data"].get("builtin"))))
+    return items
+
+
+def _recipe_row_needs_repair(row: dict[str, Any], *, provider_name: str, provider_type: str) -> bool:
+    data = row.get("data")
+    if not isinstance(data, dict):
+        return True
+    return (
+        data.get("id") != f"{provider_name}:default"
+        or data.get("provider_name") != provider_name
+        or data.get("provider_type") != provider_type
+        or not isinstance(data.get("features"), dict)
+    )
 
 
 def create_resource(
@@ -241,31 +263,16 @@ def update_resource(
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
-        if base is not None:
-            row = recipe_repo.get(owner_user_id, resource_id)
-            override = row["data"] if row and row["kind"] == "override" else {}
-            override.update(updates)
-            override["updated_at"] = now
-            recipe_repo.upsert(
-                owner_user_id=owner_user_id,
-                recipe_id=resource_id,
-                kind="override",
-                provider_type=str(base["provider_type"]),
-                data=override,
-                created_at=int(base.get("created_at", now)),
-            )
-            return _merge_recipe_override(base, override)
         row = recipe_repo.get(owner_user_id, resource_id)
-        if row is None or row["kind"] != "custom":
+        if row is None:
             return None
-        current = row["data"]
+        current = dict(row["data"])
         current.update(updates)
         current["updated_at"] = now
         recipe_repo.upsert(
             owner_user_id=owner_user_id,
             recipe_id=resource_id,
-            kind="custom",
+            kind=str(row["kind"]),
             provider_type=str(current["provider_type"]),
             data=current,
             created_at=int(row["created_at"]),
@@ -302,13 +309,32 @@ def delete_resource(
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
-        if base is not None:
-            recipe_repo.delete(owner_user_id, resource_id)
-            return True
         row = recipe_repo.get(owner_user_id, resource_id)
-        if row is None or row["kind"] != "custom":
+        if row is None:
             return False
+        data = row["data"]
+        if data.get("builtin"):
+            provider_name = str(data.get("provider_name") or resource_id.split(":")[0]).strip()
+            provider_type = str(data.get("provider_type") or provider_type_from_name(provider_name)).strip()
+            now = int(time.time() * 1000)
+            reset = {
+                **default_recipe_snapshot(provider_type, provider_name=provider_name),
+                "type": "recipe",
+                "provider_name": provider_name,
+                "provider_type": provider_type,
+                "available": bool(data.get("available", True)),
+                "created_at": int(row["created_at"]),
+                "updated_at": now,
+            }
+            recipe_repo.upsert(
+                owner_user_id=owner_user_id,
+                recipe_id=resource_id,
+                kind=str(row["kind"]),
+                provider_type=provider_type,
+                data=reset,
+                created_at=int(row["created_at"]),
+            )
+            return True
         recipe_repo.delete(owner_user_id, resource_id)
         return True
     if resource_type == "skill":

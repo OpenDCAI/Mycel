@@ -77,6 +77,7 @@ async def lifespan(app: FastAPI):
         supabase_auth_client_factory=create_supabase_auth_client,
         invite_codes=app.state.invite_code_repo,
         contact_repo=app.state.contact_repo,
+        recipe_repo=app.state.recipe_repo,
     )
 
     from backend.web.services.chat_events import ChatEventBus

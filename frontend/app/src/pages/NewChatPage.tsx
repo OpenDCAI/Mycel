@@ -263,6 +263,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
           id: item.id,
           name: item.name,
           desc: item.desc,
+          provider_name: item.provider_name,
           provider_type: item.provider_type as string,
           features: (item as { features?: Record<string, boolean> }).features ?? {},
           configurable_features: (item as { configurable_features?: Record<string, boolean> }).configurable_features ?? {},

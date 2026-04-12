@@ -541,7 +541,7 @@ def _create_thread_sandbox_resources(
     lease_repo = make_lease_repo(db_path=sandbox_db)
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-        normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe)
+        normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
         lease_repo.create(
             lease_id,
             sandbox_type,

@@ -52,9 +52,11 @@ def _lease_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) ->
 def _apply_lease_recipe(lease: dict[str, Any], provider_name: str, raw_recipe: Any) -> None:
     provider_type = provider_type_from_name(provider_name)
     recipe_snapshot = (
-        normalize_recipe_snapshot(provider_type, json.loads(str(raw_recipe))) if raw_recipe else normalize_recipe_snapshot(provider_type)
+        normalize_recipe_snapshot(provider_type, json.loads(str(raw_recipe)), provider_name=provider_name)
+        if raw_recipe
+        else normalize_recipe_snapshot(provider_type, provider_name=provider_name)
     )
-    lease["recipe_id"] = recipe_snapshot["id"] or lease.get("recipe_id") or default_recipe_id(provider_type)
+    lease["recipe_id"] = recipe_snapshot["id"] or lease.get("recipe_id") or default_recipe_id(provider_name)
     lease["recipe"] = recipe_snapshot
     lease["recipe_name"] = recipe_snapshot["name"]
 
