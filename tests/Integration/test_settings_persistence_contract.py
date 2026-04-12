@@ -204,6 +204,7 @@ def test_update_provider_platform_source_removes_stored_user_key():
 def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     app = _settings_test_app(_FakeSettingsRepo())
     app.state.thread_repo = object()
+    app.state._supabase_client = object()
     seen: dict[str, object] = {}
 
     def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
@@ -249,38 +250,6 @@ def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
         "period": "weekly",
         "unit": "tokens",
     }
-    assert seen == {
-        "user_id": "user-1",
-        "kwargs": {"thread_repo": app.state.thread_repo},
-    }
-
-
-def test_account_resources_route_uses_provider_counts_without_full_lease_projection(monkeypatch):
-    app = _settings_test_app(_FakeSettingsRepo())
-    app.state.thread_repo = object()
-    app.state._supabase_client = object()
-    seen: dict[str, object] = {}
-
-    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
-        seen["user_id"] = user_id
-        seen["kwargs"] = kwargs
-        return {"local": 1, "daytona_selfhost": 2, "e2b": 1}
-
-    monkeypatch.setattr(
-        settings_router.account_resource_service.sandbox_service,
-        "count_user_visible_leases_by_provider",
-        _fake_count_user_visible_leases_by_provider,
-        raising=False,
-    )
-
-    with TestClient(app) as client:
-        response = client.get("/api/settings/account-resources")
-
-    assert response.status_code == 200
-    items = {item["provider_name"]: item for item in response.json()["items"]}
-    assert items["local"]["used"] == 1
-    assert items["daytona_selfhost"]["used"] == 2
-    assert items["e2b"]["used"] == 1
     assert seen == {
         "user_id": "user-1",
         "kwargs": {"thread_repo": app.state.thread_repo, "supabase_client": app.state._supabase_client},

@@ -71,6 +71,7 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
             "runtime": {"tools:search": {"enabled": True}},
             "mcp": {"demo": {"command": "npx"}},
             "meta": {"source": {"marketplace_item_id": "item-1"}},
+            "compact": {"trigger_tokens": 1000},
         },
     )
 
@@ -81,34 +82,15 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
     assert payload["tools_json"] == ["search"]
     assert payload["runtime_json"] == {"tools:search": {"enabled": True}}
     assert payload["mcp_json"] == {"demo": {"command": "npx"}}
-    assert payload["meta_json"] == {"source": {"marketplace_item_id": "item-1"}}
+    assert payload["meta_json"] == {
+        "source": {"marketplace_item_id": "item-1"},
+        "compact": {"trigger_tokens": 1000},
+    }
     assert "tools" not in payload
     assert "runtime" not in payload
     assert "mcp" not in payload
     assert "meta" not in payload
-
-
-def test_supabase_agent_config_repo_stores_compact_config_in_meta_json() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-
-    repo.save_config(
-        "cfg-1",
-        {
-            "agent_user_id": "user-agent-1",
-            "name": "Toad",
-            "meta": {"source": "panel"},
-            "compact": {"trigger_tokens": 1000},
-        },
-    )
-
-    payload = client.tables["agent_configs"].upsert_payload
-    assert payload is not None
     assert "compact" not in payload
-    assert payload["meta_json"] == {
-        "source": "panel",
-        "compact": {"trigger_tokens": 1000},
-    }
 
 
 def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None:
@@ -122,7 +104,10 @@ def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None
             "tools_json": ["search"],
             "runtime_json": {"tools:search": {"enabled": True}},
             "mcp_json": {"demo": {"command": "npx"}},
-            "meta_json": {"source": {"marketplace_item_id": "item-1"}},
+            "meta_json": {
+                "source": {"marketplace_item_id": "item-1"},
+                "compact": {"trigger_tokens": 1000},
+            },
         }
     ]
     repo = SupabaseAgentConfigRepo(client)
@@ -134,29 +119,7 @@ def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None
     assert row["runtime"] == {"tools:search": {"enabled": True}}
     assert row["mcp"] == {"demo": {"command": "npx"}}
     assert row["meta"] == {"source": {"marketplace_item_id": "item-1"}}
-
-
-def test_supabase_agent_config_repo_reads_compact_config_from_meta_json() -> None:
-    client = _FakeClient()
-    client.tables["agent_configs"] = _FakeTable()
-    client.tables["agent_configs"].rows = [
-        {
-            "id": "cfg-1",
-            "agent_user_id": "user-agent-1",
-            "name": "Toad",
-            "meta_json": {
-                "source": "panel",
-                "compact": {"trigger_tokens": 1000},
-            },
-        }
-    ]
-    repo = SupabaseAgentConfigRepo(client)
-
-    row = repo.get_config("cfg-1")
-
-    assert row is not None
     assert row["compact"] == {"trigger_tokens": 1000}
-    assert row["meta"] == {"source": "panel"}
 
 
 def test_supabase_agent_config_repo_save_skill_conflicts_on_agent_config_id_and_name() -> None:
