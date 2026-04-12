@@ -49,6 +49,26 @@ class ModelsLoader:
 
         return ModelsConfig(**merged)
 
+    def load_with_user_config(
+        self,
+        user_config: dict[str, Any] | None,
+        cli_overrides: dict[str, Any] | None = None,
+    ) -> ModelsConfig:
+        """Load system + explicit user config + project config.
+
+        Web runtime supplies repo-backed user config explicitly. It must not
+        read the local operator's home directory as a silent user-settings layer.
+        """
+        system = self._load_json(self._system_dir / "models.json")
+        merged = self._merge(system, user_config or {})
+        merged = self._merge(merged, self._load_project())
+        if cli_overrides:
+            merged = self._merge(merged, cli_overrides)
+        merged = self._expand_env_vars(merged)
+        merged["catalog"] = system.get("catalog", [])
+        merged["virtual_models"] = system.get("virtual_models", [])
+        return ModelsConfig(**merged)
+
     def _load_project(self) -> dict[str, Any]:
         if not self.workspace_root:
             return {}

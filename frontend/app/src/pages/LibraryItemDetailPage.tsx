@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Zap, Users, RefreshCw } from "lucide-react";
+import RecipeEditor from "@/components/RecipeEditor";
 import { useAppStore } from "@/store/app-store";
 import type { ResourceItem } from "@/store/types";
 
@@ -9,7 +10,7 @@ export default function LibraryItemDetailPage() {
   const navigate = useNavigate();
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
-  const fetchLibrary = useAppStore((s) => s.fetchLibrary);
+  const libraryRecipes = useAppStore((s) => s.libraryRecipes);
   const fetchResourceContent = useAppStore((s) => s.fetchResourceContent);
 
   const contentKey = type && id ? `${type}:${id}` : "";
@@ -19,19 +20,14 @@ export default function LibraryItemDetailPage() {
     error: null,
   });
 
-  useEffect(() => {
-    if (!type || !id) return;
-    fetchLibrary(type === "skill" ? "skill" : "agent");
-  }, [type, id, fetchLibrary]);
-
   const item = useMemo<ResourceItem | null>(() => {
     if (!type || !id) return null;
-    const list = type === "skill" ? librarySkills : libraryAgents;
+    const list = type === "skill" ? librarySkills : type === "agent" ? libraryAgents : type === "recipe" ? libraryRecipes : [];
     return list.find((i) => i.id === id) ?? null;
-  }, [librarySkills, libraryAgents, type, id]);
+  }, [librarySkills, libraryAgents, libraryRecipes, type, id]);
 
   useEffect(() => {
-    if (!type || !id) return;
+    if (!type || !id || type === "recipe") return;
     const key = `${type}:${id}`;
     let cancelled = false;
     fetchResourceContent(type, id)
@@ -55,8 +51,9 @@ export default function LibraryItemDetailPage() {
   }, [type, id, fetchResourceContent]);
 
   const isSkill = type === "skill";
+  const isRecipe = type === "recipe";
   const filename = isSkill ? "SKILL.md" : "agent.md";
-  const loading = !!contentKey && contentState.key !== contentKey;
+  const loading = !isRecipe && !!contentKey && contentState.key !== contentKey;
   const content = contentState.key === contentKey ? contentState.content : "";
   const error = contentState.key === contentKey ? contentState.error : null;
 
@@ -80,28 +77,31 @@ export default function LibraryItemDetailPage() {
           返回
         </button>
 
-        {/* Header */}
-        <div className="flex items-start gap-4 mb-6">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-warning/10">
-                {isSkill
-                  ? <Zap className="w-4 h-4 text-warning" />
-                  : <Users className="w-4 h-4 text-info" />}
+        {!isRecipe && (
+          <div className="flex items-start gap-4 mb-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-warning/10">
+                  {isSkill
+                    ? <Zap className="w-4 h-4 text-warning" />
+                    : <Users className="w-4 h-4 text-info" />}
+                </div>
+                <h1 className="text-xl font-semibold text-foreground">{item?.name ?? id}</h1>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                  {type}
+                </span>
               </div>
-              <h1 className="text-xl font-semibold text-foreground">{item?.name ?? id}</h1>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
-                {type}
-              </span>
+              {item?.desc && (
+                <p className="text-sm text-muted-foreground mt-2">{item.desc}</p>
+              )}
             </div>
-            {item?.desc && (
-              <p className="text-sm text-muted-foreground mt-2">{item.desc}</p>
-            )}
           </div>
-        </div>
+        )}
 
-        {/* File content */}
-        <div className="surface-card p-4">
+        {isRecipe && item ? (
+          <RecipeEditor item={item} onDeleted={() => navigate("/marketplace?tab=installed&sub=recipe")} />
+        ) : (
+          <div className="surface-card p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-xs font-mono text-muted-foreground px-2 py-0.5 rounded bg-muted">
               {filename}
@@ -120,7 +120,8 @@ export default function LibraryItemDetailPage() {
           ) : (
             <p className="text-sm text-muted-foreground text-center py-6">暂无内容</p>
           )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

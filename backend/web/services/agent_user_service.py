@@ -150,6 +150,25 @@ def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
     }
 
 
+def _agent_user_summary_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
+    if user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
+    config = agent_config_repo.get_config(user.agent_config_id)
+    if config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {user.id}")
+    return {
+        "id": user.id,
+        "name": config.get("name") or user.display_name,
+        "description": config.get("description", ""),
+        "model": config.get("model"),
+        "status": config.get("status", "draft"),
+        "version": config.get("version", "0.1.0"),
+        "avatar_url": avatar_url(user.id, bool(user.avatar)),
+        "created_at": config.get("created_at", 0),
+        "updated_at": config.get("updated_at", 0),
+    }
+
+
 # ── Leon builtin ──
 
 
@@ -217,6 +236,19 @@ def list_agent_users(owner_user_id: str | None = None, user_repo: Any = None, ag
     return [_leon_builtin()]
 
 
+def list_agent_user_summaries(
+    owner_user_id: str | None = None,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+) -> list[dict[str, Any]]:
+    if owner_user_id:
+        if user_repo is None or agent_config_repo is None:
+            raise RuntimeError("user_repo and agent_config_repo are required when owner_user_id is provided")
+        agents = user_repo.list_by_owner_user_id(owner_user_id)
+        return [_agent_user_summary_from_repos(agent, agent_config_repo) for agent in agents]
+    return [_leon_builtin()]
+
+
 def get_agent_user(agent_user_id: str, *, user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
     if agent_user_id == "__leon__":
         return _leon_builtin()
@@ -234,7 +266,9 @@ def create_agent_user(
     owner_user_id: str | None = None,
     user_repo: Any = None,
     agent_config_repo: Any = None,
+    contact_repo: Any = None,
 ) -> dict[str, Any]:
+    from backend.web.services.contact_bootstrap_service import ensure_owner_agent_contact
     from storage.contracts import UserRow, UserType
     from storage.utils import generate_agent_config_id, generate_agent_user_id
 
@@ -276,6 +310,8 @@ def create_agent_user(
     created = get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if created is None:
         raise RuntimeError(f"Created agent user {agent_user_id} was not readable")
+    if owner_user_id:
+        ensure_owner_agent_contact(contact_repo, owner_user_id, agent_user_id, now=now)
     return created
 
 

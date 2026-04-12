@@ -34,6 +34,7 @@ def create_agent_sync(
     chat_repos: dict | None = None,
     extra_allowed_paths: list[str] | None = None,
     web_app: Any = None,
+    models_config_override: dict[str, Any] | None = None,
 ) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container()
@@ -52,6 +53,7 @@ def create_agent_sync(
         queue_manager=queue_manager,
         chat_repos=chat_repos,
         web_app=web_app,
+        models_config_override=models_config_override,
         verbose=True,
         agent=agent,
         bundle_dir=bundle_dir,
@@ -116,12 +118,16 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # Look up model for this thread (thread override → repo-backed user settings)
         model_name = thread_data.get("model") if thread_data else None
-        if not model_name:
-            user_settings_repo = getattr(app_obj.state, "user_settings_repo", None)
-            owner_user_id = getattr(agent_user, "owner_user_id", None) if agent_user is not None else None
-            if user_settings_repo is not None and owner_user_id is not None:
-                settings_row = user_settings_repo.get(owner_user_id) or {}
+        models_config_override = None
+        user_settings_repo = getattr(app_obj.state, "user_settings_repo", None)
+        owner_user_id = getattr(agent_user, "owner_user_id", None) if agent_user is not None else None
+        if user_settings_repo is not None and owner_user_id is not None:
+            settings_row = user_settings_repo.get(owner_user_id) or {}
+            if not model_name:
                 model_name = settings_row.get("default_model")
+            get_models_config = getattr(user_settings_repo, "get_models_config", None)
+            if get_models_config is not None:
+                models_config_override = get_models_config(owner_user_id)
 
         # @@@agent-vs-agent-user - thread_config.agent stores an agent user id (e.g. "__leon__") for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
@@ -189,6 +195,8 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             "extra_allowed_paths": extra_allowed_paths_or_none,
             "web_app": app_obj,
         }
+        if models_config_override is not None:
+            create_kwargs["models_config_override"] = models_config_override
         if agent_config_id is not None:
             create_kwargs["agent_config_id"] = agent_config_id
             create_kwargs["agent_config_repo"] = agent_config_repo

@@ -167,6 +167,7 @@ class LeonAgent:
         extra_allowed_paths: list[str] | None = None,
         extra_blocked_tools: set[str] | None = None,
         allowed_tools: set[str] | None = None,
+        models_config_override: dict[str, Any] | None = None,
         permission_resolver_scope: str = "none",
         verbose: bool = False,
     ):
@@ -224,6 +225,7 @@ class LeonAgent:
             block_network_commands=block_network_commands,
             enable_audit_log=enable_audit_log,
             enable_web_tools=enable_web_tools,
+            models_config_override=models_config_override,
         )
         # Load observation config (langfuse / langsmith)
         self._observation_config = ObservationLoader(workspace_root=workspace_root).load()
@@ -243,9 +245,8 @@ class LeonAgent:
 
         # Resolve API key (prefer resolved provider from mapping)
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
-        p = self.models_config.get_provider(provider_name) if provider_name else None
         self._explicit_api_key = api_key is not None
-        self.api_key = api_key or (p.api_key if p else None) or self.models_config.get_api_key()
+        self.api_key = api_key or self.models_config.resolve_api_key(provider_name)
 
         if not self.api_key:
             raise ValueError(
@@ -544,6 +545,7 @@ class LeonAgent:
         block_network_commands: bool | None,
         enable_audit_log: bool | None,
         enable_web_tools: bool | None,
+        models_config_override: dict[str, Any] | None,
     ) -> tuple[LeonSettings, ModelsConfig]:
         """Load configuration using new config system.
 
@@ -587,7 +589,13 @@ class LeonAgent:
         if model_name is not None:
             models_cli["active"] = {"model": model_name}
         models_loader = ModelsLoader(workspace_root=workspace_root)
-        models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
+        if models_config_override is None:
+            models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
+        else:
+            models_config = models_loader.load_with_user_config(
+                models_config_override,
+                cli_overrides=models_cli if models_cli else None,
+            )
 
         # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from the
         # repo-rooted agent_config_id path, not from ~/.leon/members filesystem shells.
@@ -738,7 +746,7 @@ class LeonAgent:
             kwargs["model_provider"] = provider
 
         p = self.models_config.get_provider(provider) if provider else None
-        api_key = (p.api_key if p else None) or self.models_config.get_api_key() or getattr(self, "api_key", None)
+        api_key = self.models_config.resolve_api_key(provider) or getattr(self, "api_key", None)
         if not api_key:
             raise RuntimeError("API key required for WebFetch extraction model")
         kwargs["api_key"] = api_key
@@ -810,7 +818,7 @@ class LeonAgent:
             # @@@api-key-reload — no model change, just refresh credentials from disk
             provider_name = self._resolve_provider_name(self.model_name, self._model_overrides)
             p = self.models_config.get_provider(provider_name) if provider_name else None
-            self.api_key = (p.api_key if p else None) or self.models_config.get_api_key()
+            self.api_key = self.models_config.resolve_api_key(provider_name)
             base_url = (p.base_url if p else None) or self.models_config.get_base_url()
             if base_url:
                 base_url = self._normalize_base_url(base_url, provider_name)
@@ -831,7 +839,7 @@ class LeonAgent:
         # Resolve provider credentials
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
         p = self.models_config.get_provider(provider_name) if provider_name else None
-        self.api_key = (p.api_key if p else None) or self.models_config.get_api_key()
+        self.api_key = self.models_config.resolve_api_key(provider_name)
         base_url = (p.base_url if p else None) or self.models_config.get_base_url()
         if base_url:
             base_url = self._normalize_base_url(base_url, provider_name)

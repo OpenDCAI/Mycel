@@ -10,7 +10,7 @@ from uuid import uuid4
 _LOCK = Lock()
 _OPERATIONS: dict[str, dict[str, Any]] = {}
 _TARGET_INDEX: dict[tuple[str, str], list[str]] = {}
-_ALLOWED_LEASE_CLEANUP_TRIAGE = {"orphan_cleanup"}
+_ALLOWED_LEASE_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
 
 
 def _now_iso() -> str:
@@ -75,6 +75,10 @@ def _has_thread_bindings(threads: list[dict[str, Any]]) -> bool:
     return any(str(item.get("thread_id") or "").strip() for item in threads)
 
 
+def _can_close_stale_active_sessions(*, category: str, sessions: list[dict[str, Any]], threads: list[dict[str, Any]]) -> bool:
+    return category == "orphan_cleanup" and _has_active_sessions(sessions) and not _has_thread_bindings(threads)
+
+
 def build_lease_cleanup_truth(
     *,
     lease_id: str,
@@ -87,12 +91,13 @@ def build_lease_cleanup_truth(
     category = str((triage or {}).get("category") or "").strip()
     has_active_sessions = _has_active_sessions(sessions)
     has_thread_bindings = _has_thread_bindings(threads)
+    can_close_stale_active_sessions = _can_close_stale_active_sessions(category=category, sessions=sessions, threads=threads)
     provider = str(provider_name or "").strip()
 
-    if has_active_sessions:
+    if has_active_sessions and not can_close_stale_active_sessions:
         allowed = False
         reason = "Lease still has active sessions and cannot enter managed cleanup."
-    elif has_thread_bindings:
+    elif has_thread_bindings and category != "detached_residue":
         allowed = False
         reason = "Lease still has thread bindings and cannot enter managed cleanup."
     elif not provider:
@@ -103,10 +108,16 @@ def build_lease_cleanup_truth(
         reason = "Lease is not in a managed cleanup state."
     elif category == "orphan_cleanup":
         allowed = True
-        reason = "Lease is orphan cleanup residue and can enter managed cleanup."
-    else:
+        if can_close_stale_active_sessions:
+            reason = "Lease has only stale active sessions and can close them before cleanup."
+        else:
+            reason = "Lease is orphan cleanup residue and can enter managed cleanup."
+    elif category == "detached_residue":
         allowed = True
-        reason = "Lease is detached residue and can enter managed cleanup."
+        reason = "Lease is detached residue and can detach stale thread bindings before cleanup."
+    else:
+        allowed = False
+        reason = "Lease is not in a managed cleanup state."
 
     operations = _operations_for_target("lease", lease_id)
     latest = operations[0] if operations else None
@@ -168,7 +179,18 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     from backend.web.services.sandbox_service import destroy_sandbox_lease
 
     try:
-        result = destroy_sandbox_lease(lease_id=lease_id, provider_name=provider_name)
+        category = str((lease_detail.get("triage") or {}).get("category") or "").strip()
+        sessions = lease_detail.get("sessions") or []
+        detach_before_cleanup = category == "detached_residue" or _can_close_stale_active_sessions(
+            category=category,
+            sessions=sessions,
+            threads=threads,
+        )
+        result = destroy_sandbox_lease(
+            lease_id=lease_id,
+            provider_name=provider_name,
+            detach_thread_bindings=detach_before_cleanup,
+        )
     except Exception as exc:
         operation["result_truth"] = {
             "lease_state_before": lease.get("observed_state"),
@@ -202,6 +224,65 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         "current_truth": {
             "lease_id": lease_id,
             "triage_category": (lease_detail.get("triage") or {}).get("category"),
+        },
+    }
+
+
+def request_provider_session_cleanup(provider_name: str, session_id: str) -> dict[str, Any]:
+    provider = str(provider_name or "").strip()
+    session = str(session_id or "").strip()
+    if not provider:
+        raise ValueError("provider_name is required")
+    if not session:
+        raise ValueError("session_id is required")
+
+    target_id = f"{provider}:{session}"
+    operation = _new_operation(
+        kind="provider_session_cleanup",
+        target_type="provider_session",
+        target_id=target_id,
+        reason="Provider session is not lease-backed and can enter managed cleanup.",
+        target={
+            "target_type": "provider_session",
+            "provider_id": provider,
+            "session_id": session,
+        },
+    )
+    _append_event(operation, status="running", message="Destroy flow started")
+
+    from backend.web.services.sandbox_service import mutate_sandbox_session
+
+    try:
+        result = mutate_sandbox_session(
+            session_id=session,
+            action="destroy",
+            provider_hint=provider,
+        )
+    except Exception as exc:
+        operation["result_truth"] = {
+            "provider_id": provider,
+            "session_id": session,
+        }
+        _append_event(operation, status="failed", message=str(exc))
+        return {
+            "accepted": True,
+            "message": str(exc),
+            "operation": _operation_view(operation),
+            "current_truth": {
+                "provider_id": provider,
+                "session_id": session,
+            },
+        }
+
+    operation["result_truth"] = {"destroy_result": result}
+    _append_event(operation, status="succeeded", message="Provider session cleanup completed.")
+    return {
+        "accepted": True,
+        "message": "Provider session cleanup completed.",
+        "operation": _operation_view(operation),
+        "current_truth": {
+            "provider_id": provider,
+            "session_id": session,
         },
     }
 

@@ -1780,7 +1780,7 @@ async def test_leon_agent_persists_summary_store_after_second_turn_compaction(tm
 
         store = SummaryStore(tmp_path / "summary.db")
         agent._memory_middleware.summary_store = store
-        agent._memory_middleware._compaction_threshold = 0.01
+        agent._memory_middleware._compaction_trigger_tokens = 1000
         agent._memory_middleware.compactor.keep_recent_tokens = 10
 
         turn1 = await agent.ainvoke("A" * 12000, thread_id="agent-compaction-thread")

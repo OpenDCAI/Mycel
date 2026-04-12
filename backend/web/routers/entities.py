@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.core.paths import avatars_dir
+from backend.web.services.social_access_service import active_contact_target_ids, can_chat_with
 from backend.web.utils.serializers import avatar_url
 from storage.contracts import UserType
 
@@ -156,6 +157,21 @@ async def delete_avatar(
 # ---------------------------------------------------------------------------
 
 
+def _relationship_states_for_user(app: Any, user_id: str) -> dict[str, str]:
+    svc = getattr(app.state, "relationship_service", None)
+    if svc is None:
+        raise HTTPException(503, "Relationship service unavailable")
+    states: dict[str, str] = {}
+    for row in svc.list_for_user(user_id):
+        other_id = getattr(row, "other_user_id", None)
+        if other_id is None:
+            user_low = getattr(row, "user_low")
+            user_high = getattr(row, "user_high")
+            other_id = user_high if user_id == user_low else user_low
+        states[str(other_id)] = str(getattr(row, "state"))
+    return states
+
+
 @router.get("")
 async def list_entities(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -165,12 +181,24 @@ async def list_entities(
     user_repo = app.state.user_repo
     users = user_repo.list_all()
     user_map = {user.id: user for user in users}
+    relationship_states = _relationship_states_for_user(app, user_id)
+    try:
+        contact_targets = active_contact_target_ids(getattr(app.state, "contact_repo", None), user_id)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
 
     items = []
 
     for user in users:
         if user.id == user_id:
             continue
+        is_owned = user.type is UserType.AGENT and user.owner_user_id == user_id
+        relationship_state = relationship_states.get(user.id, "none")
+        can_chat = can_chat_with(
+            is_owned=is_owned,
+            relationship_state=relationship_state,
+            has_contact=user.id in contact_targets,
+        )
         if user.type is UserType.HUMAN:
             items.append(
                 {
@@ -183,6 +211,9 @@ async def list_entities(
                     "default_thread_id": None,
                     "is_default_thread": None,
                     "branch_index": None,
+                    "is_owned": False,
+                    "relationship_state": relationship_state,
+                    "can_chat": can_chat,
                 }
             )
         else:
@@ -199,6 +230,9 @@ async def list_entities(
                     "default_thread_id": default_thread["id"] if default_thread else None,
                     "is_default_thread": default_thread["is_main"] if default_thread else None,
                     "branch_index": default_thread["branch_index"] if default_thread else None,
+                    "is_owned": is_owned,
+                    "relationship_state": relationship_state,
+                    "can_chat": can_chat,
                 }
             )
     return items

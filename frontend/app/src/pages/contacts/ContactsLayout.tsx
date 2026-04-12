@@ -3,12 +3,12 @@ import SplitPaneLayout from "@/components/SplitPaneLayout";
 import ContactList from "./ContactList";
 
 export default function ContactsLayout() {
-  const { id } = useParams();
+  const { id, userId } = useParams();
 
   return (
     <SplitPaneLayout
       sidebar={<ContactList />}
-      hasDetail={Boolean(id)}
+      hasDetail={Boolean(id || userId)}
     />
   );
 }

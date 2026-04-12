@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import CreateAgentDialog from "./CreateAgentDialog";
 import NewChatDialog from "./NewChatDialog";
 import AgentsPage from "../pages/AgentsPage";
 import { useAppStore } from "../store/app-store";
+import { toast } from "sonner";
 
 vi.mock("zustand/middleware", async () => {
   const actual = await vi.importActual<typeof import("zustand/middleware")>("zustand/middleware");
@@ -101,6 +102,23 @@ describe("frontend agent wording contract", () => {
     expect(screen.getByText("创建新 Agent")).toBeTruthy();
     expect(screen.getByText("定义一个新的 AI Agent")).toBeTruthy();
     expect(screen.getByRole("button", { name: "创建并配置 Agent" })).toBeTruthy();
+  });
+
+  it("CreateAgentDialog shows the concrete create failure", async () => {
+    useAppStore.setState({ addAgent: vi.fn().mockRejectedValue(new Error("quota reached")) });
+
+    render(
+      <MemoryRouter>
+        <CreateAgentDialog open onOpenChange={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/名称/), { target: { value: "Morel" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建并配置 Agent" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("创建失败：quota reached");
+    });
   });
 
   it("NewChatDialog presents agent wording", () => {

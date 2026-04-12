@@ -60,9 +60,13 @@ export default function ModelSelector({
   useEffect(() => {
     if (!isOpen) return;
     authFetch("/api/settings")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`加载模型失败：API ${r.status}: ${await r.text()}`);
+        return r.json();
+      })
       .then((d) => setEnabledModels(parseEnabledModels(d)))
       .catch((err: unknown) => {
+        setEnabledModels([]);
         setError(err instanceof Error ? err.message : "加载模型失败");
       });
   }, [isOpen]);

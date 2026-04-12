@@ -10,6 +10,7 @@ import LeasesPage from "../pages/LeasesPage";
 import OperationDetailPage from "../pages/OperationDetailPage";
 import ProviderDetailPage from "../pages/ProviderDetailPage";
 import RuntimeDetailPage from "../pages/RuntimeDetailPage";
+import SandboxConfigsPage from "../pages/SandboxConfigsPage";
 import ThreadDetailPage from "../pages/ThreadDetailPage";
 import ThreadsPage from "../pages/ThreadsPage";
 import { MonitorShell } from "./MonitorShell";
@@ -21,6 +22,7 @@ export function MonitorRoutes() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/resources" element={<ResourcesPage />} />
+        <Route path="/sandbox-configs" element={<SandboxConfigsPage />} />
         <Route path="/providers/:providerId" element={<ProviderDetailPage />} />
         <Route path="/leases" element={<LeasesPage />} />
         <Route path="/leases/:leaseId" element={<LeaseDetailPage />} />

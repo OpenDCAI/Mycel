@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ComputerPanelProps, TabType } from "./types";
-import { extractAgentSteps, extractCommandSteps } from "./utils";
+import { extractAgentSteps } from "./utils";
 import { useSandboxStatus } from "./use-sandbox-status";
 import { useFileExplorer } from "./use-file-explorer";
 import { useResizable } from "./use-resizable";
 import { PanelHeader } from "./PanelHeader";
 import { TabBar } from "./TabBar";
-import { TerminalView } from "./TerminalView";
 import { AgentsView } from "./AgentsView";
 import { FilesView } from "./FilesView";
 
@@ -22,12 +21,11 @@ export default function ComputerPanel({
   activeTab: controlledTab,
   onTabChange,
 }: ComputerPanelProps) {
-  const [internalTab, setInternalTab] = useState<TabType>("terminal");
+  const [internalTab, setInternalTab] = useState<TabType>("files");
   const activeTab = controlledTab ?? internalTab;
   const setActiveTab = onTabChange ?? setInternalTab;
 
   const isRemote = sandboxType !== null && sandboxType !== "local";
-  const commandSteps = useMemo(() => extractCommandSteps(chatEntries), [chatEntries]);
   const agentSteps = useMemo(() => extractAgentSteps(chatEntries), [chatEntries]);
   const { width: treeWidth, onMouseDown: onDragStart } = useResizable(288, 160, 500);
 
@@ -82,8 +80,6 @@ export default function ComputerPanel({
       />
 
       <div className="flex-1 overflow-hidden">
-        {activeTab === "terminal" && <TerminalView steps={commandSteps} />}
-
         {activeTab === "agents" && (
           <AgentsView
             steps={agentSteps}

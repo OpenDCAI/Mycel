@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Outlet, Route, Routes, useParams } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NewChatPage from "./NewChatPage";
 import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
+import type { AccountResourceLimit, SandboxType } from "../api/types";
 
 const handleGetDefaultThread = vi.fn();
+const handleCreateThread = vi.fn();
 const clientMocks = vi.hoisted(() => ({
   getDefaultThreadConfig: vi.fn(() => new Promise(() => {})),
+  fetchAccountResourceLimits: vi.fn<() => Promise<AccountResourceLimit[]>>(async () => []),
 }));
 
 vi.mock("zustand/middleware", async () => {
@@ -21,15 +24,44 @@ vi.mock("zustand/middleware", async () => {
 });
 
 vi.mock("../components/CenteredInputBox", () => ({
-  default: () => <div>centered-input-box</div>,
-}));
-
-vi.mock("../components/WorkspaceSetupModal", () => ({
-  default: () => null,
+  default: ({ environmentControl, onSend }: {
+    environmentControl: {
+      summary: React.ReactNode;
+      applyLabel?: string;
+      applyDisabled?: boolean;
+      onApply?: (draftModel: string) => boolean | Promise<boolean>;
+      renderPanel: (args: {
+        draftModel: string;
+        setDraftModel: (value: string) => void;
+      }) => React.ReactNode;
+    };
+    onSend?: (message: string, model: string) => Promise<void>;
+  }) => (
+    <div>
+      <div>centered-input-box</div>
+      <div data-testid="environment-summary">{environmentControl.summary}</div>
+      <button
+        disabled={environmentControl.applyDisabled}
+        onClick={() => {
+          void environmentControl.onApply?.("leon:large");
+        }}
+      >
+        {environmentControl.applyLabel ?? "确认"}
+      </button>
+      <button
+        onClick={() => {
+          void onSend?.("hello from test", "leon:large");
+        }}
+      >
+        发送测试消息
+      </button>
+      {environmentControl.renderPanel({ draftModel: "leon:large", setDraftModel: () => undefined })}
+    </div>
+  ),
 }));
 
 vi.mock("../components/FilesystemBrowser", () => ({
-  default: () => null,
+  default: () => <div>filesystem-browser</div>,
 }));
 
 vi.mock("../components/ActorAvatar", () => ({
@@ -47,7 +79,7 @@ vi.mock("../hooks/use-workspace-settings", () => ({
 }));
 
 vi.mock("../api", () => ({
-  postRun: vi.fn(),
+  postRun: vi.fn(async () => undefined),
 }));
 
 vi.mock("../api/client", () => ({
@@ -56,19 +88,25 @@ vi.mock("../api/client", () => ({
   saveDefaultThreadConfig: vi.fn(async () => undefined),
 }));
 
+vi.mock("../api/settings", () => ({
+  fetchAccountResourceLimits: clientMocks.fetchAccountResourceLimits,
+}));
+
+let sandboxTypesForTest: SandboxType[] = [{ name: "local", available: true }];
+
 function ContextOutlet() {
   return (
     <Outlet
       context={{
         tm: {
           threads: [],
-          sandboxTypes: [{ name: "local", available: true }],
+          sandboxTypes: sandboxTypesForTest,
           selectedSandbox: "local",
           loading: false,
           setSelectedSandbox: vi.fn(),
           setThreads: vi.fn(),
           refreshThreads: vi.fn(),
-          handleCreateThread: vi.fn(),
+          handleCreateThread,
           handleGetDefaultThread,
           handleDeleteThread: vi.fn(),
         },
@@ -86,11 +124,20 @@ function ThreadRouteProbe() {
 }
 
 describe("NewChatPage", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     handleGetDefaultThread.mockReset();
     handleGetDefaultThread.mockResolvedValue(null);
+    handleCreateThread.mockReset();
+    handleCreateThread.mockResolvedValue("thread-from-test");
     clientMocks.getDefaultThreadConfig.mockReset();
     clientMocks.getDefaultThreadConfig.mockImplementation(() => new Promise(() => {}));
+    clientMocks.fetchAccountResourceLimits.mockReset();
+    clientMocks.fetchAccountResourceLimits.mockResolvedValue([]);
+    sandboxTypesForTest = [{ name: "local", available: true }];
 
     useAuthStore.setState({
       token: "token",
@@ -263,5 +310,235 @@ describe("NewChatPage", () => {
     await waitFor(() => {
       expect(consoleError).not.toHaveBeenCalled();
     });
+  });
+
+  it("uses the embedded filesystem browser as the local workspace picker", async () => {
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "new",
+        provider_config: "local",
+        recipe: {
+          id: "local-recipe",
+          name: "Local",
+          provider_type: "local",
+          features: {},
+          configurable_features: {},
+          feature_options: [],
+        },
+        lease_id: null,
+        model: "leon:large",
+        workspace: null,
+      },
+    });
+    useAppStore.setState({
+      libraryRecipes: [{
+        id: "local-recipe",
+        type: "recipe",
+        name: "Local",
+        desc: "",
+        provider_type: "local",
+        available: true,
+        created_at: 0,
+        updated_at: 0,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "下一步" })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+
+    expect(await screen.findByText("选择工作区")).toBeTruthy();
+    expect(screen.getByText("filesystem-browser")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "浏览" })).toBeNull();
+    expect((screen.getByRole("button", { name: "确认" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("uses sandbox-template wording instead of bare Recipe wording in the new sandbox flow", async () => {
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "new",
+        provider_config: "local",
+        recipe: {
+          id: "local-recipe",
+          name: "Local",
+          provider_type: "local",
+          features: {},
+          configurable_features: {},
+          feature_options: [],
+        },
+        lease_id: null,
+        model: "leon:large",
+        workspace: null,
+      },
+    });
+    useAppStore.setState({
+      libraryRecipes: [{
+        id: "local-recipe",
+        type: "recipe",
+        name: "Local",
+        desc: "",
+        provider_type: "local",
+        available: true,
+        created_at: 0,
+        updated_at: 0,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+
+    expect(await screen.findByText("确认沙盒模板与工具")).toBeTruthy();
+    expect(screen.getByText("沙盒模板")).toBeTruthy();
+    expect(screen.queryByText("确认 Recipe 与工具")).toBeNull();
+    expect(screen.queryByText("Recipe")).toBeNull();
+  });
+
+  it("launches a new thread with the selected sandbox template snapshot", async () => {
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "new",
+        provider_config: "local",
+        recipe: {
+          id: "local-recipe",
+          name: "Local",
+          provider_type: "local",
+          features: { lark_cli: false },
+          configurable_features: { lark_cli: true },
+          feature_options: [{ key: "lark_cli", name: "Lark CLI", description: "Install Lark CLI" }],
+        },
+        lease_id: null,
+        model: "leon:large",
+        workspace: null,
+      },
+    });
+    useAppStore.setState({
+      libraryRecipes: [{
+        id: "local-recipe",
+        type: "recipe",
+        name: "Local",
+        desc: "",
+        provider_type: "local",
+        features: { lark_cli: true },
+        configurable_features: { lark_cli: true },
+        feature_options: [{ key: "lark_cli", name: "Lark CLI", description: "Install Lark CLI" }],
+        available: true,
+        created_at: 0,
+        updated_at: 0,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+            <Route path="/chat/hire/thread/:threadId" element={<ThreadRouteProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.click(screen.getByRole("button", { name: "发送测试消息" }));
+
+    await waitFor(() => {
+      expect(handleCreateThread).toHaveBeenCalledWith(
+        "local",
+        undefined,
+        "m_xVuNpKJNxblZ",
+        "leon:large",
+        undefined,
+        expect.objectContaining({
+          id: "local-recipe",
+          name: "Local",
+          provider_type: "local",
+          features: { lark_cli: false },
+        }),
+      );
+    });
+  });
+
+  it("blocks advancing a new sandbox selection when backend account resources say the provider is exhausted", async () => {
+    sandboxTypesForTest = [{ name: "daytona_selfhost", provider: "daytona", available: true }];
+    clientMocks.fetchAccountResourceLimits.mockResolvedValue([
+      {
+        resource: "sandbox",
+        provider_name: "daytona_selfhost",
+        label: "Self-host Daytona",
+        limit: 2,
+        used: 2,
+        remaining: 0,
+        can_create: false,
+      },
+    ]);
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "new",
+        provider_config: "daytona_selfhost",
+        recipe: {
+          id: "daytona-recipe",
+          name: "Self-host Daytona",
+          provider_type: "daytona",
+          features: {},
+          configurable_features: {},
+          feature_options: [],
+        },
+        lease_id: null,
+        model: "leon:large",
+        workspace: null,
+      },
+    });
+    useAppStore.setState({
+      libraryRecipes: [{
+        id: "daytona-recipe",
+        type: "recipe",
+        name: "Self-host Daytona",
+        desc: "",
+        provider_type: "daytona",
+        available: true,
+        created_at: 0,
+        updated_at: 0,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Self-host Daytona 已达上限")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "下一步" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

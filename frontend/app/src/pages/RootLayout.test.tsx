@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Routes } from "react-router-dom";
 
 import RootLayout, { LoginForm } from "./RootLayout";
+import { useAppStore } from "../store/app-store";
 import { useAuthStore } from "../store/auth-store";
 
 vi.mock("zustand/middleware", async () => {
@@ -155,6 +156,55 @@ describe("RootLayout agent wording contract", () => {
     fireEvent.click(screen.getByRole("button", { name: "新建" }));
 
     expect(await screen.findByRole("button", { name: "新建 Agent" })).toBeTruthy();
+  });
+
+  it("keeps the collapsed create button accessible", () => {
+    const storage = {
+      getItem: vi.fn(() => "false"),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", storage);
+    Object.defineProperty(window, "localStorage", {
+      value: storage,
+      configurable: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat"]}>
+        <Routes>
+          <Route path="*" element={<RootLayout />}>
+            <Route path="chat" element={<div>chat-page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "新建" })).toBeTruthy();
+  });
+
+  it("does not bootstrap panel resources on the settings route", async () => {
+    const loadAll = vi.fn();
+    const resetSessionData = vi.fn();
+    useAppStore.setState({
+      loadAll,
+      resetSessionData,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Routes>
+          <Route path="*" element={<RootLayout />}>
+            <Route path="settings" element={<div>settings-page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(resetSessionData).toHaveBeenCalledOnce();
+    });
+    expect(loadAll).not.toHaveBeenCalled();
   });
 });
 

@@ -60,7 +60,7 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto py-5 bg-background">
+    <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto py-5 bg-background">
       {loading ? (
         <ChatSkeleton />
       ) : (

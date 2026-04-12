@@ -28,6 +28,16 @@ function noContent(): Response {
   } as unknown as Response;
 }
 
+function errorJson(status: number, payload: unknown): Response {
+  return {
+    ok: false,
+    status,
+    statusText: "Error",
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  } as Response;
+}
+
 describe("thread api client contract", () => {
   let api: typeof import("./client");
 
@@ -50,6 +60,22 @@ describe("thread api client contract", () => {
         body: JSON.stringify({ sandbox: "local", agent_user_id: "agent-1" }),
       }),
     );
+  });
+
+  it("createThread surfaces backend error messages", async () => {
+    authFetch.mockResolvedValue(errorJson(409, {
+      error: "sandbox_quota_exceeded",
+      message: "Self-host Daytona sandbox quota exceeded",
+    }));
+
+    let thrown: Error | null = null;
+    try {
+      await api.createThread({ sandbox: "daytona_selfhost", agentUserId: "agent-1" });
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown?.message).toBe("Self-host Daytona sandbox quota exceeded");
   });
 
   it("listThreads rejects malformed thread identities", async () => {
@@ -333,18 +359,6 @@ describe("thread api client contract", () => {
     }));
 
     await expect(api.generateInviteCode()).rejects.toThrow("Malformed invite code");
-  });
-
-  it("verifyObservation rejects malformed success fields", async () => {
-    authFetch.mockResolvedValue(okJson({ success: "yes", traces: [] }));
-
-    await expect(api.verifyObservation()).rejects.toThrow("Malformed observation verify result");
-  });
-
-  it("verifyObservation rejects malformed error fields", async () => {
-    authFetch.mockResolvedValue(okJson({ success: false, error: { message: "not a string" } }));
-
-    await expect(api.verifyObservation()).rejects.toThrow("Malformed observation verify result");
   });
 
   it("uploadUserAvatar sends user avatar path instead of members path", async () => {

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.web.services.social_access_service import ACTIVE_CHAT_RELATIONSHIP_STATES, has_active_contact
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -96,12 +97,41 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
         # not deliverable chat actors. Reject them loudly at ingress instead of guessing.
         if user_repo is not None:
             candidate = user_repo.get_by_id(participant_id)
+            if candidate is not None and getattr(candidate, "owner_user_id", None) is None:
+                validated.append(participant_id)
+                continue
             if candidate is not None and getattr(candidate, "owner_user_id", None) is not None:
                 raise ValueError(f"Agent participant ids must be actor user_ids, not agent_user_id: {participant_id}")
         # @@@chat-participant-ingress-boundary - group chat creation must reject
         # unknown ids loudly at ingress instead of letting storage FKs decide.
         raise ValueError(f"Unknown chat participant id: {participant_id}")
     return validated
+
+
+def _is_owned_participant(app: Any, participant_id: str, requester_user_id: str) -> bool:
+    user_repo = getattr(app.state, "user_repo", None)
+    if user_repo is None:
+        return False
+    participant = user_repo.get_by_id(participant_id)
+    return getattr(participant, "owner_user_id", None) == requester_user_id
+
+
+def _validate_group_chat_relationships(app: Any, participant_ids: list[str], requester_user_id: str) -> None:
+    svc = getattr(app.state, "relationship_service", None)
+    if svc is None:
+        raise ValueError("Relationship service is required for group chat creation")
+    contact_repo = getattr(app.state, "contact_repo", None)
+    for participant_id in dict.fromkeys(participant_ids):
+        if participant_id == requester_user_id or _is_owned_participant(app, participant_id, requester_user_id):
+            continue
+        try:
+            if has_active_contact(contact_repo, requester_user_id, participant_id):
+                continue
+        except RuntimeError as exc:
+            raise ValueError(str(exc)) from exc
+        state = svc.get_state(requester_user_id, participant_id)
+        if state not in ACTIVE_CHAT_RELATIONSHIP_STATES:
+            raise ValueError(f"Active relationship required for group chat participant: {participant_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +156,7 @@ def create_chat(
     try:
         participant_ids = _validate_chat_participant_ids(app, body.user_ids, user_id)
         if len(participant_ids) >= 3:
+            _validate_group_chat_relationships(app, participant_ids, user_id)
             chat = _messaging(app).create_group_chat(participant_ids, body.title)
         else:
             chat = _messaging(app).find_or_create_chat(participant_ids, body.title)

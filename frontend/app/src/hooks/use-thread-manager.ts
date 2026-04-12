@@ -20,6 +20,7 @@ export interface ThreadManagerState {
   sandboxTypes: SandboxType[];
   selectedSandbox: string;
   loading: boolean;
+  bootstrapError: string | null;
 }
 
 export interface ThreadManagerActions {
@@ -58,6 +59,7 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
   const [sandboxTypes, setSandboxTypes] = useState<SandboxType[]>([{ name: "local", available: true }]);
   const [selectedSandbox, setSelectedSandbox] = useState("local");
   const [loading, setLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
 
   const refreshThreads = useCallback(async () => {
     const rows = await listThreads();
@@ -77,10 +79,13 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
         if (cancelled) return;
         setThreads(rows);
         setSandboxTypes(types);
+        setBootstrapError(null);
         const preferred = types.find((t) => t.available)?.name ?? "local";
         setSelectedSandbox(preferred);
-      } catch {
-        // ignore bootstrap errors in UI; user can retry by action
+      } catch (err) {
+        if (!cancelled) {
+          setBootstrapError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -127,7 +132,7 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
   );
 
   return {
-    threads, sandboxTypes, selectedSandbox, loading,
+    threads, sandboxTypes, selectedSandbox, loading, bootstrapError,
     setSelectedSandbox, setThreads,
     refreshThreads, handleCreateThread, handleGetDefaultThread, handleDeleteThread,
   };

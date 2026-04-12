@@ -17,8 +17,7 @@ class _FakeSettingsRepo:
             "default_model": "openai:gpt-5.4",
         }
         self.models_config = {"pool": {"enabled": ["openai:gpt-5.4"], "custom": []}}
-        self.saved_observation = None
-        self.saved_sandboxes = None
+        self.account_resource_limits = None
 
     def get(self, user_id: str):
         assert user_id == "user-1"
@@ -28,26 +27,13 @@ class _FakeSettingsRepo:
         assert user_id == "user-1"
         return self.models_config
 
-    def get_observation_config(self, user_id: str):
+    def set_models_config(self, user_id: str, models_config: dict):
         assert user_id == "user-1"
-        return None
+        self.models_config = models_config
 
-    def get_sandbox_configs(self, user_id: str):
+    def get_account_resource_limits(self, user_id: str):
         assert user_id == "user-1"
-        return None
-
-    def set_observation_config(self, user_id: str, config):
-        assert user_id == "user-1"
-        self.saved_observation = config
-
-    def set_sandbox_configs(self, user_id: str, configs):
-        assert user_id == "user-1"
-        self.saved_sandboxes = configs
-
-
-def _request(repo: _FakeSettingsRepo | None):
-    state = SimpleNamespace(user_settings_repo=repo) if repo is not None else SimpleNamespace()
-    return SimpleNamespace(app=SimpleNamespace(state=state))
+        return self.account_resource_limits
 
 
 def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
@@ -82,7 +68,14 @@ def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch
         "enabled_models": ["openai:gpt-5.4"],
         "custom_models": [],
         "custom_config": {},
-        "providers": {"openai": {"api_key": None, "base_url": "https://api.openai.com"}},
+        "providers": {
+            "openai": {
+                "api_key": None,
+                "has_api_key": False,
+                "credential_source": "platform",
+                "base_url": "https://api.openai.com",
+            }
+        },
     }
 
 
@@ -131,7 +124,182 @@ def test_get_settings_route_merges_repo_backed_model_pool_over_filesystem_loader
     assert response.json()["enabled_models"] == ["repo-model"]
     assert response.json()["custom_models"] == ["repo-custom"]
     assert response.json()["custom_config"] == {"repo-custom": {"based_on": "gpt-4o"}}
-    assert response.json()["providers"] == {"openai": {"api_key": "repo-key", "base_url": "https://repo.example"}}
+    assert response.json()["providers"] == {
+        "openai": {
+            "api_key": None,
+            "has_api_key": True,
+            "credential_source": "user",
+            "base_url": "https://repo.example",
+        }
+    }
+
+
+def test_get_settings_route_exposes_platform_credential_source_without_user_key(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {
+        "providers": {"anthropic": {"credential_source": "platform", "base_url": "https://platform.example"}},
+        "pool": {"enabled": ["repo-model"], "custom": []},
+    }
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.get("/api/settings")
+
+    assert response.status_code == 200
+    assert response.json()["providers"]["anthropic"] == {
+        "api_key": None,
+        "has_api_key": False,
+        "credential_source": "platform",
+        "base_url": "https://platform.example",
+    }
+
+
+def test_update_provider_rejects_user_credential_source_without_key():
+    repo = _FakeSettingsRepo()
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post(
+            "/api/settings/providers",
+            json={"provider": "openai", "credential_source": "user", "api_key": None, "base_url": None},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "User credential source requires an API key"
+    assert repo.models_config == {"pool": {"enabled": ["openai:gpt-5.4"], "custom": []}}
+
+
+def test_update_provider_preserves_existing_key_when_base_url_changes():
+    repo = _FakeSettingsRepo()
+    repo.models_config = {
+        "providers": {"openai": {"credential_source": "user", "api_key": "repo-key", "base_url": "https://old.example"}},
+        "pool": {"enabled": ["repo-model"], "custom": []},
+    }
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post(
+            "/api/settings/providers",
+            json={"provider": "openai", "api_key": None, "base_url": None},
+        )
+
+    assert response.status_code == 200
+    assert repo.models_config["providers"]["openai"] == {"credential_source": "user", "api_key": "repo-key"}
+
+
+def test_update_provider_platform_source_removes_stored_user_key():
+    repo = _FakeSettingsRepo()
+    repo.models_config = {
+        "providers": {"openai": {"credential_source": "user", "api_key": "repo-key", "base_url": "https://old.example"}},
+        "pool": {"enabled": ["repo-model"], "custom": []},
+    }
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post(
+            "/api/settings/providers",
+            json={"provider": "openai", "credential_source": "platform", "api_key": None, "base_url": None},
+        )
+
+    assert response.status_code == 200
+    assert repo.models_config["providers"]["openai"] == {"credential_source": "platform"}
+
+
+def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
+    app = _settings_test_app(_FakeSettingsRepo())
+    app.state.thread_repo = object()
+    app.state.user_repo = object()
+    seen: dict[str, object] = {}
+
+    def _fake_list_user_leases(user_id: str, **kwargs):
+        seen["user_id"] = user_id
+        seen["kwargs"] = kwargs
+        return [
+            {"lease_id": "lease-local", "provider_name": "local"},
+            {"lease_id": "lease-daytona-1", "provider_name": "daytona_selfhost"},
+            {"lease_id": "lease-daytona-2", "provider_name": "daytona_selfhost"},
+            {"lease_id": "lease-e2b", "provider_name": "e2b"},
+        ]
+
+    monkeypatch.setattr(settings_router.account_resource_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/account-resources")
+
+    assert response.status_code == 200
+    items = {item["provider_name"]: item for item in response.json()["items"]}
+    assert items["local"] == {
+        "resource": "sandbox",
+        "provider_name": "local",
+        "label": "Local",
+        "limit": 999,
+        "used": 1,
+        "remaining": 998,
+        "can_create": True,
+    }
+    assert items["daytona_selfhost"]["limit"] == 2
+    assert items["daytona_selfhost"]["used"] == 2
+    assert items["daytona_selfhost"]["remaining"] == 0
+    assert items["daytona_selfhost"]["can_create"] is False
+    assert items["e2b"]["limit"] == 0
+    assert items["e2b"]["used"] == 1
+    assert items["e2b"]["can_create"] is False
+    assert items["platform_tokens"] == {
+        "resource": "token",
+        "provider_name": "platform_tokens",
+        "label": "平台 Token",
+        "limit": 100_000_000,
+        "used": 0,
+        "remaining": 100_000_000,
+        "can_create": True,
+        "period": "weekly",
+        "unit": "tokens",
+    }
+    assert seen == {
+        "user_id": "user-1",
+        "kwargs": {"thread_repo": app.state.thread_repo, "user_repo": app.state.user_repo},
+    }
+
+
+def test_account_resources_route_applies_user_limit_overrides(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.account_resource_limits = {"sandbox": {"daytona_selfhost": 5, "docker": 3}, "token": {"weekly": 50_000_000}}
+    app = _settings_test_app(repo)
+    app.state.thread_repo = object()
+    app.state.user_repo = object()
+
+    def _fake_list_user_leases(user_id: str, **kwargs):
+        assert user_id == "user-1"
+        return [
+            {"lease_id": "lease-daytona-1", "provider_name": "daytona_selfhost"},
+            {"lease_id": "lease-daytona-2", "provider_name": "daytona_selfhost"},
+        ]
+
+    monkeypatch.setattr(settings_router.account_resource_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/account-resources")
+
+    assert response.status_code == 200
+    items = {item["provider_name"]: item for item in response.json()["items"]}
+    assert items["daytona_selfhost"]["limit"] == 5
+    assert items["daytona_selfhost"]["used"] == 2
+    assert items["daytona_selfhost"]["remaining"] == 3
+    assert items["daytona_selfhost"]["can_create"] is True
+    assert items["docker"]["limit"] == 3
+    assert items["docker"]["used"] == 0
+    assert items["docker"]["remaining"] == 3
+    assert items["docker"]["can_create"] is True
+    assert items["platform_tokens"]["limit"] == 50_000_000
+    assert items["platform_tokens"]["remaining"] == 50_000_000
+
+
+def test_app_settings_router_does_not_expose_monitor_owned_surfaces():
+    app = _settings_test_app(_FakeSettingsRepo())
+
+    with TestClient(app) as client:
+        paths = set(client.get("/openapi.json").json()["paths"])
+
+    assert "/api/settings/account-resources" in paths
+    assert "/api/settings/observation" not in paths
+    assert "/api/settings/observation/verify" not in paths
+    assert "/api/settings/sandboxes" not in paths
 
 
 def test_get_available_models_route_prefers_repo_backed_model_pool(monkeypatch):
@@ -174,6 +342,7 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
             active=SimpleNamespace(provider=None),
             resolve_model=lambda _model_id: ("repo-custom", {}),
             get_provider=lambda _provider_name: SimpleNamespace(api_key="repo-key", base_url="https://repo.example"),
+            resolve_api_key=lambda _provider_name: "repo-key",
         ),
     )
     monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
@@ -202,66 +371,3 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
         "api_key": "repo-key",
         "base_url": "https://repo.example/v1",
     }
-
-
-@pytest.mark.asyncio
-async def test_get_observation_settings_keeps_loader_fallback_when_repo_row_missing(monkeypatch):
-    req = _request(_FakeSettingsRepo())
-
-    class _FakeObservationConfig:
-        def model_dump(self):
-            return {"active": "langfuse", "langfuse": {"public_key": "pk"}}
-
-    class _FakeObservationLoader:
-        def load(self):
-            return _FakeObservationConfig()
-
-    monkeypatch.setattr("config.observation_loader.ObservationLoader", _FakeObservationLoader)
-
-    result = await settings_router.get_observation_settings(req, "user-1")
-
-    assert result == {"active": "langfuse", "langfuse": {"public_key": "pk"}}
-
-
-def test_update_observation_settings_route_requires_repo_backed_storage_contract():
-    with pytest.raises(RuntimeError, match="user_settings_repo"):
-        with TestClient(_settings_test_app(None)) as client:
-            client.post("/api/settings/observation", json={"active": "langsmith"})
-
-
-@pytest.mark.asyncio
-async def test_list_sandbox_configs_does_not_import_filesystem_when_repo_row_missing(
-    monkeypatch,
-):
-    req = _request(_FakeSettingsRepo())
-
-    result = await settings_router.list_sandbox_configs(req, "user-1")
-
-    assert result == {"sandboxes": {}}
-
-
-def test_update_observation_settings_route_does_not_import_filesystem_when_repo_row_missing(monkeypatch):
-    repo = _FakeSettingsRepo()
-
-    with TestClient(_settings_test_app(repo)) as client:
-        response = client.post("/api/settings/observation", json={"active": "langsmith"})
-
-    assert response.status_code == 200
-    assert response.json() == {"success": True, "active": "langsmith"}
-    assert repo.saved_observation == {"active": "langsmith"}
-
-
-def test_save_sandbox_config_route_does_not_import_filesystem_when_repo_row_missing():
-    repo = _FakeSettingsRepo()
-
-    with TestClient(_settings_test_app(repo)) as client:
-        response = client.post(
-            "/api/settings/sandboxes",
-            json={"name": "beta", "config": {"provider": "local"}},
-        )
-
-    assert response.status_code == 200
-    assert response.json() == {"success": True, "path": "supabase://user_settings/user-1/sandbox_configs/beta"}
-    assert repo.saved_sandboxes["beta"]["provider"] == "local"
-    assert repo.saved_sandboxes["beta"]["name"] == "local"
-    assert repo.saved_sandboxes["beta"]["on_exit"] == "pause"

@@ -46,6 +46,7 @@ export interface Agent {
   version: string;
   avatar_url?: string;
   config: AgentConfig;
+  config_loaded?: boolean;
   created_at: number;
   updated_at: number;
   builtin?: boolean;

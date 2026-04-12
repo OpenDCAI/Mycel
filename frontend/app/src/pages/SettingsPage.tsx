@@ -1,18 +1,17 @@
-import { Box, Cpu, Activity, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Ticket, Plus, Trash2, Copy, Check, AlertTriangle, TicketX } from "lucide-react";
+import { Cpu, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Ticket, Plus, Trash2, Copy, Check, AlertTriangle, TicketX, Gauge } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 import ModelMappingSection from "../components/ModelMappingSection";
 import ModelPoolSection from "../components/ModelPoolSection";
-import ObservationSection from "../components/ObservationSection";
 import ProvidersSection from "../components/ProvidersSection";
-import SandboxSection from "../components/SandboxSection";
-import WorkspaceSection from "../components/WorkspaceSection";
 import { fetchInviteCodes, generateInviteCode, revokeInviteCode } from "@/api/client";
 import type { InviteCode } from "@/api/client";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { authFetch } from "../store/auth-store";
 import { asRecord } from "@/lib/records";
+import { fetchAccountResourceLimits } from "@/api/settings";
+import type { AccountResourceLimit } from "@/api/types";
 
 interface AvailableModelsData {
   models: Array<{
@@ -34,17 +33,16 @@ interface Settings {
   model_mapping: Record<string, string>;
   enabled_models: string[];
   custom_config: Record<string, { based_on?: string | null; context_limit?: number | null }>;
-  providers: Record<string, { api_key: string | null; base_url: string | null }>;
+  providers: Record<string, { api_key: string | null; has_api_key?: boolean; credential_source?: "platform" | "user"; base_url: string | null }>;
   default_workspace: string | null;
   default_model: string;
 }
 
-type Tab = "model" | "sandbox" | "observation" | "invite";
+type Tab = "model" | "accountResources" | "invite";
 
 const TABS: { id: Tab; label: string; icon: typeof Cpu; desc: string }[] = [
   { id: "model", label: "模型", icon: Cpu, desc: "模型、提供商与映射" },
-  { id: "sandbox", label: "沙箱", icon: Box, desc: "执行环境配置" },
-  { id: "observation", label: "追踪", icon: Activity, desc: "Agent 可观测性" },
+  { id: "accountResources", label: "账号资源", icon: Gauge, desc: "平台资源限额" },
   { id: "invite", label: "邀请码", icon: Ticket, desc: "管理注册邀请码" },
 ];
 
@@ -85,6 +83,10 @@ function InviteStatusBadge({ code }: { code: InviteCode }) {
 
 function isSuccessResponse(value: unknown): boolean {
   return asRecord(value)?.success === true;
+}
+
+async function httpErrorMessage(prefix: string, response: Response): Promise<string> {
+  return `${prefix}：API ${response.status}: ${await response.text()}`;
 }
 
 function InviteCopyButton({ text }: { text: string }) {
@@ -132,7 +134,8 @@ function InviteCodesSection() {
       const data = await fetchInviteCodes();
       setCodes(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
+      console.error("Failed to load invite codes:", err);
+      setError("邀请码暂时无法加载，请稍后重试。");
     } finally {
       setLoading(false);
     }
@@ -282,13 +285,123 @@ function InviteCodesSection() {
   );
 }
 
+function AccountResourcesSection({
+  items,
+  loading,
+  error,
+  onRetry,
+}: {
+  items: AccountResourceLimit[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const tokenItems = items.filter((item) => item.resource === "token");
+  const sandboxItems = items.filter((item) => item.resource === "sandbox");
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
+        <p className="text-sm text-muted-foreground">加载账号资源...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <AlertTriangle className="w-6 h-6 text-destructive mb-3" />
+        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />重试
+        </button>
+      </div>
+    );
+  }
+
+  const periodLabel = (period: string | undefined) => {
+    if (period === "daily") return "每天";
+    if (period === "weekly") return "每周";
+    if (period === "monthly") return "每月";
+    return "周期";
+  };
+
+  const numberLabel = (value: number, unit?: string) => {
+    const formatted = unit === "tokens" ? value.toLocaleString("en-US") : String(value);
+    return unit === "tokens" ? `${formatted}` : formatted;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">账号资源</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">查看当前账号可用的平台资源与使用情况</p>
+      </div>
+      {tokenItems.length > 0 && (
+        <div className="rounded-xl border border-border overflow-hidden">
+          <div className="grid grid-cols-[1fr_88px_112px_112px] gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs text-muted-foreground font-medium">
+            <span>Token</span>
+            <span className="text-right">周期</span>
+            <span className="text-right">已用</span>
+            <span className="text-right">上限</span>
+          </div>
+          {tokenItems.map((item) => (
+            <div
+              key={`${item.resource}:${item.provider_name}`}
+              className="grid grid-cols-[1fr_88px_112px_112px] gap-3 px-4 py-3 border-b border-border last:border-b-0 items-center"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{item.label}</p>
+                <p className="text-2xs text-muted-foreground font-mono truncate">{item.provider_name}</p>
+              </div>
+              <span className="text-right text-sm text-foreground">{periodLabel(item.period)}</span>
+              <span className="text-right text-sm text-foreground tabular-nums">{numberLabel(item.used, item.unit)}</span>
+              <span className="text-right text-sm text-foreground tabular-nums">{numberLabel(item.limit, item.unit)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <div className="grid grid-cols-[1fr_72px_72px_88px] gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs text-muted-foreground font-medium">
+          <span>沙箱</span>
+          <span className="text-right">已用</span>
+          <span className="text-right">上限</span>
+          <span className="text-right">状态</span>
+        </div>
+        {sandboxItems.map((item) => (
+          <div
+            key={`${item.resource}:${item.provider_name}`}
+            className="grid grid-cols-[1fr_72px_72px_88px] gap-3 px-4 py-3 border-b border-border last:border-b-0 items-center"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{item.label}</p>
+              <p className="text-2xs text-muted-foreground font-mono truncate">{item.provider_name}</p>
+            </div>
+            <span className="text-right text-sm text-foreground tabular-nums">{item.used}</span>
+            <span className="text-right text-sm text-foreground tabular-nums">{item.limit}</span>
+            <span className={`text-right text-xs font-medium ${item.can_create ? "text-success" : "text-muted-foreground"}`}>
+              {item.can_create ? `剩余 ${item.remaining}` : "已达上限"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab | null>(isMobile ? null : "model");
   const [availableModels, setAvailableModels] = useState<AvailableModelsData | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [sandboxes, setSandboxes] = useState<Record<string, Record<string, unknown>>>({});
-  const [observationConfig, setObservationConfig] = useState<Record<string, unknown>>({});
+  const [accountResources, setAccountResources] = useState<AccountResourceLimit[]>([]);
+  const [accountResourcesLoaded, setAccountResourcesLoaded] = useState(false);
+  const [accountResourcesLoading, setAccountResourcesLoading] = useState(false);
+  const [accountResourcesError, setAccountResourcesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -296,33 +409,27 @@ export default function SettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [modelsRes, settingsRes, sandboxesRes, observationRes] = await Promise.all([
+      const [modelsRes, settingsRes] = await Promise.all([
         authFetch("/api/settings/available-models"),
         authFetch("/api/settings"),
-        authFetch("/api/settings/sandboxes"),
-        authFetch("/api/settings/observation"),
       ]);
 
       if (!modelsRes.ok || !settingsRes.ok) {
-        throw new Error(`API 请求失败 (${modelsRes.status})`);
+        throw new Error(`Settings API failed: models=${modelsRes.status}, settings=${settingsRes.status}`);
       }
 
       const modelsData = await modelsRes.json();
       const settingsData = await settingsRes.json();
-      const sandboxesData = await sandboxesRes.json();
-      const observationData = await observationRes.json();
 
       setAvailableModels(modelsData);
       setSettings(settingsData);
-      setSandboxes(sandboxesData.sandboxes || {});
-      setObservationConfig(observationData);
     } catch (err) {
       // @@@settings-route-teardown - settings bootstrap requests can finish
       // after navigation already left /settings. Only surface failures while
       // this route is still active; otherwise this is stale UI noise.
       if (!isActiveSettingsRoute()) return;
       console.error("Failed to load settings:", err);
-      setError(err instanceof Error ? err.message : "加载设置失败");
+      setError("设置暂时无法加载，请稍后重试。");
     } finally {
       setLoading(false);
     }
@@ -332,20 +439,50 @@ export default function SettingsPage() {
     void loadData();
   }, [loadData]);
 
+  const loadAccountResources = async () => {
+    if (accountResourcesLoading) return;
+    setAccountResourcesLoading(true);
+    setAccountResourcesError(null);
+    try {
+      setAccountResources(await fetchAccountResourceLimits());
+      setAccountResourcesLoaded(true);
+    } catch (err) {
+      console.error("Failed to load account resources:", err);
+      setAccountResourcesError("账号资源暂时无法加载，请稍后重试。");
+    } finally {
+      setAccountResourcesLoading(false);
+    }
+  };
+
+  const selectTab = (nextTab: Tab) => {
+    setTab(nextTab);
+    if (nextTab === "accountResources" && !accountResourcesLoaded) void loadAccountResources();
+  };
+
+  const reloadModelSettings = async () => {
+    const [modelsRes, settingsRes] = await Promise.all([
+      authFetch("/api/settings/available-models"),
+      authFetch("/api/settings"),
+    ]);
+    if (!modelsRes.ok || !settingsRes.ok) {
+      throw new Error(`Settings reload failed: models=${modelsRes.status}, settings=${settingsRes.status}`);
+    }
+    setAvailableModels(await modelsRes.json());
+    setSettings(await settingsRes.json());
+  };
+
   const handleAddCustomModel = async (modelId: string, provider: string, basedOn?: string, contextLimit?: number) => {
-    const res = await authFetch("/api/settings/models/custom", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_id: modelId, provider, based_on: basedOn || null, context_limit: contextLimit || null }),
-    });
-    const data = await res.json();
-    if (isSuccessResponse(data)) {
-      const [modelsRes, settingsRes] = await Promise.all([
-        authFetch("/api/settings/available-models"),
-        authFetch("/api/settings"),
-      ]);
-      setAvailableModels(await modelsRes.json());
-      setSettings(await settingsRes.json());
+    try {
+      const response = await authFetch("/api/settings/models/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_id: modelId, provider, based_on: basedOn || null, context_limit: contextLimit || null }),
+      });
+      if (!response.ok) throw new Error(await httpErrorMessage("自定义模型保存失败", response));
+      if (isSuccessResponse(await response.json())) await reloadModelSettings();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      throw err;
     }
   };
 
@@ -392,12 +529,17 @@ export default function SettingsPage() {
                   <button
                     key={id}
                     onClick={async () => {
-                      setSettings({ ...settings, default_model: id });
-                      await authFetch("/api/settings/default-model", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ model: id }),
-                      });
+                      try {
+                        const response = await authFetch("/api/settings/default-model", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ model: id }),
+                        });
+                        if (!response.ok) throw new Error(await httpErrorMessage("默认模型保存失败", response));
+                        setSettings({ ...settings, default_model: id });
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : String(err));
+                      }
                     }}
                     className={`px-4 py-2 text-sm rounded-lg border transition-colors duration-fast ${
                       active
@@ -431,17 +573,15 @@ export default function SettingsPage() {
             }}
             onAddCustomModel={handleAddCustomModel}
             onRemoveCustomModel={async (modelId) => {
-              const res = await authFetch(`/api/settings/models/custom?model_id=${encodeURIComponent(modelId)}`, {
-                method: "DELETE",
-              });
-              const data = await res.json();
-              if (isSuccessResponse(data)) {
-                const [modelsRes, settingsRes] = await Promise.all([
-                  authFetch("/api/settings/available-models"),
-                  authFetch("/api/settings"),
-                ]);
-                setAvailableModels(await modelsRes.json());
-                setSettings(await settingsRes.json());
+              try {
+                const response = await authFetch(`/api/settings/models/custom?model_id=${encodeURIComponent(modelId)}`, {
+                  method: "DELETE",
+                });
+                if (!response.ok) throw new Error(await httpErrorMessage("自定义模型移除失败", response));
+                if (isSuccessResponse(await response.json())) await reloadModelSettings();
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : String(err));
+                throw err;
               }
             }}
           />
@@ -457,30 +597,16 @@ export default function SettingsPage() {
         </>
       )}
 
-      {activeTab === "sandbox" && (
-        <>
-          <WorkspaceSection
-            defaultWorkspace={settings.default_workspace}
-            onUpdate={(ws) => setSettings({ ...settings, default_workspace: ws })}
-          />
-          <SandboxSection
-            sandboxes={sandboxes}
-            onUpdate={(name, config) => {
-              setSandboxes({ ...sandboxes, [name]: config });
-            }}
-          />
-        </>
-      )}
-
-      {activeTab === "observation" && (
-        <ObservationSection
-          config={observationConfig}
-          onUpdate={(cfg) => setObservationConfig(cfg)}
-        />
-      )}
-
       {activeTab === "invite" && (
         <InviteCodesSection />
+      )}
+      {activeTab === "accountResources" && (
+        <AccountResourcesSection
+          items={accountResources}
+          loading={accountResourcesLoading}
+          error={accountResourcesError}
+          onRetry={() => void loadAccountResources()}
+        />
       )}
     </div>
   );
@@ -493,7 +619,7 @@ export default function SettingsPage() {
         return (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => selectTab(t.id)}
             className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors duration-fast group ${
               active
                 ? "bg-primary/5 border border-primary/15"

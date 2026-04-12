@@ -10,6 +10,18 @@ afterEach(() => {
 });
 
 describe("ChatArea", () => {
+  it("can shrink inside the chat flex column so the message pane owns scrolling", () => {
+    const { container } = render(
+      <ChatArea
+        entries={[]}
+        runtimeStatus={null}
+        loading={false}
+      />,
+    );
+
+    expect(container.firstElementChild?.className).toContain("min-h-0");
+  });
+
   it("does not render hidden user entries", () => {
     render(
       <ChatArea

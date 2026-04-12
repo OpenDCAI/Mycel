@@ -335,6 +335,7 @@ def _make_threads_app(
 def _patch_create_thread_noop_guards():
     with (
         patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
+        patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
         patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
         patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),

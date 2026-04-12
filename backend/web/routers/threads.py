@@ -26,7 +26,7 @@ from backend.web.models.requests import (
     SendMessageRequest,
     ThreadPermissionRuleRequest,
 )
-from backend.web.services import sandbox_service
+from backend.web.services import account_resource_service, sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_source
@@ -308,6 +308,24 @@ def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: Creat
     if provider is not None:
         return None
     return _provider_unavailable_response(sandbox_type)
+
+
+def _validate_sandbox_quota_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
+    if payload.lease_id:
+        return None
+    sandbox_type = payload.sandbox or "local"
+    try:
+        account_resource_service.assert_can_create_sandbox(app, owner_user_id, sandbox_type)
+    except account_resource_service.AccountResourceLimitExceededError as exc:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "sandbox_quota_exceeded",
+                "message": str(exc),
+                "resource": exc.resource,
+            },
+        )
+    return None
 
 
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
@@ -673,6 +691,9 @@ async def create_thread(
     capability_error = await _validate_mount_capability_gate(sandbox_type, requested_mounts)
     if capability_error is not None:
         return capability_error
+    quota_error = _validate_sandbox_quota_gate(app, user_id, payload)
+    if quota_error is not None:
+        return quota_error
 
     result = _create_owned_thread(app, user_id, payload, is_main=False)
     _invalidate_resource_overview_cache()
@@ -1113,20 +1134,9 @@ async def get_thread_runtime(
     thread_data = app.state.thread_repo.get_by_id(thread_id)
     model = thread_data["model"] if thread_data and thread_data.get("model") else None
 
-    if not stream:
-        status = agent.runtime.get_compact_dict()
-        state_str = status.pop("state", "idle")
-        status["state"] = {"state": state_str, "flags": {}}
-        status["model"] = model
-        status["last_seq"] = last_seq
-        if state_str == "active":
-            run_id = await get_latest_run_id(thread_id)
-            if run_id:
-                status["run_start_seq"] = await get_run_start_seq(thread_id, run_id)
-        return status
-
     status = agent.runtime.get_status_dict()
-    status["model"] = model
+    if model is not None:
+        status["model"] = model
     status["last_seq"] = last_seq
     if status.get("state", {}).get("state") == "active":
         run_id = await get_latest_run_id(thread_id)
