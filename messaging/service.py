@@ -29,14 +29,14 @@ class MessagingService:
 
     def __init__(
         self,
-        chat_repo: Any,  # chat repo compatible with MessagingService create/list/delete operations
-        chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
-        messages_repo: Any,  # SupabaseMessagesRepo
-        user_repo: Any,  # UserRepo (for name + avatar lookup)
+        chat_repo: Any,
+        chat_member_repo: Any,
+        messages_repo: Any,
+        user_repo: Any,
         thread_repo: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
-        event_bus: Any | None = None,  # ChatEventBus-compatible publisher (optional)
+        event_bus: Any | None = None,
     ) -> None:
         self._chats = chat_repo
         self._chat_members_repo = chat_member_repo

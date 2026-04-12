@@ -121,9 +121,9 @@ class ToolRegistry:
 
     def register(self, entry: ToolEntry) -> None:
         if self._allowed_tools is not None and entry.name not in self._allowed_tools:
-            return  # silently skip
+            return
         if entry.name in self._blocked_tools:
-            return  # silently skip disabled tools
+            return
         self._tools[entry.name] = entry
 
     def get(self, name: str) -> ToolEntry | None:
