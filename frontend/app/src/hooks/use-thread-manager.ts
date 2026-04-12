@@ -5,7 +5,6 @@ import {
   getDefaultThread,
   listSandboxTypes,
   listThreads,
-  type RecipeSnapshot,
   type SandboxType,
   type ThreadSummary,
 } from "../api";
@@ -33,7 +32,7 @@ export interface ThreadManagerActions {
     agentUserId?: string,
     model?: string,
     leaseId?: string,
-    recipe?: RecipeSnapshot,
+    recipeId?: string,
   ) => Promise<string>;
   handleGetDefaultThread: (agentUserId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
   handleDeleteThread: (threadId: string) => Promise<void>;
@@ -104,10 +103,10 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     agentUserId?: string,
     model?: string,
     leaseId?: string,
-    recipe?: RecipeSnapshot,
+    recipeId?: string,
   ): Promise<string> => {
     const type = sandbox ?? selectedSandbox;
-    const thread = await createThread({ sandbox: type, cwd, agentUserId: agentUserId ?? "", model, leaseId, recipe });
+    const thread = await createThread({ sandbox: type, cwd, agentUserId: agentUserId ?? "", model, leaseId, recipeId });
     setThreads((prev) => upsertThread(prev, thread));
     setSelectedSandbox(type);
     return thread.thread_id;

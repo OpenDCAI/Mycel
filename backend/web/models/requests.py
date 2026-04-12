@@ -22,7 +22,7 @@ class RecipeSnapshotRequest(BaseModel):
 class CreateThreadRequest(BaseModel):
     agent_user_id: str
     sandbox: str = Field(default="local", validation_alias=AliasChoices("sandbox", "sandbox_type"))
-    recipe: RecipeSnapshotRequest | None = None
+    recipe_id: str | None = None
     lease_id: str | None = None
     cwd: str | None = None
     model: str | None = None

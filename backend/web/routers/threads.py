@@ -580,17 +580,17 @@ def _resolve_owned_recipe_snapshot(
     app: Any,
     owner_user_id: str,
     sandbox_type: str,
-    requested_recipe: dict[str, Any] | None,
+    recipe_id: str | None,
 ) -> dict[str, Any]:
-    recipe_id = str((requested_recipe or {}).get("id") or default_recipe_id(sandbox_type)).strip()
-    if not recipe_id:
+    resolved_recipe_id = str(recipe_id or default_recipe_id(sandbox_type)).strip()
+    if not resolved_recipe_id:
         raise HTTPException(400, "Recipe id is required")
 
     recipe_repo = getattr(app.state, "recipe_repo", None)
     if recipe_repo is None:
         raise RuntimeError("recipe_repo is required for thread recipe resolution")
 
-    row = recipe_repo.get(owner_user_id, recipe_id)
+    row = recipe_repo.get(owner_user_id, resolved_recipe_id)
     if row is None:
         raise HTTPException(400, "Recipe not found")
 
@@ -633,8 +633,7 @@ def _create_owned_thread(
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
     selected_recipe = None
     if not selected_lease_id:
-        requested_recipe = payload.recipe.model_dump() if payload.recipe else None
-        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, requested_recipe)
+        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.recipe_id)
 
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     # @@@user-owned-thread-seq - thread ids are now allocated from the unified

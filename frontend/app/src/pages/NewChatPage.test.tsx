@@ -474,12 +474,7 @@ describe("NewChatPage", () => {
         "m_xVuNpKJNxblZ",
         "leon:large",
         undefined,
-        expect.objectContaining({
-          id: "local-recipe",
-          name: "Local",
-          provider_type: "local",
-          features: { lark_cli: false },
-        }),
+        "local-recipe",
       );
     });
   });

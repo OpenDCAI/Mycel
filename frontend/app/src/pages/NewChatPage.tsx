@@ -406,7 +406,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         decodedAgentId,
         model,
         undefined,
-        selectedRecipeSnapshot,
+        selectedRecipeSnapshot.id,
       );
     }
     postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {

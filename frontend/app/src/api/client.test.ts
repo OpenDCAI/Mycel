@@ -62,6 +62,24 @@ describe("thread api client contract", () => {
     );
   });
 
+  it("createThread sends recipe_id instead of the recipe snapshot", async () => {
+    authFetch.mockResolvedValue(okJson({ thread_id: "thread-1" }));
+
+    await api.createThread({
+      sandbox: "local",
+      agentUserId: "agent-1",
+      recipeId: "local:default",
+    });
+
+    expect(authFetch).toHaveBeenCalledWith(
+      "/api/threads",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ sandbox: "local", agent_user_id: "agent-1", recipe_id: "local:default" }),
+      }),
+    );
+  });
+
   it("createThread surfaces backend error messages", async () => {
     authFetch.mockResolvedValue(errorJson(409, {
       error: "sandbox_quota_exceeded",

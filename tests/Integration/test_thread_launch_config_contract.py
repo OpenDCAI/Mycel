@@ -688,20 +688,12 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         "created_at": 0,
         "updated_at": 0,
     }
-    recipe = {
-        "id": "local:custom:lark",
-        "name": "Tampered Client Name",
-        "provider_type": "local",
-        "features": {"lark_cli": False},
-        "configurable_features": {"lark_cli": True},
-        "feature_options": [{"key": "lark_cli", "name": "Lark CLI", "description": "Install Lark CLI"}],
-    }
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "member-1",
             "model": "gpt-5.4-mini",
             "sandbox": "local",
-            "recipe": recipe,
+            "recipe_id": "local:custom:lark",
         }
     )
     normalized_recipe = normalize_recipe_snapshot("local", repo_recipe)
@@ -745,12 +737,7 @@ async def test_create_thread_rejects_unowned_recipe_snapshot() -> None:
             "agent_user_id": "member-1",
             "model": "gpt-5.4-mini",
             "sandbox": "local",
-            "recipe": {
-                "id": "local:custom:foreign",
-                "name": "Foreign Recipe",
-                "provider_type": "local",
-                "features": {},
-            },
+            "recipe_id": "local:custom:foreign",
         }
     )
 
