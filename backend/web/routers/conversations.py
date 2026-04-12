@@ -46,14 +46,16 @@ async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> list[dict[str, Any]]:
-    return await asyncio.to_thread(_list_conversations_for_user, app, user_id)
+    hire_items, visit_items = await asyncio.gather(
+        asyncio.to_thread(_list_hire_conversations_for_user, app, user_id),
+        asyncio.to_thread(_list_visit_conversations_for_user, app, user_id),
+    )
+    return _sort_conversation_items([*hire_items, *visit_items])
 
 
-def _list_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
-    """Return hire threads + visit chats merged by updated_at desc."""
+def _list_hire_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
+    """Return hire thread rows for the unified conversation sidebar."""
     items: list[dict[str, Any]] = []
-
-    # ── Hire threads ──
     raw_threads = canonical_owner_threads(app.state.thread_repo.list_by_owner_user_id(user_id))
     pool = app.state.agent_pool
     for t in raw_threads:
@@ -78,8 +80,12 @@ def _list_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]
                 "running": running,
             }
         )
+    return items
 
-    # ── Visit chats ──
+
+def _list_visit_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
+    """Return visit chat rows for the unified conversation sidebar."""
+    items: list[dict[str, Any]] = []
     messaging = getattr(app.state, "messaging_service", None)
     if messaging:
         chats = messaging.list_conversation_summaries_for_user(user_id)
@@ -95,7 +101,9 @@ def _list_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]
                     "running": False,
                 }
             )
+    return items
 
-    # Sort by updated_at descending (None goes last)
+
+def _sort_conversation_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     items.sort(key=_conversation_updated_at_key, reverse=True)
     return items

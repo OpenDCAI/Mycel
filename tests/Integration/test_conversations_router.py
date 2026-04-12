@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -270,4 +271,36 @@ async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatc
     monkeypatch.setattr(conversations_router.asyncio, "to_thread", _fake_to_thread)
 
     assert await conversations_router.list_conversations("human-user-1", app=app) == []
-    assert to_thread_calls == [("_list_conversations_for_user", (app, "human-user-1"))]
+    assert to_thread_calls == [
+        ("_list_hire_conversations_for_user", (app, "human-user-1")),
+        ("_list_visit_conversations_for_user", (app, "human-user-1")),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_fetches_hire_and_visit_sources_in_parallel() -> None:
+    hire_started = threading.Event()
+    visit_started = threading.Event()
+
+    def _list_threads(_user_id: str):
+        hire_started.set()
+        if not visit_started.wait(0.2):
+            raise AssertionError("visit summaries did not start while hire threads were loading")
+        return []
+
+    def _list_visit_summaries(_user_id: str):
+        visit_started.set()
+        if not hire_started.wait(0.2):
+            raise AssertionError("hire threads did not start while visit summaries were loading")
+        return []
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(list_by_owner_user_id=_list_threads),
+            agent_pool={},
+            thread_last_active={},
+            messaging_service=SimpleNamespace(list_conversation_summaries_for_user=_list_visit_summaries),
+        )
+    )
+
+    assert await conversations_router.list_conversations("human-user-1", app=app) == []
