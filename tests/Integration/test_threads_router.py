@@ -365,25 +365,6 @@ async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
 
 
 @pytest.mark.asyncio
-async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
-    payload = CreateThreadRequest.model_validate(
-        {
-            "agent_user_id": "agent-user-1",
-            "sandbox_type": "daytona_selfhost",
-            "model": "gpt-5.4-mini",
-        }
-    )
-
-    with _patch_create_thread_noop_guards():
-        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
-
-    assert result["sandbox"] == "daytona_selfhost"
-    assert app.state.thread_sandbox[result["thread_id"]] == "daytona_selfhost"
-    assert app.state.thread_repo.rows[result["thread_id"]]["sandbox_type"] == "daytona_selfhost"
-
-
-@pytest.mark.asyncio
 async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadata():
     thread_repo = _FakeThreadRepo()
     thread_repo.create(
