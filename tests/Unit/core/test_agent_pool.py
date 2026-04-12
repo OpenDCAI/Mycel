@@ -164,15 +164,15 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with_conflicting_legacy_member_shell(
+async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with_conflicting_stale_member_shell(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ):
     captured: dict[str, object] = {}
-    legacy_member_dir = tmp_path / "members" / "agent-user-1"
-    legacy_member_dir.mkdir(parents=True)
-    (legacy_member_dir / "agent.md").write_text(
-        "---\nname: Legacy Toad\ndescription: stale shell\n---\nYou are the wrong source.\n",
+    stale_member_dir = tmp_path / "members" / "agent-user-1"
+    stale_member_dir.mkdir(parents=True)
+    (stale_member_dir / "agent.md").write_text(
+        "---\nname: Stale Toad\ndescription: stale shell\n---\nYou are the wrong source.\n",
         encoding="utf-8",
     )
 

@@ -626,17 +626,17 @@ async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path)
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_id_ignores_conflicting_legacy_member_shell(tmp_path):
+async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell(tmp_path):
     """Repo-rooted live startup must ignore a stale member-dir shell with conflicting MCP state."""
     from core.runtime.agent import LeonAgent
 
-    legacy_member_dir = tmp_path / "members" / "toad"
-    legacy_member_dir.mkdir(parents=True)
-    (legacy_member_dir / "agent.md").write_text(
-        "---\nname: Legacy Toad\ndescription: Stale member shell\n---\nYou are Legacy Toad.\n",
+    stale_member_dir = tmp_path / "members" / "toad"
+    stale_member_dir.mkdir(parents=True)
+    (stale_member_dir / "agent.md").write_text(
+        "---\nname: Stale Toad\ndescription: Stale member shell\n---\nYou are Stale Toad.\n",
         encoding="utf-8",
     )
-    (legacy_member_dir / ".mcp.json").write_text('{"mcpServers":{}}', encoding="utf-8")
+    (stale_member_dir / ".mcp.json").write_text('{"mcpServers":{}}', encoding="utf-8")
 
     class _Repo:
         def get_config(self, agent_config_id: str):
@@ -684,9 +684,9 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_legacy_member_shel
         await agent.ainit()
 
         # @@@runtime-repo-source-of-truth - repo-backed live startup must ignore
-        # conflicting legacy member shells and keep MCP registration sourced from agent_config_repo.
+        # conflicting stale member shells and keep MCP registration sourced from agent_config_repo.
         assert "Repo Toad" in agent.system_prompt
-        assert "Legacy Toad" not in agent.system_prompt
+        assert "Stale Toad" not in agent.system_prompt
         assert agent._tool_registry.get("ListMcpResources") is not None
         assert agent._tool_registry.get("ReadMcpResource") is not None
 
@@ -1005,7 +1005,7 @@ def test_leon_agent_chat_tool_wiring_rejects_user_id_only_runtime_shape(monkeypa
         LeonAgent._init_services(agent)
 
 
-def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy_user_id():
+def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_removed_user_id():
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
@@ -1029,13 +1029,13 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy
     assert "- Your owner: Owner 2 (human user_id: human-user-2)" in prompt
 
 
-def test_leon_agent_chat_identity_prompt_does_not_bridge_legacy_thread_user_id() -> None:
+def test_leon_agent_chat_identity_prompt_does_not_bridge_removed_thread_user_id() -> None:
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
-    agent._thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("legacy thread-user bridge should not be used"))
+    agent._thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("removed thread-user bridge should not be used"))
     agent._chat_repos = {
         "chat_identity_id": "thread-user-3",
         "owner_id": "human-user-3",
