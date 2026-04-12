@@ -86,7 +86,10 @@ describe("thread api client contract", () => {
   });
 
   it("getDefaultThreadConfig queries by agent_user_id", async () => {
-    authFetch.mockResolvedValue(okJson({ source: "derived", config: {} }));
+    authFetch.mockResolvedValue(okJson({
+      source: "derived",
+      config: { create_mode: "new", provider_config: "local", recipe: null, lease_id: null, model: null, workspace: null },
+    }));
 
     await api.getDefaultThreadConfig("agent-1");
 
@@ -94,6 +97,12 @@ describe("thread api client contract", () => {
       "/api/threads/default-config?agent_user_id=agent-1",
       { signal: undefined },
     );
+  });
+
+  it("getDefaultThreadConfig rejects malformed launch config payloads", async () => {
+    authFetch.mockResolvedValue(okJson({ source: "derived", config: { provider_config: "local" } }));
+
+    await expect(api.getDefaultThreadConfig("agent-1")).rejects.toThrow("Malformed default thread config");
   });
 
   it("saveDefaultThreadConfig posts agent_user_id", async () => {
