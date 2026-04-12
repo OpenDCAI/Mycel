@@ -32,6 +32,12 @@ describe("streaming api contract", () => {
     await expect(api.cancelRun("thread-1")).rejects.toThrow("No active run found");
   });
 
+  it("cancelRun ignores non-string backend messages", async () => {
+    authFetch.mockResolvedValue(okJson({ ok: false, message: { text: "No active run found" } }));
+
+    await expect(api.cancelRun("thread-1")).rejects.toThrow(/^Cancel failed$/);
+  });
+
   it("postRun reports startup cancellation as a cancelled run", async () => {
     authFetch.mockResolvedValue(okJson({ status: "cancelled", routing: "cancelled", thread_id: "thread-1" }));
 
