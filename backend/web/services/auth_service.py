@@ -167,7 +167,7 @@ class AuthService:
         if self._recipe_repo is not None:
             self._seed_default_recipes(auth_user_id)
 
-        # Load entities + agents
+        # Load user-owned agents.
         owned_agents = self._users.list_by_owner_user_id(auth_user_id)
         agent_info = None
         if owned_agents:
@@ -278,7 +278,7 @@ class AuthService:
             src_avatar = assets_dir / agent_def["avatar"]
             if not src_avatar.exists():
                 raise RuntimeError(f"Default agent avatar missing: {src_avatar}")
-            from backend.web.routers.entities import process_and_save_avatar
+            from backend.web.routers.users import process_and_save_avatar
 
             avatar_path = process_and_save_avatar(src_avatar, agent_id)
             self._users.update(agent_id, avatar=avatar_path)

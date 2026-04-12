@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-# NOTE: EntityRow was deleted from storage/contracts.py in the entity→member
-# refactor (commit cc156856). The old test asserted that child agent branches
-# were filtered out on the backend; that filtering was removed along with the
-# entity layer — it is now the frontend's responsibility. The test below
-# verifies the current production behaviour of list_entities:
+# NOTE: User is the only identity table. The old EntityRow layer was removed;
+# this router projects user rows into chat-candidate payloads for contacts and
+# group-chat creation. The test below verifies the current production behaviour:
 #   • current user is excluded
 #   • other humans and agents are all included (no branch filtering)
 #   • thread metadata (is_main, branch_index) is attached from thread_repo
@@ -14,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.web.routers import entities as entities_router
+from backend.web.routers import users as users_router
 from storage.contracts import ContactEdgeRow, UserRow, UserType
 
 NOW = 1_775_223_756.0
@@ -53,7 +51,7 @@ def _active_contact_repo(source_user_id: str, target_user_id: str) -> SimpleName
     )
 
 
-def _entities_app(
+def _users_app(
     users: list[UserRow],
     *,
     thread_repo: object | None = None,
@@ -91,7 +89,7 @@ class _FakeThreadRepo:
 
 
 @pytest.mark.asyncio
-async def test_list_entities_excludes_current_user_and_returns_all_others():
+async def test_list_chat_candidates_excludes_current_user_and_returns_all_others():
     current_user = _human("u1", "owner")
     other_human = _human("u2", "other")
     main_agent = _agent("a-main", "Toad", "u2")
@@ -102,20 +100,20 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
             "a-child": {"id": "thread-child", "is_main": False, "branch_index": 1},
         }
     )
-    app = _entities_app(
+    app = _users_app(
         [current_user, other_human, main_agent, child_agent],
         thread_repo=thread_repo,
         relationships={"u2": "visit", "a-main": "pending"},
     )
 
-    result = await entities_router.list_entities(user_id="u1", app=app)
+    result = await users_router.list_chat_candidates(user_id="u1", app=app)
 
     assert thread_repo.batch_calls == [["a-main", "a-child"]]
     assert thread_repo.single_calls == []
 
     # Current user (u1) is excluded; all other users are returned.
-    identities = [(item["type"], item.get("user_id")) for item in result]
-    assert identities == [
+    candidates = [(item["type"], item.get("user_id")) for item in result]
+    assert candidates == [
         ("human", "u2"),
         ("agent", "a-main"),
         ("agent", "a-child"),
@@ -157,13 +155,13 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
 
 
 @pytest.mark.asyncio
-async def test_list_entities_marks_owned_agents_as_chat_candidates_without_relationship():
-    app = _entities_app(
+async def test_list_chat_candidates_marks_owned_agents_as_chat_candidates_without_relationship():
+    app = _users_app(
         [_human("u1", "owner"), _agent("a-owned", "Morel", "u1")],
         thread_repo=_FakeThreadRepo({"a-owned": {"id": "thread-owned", "is_main": True, "branch_index": 0}}),
     )
 
-    result = await entities_router.list_entities(user_id="u1", app=app)
+    result = await users_router.list_chat_candidates(user_id="u1", app=app)
 
     assert result[0]["user_id"] == "a-owned"
     assert result[0]["is_owned"] is True
@@ -172,13 +170,13 @@ async def test_list_entities_marks_owned_agents_as_chat_candidates_without_relat
 
 
 @pytest.mark.asyncio
-async def test_list_entities_marks_normal_active_contacts_as_chat_candidates():
-    app = _entities_app(
+async def test_list_chat_candidates_marks_normal_active_contacts_as_chat_candidates():
+    app = _users_app(
         [_human("u1", "owner"), _human("u2", "other")],
         contact_repo=_active_contact_repo("u1", "u2"),
     )
 
-    result = await entities_router.list_entities(user_id="u1", app=app)
+    result = await users_router.list_chat_candidates(user_id="u1", app=app)
 
     assert result == [
         {
@@ -199,13 +197,13 @@ async def test_list_entities_marks_normal_active_contacts_as_chat_candidates():
 
 
 @pytest.mark.asyncio
-async def test_list_entities_marks_agents_owned_by_active_contacts_as_chat_candidates():
-    app = _entities_app(
+async def test_list_chat_candidates_marks_agents_owned_by_active_contacts_as_chat_candidates():
+    app = _users_app(
         [_human("u1", "owner"), _human("u2", "other"), _agent("a-other", "Toad", "u2")],
         contact_repo=_active_contact_repo("u1", "u2"),
     )
 
-    result = await entities_router.list_entities(user_id="u1", app=app)
+    result = await users_router.list_chat_candidates(user_id="u1", app=app)
 
     human_item = next(item for item in result if item["user_id"] == "u2")
     agent_item = next(item for item in result if item["user_id"] == "a-other")
@@ -229,7 +227,7 @@ async def test_get_agent_thread_reads_main_thread_from_thread_repo_via_user_repo
         )
     )
 
-    result = await entities_router.get_agent_thread("a-main", current_user_id="u2", app=app)
+    result = await users_router.get_agent_thread("a-main", current_user_id="u2", app=app)
 
     assert result == {"user_id": "a-main", "default_thread_id": "thread-main"}
 
@@ -242,7 +240,7 @@ def test_get_user_or_404_returns_user():
         )
     )
 
-    result = entities_router._get_user_or_404(app, "a-main")
+    result = users_router._get_user_or_404(app, "a-main")
 
     assert result is agent
 
@@ -255,7 +253,14 @@ def test_get_user_or_404_raises_for_missing_user():
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        entities_router._get_user_or_404(app, "missing")
+        users_router._get_user_or_404(app, "missing")
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "User not found"
+
+
+def test_user_router_exposes_chat_candidates_not_legacy_entities_path():
+    paths = {route.path for route in users_router.users_router.routes}
+
+    assert "/api/users/chat-candidates" in paths
+    assert "/api/entities" not in paths

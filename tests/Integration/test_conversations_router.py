@@ -29,7 +29,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
                         "avatar_url": avatar_url("agent-user-1", False),
                         "updated_at": "2026-04-07T00:00:00Z",
                         "unread_count": 3,
-                        "entities": [
+                        "members": [
                             {
                                 "id": "thread-user-1",
                                 "name": "Toad",
@@ -96,7 +96,7 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                         "avatar_url": avatar_url("member-agent-2", False),
                         "updated_at": 1775540100.0,
                         "unread_count": 0,
-                        "entities": [
+                        "members": [
                             {
                                 "id": "member-agent-2",
                                 "name": "Toad",
@@ -220,7 +220,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
                         "avatar_url": avatar_url("agent-user-1", True),
                         "updated_at": "2026-04-07T00:00:00Z",
                         "unread_count": 0,
-                        "entities": [
+                        "members": [
                             {
                                 "id": "thread-user-1",
                                 "name": "Morel",
@@ -235,7 +235,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
                 ),
             ),
             user_repo=SimpleNamespace(
-                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit entities"))
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not resolve visit members"))
             ),
             chat_repo=SimpleNamespace(
                 get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("router should not rebuild chat summary"))

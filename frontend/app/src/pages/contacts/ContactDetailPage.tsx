@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Bot, MessageSquare, User } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { fetchEntities, type EntityItem } from "@/api/entities";
+import { fetchUserChatCandidates, type UserChatCandidate } from "@/api/users";
 import ActorAvatar from "@/components/ActorAvatar";
 import { Button } from "@/components/ui/button";
 import { authFetch, useAuthStore } from "@/store/auth-store";
@@ -24,7 +24,7 @@ async function createDirectChat(currentUserId: string, targetUserId: string): Pr
   return (payload as { id: string }).id;
 }
 
-function relationshipLabel(contact: EntityItem): string {
+function relationshipLabel(contact: UserChatCandidate): string {
   if (contact.relationship_state === "visit" || contact.relationship_state === "hire") return contact.relationship_state;
   if (contact.can_chat) return "联系人";
   return contact.relationship_state;
@@ -34,7 +34,7 @@ export default function ContactDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const myUserId = useAuthStore((s) => s.userId);
-  const [entities, setEntities] = useState<EntityItem[]>([]);
+  const [chatCandidates, setChatCandidates] = useState<UserChatCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
@@ -44,9 +44,9 @@ export default function ContactDetailPage() {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetchEntities()
+    fetchUserChatCandidates()
       .then((items) => {
-        if (!cancelled) setEntities(items);
+        if (!cancelled) setChatCandidates(items);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(errorText(err));
@@ -59,17 +59,13 @@ export default function ContactDetailPage() {
     };
   }, []);
 
-  const contact = useMemo(() => entities.find((item) => item.user_id === userId), [entities, userId]);
+  const contact = useMemo(() => chatCandidates.find((item) => item.user_id === userId), [chatCandidates, userId]);
 
   const openConversation = async () => {
     if (!contact || opening) return;
     setOpening(true);
     setOpenError(null);
     try {
-      if (contact.default_thread_id) {
-        navigate(`/chat/hire/thread/${contact.default_thread_id}`);
-        return;
-      }
       if (!myUserId) throw new Error("当前用户未登录");
       const chatId = await createDirectChat(myUserId, contact.user_id);
       navigate(`/chat/visit/${chatId}`);
@@ -99,7 +95,6 @@ export default function ContactDetailPage() {
   }
 
   const isAgent = contact.type === "agent";
-  const actionLabel = contact.default_thread_id ? "打开默认线程" : "发起对话";
   const relationshipStatus = relationshipLabel(contact);
 
   return (
@@ -115,7 +110,7 @@ export default function ContactDetailPage() {
         {contact.can_chat && (
           <Button size="sm" onClick={() => void openConversation()} disabled={opening}>
             <MessageSquare className="h-3.5 w-3.5 mr-1" />
-            {opening ? "打开中..." : actionLabel}
+            {opening ? "打开中..." : "发起对话"}
           </Button>
         )}
       </div>

@@ -130,7 +130,7 @@ describe("NewChatDialog", () => {
     const { onOpenChange } = renderDialog();
 
     fireEvent.click(screen.getByRole("button", { name: "创建群聊" }));
-    expect(authFetch).toHaveBeenCalledWith("/api/entities");
+    expect(authFetch).toHaveBeenCalledWith("/api/users/chat-candidates");
 
     expect(await screen.findByRole("button", { name: /Ada/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Pending User/ })).toBeNull();
@@ -152,7 +152,7 @@ describe("NewChatDialog", () => {
     expect(navigate).toHaveBeenCalledWith("/chat/visit/chat-1");
   });
 
-  it("uses entities as the group-chat participant source of truth", async () => {
+  it("uses user candidates as the group-chat participant source of truth", async () => {
     useAppStore.setState({
       agentList: [
         {
@@ -193,7 +193,7 @@ describe("NewChatDialog", () => {
           can_chat: true,
         },
       ]))
-      .mockResolvedValueOnce(okJson({ id: "chat-entity-source", status: "active", created_at: 1 }));
+      .mockResolvedValueOnce(okJson({ id: "chat-user-candidates-source", status: "active", created_at: 1 }));
 
     renderDialog();
 

@@ -51,16 +51,16 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [typingEntities, setTypingEntities] = useState<Set<string>>(new Set());
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
   const memberMap = useMemo(() => {
     const m = new Map<string, ChatMember>();
-    chat?.entities.forEach(e => m.set(e.id, e));
+    chat?.members.forEach(member => m.set(member.id, member));
     return m;
-  }, [chat?.entities]);
+  }, [chat?.members]);
   // Track if user is at bottom for sticky scroll
   const onScroll = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -147,13 +147,13 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         }
         if (event.type === "typing_start") {
           const userId = parseChatTypingUserId(event.data);
-          if (userId) setTypingEntities(prev => new Set([...prev, userId]));
+          if (userId) setTypingUsers(prev => new Set([...prev, userId]));
           return;
         }
         if (event.type === "typing_stop") {
           const userId = parseChatTypingUserId(event.data);
           if (!userId) return;
-          setTypingEntities(prev => {
+          setTypingUsers(prev => {
             const next = new Set(prev);
             next.delete(userId);
             return next;
@@ -232,10 +232,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   };
 
   // Typing indicator display — works for both 1:1 and group
-  const typingNames = [...typingEntities]
+  const typingNames = [...typingUsers]
     .map(id => memberMap.get(id)?.name)
     .filter(Boolean);
-  const typingDisplay = typingEntities.size > 0 ? (
+  const typingDisplay = typingUsers.size > 0 ? (
     <div className="flex items-center gap-2 px-4 py-1">
       <div className="flex gap-1">
         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -250,7 +250,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
 
   // Display name for header
   const chatName = chat
-    ? chat.title || chat.entities.filter(e => e.id !== myUserId).map(e => e.name).join(", ") || "聊天"
+    ? chat.title || chat.members.filter(member => member.id !== myUserId).map(member => member.name).join(", ") || "聊天"
     : "聊天";
 
   if (loading) {
@@ -286,7 +286,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           </span>
           {chat && (
             <span className="text-2xs px-1.5 py-0.5 rounded-md font-medium border border-border text-muted-foreground bg-muted">
-              {chat.entities.length} 位成员
+              {chat.members.length} 位成员
             </span>
           )}
         </div>

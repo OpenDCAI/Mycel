@@ -87,24 +87,24 @@ class MessagingService:
     def project_message_response(self, row: dict[str, Any]) -> dict[str, Any]:
         return self._project_message_response(row)
 
-    def _build_chat_entities(self, chat_id: str) -> list[dict[str, Any]]:
-        entities_info = []
+    def _build_chat_members(self, chat_id: str) -> list[dict[str, Any]]:
+        member_info = []
         for member in self._members_repo.list_members(chat_id):
             social_user_id = member.get("user_id")
-            entity = self._resolve_display_user(social_user_id) if social_user_id else None
-            if entity is None:
+            user = self._resolve_display_user(social_user_id) if social_user_id else None
+            if user is None:
                 continue
-            # @@@thread-social-entity-projection - outward chat entities must keep the
+            # @@@thread-social-member-projection - outward chat members must keep the
             # social/thread user id while borrowing display/avatar fields from the resolved user row.
-            entities_info.append(
+            member_info.append(
                 {
                     "id": social_user_id,
-                    "name": entity.display_name,
-                    "type": entity.type.value if hasattr(entity.type, "value") else str(entity.type),
-                    "avatar_url": avatar_url(entity.id, bool(entity.avatar)),
+                    "name": user.display_name,
+                    "type": user.type.value if hasattr(user.type, "value") else str(user.type),
+                    "avatar_url": avatar_url(user.id, bool(user.avatar)),
                 }
             )
-        return entities_info
+        return member_info
 
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
@@ -343,7 +343,7 @@ class MessagingService:
             "title": chat.title,
             "status": chat.status,
             "created_at": chat.created_at,
-            "entities": self._build_chat_entities(chat.id),
+            "members": self._build_chat_members(chat.id),
         }
 
     def list_chats_for_user(self, user_id: str) -> list[dict[str, Any]]:
@@ -360,8 +360,8 @@ class MessagingService:
 
         result: list[dict[str, Any]] = []
         for chat in chat_rows:
-            entities_info = self._project_chat_entities(members_by_chat[chat.id], users_by_id)
-            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, entities_info, user_id)
+            member_info = self._project_chat_members(members_by_chat[chat.id], users_by_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, member_info, user_id)
             result.append(
                 {
                     "id": chat.id,
@@ -370,7 +370,7 @@ class MessagingService:
                     "created_at": chat.created_at,
                     "updated_at": getattr(chat, "updated_at", None) or getattr(chat, "created_at", None),
                     "avatar_url": chat_avatar_url,
-                    "entities": entities_info,
+                    "members": member_info,
                     "last_message": self._project_latest_message(latest_messages.get(chat.id), users_by_id),
                     "unread_count": int(unread_by_chat.get(chat.id, 0)),
                     "has_mention": False,  # TODO: implement mention tracking
@@ -383,8 +383,8 @@ class MessagingService:
         chat_rows, members_by_chat, users_by_id, unread_by_chat = self._chat_projection_inputs(user_id)
         result: list[dict[str, Any]] = []
         for chat in chat_rows:
-            entities_info = self._project_chat_entities(members_by_chat[chat.id], users_by_id)
-            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, entities_info, user_id)
+            member_info = self._project_chat_members(members_by_chat[chat.id], users_by_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, member_info, user_id)
             result.append(
                 {
                     "id": chat.id,
@@ -445,15 +445,15 @@ class MessagingService:
             unread_future = executor.submit(self._messages.count_unread_by_chat_ids, user_id, last_read_by_chat)
             return users_future.result(), unread_future.result()
 
-    def _project_chat_entities(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
+    def _project_chat_members(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
         return [
-            self._project_known_user_entity(str(member.get("user_id") or ""), users_by_id) for member in members if member.get("user_id")
+            self._project_known_user_member(str(member.get("user_id") or ""), users_by_id) for member in members if member.get("user_id")
         ]
 
-    def _chat_title_and_avatar(self, title: str | None, entities: list[dict[str, Any]], viewer_id: str) -> tuple[str, str | None]:
-        other_entities = [entity for entity in entities if entity["id"] != viewer_id]
-        other_names = [entity["name"] for entity in other_entities if entity.get("name")]
-        return title or ", ".join(other_names) or "Chat", other_entities[0]["avatar_url"] if other_entities else None
+    def _chat_title_and_avatar(self, title: str | None, members: list[dict[str, Any]], viewer_id: str) -> tuple[str, str | None]:
+        other_members = [member for member in members if member["id"] != viewer_id]
+        other_names = [member["name"] for member in other_members if member.get("name")]
+        return title or ", ".join(other_names) or "Chat", other_members[0]["avatar_url"] if other_members else None
 
     def _project_latest_message(self, row: dict[str, Any] | None, users_by_id: dict[str, Any]) -> dict[str, Any] | None:
         if row is None:
@@ -474,7 +474,7 @@ class MessagingService:
             return {}
         return {user.id: user for user in self._user_repo.list_by_ids(user_ids)}
 
-    def _project_known_user_entity(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
+    def _project_known_user_member(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
         user = users_by_id.get(social_user_id)
         if user is None:
             raise RuntimeError(f"Chat member {social_user_id} is not a resolvable user row")

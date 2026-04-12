@@ -1,4 +1,4 @@
-"""Social access rules for entity discovery and group chat creation."""
+"""Social access rules for user discovery and group chat creation."""
 
 from __future__ import annotations
 

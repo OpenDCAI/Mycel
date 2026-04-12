@@ -190,7 +190,7 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
                     "title": chat_obj.title,
                     "status": chat_obj.status,
                     "created_at": chat_obj.created_at,
-                    "entities": [],
+                    "members": [],
                 },
                 list_chat_members=lambda _chat_id: (_ for _ in ()).throw(
                     AssertionError("route should consume service-owned chat detail, not rebuild members locally")
@@ -207,7 +207,7 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         "title": "Chat title",
         "status": "active",
         "created_at": "2026-04-07T00:00:00Z",
-        "entities": [],
+        "members": [],
     }
     assert seen == [("helper", (app, "chat-1", "user-1"))]
 
@@ -253,7 +253,7 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
                     "title": "Chat title",
                     "status": "active",
                     "created_at": "2026-04-07T00:00:00Z",
-                    "entities": [
+                    "members": [
                         {
                             "id": "thread-user-1",
                             "name": "Toad",
@@ -280,7 +280,7 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
 
     result = messaging_router.get_chat("chat-1", user_id="human-user-1", app=app)
 
-    assert result["entities"] == [
+    assert result["members"] == [
         {
             "id": "thread-user-1",
             "name": "Toad",

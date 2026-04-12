@@ -8,7 +8,7 @@ Priority chain (highest wins):
 5. muted chat → NOTIFY
 6. VISIT relationship → NOTIFY (queue, not direct)
 7. stranger (no relationship) → NOTIFY (anti-spam default)
-8. Default → DELIVER (same-owner entities, known contacts)
+8. Default → DELIVER (same-owner users, known contacts)
 """
 
 from __future__ import annotations

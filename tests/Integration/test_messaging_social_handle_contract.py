@@ -458,7 +458,7 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
 
     chats = service.list_chats_for_user("human-user-1")
 
-    assert chats[0]["entities"] == [
+    assert chats[0]["members"] == [
         {
             "id": "human-user-1",
             "name": "Human",
@@ -695,7 +695,7 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
         "title": "Chat title",
         "status": "active",
         "created_at": "2026-04-07T00:00:00Z",
-        "entities": [
+        "members": [
             {
                 "id": "human-user-1",
                 "name": "Human",

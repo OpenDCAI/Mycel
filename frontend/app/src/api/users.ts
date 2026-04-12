@@ -1,6 +1,6 @@
 import { authFetch } from "@/store/auth-store";
 
-export type EntityItem = {
+export type UserChatCandidate = {
   user_id: string;
   name: string;
   type: string;
@@ -14,10 +14,10 @@ export type EntityItem = {
   can_chat: boolean;
 };
 
-export function parseEntities(value: unknown): EntityItem[] {
-  if (!Array.isArray(value)) throw new Error("Malformed entity list");
+export function parseUserChatCandidates(value: unknown): UserChatCandidate[] {
+  if (!Array.isArray(value)) throw new Error("Malformed user chat candidate list");
   return value.map((item) => {
-    if (!item || typeof item !== "object") throw new Error("Malformed entity list");
+    if (!item || typeof item !== "object") throw new Error("Malformed user chat candidate list");
     const row = item as Record<string, unknown>;
     if (
       typeof row.user_id !== "string"
@@ -27,7 +27,7 @@ export function parseEntities(value: unknown): EntityItem[] {
       || typeof row.relationship_state !== "string"
       || typeof row.can_chat !== "boolean"
     ) {
-      throw new Error("Malformed entity list");
+      throw new Error("Malformed user chat candidate list");
     }
     return {
       user_id: row.user_id,
@@ -45,8 +45,8 @@ export function parseEntities(value: unknown): EntityItem[] {
   });
 }
 
-export async function fetchEntities(): Promise<EntityItem[]> {
-  const response = await authFetch("/api/entities");
-  if (!response.ok) throw new Error(`Entities API ${response.status}: ${await response.text()}`);
-  return parseEntities(await response.json());
+export async function fetchUserChatCandidates(): Promise<UserChatCandidate[]> {
+  const response = await authFetch("/api/users/chat-candidates");
+  if (!response.ok) throw new Error(`User chat candidates API ${response.status}: ${await response.text()}`);
+  return parseUserChatCandidates(await response.json());
 }

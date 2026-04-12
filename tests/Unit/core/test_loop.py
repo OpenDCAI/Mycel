@@ -3144,13 +3144,13 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
     model = _SplitAnyOfStreamingToolModel()
     seen_calls = []
 
-    def read_messages_handler(entity_id: str | None = None, chat_id: str | None = None) -> str:
-        seen_calls.append({"entity_id": entity_id, "chat_id": chat_id})
+    def read_messages_handler(user_id: str | None = None, chat_id: str | None = None) -> str:
+        seen_calls.append({"user_id": user_id, "chat_id": chat_id})
         if chat_id:
             return f"chat:{chat_id}"
-        if entity_id:
-            return f"entity:{entity_id}"
-        return "Provide entity_id or chat_id."
+        if user_id:
+            return f"user:{user_id}"
+        return "Provide user_id or chat_id."
 
     entry = ToolEntry(
         name="read_messages",
@@ -3162,11 +3162,11 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
                 "type": "object",
                 "required": [],
                 "properties": {
-                    "entity_id": {"type": "string"},
+                    "user_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                 },
                 "x-leon-required-any-of": [
-                    ["entity_id"],
+                    ["user_id"],
                     ["chat_id"],
                 ],
             },
@@ -3185,9 +3185,9 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
     result = await loop.ainvoke({"messages": [{"role": "user", "content": "read chat"}]})
 
     tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
-    assert seen_calls == [{"entity_id": None, "chat_id": "chat-1"}]
+    assert seen_calls == [{"user_id": None, "chat_id": "chat-1"}]
     assert any(msg.tool_call_id == "tc-chat-read" and msg.content == "chat:chat-1" for msg in tool_messages)
-    assert not any(msg.content == "Provide entity_id or chat_id." for msg in tool_messages)
+    assert not any(msg.content == "Provide user_id or chat_id." for msg in tool_messages)
 
 
 @pytest.mark.asyncio

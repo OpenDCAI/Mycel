@@ -287,7 +287,7 @@ def test_verify_register_otp_accepts_direct_gotrue_client_without_auth_wrapper()
 def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
     monkeypatch.setattr(
-        "backend.web.routers.entities.process_and_save_avatar",
+        "backend.web.routers.users.process_and_save_avatar",
         lambda _source, user_id: f"avatars/{user_id}.png",
     )
     monkeypatch.setattr(
@@ -345,7 +345,7 @@ def test_create_initial_agents_persists_default_agent_avatars(monkeypatch: pytes
     monkeypatch.setattr("storage.utils.generate_agent_user_id", lambda: next(user_ids))
     monkeypatch.setattr("storage.utils.generate_agent_config_id", lambda: next(config_ids))
     monkeypatch.setattr(
-        "backend.web.routers.entities.process_and_save_avatar",
+        "backend.web.routers.users.process_and_save_avatar",
         lambda _source, user_id: f"avatars/{user_id}.png",
     )
 

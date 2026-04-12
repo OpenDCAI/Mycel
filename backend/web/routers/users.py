@@ -48,12 +48,6 @@ def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
     return f"avatars/{user_id}.png"
 
 
-router = APIRouter(prefix="/api/entities", tags=["entities"])
-
-# ---------------------------------------------------------------------------
-# Users (user-backed avatar and agent directory)
-# ---------------------------------------------------------------------------
-
 users_router = APIRouter(prefix="/api/users", tags=["users"])
 
 
@@ -153,7 +147,7 @@ async def delete_avatar(
 
 
 # ---------------------------------------------------------------------------
-# Entities (social identities for chat discovery)
+# User chat candidates
 # ---------------------------------------------------------------------------
 
 
@@ -172,8 +166,8 @@ def _relationship_states_for_user(app: Any, user_id: str) -> dict[str, str]:
     return states
 
 
-@router.get("")
-async def list_entities(
+@users_router.get("/chat-candidates")
+async def list_chat_candidates(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
@@ -244,8 +238,8 @@ async def list_entities(
     return items
 
 
-@router.get("/{user_id}/profile")
-async def get_entity_profile(
+@users_router.get("/{user_id}/profile")
+async def get_user_profile(
     user_id: str,
     app: Annotated[Any, Depends(get_app)],
 ):
@@ -262,7 +256,7 @@ async def get_entity_profile(
     }
 
 
-@router.get("/{user_id}/agent-thread")
+@users_router.get("/{user_id}/agent-thread")
 async def get_agent_thread(
     user_id: str,
     current_user_id: Annotated[str, Depends(get_current_user_id)],

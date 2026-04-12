@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.web.routers import entities as entities_router
+from backend.web.routers import users as users_router
 from backend.web.utils import serializers
 
 
@@ -43,20 +43,20 @@ async def test_delete_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
     avatar_dir.mkdir()
     avatar_path = avatar_dir / "agent-1.png"
     avatar_path.write_bytes(b"png")
-    monkeypatch.setattr(entities_router, "AVATARS_DIR", avatar_dir)
+    monkeypatch.setattr(users_router, "AVATARS_DIR", avatar_dir)
 
     def fake_helper(user_id: str, current_user_id: str, user_repo):
         seen.append(("helper", (user_id, current_user_id)))
         return _user(user_id, owner_user_id="user-1", avatar="avatars/agent-1.png")
 
-    monkeypatch.setattr(entities_router, "_get_owned_avatar_user_or_404", fake_helper)
+    monkeypatch.setattr(users_router, "_get_owned_avatar_user_or_404", fake_helper)
 
     fake_repo = SimpleNamespace(
         get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("route should use helper, not repo lookup directly")),
         update=lambda user_id, **fields: seen.append(("update", (user_id, fields))),
     )
 
-    result = await entities_router.delete_avatar(
+    result = await users_router.delete_avatar(
         "agent-1",
         current_user_id="user-1",
         app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo)),
@@ -78,9 +78,9 @@ async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
         seen.append(("helper", (user_id, current_user_id)))
         return _user(user_id, owner_user_id="user-1")
 
-    monkeypatch.setattr(entities_router, "_get_owned_avatar_user_or_404", fake_helper)
+    monkeypatch.setattr(users_router, "_get_owned_avatar_user_or_404", fake_helper)
     monkeypatch.setattr(
-        entities_router,
+        users_router,
         "process_and_save_avatar",
         lambda data, user_id: seen.append(("save", (data, user_id))) or f"avatars/{user_id}.png",
     )
@@ -90,7 +90,7 @@ async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
         update=lambda user_id, **fields: seen.append(("update", (user_id, fields))),
     )
 
-    result = await entities_router.upload_avatar(
+    result = await users_router.upload_avatar(
         "agent-1",
         _FakeUploadFile(b"png-bytes", content_type="image/png"),
         current_user_id="user-1",

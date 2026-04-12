@@ -386,7 +386,7 @@ export interface ChatDetail {
   title: string | null;
   status: string;
   created_at: number;
-  entities: ChatMember[];
+  members: ChatMember[];
 }
 
 export interface ChatMessage {

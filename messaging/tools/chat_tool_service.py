@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.runtime.tool_result import tool_error
+from core.runtime.tool_result import ToolResultEnvelope, tool_error
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ class ChatToolService:
                 return "No chats found."
             lines = []
             for c in chats:
-                others = [e for e in c.get("entities", []) if e["id"] != eid]
+                others = [member for member in c.get("members", []) if member["id"] != eid]
                 name = ", ".join(e["name"] for e in others) or "Unknown"
                 unread = c.get("unread_count", 0)
                 last = c.get("last_message")
@@ -258,7 +258,7 @@ class ChatToolService:
             chat_id: str | None = None,
             signal: str = "open",
             mentions: list[str] | None = None,
-        ) -> str:
+        ) -> str | ToolResultEnvelope:
             resolved_chat_id = chat_id
             target_name = "chat"
 
