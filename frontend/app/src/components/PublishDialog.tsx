@@ -32,7 +32,7 @@ export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState("");
   const [publishing, setPublishing] = useState(false);
-  const publishToMarketplace = useMarketplaceStore(s => s.publishToMarketplace);
+  const publishAgentUserToMarketplace = useMarketplaceStore(s => s.publishAgentUserToMarketplace);
 
   if (!agent) return null;
 
@@ -42,7 +42,7 @@ export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
     try {
       setPublishing(true);
       await publishAgent(agentId, bumpType);
-      await publishToMarketplace(agentId, "member", bumpType, notes, tags.split(",").map(t => t.trim()).filter(Boolean), "public");
+      await publishAgentUserToMarketplace(agentId, bumpType, notes, tags.split(",").map(t => t.trim()).filter(Boolean), "public");
       toast.success(`${agent.name} v${newVersion} 已发布`);
       onOpenChange(false);
     } catch (err) {

@@ -9,10 +9,11 @@ import UpdateDialog from "@/components/marketplace/UpdateDialog";
 import RecipeEditor from "@/components/RecipeEditor";
 import type { Agent, ResourceItem } from "@/store/types";
 import type { UpdateAvailable } from "@/store/marketplace-store";
+import { HUB_AGENT_USER_TYPE } from "@/lib/marketplace-types";
 
 type Tab = "explore" | "installed";
-type InstalledSubTab = "member" | "skill" | "agent" | "recipe";
-type TypeFilter = "all" | "member" | "agent" | "skill" | "env";
+type InstalledSubTab = "agent-user" | "skill" | "agent" | "recipe";
+type TypeFilter = "all" | typeof HUB_AGENT_USER_TYPE | "agent" | "skill" | "env";
 type InstalledAgentUser = Agent & {
   source?: {
     marketplace_item_id?: string;
@@ -25,12 +26,12 @@ function isTab(value: string | null): value is Tab {
 }
 
 function isInstalledSubTab(value: string | null): value is InstalledSubTab {
-  return value === "member" || value === "skill" || value === "agent" || value === "recipe";
+  return value === "agent-user" || value === "skill" || value === "agent" || value === "recipe";
 }
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "member", label: "Agent" },
+  { id: HUB_AGENT_USER_TYPE, label: "Agent" },
   { id: "agent", label: "Subagent" },
   { id: "skill", label: "Skill" },
   { id: "env", label: "Env" },
@@ -50,7 +51,7 @@ export default function MarketplacePage() {
   const rawTab = searchParams.get("tab");
   const rawInstalledSubTab = searchParams.get("sub");
   const tab = isTab(rawTab) ? rawTab : "explore";
-  const installedSubTab = isInstalledSubTab(rawInstalledSubTab) ? rawInstalledSubTab : "member";
+  const installedSubTab = isInstalledSubTab(rawInstalledSubTab) ? rawInstalledSubTab : "agent-user";
 
   const setTab = (t: Tab) => setSearchParams((p) => { p.set("tab", t); p.delete("sub"); return p; }, { replace: true });
   const setInstalledSubTab = (s: InstalledSubTab) => setSearchParams((p) => { p.set("sub", s); return p; }, { replace: true });
@@ -127,12 +128,12 @@ export default function MarketplacePage() {
   }, [libraryRecipes]);
 
   const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
-    { id: "member", label: "Agent", icon: Package, count: installedAgentUsers.length },
+    { id: "agent-user", label: "Agent", icon: Package, count: installedAgentUsers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
     { id: "agent", label: "Subagent", icon: Users, count: libraryAgents.length },
     { id: "recipe", label: "Sandbox", icon: Box, count: libraryRecipes.length },
   ];
-  const installedSubTabLoaded = installedSubTab === "member" ? agentsLoaded : librariesLoaded[installedSubTab];
+  const installedSubTabLoaded = installedSubTab === "agent-user" ? agentsLoaded : librariesLoaded[installedSubTab];
 
   const handleCheckUpdates = async () => {
     // source field comes from meta.json; agent users without it cannot be checked
@@ -394,7 +395,7 @@ export default function MarketplacePage() {
                 )}
 
                 {/* Agent user list */}
-                {installedSubTabLoaded && installedSubTab === "member" && (
+                {installedSubTabLoaded && installedSubTab === "agent-user" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredAgentUsers.map((agent) => {

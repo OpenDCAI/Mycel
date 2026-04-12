@@ -6,6 +6,7 @@ import { useMarketplaceStore } from "@/store/marketplace-store";
 import LineageTree from "@/components/marketplace/LineageTree";
 import InstallDialog from "@/components/marketplace/InstallDialog";
 import { typeBadgeColors } from "@/components/marketplace/constants";
+import { marketplaceTypeLabel } from "@/lib/marketplace-types";
 
 export default function MarketplaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,7 +83,7 @@ export default function MarketplaceDetailPage() {
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-xl font-semibold text-foreground">{detail.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeBadgeColors[detail.type] || "bg-muted text-muted-foreground"}`}>
-                {detail.type}
+                {marketplaceTypeLabel(detail.type)}
               </span>
             </div>
             <p className="text-sm text-muted-foreground mb-3">{detail.description || "No description"}</p>

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth-store";
+import { HUB_AGENT_USER_TYPE } from "@/lib/marketplace-types";
 
 const HUB_URL = import.meta.env.VITE_MYCEL_HUB_URL || "http://localhost:8090";
 const API = "/api/marketplace";
@@ -94,7 +95,7 @@ interface MarketplaceState {
   downloading: boolean;
   download: (itemId: string) => Promise<{ resource_id: string; type: string; version: string }>;
   upgrade: (userId: string, itemId: string) => Promise<void>;
-  publishToMarketplace: (userId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
+  publishAgentUserToMarketplace: (userId: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
 }
 
 function isActiveMarketplaceRoute(): boolean {
@@ -271,12 +272,12 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
     });
   },
 
-  publishToMarketplace: async (userId, type, bumpType, releaseNotes, tags, visibility) => {
+  publishAgentUserToMarketplace: async (userId, bumpType, releaseNotes, tags, visibility) => {
     return backendApi("/publish", {
       method: "POST",
       body: JSON.stringify({
         user_id: userId,
-        type,
+        type: HUB_AGENT_USER_TYPE,
         bump_type: bumpType,
         release_notes: releaseNotes,
         tags,
