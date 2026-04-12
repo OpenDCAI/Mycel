@@ -52,12 +52,12 @@ def get_profile(user: UserRow | None = None) -> dict[str, Any]:
 
 
 def update_profile(*, user_repo: Any, user_id: str, name: str | None = None, email: str | None = None) -> dict[str, Any]:
-    updates: dict[str, Any] = {}
-    if name is not None:
-        updates["display_name"] = name
-    if email is not None:
-        updates["email"] = email
-    if not updates:
+    if name is None and email is None:
         return get_profile(user_repo.get_by_id(user_id))
-    user_repo.update(user_id, **updates)
+    if name is not None and email is not None:
+        user_repo.update(user_id, display_name=name, email=email)
+    elif name is not None:
+        user_repo.update(user_id, display_name=name)
+    else:
+        user_repo.update(user_id, email=email)
     return get_profile(user_repo.get_by_id(user_id))
