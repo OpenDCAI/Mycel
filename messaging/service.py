@@ -13,6 +13,8 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
 from typing import Any
 
 from backend.web.utils.serializers import avatar_url
@@ -221,20 +223,20 @@ class MessagingService:
         sender_user = self._resolve_display_user(sender_id)
         sender_name = sender_user.display_name if sender_user else "unknown"
         sender_avatar_url = avatar_url(sender_user.id if sender_user else sender_id, bool(sender_user.avatar if sender_user else None))
-        sender_type = (
-            sender_user.type.value
-            if hasattr(sender_user, "type") and hasattr(sender_user.type, "value")
-            else getattr(sender_user, "type", None)
-        )
-        sender_owner_id = sender_user.id if sender_type == "human" else getattr(sender_user, "owner_user_id", None)
+        sender_raw_type = getattr(sender_user, "type", None) if sender_user else None
+        sender_type = sender_raw_type.value if isinstance(sender_raw_type, Enum) else sender_raw_type
+        sender_owner_id = sender_user.id if sender_user and sender_type == "human" else getattr(sender_user, "owner_user_id", None)
 
         for member in members:
             uid = member.get("user_id")
             if not uid or uid == sender_id:
                 continue
             m = self._resolve_display_user(uid)
-            member_type = m.type.value if hasattr(getattr(m, "type", None), "value") else getattr(m, "type", None)
-            if not m or member_type == "human":
+            if not m:
+                continue
+            member_raw_type = getattr(m, "type", None)
+            member_type = member_raw_type.value if isinstance(member_raw_type, Enum) else member_raw_type
+            if member_type == "human":
                 continue
 
             # @@@same-owner-group-delivery - explicit group membership among the same owner
@@ -421,18 +423,27 @@ class MessagingService:
         if not visible_chats:
             return [], {}, {}, {}
 
-        users_by_id = self._users_by_id(
-            sorted(
-                {
-                    str(member.get("user_id") or "")
-                    for chat_id in active_chat_ids
-                    for member in members_by_chat.get(chat_id, [])
-                    if member.get("user_id")
-                }
-            )
+        user_ids = sorted(
+            {
+                str(member.get("user_id") or "")
+                for chat_id in active_chat_ids
+                for member in members_by_chat.get(chat_id, [])
+                if member.get("user_id")
+            }
         )
-        unread_by_chat = self._messages.count_unread_by_chat_ids(user_id, last_read_by_chat)
+        users_by_id, unread_by_chat = self._load_member_users_and_unread_counts(user_id, user_ids, last_read_by_chat)
         return visible_chats, members_by_chat, users_by_id, unread_by_chat
+
+    def _load_member_users_and_unread_counts(
+        self,
+        user_id: str,
+        user_ids: list[str],
+        last_read_by_chat: dict[str, int],
+    ) -> tuple[dict[str, Any], dict[str, int]]:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            users_future = executor.submit(self._users_by_id, user_ids)
+            unread_future = executor.submit(self._messages.count_unread_by_chat_ids, user_id, last_read_by_chat)
+            return users_future.result(), unread_future.result()
 
     def _project_chat_entities(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
         return [

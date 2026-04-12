@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -619,6 +620,46 @@ def test_messaging_service_conversation_summaries_fail_on_unknown_member_identit
 
     with pytest.raises(RuntimeError, match="Chat member missing-user is not a resolvable user row"):
         service.list_conversation_summaries_for_user("human-user-1")
+
+
+def test_messaging_service_conversation_summaries_loads_users_and_unread_counts_in_parallel() -> None:
+    users_started = threading.Event()
+    unread_started = threading.Event()
+
+    def _list_users(user_ids: list[str]):
+        users_started.set()
+        if not unread_started.wait(0.2):
+            raise AssertionError("unread counts did not start while users were loading")
+        return [
+            SimpleNamespace(id=user_id, display_name=user_id, type="human", avatar=None)
+            for user_id in user_ids
+        ]
+
+    def _count_unread(_user_id: str, _last_read_by_chat: dict[str, int]):
+        unread_started.set()
+        if not users_started.wait(0.2):
+            raise AssertionError("users did not start while unread counts were loading")
+        return {"chat-1": 2}
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 4},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=_count_unread),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(list_by_ids=_list_users),
+    )
+
+    summaries = service.list_conversation_summaries_for_user("human-user-1")
+
+    assert summaries[0]["unread_count"] == 2
 
 
 def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -> None:
