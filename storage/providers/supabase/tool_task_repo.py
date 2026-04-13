@@ -9,7 +9,7 @@ from core.tools.task.types import Task, TaskStatus
 from storage.providers.supabase import _query as q
 
 _REPO = "tool_task repo"
-_TABLE = "tool_tasks"
+_TABLE = "agent_thread_tasks"
 
 
 class SupabaseToolTaskRepo:
