@@ -2,26 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from storage.providers.supabase import _query as q
-from storage.providers.supabase.schema import resolve_runtime_schema, route_for_schema
+from storage.providers.supabase.schema import resolve_runtime_schema
 
 _REPO = "thread repo"
+_SCHEMA = "agent"
 _TABLE = "threads"
-
-_THREAD_MEMBER_COLUMNS = {
-    "public": "member_id",
-    "staging": "agent_user_id",
-}
-_OWNER_TABLES = {
-    "public": "members",
-    "staging": "users",
-}
-_OWNER_NAME_COLUMNS = {
-    "public": "name",
-    "staging": "display_name",
-}
+_THREAD_MEMBER_COLUMN = "agent_user_id"
 _BASE_COLS = (
     "id",
     "sandbox_type",
@@ -31,10 +21,6 @@ _BASE_COLS = (
     "branch_index",
     "created_at",
 )
-_OPTIONAL_COLS_BY_SCHEMA = {
-    "public": ("observation_provider",),
-    "staging": (),
-}
 
 
 def _validate_thread_identity(*, is_main: bool, branch_index: int) -> None:
@@ -47,20 +33,28 @@ def _validate_thread_identity(*, is_main: bool, branch_index: int) -> None:
 
 
 def _select_cols(schema: str) -> tuple[str, ...]:
-    return (_thread_member_column(schema), *_BASE_COLS, *_OPTIONAL_COLS_BY_SCHEMA[schema])
+    resolve_runtime_schema(schema)
+    return (_THREAD_MEMBER_COLUMN, *_BASE_COLS)
 
 
 def _to_dict(row: dict[str, Any], schema: str) -> dict[str, Any]:
     result = {c: row.get(c) for c in _BASE_COLS}
-    result["member_id"] = row.get(_thread_member_column(schema))
+    resolve_runtime_schema(schema)
+    result["member_id"] = row.get(_THREAD_MEMBER_COLUMN)
     result["observation_provider"] = row.get("observation_provider")
     result["is_main"] = bool(result["is_main"])
     result["branch_index"] = int(result["branch_index"]) if result["branch_index"] is not None else 0
     return result
 
 
-def _thread_member_column(schema: str) -> str:
-    return route_for_schema(_REPO, _THREAD_MEMBER_COLUMNS, schema)
+def _created_at_payload(schema: str, created_at: float) -> float | str:
+    resolve_runtime_schema(schema)
+    return datetime.fromtimestamp(created_at, tz=UTC).isoformat()
+
+
+def _is_main_payload(schema: str, is_main: bool) -> bool | int:
+    resolve_runtime_schema(schema)
+    return is_main
 
 
 class SupabaseThreadRepo:
@@ -83,18 +77,20 @@ class SupabaseThreadRepo:
         is_main = bool(extra.get("is_main", False))
         branch_index = int(extra["branch_index"])
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
+        owner_user_id = extra.get("owner_user_id")
+        if not owner_user_id:
+            raise ValueError("owner_user_id is required when creating agent.threads rows")
         payload = {
             "id": thread_id,
             self._thread_member_column: member_id,
+            "owner_user_id": owner_user_id,
             "sandbox_type": sandbox_type,
             "cwd": cwd,
             "model": extra.get("model"),
-            "is_main": int(is_main),
+            "is_main": _is_main_payload(self._schema, is_main),
             "branch_index": branch_index,
-            "created_at": created_at,
+            "created_at": _created_at_payload(self._schema, created_at),
         }
-        if self._schema == "public":
-            payload["observation_provider"] = extra.get("observation_provider")
         self._t().insert(payload).execute()
 
     def get_by_id(self, thread_id: str) -> dict[str, Any] | None:
@@ -107,7 +103,9 @@ class SupabaseThreadRepo:
 
     def get_main_thread(self, member_id: str) -> dict[str, Any] | None:
         select = ", ".join(_select_cols(self._schema))
-        response = self._t().select(select).eq(self._thread_member_column, member_id).eq("is_main", 1).execute()
+        response = (
+            self._t().select(select).eq(self._thread_member_column, member_id).eq("is_main", _is_main_payload(self._schema, True)).execute()
+        )
         rows = q.rows(response, _REPO, "get_main_thread")
         if not rows:
             return None
@@ -142,24 +140,12 @@ class SupabaseThreadRepo:
     def list_by_owner_user_id(self, owner_user_id: str) -> list[dict[str, Any]]:
         """Return all threads owned by this user via a two-step query (members JOIN threads).
 
-        Supabase PostgREST foreign-table embed syntax is used to avoid raw SQL.
-        We query members for the owner, then fetch threads for those member IDs.
+        Thread rows already carry owner_user_id in the migrated agent schema.
         """
-        owner_table = route_for_schema(_REPO, _OWNER_TABLES, self._schema)
-        owner_name_col = route_for_schema(_REPO, _OWNER_NAME_COLUMNS, self._schema)
-        mem_response = self._client.table(owner_table).select(f"id, {owner_name_col}, avatar").eq("owner_user_id", owner_user_id).execute()
-        member_rows = q.rows(mem_response, _REPO, f"list_by_owner_user_id:{owner_table}")
-        if not member_rows:
-            return []
-
-        member_map: dict[str, dict[str, Any]] = {r["id"]: r for r in member_rows}
-        member_ids = list(member_map.keys())
-
-        # Step 2: get threads for those members
         thread_cols = ", ".join(_select_cols(self._schema))
         query = q.order(
             q.order(
-                q.in_(self._t().select(thread_cols), self._thread_member_column, member_ids, _REPO, "list_by_owner_user_id"),
+                self._t().select(thread_cols).eq("owner_user_id", owner_user_id),
                 "is_main",
                 desc=True,
                 repo=_REPO,
@@ -170,21 +156,19 @@ class SupabaseThreadRepo:
             repo=_REPO,
             operation="list_by_owner_user_id",
         )
-        thread_rows = q.rows(query.execute(), _REPO, "list_by_owner_user_id:threads")
+        thread_rows = q.rows(query.execute(), _REPO, "list_by_owner_user_id:agent_threads")
 
         result: list[dict[str, Any]] = []
         for raw in thread_rows:
             d = _to_dict(raw, self._schema)
-            mid = d["member_id"]
-            member_info = member_map.get(mid, {})
-            d["member_name"] = member_info.get(owner_name_col)
-            d["member_avatar"] = member_info.get("avatar")
+            d["member_name"] = None
+            d["member_avatar"] = None
             d["entity_name"] = None
             result.append(d)
         return result
 
     def update(self, thread_id: str, **fields: Any) -> None:
-        allowed = {"sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index"}
+        allowed = {"sandbox_type", "model", "cwd", "is_main", "branch_index"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
@@ -199,15 +183,16 @@ class SupabaseThreadRepo:
                 branch_index=next_branch_index if next_branch_index is not None else int(current["branch_index"]),
             )
         if "is_main" in updates:
-            updates["is_main"] = int(bool(updates["is_main"]))
+            updates["is_main"] = _is_main_payload(self._schema, bool(updates["is_main"]))
         self._t().update(updates).eq("id", thread_id).execute()
 
     def delete(self, thread_id: str) -> None:
         self._t().delete().eq("id", thread_id).execute()
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return self._client.schema(_SCHEMA).table(_TABLE)
 
     @property
     def _thread_member_column(self) -> str:
-        return _thread_member_column(self._schema)
+        resolve_runtime_schema(self._schema)
+        return _THREAD_MEMBER_COLUMN

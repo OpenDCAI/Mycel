@@ -145,7 +145,7 @@ Current code surfaces:
 | `agent.agent_rules` | `public.agent_rules`, `staging.agent_rules` | migrate | Keep separate CRUD object. |
 | `agent.agent_skills` | `public.agent_skills`, `staging.agent_skills` | migrate | Keep separate CRUD object. |
 | `agent.agent_sub_agents` | `public.agent_sub_agents`, `staging.agent_sub_agents` | migrate | Config-time sub-agent definitions. |
-| `agent.threads` | `public.threads`, `staging.threads`, `staging.thread_config` | migrate | Thread runtime must eventually point at container workspace, not terminal. |
+| `agent.threads` | `public.threads`, `staging.threads`, `staging.thread_config` | migrate | Thread runtime must point at sandbox/container execution. Workspace is only a thin working-directory context, not the core runtime relation. |
 | `agent.thread_launch_prefs` | `public.thread_launch_prefs`, `staging.thread_launch_prefs` | migrate | Preserve if still product-visible launch preference. |
 | `agent.run_events` | `public.run_events`, `staging.run_events` | migrate | Runtime/event history belongs with agent execution. |
 | `agent.summaries` | `public.summaries`, `staging.summaries` | migrate | Keep if used by context compaction/summaries. |
@@ -175,11 +175,11 @@ Current code surfaces:
 | `container.devices` | sandbox provider/account resource config; no exact current table | migrate/add | Device is persistent compute endpoint. Need daemon/provider reality check before DDL. |
 | `container.sandbox_templates` | `public.library_recipes`, `staging.library_recipes`, SQLite `library_recipes` | rename + migrate | The issue reply says `sandbox_templates`, not `sandbox_recipes`. This supersedes earlier discussion naming. |
 | `container.sandboxes` | `public.sandbox_leases`, `public.sandbox_instances`, staging equivalents | migrate | Target combines persistent sandbox desired/observed state. |
-| `container.workspaces` | `sandbox_leases`, thread terminal/lease binding, file workspace paths | migrate | Must replace thread -> terminal -> lease assumptions with thread -> workspace. |
+| `container.workspaces` | cwd/project path state inside a sandbox/container | migrate/add only if needed | Workspace is a thin working-directory context. Do not model thread -> workspace -> device as the core relation. |
 | `container.resource_snapshots` | `lease_resource_snapshots` | migrate | Target commit reply says resource snapshots remain in container. |
 | `container.provider_events` | `public.provider_events`, `staging.provider_events` | migrate | Issue reply places provider events in container; observability boundary should be revisited later. |
 | terminals | `abstract_terminals`, `thread_terminal_pointers`, `terminal_commands`, `terminal_command_chunks` | route-out | Issue reply: terminal is stateless sandbox exec API, no PTY persistence. Current Mycel code still depends heavily on terminal repos, so this is a major implementation slice. |
-| volumes | `sandbox_volumes` | route-out | Issue reply: file upload/download uses Supabase Storage directly; volumes abstraction is invalid. |
+| mount/volumes | `sandbox_volumes`, mount-style file workspace abstractions | route-out/delete together | Mount and volume are the same wrong layer for this refactor. File upload/download should go through a unified sandbox upload/download interface. |
 | `sync_files` | `public.sync_files`, `staging.sync_files`, SQLite `sync_files` | route-out/delete candidate | No target model unless a future sync feature is explicitly designed. |
 
 Current code surfaces:
@@ -251,11 +251,13 @@ blind DDL dump. The safe sequence is:
    - Remove durable terminal/command/chunk pointer assumptions from the runtime
      path.
    - Replace thread -> terminal -> lease file path lookup with thread ->
-     workspace / sandbox exec API contract.
+     sandbox/container exec API contract. Keep workspace as a thin cwd/project
+     context only when a real API needs it.
 5. Later slices:
    - identity migration
    - chat migration
-   - container sandbox/workspace migration
+   - container sandbox migration, with workspace kept as a thin path/context
+     object only if the runtime still needs it
    - hub marketplace migration
    - observability schema
 

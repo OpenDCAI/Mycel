@@ -92,6 +92,49 @@ def _seed_dev_user(app: FastAPI) -> None:
                 log.warning("DEV: avatar copy failed for %s: %s", agent_def["name"], e)
 
 
+def _wire_supabase_runtime(app: FastAPI, *, storage_client: Any, auth_client: Any) -> None:
+    """Wire Supabase repos without sharing the auth-mutated client into storage."""
+    from backend.web.services.auth_service import AuthService
+    from storage.container import StorageContainer
+    from storage.providers.supabase import (
+        SupabaseAccountRepo,
+        SupabaseChatEntityRepo,
+        SupabaseChatMessageRepo,
+        SupabaseChatRepo,
+        SupabaseContactRepo,
+        SupabaseEntityRepo,
+        SupabaseInviteCodeRepo,
+        SupabaseMemberRepo,
+        SupabaseRecipeRepo,
+        SupabaseThreadLaunchPrefRepo,
+        SupabaseThreadRepo,
+        SupabaseUserSettingsRepo,
+    )
+
+    app.state.member_repo = SupabaseMemberRepo(storage_client)
+    app.state.account_repo = SupabaseAccountRepo(storage_client)
+    app.state.entity_repo = SupabaseEntityRepo(storage_client)
+    app.state.thread_repo = SupabaseThreadRepo(storage_client)
+    app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(storage_client)
+    app.state.recipe_repo = SupabaseRecipeRepo(storage_client)
+    app.state.chat_repo = SupabaseChatRepo(storage_client)
+    app.state.chat_entity_repo = SupabaseChatEntityRepo(storage_client)
+    app.state.chat_message_repo = SupabaseChatMessageRepo(storage_client)
+    app.state.invite_code_repo = SupabaseInviteCodeRepo(storage_client)
+    app.state.user_settings_repo = SupabaseUserSettingsRepo(storage_client)
+    app.state.contact_repo = SupabaseContactRepo(storage_client)
+    app.state._supabase_client = storage_client
+    app.state._supabase_auth_client = auth_client
+    app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=storage_client)
+    app.state.auth_service = AuthService(
+        members=app.state.member_repo,
+        accounts=app.state.account_repo,
+        entities=app.state.entity_repo,
+        supabase_client=auth_client,
+        invite_codes=app.state.invite_code_repo,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown."""
@@ -115,36 +158,11 @@ async def lifespan(app: FastAPI):
 
     if _storage_strategy == "supabase":
         from backend.web.core.supabase_factory import create_supabase_client
-        from storage.container import StorageContainer
-        from storage.providers.supabase import (
-            SupabaseAccountRepo,
-            SupabaseChatEntityRepo,
-            SupabaseChatMessageRepo,
-            SupabaseChatRepo,
-            SupabaseContactRepo,
-            SupabaseEntityRepo,
-            SupabaseInviteCodeRepo,
-            SupabaseMemberRepo,
-            SupabaseRecipeRepo,
-            SupabaseThreadLaunchPrefRepo,
-            SupabaseThreadRepo,
-            SupabaseUserSettingsRepo,
-        )
 
+        # @@@supabase-client-boundary - auth calls mutate client auth headers; storage repos must keep service-role identity.
         _supabase_client = create_supabase_client()
-        app.state.member_repo = SupabaseMemberRepo(_supabase_client)
-        app.state.account_repo = SupabaseAccountRepo(_supabase_client)
-        app.state.entity_repo = SupabaseEntityRepo(_supabase_client)
-        app.state.thread_repo = SupabaseThreadRepo(_supabase_client)
-        app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(_supabase_client)
-        app.state.recipe_repo = SupabaseRecipeRepo(_supabase_client)
-        app.state.chat_repo = SupabaseChatRepo(_supabase_client)
-        app.state.chat_entity_repo = SupabaseChatEntityRepo(_supabase_client)
-        app.state.chat_message_repo = SupabaseChatMessageRepo(_supabase_client)
-        app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
-        app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
-        app.state._supabase_client = _supabase_client
-        app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
+        _supabase_auth_client = create_supabase_client()
+        _wire_supabase_runtime(app, storage_client=_supabase_client, auth_client=_supabase_auth_client)
     else:
         from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
         from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
@@ -167,17 +185,9 @@ async def lifespan(app: FastAPI):
         app.state.chat_entity_repo = SQLiteChatEntityRepo(chat_db)
         app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
 
-    from backend.web.services.auth_service import AuthService
+    if _storage_strategy != "supabase":
+        from backend.web.services.auth_service import AuthService
 
-    if _storage_strategy == "supabase":
-        app.state.auth_service = AuthService(
-            members=app.state.member_repo,
-            accounts=app.state.account_repo,
-            entities=app.state.entity_repo,
-            supabase_client=_supabase_client,
-            invite_codes=app.state.invite_code_repo,
-        )
-    else:
         app.state.auth_service = AuthService(
             members=app.state.member_repo,
             accounts=app.state.account_repo,
@@ -199,9 +209,7 @@ async def lifespan(app: FastAPI):
 
     from backend.web.services.delivery_resolver import DefaultDeliveryResolver
 
-    if _storage_strategy == "supabase":
-        app.state.contact_repo = SupabaseContactRepo(_supabase_client)
-    else:
+    if _storage_strategy != "supabase":
         from storage.providers.sqlite.contact_repo import SQLiteContactRepo
 
         app.state.contact_repo = SQLiteContactRepo(chat_db)

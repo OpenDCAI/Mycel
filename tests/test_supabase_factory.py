@@ -45,3 +45,11 @@ def test_create_supabase_client_passes_explicit_staging_schema(monkeypatch: pyte
         "key": "service-role-key",
         "schema": "staging",
     }
+
+
+def test_create_supabase_client_rejects_agent_as_global_runtime_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_required_supabase_env(monkeypatch)
+    monkeypatch.setenv("LEON_DB_SCHEMA", "agent")
+
+    with pytest.raises(RuntimeError, match="Unsupported LEON_DB_SCHEMA"):
+        supabase_factory.create_supabase_client()

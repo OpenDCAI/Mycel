@@ -170,3 +170,20 @@ class FakeSupabaseClient:
         if table_name in self._auto_seq_tables:
             query._auto_seq = True
         return query
+
+    def schema(self, schema_name: str) -> FakeSupabaseSchemaClient:
+        return FakeSupabaseSchemaClient(schema_name, self._tables, self._auto_seq_tables)
+
+
+class FakeSupabaseSchemaClient:
+    def __init__(self, schema_name: str, tables: dict[str, list[dict]], auto_seq_tables: set[str]):
+        self._schema_name = schema_name
+        self._tables = tables
+        self._auto_seq_tables = auto_seq_tables
+
+    def table(self, table_name: str) -> FakeSupabaseQuery:
+        qualified = f"{self._schema_name}.{table_name}"
+        query = FakeSupabaseQuery(qualified, self._tables)
+        if qualified in self._auto_seq_tables:
+            query._auto_seq = True
+        return query

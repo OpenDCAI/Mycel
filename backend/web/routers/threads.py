@@ -355,6 +355,7 @@ def _create_owned_thread(
         sandbox_type=sandbox_type,
         cwd=payload.cwd,
         created_at=time.time(),
+        owner_user_id=owner_user_id,
         model=payload.model,
         is_main=resolved_is_main,
         branch_index=branch_index,

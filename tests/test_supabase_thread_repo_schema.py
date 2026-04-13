@@ -6,28 +6,21 @@ from storage.providers.supabase.thread_repo import SupabaseThreadRepo
 from tests.fakes.supabase import FakeSupabaseClient
 
 
-def test_thread_repo_lists_staging_threads_by_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_thread_repo_lists_agent_threads_by_owner_under_staging_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
     client = FakeSupabaseClient(
         tables={
-            "users": [
-                {
-                    "id": "agent_1",
-                    "owner_user_id": "owner_1",
-                    "display_name": "Builder",
-                    "avatar": "avatar.png",
-                }
-            ],
-            "threads": [
+            "agent.threads": [
                 {
                     "id": "thread_1",
                     "agent_user_id": "agent_1",
+                    "owner_user_id": "owner_1",
                     "sandbox_type": "local",
                     "model": "large",
                     "cwd": "/work",
-                    "is_main": 1,
+                    "is_main": True,
                     "branch_index": 0,
-                    "created_at": 1.0,
+                    "created_at": "2026-04-14T00:00:00+00:00",
                 }
             ],
         }
@@ -45,12 +38,58 @@ def test_thread_repo_lists_staging_threads_by_owner(monkeypatch: pytest.MonkeyPa
             "observation_provider": None,
             "is_main": True,
             "branch_index": 0,
-            "created_at": 1.0,
-            "member_name": "Builder",
-            "member_avatar": "avatar.png",
+            "created_at": "2026-04-14T00:00:00+00:00",
+            "member_name": None,
+            "member_avatar": None,
             "entity_name": None,
         }
     ]
+
+
+def test_thread_repo_creates_agent_thread_with_owner_and_timestamptz(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    tables: dict[str, list[dict]] = {}
+    repo = SupabaseThreadRepo(FakeSupabaseClient(tables=tables))
+
+    repo.create(
+        thread_id="thread_1",
+        member_id="agent_1",
+        sandbox_type="local",
+        cwd="/work",
+        created_at=1710000000.0,
+        owner_user_id="owner_1",
+        model="large",
+        is_main=True,
+        branch_index=0,
+    )
+
+    assert tables["agent.threads"] == [
+        {
+            "id": "thread_1",
+            "agent_user_id": "agent_1",
+            "owner_user_id": "owner_1",
+            "sandbox_type": "local",
+            "cwd": "/work",
+            "model": "large",
+            "is_main": True,
+            "branch_index": 0,
+            "created_at": "2024-03-09T16:00:00+00:00",
+        }
+    ]
+
+
+def test_thread_repo_requires_owner_when_creating_agent_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    repo = SupabaseThreadRepo(FakeSupabaseClient())
+
+    with pytest.raises(ValueError, match="owner_user_id"):
+        repo.create(
+            thread_id="thread_1",
+            member_id="agent_1",
+            sandbox_type="local",
+            branch_index=0,
+            is_main=True,
+        )
 
 
 def test_thread_repo_rejects_unknown_runtime_schema(monkeypatch: pytest.MonkeyPatch) -> None:

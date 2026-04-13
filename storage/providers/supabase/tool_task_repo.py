@@ -7,20 +7,23 @@ from typing import Any
 
 from core.tools.task.types import Task, TaskStatus
 from storage.providers.supabase import _query as q
+from storage.providers.supabase.schema import resolve_runtime_schema
 
 _REPO = "tool_task repo"
-_TABLE = "tool_tasks"
+_SCHEMA = "agent"
+_TABLE = "thread_tasks"
 
 
 class SupabaseToolTaskRepo:
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, *, schema: str | None = None) -> None:
         self._client = q.validate_client(client, _REPO)
+        self._schema = resolve_runtime_schema(schema)
 
     def close(self) -> None:
         return None
 
     def _table(self) -> Any:
-        return self._client.table(_TABLE)
+        return self._client.schema(_SCHEMA).table(_TABLE)
 
     def next_id(self, thread_id: str) -> str:
         rows = q.rows(
