@@ -624,10 +624,7 @@ def test_messaging_service_conversation_summaries_loads_users_and_unread_counts_
         users_started.set()
         if not unread_started.wait(0.2):
             raise AssertionError("unread counts did not start while users were loading")
-        return [
-            SimpleNamespace(id=user_id, display_name=user_id, type="human", avatar=None)
-            for user_id in user_ids
-        ]
+        return [SimpleNamespace(id=user_id, display_name=user_id, type="human", avatar=None) for user_id in user_ids]
 
     def _count_unread(_user_id: str, _last_read_by_chat: dict[str, int]):
         unread_started.set()

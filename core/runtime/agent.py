@@ -862,9 +862,7 @@ class LeonAgent:
         Args:
             **overrides: Fields to override (e.g. active="langfuse" or active=None)
         """
-        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(
-            cli_overrides=overrides or None
-        )
+        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
 
         if self.verbose:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")

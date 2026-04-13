@@ -344,11 +344,7 @@ def update_agent_user(
     user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
-    updates = {
-        key: value
-        for key, value in {"name": name, "description": description, "status": status}.items()
-        if value is not None
-    }
+    updates = {key: value for key, value in {"name": name, "description": description, "status": status}.items() if value is not None}
     if not updates:
         return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if "name" in updates:

@@ -379,11 +379,7 @@ class MemoryMiddleware(AgentMiddleware):
         summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
         summarized = [summary_msg] + messages[self._compact_up_to_index :]
         if self.verbose:
-            print(
-                f"[Memory] Using cached summary: "
-                f"{self._compact_up_to_index} old msgs replaced, "
-                f"{len(summarized) - 1} msgs sent to LLM"
-            )
+            print(f"[Memory] Using cached summary: {self._compact_up_to_index} old msgs replaced, {len(summarized) - 1} msgs sent to LLM")
         return summarized
 
     def snapshot_thread_state(self, thread_id: str) -> dict[str, Any]:

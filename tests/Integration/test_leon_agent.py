@@ -1015,9 +1015,7 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_remove
         "owner_id": "human-user-2",
         "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
-                SimpleNamespace(id=uid, display_name="Morel")
-                if uid == "agent-user-2"
-                else SimpleNamespace(id=uid, display_name="Owner 2")
+                SimpleNamespace(id=uid, display_name="Morel") if uid == "agent-user-2" else SimpleNamespace(id=uid, display_name="Owner 2")
             )
         ),
     }
