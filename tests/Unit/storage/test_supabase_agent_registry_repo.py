@@ -68,6 +68,18 @@ def test_storage_container_user_settings_repo_uses_staging_client_not_public_cli
     assert public_client.table_names == []
 
 
+def test_storage_container_sync_file_repo_uses_staging_client_not_public_client() -> None:
+    staging_client = _FakeClient("staging")
+    public_client = _FakeClient("public")
+    container = StorageContainer(supabase_client=staging_client, public_supabase_client=public_client)
+
+    repo = container.sync_file_repo()
+    repo.track_file("thread-1", "notes/a.txt", "a" * 64, 123)
+
+    assert staging_client.table_names == ["sync_files"]
+    assert public_client.table_names == []
+
+
 def test_runtime_agent_registry_builder_does_not_resolve_public_client(monkeypatch) -> None:
     staging_client = _FakeClient("staging")
 
@@ -89,6 +101,22 @@ def test_runtime_agent_registry_builder_does_not_resolve_public_client(monkeypat
     )
 
     assert staging_client.table_names == ["agent_registry"]
+
+
+def test_runtime_sync_file_builder_does_not_resolve_public_client(monkeypatch) -> None:
+    staging_client = _FakeClient("staging")
+
+    def fake_resolve_supabase_client(supabase_client=None, factory_ref=None):
+        if factory_ref is not None:
+            raise AssertionError(f"unexpected public factory resolution: {factory_ref}")
+        return supabase_client
+
+    monkeypatch.setattr(storage_runtime, "_resolve_supabase_client", fake_resolve_supabase_client)
+
+    repo = storage_runtime.build_sync_file_repo(supabase_client=staging_client)
+    repo.track_file("thread-1", "notes/a.txt", "a" * 64, 123)
+
+    assert staging_client.table_names == ["sync_files"]
 
 
 def test_supabase_agent_registry_repo_lists_running_by_name() -> None:
