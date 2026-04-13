@@ -543,4 +543,68 @@ describe("NewChatPage", () => {
     expect(await screen.findByText("Self-host Daytona 已达上限")).toBeTruthy();
     expect((screen.getByRole("button", { name: "下一步" }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("shows unavailable configured sandbox providers instead of hiding their quota state", async () => {
+    sandboxTypesForTest = [{
+      name: "daytona_selfhost",
+      provider: "daytona",
+      available: false,
+      reason: "Provider daytona_selfhost is configured but unavailable in the current process",
+    }];
+    clientMocks.fetchAccountResourceLimits.mockResolvedValue([
+      {
+        resource: "sandbox",
+        provider_name: "daytona_selfhost",
+        label: "Self-host Daytona",
+        limit: 2,
+        used: 0,
+        remaining: 2,
+        can_create: true,
+      },
+    ]);
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "new",
+        provider_config: "daytona_selfhost",
+        recipe: {
+          id: "daytona-recipe",
+          name: "Self-host Daytona",
+          provider_type: "daytona",
+          features: {},
+          configurable_features: {},
+          feature_options: [],
+        },
+        lease_id: null,
+        model: "leon:large",
+        workspace: null,
+      },
+    });
+    useAppStore.setState({
+      libraryRecipes: [{
+        id: "daytona-recipe",
+        type: "recipe",
+        name: "Self-host Daytona",
+        desc: "",
+        provider_type: "daytona",
+        available: true,
+        created_at: 0,
+        updated_at: 0,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Self-host Daytona 当前不可用")).toBeTruthy();
+    expect(screen.getByText("Provider daytona_selfhost is configured but unavailable in the current process")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "下一步" }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });

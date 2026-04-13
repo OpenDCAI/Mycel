@@ -279,12 +279,13 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   const providerConfigOptions = useMemo(
     () =>
       sandboxTypes
-        .filter((item) => item.available)
         .map((item) => ({
           value: item.name,
-          label: providerConfigLabel(item.name),
+          label: sandboxResourceByProvider.get(item.name)?.label ?? providerConfigLabel(item.name),
           providerType: item.provider || providerTypeFromName(item.name),
           resource: sandboxResourceByProvider.get(item.name),
+          available: item.available,
+          reason: item.reason,
         })),
     [sandboxResourceByProvider, sandboxTypes],
   );
@@ -535,7 +536,11 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   const selectedProviderResource = selectedProviderConfig
     ? sandboxResourceByProvider.get(selectedProviderConfig)
     : undefined;
+  const selectedProviderOption = selectedProviderConfig
+    ? providerConfigOptions.find((item) => item.value === selectedProviderConfig)
+    : undefined;
   const newSandboxQuotaBlocked = createMode === "new" && selectedProviderResource?.can_create === false;
+  const newSandboxProviderUnavailable = createMode === "new" && selectedProviderOption?.available === false;
   const stepSummary = createMode === "existing"
     ? `复用 ${providerSummaryLabel} 的现有沙盒`
     : `新建 ${providerSummaryLabel} 沙盒 · ${recipeSummaryLabel}`;
@@ -590,7 +595,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
           environmentControl={{
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),
-            applyDisabled: (configStep === 1 && newSandboxQuotaBlocked)
+            applyDisabled: (configStep === 1 && (newSandboxQuotaBlocked || newSandboxProviderUnavailable))
               || (configStep === 2 && createMode === "existing" && !selectedLeaseId),
             showBack: configStep > 1,
             backLabel: "返回上一步",
@@ -714,7 +719,9 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                           <SelectContent>
                             {providerConfigOptions.map((item) => (
                               <SelectItem key={item.value} value={item.value}>
-                                {item.resource?.can_create === false ? `${item.label} · 已达上限` : item.label}
+                                {!item.available
+                                  ? `${item.label} · 当前不可用`
+                                  : item.resource?.can_create === false ? `${item.label} · 已达上限` : item.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -725,7 +732,13 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                         {accountResourcesError && (
                           <p className="mt-2 text-xs text-destructive">{accountResourcesError}</p>
                         )}
-                        {!accountResourcesLoading && selectedProviderResource && (
+                        {newSandboxProviderUnavailable && selectedProviderOption && (
+                          <div className="mt-2 space-y-1 text-xs text-destructive">
+                            <p>{selectedProviderOption.label} 当前不可用</p>
+                            {selectedProviderOption.reason && <p>{selectedProviderOption.reason}</p>}
+                          </div>
+                        )}
+                        {!newSandboxProviderUnavailable && !accountResourcesLoading && selectedProviderResource && (
                           <p className={cn(
                             "mt-2 text-xs",
                             selectedProviderResource.can_create ? "text-muted-foreground" : "text-destructive",
