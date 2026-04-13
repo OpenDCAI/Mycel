@@ -119,9 +119,7 @@ class StorageContainer:
         return self._build("tool_task_repo")
 
     def sync_file_repo(self) -> SyncFileRepo:
-        # @@@sync-file-public-schema - sync_files is still a public-schema island,
-        # so runtime cleanup must not silently inherit staging.
-        return self._build("sync_file_repo", client=self._public_supabase_client)
+        return self._build("sync_file_repo")
 
     def resource_snapshot_repo(self) -> ResourceSnapshotRepo:
         return self._build("resource_snapshot_repo")

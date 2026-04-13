@@ -10,7 +10,6 @@ from typing import Any
 from storage.container import StorageContainer
 
 _WEB_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_supabase_client"
-_PUBLIC_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_public_supabase_client"
 
 
 def uses_supabase_storage() -> bool:
@@ -91,7 +90,6 @@ def build_sync_file_repo(*, supabase_client: Any | None = None, supabase_client_
         "sync_file_repo",
         supabase_client=supabase_client,
         supabase_client_factory=supabase_client_factory,
-        public_supabase_client_factory=_PUBLIC_SUPABASE_CLIENT_FACTORY,
     )
 
 
