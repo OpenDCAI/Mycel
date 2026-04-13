@@ -52,6 +52,18 @@ class SupabaseAgentRegistryRepo:
         r = rows[0]
         return (r["agent_id"], r["name"], r["thread_id"], r["status"], r.get("parent_agent_id"), r.get("subagent_type"))
 
+    def list_running_by_name(self, name: str) -> list[tuple]:
+        rows = q.rows(
+            self._table()
+            .select("agent_id,name,thread_id,status,parent_agent_id,subagent_type")
+            .eq("name", name)
+            .eq("status", "running")
+            .execute(),
+            _REPO,
+            "list_running_by_name",
+        )
+        return [(r["agent_id"], r["name"], r["thread_id"], r["status"], r.get("parent_agent_id"), r.get("subagent_type")) for r in rows]
+
     def update_status(self, agent_id: str, status: str) -> None:
         self._table().update({"status": status}).eq("agent_id", agent_id).execute()
 
