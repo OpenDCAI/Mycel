@@ -241,33 +241,7 @@ export default function EvaluationPage() {
         <div className="evaluation-batches-header">
           <div>
             <h2>Evaluation Batches</h2>
-            <p className="surface-card__body">
-              {batches.length > 0
-                ? `Showing ${batchRangeStart}-${batchRangeEnd} of ${batches.length} batches`
-                : "No evaluation batches yet."}
-            </p>
           </div>
-          {totalPages > 1 ? (
-            <div className="evaluation-pagination">
-              <button
-                type="button"
-                className="monitor-action-button"
-                disabled={page <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </button>
-              <span className="evaluation-pagination__meta">Page {page} / {totalPages}</span>
-              <button
-                type="button"
-                className="monitor-action-button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-              >
-                Next
-              </button>
-            </div>
-          ) : null}
         </div>
 
         <article className="evaluation-create-panel">
@@ -339,6 +313,35 @@ export default function EvaluationPage() {
             </div>
           </form>
         </article>
+
+        {batches.length > 0 ? (
+          <div className="evaluation-pagination evaluation-pagination--inline">
+            <span className="evaluation-pagination__meta">
+              Showing {batchRangeStart}-{batchRangeEnd} of {batches.length} batches
+            </span>
+            {totalPages > 1 ? (
+              <>
+                <button
+                  type="button"
+                  className="monitor-action-button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  Previous
+                </button>
+                <span className="evaluation-pagination__meta">Page {page} / {totalPages}</span>
+                <button
+                  type="button"
+                  className="monitor-action-button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                >
+                  Next
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
 
         {visibleBatches.length > 0 ? (
           <div className="evaluation-batch-grid">

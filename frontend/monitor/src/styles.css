@@ -1995,3 +1995,14 @@ section li {
     grid-template-columns: 1fr;
   }
 }
+
+.evaluation-pagination--inline {
+  margin: 0.9rem 0 1rem;
+  justify-content: flex-end;
+}
+
+@media (max-width: 840px) {
+  .evaluation-pagination--inline {
+    justify-content: flex-start;
+  }
+}
