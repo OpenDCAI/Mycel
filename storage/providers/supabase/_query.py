@@ -17,6 +17,18 @@ def validate_client(client: Any, repo: str) -> Any:
     return client
 
 
+def schema_table(client: Any, schema: str, table: str, repo: str) -> Any:
+    """Return a schema-qualified table query root, failing loudly if unsupported."""
+    schema_method = getattr(client, "schema", None)
+    if not callable(schema_method):
+        raise RuntimeError(f"Supabase {repo} requires client.schema({schema!r}) support for {schema}.{table}.")
+    scoped = schema_method(schema)
+    table_method = getattr(scoped, "table", None)
+    if not callable(table_method):
+        raise RuntimeError(f"Supabase {repo} schema({schema!r}) result must expose table(name).")
+    return table_method(table)
+
+
 def rows(response: Any, repo: str, operation: str) -> list[dict[str, Any]]:
     """Extract and validate the `.data` list from a supabase-py response."""
     if isinstance(response, dict):

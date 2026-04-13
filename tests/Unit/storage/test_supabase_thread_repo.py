@@ -1,4 +1,5 @@
 from storage.providers.supabase.thread_repo import SupabaseThreadRepo
+from tests.fakes.supabase import FakeSupabaseClient
 
 
 class _FakeTable:
@@ -56,6 +57,9 @@ class _FakeClient:
     def __init__(self) -> None:
         self.table_obj = _FakeTable()
 
+    def schema(self, _name):
+        return self
+
     def table(self, _name):
         return self.table_obj
 
@@ -71,6 +75,7 @@ def test_supabase_thread_repo_create_writes_integer_main_flag():
         created_at=1.0,
         is_main=True,
         branch_index=0,
+        owner_user_id="owner-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -88,6 +93,7 @@ def test_supabase_thread_repo_create_defaults_active_status():
         created_at=1.0,
         is_main=True,
         branch_index=0,
+        owner_user_id="owner-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -105,6 +111,7 @@ def test_supabase_thread_repo_create_uses_agent_user_id_not_member_id() -> None:
         created_at=1.0,
         is_main=True,
         branch_index=0,
+        owner_user_id="owner-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -242,3 +249,36 @@ def test_supabase_thread_repo_list_by_ids_chunks_large_in_filters() -> None:
 
     assert [row["id"] for row in rows] == ["thread-0", "thread-80"]
     assert [len(values) for _key, values in client.table_obj.in_calls] == [80, 1]
+
+
+def test_supabase_thread_repo_reads_agent_threads_schema_table() -> None:
+    client = FakeSupabaseClient(
+        tables={
+            "agent.threads": [
+                {
+                    "id": "thread-1",
+                    "agent_user_id": "agent-1",
+                    "owner_user_id": "owner-1",
+                    "current_workspace_id": None,
+                    "sandbox_type": "local",
+                    "model": "large",
+                    "cwd": "/work",
+                    "status": "active",
+                    "run_status": "idle",
+                    "is_main": True,
+                    "branch_index": 0,
+                    "created_at": "2026-04-14T00:00:00+00:00",
+                    "updated_at": "2026-04-14T00:00:00+00:00",
+                    "last_active_at": None,
+                }
+            ]
+        }
+    )
+    repo = SupabaseThreadRepo(client)
+
+    row = repo.get_by_id("thread-1")
+
+    assert row is not None
+    assert row["id"] == "thread-1"
+    assert row["agent_user_id"] == "agent-1"
+    assert row["owner_user_id"] == "owner-1"
