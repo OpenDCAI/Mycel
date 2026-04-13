@@ -51,15 +51,7 @@ uv sync
 cd frontend/app && npm install && cd ../..
 ```
 
-**Sandbox providers** require extra dependencies — install only what you need:
-
-```bash
-uv sync --extra sandbox     # AgentBay
-uv sync --extra e2b         # E2B
-uv sync --extra daytona     # Daytona
-```
-
-Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
+Sandbox provider SDKs are installed by default. Docker still requires Docker installed locally. See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
 
 ### 3. Start the services
 

@@ -1466,7 +1466,9 @@ source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },
     { name = "croniter" },
+    { name = "daytona-sdk" },
     { name = "duckduckgo-search" },
+    { name = "e2b" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "langchain" },
@@ -1482,35 +1484,26 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyjwt" },
     { name = "pyright" },
+    { name = "python-socks" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "sse-starlette" },
     { name = "supabase" },
     { name = "uvicorn" },
+    { name = "wuying-agentbay-sdk" },
 ]
 
 [package.optional-dependencies]
 all = [
-    { name = "daytona-sdk" },
-    { name = "e2b" },
     { name = "httpx-sse" },
     { name = "langfuse" },
     { name = "langsmith" },
     { name = "pymupdf" },
     { name = "python-pptx" },
-    { name = "python-socks" },
-    { name = "wuying-agentbay-sdk" },
-]
-daytona = [
-    { name = "daytona-sdk" },
-    { name = "python-socks" },
 ]
 docs = [
     { name = "pymupdf" },
     { name = "python-pptx" },
-]
-e2b = [
-    { name = "e2b" },
 ]
 eval = [
     { name = "httpx-sse" },
@@ -1532,9 +1525,6 @@ pdf = [
 pptx = [
     { name = "python-pptx" },
 ]
-sandbox = [
-    { name = "wuying-agentbay-sdk" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -1549,11 +1539,9 @@ dev = [
 requires-dist = [
     { name = "bcrypt", specifier = ">=4.0.0" },
     { name = "croniter", specifier = ">=6.0.0" },
-    { name = "daytona-sdk", marker = "extra == 'all'", specifier = ">=0.139.0,<0.140.0" },
-    { name = "daytona-sdk", marker = "extra == 'daytona'", specifier = ">=0.139.0,<0.140.0" },
+    { name = "daytona-sdk", specifier = ">=0.139.0,<0.140.0" },
     { name = "duckduckgo-search", specifier = ">=8.1.1" },
-    { name = "e2b", marker = "extra == 'all'", specifier = ">=2.13.0" },
-    { name = "e2b", marker = "extra == 'e2b'", specifier = ">=2.13.0" },
+    { name = "e2b", specifier = ">=2.13.0" },
     { name = "fastapi", specifier = ">=0.118.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "httpx-sse", marker = "extra == 'all'", specifier = ">=0.4.0" },
@@ -1584,17 +1572,15 @@ requires-dist = [
     { name = "python-pptx", marker = "extra == 'all'", specifier = ">=1.0.0" },
     { name = "python-pptx", marker = "extra == 'docs'", specifier = ">=1.0.0" },
     { name = "python-pptx", marker = "extra == 'pptx'", specifier = ">=1.0.0" },
-    { name = "python-socks", marker = "extra == 'all'", specifier = ">=2.7.0" },
-    { name = "python-socks", marker = "extra == 'daytona'", specifier = ">=2.7.0" },
+    { name = "python-socks", specifier = ">=2.7.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "sse-starlette", specifier = ">=1.6.0" },
     { name = "supabase", specifier = ">=2.28.3" },
     { name = "uvicorn", specifier = ">=0.30.0" },
-    { name = "wuying-agentbay-sdk", marker = "extra == 'all'", specifier = ">=0.10.0" },
-    { name = "wuying-agentbay-sdk", marker = "extra == 'sandbox'", specifier = ">=0.10.0" },
+    { name = "wuying-agentbay-sdk", specifier = ">=0.10.0" },
 ]
-provides-extras = ["pdf", "pptx", "docs", "sandbox", "e2b", "daytona", "eval", "langfuse", "langsmith", "otel", "all"]
+provides-extras = ["pdf", "pptx", "docs", "eval", "langfuse", "langsmith", "otel", "all"]
 
 [package.metadata.requires-dev]
 dev = [
