@@ -1,4 +1,4 @@
-"""TaskService - SQLite-backed task management tools.
+"""TaskService - storage-backed thread task tools.
 
 Provides TaskCreate/TaskGet/TaskList/TaskUpdate as DEFERRED tools.
 Tasks are partitioned by thread_id so all agents in the same thread share
@@ -129,8 +129,8 @@ TASK_UPDATE_SCHEMA = {
 class TaskService:
     """Task management service providing DEFERRED tools.
 
-    Tasks are stored in SQLite and partitioned by thread_id so all agents
-    in the same thread/team share the same task list.
+    Tasks are stored through the active storage strategy and partitioned by
+    thread_id so all agents in the same thread/team share the same task list.
 
     thread_id is resolved at call time from sandbox.thread_context;
     falls back to a fixed thread_id if provided at construction (for tests).

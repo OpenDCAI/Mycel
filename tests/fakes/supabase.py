@@ -26,7 +26,7 @@ class FakeSupabaseQuery:
         self._delete_requested = False
         self._auto_seq = False
 
-    def select(self, _columns: str):
+    def select(self, _columns: str, **_kwargs: object):
         return self
 
     def insert(self, payload: dict | list[dict]):
