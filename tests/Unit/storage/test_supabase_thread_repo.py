@@ -100,6 +100,48 @@ def test_supabase_thread_repo_create_defaults_active_status():
     assert client.table_obj.insert_payload["status"] == "active"
 
 
+def test_supabase_thread_repo_create_serializes_epoch_timestamps_for_agent_schema():
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    repo.create(
+        thread_id="thread-1",
+        agent_user_id="agent-1",
+        sandbox_type="local",
+        created_at=1.25,
+        updated_at=2.5,
+        last_active_at=3.75,
+        is_main=True,
+        branch_index=0,
+        owner_user_id="owner-1",
+    )
+
+    assert client.table_obj.insert_payload is not None
+    assert client.table_obj.insert_payload["created_at"] == "1970-01-01T00:00:01.250000+00:00"
+    assert client.table_obj.insert_payload["updated_at"] == "1970-01-01T00:00:02.500000+00:00"
+    assert client.table_obj.insert_payload["last_active_at"] == "1970-01-01T00:00:03.750000+00:00"
+
+
+def test_supabase_thread_repo_create_defaults_updated_at_to_created_at_for_agent_schema():
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    repo.create(
+        thread_id="thread-1",
+        agent_user_id="agent-1",
+        sandbox_type="local",
+        created_at=1.25,
+        is_main=True,
+        branch_index=0,
+        owner_user_id="owner-1",
+    )
+
+    assert client.table_obj.insert_payload is not None
+    assert client.table_obj.insert_payload["created_at"] == "1970-01-01T00:00:01.250000+00:00"
+    assert client.table_obj.insert_payload["updated_at"] == "1970-01-01T00:00:01.250000+00:00"
+    assert client.table_obj.insert_payload["last_active_at"] is None
+
+
 def test_supabase_thread_repo_create_uses_agent_user_id_not_member_id() -> None:
     client = _FakeClient()
     repo = SupabaseThreadRepo(client)
