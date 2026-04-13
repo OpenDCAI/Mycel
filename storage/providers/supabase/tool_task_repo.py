@@ -9,7 +9,8 @@ from core.tools.task.types import Task, TaskStatus
 from storage.providers.supabase import _query as q
 
 _REPO = "tool_task repo"
-_TABLE = "agent_thread_tasks"
+_SCHEMA = "agent"
+_TABLE = "thread_tasks"
 
 
 class SupabaseToolTaskRepo:
@@ -20,7 +21,7 @@ class SupabaseToolTaskRepo:
         return None
 
     def _table(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, _SCHEMA, _TABLE, _REPO)
 
     def next_id(self, thread_id: str) -> str:
         rows = q.rows(
