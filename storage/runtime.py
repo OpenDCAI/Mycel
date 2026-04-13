@@ -69,6 +69,10 @@ def build_tool_task_repo(*, supabase_client: Any | None = None, supabase_client_
     return _build_storage_repo("tool_task_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
+def build_schedule_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
+    return _build_storage_repo("schedule_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
+
+
 def build_lease_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
     return _build_storage_repo("lease_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
