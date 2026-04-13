@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from storage.providers.supabase import _query as q
@@ -44,6 +45,14 @@ def _to_dict(row: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _to_timestamptz(value: float | str | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return datetime.fromtimestamp(value, UTC).isoformat()
+
+
 class SupabaseThreadRepo:
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
@@ -69,6 +78,8 @@ class SupabaseThreadRepo:
     ) -> None:
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
         resolved_owner_user_id = owner_user_id or self._resolve_owner_user_id(agent_user_id)
+        created_at_value = _to_timestamptz(created_at)
+        updated_at_value = _to_timestamptz(updated_at) if updated_at is not None else created_at_value
         self._t().insert(
             {
                 "id": thread_id,
@@ -80,9 +91,9 @@ class SupabaseThreadRepo:
                 "status": status,
                 "is_main": int(is_main),
                 "branch_index": branch_index,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "last_active_at": last_active_at,
+                "created_at": created_at_value,
+                "updated_at": updated_at_value,
+                "last_active_at": _to_timestamptz(last_active_at),
             }
         ).execute()
 
