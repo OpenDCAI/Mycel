@@ -44,6 +44,14 @@ def make_cron_job_repo() -> Any:
     return SQLiteCronJobRepo(db_path=DB_PATH)
 
 
+def make_schedule_repo() -> Any:
+    if _strategy() == "supabase":
+        from storage.providers.supabase.schedule_repo import SupabaseScheduleRepo
+
+        return SupabaseScheduleRepo(_supabase_client())
+    raise RuntimeError("schedule repo requires LEON_STORAGE_STRATEGY=supabase")
+
+
 def make_sandbox_monitor_repo() -> Any:
     if _strategy() == "supabase":
         from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo

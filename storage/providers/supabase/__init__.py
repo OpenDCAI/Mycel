@@ -20,6 +20,7 @@ from .resource_snapshot_repo import list_snapshots_by_lease_ids, upsert_lease_re
 from .run_event_repo import SupabaseRunEventRepo
 from .sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from .sandbox_volume_repo import SupabaseSandboxVolumeRepo
+from .schedule_repo import SupabaseScheduleRepo
 from .summary_repo import SupabaseSummaryRepo
 from .sync_file_repo import SupabaseSyncFileRepo
 from .terminal_repo import SupabaseTerminalRepo
@@ -49,6 +50,7 @@ __all__ = [
     "SupabaseQueueRepo",
     "SupabaseRecipeRepo",
     "SupabaseRunEventRepo",
+    "SupabaseScheduleRepo",
     "SupabaseSandboxMonitorRepo",
     "SupabaseSandboxVolumeRepo",
     "SupabaseSummaryRepo",
