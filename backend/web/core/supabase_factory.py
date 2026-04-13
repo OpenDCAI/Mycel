@@ -7,6 +7,8 @@ import os
 import httpx
 from supabase import ClientOptions, create_client
 
+from storage.providers.supabase.schema import resolve_runtime_schema
+
 
 def create_supabase_client():
     """Build a supabase-py client from runtime environment.
@@ -22,7 +24,7 @@ def create_supabase_client():
         raise RuntimeError("SUPABASE_INTERNAL_URL or SUPABASE_PUBLIC_URL is required.")
     if not key:
         raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for Supabase storage runtime.")
-    schema = os.getenv("LEON_DB_SCHEMA", "public")
+    schema = resolve_runtime_schema()
     timeout = httpx.Timeout(30.0, connect=10.0)
     http_client = httpx.Client(timeout=timeout, trust_env=False)
     return create_client(url, key, options=ClientOptions(httpx_client=http_client, schema=schema))
