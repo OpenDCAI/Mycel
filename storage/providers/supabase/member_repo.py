@@ -61,9 +61,7 @@ class SupabaseMemberRepo:
             self._description_column: row.description,
             self._config_column: row.config_dir,
         }
-        self._t().insert(
-            {k: v for k, v in payload.items() if v is not None}
-        ).execute()
+        self._t().insert({k: v for k, v in payload.items() if v is not None}).execute()
 
     def get_by_id(self, member_id: str) -> MemberRow | None:
         response = self._t().select("*").eq("id", member_id).execute()
@@ -130,8 +128,7 @@ class SupabaseMemberRepo:
             data = getattr(response, "data", None)
         if data is None:
             raise RuntimeError(
-                f"Supabase {_MEMBER_REPO} expected data from {rpc_name} RPC. "
-                "Check the function exists and member_id is valid."
+                f"Supabase {_MEMBER_REPO} expected data from {rpc_name} RPC. Check the function exists and member_id is valid."
             )
         # data may be a list with one element (scalar), or an int directly
         if isinstance(data, list):
