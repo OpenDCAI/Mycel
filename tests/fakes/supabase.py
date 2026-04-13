@@ -33,7 +33,7 @@ class FakeSupabaseQuery:
         self._insert_payload = payload if isinstance(payload, list) else dict(payload)
         return self
 
-    def upsert(self, payload: dict, *, on_conflict: str = ""):
+    def upsert(self, payload: dict, *, on_conflict: str = "", ignore_duplicates: bool = False):
         self._upsert_payload = dict(payload)
         self._upsert_conflict = on_conflict
         return self
@@ -109,9 +109,8 @@ class FakeSupabaseQuery:
 
         # UPSERT
         if self._upsert_payload is not None:
-            conflict_col = self._upsert_conflict or "id"
-            conflict_val = self._upsert_payload.get(conflict_col)
-            existing = [r for r in table if r.get(conflict_col) == conflict_val]
+            conflict_cols = [col.strip() for col in (self._upsert_conflict or "id").split(",") if col.strip()]
+            existing = [r for r in table if all(r.get(col) == self._upsert_payload.get(col) for col in conflict_cols)]
             if existing:
                 existing[0].update(self._upsert_payload)
                 return FakeSupabaseResponse([dict(existing[0])])

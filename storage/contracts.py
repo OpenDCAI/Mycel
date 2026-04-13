@@ -150,6 +150,8 @@ class ChatRow(BaseModel):
     status: str = "active"
     created_at: float
     updated_at: float | None = None
+    type: str = "direct"
+    created_by_user_id: str | None = None
 
 
 class ChatEntityRow(BaseModel):

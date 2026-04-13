@@ -52,7 +52,7 @@ class ChatService:
         m = self._members.get_by_id(user_id) if self._members else None
         return m.name if m else "unknown"
 
-    def find_or_create_chat(self, user_ids: list[str], title: str | None = None) -> ChatRow:
+    def find_or_create_chat(self, user_ids: list[str], title: str | None = None, *, created_by_user_id: str | None = None) -> ChatRow:
         """Find existing 1:1 chat between two social identities, or create one."""
         if len(user_ids) != 2:
             raise ValueError("Use create_group_chat() for 3+ participants")
@@ -63,18 +63,18 @@ class ChatService:
 
         now = time.time()
         chat_id = str(uuid.uuid4())
-        self._chats.create(ChatRow(id=chat_id, title=title, created_at=now))
+        self._chats.create(ChatRow(id=chat_id, title=title, type="direct", created_by_user_id=created_by_user_id, created_at=now))
         for uid in user_ids:
             self._chat_entities.add_participant(chat_id, uid, now)
         return self._chats.get_by_id(chat_id)
 
-    def create_group_chat(self, user_ids: list[str], title: str | None = None) -> ChatRow:
+    def create_group_chat(self, user_ids: list[str], title: str | None = None, *, created_by_user_id: str | None = None) -> ChatRow:
         """Create a group chat with 3+ participants."""
         if len(user_ids) < 3:
             raise ValueError("Group chat requires 3+ participants")
         now = time.time()
         chat_id = str(uuid.uuid4())
-        self._chats.create(ChatRow(id=chat_id, title=title, created_at=now))
+        self._chats.create(ChatRow(id=chat_id, title=title, type="group", created_by_user_id=created_by_user_id, created_at=now))
         for uid in user_ids:
             self._chat_entities.add_participant(chat_id, uid, now)
         return self._chats.get_by_id(chat_id)

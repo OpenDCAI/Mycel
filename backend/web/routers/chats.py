@@ -47,9 +47,9 @@ async def create_chat(
     chat_service = app.state.chat_service
     try:
         if len(body.user_ids) >= 3:
-            chat = chat_service.create_group_chat(body.user_ids, body.title)
+            chat = chat_service.create_group_chat(body.user_ids, body.title, created_by_user_id=user_id)
         else:
-            chat = chat_service.find_or_create_chat(body.user_ids, body.title)
+            chat = chat_service.find_or_create_chat(body.user_ids, body.title, created_by_user_id=user_id)
         return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at}
     except ValueError as e:
         raise HTTPException(400, str(e))
