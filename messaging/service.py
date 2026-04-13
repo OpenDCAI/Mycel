@@ -13,6 +13,8 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
 from typing import Any
 
 from backend.web.utils.serializers import avatar_url
@@ -27,24 +29,22 @@ class MessagingService:
 
     def __init__(
         self,
-        chat_repo: Any,  # chat repo compatible with MessagingService create/list/delete operations
-        chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
-        messages_repo: Any,  # SupabaseMessagesRepo
-        message_read_repo: Any,  # SupabaseMessageReadRepo
-        user_repo: Any,  # UserRepo (for name + avatar lookup)
+        chat_repo: Any,
+        chat_member_repo: Any,
+        messages_repo: Any,
+        user_repo: Any,
         thread_repo: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
-        event_bus: Any | None = None,  # ChatEventBus-compatible publisher (optional)
+        event_bus: Any | None = None,
     ) -> None:
         self._chats = chat_repo
-        self._members_repo = chat_member_repo
+        self._chat_members_repo = chat_member_repo
         self._messages = messages_repo
         self._user_repo = user_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
-        self._reads = message_read_repo
 
     def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -85,24 +85,24 @@ class MessagingService:
     def project_message_response(self, row: dict[str, Any]) -> dict[str, Any]:
         return self._project_message_response(row)
 
-    def _build_chat_entities(self, chat_id: str) -> list[dict[str, Any]]:
-        entities_info = []
-        for member in self._members_repo.list_members(chat_id):
+    def _build_chat_members(self, chat_id: str) -> list[dict[str, Any]]:
+        member_info = []
+        for member in self._chat_members_repo.list_members(chat_id):
             social_user_id = member.get("user_id")
-            entity = self._resolve_display_user(social_user_id) if social_user_id else None
-            if entity is None:
+            user = self._resolve_display_user(social_user_id) if social_user_id else None
+            if user is None:
                 continue
-            # @@@thread-social-entity-projection - outward chat entities must keep the
+            # @@@thread-social-member-projection - outward chat members must keep the
             # social/thread user id while borrowing display/avatar fields from the resolved user row.
-            entities_info.append(
+            member_info.append(
                 {
                     "id": social_user_id,
-                    "name": entity.display_name,
-                    "type": entity.type.value if hasattr(entity.type, "value") else str(entity.type),
-                    "avatar_url": avatar_url(entity.id, bool(entity.avatar)),
+                    "name": user.display_name,
+                    "type": user.type.value if hasattr(user.type, "value") else str(user.type),
+                    "avatar_url": avatar_url(user.id, bool(user.avatar)),
                 }
             )
-        return entities_info
+        return member_info
 
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
@@ -114,7 +114,7 @@ class MessagingService:
     def find_or_create_chat(self, user_ids: list[str], title: str | None = None) -> dict[str, Any]:
         if len(user_ids) != 2:
             raise ValueError("Use create_group_chat() for 3+ users")
-        existing_id = self._members_repo.find_chat_between(user_ids[0], user_ids[1])
+        existing_id = self._chat_members_repo.find_chat_between(user_ids[0], user_ids[1])
         if existing_id:
             chat = self._chats.get_by_id(existing_id)
             return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at}
@@ -142,7 +142,7 @@ class MessagingService:
             )
         )
         for uid in user_ids:
-            self._members_repo.add_member(chat_id, uid)
+            self._chat_members_repo.add_member(chat_id, uid)
         return {"id": chat_id, "title": title, "status": "active", "created_at": now}
 
     # ------------------------------------------------------------------
@@ -183,7 +183,7 @@ class MessagingService:
             row["ai_metadata_json"] = ai_metadata
 
         if enforce_caught_up:
-            last_read_seq = getattr(self._members_repo, "last_read_seq", None)
+            last_read_seq = getattr(self._chat_members_repo, "last_read_seq", None)
             if last_read_seq is None:
                 raise RuntimeError("chat_member_repo must expose last_read_seq for caught-up sends")
             created_row = self._messages.create(row, expected_read_seq=int(last_read_seq(chat_id, sender_id)))
@@ -217,24 +217,24 @@ class MessagingService:
         signal: str | None = None,
     ) -> None:
         mention_set = set(mentions)
-        members = self._members_repo.list_members(chat_id)
+        members = self._chat_members_repo.list_members(chat_id)
         sender_user = self._resolve_display_user(sender_id)
         sender_name = sender_user.display_name if sender_user else "unknown"
         sender_avatar_url = avatar_url(sender_user.id if sender_user else sender_id, bool(sender_user.avatar if sender_user else None))
-        sender_type = (
-            sender_user.type.value
-            if hasattr(sender_user, "type") and hasattr(sender_user.type, "value")
-            else getattr(sender_user, "type", None)
-        )
-        sender_owner_id = sender_user.id if sender_type == "human" else getattr(sender_user, "owner_user_id", None)
+        sender_raw_type = getattr(sender_user, "type", None) if sender_user else None
+        sender_type = sender_raw_type.value if isinstance(sender_raw_type, Enum) else sender_raw_type
+        sender_owner_id = sender_user.id if sender_user and sender_type == "human" else getattr(sender_user, "owner_user_id", None)
 
         for member in members:
             uid = member.get("user_id")
             if not uid or uid == sender_id:
                 continue
             m = self._resolve_display_user(uid)
-            member_type = m.type.value if hasattr(getattr(m, "type", None), "value") else getattr(m, "type", None)
-            if not m or member_type == "human":
+            if not m:
+                continue
+            member_raw_type = getattr(m, "type", None)
+            member_type = member_raw_type.value if isinstance(member_raw_type, Enum) else member_raw_type
+            if member_type == "human":
                 continue
 
             # @@@same-owner-group-delivery - explicit group membership among the same owner
@@ -276,7 +276,7 @@ class MessagingService:
         """Mark all messages in a chat as read for user."""
         msgs = self._messages.list_by_chat(chat_id, limit=1, viewer_id=user_id)
         last_read_seq = int(msgs[-1].get("seq") or 0) if msgs else 0
-        self._members_repo.update_last_read(chat_id, user_id, last_read_seq)
+        self._chat_members_repo.update_last_read(chat_id, user_id, last_read_seq)
 
     # ------------------------------------------------------------------
     # Queries
@@ -311,16 +311,16 @@ class MessagingService:
         return self._messages.count_unread(chat_id, user_id)
 
     def find_direct_chat_id(self, actor_id: str, target_id: str) -> str | None:
-        return self._members_repo.find_chat_between(actor_id, target_id)
+        return self._chat_members_repo.find_chat_between(actor_id, target_id)
 
     def search_messages(self, query: str, *, chat_id: str | None = None) -> list[dict[str, Any]]:
         return self._messages.search(query, chat_id=chat_id)
 
     def list_chat_members(self, chat_id: str) -> list[dict[str, Any]]:
-        return self._members_repo.list_members(chat_id)
+        return self._chat_members_repo.list_members(chat_id)
 
     def is_chat_member(self, chat_id: str, user_id: str) -> bool:
-        return self._members_repo.is_member(chat_id, user_id)
+        return self._chat_members_repo.is_member(chat_id, user_id)
 
     def list_messages_by_time_range(
         self,
@@ -333,7 +333,7 @@ class MessagingService:
         return [self._normalize_message_row(row) for row in rows]
 
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None) -> None:
-        self._members_repo.update_mute(chat_id, user_id, muted, mute_until)
+        self._chat_members_repo.update_mute(chat_id, user_id, muted, mute_until)
 
     def get_chat_detail(self, chat: Any) -> dict[str, Any]:
         return {
@@ -341,7 +341,7 @@ class MessagingService:
             "title": chat.title,
             "status": chat.status,
             "created_at": chat.created_at,
-            "entities": self._build_chat_entities(chat.id),
+            "members": self._build_chat_members(chat.id),
         }
 
     def list_chats_for_user(self, user_id: str) -> list[dict[str, Any]]:
@@ -358,8 +358,8 @@ class MessagingService:
 
         result: list[dict[str, Any]] = []
         for chat in chat_rows:
-            entities_info = self._project_chat_entities(members_by_chat[chat.id], users_by_id)
-            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, entities_info, user_id)
+            member_info = self._project_chat_members(members_by_chat[chat.id], users_by_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, member_info, user_id)
             result.append(
                 {
                     "id": chat.id,
@@ -368,10 +368,9 @@ class MessagingService:
                     "created_at": chat.created_at,
                     "updated_at": getattr(chat, "updated_at", None) or getattr(chat, "created_at", None),
                     "avatar_url": chat_avatar_url,
-                    "entities": entities_info,
+                    "members": member_info,
                     "last_message": self._project_latest_message(latest_messages.get(chat.id), users_by_id),
                     "unread_count": int(unread_by_chat.get(chat.id, 0)),
-                    "has_mention": False,  # TODO: implement mention tracking
                 }
             )
         return result
@@ -381,8 +380,8 @@ class MessagingService:
         chat_rows, members_by_chat, users_by_id, unread_by_chat = self._chat_projection_inputs(user_id)
         result: list[dict[str, Any]] = []
         for chat in chat_rows:
-            entities_info = self._project_chat_entities(members_by_chat[chat.id], users_by_id)
-            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, entities_info, user_id)
+            member_info = self._project_chat_members(members_by_chat[chat.id], users_by_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, member_info, user_id)
             result.append(
                 {
                     "id": chat.id,
@@ -398,7 +397,7 @@ class MessagingService:
         self,
         user_id: str,
     ) -> tuple[list[Any], dict[str, list[dict[str, Any]]], dict[str, Any], dict[str, int]]:
-        chat_ids = self._members_repo.list_chats_for_user(user_id)
+        chat_ids = self._chat_members_repo.list_chats_for_user(user_id)
         if not chat_ids:
             return [], {}, {}, {}
 
@@ -409,7 +408,7 @@ class MessagingService:
 
         members_by_chat: dict[str, list[dict[str, Any]]] = {chat_id: [] for chat_id in active_chat_ids}
         last_read_by_chat: dict[str, int] = {}
-        for member in self._members_repo.list_members_for_chats(active_chat_ids):
+        for member in self._chat_members_repo.list_members_for_chats(active_chat_ids):
             chat_id = str(member.get("chat_id") or "")
             if chat_id not in members_by_chat:
                 continue
@@ -421,28 +420,37 @@ class MessagingService:
         if not visible_chats:
             return [], {}, {}, {}
 
-        users_by_id = self._users_by_id(
-            sorted(
-                {
-                    str(member.get("user_id") or "")
-                    for chat_id in active_chat_ids
-                    for member in members_by_chat.get(chat_id, [])
-                    if member.get("user_id")
-                }
-            )
+        user_ids = sorted(
+            {
+                str(member.get("user_id") or "")
+                for chat_id in active_chat_ids
+                for member in members_by_chat.get(chat_id, [])
+                if member.get("user_id")
+            }
         )
-        unread_by_chat = self._messages.count_unread_by_chat_ids(user_id, last_read_by_chat)
+        users_by_id, unread_by_chat = self._load_chat_users_and_unread_counts(user_id, user_ids, last_read_by_chat)
         return visible_chats, members_by_chat, users_by_id, unread_by_chat
 
-    def _project_chat_entities(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
+    def _load_chat_users_and_unread_counts(
+        self,
+        user_id: str,
+        user_ids: list[str],
+        last_read_by_chat: dict[str, int],
+    ) -> tuple[dict[str, Any], dict[str, int]]:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            users_future = executor.submit(self._users_by_id, user_ids)
+            unread_future = executor.submit(self._messages.count_unread_by_chat_ids, user_id, last_read_by_chat)
+            return users_future.result(), unread_future.result()
+
+    def _project_chat_members(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
         return [
-            self._project_known_user_entity(str(member.get("user_id") or ""), users_by_id) for member in members if member.get("user_id")
+            self._project_known_user_member(str(member.get("user_id") or ""), users_by_id) for member in members if member.get("user_id")
         ]
 
-    def _chat_title_and_avatar(self, title: str | None, entities: list[dict[str, Any]], viewer_id: str) -> tuple[str, str | None]:
-        other_entities = [entity for entity in entities if entity["id"] != viewer_id]
-        other_names = [entity["name"] for entity in other_entities if entity.get("name")]
-        return title or ", ".join(other_names) or "Chat", other_entities[0]["avatar_url"] if other_entities else None
+    def _chat_title_and_avatar(self, title: str | None, members: list[dict[str, Any]], viewer_id: str) -> tuple[str, str | None]:
+        other_members = [member for member in members if member["id"] != viewer_id]
+        other_names = [member["name"] for member in other_members if member.get("name")]
+        return title or ", ".join(other_names) or "Chat", other_members[0]["avatar_url"] if other_members else None
 
     def _project_latest_message(self, row: dict[str, Any] | None, users_by_id: dict[str, Any]) -> dict[str, Any] | None:
         if row is None:
@@ -463,7 +471,7 @@ class MessagingService:
             return {}
         return {user.id: user for user in self._user_repo.list_by_ids(user_ids)}
 
-    def _project_known_user_entity(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
+    def _project_known_user_member(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
         user = users_by_id.get(social_user_id)
         if user is None:
             raise RuntimeError(f"Chat member {social_user_id} is not a resolvable user row")

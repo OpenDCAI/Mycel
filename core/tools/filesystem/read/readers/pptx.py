@@ -60,7 +60,7 @@ def read_pptx(
         result.error = f"Start slide {start_slide} exceeds total slides {total_slides}"
         return result
 
-    effective_limit = limit_slides if limit_slides else 20
+    effective_limit = limit_slides or 20
     end_idx = min(start_idx + effective_limit, total_slides)
 
     output_parts: list[str] = []

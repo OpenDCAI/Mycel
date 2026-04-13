@@ -14,7 +14,7 @@ const API_BASE = (
   ?? import.meta.env.VITE_API_BASE
   ?? ""
 ).replace(/\/$/, "");
-export interface AuthIdentity {
+interface AuthIdentity {
   id: string;
   name: string;
   type: string;

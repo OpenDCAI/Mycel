@@ -502,28 +502,9 @@ class SQLiteLeaseRepo:
         )
         self._conn.commit()
 
-        # Schema migration: add columns if missing
         from sandbox.lease import REQUIRED_EVENT_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_LEASE_COLUMNS
 
         lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "instance_status" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN instance_status TEXT NOT NULL DEFAULT 'detached'")
-            self._conn.execute("UPDATE sandbox_leases SET instance_status = observed_state")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "recipe_id" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN recipe_id TEXT")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "recipe_json" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN recipe_json TEXT")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "volume_id" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN volume_id TEXT")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-
         instance_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
         event_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(lease_events)").fetchall()}
 

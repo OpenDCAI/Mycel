@@ -50,6 +50,16 @@ async def lifespan(app: FastAPI):
         supabase_client=_supabase_client,
         public_supabase_client=_public_supabase_client,
     )
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore
+
+    pg_url = os.environ["LEON_POSTGRES_URL"]
+    app.state._thread_checkpoint_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
+    app.state._thread_checkpoint_saver = await app.state._thread_checkpoint_saver_ctx.__aenter__()
+    await app.state._thread_checkpoint_saver.setup()
+    app.state.thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
+
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.lease_repo = storage_container.lease_repo()
@@ -95,7 +105,6 @@ async def lifespan(app: FastAPI):
     from messaging.service import MessagingService
     from storage.providers.supabase.messaging_repo import (
         SupabaseChatMemberRepo,
-        SupabaseMessageReadRepo,
         SupabaseMessagesRepo,
         SupabaseRelationshipRepo,
     )
@@ -103,7 +112,6 @@ async def lifespan(app: FastAPI):
     _msg_supabase = create_messaging_supabase_client()
     _chat_member_repo = SupabaseChatMemberRepo(_msg_supabase)
     _messages_repo = SupabaseMessagesRepo(_msg_supabase)
-    _message_read_repo = SupabaseMessageReadRepo(_msg_supabase)
     app.state.relationship_repo = SupabaseRelationshipRepo(_msg_supabase)
     app.state.chat_member_repo = _chat_member_repo
     app.state.messages_repo = _messages_repo
@@ -120,7 +128,6 @@ async def lifespan(app: FastAPI):
         chat_repo=app.state.chat_repo,
         chat_member_repo=_chat_member_repo,
         messages_repo=_messages_repo,
-        message_read_repo=_message_read_repo,
         user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
         event_bus=app.state.chat_event_bus,
@@ -168,6 +175,10 @@ async def lifespan(app: FastAPI):
 
         if hasattr(app.state, "recipe_repo"):
             app.state.recipe_repo.close()
+
+        checkpoint_saver_ctx = getattr(app.state, "_thread_checkpoint_saver_ctx", None)
+        if checkpoint_saver_ctx is not None:
+            await checkpoint_saver_ctx.__aexit__(None, None, None)
 
         # Cleanup: close all agents
         for agent in app.state.agent_pool.values():

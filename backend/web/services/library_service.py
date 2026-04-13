@@ -269,10 +269,12 @@ def update_resource(
     resource_id: str,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
-    **fields: Any,
+    *,
+    name: str | None = None,
+    desc: str | None = None,
+    features: dict[str, bool] | None = None,
 ) -> dict[str, Any] | None:
-    allowed = {"name", "desc", "features"}
-    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    updates = {key: value for key, value in {"name": name, "desc": desc, "features": features}.items() if value is not None}
     now = int(time.time() * 1000)
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)

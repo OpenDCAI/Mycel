@@ -79,9 +79,6 @@ from core.tools.search.service import SearchService  # noqa: E402
 from core.tools.skills.service import SkillsService  # noqa: E402
 from core.tools.task.service import TaskService  # noqa: E402
 from core.tools.tool_search.service import ToolSearchService  # noqa: E402
-
-# Multi-agent team coordination
-# from core.agents.teams.service import TeamService  # @@@teams-removed - module doesn't exist
 from core.tools.web.service import WebService  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
 
@@ -297,7 +294,7 @@ class LeonAgent:
             self.checkpointer = None
 
         # Initialize ToolRegistry and Services (new architecture)
-        blocked = self._get_member_blocked_tools()
+        blocked = self._get_agent_blocked_tools()
         if extra_blocked_tools:
             blocked = blocked | extra_blocked_tools
         self._tool_registry = ToolRegistry(
@@ -309,10 +306,6 @@ class LeonAgent:
 
         # Build middleware stack
         middleware = self._build_middleware_stack()
-
-        # Ensure the bound model still sees at least one BaseTool-compatible entry.
-        if not mcp_tools and not self._has_middleware_tools(middleware):
-            mcp_tools = [self._create_placeholder_tool()]
 
         self._system_prompt_section_cache: dict[str, str] = {}
         self.system_prompt = self._compose_system_prompt()
@@ -376,7 +369,6 @@ class LeonAgent:
         self._cleanup_registry.register(self._cleanup_sandbox, priority=2)
         self._cleanup_registry.register(self._mark_terminated, priority=3)
         self._cleanup_registry.register(self._cleanup_mcp_client, priority=4)
-        self._cleanup_registry.register(self._cleanup_sqlite_connection, priority=5)
 
         # Mark agent as ready (checkpointer is None when async init still pending)
         if self.checkpointer is not None:
@@ -464,10 +456,6 @@ class LeonAgent:
 
             return None, mcp_tools
 
-    def _has_middleware_tools(self, middleware: list) -> bool:
-        """Check if any middleware has BaseTool instances."""
-        return any(getattr(m, "tools", None) for m in middleware)
-
     def _register_mcp_tools(self, mcp_tools: list) -> None:
         if not mcp_tools:
             return
@@ -477,18 +465,7 @@ class LeonAgent:
             except Exception as exc:
                 logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
 
-    def _create_placeholder_tool(self):
-        """Create placeholder tool so the bound model still has a BaseTool."""
-        from langchain_core.tools import tool
-
-        @tool
-        def _placeholder() -> str:
-            """Internal placeholder for the empty-tool edge."""
-            return ""
-
-        return _placeholder
-
-    def _get_member_blocked_tools(self) -> set[str]:
+    def _get_agent_blocked_tools(self) -> set[str]:
         """Return disabled tool names, respecting catalog defaults.
 
         Logic:
@@ -585,7 +562,7 @@ class LeonAgent:
 
         # Load runtime config
         loader = AgentLoader(workspace_root=workspace_root)
-        config = loader.load(cli_overrides=cli_overrides if cli_overrides else None)
+        config = loader.load(cli_overrides=cli_overrides or None)
         if memory_config_override is not None:
             config = self._with_memory_config_override(config, memory_config_override)
 
@@ -595,15 +572,15 @@ class LeonAgent:
             models_cli["active"] = {"model": model_name}
         models_loader = ModelsLoader(workspace_root=workspace_root)
         if models_config_override is None:
-            models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
+            models_config = models_loader.load(cli_overrides=models_cli or None)
         else:
             models_config = models_loader.load_with_user_config(
                 models_config_override,
-                cli_overrides=models_cli if models_cli else None,
+                cli_overrides=models_cli or None,
             )
 
-        # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from the
-        # repo-rooted agent_config_id path, not from ~/.leon/members filesystem shells.
+        # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from
+        # the repo-rooted agent_config_id path, not stale local filesystem shells.
         if agent_config_id is not None:
             if agent_config_repo is None:
                 raise RuntimeError("agent_config_repo is required when agent_config_id is provided")
@@ -623,7 +600,7 @@ class LeonAgent:
             if not agent_def:
                 available = ", ".join(sorted(all_agents.keys()))
                 raise ValueError(f"Unknown agent: {agent_name}. Available: {available}")
-            # If agent has source_dir (member), load full bundle
+            # If agent has source_dir, load the full bundle.
             if agent_def.source_dir:
                 self._agent_bundle = loader.load_bundle(agent_def.source_dir)
             else:
@@ -698,7 +675,7 @@ class LeonAgent:
         raise TypeError(f"sandbox must be Sandbox, str, or None, got {type(sandbox)}")
 
     def _resolve_provider_name(self, model_name: str, overrides: dict | None = None) -> str | None:
-        """Resolve provider: overrides → custom_providers → infer from model name → env fallback."""
+        """Resolve provider: overrides → active config → infer from model name → configured default."""
         if overrides and overrides.get("model_provider"):
             return overrides["model_provider"]
         if self.models_config.active and self.models_config.active.provider:
@@ -731,8 +708,7 @@ class LeonAgent:
         base_url = base_url.rstrip("/")
 
         # Remove /v1 suffix if present (we'll add it back if needed)
-        if base_url.endswith("/v1"):
-            base_url = base_url[:-3]
+        base_url = base_url.removesuffix("/v1")
 
         # Add /v1 for OpenAI-compatible providers
         if provider in ("openai", None):  # None defaults to OpenAI
@@ -767,13 +743,12 @@ class LeonAgent:
         if provider:
             kwargs["model_provider"] = provider
 
-        p = self.models_config.get_provider(provider) if provider else None
         api_key = self.models_config.resolve_api_key(provider) or getattr(self, "api_key", None)
         if not api_key:
             raise RuntimeError("API key required for WebFetch extraction model")
         kwargs["api_key"] = api_key
 
-        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        base_url = self.models_config.resolve_base_url(provider)
         if base_url:
             kwargs["base_url"] = self._normalize_base_url(base_url, provider)
         return init_chat_model(model_name, **kwargs)
@@ -787,22 +762,11 @@ class LeonAgent:
             kwargs.update({k: v for k, v in self._model_overrides.items() if k not in ("context_limit", "based_on")})
 
         # Use provider from model overrides (mapping) first, then infer
-        provider = self._resolve_provider_name(self.model_name, kwargs if kwargs else None)
+        provider = self._resolve_provider_name(self.model_name, kwargs or None)
         if provider:
             kwargs["model_provider"] = provider
 
-        # Get credentials from the resolved provider
-        p = self.models_config.get_provider(provider) if provider else None
-        env_base_url = os.getenv("ANTHROPIC_BASE_URL") or os.getenv("OPENAI_BASE_URL")
-
-        # @@@explicit-api-key-base-url
-        # Real-model verification must not be silently redirected to a provider
-        # config endpoint when the caller explicitly injected credentials for a
-        # different OpenAI-compatible endpoint.
-        if self._explicit_api_key and env_base_url:
-            base_url = env_base_url
-        else:
-            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        base_url = self.models_config.resolve_base_url(provider)
         if base_url:
             kwargs["base_url"] = self._normalize_base_url(base_url, provider)
 
@@ -839,9 +803,8 @@ class LeonAgent:
         if model is None:
             # @@@api-key-reload — no model change, just refresh credentials from disk
             provider_name = self._resolve_provider_name(self.model_name, self._model_overrides)
-            p = self.models_config.get_provider(provider_name) if provider_name else None
             self.api_key = self.models_config.resolve_api_key(provider_name)
-            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+            base_url = self.models_config.resolve_base_url(provider_name)
             if base_url:
                 base_url = self._normalize_base_url(base_url, provider_name)
             self._current_model_config.update(
@@ -860,9 +823,8 @@ class LeonAgent:
 
         # Resolve provider credentials
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
-        p = self.models_config.get_provider(provider_name) if provider_name else None
         self.api_key = self.models_config.resolve_api_key(provider_name)
-        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        base_url = self.models_config.resolve_base_url(provider_name)
         if base_url:
             base_url = self._normalize_base_url(base_url, provider_name)
 
@@ -900,9 +862,7 @@ class LeonAgent:
         Args:
             **overrides: Fields to override (e.g. active="langfuse" or active=None)
         """
-        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(
-            cli_overrides=overrides if overrides else None
-        )
+        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
 
         if self.verbose:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
@@ -936,7 +896,6 @@ class LeonAgent:
                 cleanup_steps = [
                     ("monitor", self._mark_terminated),
                     ("MCP client", self._cleanup_mcp_client),
-                    ("SQLite connection", self._cleanup_sqlite_connection),
                 ]
                 if cleanup_sandbox:
                     cleanup_steps.insert(0, ("sandbox", self._cleanup_sandbox))
@@ -1023,9 +982,6 @@ class LeonAgent:
             print(f"[LeonAgent] MCP cleanup error: {e}")
         self._mcp_client = None
 
-    def _cleanup_sqlite_connection(self) -> None:
-        """No-op: SQLite checkpointer removed; Postgres cleanup handled by _pg_saver_ctx."""
-
     def __del__(self):
         self.close()
 
@@ -1097,8 +1053,8 @@ class LeonAgent:
 
     def _add_memory_middleware(self, middleware: list) -> None:
         """Add memory middleware to stack."""
-        # @@@context-limit-fallback — prefer mapping override (e.g. leon:tiny → 8000),
-        # then Monitor's resolved value (model API → 128000 fallback).
+        # @@@context-limit-default - prefer mapping override (e.g. leon:tiny -> 8000),
+        # then Monitor's resolved value (model API or its 128000 default).
         context_limit = self._model_overrides.get("context_limit") or self._monitor_middleware._context_monitor.context_limit
         pruning_config = self.config.memory.pruning
         compaction_config = self.config.memory.compaction
@@ -1212,7 +1168,7 @@ class LeonAgent:
 
         # Skills tools
         if self.config.skills.enabled and self.config.skills.paths:
-            # Use member bundle's skills enabled/disabled state if available
+            # Use the agent bundle's skills enabled/disabled state if available.
             enabled_skills = self.config.skills.skills
             if hasattr(self, "_agent_bundle") and self._agent_bundle:
                 bundle_skill_entries = {k.split(":", 1)[1]: v for k, v in self._agent_bundle.runtime.items() if k.startswith("skills:")}
@@ -1254,12 +1210,6 @@ class LeonAgent:
             web_app=self._web_app,
             child_agent_factory=create_leon_agent,
         )
-
-        # Team coordination (TeamCreate/TeamDelete — deferred mode)
-        # @@@teams-removed - TeamService module doesn't exist, feature not implemented
-        # self._team_service = TeamService(
-        #     tool_registry=self._tool_registry,
-        # )
 
         # @@@chat-tools - register chat tools for agents with user identity (v2 messaging)
         if self._chat_repos:
@@ -1332,7 +1282,7 @@ class LeonAgent:
             for tool in tools:
                 # Extract server name from tool metadata or connection
                 server_name = None
-                for name in configs.keys():
+                for name in configs:
                     if hasattr(tool, "metadata") and tool.metadata:
                         server_name = name
                         break
@@ -1366,7 +1316,6 @@ class LeonAgent:
         self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
         self.checkpointer = await self._pg_saver_ctx.__aenter__()
         await self.checkpointer.setup()
-        return None  # no SQLite conn to track
 
     def _is_tool_allowed(self, tool) -> bool:
         # Extract original tool name without mcp__ prefix
@@ -1385,7 +1334,7 @@ class LeonAgent:
 
     def _build_system_prompt(self) -> str:
         """Build system prompt based on sandbox mode."""
-        # If agent override is set, use member's system_prompt + rules
+        # If agent override is set, use its system_prompt + rules.
         if hasattr(self, "_agent_override") and self._agent_override:
             prompt = self._agent_override.system_prompt
             # Append bundle rules (from rules/*.md) to system prompt
@@ -1410,7 +1359,7 @@ class LeonAgent:
         if chat_identity_id:
             return str(chat_identity_id)
         if self._chat_repos.get("user_id"):
-            raise RuntimeError("legacy chat_repos.user_id is no longer supported; use chat_identity_id")
+            raise RuntimeError("chat_repos.user_id is no longer supported; use chat_identity_id")
         return None
 
     def _compose_system_prompt(self) -> str:
@@ -1427,16 +1376,16 @@ class LeonAgent:
             owner_uid = repos.get("owner_id", "")
             if uid:
                 user_repo = repos.get("user_repo")
-                self_member = user_repo.get_by_id(uid) if user_repo else None
+                self_user = user_repo.get_by_id(uid) if user_repo else None
                 owner_row = user_repo.get_by_id(owner_uid) if user_repo and owner_uid else None
-                name = self_member.display_name if self_member else uid
+                name = self_user.display_name if self_user else uid
                 owner_name = owner_row.display_name if owner_row else "unknown"
                 prompt += (
                     f"\n\n**Chat Identity:**\n"
                     f"- Your name: {name}\n"
                     f"- Your chat identity id: {uid}\n"
-                    f"- The chat tools still use the parameter name user_id for legacy reasons.\n"
                     f"- Your owner: {owner_name} (human user_id: {owner_uid})\n"
+                    f"- For 1:1 chat tools, use participant_id for the other user's social id.\n"
                     f"- When you receive a chat notification, you MUST read it with read_messages() before deciding what to do.\n"
                     f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly.\n"
                     f"- If you reply to the other party, you MUST call send_message(). Never claim you replied unless send_message() succeeded.\n"
@@ -1534,9 +1483,8 @@ class LeonAgent:
             # Reuse the event loop created during initialization
             if hasattr(self, "_event_loop") and self._event_loop:
                 return self._event_loop.run_until_complete(_ainvoke())
-            else:
-                # Fallback to asyncio.run() if no loop exists
-                return asyncio.run(_ainvoke())
+            # Fallback to asyncio.run() if no loop exists
+            return asyncio.run(_ainvoke())
         except Exception as e:
             self._monitor_middleware.mark_error(e)
             raise

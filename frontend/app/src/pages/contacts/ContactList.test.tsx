@@ -77,7 +77,7 @@ describe("ContactList", () => {
     expect(screen.getByText("Morel")).toBeTruthy();
   });
 
-  it("shows backend-approved external contacts from the entity surface", async () => {
+  it("shows backend-approved external contacts from the user candidate surface", async () => {
     authFetch.mockResolvedValueOnce(okJson([
       {
         user_id: "human-2",
@@ -125,8 +125,8 @@ describe("ContactList", () => {
       <MemoryRouter initialEntries={["/contacts"]}>
         <Routes>
           <Route path="/contacts" element={<ContactList />} />
-          <Route path="/contacts/entities" element={<ContactList />} />
-          <Route path="/contacts/entities/:userId" element={<div>contact detail route</div>} />
+          <Route path="/contacts/users" element={<ContactList />} />
+          <Route path="/contacts/users/:userId" element={<div>contact detail route</div>} />
         </Routes>
       </MemoryRouter>,
     );
@@ -136,7 +136,7 @@ describe("ContactList", () => {
     fireEvent.click(screen.getByRole("button", { name: /联系人/ }));
 
     await waitFor(() => {
-      expect(authFetch).toHaveBeenCalledWith("/api/entities");
+      expect(authFetch).toHaveBeenCalledWith("/api/users/chat-candidates");
     });
     expect(await screen.findByText("Ada")).toBeTruthy();
     expect(screen.getByText("Grace")).toBeTruthy();

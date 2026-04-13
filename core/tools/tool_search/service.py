@@ -49,7 +49,7 @@ class ToolSearchService:
         )
         logger.info("ToolSearchService initialized")
 
-    def _search(self, query: str = "", tool_context=None, **kwargs) -> str:
+    def _search(self, query: str = "", tool_context=None) -> str:
         select_names: list[str] = []
         normalized = query.strip()
         if normalized.lower().startswith("select:"):

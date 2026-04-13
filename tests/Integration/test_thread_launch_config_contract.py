@@ -19,26 +19,26 @@ from storage.contracts import UserRow, UserType
 class _FakeUserRepo:
     def __init__(self) -> None:
         self._users = {
-            "member-1": UserRow(
-                id="member-1",
+            "agent-user-1": UserRow(
+                id="agent-user-1",
                 type=UserType.AGENT,
                 display_name="Toad",
                 owner_user_id="owner-1",
                 agent_config_id="cfg-1",
-                avatar="avatars/member-1.png",
+                avatar="avatars/agent-user-1.png",
                 created_at=1.0,
             ),
-            "member-2": UserRow(
-                id="member-2",
+            "agent-user-2": UserRow(
+                id="agent-user-2",
                 type=UserType.AGENT,
                 display_name="Dryad",
                 owner_user_id="owner-2",
                 agent_config_id="cfg-2",
-                avatar="avatars/member-2.png",
+                avatar="avatars/agent-user-2.png",
                 created_at=2.0,
             ),
         }
-        self._seq = {"member-1": 0, "member-2": 0}
+        self._seq = {"agent-user-1": 0, "agent-user-2": 0}
 
     def get_by_id(self, user_id: str):
         return self._users.get(user_id)
@@ -146,7 +146,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
     thread_launch_config_service.save_last_confirmed_config(
         app=app,
         owner_user_id="owner-1",
-        agent_user_id="member-1",
+        agent_user_id="agent-user-1",
         payload={
             "create_mode": "wat",
             "provider_config": "  local  ",
@@ -160,7 +160,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
     assert app.state.thread_launch_pref_repo.confirmed == [
         (
             "owner-1",
-            "member-1",
+            "agent-user-1",
             {
                 "create_mode": "new",
                 "provider_config": "local",
@@ -268,7 +268,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
         result = thread_launch_config_service.resolve_default_config(
             app=app,
             owner_user_id="owner-1",
-            agent_user_id="member-1",
+            agent_user_id="agent-user-1",
         )
 
     assert result == {
@@ -333,7 +333,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
         result = thread_launch_config_service.resolve_default_config(
             app=app,
             owner_user_id="owner-1",
-            agent_user_id="member-1",
+            agent_user_id="agent-user-1",
         )
 
     assert result == {
@@ -353,7 +353,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
 def test_find_owned_agent_returns_none_for_foreign_agent() -> None:
     app = _make_threads_app()
 
-    result = threads_router._find_owned_agent(app, "member-2", "owner-1")
+    result = threads_router._find_owned_agent(app, "agent-user-2", "owner-1")
 
     assert result is None
 
@@ -362,7 +362,7 @@ def test_require_owned_agent_raises_for_foreign_agent() -> None:
     app = _make_threads_app()
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
-        threads_router._require_owned_agent(app, "member-2", "owner-1")
+        threads_router._require_owned_agent(app, "agent-user-2", "owner-1")
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
@@ -373,7 +373,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
     app = _make_threads_app()
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "lease_id": "lease-1",
             "model": "gpt-5.4",
             "cwd": "/workspace/requested",
@@ -402,7 +402,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
     save_successful.assert_called_once_with(
         app,
         "owner-1",
-        "member-1",
+        "agent-user-1",
         {
             "create_mode": "existing",
             "provider_config": "daytona_selfhost",
@@ -417,11 +417,11 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
 @pytest.mark.asyncio
 async def test_resolve_main_thread_uses_owned_agent_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
-    payload = threads_router.ResolveMainThreadRequest(agent_user_id="member-2")
+    payload = threads_router.ResolveMainThreadRequest(agent_user_id="agent-user-2")
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_find_owned_agent(app_obj, member_id: str, owner_user_id: str):
-        calls.append((app_obj, member_id, owner_user_id))
+    def _fake_find_owned_agent(app_obj, agent_user_id: str, owner_user_id: str):
+        calls.append((app_obj, agent_user_id, owner_user_id))
         return None
 
     monkeypatch.setattr(threads_router, "_find_owned_agent", _fake_find_owned_agent)
@@ -429,11 +429,11 @@ async def test_resolve_main_thread_uses_owned_agent_lookup(monkeypatch: pytest.M
     result = await threads_router.resolve_main_thread(payload, "owner-1", app)
 
     assert result == {
-        "agent_user_id": "member-2",
+        "agent_user_id": "agent-user-2",
         "default_thread_id": None,
         "thread": None,
     }
-    assert calls == [(app, "member-2", "owner-1")]
+    assert calls == [(app, "agent-user-2", "owner-1")]
 
 
 @pytest.mark.asyncio
@@ -441,18 +441,18 @@ async def test_get_default_thread_config_uses_strict_agent_gate(monkeypatch: pyt
     app = _make_threads_app()
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_require_owned_agent(app_obj, member_id: str, owner_user_id: str):
-        calls.append((app_obj, member_id, owner_user_id))
+    def _fake_require_owned_agent(app_obj, agent_user_id: str, owner_user_id: str):
+        calls.append((app_obj, agent_user_id, owner_user_id))
         raise threads_router.HTTPException(403, "Not authorized")
 
     monkeypatch.setattr(threads_router, "_require_owned_agent", _fake_require_owned_agent)
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
-        await threads_router.get_default_thread_config("member-2", "owner-1", app)
+        await threads_router.get_default_thread_config("agent-user-2", "owner-1", app)
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
-    assert calls == [(app, "member-2", "owner-1")]
+    assert calls == [(app, "agent-user-2", "owner-1")]
 
 
 @pytest.mark.asyncio
@@ -465,7 +465,7 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
         return fn(*args)
 
     monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
-    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, member_id, owner_user_id: object())
+    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, agent_user_id, owner_user_id: object())
     monkeypatch.setattr(
         threads_router,
         "resolve_default_config",
@@ -475,17 +475,17 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
         },
     )
 
-    result = await threads_router.get_default_thread_config("member-1", "owner-1", app)
+    result = await threads_router.get_default_thread_config("agent-user-1", "owner-1", app)
 
     assert result == {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
-    assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "member-1"))]
+    assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "agent-user-1"))]
 
 
 @pytest.mark.asyncio
 async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     payload = threads_router.SaveThreadLaunchConfigRequest(
-        agent_user_id="member-2",
+        agent_user_id="agent-user-2",
         create_mode="new",
         provider_config="local",
         lease_id=None,
@@ -494,8 +494,8 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
     )
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_require_owned_agent(app_obj, member_id: str, owner_user_id: str):
-        calls.append((app_obj, member_id, owner_user_id))
+    def _fake_require_owned_agent(app_obj, agent_user_id: str, owner_user_id: str):
+        calls.append((app_obj, agent_user_id, owner_user_id))
         raise threads_router.HTTPException(403, "Not authorized")
 
     monkeypatch.setattr(threads_router, "_require_owned_agent", _fake_require_owned_agent)
@@ -505,14 +505,14 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
-    assert calls == [(app, "member-2", "owner-1")]
+    assert calls == [(app, "agent-user-2", "owner-1")]
 
 
 @pytest.mark.asyncio
 async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     payload = threads_router.SaveThreadLaunchConfigRequest(
-        agent_user_id="member-1",
+        agent_user_id="agent-user-1",
         create_mode="new",
         provider_config="local",
         recipe_id="local:default",
@@ -528,7 +528,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
         return fn(*args)
 
     monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
-    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, member_id, owner_user_id: object())
+    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, agent_user_id, owner_user_id: object())
     monkeypatch.setattr(
         threads_router,
         "save_last_confirmed_config",
@@ -543,9 +543,9 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
         (
             app,
             "owner-1",
-            "member-1",
+            "agent-user-1",
             {
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
                 "create_mode": "new",
                 "provider_config": "local",
                 "recipe_id": "local:default",
@@ -561,7 +561,7 @@ def test_get_default_thread_config_route_rejects_unowned_agent() -> None:
     app = _make_threads_app()
 
     with TestClient(_route_test_app(app)) as client:
-        response = client.get("/api/threads/default-config", params={"agent_user_id": "member-2"})
+        response = client.get("/api/threads/default-config", params={"agent_user_id": "agent-user-2"})
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Not authorized"}
@@ -580,11 +580,11 @@ def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monk
     )
 
     with TestClient(_route_test_app(app)) as client:
-        response = client.get("/api/threads/default-config", params={"agent_user_id": "member-1"})
+        response = client.get("/api/threads/default-config", params={"agent_user_id": "agent-user-1"})
 
     assert response.status_code == 200
     assert response.json() == {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
-    assert calls == [(app, "owner-1", "member-1")]
+    assert calls == [(app, "owner-1", "agent-user-1")]
 
 
 def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -600,7 +600,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
         response = client.post(
             "/api/threads/default-config",
             json={
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
                 "create_mode": "new",
                 "provider_config": "local",
                 "recipe_id": "local:default",
@@ -616,9 +616,9 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
         (
             app,
             "owner-1",
-            "member-1",
+            "agent-user-1",
             {
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
                 "create_mode": "new",
                 "provider_config": "local",
                 "recipe_id": "local:default",
@@ -635,7 +635,7 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
     app = _make_threads_app()
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "model": "gpt-5.4-mini",
             "cwd": "/tmp/fresh-local-thread",
         }
@@ -654,7 +654,7 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
     save_successful.assert_called_once_with(
         app,
         "owner-1",
-        "member-1",
+        "agent-user-1",
         {
             "create_mode": "new",
             "provider_config": "local",
@@ -691,7 +691,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
     }
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "model": "gpt-5.4-mini",
             "sandbox": "local",
             "recipe_id": "local:custom:lark",
@@ -718,7 +718,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
     save_successful.assert_called_once_with(
         app,
         "owner-1",
-        "member-1",
+        "agent-user-1",
         {
             "create_mode": "new",
             "provider_config": "local",
@@ -735,7 +735,7 @@ async def test_create_thread_rejects_unowned_recipe_snapshot() -> None:
     app = _make_threads_app()
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "model": "gpt-5.4-mini",
             "sandbox": "local",
             "recipe_id": "local:custom:foreign",
@@ -761,7 +761,7 @@ async def test_create_thread_rejects_new_lease_when_account_resource_limit_is_re
     app = _make_threads_app()
     payload = CreateThreadRequest.model_validate(
         {
-            "agent_user_id": "member-1",
+            "agent_user_id": "agent-user-1",
             "model": "gpt-5.4-mini",
             "sandbox": "daytona_selfhost",
         }

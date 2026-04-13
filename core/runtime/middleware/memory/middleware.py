@@ -197,7 +197,9 @@ class MemoryMiddleware(AgentMiddleware):
                     print(f"[Memory]   msg[{i}] ToolMessage: {orig_len} → {new_len} chars ({action})")
 
         # Layer 2: Compaction
-        estimated = self._estimate_tokens(messages) + sys_tokens
+        summarized_messages = self._messages_with_cached_summary(messages)
+        estimate_source = summarized_messages if summarized_messages is not None else messages
+        estimated = self._estimate_tokens(estimate_source) + sys_tokens
         if self.verbose:
             threshold = self._compaction_threshold_tokens()
             should_compact = self._should_compact(estimated)
@@ -212,16 +214,8 @@ class MemoryMiddleware(AgentMiddleware):
             compacted = await self._attempt_compaction(messages, thread_id=thread_id)
             if compacted is not None:
                 messages = compacted
-        elif self._cached_summary and self._compact_up_to_index > 0:
-            if self._compact_up_to_index <= len(messages):
-                summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
-                messages = [summary_msg] + messages[self._compact_up_to_index :]
-                if self.verbose:
-                    print(
-                        f"[Memory] Using cached summary: "
-                        f"{self._compact_up_to_index} old msgs replaced, "
-                        f"{len(messages) - 1} msgs sent to LLM"
-                    )
+        elif summarized_messages is not None:
+            messages = summarized_messages
 
         if self.verbose:
             final_tokens = self._estimate_tokens(messages) + sys_tokens
@@ -378,6 +372,15 @@ class MemoryMiddleware(AgentMiddleware):
         notices = list(self._pending_owner_notices)
         self._pending_owner_notices.clear()
         return notices
+
+    def _messages_with_cached_summary(self, messages: list[Any]) -> list[Any] | None:
+        if not self._cached_summary or self._compact_up_to_index <= 0 or self._compact_up_to_index > len(messages):
+            return None
+        summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
+        summarized = [summary_msg] + messages[self._compact_up_to_index :]
+        if self.verbose:
+            print(f"[Memory] Using cached summary: {self._compact_up_to_index} old msgs replaced, {len(summarized) - 1} msgs sent to LLM")
+        return summarized
 
     def snapshot_thread_state(self, thread_id: str) -> dict[str, Any]:
         return {

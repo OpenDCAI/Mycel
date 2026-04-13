@@ -21,10 +21,10 @@ class SQLiteDBRole(StrEnum):
     QUEUE = "queue"
 
 
-def _env_path(env_var: str, fallback: Path) -> Path:
-    """Return Path from environment variable if set, otherwise the fallback."""
+def _env_path(env_var: str, default_path: Path) -> Path:
+    """Return Path from environment variable if set, otherwise the default path."""
     raw = os.getenv(env_var)
-    return Path(raw) if raw else fallback
+    return Path(raw) if raw else default_path
 
 
 def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) -> Path:

@@ -75,16 +75,19 @@ class _FakeThreadRepo:
         sandbox_type: str,
         cwd: str | None,
         created_at: float,
-        **extra,
+        *,
+        model: str | None,
+        is_main: bool,
+        branch_index: int,
     ):
         row = {
             "id": thread_id,
             "agent_user_id": agent_user_id,
             "sandbox_type": sandbox_type,
             "cwd": cwd,
-            "model": extra.get("model"),
-            "is_main": bool(extra.get("is_main", False)),
-            "branch_index": int(extra["branch_index"]),
+            "model": model,
+            "is_main": is_main,
+            "branch_index": branch_index,
             "created_at": created_at,
         }
         self.rows[thread_id] = row
@@ -152,6 +155,7 @@ class _FakeChildAgent:
 class _FakeAsyncCommand:
     def __init__(self):
         self.done = False
+        self.cancelled = False
         self.stdout_buffer = []
         self.stderr_buffer = []
         self.exit_code = None
@@ -1136,7 +1140,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         rows={
             "parent-thread": {
                 "id": "parent-thread",
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-parent",
@@ -1146,7 +1150,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
             }
         }
     )
-    user_repo = _FakeUserRepo({"member-1": "Toad"})
+    user_repo = _FakeUserRepo({"agent-user-1": "Toad"})
     service = _make_service(
         tmp_path,
         thread_repo=thread_repo,
@@ -1166,7 +1170,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         child_thread = thread_repo.get_by_id(child_thread_id)
 
         assert child_thread is not None
-        assert child_thread["agent_user_id"] == "member-1"
+        assert child_thread["agent_user_id"] == "agent-user-1"
         assert child_thread["sandbox_type"] == "daytona_selfhost"
         assert child_thread["cwd"] == "/home/daytona"
         assert child_thread["is_main"] is False
@@ -1184,7 +1188,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         rows={
             "parent-thread": {
                 "id": "parent-thread",
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-parent",
@@ -1194,7 +1198,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
             },
             "subagent-existing": {
                 "id": "subagent-existing",
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-test",
@@ -1217,7 +1221,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         tmp_path,
         agent_registry=registry,
         thread_repo=thread_repo,
-        user_repo=_FakeUserRepo({"member-1": "Toad"}),
+        user_repo=_FakeUserRepo({"agent-user-1": "Toad"}),
     )
 
     set_current_thread_id("parent-thread")

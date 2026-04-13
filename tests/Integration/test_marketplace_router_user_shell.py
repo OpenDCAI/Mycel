@@ -5,19 +5,25 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.web.models.marketplace import PublishToMarketplaceRequest, UpgradeFromMarketplaceRequest
+from backend.web.models.marketplace import PublishAgentUserToMarketplaceRequest, UpgradeFromMarketplaceRequest
 from backend.web.routers import marketplace as marketplace_router
 
 
+def test_marketplace_router_exposes_agent_user_publish_not_generic_publish() -> None:
+    paths = {route.path for route in marketplace_router.router.routes}
+    assert "/api/marketplace/publish-agent-user" in paths
+    assert "/api/marketplace/publish" not in paths
+
+
 @pytest.mark.asyncio
-async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_publish_agent_user_to_marketplace_uses_user_repo_not_member_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
     monkeypatch.setattr(marketplace_router.marketplace_client, "publish", lambda **kwargs: seen.update(kwargs) or {"ok": True})
     monkeypatch.setattr(
         "backend.web.services.profile_service.get_profile",
         lambda user=None: (
-            (_ for _ in ()).throw(AssertionError("config profile fallback not allowed")) if user is None else {"name": user.display_name}
+            (_ for _ in ()).throw(AssertionError("profile lookup must be user-scoped")) if user is None else {"name": user.display_name}
         ),
     )
 
@@ -31,7 +37,7 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
         )
     )
     agent_config_repo = SimpleNamespace()
-    req = PublishToMarketplaceRequest(user_id="agent-1")
+    req = PublishAgentUserToMarketplaceRequest(user_id="agent-1")
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
@@ -41,10 +47,11 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
         )
     )
 
-    result = await marketplace_router.publish_to_marketplace(req=req, user_id="owner-1", request=request)
+    result = await marketplace_router.publish_agent_user_to_marketplace(req=req, user_id="owner-1", request=request)
 
     assert result == {"ok": True}
     assert seen["user_id"] == "agent-1"
+    assert seen["type_"] == "member"
     assert seen["publisher_user_id"] == "owner-1"
     assert seen["publisher_username"] == "owner-name"
     assert seen["user_repo"] is user_repo

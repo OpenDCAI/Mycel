@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import UTC
-from pathlib import Path
 
 from eval.models import (
     ObjectiveMetrics,
@@ -16,7 +15,7 @@ from eval.models import (
 class TrajectoryStore:
     """Storage for eval trajectories and metrics."""
 
-    def __init__(self, db_path: str | Path | None = None, eval_repo=None):
+    def __init__(self, eval_repo=None):
         if eval_repo is not None:
             self._repo = eval_repo
         else:

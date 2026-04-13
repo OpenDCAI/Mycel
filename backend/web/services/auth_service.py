@@ -167,7 +167,7 @@ class AuthService:
         if self._recipe_repo is not None:
             self._seed_default_recipes(auth_user_id)
 
-        # Load entities + agents
+        # Load user-owned agents.
         owned_agents = self._users.list_by_owner_user_id(auth_user_id)
         agent_info = None
         if owned_agents:
@@ -189,16 +189,6 @@ class AuthService:
 
     def verify_token(self, token: str) -> dict:
         """Verify Supabase JWT. Returns {user_id}."""
-        auth_client = self._sb_auth_factory() if self._sb_auth_factory is not None else self._sb_auth
-        if auth_client is not None:
-            auth_api = self._auth_api(auth_client)
-            try:
-                user_resp = auth_api.get_user(token)
-            except Exception as e:
-                raise ValueError(f"Token 无效: {e}") from e
-            if user_resp is None or getattr(user_resp, "user", None) is None:
-                raise ValueError("Token 无效: user not found")
-            return {"user_id": str(user_resp.user.id)}
         jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
         if not jwt_secret:
             raise RuntimeError("SUPABASE_JWT_SECRET env var required for token verification.")
@@ -207,6 +197,7 @@ class AuthService:
                 token,
                 jwt_secret,
                 algorithms=[SUPABASE_JWT_ALGORITHM],
+                leeway=60,
                 options={"verify_aud": False},
             )
             return {"user_id": payload["sub"]}
@@ -287,7 +278,7 @@ class AuthService:
             src_avatar = assets_dir / agent_def["avatar"]
             if not src_avatar.exists():
                 raise RuntimeError(f"Default agent avatar missing: {src_avatar}")
-            from backend.web.routers.entities import process_and_save_avatar
+            from backend.web.routers.users import process_and_save_avatar
 
             avatar_path = process_and_save_avatar(src_avatar, agent_id)
             self._users.update(agent_id, avatar=avatar_path)

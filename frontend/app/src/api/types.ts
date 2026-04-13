@@ -175,19 +175,6 @@ export interface UserLeaseSummary {
   }>;
 }
 
-export interface SandboxSession {
-  session_id: string;
-  thread_id: string;
-  provider: string;
-  status: string;
-  created_at?: string;
-  last_active?: string;
-  lease_id?: string | null;
-  instance_id?: string | null;
-  chat_session_id?: string | null;
-  source?: string;
-}
-
 export interface SandboxInfo {
   type: string;
   status: string | null;
@@ -310,16 +297,6 @@ export interface StreamStatus {
   run_start_seq?: number;
 }
 
-export interface SessionStatus {
-  thread_id: string;
-  session_id: string;
-  terminal_id: string;
-  status: string;
-  started_at: string;
-  last_active_at: string;
-  expires_at: string;
-}
-
 export interface TerminalStatus {
   thread_id: string;
   terminal_id: string;
@@ -386,7 +363,7 @@ export interface ChatDetail {
   title: string | null;
   status: string;
   created_at: number;
-  entities: ChatMember[];
+  members: ChatMember[];
 }
 
 export interface ChatMessage {

@@ -1536,7 +1536,7 @@ class TestToolRunnerErrorNormalization:
             name="Write",
             mode=ToolMode.INLINE,
             schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
-            handler=lambda: "sync-only fallback",
+            handler=lambda: "sync-only result",
             source="test",
         )
         runner = _make_runner([entry])
@@ -2176,11 +2176,11 @@ class TestToolRunnerInlineInjection:
 class TestServiceDeclaredToolModes:
     """Verify services declare the runtime tool modes they own."""
 
-    def test_task_service_registers_deferred(self, tmp_path):
+    def test_task_service_registers_deferred(self):
         reg = ToolRegistry()
         from core.tools.task.service import TaskService
 
-        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db", repo=object())
+        _svc = TaskService(registry=reg, repo=object())
         # TaskCreate/TaskUpdate/TaskList/TaskGet should be DEFERRED
         for tool_name in ["TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]:
             entry = reg.get(tool_name)
@@ -2197,11 +2197,11 @@ class TestServiceDeclaredToolModes:
             assert entry is not None, f"{tool_name} not registered"
             assert entry.mode == ToolMode.INLINE, f"{tool_name} should be INLINE, got {entry.mode}"
 
-    def test_task_service_read_only_queries_are_concurrency_safe(self, tmp_path):
+    def test_task_service_read_only_queries_are_concurrency_safe(self):
         reg = ToolRegistry()
         from core.tools.task.service import TaskService
 
-        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db", repo=object())
+        _svc = TaskService(registry=reg, repo=object())
 
         for tool_name in ["TaskGet", "TaskList"]:
             entry = reg.get(tool_name)

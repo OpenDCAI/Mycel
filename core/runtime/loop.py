@@ -533,11 +533,11 @@ class QueryLoop:
                 if not tool_calls and not self._ai_message_has_visible_content(ai_msg):
                     terminal_followthrough_notice = self._get_terminal_followthrough_notice(messages)
                     if terminal_followthrough_notice is not None:
-                        ai_msg = self._build_terminal_followthrough_fallback(terminal_followthrough_notice)
+                        ai_msg = self._build_empty_terminal_followthrough_reply(terminal_followthrough_notice)
                     else:
                         chat_followthrough_notice = self._get_chat_followthrough_notice(messages)
                         if chat_followthrough_notice is not None:
-                            ai_msg = self._build_chat_followthrough_fallback(chat_followthrough_notice)
+                            ai_msg = self._build_empty_chat_followthrough_reply(chat_followthrough_notice)
 
                 # Yield agent update (stream_mode="updates" format)
                 yield {"agent": {"messages": [ai_msg]}}
@@ -697,9 +697,8 @@ class QueryLoop:
         transition: ContinueState | None = None
 
         # @@@ainvoke-drains-astream
-        # QueryLoop is generator-first. ainvoke exists only as a compatibility
-        # adapter for callers like LeonAgent.invoke/ainvoke and must not invent
-        # a separate execution path.
+        # QueryLoop is generator-first. ainvoke drains the generator for callers
+        # like LeonAgent.invoke/ainvoke and must not invent a separate execution path.
         async for event in self.query(input, config=config):
             if "terminal" in event:
                 terminal = event["terminal"]
@@ -783,21 +782,7 @@ class QueryLoop:
             """Actual model call — innermost of the chain."""
             tools = request.tools or []
             model = request.model
-
-            # Bind tools to model if any
-            if tools:
-                try:
-                    bound = model.bind_tools(tools)
-                except Exception:
-                    bound = model
-            else:
-                bound = model
-
-            if max_output_tokens_override is not None and hasattr(bound, "bind"):
-                try:
-                    bound = bound.bind(max_tokens=max_output_tokens_override)
-                except Exception:
-                    pass
+            bound = self._bind_model(model, tools, max_output_tokens_override=max_output_tokens_override)
 
             # Build message list: system + conversation
             call_messages = []
@@ -847,8 +832,8 @@ class QueryLoop:
         if max_output_tokens_override is not None and hasattr(bound, "bind"):
             try:
                 bound = bound.bind(max_tokens=max_output_tokens_override)
-            except Exception:
-                pass
+            except Exception as exc:
+                raise RuntimeError(f"Failed to bind max_tokens={max_output_tokens_override}") from exc
         return bound
 
     def _can_stream_tools(self) -> bool:
@@ -2194,7 +2179,7 @@ class QueryLoop:
         return last_message
 
     @classmethod
-    def _build_terminal_followthrough_fallback(cls, notice: HumanMessage) -> AIMessage:
+    def _build_empty_terminal_followthrough_reply(cls, notice: HumanMessage) -> AIMessage:
         metadata = getattr(notice, "metadata", None) or {}
         notification_type = str(metadata.get("notification_type") or "task")
         content = getattr(notice, "content", "")
@@ -2202,7 +2187,7 @@ class QueryLoop:
         status_match = re.search(r"<status>(.*?)</status>", text, flags=re.IGNORECASE | re.DOTALL)
         status = status_match.group(1).strip().lower() if status_match else ""
         subject = "command" if notification_type == "command" else "agent"
-        # @@@terminal-followthrough-fallback - terminal background notifications
+        # @@@terminal-empty-followthrough - terminal background notifications
         # must never collapse into notice-only durable history when the model
         # reentry stays silent; surface the silence explicitly instead.
         if status == "completed":
@@ -2216,7 +2201,7 @@ class QueryLoop:
         return AIMessage(content=reply)
 
     @classmethod
-    def _build_chat_followthrough_fallback(cls, notice: HumanMessage) -> AIMessage:
+    def _build_empty_chat_followthrough_reply(cls, notice: HumanMessage) -> AIMessage:
         content = getattr(notice, "content", "")
         text = content if isinstance(content, str) else str(content)
         chat_id_match = re.search(r'read_messages\(chat_id="([^"]+)"\)', text)

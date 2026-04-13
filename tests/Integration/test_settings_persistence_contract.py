@@ -44,6 +44,22 @@ def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
     return app
 
 
+def _patch_chat_model(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    captured: dict[str, object] = {}
+
+    class _FakeModel:
+        async def ainvoke(self, _prompt):
+            return SimpleNamespace(content="ok")
+
+    def _fake_init_chat_model(model_name: str, **kwargs):
+        captured["model"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeModel()
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+    return captured
+
+
 def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch):
     repo = _FakeSettingsRepo()
     monkeypatch.setattr(
@@ -204,20 +220,19 @@ def test_update_provider_platform_source_removes_stored_user_key():
 def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     app = _settings_test_app(_FakeSettingsRepo())
     app.state.thread_repo = object()
-    app.state.user_repo = object()
+    app.state._supabase_client = object()
     seen: dict[str, object] = {}
 
-    def _fake_list_user_leases(user_id: str, **kwargs):
+    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
         seen["user_id"] = user_id
         seen["kwargs"] = kwargs
-        return [
-            {"lease_id": "lease-local", "provider_name": "local"},
-            {"lease_id": "lease-daytona-1", "provider_name": "daytona_selfhost"},
-            {"lease_id": "lease-daytona-2", "provider_name": "daytona_selfhost"},
-            {"lease_id": "lease-e2b", "provider_name": "e2b"},
-        ]
+        return {"local": 1, "daytona_selfhost": 2, "e2b": 1}
 
-    monkeypatch.setattr(settings_router.account_resource_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+    monkeypatch.setattr(
+        settings_router.account_resource_service.sandbox_service,
+        "count_user_visible_leases_by_provider",
+        _fake_count_user_visible_leases_by_provider,
+    )
 
     with TestClient(app) as client:
         response = client.get("/api/settings/account-resources")
@@ -253,7 +268,7 @@ def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     }
     assert seen == {
         "user_id": "user-1",
-        "kwargs": {"thread_repo": app.state.thread_repo, "user_repo": app.state.user_repo},
+        "kwargs": {"thread_repo": app.state.thread_repo, "supabase_client": app.state._supabase_client},
     }
 
 
@@ -262,16 +277,17 @@ def test_account_resources_route_applies_user_limit_overrides(monkeypatch):
     repo.account_resource_limits = {"sandbox": {"daytona_selfhost": 5, "docker": 3}, "token": {"weekly": 50_000_000}}
     app = _settings_test_app(repo)
     app.state.thread_repo = object()
-    app.state.user_repo = object()
 
-    def _fake_list_user_leases(user_id: str, **kwargs):
+    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
         assert user_id == "user-1"
-        return [
-            {"lease_id": "lease-daytona-1", "provider_name": "daytona_selfhost"},
-            {"lease_id": "lease-daytona-2", "provider_name": "daytona_selfhost"},
-        ]
+        assert kwargs == {"thread_repo": app.state.thread_repo}
+        return {"daytona_selfhost": 2}
 
-    monkeypatch.setattr(settings_router.account_resource_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+    monkeypatch.setattr(
+        settings_router.account_resource_service.sandbox_service,
+        "count_user_visible_leases_by_provider",
+        _fake_count_user_visible_leases_by_provider,
+    )
 
     with TestClient(app) as client:
         response = client.get("/api/settings/account-resources")
@@ -343,22 +359,12 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
             resolve_model=lambda _model_id: ("repo-custom", {}),
             get_provider=lambda _provider_name: SimpleNamespace(api_key="repo-key", base_url="https://repo.example"),
             resolve_api_key=lambda _provider_name: "repo-key",
+            resolve_base_url=lambda _provider_name: "https://repo.example",
         ),
     )
     monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
 
-    captured: dict[str, object] = {}
-
-    class _FakeModel:
-        async def ainvoke(self, _prompt):
-            return SimpleNamespace(content="ok")
-
-    def _fake_init_chat_model(model_name: str, **kwargs):
-        captured["model"] = model_name
-        captured["kwargs"] = kwargs
-        return _FakeModel()
-
-    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+    captured = _patch_chat_model(monkeypatch)
 
     with TestClient(_settings_test_app(repo)) as client:
         response = client.post("/api/settings/models/test", json={"model_id": "repo-custom"})
@@ -370,4 +376,26 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
         "model_provider": "openai",
         "api_key": "repo-key",
         "base_url": "https://repo.example/v1",
+    }
+
+
+def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {}
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://anthropic.example")
+    monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://platform.example")
+
+    captured = _patch_chat_model(monkeypatch)
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post("/api/settings/models/test", json={"model_id": "openai:gpt-4o"})
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert captured["model"] == "gpt-4o"
+    assert captured["kwargs"] == {
+        "model_provider": "openai",
+        "api_key": "platform-key",
+        "base_url": "https://platform.example/v1",
     }

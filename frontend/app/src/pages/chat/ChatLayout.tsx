@@ -11,17 +11,17 @@ export default function ChatLayout() {
   const tm = useThreadManager();
   const refreshChatList = useConversationStore((s) => s.fetchConversations);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [, setSessionsOpen] = useState(false);
 
   const outletContext = useMemo(
-    () => ({ tm, sidebarCollapsed, setSidebarCollapsed, setSessionsOpen, refreshChatList }),
-    [tm, sidebarCollapsed, refreshChatList],
+    () => ({ tm, setSidebarCollapsed, refreshChatList }),
+    [tm, refreshChatList],
   );
 
   return (
     <SplitPaneLayout
       sidebar={<ConversationList threads={tm.threads} bootstrapError={tm.bootstrapError} />}
       hasDetail={hasActiveConversation}
+      sidebarCollapsed={sidebarCollapsed}
       emptyMessage="选择一个对话开始"
       outletContext={outletContext}
     />

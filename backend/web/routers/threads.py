@@ -30,6 +30,7 @@ from backend.web.services import account_resource_service, sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_source
+from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
@@ -524,12 +525,10 @@ def _create_thread_sandbox_resources(
 
     from backend.web.core.config import SANDBOX_VOLUME_ROOT
     from backend.web.utils.helpers import _get_container
-    from sandbox.control_plane_repos import resolve_sandbox_db_path
     from sandbox.volume_source import HostVolume
     from storage.runtime import build_lease_repo as make_lease_repo
     from storage.runtime import build_terminal_repo as make_terminal_repo
 
-    sandbox_db = resolve_sandbox_db_path()
     now_str = datetime.now().isoformat()
     volume_id = str(uuid.uuid4())
     vol_path = SANDBOX_VOLUME_ROOT / volume_id
@@ -541,7 +540,7 @@ def _create_thread_sandbox_resources(
     finally:
         vol_repo.close()
 
-    lease_repo = make_lease_repo(db_path=sandbox_db)
+    lease_repo = make_lease_repo()
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
         normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
@@ -555,7 +554,7 @@ def _create_thread_sandbox_resources(
     finally:
         lease_repo.close()
 
-    terminal_repo = make_terminal_repo(db_path=sandbox_db)
+    terminal_repo = make_terminal_repo()
     try:
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
         # @@@initial-cwd - local threads own their requested cwd; remote threads start from provider defaults.
@@ -641,7 +640,7 @@ def _create_owned_thread(
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     # @@@user-owned-thread-seq - thread ids are now allocated from the unified
     # user identity root, so create-path sequencing must fail loudly through
-    # user_repo instead of silently reaching back into a legacy member repo.
+    # user_repo instead of inventing a second agent identity source.
     seq = app.state.user_repo.increment_thread_seq(agent_user_id)
     new_thread_id = f"{agent_user_id}-{seq}"
     has_main = app.state.thread_repo.get_default_thread(agent_user_id) is not None
@@ -802,9 +801,13 @@ async def save_default_thread_config(
 
 
 def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
+    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
+    return build_owner_thread_workbench_from_rows(app, raw)
+
+
+def build_owner_thread_workbench_from_rows(app: Any, raw: list[dict[str, Any]]) -> dict[str, Any]:
     from core.runtime.middleware.monitor import AgentState
 
-    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
     pool = app.state.agent_pool
     runtime_states = summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
     visible_threads = []
@@ -856,7 +859,8 @@ async def list_threads(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
-    return build_owner_thread_workbench(app, user_id)
+    raw = await list_owner_thread_rows_for_auth_burst(app, user_id)
+    return await asyncio.to_thread(build_owner_thread_workbench_from_rows, app, raw)
 
 
 @router.get("/{thread_id}")

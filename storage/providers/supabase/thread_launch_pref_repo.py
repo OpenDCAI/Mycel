@@ -51,12 +51,11 @@ class SupabaseThreadLaunchPrefRepo:
         self._save(owner_user_id, agent_user_id, "last_successful_json", "last_successful_at", config)
 
     def delete_by_agent_user_id(self, agent_user_id: str) -> int:
-        rows = q.rows(
-            self._t().delete().eq("agent_user_id", agent_user_id).execute(),
-            _REPO,
-            "delete_by_agent_user_id",
-        )
-        return len(rows)
+        response = self._t().delete().eq("agent_user_id", agent_user_id).execute()
+        data = getattr(response, "data", None) if not isinstance(response, dict) else response.get("data")
+        if data is None:
+            return 0
+        return len(q.rows(response, _REPO, "delete_by_agent_user_id"))
 
     def _save(
         self,

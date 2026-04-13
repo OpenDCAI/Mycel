@@ -31,6 +31,7 @@ class _FakeTable:
         self.update_payload = None
         self.upsert_payload = None
         self.on_conflict = None
+        self.delete_count = 0
         self.rows = []
         self.count = None
 
@@ -79,6 +80,10 @@ class _FakeTable:
         self.update_payload = payload
         return self
 
+    def delete(self):
+        self.delete_count += 1
+        return self
+
     def execute(self):
         return _FakeResponse(data=self.rows, count=self.count)
 
@@ -86,10 +91,12 @@ class _FakeTable:
 class _FakeClient:
     def __init__(self) -> None:
         self.tables: dict[str, _FakeTable] = {}
+        self.table_calls: list[str] = []
         self.rpc_calls: list[tuple[str, dict[str, object]]] = []
         self.rpc_data = [{"increment_chat_message_seq": 7}]
 
     def table(self, name: str):
+        self.table_calls.append(name)
         table = self.tables.get(name)
         if table is None:
             table = _FakeTable(name)
@@ -154,6 +161,21 @@ def test_supabase_chat_repo_get_by_id_hydrates_chat_root_fields() -> None:
     assert row.type == "direct"
     assert row.created_by_user_id == "user-1"
     assert row.next_message_seq == 4
+
+
+def test_supabase_chat_repo_delete_removes_child_rows_before_chat_root() -> None:
+    client = _FakeClient()
+    repo = SupabaseChatRepo(client)
+
+    repo.delete("chat-1")
+
+    assert client.table_calls == ["messages", "chat_members", "chats"]
+    assert client.tables["messages"].delete_count == 1
+    assert client.tables["chat_members"].delete_count == 1
+    assert client.tables["chats"].delete_count == 1
+    assert ("chat_id", "chat-1") in client.tables["messages"].eq_calls
+    assert ("chat_id", "chat-1") in client.tables["chat_members"].eq_calls
+    assert ("id", "chat-1") in client.tables["chats"].eq_calls
 
 
 def test_supabase_chat_member_repo_updates_last_read_seq() -> None:

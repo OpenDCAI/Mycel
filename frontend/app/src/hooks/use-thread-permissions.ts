@@ -10,7 +10,7 @@ import {
   type PermissionRuleBehavior,
 } from "../api";
 
-export interface ThreadPermissionsState {
+interface ThreadPermissionsState {
   requests: PermissionRequest[];
   sessionRules: ThreadPermissionRules;
   managedOnly: boolean;
@@ -18,7 +18,7 @@ export interface ThreadPermissionsState {
   resolvingId: string | null;
 }
 
-export interface ThreadPermissionsActions {
+interface ThreadPermissionsActions {
   refreshPermissions: () => Promise<void>;
   resolvePermission: (
     requestId: string,

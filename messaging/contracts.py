@@ -28,7 +28,7 @@ class User(BaseModel):
 
 
 class UserRepo(Protocol):
-    """Resolve the current messaging social-id record. Reads from member-backed storage today."""
+    """Resolve the current messaging social-id record from user storage."""
 
     def get_user(self, user_id: str) -> User | None: ...
     def list_users(self) -> list[User]: ...

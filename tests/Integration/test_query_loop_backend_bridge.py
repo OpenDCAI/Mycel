@@ -24,6 +24,7 @@ from backend.web.services.streaming_service import (
     _run_agent_to_buffer,
     start_agent_run,
 )
+from core.runtime.checkpoint_store import ThreadCheckpointState
 from core.runtime.loop import QueryLoop
 from core.runtime.middleware.memory.middleware import MemoryMiddleware
 from core.runtime.middleware.monitor.state_monitor import AgentState
@@ -330,6 +331,28 @@ class _BrokenStreamGraphAgent(_StreamingGraphAgent):
         raise self._error
 
 
+class _ActivityThenBrokenStreamGraphAgent(_StreamingGraphAgent):
+    def __init__(self, runtime: Any, error: Exception | None = None) -> None:
+        self._runtime = runtime
+        self._error = error or RuntimeError("stream boom")
+
+    async def astream(self, *_args, **_kwargs):
+        if False:
+            yield None
+        self._runtime.emit_activity_event(
+            {
+                "event": "notice",
+                "data": json.dumps(
+                    {
+                        "content": "Compacting conversation. A summary is being prepared.",
+                        "notification_type": "compact_start",
+                    }
+                ),
+            }
+        )
+        raise self._error
+
+
 class _BlockingSecondPullGraphAgent(_StreamingGraphAgent):
     def __init__(self) -> None:
         self.second_pull_started = asyncio.Event()
@@ -357,6 +380,10 @@ class _StreamingRuntime:
 
     def set_event_callback(self, cb) -> None:
         self._event_callback = cb
+
+    def emit_activity_event(self, event: dict[str, Any]) -> None:
+        if self._event_callback is not None:
+            self._event_callback(event)
 
     def bind_thread(self, *, activity_sink=None) -> None:
         self._activity_sink = activity_sink
@@ -549,11 +576,16 @@ def _assert_notice_then_text(entries: list[dict], notice_contains: str, expected
     assert entries[0]["segments"][1] == {"type": "text", "content": expected_text}
 
 
+def _put_local_agent_in_pool(app: SimpleNamespace, thread_id: str, agent: SimpleNamespace) -> None:
+    pool = getattr(app.state, "agent_pool", None)
+    if not isinstance(pool, dict):
+        app.state.agent_pool = {}
+    app.state.agent_pool[f"{thread_id}:local"] = agent
+
+
 async def _get_local_thread_history(thread_id: str, *, agent: SimpleNamespace, app: SimpleNamespace) -> dict:
-    with (
-        patch.object(threads_router, "get_or_create_agent", return_value=agent),
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-    ):
+    _put_local_agent_in_pool(app, thread_id, agent)
+    with patch.object(threads_router, "resolve_thread_sandbox", return_value="local"):
         return await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
 
 
@@ -616,10 +648,8 @@ async def test_get_thread_history_reads_messages_via_query_loop_state_bridge():
 
     fake_agent = SimpleNamespace(agent=loop)
     fake_app = SimpleNamespace(state=SimpleNamespace())
-    with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
-    ):
+    _put_local_agent_in_pool(fake_app, "history-thread", fake_agent)
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
         history = await get_thread_history(
             "history-thread",
             limit=20,
@@ -630,6 +660,47 @@ async def test_get_thread_history_reads_messages_via_query_loop_state_bridge():
 
     assert history["total"] == 2
     assert history["thread_id"] == "history-thread"
+    assert [item["role"] for item in history["messages"]] == ["human", "assistant"]
+    assert history["messages"][1]["text"] == "history reply"
+
+
+@pytest.mark.asyncio
+async def test_get_thread_history_reads_checkpoint_without_creating_agent():
+    class _CheckpointStore:
+        async def load(self, thread_id: str):
+            assert thread_id == "history-checkpoint-thread"
+            return ThreadCheckpointState(
+                messages=[HumanMessage(content="hello"), AIMessage(content="history reply")],
+                tool_permission_context={},
+                pending_permission_requests={},
+                resolved_permission_requests={},
+                memory_compaction_state={},
+                mcp_instruction_state={},
+            )
+
+    fake_app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_checkpoint_store=_CheckpointStore(),
+        )
+    )
+
+    async def fail_agent_creation(*_args, **_kwargs):
+        raise AssertionError("history read must not create a LeonAgent")
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", side_effect=fail_agent_creation),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(
+            "history-checkpoint-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert history["total"] == 2
     assert [item["role"] for item in history["messages"]] == ["human", "assistant"]
     assert history["messages"][1]["text"] == "history reply"
 
@@ -654,10 +725,8 @@ async def test_get_thread_history_skips_empty_ai_messages_after_notifications():
 
     fake_agent = SimpleNamespace(agent=loop)
     fake_app = SimpleNamespace(state=SimpleNamespace())
-    with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
-    ):
+    _put_local_agent_in_pool(fake_app, "history-empty-ai-thread", fake_agent)
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
         history = await get_thread_history(
             "history-empty-ai-thread",
             limit=20,
@@ -708,10 +777,8 @@ async def test_get_thread_history_retains_tool_search_inline_select_error():
 
     fake_agent = SimpleNamespace(agent=loop)
     fake_app = SimpleNamespace(state=SimpleNamespace())
-    with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
-    ):
+    _put_local_agent_in_pool(fake_app, "history-tool-search-inline-select", fake_agent)
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
         history = await get_thread_history(
             "history-tool-search-inline-select",
             limit=20,
@@ -755,10 +822,8 @@ async def test_get_thread_history_persists_visible_assistant_error_after_model_f
 
     fake_agent = SimpleNamespace(agent=loop)
     fake_app = SimpleNamespace(state=SimpleNamespace())
-    with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
-    ):
+    _put_local_agent_in_pool(fake_app, "history-visible-model-error", fake_agent)
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
         history = await get_thread_history(
             "history-visible-model-error",
             limit=20,
@@ -889,10 +954,8 @@ async def test_get_thread_history_rebuilds_persisted_midrun_steer_message(tmp_pa
 
     fake_agent = SimpleNamespace(agent=loop)
     fake_app = SimpleNamespace(state=SimpleNamespace())
-    with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
-    ):
+    _put_local_agent_in_pool(fake_app, "steer-history-thread", fake_agent)
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
         history = await get_thread_history(
             "steer-history-thread",
             limit=20,
@@ -1243,6 +1306,7 @@ async def test_cold_rebuild_surfaces_persisted_compaction_notice_in_detail_and_h
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
     fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    _put_local_agent_in_pool(fake_app, "compact-thread", fake_agent)
 
     with (
         patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
@@ -1293,6 +1357,7 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
     fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    _put_local_agent_in_pool(fake_app, "prompt-too-long-thread", fake_agent)
 
     with (
         patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
@@ -1429,6 +1494,7 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
         agent=compact_loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
+    _put_local_agent_in_pool(fake_app, "compaction-lifecycle-thread", fake_agent)
 
     with (
         patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
@@ -1494,6 +1560,7 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
         agent=recovery_loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
+    _put_local_agent_in_pool(fake_app, "compaction-lifecycle-thread", recovery_agent)
 
     async for _ in recovery_loop.query(
         {"messages": [{"role": "user", "content": "start"}]},
@@ -1573,6 +1640,7 @@ async def test_cold_rebuild_surfaces_compaction_breaker_notice_after_repeated_fa
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
     fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    _put_local_agent_in_pool(fake_app, "compaction-breaker-thread", fake_agent)
 
     with (
         patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
@@ -2144,6 +2212,48 @@ async def test_run_agent_to_buffer_logs_real_stream_error_without_none_traceback
     assert len(error_events) == 1
     assert error_events[0]["error"] == "stream blew up"
     assert "NoneType: None" not in capsys.readouterr().err
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_drains_activity_notice_before_stream_error(monkeypatch, tmp_path):
+    _patch_direct_streaming(monkeypatch)
+
+    runtime = _StreamingRuntime()
+    agent = SimpleNamespace(
+        agent=_ActivityThenBrokenStreamGraphAgent(runtime, RuntimeError("summary upstream failed")),
+        runtime=runtime,
+        storage_container=_fake_storage_container(),
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-stream-error-notice",
+        "hello",
+        app,
+        False,
+        thread_buf,
+        "run-stream-error-notice",
+    )
+
+    events, _ = await thread_buf.read_with_timeout(0, timeout=0.01)
+    assert events is not None
+    typed_events = [(event.get("event"), json.loads(event["data"])) for event in events if event.get("event") in {"notice", "error"}]
+    assert typed_events[0][0] == "notice"
+    assert typed_events[0][1]["notification_type"] == "compact_start"
+    assert typed_events[1][0] == "error"
+    assert typed_events[1][1]["error"] == "summary upstream failed"
 
 
 @pytest.mark.asyncio

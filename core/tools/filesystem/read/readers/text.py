@@ -54,7 +54,7 @@ def read_text(
         result.error = f"Offset {offset} exceeds file length {total_lines}"
         return result
 
-    effective_limit = limit if limit else limits.max_lines
+    effective_limit = limit or limits.max_lines
     if offset is None and limit is None and total_lines > limits.max_lines:
         effective_limit = limits.max_lines
 

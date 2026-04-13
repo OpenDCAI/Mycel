@@ -69,8 +69,7 @@ def _sanitize_shell_output(raw: str) -> str:
             break
         cleaned = next_cleaned
     cleaned = cleaned.replace("\x08", "")
-    cleaned = "".join(ch for ch in cleaned if ch in "\n\t" or 32 <= ord(ch))
-    return cleaned
+    return "".join(ch for ch in cleaned if ch in "\n\t" or ord(ch) >= 32)
 
 
 def _normalize_pty_result(output: str, command: str | None = None) -> str:
@@ -82,16 +81,16 @@ def _extract_state_from_output(
     start_marker: str,
     end_marker: str,
     *,
-    cwd_fallback: str,
-    env_fallback: dict[str, str],
+    previous_cwd: str,
+    previous_env: dict[str, str],
 ) -> tuple[str, dict[str, str], str]:
-    pattern = re.compile(rf"{re.escape(start_marker)}(.*?){re.escape(end_marker)}", re.S)
+    pattern = re.compile(rf"{re.escape(start_marker)}(.*?){re.escape(end_marker)}", re.DOTALL)
     matches = list(pattern.finditer(raw_output))
     if not matches:
-        # @@@markerless-empty-output-fallback - Some lightweight providers/tests return empty stdout on successful exec.
+        # @@@markerless-empty-output-preserve-state - Some lightweight providers/tests return empty stdout on successful exec.
         # Keep previous terminal snapshot only for truly-empty output; any non-empty markerless output still fails loudly.
         if not _sanitize_shell_output(raw_output).strip():
-            return cwd_fallback, dict(env_fallback), ""
+            return previous_cwd, dict(previous_env), ""
         raise RuntimeError("Failed to parse terminal state: state markers not found")
 
     match = matches[-1]
@@ -134,10 +133,14 @@ def _build_export_block(env_delta: dict[str, str]) -> str:
     return "\n".join(f"export {k}={shlex.quote(str(v))}" for k, v in env_delta.items())
 
 
-def _build_state_snapshot_cmd() -> tuple[str, str, str]:
-    """Returns (start_marker, end_marker, full_cmd)."""
+def _build_state_markers() -> tuple[str, str]:
     start = f"__LEON_STATE_START_{uuid.uuid4().hex[:8]}__"
     end = f"__LEON_STATE_END_{uuid.uuid4().hex[:8]}__"
+    return start, end
+
+
+def _build_state_snapshot_cmd() -> tuple[str, str, str]:
+    start, end = _build_state_markers()
     cmd = "\n".join([f"echo {shlex.quote(start)}", "pwd", "env", f"echo {shlex.quote(end)}"])
     return start, end, cmd
 
@@ -221,13 +224,12 @@ class _SubprocessPtySession:
             if marker_done_re.search(decoded):
                 cleaned, exit_code = _extract_marker_exit(decoded, marker, command)
                 return cleaned, "", exit_code
-            if on_stdout_chunk is not None:
-                if len(decoded) > emitted_raw_len:
-                    delta_raw = decoded[emitted_raw_len:]
-                    emitted_raw_len = len(decoded)
-                    delta = _sanitize_shell_output(delta_raw)
-                    if delta:
-                        on_stdout_chunk(delta)
+            if on_stdout_chunk is not None and len(decoded) > emitted_raw_len:
+                delta_raw = decoded[emitted_raw_len:]
+                emitted_raw_len = len(decoded)
+                delta = _sanitize_shell_output(delta_raw)
+                if delta:
+                    on_stdout_chunk(delta)
 
     def interrupt_and_recover(self, recover_timeout: float = 3.0) -> bool:
         """Send Ctrl+C to interrupt the current command and recover the session.
@@ -923,9 +925,7 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
             f"command={command[:200]!r}",
             flush=True,
         )
-        # @@@ _build_state_snapshot_cmd returns (start, end, cmd) but RemoteWrappedRuntime
-        # builds its own inline block to interleave cd/exports/command, so the pre-built cmd is unused.
-        start_marker, end_marker, _ = _build_state_snapshot_cmd()
+        start_marker, end_marker = _build_state_markers()
         exports = _build_export_block(state.env_delta)
         wrapped = "\n".join(
             part
@@ -963,8 +963,8 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
                 raw_output,
                 start_marker,
                 end_marker,
-                cwd_fallback=state.cwd,
-                env_fallback=state.env_delta,
+                previous_cwd=state.cwd,
+                previous_env=state.env_delta,
             )
         except Exception as exc:
             print(
@@ -1007,4 +1007,3 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
 
     async def close(self) -> None:
         """No-op for remote runtime - instance lifecycle managed by lease."""
-        pass

@@ -29,7 +29,6 @@ def get_executor(default_cwd: str | None = None) -> BaseExecutor:
 
     if system == "Darwin":
         return ZshExecutor(default_cwd=default_cwd)
-    elif system == "Windows":
+    if system == "Windows":
         return PowerShellExecutor(default_cwd=default_cwd)
-    else:
-        return BashExecutor(default_cwd=default_cwd)
+    return BashExecutor(default_cwd=default_cwd)

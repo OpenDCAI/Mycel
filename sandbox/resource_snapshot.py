@@ -8,10 +8,39 @@ from sandbox.provider import SandboxProvider
 from storage.runtime import build_resource_snapshot_repo
 
 
-def upsert_lease_resource_snapshot(**kwargs) -> None:  # type: ignore[no-untyped-def]
+def upsert_lease_resource_snapshot(
+    *,
+    lease_id: str,
+    provider_name: str,
+    observed_state: str,
+    probe_mode: str,
+    cpu_used: float | None = None,
+    cpu_limit: float | None = None,
+    memory_used_mb: float | None = None,
+    memory_total_mb: float | None = None,
+    disk_used_gb: float | None = None,
+    disk_total_gb: float | None = None,
+    network_rx_kbps: float | None = None,
+    network_tx_kbps: float | None = None,
+    probe_error: str | None = None,
+) -> None:
     repo = build_resource_snapshot_repo()
     try:
-        repo.upsert_lease_resource_snapshot(**kwargs)
+        repo.upsert_lease_resource_snapshot(
+            lease_id=lease_id,
+            provider_name=provider_name,
+            observed_state=observed_state,
+            probe_mode=probe_mode,
+            cpu_used=cpu_used,
+            cpu_limit=cpu_limit,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+            network_rx_kbps=network_rx_kbps,
+            network_tx_kbps=network_tx_kbps,
+            probe_error=probe_error,
+        )
     finally:
         repo.close()
 

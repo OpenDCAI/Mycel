@@ -138,7 +138,7 @@ describe("AgentDetailPage wording contract", () => {
       ...agentFixture,
       config: {
         ...agentFixture.config,
-        memory: { compaction: { trigger_tokens: 80000 } },
+        compact: { trigger_tokens: 80000 },
       },
     });
 
@@ -158,7 +158,7 @@ describe("AgentDetailPage wording contract", () => {
 
     await waitFor(() => {
       expect(updateAgentConfig).toHaveBeenCalledWith("agent-1", {
-        memory: { compaction: { trigger_tokens: 100000 } },
+        compact: { trigger_tokens: 100000 },
       });
     });
   });

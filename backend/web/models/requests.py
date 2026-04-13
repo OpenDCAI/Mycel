@@ -2,14 +2,16 @@
 
 from typing import Any, Literal
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from sandbox.config import MountSpec
 
 
 class CreateThreadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     agent_user_id: str
-    sandbox: str = Field(default="local", validation_alias=AliasChoices("sandbox", "sandbox_type"))
+    sandbox: str = "local"
     recipe_id: str | None = None
     lease_id: str | None = None
     cwd: str | None = None

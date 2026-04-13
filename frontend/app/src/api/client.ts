@@ -1,10 +1,8 @@
 import type {
-  SandboxSession,
   SandboxType,
   UserLeaseSummary,
   ThreadLaunchConfig,
   ThreadLaunchConfigResponse,
-  SessionStatus,
   StreamStatus,
   TerminalStatus,
   LeaseStatus,
@@ -45,12 +43,12 @@ async function checkedResponse(url: string, init?: RequestInit): Promise<Respons
   return response;
 }
 
-export async function request<T>(url: string, init?: RequestInit): Promise<T> {
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await checkedResponse(url, init);
   return (await response.json()) as T;
 }
 
-export async function requestOk(url: string, init?: RequestInit): Promise<void> {
+async function requestOk(url: string, init?: RequestInit): Promise<void> {
   await checkedResponse(url, init);
 }
 
@@ -165,10 +163,6 @@ export async function saveDefaultThreadConfig(
     method: "POST",
     body: JSON.stringify({ agent_user_id: agentUserId, ...config }),
   });
-}
-
-export async function deleteThread(threadId: string): Promise<void> {
-  await requestOk(`/api/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
 }
 
 export async function getThread(threadId: string): Promise<ThreadDetail> {
@@ -385,43 +379,6 @@ function parseSandboxTypes(value: unknown): SandboxType[] {
   });
 }
 
-export async function listSandboxSessions(): Promise<SandboxSession[]> {
-  const sessions = parseSandboxSessions(await request("/api/sandbox/sessions"));
-  const toTs = (value?: string): number => {
-    if (!value) return 0;
-    const ts = Date.parse(value);
-    return Number.isFinite(ts) ? ts : 0;
-  };
-  return [...sessions].sort((a, b) => {
-    const createdDiff = toTs(b.created_at) - toTs(a.created_at);
-    if (createdDiff !== 0) return createdDiff;
-    const activeDiff = toTs(b.last_active) - toTs(a.last_active);
-    if (activeDiff !== 0) return activeDiff;
-    const providerDiff = a.provider.localeCompare(b.provider);
-    if (providerDiff !== 0) return providerDiff;
-    const threadDiff = a.thread_id.localeCompare(b.thread_id);
-    if (threadDiff !== 0) return threadDiff;
-    return a.session_id.localeCompare(b.session_id);
-  });
-}
-
-function parseSandboxSessions(value: unknown): SandboxSession[] {
-  const payload = asRecord(value);
-  const sessions = payload?.sessions;
-  if (!Array.isArray(sessions)) throw new Error("Malformed sandbox sessions");
-  return sessions.map((session) => {
-    const data = asRecord(session);
-    const session_id = data ? recordString(data, "session_id") : undefined;
-    const thread_id = data ? recordString(data, "thread_id") : undefined;
-    const provider = data ? recordString(data, "provider") : undefined;
-    const status = data ? recordString(data, "status") : undefined;
-    if (!data || !session_id || !thread_id || !provider || !status) {
-      throw new Error("Malformed sandbox sessions");
-    }
-    return { ...data, session_id, thread_id, provider, status } as SandboxSession;
-  });
-}
-
 export async function listMyLeases(signal?: AbortSignal): Promise<UserLeaseSummary[]> {
   return parseUserLeases(await request("/api/sandbox/leases/mine", { signal }));
 }
@@ -461,33 +418,7 @@ function parseUserLeases(value: unknown): UserLeaseSummary[] {
   });
 }
 
-export async function destroySandboxSession(sessionId: string, provider: string): Promise<void> {
-  await requestOk(
-    `/api/sandbox/sessions/${encodeURIComponent(sessionId)}?provider=${encodeURIComponent(provider)}`,
-    { method: "DELETE" },
-  );
-}
-
-// --- Session/Terminal/Lease API ---
-
-export async function getThreadSession(threadId: string): Promise<SessionStatus> {
-  return parseSessionStatus(await request(`/api/threads/${encodeURIComponent(threadId)}/session`));
-}
-
-function parseSessionStatus(value: unknown): SessionStatus {
-  const payload = asRecord(value);
-  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
-  const session_id = payload ? recordString(payload, "session_id") : undefined;
-  const terminal_id = payload ? recordString(payload, "terminal_id") : undefined;
-  const status = payload ? recordString(payload, "status") : undefined;
-  const started_at = payload ? recordString(payload, "started_at") : undefined;
-  const last_active_at = payload ? recordString(payload, "last_active_at") : undefined;
-  const expires_at = payload ? recordString(payload, "expires_at") : undefined;
-  if (!payload || !thread_id || !session_id || !terminal_id || !status || !started_at || !last_active_at || !expires_at) {
-    throw new Error("Malformed session status");
-  }
-  return { ...payload, thread_id, session_id, terminal_id, status, started_at, last_active_at, expires_at } as SessionStatus;
-}
+// --- Terminal/Lease API ---
 
 export async function getThreadTerminal(threadId: string): Promise<TerminalStatus> {
   return parseTerminalStatus(await request(`/api/threads/${encodeURIComponent(threadId)}/terminal`));

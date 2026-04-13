@@ -109,10 +109,9 @@ class MarkdownifyFetcher(BaseFetcher):
         """Process HTML content to Markdown or plain text."""
         if self.has_markdownify:
             return self._markdownify_html(html, result)
-        elif self.has_bs4:
+        if self.has_bs4:
             return self._bs4_extract(html, result)
-        else:
-            return self._basic_extract(html, result)
+        return self._basic_extract(html, result)
 
     def _markdownify_html(self, html: str, result: FetchResult) -> str:
         """Convert HTML to Markdown using markdownify."""
@@ -147,9 +146,7 @@ class MarkdownifyFetcher(BaseFetcher):
         )
 
         content = re.sub(r"\n{3,}", "\n\n", content)
-        content = content.strip()
-
-        return content
+        return content.strip()
 
     def _bs4_extract(self, html: str, result: FetchResult) -> str:
         """Extract text using BeautifulSoup."""
@@ -175,9 +172,7 @@ class MarkdownifyFetcher(BaseFetcher):
         else:
             text = soup.get_text(separator="\n\n", strip=True)
 
-        text = re.sub(r"\n{3,}", "\n\n", text)
-
-        return text
+        return re.sub(r"\n{3,}", "\n\n", text)
 
     def _basic_extract(self, html: str, result: FetchResult) -> str:
         """Basic HTML extraction without external libraries."""
@@ -188,6 +183,4 @@ class MarkdownifyFetcher(BaseFetcher):
         text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<[^>]+>", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
+        return re.sub(r"\s+", " ", text).strip()

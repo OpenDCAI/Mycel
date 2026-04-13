@@ -30,13 +30,21 @@ class SupabaseAgentConfigRepo:
         if not rows:
             return None
         row = dict(rows[0])
-        return {
+        meta = row.get("meta_json") or {}
+        if not isinstance(meta, dict):
+            raise RuntimeError(f"Supabase {_REPO} expected meta_json object for get_config.")
+        meta = dict(meta)
+        compact = meta.pop("compact", None)
+        result = {
             **row,
             "tools": row.get("tools_json", []),
             "runtime": row.get("runtime_json", {}),
             "mcp": row.get("mcp_json", {}),
-            "meta": row.get("meta_json", {}),
+            "meta": meta,
         }
+        if compact is not None:
+            result["compact"] = compact
+        return result
 
     def save_config(self, agent_config_id: str, data: dict[str, Any]) -> None:
         payload = {"id": agent_config_id, **{k: v for k, v in data.items() if k != "id"}}
@@ -46,8 +54,19 @@ class SupabaseAgentConfigRepo:
             payload["runtime_json"] = payload.pop("runtime")
         if "mcp" in payload:
             payload["mcp_json"] = payload.pop("mcp")
-        if "meta" in payload:
-            payload["meta_json"] = payload.pop("meta")
+        meta = payload.pop("meta", {})
+        if meta is None:
+            meta = {}
+        if not isinstance(meta, dict):
+            raise RuntimeError(f"Supabase {_REPO} expected meta object for save_config.")
+        meta = dict(meta)
+        if "compact" in payload:
+            compact = payload.pop("compact")
+            if compact is None:
+                meta.pop("compact", None)
+            else:
+                meta["compact"] = compact
+        payload["meta_json"] = meta
         self._client.table("agent_configs").upsert(payload).execute()
 
     def delete_config(self, agent_config_id: str) -> None:

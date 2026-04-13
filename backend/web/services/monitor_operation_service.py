@@ -228,13 +228,27 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def request_provider_session_cleanup(provider_name: str, session_id: str) -> dict[str, Any]:
+def request_provider_session_cleanup(provider_name: str, session_id: str, session_truth: dict[str, Any]) -> dict[str, Any]:
     provider = str(provider_name or "").strip()
     session = str(session_id or "").strip()
     if not provider:
         raise ValueError("provider_name is required")
     if not session:
         raise ValueError("session_id is required")
+    status = str(session_truth.get("status") or "").strip().lower()
+    source = str(session_truth.get("source") or "").strip()
+    if source != "provider_orphan" or status != "paused":
+        return {
+            "accepted": False,
+            "message": "Provider session cleanup requires a paused provider-orphan session.",
+            "operation": None,
+            "current_truth": {
+                "provider_id": provider,
+                "session_id": session,
+                "status": status or None,
+                "source": source or None,
+            },
+        }
 
     target_id = f"{provider}:{session}"
     operation = _new_operation(

@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.models.panel import (
     AgentConfigPayload,
     CreateAgentRequest,
@@ -20,6 +20,7 @@ from backend.web.services import agent_user_service, library_service, profile_se
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
+CurrentUser = Annotated[Any, Depends(get_current_user)]
 
 
 def _require_owned_agent_user(agent_id: str, user_id: str, user_repo: Any) -> Any:
@@ -113,7 +114,9 @@ async def update_agent(
         agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
-        **req.model_dump(),
+        name=req.name,
+        description=req.description,
+        status=req.status,
     )
     if not item:
         raise HTTPException(404, "Agent not found")
@@ -181,12 +184,14 @@ async def delete_agent(
         await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     thread_launch_pref_repo = getattr(request.app.state, "thread_launch_pref_repo", None)
+    contact_repo = getattr(request.app.state, "contact_repo", None)
     ok = await asyncio.to_thread(
         agent_user_service.delete_agent_user,
         agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
         thread_launch_pref_repo=thread_launch_pref_repo,
+        contact_repo=contact_repo,
     )
     if not ok:
         raise HTTPException(404, "Agent not found")
@@ -244,7 +249,9 @@ async def update_resource(
         resource_id,
         user_id,
         request.app.state.recipe_repo,
-        **req.model_dump(),
+        name=req.name,
+        desc=req.desc,
+        features=req.features,
     )
     if not item:
         raise HTTPException(404, "Resource not found")
@@ -326,11 +333,9 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 
 @router.get("/profile")
 async def get_profile(
-    user_id: CurrentUserId,
-    request: Request,
+    user: CurrentUser,
 ) -> dict[str, Any]:
-    user = request.app.state.user_repo.get_by_id(user_id)
-    return await asyncio.to_thread(profile_service.get_profile, user)
+    return profile_service.get_profile(user)
 
 
 @router.put("/profile")
@@ -343,5 +348,6 @@ async def update_profile(
         profile_service.update_profile,
         user_repo=request.app.state.user_repo,
         user_id=user_id,
-        **req.model_dump(),
+        name=req.name,
+        email=req.email,
     )

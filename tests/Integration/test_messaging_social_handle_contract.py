@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -37,10 +38,10 @@ class _FakeRelationshipRepo:
         key = cast(tuple[str, str], tuple(sorted((actor_id, target_id))))
         return self._existing.get(key)
 
-    def upsert(self, actor_id: str, target_id: str, **fields):
+    def upsert(self, actor_id: str, target_id: str, *, state: str, initiator_user_id: str | None):
         key = cast(tuple[str, str], tuple(sorted((actor_id, target_id))))
         row = dict(self._existing[key])
-        row.update(fields)
+        row.update({"state": state, "initiator_user_id": initiator_user_id})
         row["updated_at"] = "2026-04-07T00:01:00Z"
         self._existing[key] = row
         return row
@@ -71,7 +72,7 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     assert resolved.display_name == "Human"
 
 
-def test_messaging_display_user_resolver_does_not_bridge_legacy_thread_user_id() -> None:
+def test_messaging_display_user_resolver_does_not_bridge_removed_thread_user_id() -> None:
     resolved = resolve_messaging_display_user(
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
@@ -94,7 +95,6 @@ def test_deliver_to_agents_does_not_require_main_thread_id():
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
@@ -197,7 +197,7 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
         assert registry.get(removed_name) is None
 
 
-def test_send_message_schema_marks_user_id_name_as_legacy() -> None:
+def test_send_message_schema_uses_participant_id_for_direct_chat() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -209,9 +209,11 @@ def test_send_message_schema_marks_user_id_name_as_legacy() -> None:
 
     send_message_schema = send_message.get_schema()
 
-    assert "legacy" in send_message_schema["parameters"]["properties"]["user_id"]["description"].lower()
+    assert "participant_id" in send_message_schema["parameters"]["properties"]
+    assert "user_id" not in send_message_schema["parameters"]["properties"]
+    assert "legacy" not in send_message_schema["description"].lower()
     assert "directory" not in send_message_schema["description"].lower()
-    assert send_message_schema["parameters"]["x-leon-required-any-of"] == [["user_id"], ["chat_id"]]
+    assert send_message_schema["parameters"]["x-leon-required-any-of"] == [["participant_id"], ["chat_id"]]
 
 
 def test_read_messages_schema_requires_non_empty_chat_or_user_identifier() -> None:
@@ -226,12 +228,13 @@ def test_read_messages_schema_requires_non_empty_chat_or_user_identifier() -> No
 
     params = read_messages.get_schema()["parameters"]
 
-    assert params["x-leon-required-any-of"] == [["user_id"], ["chat_id"]]
-    assert params["properties"]["user_id"]["minLength"] == 1
+    assert params["x-leon-required-any-of"] == [["participant_id"], ["chat_id"]]
+    assert params["properties"]["participant_id"]["minLength"] == 1
+    assert "user_id" not in params["properties"]
     assert params["properties"]["chat_id"]["minLength"] == 1
 
 
-def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> None:
+def test_chat_tool_service_accepts_chat_identity_id_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -242,7 +245,7 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     assert registry.get("list_chats") is not None
 
 
-def test_chat_tool_service_rejects_legacy_constructor_user_id() -> None:
+def test_chat_tool_service_rejects_removed_constructor_user_id() -> None:
     registry = ToolRegistry()
 
     with pytest.raises(TypeError, match="user_id"):
@@ -286,7 +289,6 @@ def test_messaging_service_resolves_sender_name_from_agent_user_id() -> None:
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
         messages_repo=SimpleNamespace(create=lambda row: row),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -312,7 +314,6 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
         messages_repo=SimpleNamespace(create=lambda row: row),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -350,7 +351,6 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_agen
                 }
             ]
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
         ),
@@ -395,7 +395,6 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
         chat_repo=SimpleNamespace(),
         chat_member_repo=_StatefulChatMemberRepo(),
         messages_repo=_MessagesRepo(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
         ),
@@ -442,7 +441,6 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
                 AssertionError("chat list should not count unread one chat at a time")
             ),
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -457,7 +455,7 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
 
     chats = service.list_chats_for_user("human-user-1")
 
-    assert chats[0]["entities"] == [
+    assert chats[0]["members"] == [
         {
             "id": "human-user-1",
             "name": "Human",
@@ -477,7 +475,7 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
     assert chats[0]["unread_count"] == 0
 
 
-def test_messaging_service_list_chats_ignores_blank_other_names_in_title_fallback() -> None:
+def test_messaging_service_list_chats_ignores_blank_other_names_in_title_default() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
             list_by_ids=lambda chat_ids: [
@@ -497,7 +495,6 @@ def test_messaging_service_list_chats_ignores_blank_other_names_in_title_fallbac
             list_latest_by_chat_ids=lambda _chat_ids: {},
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {"chat-1": 0},
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -568,13 +565,12 @@ def test_messaging_service_conversation_summaries_use_bulk_projection_repos() ->
                 AssertionError("conversation summaries must not count unread one by one")
             ),
         ),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: calls.append(f"users:{','.join(user_ids)}") or [user_rows[user_id] for user_id in user_ids],
             get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch users one by one")),
         ),
         thread_repo=SimpleNamespace(
-            get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("direct user ids should not need thread fallback"))
+            get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("direct user ids should not query threads"))
         ),
     )
 
@@ -611,7 +607,6 @@ def test_messaging_service_conversation_summaries_fail_on_unknown_member_identit
             ],
         ),
         messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
         ),
@@ -621,6 +616,42 @@ def test_messaging_service_conversation_summaries_fail_on_unknown_member_identit
         service.list_conversation_summaries_for_user("human-user-1")
 
 
+def test_messaging_service_conversation_summaries_loads_users_and_unread_counts_in_parallel() -> None:
+    users_started = threading.Event()
+    unread_started = threading.Event()
+
+    def _list_users(user_ids: list[str]):
+        users_started.set()
+        if not unread_started.wait(0.2):
+            raise AssertionError("unread counts did not start while users were loading")
+        return [SimpleNamespace(id=user_id, display_name=user_id, type="human", avatar=None) for user_id in user_ids]
+
+    def _count_unread(_user_id: str, _last_read_by_chat: dict[str, int]):
+        unread_started.set()
+        if not users_started.wait(0.2):
+            raise AssertionError("users did not start while unread counts were loading")
+        return {"chat-1": 2}
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 4},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=_count_unread),
+        user_repo=SimpleNamespace(list_by_ids=_list_users),
+    )
+
+    summaries = service.list_conversation_summaries_for_user("human-user-1")
+
+    assert summaries[0]["unread_count"] == 2
+
+
 def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(),
@@ -628,7 +659,6 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
             list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "agent-user-1"}],
         ),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -654,7 +684,7 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
         "title": "Chat title",
         "status": "active",
         "created_at": "2026-04-07T00:00:00Z",
-        "entities": [
+        "members": [
             {
                 "id": "human-user-1",
                 "name": "Human",
@@ -741,7 +771,6 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
         ),
         chat_member_repo=members_repo,
         messages_repo=messages_repo,
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: [
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -794,7 +823,7 @@ def test_chat_tool_send_accepts_agent_user_target_id() -> None:
     send_message = registry.get("send_message")
     assert send_message is not None
 
-    result = send_message.handler(content="hello", user_id="agent-user-1")
+    result = send_message.handler(content="hello", participant_id="agent-user-1")
 
     assert result == "Message sent to Toad."
     assert sent == [("chat-1", "human-user-1", "hello")]
@@ -925,7 +954,7 @@ def test_read_messages_uses_agent_user_target_name_on_no_history() -> None:
     read_messages = registry.get("read_messages")
     assert read_messages is not None
 
-    result = read_messages.handler(user_id="agent-user-1")
+    result = read_messages.handler(participant_id="agent-user-1")
 
     assert result == "No chat history with Toad."
 
@@ -943,7 +972,7 @@ def test_read_messages_uses_messaging_service_direct_chat_lookup_without_member_
     read_messages = registry.get("read_messages")
     assert read_messages is not None
 
-    result = read_messages.handler(user_id="agent-user-1")
+    result = read_messages.handler(participant_id="agent-user-1")
 
     assert result == "No chat history with Toad."
 
@@ -987,7 +1016,7 @@ def test_chat_tool_search_does_not_fall_back_to_global_search_for_agent_user_tar
     search_messages = registry.get("search_messages")
     assert search_messages is not None
 
-    result = search_messages.handler(query="hello", user_id="agent-user-1")
+    result = search_messages.handler(query="hello", participant_id="agent-user-1")
 
     assert result == "No messages matching 'hello' with Toad."
     assert search_calls == []
@@ -1008,7 +1037,7 @@ def test_chat_tool_search_uses_messaging_service_direct_chat_lookup_without_memb
     search_messages = registry.get("search_messages")
     assert search_messages is not None
 
-    result = search_messages.handler(query="hello", user_id="agent-user-1")
+    result = search_messages.handler(query="hello", participant_id="agent-user-1")
 
     assert result == "No messages matching 'hello'."
     assert search_calls == [("hello", "chat-1")]
@@ -1020,7 +1049,6 @@ def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
@@ -1059,7 +1087,6 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
             ]
         ),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)
@@ -1118,7 +1145,7 @@ def test_delivery_resolver_propagates_contact_repo_failures() -> None:
 def test_delivery_resolver_requires_current_chat_member_contract() -> None:
     resolver = HireVisitDeliveryResolver(
         contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
-        chat_member_repo=SimpleNamespace(list_entities=lambda _chat_id: []),
+        chat_member_repo=SimpleNamespace(),
         relationship_repo=None,
     )
 
@@ -1170,7 +1197,6 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
             ]
         ),
         messages_repo=SimpleNamespace(),
-        message_read_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)

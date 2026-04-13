@@ -1,6 +1,7 @@
 """Thread file browsing endpoints."""
 
 import asyncio
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -21,9 +22,17 @@ router = APIRouter(
 _public = APIRouter(prefix="/api/threads/{thread_id}/files", tags=["thread-files"])
 
 
-async def _call_channel_file_service(method, *args, missing_status: int | None = None, **kwargs):
+async def _call_channel_file_service(
+    method: Callable[..., Any],
+    *,
+    thread_id: str,
+    relative_path: str | None = None,
+    missing_status: int | None = None,
+) -> Any:
     try:
-        return await asyncio.to_thread(method, *args, **kwargs)
+        if relative_path is None:
+            return await asyncio.to_thread(method, thread_id=thread_id)
+        return await asyncio.to_thread(method, thread_id=thread_id, relative_path=relative_path)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except FileNotFoundError as e:

@@ -195,7 +195,7 @@ class SupabaseSandboxMonitorRepo:
             "list_sessions_with_leases active",
         )
 
-        # All leases (for terminal fallback)
+        # All leases for terminal-derived resource rows.
         leases = q.rows(
             self._client.table("sandbox_leases").select("lease_id,provider_name,observed_state,desired_state,created_at").execute(),
             _REPO,

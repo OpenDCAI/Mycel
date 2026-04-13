@@ -39,8 +39,8 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <AgentsPage /> },
           { path: 'agents/:id', element: <AgentDetailPage /> },
-          { path: 'entities', element: null },
-          { path: 'entities/:userId', element: <ContactDetailPage /> },
+          { path: 'users', element: null },
+          { path: 'users/:userId', element: <ContactDetailPage /> },
         ],
       },
       { path: 'marketplace', element: <MarketplacePage /> },

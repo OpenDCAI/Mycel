@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ComputerPanelProps, TabType } from "./types";
+import type { ChatEntry } from "../../api";
+import type { TabType } from "./types";
 import { extractAgentSteps } from "./utils";
-import { useSandboxStatus } from "./use-sandbox-status";
+import { useRemoteWorkspaceRoot } from "./use-remote-workspace-root";
 import { useFileExplorer } from "./use-file-explorer";
 import { useResizable } from "./use-resizable";
 import { PanelHeader } from "./PanelHeader";
@@ -9,7 +10,16 @@ import { TabBar } from "./TabBar";
 import { AgentsView } from "./AgentsView";
 import { FilesView } from "./FilesView";
 
-export type { ComputerPanelProps };
+interface ComputerPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  threadId: string | null;
+  sandboxType: string | null;
+  chatEntries: ChatEntry[];
+  width?: number;
+  activeTab?: TabType;
+  onTabChange?: (tab: TabType) => void;
+}
 
 export default function ComputerPanel({
   isOpen,
@@ -29,7 +39,7 @@ export default function ComputerPanel({
   const agentSteps = useMemo(() => extractAgentSteps(chatEntries), [chatEntries]);
   const { width: treeWidth, onMouseDown: onDragStart } = useResizable(288, 160, 500);
 
-  const { refreshStatus } = useSandboxStatus({ threadId, isRemote });
+  const { refreshWorkspaceRoot } = useRemoteWorkspaceRoot({ threadId, isRemote });
   const {
     currentPath,
     setCurrentPath,
@@ -44,15 +54,15 @@ export default function ComputerPanel({
     refreshWorkspace,
   } = useFileExplorer({ threadId });
 
-  // Refresh sandbox status when panel opens
+  // Resolve the remote cwd before loading files so the tree opens at the workspace root.
   useEffect(() => {
     if (!isOpen) return;
-    refreshStatus().then((cwd) => {
+    refreshWorkspaceRoot().then((cwd) => {
       if (cwd && !currentPath) {
         setCurrentPath(cwd);
       }
     });
-  }, [isOpen, refreshStatus, currentPath, setCurrentPath]);
+  }, [isOpen, refreshWorkspaceRoot, currentPath, setCurrentPath]);
 
   // Refresh workspace when files tab is active
   useEffect(() => {

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "./ui/input";
 import { useAppStore } from "@/store/app-store";
 import { authFetch, useAuthStore } from "@/store/auth-store";
-import { fetchEntities, type EntityItem } from "@/api/entities";
+import { fetchUserChatCandidates, type UserChatCandidate } from "@/api/users";
 
 interface NewChatDialogProps {
   open: boolean;
@@ -36,11 +36,11 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
   const myUserId = useAuthStore(s => s.userId);
   const [filter, setFilter] = useState("");
   const [mode, setMode] = useState<DialogMode>("thread");
-  const [entities, setEntities] = useState<EntityItem[]>([]);
+  const [chatCandidates, setChatCandidates] = useState<UserChatCandidate[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [groupTitle, setGroupTitle] = useState("");
-  const [loadingEntities, setLoadingEntities] = useState(false);
-  const [entitiesLoaded, setEntitiesLoaded] = useState(false);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [candidatesLoaded, setCandidatesLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,50 +53,34 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
   }, [agentList, filter]);
 
   const groupCandidates = useMemo(() => {
-    const byId = new Map<string, EntityItem>();
-    for (const agent of agentList) {
-      byId.set(agent.id, {
-        user_id: agent.id,
-        name: agent.name,
-        type: "agent",
-        avatar_url: agent.avatar_url ?? null,
-        owner_name: "我的 Agent",
-        is_owned: true,
-        relationship_state: "none",
-        can_chat: true,
-      });
-    }
-    for (const entity of entities) {
-      if (!byId.has(entity.user_id)) byId.set(entity.user_id, entity);
-    }
     const query = filter.trim().toLowerCase();
-    const items = [...byId.values()].filter((item) => item.user_id !== myUserId && (item.is_owned || item.can_chat));
+    const items = chatCandidates.filter((item) => item.user_id !== myUserId && (item.is_owned || item.can_chat));
     if (!query) return items;
     return items.filter((item) => [item.name, item.owner_name ?? "", item.type].join(" ").toLowerCase().includes(query));
-  }, [agentList, entities, filter, myUserId]);
+  }, [chatCandidates, filter, myUserId]);
 
   useEffect(() => {
     if (!open) return;
     setFilter("");
     setSelectedIds([]);
     setGroupTitle("");
-    setEntities([]);
-    setEntitiesLoaded(false);
+    setChatCandidates([]);
+    setCandidatesLoaded(false);
     setError(null);
   }, [open]);
 
   useEffect(() => {
-    if (!open || mode !== "group" || entitiesLoaded || loadingEntities) return;
-    setLoadingEntities(true);
+    if (!open || mode !== "group" || candidatesLoaded || loadingCandidates) return;
+    setLoadingCandidates(true);
     setError(null);
-    fetchEntities()
-      .then(setEntities)
+    fetchUserChatCandidates()
+      .then(setChatCandidates)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => {
-        setEntitiesLoaded(true);
-        setLoadingEntities(false);
+        setCandidatesLoaded(true);
+        setLoadingCandidates(false);
       });
-  }, [entitiesLoaded, loadingEntities, mode, open]);
+  }, [candidatesLoaded, loadingCandidates, mode, open]);
 
   const handleSelect = (agent: typeof agentList[0]) => {
     onOpenChange(false);
@@ -215,7 +199,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
                 <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             ))
-          ) : loadingEntities ? (
+          ) : loadingCandidates ? (
             <p className="text-sm text-muted-foreground text-center py-8">加载联系人...</p>
           ) : groupCandidates.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">暂无可选联系人</p>

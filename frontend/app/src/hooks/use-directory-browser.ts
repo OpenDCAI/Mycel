@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { asRecord, recordString } from "@/lib/records";
 
-export interface BrowseItem {
+interface BrowseItem {
   name: string;
   path: string;
   is_dir: boolean;

@@ -81,8 +81,15 @@ def _load_merged_models_for_storage(repo: Any, user_id: str) -> ModelsConfig:
     return loader.load_with_user_config(repo.get_models_config(user_id) or {})
 
 
+def _normalize_model_base_url(base_url: str, provider_name: str | None) -> str:
+    url = base_url.rstrip("/").removesuffix("/v1")
+    if provider_name != "anthropic":
+        url = f"{url}/v1"
+    return url
+
+
 # ============================================================================
-# Settings endpoint (returns workspace + models combined for frontend compat)
+# Settings endpoint (returns workspace + models as one frontend settings bundle)
 # ============================================================================
 
 
@@ -94,7 +101,7 @@ class ProviderConfig(BaseModel):
 
 
 class UserSettings(BaseModel):
-    """Combined settings for frontend compatibility."""
+    """Combined settings bundle for the app settings page."""
 
     default_workspace: str | None = None
     recent_workspaces: list[str] = []
@@ -113,7 +120,7 @@ async def get_settings(request: Request, user_id: CurrentUserId) -> UserSettings
     ws = _load_workspace_settings(repo, user_id)
     models = _load_merged_models_for_storage(repo, user_id)
 
-    # Build compat view
+    # Build the app-facing settings bundle.
     mapping = {k: v.model for k, v in models.mapping.items()}
     providers = {}
     for name, provider in models.providers.items():
@@ -476,9 +483,6 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
 
         provider_name = _attempt_infer_model_provider(resolved)
 
-    # Get credentials from providers config
-    p = mc.get_provider(provider_name) if provider_name else None
-
     try:
         from langchain.chat_models import init_chat_model
 
@@ -490,12 +494,9 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
         api_key = mc.resolve_api_key(provider_name)
         if api_key:
             kwargs["api_key"] = api_key
-        if p and p.base_url:
-            url = p.base_url.rstrip("/")
-            url = url.removesuffix("/v1")
-            if provider_name != "anthropic":
-                url = f"{url}/v1"
-            kwargs["base_url"] = url
+        base_url = mc.resolve_base_url(provider_name)
+        if base_url:
+            kwargs["base_url"] = _normalize_model_base_url(base_url, provider_name)
 
         kwargs = normalize_model_kwargs(resolved, kwargs)
         model = init_chat_model(resolved, **kwargs)

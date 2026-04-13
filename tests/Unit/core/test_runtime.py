@@ -34,7 +34,7 @@ def terminal_store(temp_db):
     repo.close()
 
 
-class _LeaseStoreCompat:
+class _LeaseStoreAdapter:
     """Thin wrapper: repo returns dicts, tests expect domain objects from create/get."""
 
     def __init__(self, repo: SQLiteLeaseRepo):
@@ -54,10 +54,10 @@ class _LeaseStoreCompat:
 
 @pytest.fixture
 def lease_store(temp_db):
-    """Create SQLiteLeaseRepo with compat wrapper for tests."""
+    """Create SQLiteLeaseRepo with domain-object adapter for tests."""
     repo = SQLiteLeaseRepo(db_path=temp_db)
-    compat = _LeaseStoreCompat(repo)
-    yield compat
+    adapter = _LeaseStoreAdapter(repo)
+    yield adapter
     repo.close()
 
 
@@ -723,8 +723,8 @@ def test_extract_state_from_output_ignores_prompt_noise():
         raw,
         start,
         end,
-        cwd_fallback="/home/daytona",
-        env_fallback={},
+        previous_cwd="/home/daytona",
+        previous_env={},
     )
     assert cwd == "/home/daytona/snake-fullstack"
     assert env_map.get("PWD") == "/home/daytona/snake-fullstack"
@@ -749,7 +749,7 @@ def test_normalize_pty_result_strips_prompt_echo_and_tail_prompt():
 async def test_daytona_runtime_sanitizes_corrupted_terminal_state_before_create(terminal_store, lease_store):
     pytest.importorskip("daytona_sdk")
     terminal = terminal_from_row(terminal_store.create("term-4", "thread-4", "lease-4", "/tmp"), terminal_store.db_path)
-    # Simulate legacy-corrupted snapshot.
+    # Simulate corrupted persisted snapshot.
     terminal.update_state(
         TerminalState(
             cwd="\x1b>",

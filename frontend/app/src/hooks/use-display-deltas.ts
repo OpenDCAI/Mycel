@@ -185,12 +185,12 @@ interface DisplayDeltaDeps {
   stream: Pick<UseThreadStreamResult, "runtimeStatus" | "isRunning" | "subscribe">;
 }
 
-export interface DisplayDeltaState {
+interface DisplayDeltaState {
   runtimeStatus: StreamStatus | null;
   isRunning: boolean;
 }
 
-export interface DisplayDeltaActions {
+interface DisplayDeltaActions {
   handleSendMessage: (message: string, attachments?: string[]) => Promise<void>;
   handleStopStreaming: () => Promise<void>;
 }

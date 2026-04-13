@@ -54,11 +54,8 @@ async def test_call_invite_code_repo_maps_exception_to_prefixed_500():
 
     with pytest.raises(HTTPException) as exc_info:
         await invite_codes_router._call_invite_code_repo(
-            _request(repo),
             "生成邀请码失败：",
-            "generate",
-            created_by="user-1",
-            expires_days=7,
+            lambda: repo.generate(created_by="user-1", expires_days=7),
         )
 
     assert exc_info.value.status_code == 500
@@ -72,10 +69,8 @@ async def test_call_invite_code_repo_preserves_http_exception():
 
     with pytest.raises(HTTPException) as exc_info:
         await invite_codes_router._call_invite_code_repo(
-            _request(repo),
             "校验邀请码失败：",
-            "is_valid",
-            "invite-1",
+            lambda: repo.is_valid("invite-1"),
         )
 
     assert exc_info.value.status_code == 503

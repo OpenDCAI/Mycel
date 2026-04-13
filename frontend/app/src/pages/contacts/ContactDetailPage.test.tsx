@@ -43,7 +43,7 @@ describe("ContactDetailPage", () => {
     navigate.mockReset();
   });
 
-  it("renders a contact profile from the entity surface without leaking agent config panels", async () => {
+  it("renders a contact profile from the user candidate surface without leaking agent config panels", async () => {
     authFetch.mockResolvedValueOnce(okJson([
       {
         user_id: "human-2",
@@ -58,14 +58,14 @@ describe("ContactDetailPage", () => {
     ]));
 
     render(
-      <MemoryRouter initialEntries={["/contacts/entities/human-2"]}>
+      <MemoryRouter initialEntries={["/contacts/users/human-2"]}>
         <Routes>
-          <Route path="/contacts/entities/:userId" element={<ContactDetailPage />} />
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(authFetch).toHaveBeenCalledWith("/api/entities"));
+    await waitFor(() => expect(authFetch).toHaveBeenCalledWith("/api/users/chat-candidates"));
     expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
     expect(screen.getByText("human")).toBeTruthy();
     expect(screen.getByText("visit")).toBeTruthy();
@@ -74,34 +74,41 @@ describe("ContactDetailPage", () => {
     expect(screen.queryByRole("button", { name: /子 Agent/ })).toBeNull();
   });
 
-  it("opens an agent contact default thread when the backend exposes one", async () => {
-    authFetch.mockResolvedValueOnce(okJson([
-      {
-        user_id: "agent-2",
-        name: "Toad",
-        type: "agent",
-        avatar_url: null,
-        owner_name: "Other",
-        is_owned: false,
-        relationship_state: "hire",
-        can_chat: true,
-        default_thread_id: "thread-toad",
-        is_default_thread: true,
-        branch_index: 0,
-      },
-    ]));
+  it("opens an agent contact through the chat surface instead of the private default thread", async () => {
+    authFetch
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "agent-2",
+          name: "Toad",
+          type: "agent",
+          avatar_url: null,
+          owner_name: "Other",
+          is_owned: false,
+          relationship_state: "hire",
+          can_chat: true,
+        },
+      ]))
+      .mockResolvedValueOnce(okJson({ id: "chat-agent-2" }));
 
     render(
-      <MemoryRouter initialEntries={["/contacts/entities/agent-2"]}>
+      <MemoryRouter initialEntries={["/contacts/users/agent-2"]}>
         <Routes>
-          <Route path="/contacts/entities/:userId" element={<ContactDetailPage />} />
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "打开默认线程" }));
+    fireEvent.click(await screen.findByRole("button", { name: "发起对话" }));
 
-    expect(navigate).toHaveBeenCalledWith("/chat/hire/thread/thread-toad");
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith("/api/chats", {
+        method: "POST",
+        body: JSON.stringify({ user_ids: ["human-1", "agent-2"] }),
+      });
+    });
+    expect(navigate).toHaveBeenCalledWith("/chat/visit/chat-agent-2");
+    expect(screen.queryByText("默认线程")).toBeNull();
+    expect(screen.queryByText("分支")).toBeNull();
   });
 
   it("shows chat-capable contacts as contacts instead of exposing raw none state", async () => {
@@ -119,9 +126,9 @@ describe("ContactDetailPage", () => {
     ]));
 
     render(
-      <MemoryRouter initialEntries={["/contacts/entities/human-2"]}>
+      <MemoryRouter initialEntries={["/contacts/users/human-2"]}>
         <Routes>
-          <Route path="/contacts/entities/:userId" element={<ContactDetailPage />} />
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );

@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.runtime.tool_result import tool_error
+from core.runtime.tool_result import ToolResultEnvelope, tool_error
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ class ChatToolService:
                 return "No chats found."
             lines = []
             for c in chats:
-                others = [e for e in c.get("entities", []) if e["id"] != eid]
+                others = [member for member in c.get("members", []) if member["id"] != eid]
                 name = ", ".join(e["name"] for e in others) or "Unknown"
                 unread = c.get("unread_count", 0)
                 last = c.get("last_message")
@@ -173,17 +173,17 @@ class ChatToolService:
     def _register_chat_read(self, registry: ToolRegistry) -> None:
         eid = self._chat_identity_id
 
-        def handle(user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+        def handle(participant_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
             if chat_id:
                 pass
-            elif user_id:
-                chat_id = self._messaging.find_direct_chat_id(eid, user_id)
+            elif participant_id:
+                chat_id = self._messaging.find_direct_chat_id(eid, participant_id)
                 if not chat_id:
-                    target = self._resolve_display_user(user_id)
-                    name = target.display_name if target else user_id
+                    target = self._resolve_display_user(participant_id)
+                    name = target.display_name if target else participant_id
                     return f"No chat history with {name}."
             else:
-                return "Provide user_id or chat_id."
+                return "Provide participant_id or chat_id."
 
             if range:
                 try:
@@ -226,10 +226,10 @@ class ChatToolService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "user_id": {
+                            "participant_id": {
                                 "type": "string",
                                 "minLength": 1,
-                                "description": "Participant id for 1:1 chat history. Parameter name is legacy.",
+                                "description": "Participant id for 1:1 chat history.",
                             },
                             "chat_id": {
                                 "type": "string",
@@ -241,7 +241,7 @@ class ChatToolService:
                                 "description": "History range. Negative index '-X:-Y' or time '-1h:', '2026-03-20:'.",
                             },
                         },
-                        "x-leon-required-any-of": [["user_id"], ["chat_id"]],
+                        "x-leon-required-any-of": [["participant_id"], ["chat_id"]],
                     },
                 },
                 handler=handle,
@@ -254,28 +254,28 @@ class ChatToolService:
 
         def handle(
             content: str,
-            user_id: str | None = None,
+            participant_id: str | None = None,
             chat_id: str | None = None,
             signal: str = "open",
             mentions: list[str] | None = None,
-        ) -> str:
+        ) -> str | ToolResultEnvelope:
             resolved_chat_id = chat_id
             target_name = "chat"
 
             if chat_id:
                 if not self._messaging.is_chat_member(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
-            elif user_id:
-                if user_id == eid:
+            elif participant_id:
+                if participant_id == eid:
                     raise RuntimeError("Cannot send a message to yourself.")
-                target = self._resolve_display_user(user_id)
+                target = self._resolve_display_user(participant_id)
                 if not target:
-                    raise RuntimeError(f"User not found: {user_id}")
+                    raise RuntimeError(f"Participant not found: {participant_id}")
                 target_name = target.display_name
-                chat = self._messaging.find_or_create_chat([eid, user_id])
+                chat = self._messaging.find_or_create_chat([eid, participant_id])
                 resolved_chat_id = chat["id"]
             else:
-                raise RuntimeError("Provide user_id (for 1:1) or chat_id (for group)")
+                raise RuntimeError("Provide participant_id (for 1:1) or chat_id (for group)")
 
             # @@@read-before-send-gate - group chats and direct chats share the same
             # delivery invariant: you must consume unread messages before replying,
@@ -317,8 +317,7 @@ class ChatToolService:
                 schema={
                     "name": "send_message",
                     "description": (
-                        "Send a message. Use user_id for 1:1 chats and chat_id for group chats.\n"
-                        "The user_id parameter name is legacy.\n\n"
+                        "Send a message. Use participant_id for 1:1 chats and chat_id for group chats.\n"
                         "For any chat, you MUST call read_messages() first if you have unread messages.\n"
                         "Sending will fail otherwise.\n\n"
                         "Signal protocol:\n"
@@ -330,10 +329,10 @@ class ChatToolService:
                         "type": "object",
                         "properties": {
                             "content": {"type": "string", "minLength": 1, "description": "Message content"},
-                            "user_id": {
+                            "participant_id": {
                                 "type": "string",
                                 "minLength": 1,
-                                "description": ("Target participant id for 1:1 chat. Parameter name is legacy."),
+                                "description": "Target participant id for 1:1 chat.",
                             },
                             "chat_id": {
                                 "type": "string",
@@ -348,7 +347,7 @@ class ChatToolService:
                             },
                         },
                         "required": ["content"],
-                        "x-leon-required-any-of": [["user_id"], ["chat_id"]],
+                        "x-leon-required-any-of": [["participant_id"], ["chat_id"]],
                     },
                 },
                 handler=handle,
@@ -359,13 +358,13 @@ class ChatToolService:
     def _register_search_messages(self, registry: ToolRegistry) -> None:
         eid = self._chat_identity_id
 
-        def handle(query: str, user_id: str | None = None) -> str:
+        def handle(query: str, participant_id: str | None = None) -> str:
             chat_id = None
-            if user_id:
-                chat_id = self._messaging.find_direct_chat_id(eid, user_id)
+            if participant_id:
+                chat_id = self._messaging.find_direct_chat_id(eid, participant_id)
                 if not chat_id:
-                    target = self._resolve_display_user(user_id)
-                    name = target.display_name if target else user_id
+                    target = self._resolve_display_user(participant_id)
+                    name = target.display_name if target else participant_id
                     return f"No messages matching '{query}' with {name}."
             results = self._messaging.search_messages(query, chat_id=chat_id)
             if not results:
@@ -383,15 +382,15 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "search_messages",
-                    "description": "Search messages. Optionally filter by user_id.",
+                    "description": "Search messages. Optionally filter by participant_id.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "minLength": 1, "description": "Search query"},
-                            "user_id": {
+                            "participant_id": {
                                 "type": "string",
                                 "minLength": 1,
-                                "description": "Optional: only search in chat with this participant id. Parameter name is legacy.",
+                                "description": "Optional: only search in chat with this participant id.",
                             },
                         },
                         "required": ["query"],

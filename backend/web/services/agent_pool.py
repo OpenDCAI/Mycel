@@ -87,7 +87,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         if pool_key in pool:
             return pool[pool_key]
 
-        # For local sandbox, check if thread has custom cwd (memory → SQLite fallback)
+        # For local sandbox, check if thread has custom cwd (live map → persisted thread config).
         workspace_root = None
         thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
         if sandbox_type == "local":
@@ -99,7 +99,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 path = Path(cwd).expanduser()
                 # @@@fresh-local-cwd-owns-workspace - a cwd chosen in this live backend session is
                 # the caller contract for local threads; create it instead of silently falling
-                # back to the repo root. Persisted paths from another host stay advisory.
+                # using the repo root. Persisted paths from another host stay advisory.
                 if cwd_from_live_map:
                     path.mkdir(parents=True, exist_ok=True)
                     workspace_root = path.resolve()
@@ -150,10 +150,11 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             agent_config = agent_config_repo.get_config(agent_config_id)
             if agent_config is None:
                 raise RuntimeError(f"Agent config {agent_config_id} is missing for runtime startup: {thread_id}")
-            raw_memory = agent_config.get("memory")
-            if raw_memory is not None and not isinstance(raw_memory, dict):
-                raise RuntimeError(f"agent config memory must be a JSON object for runtime startup: {agent_config_id}")
-            memory_config_override = raw_memory
+            raw_compact = agent_config.get("compact")
+            if raw_compact is not None and not isinstance(raw_compact, dict):
+                raise RuntimeError(f"agent config compact must be a JSON object for runtime startup: {agent_config_id}")
+            if raw_compact is not None:
+                memory_config_override = {"compaction": raw_compact}
 
         # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None

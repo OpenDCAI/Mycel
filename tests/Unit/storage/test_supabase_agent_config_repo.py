@@ -71,6 +71,7 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
             "runtime": {"tools:search": {"enabled": True}},
             "mcp": {"demo": {"command": "npx"}},
             "meta": {"source": {"marketplace_item_id": "item-1"}},
+            "compact": {"trigger_tokens": 1000},
         },
     )
 
@@ -81,11 +82,15 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
     assert payload["tools_json"] == ["search"]
     assert payload["runtime_json"] == {"tools:search": {"enabled": True}}
     assert payload["mcp_json"] == {"demo": {"command": "npx"}}
-    assert payload["meta_json"] == {"source": {"marketplace_item_id": "item-1"}}
+    assert payload["meta_json"] == {
+        "source": {"marketplace_item_id": "item-1"},
+        "compact": {"trigger_tokens": 1000},
+    }
     assert "tools" not in payload
     assert "runtime" not in payload
     assert "mcp" not in payload
     assert "meta" not in payload
+    assert "compact" not in payload
 
 
 def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None:
@@ -99,7 +104,10 @@ def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None
             "tools_json": ["search"],
             "runtime_json": {"tools:search": {"enabled": True}},
             "mcp_json": {"demo": {"command": "npx"}},
-            "meta_json": {"source": {"marketplace_item_id": "item-1"}},
+            "meta_json": {
+                "source": {"marketplace_item_id": "item-1"},
+                "compact": {"trigger_tokens": 1000},
+            },
         }
     ]
     repo = SupabaseAgentConfigRepo(client)
@@ -111,6 +119,7 @@ def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None
     assert row["runtime"] == {"tools:search": {"enabled": True}}
     assert row["mcp"] == {"demo": {"command": "npx"}}
     assert row["meta"] == {"source": {"marketplace_item_id": "item-1"}}
+    assert row["compact"] == {"trigger_tokens": 1000}
 
 
 def test_supabase_agent_config_repo_save_skill_conflicts_on_agent_config_id_and_name() -> None:

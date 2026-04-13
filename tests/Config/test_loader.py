@@ -202,7 +202,7 @@ def test_project_agent_file_does_not_claim_bundle_source_dir(tmp_path: Path):
         encoding="utf-8",
     )
 
-    agent = AgentLoader(workspace_root=tmp_path).load_all_agents()["explore"]
+    agent = AgentLoader(workspace_root=tmp_path).load_runtime_agents()["explore"]
 
     assert agent.model == "project-model"
     assert agent.source_dir is None

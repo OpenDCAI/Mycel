@@ -6,7 +6,7 @@ import {
   type ThreadDetail,
 } from "../api";
 
-export interface ThreadDataState {
+interface ThreadDataState {
   entries: ChatEntry[];
   activeSandbox: SandboxInfo | null;
   loading: boolean;
@@ -14,7 +14,7 @@ export interface ThreadDataState {
   displaySeq: number;
 }
 
-export interface ThreadDataActions {
+interface ThreadDataActions {
   setEntries: React.Dispatch<React.SetStateAction<ChatEntry[]>>;
   setActiveSandbox: React.Dispatch<React.SetStateAction<SandboxInfo | null>>;
   loadThread: (threadId: string) => Promise<void>;

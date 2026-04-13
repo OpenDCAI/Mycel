@@ -106,7 +106,7 @@ class DockerProvider(SandboxProvider):
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
-        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> member volume bind mount
+        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> managed volume bind mount
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
@@ -156,7 +156,7 @@ class DockerProvider(SandboxProvider):
             f"leon.session_id={session_id}",
         ]
 
-        # Merge global bind_mounts with thread-specific mounts + member volume mount
+        # Merge global bind_mounts with thread-specific mounts + managed volume mount
         all_mounts = list(self.bind_mounts)
         if thread_id and thread_id in self._volume_mounts:
             all_mounts.append(self._volume_mounts.pop(thread_id))
@@ -604,8 +604,8 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
             snapshot_out,
             start_marker,
             end_marker,
-            cwd_fallback=state.cwd,
-            env_fallback=state.env_delta,
+            previous_cwd=state.cwd,
+            previous_env=state.env_delta,
         )
         env_delta = _compute_env_delta(env_map, self._baseline_env or {}, state.env_delta)
         from sandbox.terminal import TerminalState

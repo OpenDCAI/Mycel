@@ -86,7 +86,7 @@ class McpResourceToolService:
             return None
         return str(value)
 
-    async def _list_resources(self, server: str | None = None, **_kwargs: Any) -> str:
+    async def _list_resources(self, server: str | None = None) -> str:
         client = self._get_client()
         server_names = [server] if server else self._available_servers()
         if server and server not in self._available_servers():
@@ -108,7 +108,7 @@ class McpResourceToolService:
                     )
         return json.dumps({"items": items, "total": len(items)}, ensure_ascii=False, indent=2)
 
-    async def _read_resource(self, *, server: str, uri: str, **_kwargs: Any) -> str:
+    async def _read_resource(self, *, server: str, uri: str) -> str:
         client = self._get_client()
         if server not in self._available_servers():
             raise ValueError(f'MCP server not found: "{server}"')

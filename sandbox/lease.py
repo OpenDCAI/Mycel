@@ -48,6 +48,7 @@ REQUIRED_LEASE_COLUMNS = {
     "instance_created_at",
     "desired_state",
     "observed_state",
+    "instance_status",
     "version",
     "observed_at",
     "last_error",
@@ -143,15 +144,6 @@ class SandboxLease(ABC):
         self.refresh_hint_at = refresh_hint_at
         self.volume_id = volume_id
         self.bind_mounts = bind_mounts
-
-    # @@@compat-refresh-error - legacy callers still read refresh_error while storage canonicalized to last_error.
-    @property
-    def refresh_error(self) -> str | None:
-        return self.last_error
-
-    @refresh_error.setter
-    def refresh_error(self, value: str | None) -> None:
-        self.last_error = value
 
     def get_instance(self) -> SandboxInstance | None:
         return self._current_instance

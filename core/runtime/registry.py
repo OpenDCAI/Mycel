@@ -121,9 +121,9 @@ class ToolRegistry:
 
     def register(self, entry: ToolEntry) -> None:
         if self._allowed_tools is not None and entry.name not in self._allowed_tools:
-            return  # silently skip
+            return
         if entry.name in self._blocked_tools:
-            return  # silently skip disabled tools
+            return
         self._tools[entry.name] = entry
 
     def get(self, name: str) -> ToolEntry | None:
@@ -162,8 +162,7 @@ class ToolRegistry:
         # --- select:<names> exact lookup ---
         if q.lower().startswith("select:"):
             names = [n.strip() for n in q[len("select:") :].split(",") if n.strip()]
-            results = [self._tools[n] for n in names if n in self._tools and (modes is None or self._tools[n].mode in modes)]
-            return results
+            return [self._tools[n] for n in names if n in self._tools and (modes is None or self._tools[n].mode in modes)]
 
         # --- keyword search with ranking ---
         keywords = q.lower().split()

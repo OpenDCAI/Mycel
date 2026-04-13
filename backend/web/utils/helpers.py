@@ -26,7 +26,7 @@ def get_terminal_timestamps(terminal_id: str) -> tuple[str | None, str | None]:
     sandbox_db = resolve_sandbox_db_path()
     if not sandbox_db.exists():
         return None, None
-    repo = make_terminal_repo(db_path=sandbox_db)
+    repo = make_terminal_repo()
     try:
         return repo.get_timestamps(terminal_id)
     finally:
@@ -38,7 +38,7 @@ def get_lease_timestamps(lease_id: str) -> tuple[str | None, str | None]:
     sandbox_db = resolve_sandbox_db_path()
     if not sandbox_db.exists():
         return None, None
-    repo = make_lease_repo(db_path=sandbox_db)
+    repo = make_lease_repo()
     try:
         row = repo.get(lease_id)
     finally:
@@ -105,7 +105,7 @@ def resolve_local_workspace_path(
     if local_workspace_root is None:
         local_workspace_root = LOCAL_WORKSPACE_ROOT
 
-    # Use thread-specific workspace root if available (memory → SQLite fallback)
+    # Use thread-specific workspace root if available (live map → persisted thread config).
     thread_cwd = None
     if thread_id:
         if thread_cwd_map:
@@ -140,8 +140,8 @@ def delete_thread_in_db(thread_id: str) -> None:
     if not sandbox_db.exists():
         return
 
-    session_repo = make_chat_session_repo(db_path=sandbox_db)
-    terminal_repo = make_terminal_repo(db_path=sandbox_db)
+    session_repo = make_chat_session_repo()
+    terminal_repo = make_terminal_repo()
     sync_state = SyncState()
     try:
         session_repo.delete_by_thread(thread_id)

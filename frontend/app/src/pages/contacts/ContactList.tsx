@@ -5,7 +5,7 @@ import ActorAvatar from "@/components/ActorAvatar";
 import { useAppStore } from "@/store/app-store";
 import { useAuthStore } from "@/store/auth-store";
 import CreateAgentDialog from "@/components/CreateAgentDialog";
-import { fetchEntities, type EntityItem } from "@/api/entities";
+import { fetchUserChatCandidates, type UserChatCandidate } from "@/api/users";
 
 type Tab = "agents" | "contacts";
 
@@ -15,7 +15,7 @@ const statusDot: Record<string, string> = {
   inactive: "bg-muted-foreground opacity-50",
 };
 
-function contactStatusLabel(contact: EntityItem): string {
+function contactStatusLabel(contact: UserChatCandidate): string {
   if (contact.relationship_state === "visit" || contact.relationship_state === "hire") {
     return contact.relationship_state;
   }
@@ -26,14 +26,14 @@ function contactStatusLabel(contact: EntityItem): string {
 export default function ContactList() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [entities, setEntities] = useState<EntityItem[]>([]);
+  const [chatCandidates, setChatCandidates] = useState<UserChatCandidate[]>([]);
   const [contactsLoaded, setContactsLoaded] = useState(false);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { id: activeAgentId, userId: activeEntityId } = useParams<{ id?: string; userId?: string }>();
-  const tab: Tab = location.pathname.startsWith("/contacts/entities") ? "contacts" : "agents";
+  const { id: activeAgentId, userId: activeContactUserId } = useParams<{ id?: string; userId?: string }>();
+  const tab: Tab = location.pathname.startsWith("/contacts/users") ? "contacts" : "agents";
 
   const agentsState = useAppStore((s) => s.agentList);
   const myUserId = useAuthStore((s) => s.userId);
@@ -45,20 +45,20 @@ export default function ContactList() {
     : agents;
   const contacts = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return entities
-      .filter((entity) => entity.user_id !== myUserId && !entity.is_owned && entity.can_chat)
+    return chatCandidates
+      .filter((candidate) => candidate.user_id !== myUserId && !candidate.is_owned && candidate.can_chat)
       .filter((item) => {
         if (!query) return true;
         return [item.name, item.owner_name ?? "", item.type, item.relationship_state].join(" ").toLowerCase().includes(query);
       });
-  }, [entities, myUserId, search]);
+  }, [chatCandidates, myUserId, search]);
 
   const loadContacts = useCallback(async () => {
     if (contactsLoaded || contactsLoading) return;
     setContactsLoading(true);
     setContactsError(null);
     try {
-      setEntities(await fetchEntities());
+      setChatCandidates(await fetchUserChatCandidates());
     } catch (err) {
       setContactsError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -100,7 +100,7 @@ export default function ContactList() {
         </button>
         <button
           onClick={() => {
-            navigate("/contacts/entities");
+            navigate("/contacts/users");
             void loadContacts();
           }}
           className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors duration-fast ${
@@ -188,9 +188,9 @@ export default function ContactList() {
             contacts.map((contact) => (
               <Link
                 key={contact.user_id}
-                to={`/contacts/entities/${contact.user_id}`}
+                to={`/contacts/users/${contact.user_id}`}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-fast ${
-                  activeEntityId === contact.user_id ? "bg-background shadow-sm" : "hover:bg-muted"
+                  activeContactUserId === contact.user_id ? "bg-background shadow-sm" : "hover:bg-muted"
                 }`}
               >
                 <ActorAvatar

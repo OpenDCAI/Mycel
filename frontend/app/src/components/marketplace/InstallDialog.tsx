@@ -5,6 +5,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useMarketplaceStore, type MarketplaceItemDetail } from "@/store/marketplace-store";
 import { toast } from "sonner";
+import { marketplaceTypeLabel } from "@/lib/marketplace-types";
 
 interface Props {
   open: boolean;
@@ -17,7 +18,7 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
   const downloading = useMarketplaceStore((s) => s.downloading);
 
   const latestVersion = item.versions?.[0]?.version || "latest";
-  const itemTypeLabel = item.type === "member" ? "Agent" : item.type === "agent" ? "Subagent" : item.type;
+  const itemTypeLabel = marketplaceTypeLabel(item.type);
 
   const handleDownload = async () => {
     try {

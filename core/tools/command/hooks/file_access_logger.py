@@ -9,9 +9,8 @@ from .base import HookResult
 class FileAccessLoggerHook:
     """File access logger hook - logs all file operations with timestamps."""
 
-    def __init__(self, workspace_root: Path | str | None = None, log_file: str = "file_access.log", **kwargs):
+    def __init__(self, workspace_root: Path | str | None = None, log_file: str = "file_access.log"):
         self.workspace_root = Path(workspace_root) if workspace_root else None
-        self.config = kwargs
         self.log_path = (Path(workspace_root) / log_file) if workspace_root else Path(log_file)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 

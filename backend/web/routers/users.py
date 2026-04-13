@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.core.paths import avatars_dir
-from backend.web.services.social_access_service import active_contact_target_ids, can_chat_with
+from backend.web.services.social_access_service import active_contact_target_ids, can_chat_with_owner_scope
 from backend.web.utils.serializers import avatar_url
 from storage.contracts import UserType
 
@@ -47,12 +47,6 @@ def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
     img.save(AVATARS_DIR / f"{user_id}.png", format="PNG", optimize=True)
     return f"avatars/{user_id}.png"
 
-
-router = APIRouter(prefix="/api/entities", tags=["entities"])
-
-# ---------------------------------------------------------------------------
-# Users (user-backed avatar and agent directory)
-# ---------------------------------------------------------------------------
 
 users_router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -153,7 +147,7 @@ async def delete_avatar(
 
 
 # ---------------------------------------------------------------------------
-# Entities (social identities for chat discovery)
+# User chat candidates
 # ---------------------------------------------------------------------------
 
 
@@ -172,8 +166,8 @@ def _relationship_states_for_user(app: Any, user_id: str) -> dict[str, str]:
     return states
 
 
-@router.get("")
-async def list_entities(
+@users_router.get("/chat-candidates")
+async def list_chat_candidates(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
@@ -194,10 +188,13 @@ async def list_entities(
             continue
         is_owned = user.type is UserType.AGENT and user.owner_user_id == user_id
         relationship_state = relationship_states.get(user.id, "none")
-        can_chat = can_chat_with(
+        owner_user_id = str(user.owner_user_id) if user.type is UserType.AGENT and user.owner_user_id else None
+        can_chat = can_chat_with_owner_scope(
             is_owned=is_owned,
             relationship_state=relationship_state,
             has_contact=user.id in contact_targets,
+            owner_relationship_state=relationship_states.get(owner_user_id, "none") if owner_user_id else None,
+            owner_has_contact=owner_user_id in contact_targets if owner_user_id else False,
         )
         if user.type is UserType.HUMAN:
             items.append(
@@ -208,9 +205,6 @@ async def list_entities(
                     "avatar_url": avatar_url(user.id, bool(user.avatar)),
                     "owner_name": None,
                     "agent_name": user.display_name,
-                    "default_thread_id": None,
-                    "is_default_thread": None,
-                    "branch_index": None,
                     "is_owned": False,
                     "relationship_state": relationship_state,
                     "can_chat": can_chat,
@@ -218,7 +212,6 @@ async def list_entities(
             )
         else:
             owner = user_map.get(user.owner_user_id) if user.owner_user_id else None
-            default_thread = app.state.thread_repo.get_default_thread(user.id)
             items.append(
                 {
                     "user_id": user.id,
@@ -227,9 +220,6 @@ async def list_entities(
                     "avatar_url": avatar_url(user.id, bool(user.avatar)),
                     "owner_name": owner.display_name if owner else None,
                     "agent_name": user.display_name,
-                    "default_thread_id": default_thread["id"] if default_thread else None,
-                    "is_default_thread": default_thread["is_main"] if default_thread else None,
-                    "branch_index": default_thread["branch_index"] if default_thread else None,
                     "is_owned": is_owned,
                     "relationship_state": relationship_state,
                     "can_chat": can_chat,
@@ -238,8 +228,8 @@ async def list_entities(
     return items
 
 
-@router.get("/{user_id}/profile")
-async def get_entity_profile(
+@users_router.get("/{user_id}/profile")
+async def get_user_profile(
     user_id: str,
     app: Annotated[Any, Depends(get_app)],
 ):
@@ -254,20 +244,6 @@ async def get_entity_profile(
         "avatar_url": avatar_url(user.id, bool(user.avatar)),
         "description": None,
     }
-
-
-@router.get("/{user_id}/agent-thread")
-async def get_agent_thread(
-    user_id: str,
-    current_user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
-):
-    """Get the default representative thread for an agent user."""
-    user = _get_user_or_404(app, user_id)
-    default_thread = app.state.thread_repo.get_default_thread(user_id)
-    if user.type is UserType.AGENT and default_thread is not None:
-        return {"user_id": user_id, "default_thread_id": default_thread["id"]}
-    raise HTTPException(404, "No agent thread found")
 
 
 def _get_user_or_404(app: Any, user_id: str) -> Any:

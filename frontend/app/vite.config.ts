@@ -4,11 +4,11 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { inspectAttr } from 'kimi-plugin-inspect-react'
 
-function getWorktreePort(key: string, fallback: string): string {
+function getWorktreePort(key: string, defaultPort: string): string {
   try {
     return execSync(`git config --worktree --get ${key}`, { encoding: "utf-8" }).trim()
   } catch {
-    return fallback
+    return defaultPort
   }
 }
 

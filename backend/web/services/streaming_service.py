@@ -812,6 +812,15 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             except asyncio.QueueFull:
                 pass  # Backpressure: drop under overload
 
+        async def drain_activity_events() -> None:
+            while not activity_queue.empty():
+                try:
+                    act_event = activity_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                logger.info("[stream:drain] emitting activity event: %s", act_event.get("event", "?"))
+                await emit(act_event)
+
         if hasattr(agent, "runtime"):
             agent.runtime.set_event_callback(on_activity_event)
 
@@ -1039,13 +1048,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                     continue
 
                 # @@@drain-before-chunk — drain activity events BEFORE processing chunk.
-                while not activity_queue.empty():
-                    try:
-                        act_event = activity_queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        break
-                    logger.info("[stream:drain] emitting activity event: %s", act_event.get("event", "?"))
-                    await emit(act_event)
+                await drain_activity_events()
 
                 if not isinstance(chunk, tuple) or len(chunk) != 2:
                     continue
@@ -1221,15 +1224,15 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                                     )
 
                 # Drain real-time activity events (sub-agent, command progress, etc.)
-                while not activity_queue.empty():
-                    try:
-                        act_event = activity_queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        break
-                    await emit(act_event)
+                await drain_activity_events()
 
             if stream_err is None:
                 break  # 正常完成，退出外层重试循环
+
+            # @@@drain-before-stream-error - activity events can happen before
+            # the first model chunk. Preserve user-visible notices such as
+            # compact_start even when the model call fails immediately.
+            await drain_activity_events()
 
             if _is_retryable_stream_error(stream_err) and stream_attempt < max_stream_retries:
                 stream_attempt += 1

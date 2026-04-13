@@ -19,7 +19,6 @@ from backend.web.routers import (  # noqa: E402
     auth,
     contacts,
     conversations,  # noqa: E402
-    entities,
     invite_codes,
     marketplace,
     monitor,
@@ -29,6 +28,7 @@ from backend.web.routers import (  # noqa: E402
     settings,
     thread_files,
     threads,
+    users,
     webhooks,
 )
 from backend.web.routers import messaging as messaging_router  # noqa: E402
@@ -55,8 +55,7 @@ app.include_router(messaging_router.router)
 
 app.include_router(contacts.router)
 app.include_router(relationships_router)
-app.include_router(entities.router)
-app.include_router(entities.users_router)
+app.include_router(users.users_router)
 app.include_router(sandbox.router)
 app.include_router(webhooks.router)
 app.include_router(thread_files.router)

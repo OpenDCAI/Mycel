@@ -123,18 +123,13 @@ def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _memory_from_repo(config: dict[str, Any]) -> dict[str, Any]:
-    memory = config.get("memory")
-    if memory is None:
-        return {"compaction": {"trigger_tokens": None}}
-    if not isinstance(memory, dict):
-        raise RuntimeError("agent config memory must be a JSON object")
-    compaction = memory.get("compaction")
-    if compaction is None:
-        return {"compaction": {"trigger_tokens": None}}
-    if not isinstance(compaction, dict):
-        raise RuntimeError("agent config memory.compaction must be a JSON object")
-    return {"compaction": {"trigger_tokens": compaction.get("trigger_tokens")}}
+def _compact_from_repo(config: dict[str, Any]) -> dict[str, Any]:
+    compact = config.get("compact")
+    if compact is None:
+        return {"trigger_tokens": None}
+    if not isinstance(compact, dict):
+        raise RuntimeError("agent config compact must be a JSON object")
+    return {"trigger_tokens": compact.get("trigger_tokens")}
 
 
 def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
@@ -158,7 +153,7 @@ def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
             "mcps": _mcps_from_repo(config),
             "skills": _skills_from_repo(user.agent_config_id, config, agent_config_repo),
             "subAgents": _sub_agents_from_repo(user.agent_config_id, agent_config_repo),
-            "memory": _memory_from_repo(config),
+            "compact": _compact_from_repo(config),
         },
         "created_at": config.get("created_at", 0),
         "updated_at": config.get("updated_at", 0),
@@ -339,15 +334,17 @@ def update_agent_user(
     agent_user_id: str,
     user_repo: Any = None,
     agent_config_repo: Any = None,
-    **fields: Any,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    status: str | None = None,
 ) -> dict[str, Any] | None:
     if agent_user_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
     user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
-    allowed = {"name", "description", "status"}
-    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    updates = {key: value for key, value in {"name": name, "description": description, "status": status}.items() if value is not None}
     if not updates:
         return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if "name" in updates:
@@ -445,35 +442,29 @@ def _runtime_and_tools_from_patch(current_config: dict[str, Any], config_patch: 
     return runtime, tools
 
 
-def _memory_from_patch(current_config: dict[str, Any], config_patch: dict[str, Any]) -> dict[str, Any]:
-    current = current_config.get("memory")
+def _compact_from_patch(current_config: dict[str, Any], config_patch: dict[str, Any]) -> dict[str, Any]:
+    current = current_config.get("compact")
     if current is None:
-        memory: dict[str, Any] = {}
+        compact: dict[str, Any] = {}
     elif isinstance(current, dict):
-        memory = dict(current)
+        compact = dict(current)
     else:
-        raise RuntimeError("agent config memory must be a JSON object")
+        raise RuntimeError("agent config compact must be a JSON object")
 
-    if "memory" not in config_patch or config_patch["memory"] is None:
-        return memory
+    if "compact" not in config_patch or config_patch["compact"] is None:
+        return compact
 
-    patch = config_patch["memory"]
+    patch = config_patch["compact"]
     if not isinstance(patch, dict):
-        raise RuntimeError("agent config patch memory must be a JSON object")
+        raise RuntimeError("agent config patch compact must be a JSON object")
 
-    if "compaction" in patch and patch["compaction"] is not None:
-        compaction_patch = patch["compaction"]
-        if not isinstance(compaction_patch, dict):
-            raise RuntimeError("agent config patch memory.compaction must be a JSON object")
-        compaction = dict(memory.get("compaction", {}) if isinstance(memory.get("compaction"), dict) else {})
-        if "trigger_tokens" in compaction_patch:
-            trigger_tokens = compaction_patch["trigger_tokens"]
-            if trigger_tokens is not None and not isinstance(trigger_tokens, int):
-                raise RuntimeError("agent config patch memory.compaction.trigger_tokens must be an integer or null")
-            compaction["trigger_tokens"] = trigger_tokens
-        memory["compaction"] = compaction
+    if "trigger_tokens" in patch:
+        trigger_tokens = patch["trigger_tokens"]
+        if trigger_tokens is not None and not isinstance(trigger_tokens, int):
+            raise RuntimeError("agent config patch compact.trigger_tokens must be an integer or null")
+        compact["trigger_tokens"] = trigger_tokens
 
-    return memory
+    return compact
 
 
 def _mcp_from_patch(config_patch: dict[str, Any], current_config: dict[str, Any]) -> dict[str, Any]:
@@ -539,7 +530,7 @@ def _sync_agent_config_patch_to_repo(
     agent_user_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any
 ) -> dict[str, Any] | None:
     # @@@repo-only-agent-shell - fresh register now creates DB-only agents. Owner-scoped
-    # panel edits must keep working even when no legacy agent dir exists.
+    # panel edits must use the repo config even when no stale local agent dir exists.
     user, current_config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or current_config is None:
         return None
@@ -557,7 +548,7 @@ def _sync_agent_config_patch_to_repo(
         "created_at": current_config.get("created_at", 0),
         "updated_at": int(time.time() * 1000),
         "runtime": runtime,
-        "memory": _memory_from_patch(current_config, config_patch),
+        "compact": _compact_from_patch(current_config, config_patch),
         "mcp": _mcp_from_patch(config_patch, current_config),
     }
     agent_config_repo.save_config(user.agent_config_id, updated_config)
@@ -600,8 +591,8 @@ def _resolve_repo_backed_agent(
     user = user_repo.get_by_id(agent_user_id)
     if user is None or user.agent_config_id is None:
         return None, None
-    # @@@repo-backed-agent-wins - repo-backed agent users must not silently fall
-    # back to legacy agent-dir writes just because an old shell still exists.
+    # @@@repo-backed-agent-wins - repo-backed agent users must not silently write
+    # to stale local agent dirs just because an old shell still exists.
     config = agent_config_repo.get_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {agent_user_id}")
@@ -613,21 +604,27 @@ def delete_agent_user(
     user_repo: Any = None,
     agent_config_repo: Any = None,
     thread_launch_pref_repo: Any = None,
+    contact_repo: Any = None,
 ) -> bool:
     if agent_user_id == "__leon__":
         return False
     _require_repo_backed_agent_ops(user_repo, agent_config_repo)
     if thread_launch_pref_repo is None:
         raise RuntimeError("thread_launch_pref_repo is required for agent delete")
+    if contact_repo is None:
+        raise RuntimeError("contact_repo is required for agent delete")
     user = user_repo.get_by_id(agent_user_id)
     if user is None:
         return False
 
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {agent_user_id} is missing agent_config_id")
-    # @@@delete-agent-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
-    agent_config_repo.delete_config(user.agent_config_id)
+    # @@@delete-agent-order - clear dependent rows before the config/user roots.
+    # If dependency cleanup fails, refusing the delete is safer than leaving an
+    # agent user pointing at a removed config.
     thread_launch_pref_repo.delete_by_agent_user_id(agent_user_id)
+    contact_repo.delete_for_user(agent_user_id)
+    agent_config_repo.delete_config(user.agent_config_id)
 
     # Also remove from unified users table
     user_repo.delete(agent_user_id)
@@ -698,7 +695,7 @@ def install_from_snapshot(
 
     # @@@snapshot-install-repo-only - marketplace agent installs no longer materialize
     # a local agent directory. The DB is now the live shell; marketplace lineage still needs
-    # a separate repo-rooted home because publish used to read meta.json.source.
+    # a separate repo-rooted home because publish records source lineage.
     _save_config_to_repo(
         agent_config_repo,
         agent_config_id,

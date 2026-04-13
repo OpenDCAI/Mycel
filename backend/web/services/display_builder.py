@@ -130,7 +130,7 @@ def _append_to_turn(turn: dict, msg_id: str, segments: list[dict]) -> None:
 def _iter_tool_segments(turn: dict, *, reverse: bool = False):
     segments = list(enumerate(turn.get("segments", [])))
     if reverse:
-        segments = list(reversed(segments))
+        segments.reverse()
     for index, seg in segments:
         if seg.get("type") == "tool":
             yield index, seg

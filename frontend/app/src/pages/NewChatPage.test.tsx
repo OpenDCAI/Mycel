@@ -103,16 +103,10 @@ function ContextOutlet() {
           sandboxTypes: sandboxTypesForTest,
           selectedSandbox: "local",
           loading: false,
-          setSelectedSandbox: vi.fn(),
-          setThreads: vi.fn(),
           refreshThreads: vi.fn(),
           handleCreateThread,
           handleGetDefaultThread,
-          handleDeleteThread: vi.fn(),
         },
-        sidebarCollapsed: false,
-        setSidebarCollapsed: vi.fn(),
-        setSessionsOpen: vi.fn(),
       }}
     />
   );

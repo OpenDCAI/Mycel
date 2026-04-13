@@ -8,11 +8,14 @@ Uses dynamic schema (callable) to reflect current skill index on each call.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Sequence
 from pathlib import Path
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
+
+logger = logging.getLogger(__name__)
 
 
 class SkillsService:
@@ -41,7 +44,7 @@ class SkillsService:
                     if "name" in metadata:
                         self._skills_index[metadata["name"]] = skill_file
                 except Exception:
-                    pass
+                    logger.exception("Failed to load skill metadata from %s", skill_file)
 
     @staticmethod
     def _parse_frontmatter(content: str) -> dict[str, str]:

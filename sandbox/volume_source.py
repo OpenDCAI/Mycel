@@ -46,7 +46,7 @@ def _resolve_safe_path(base: Path, relative_path: str) -> Path:
 
 
 class HostVolume:
-    """Host filesystem volume. Used by Local, Docker, E2B, Daytona fallback."""
+    """Host filesystem volume used by host-backed providers and Daytona staging."""
 
     def __init__(self, base_path: Path):
         self.base_path = base_path.expanduser().resolve()

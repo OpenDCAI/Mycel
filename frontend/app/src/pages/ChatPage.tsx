@@ -31,9 +31,7 @@ import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thre
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
-  sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
-  setSessionsOpen: (value: boolean) => void;
 }
 
 function isAskUserQuestionRequest(
@@ -135,7 +133,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         if (!isAssistantTurn(entry)) continue;
         for (const seg of entry.segments) {
           if (seg.type === "tool" && seg.step.name === "Agent" && seg.step.subagent_stream?.task_id === taskId) {
-            handleFocusAgent(seg.step.id);
+            handleFocusAgent();
             return;
           }
         }
@@ -458,7 +456,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               width={computerResize.width}
               activeTab={computerTab}
               onTabChange={setComputerTab}
-              isStreaming={isStreaming}
             />
           </>
         )}

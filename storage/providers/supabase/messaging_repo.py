@@ -8,13 +8,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from messaging._utils import now_iso
+from messaging.contracts import RelationshipState
 from storage.providers.supabase import _query as q
 
 logger = logging.getLogger(__name__)
 
 
 class SupabaseChatMemberRepo:
-    """chat_members table — replaces SQLiteChatParticipantRepo for Supabase backend."""
+    """chat_members table for Supabase messaging."""
 
     def __init__(self, client: Any) -> None:
         self._client = client
@@ -259,28 +260,6 @@ class SupabaseMessagesRepo:
         return res.data or []
 
 
-class SupabaseMessageReadRepo:
-    """message_reads is intentionally not part of the current v1 root contract."""
-
-    def __init__(self, client: Any) -> None:
-        self._client = client
-
-    def close(self) -> None:
-        pass
-
-    def mark_read(self, message_id: str, user_id: str) -> None:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-    def mark_chat_read(self, chat_id: str, user_id: str, message_ids: list[str]) -> None:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-    def get_read_count(self, message_id: str) -> int:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-    def has_read(self, message_id: str, user_id: str) -> bool:
-        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
-
-
 class SupabaseRelationshipRepo:
     """relationships table — Hire/Visit state machine persistence."""
 
@@ -335,12 +314,20 @@ class SupabaseRelationshipRepo:
             return None
         return self._normalize(res.data[0])
 
-    def upsert(self, user_a: str, user_b: str, **fields: Any) -> dict[str, Any]:
+    def upsert(
+        self,
+        user_a: str,
+        user_b: str,
+        *,
+        state: RelationshipState,
+        initiator_user_id: str | None,
+    ) -> dict[str, Any]:
         user_low, user_high = self._ordered(user_a, user_b)
         existing = self.get(user_a, user_b)
         now = time.time()
         if existing:
-            if fields.get("state") == "none":
+            relationship_updates = {"state": state, "initiator_user_id": initiator_user_id}
+            if state == "none":
                 (
                     self._client.table("relationships")
                     .delete()
@@ -349,16 +336,16 @@ class SupabaseRelationshipRepo:
                     .eq("kind", "hire_visit")
                     .execute()
                 )
-                return self._normalize({**existing, "updated_at": now, **fields})
+                return self._normalize({**existing, "updated_at": now, **relationship_updates})
             res = (
                 self._client.table("relationships")
-                .update({"updated_at": now, **fields})
+                .update({"updated_at": now, **relationship_updates})
                 .eq("user_low", user_low)
                 .eq("user_high", user_high)
                 .eq("kind", "hire_visit")
                 .execute()
             )
-            return self._normalize(res.data[0] if res.data else {**existing, "updated_at": now, **fields})
+            return self._normalize(res.data[0] if res.data else {**existing, "updated_at": now, **relationship_updates})
 
         row = {
             "user_low": user_low,
@@ -366,7 +353,8 @@ class SupabaseRelationshipRepo:
             "kind": "hire_visit",
             "created_at": now,
             "updated_at": now,
-            **fields,
+            "state": state,
+            "initiator_user_id": initiator_user_id,
         }
         res = self._client.table("relationships").insert(row).execute()
         return self._normalize(res.data[0] if res.data else row)

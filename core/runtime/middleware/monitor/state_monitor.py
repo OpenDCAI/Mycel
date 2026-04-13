@@ -1,5 +1,6 @@
 """执行状态监控"""
 
+import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ from enum import Enum
 from typing import Any
 
 from .base import BaseMonitor
+
+logger = logging.getLogger(__name__)
 
 
 class AgentState(Enum):
@@ -101,7 +104,7 @@ class StateMonitor(BaseMonitor):
             try:
                 cb(old, new)
             except Exception:
-                pass
+                logger.exception("State transition callback failed: %s -> %s", old.value, new.value)
 
     def mark_ready(self) -> bool:
         """标记为就绪（初始化完成后调用）"""

@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MarketplacePage from "./MarketplacePage";
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="location">{location.pathname + location.search}</output>;
+}
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
@@ -94,7 +99,7 @@ describe("MarketplacePage wording contract", () => {
 
   it("uses Agent wording for the installed local agent tab", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=member"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent-user"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -104,6 +109,21 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getAllByRole("button", { name: /Agent/ }).length).toBeGreaterThan(0);
     expect(screen.getByText("暂无已安装的 Agent")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Member" })).toBeNull();
+  });
+
+  it("uses agent-user as the installed Agent tab URL key", () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed"]}>
+        <Routes>
+          <Route path="/marketplace" element={<><MarketplacePage /><LocationProbe /></>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Agent/ })[0]);
+
+    expect(screen.getByLabelText("location").textContent).toContain("sub=agent-user");
+    expect(screen.getByLabelText("location").textContent).not.toContain("sub=member");
   });
 
   it("uses Subagent wording for marketplace agent resources", () => {
@@ -187,7 +207,7 @@ describe("MarketplacePage wording contract", () => {
     });
   });
 
-  it("uses Agent wording for marketplace member resources", () => {
+  it("uses Agent wording for the Hub agent-user item type", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace"]}>
         <Routes>

@@ -17,10 +17,6 @@ class SupabaseEvalRepo:
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
 
-    def ensure_schema(self) -> None:
-        """Supabase schema is managed via migrations, not runtime DDL."""
-        return None
-
     def upsert_run_header(
         self,
         *,

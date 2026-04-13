@@ -89,7 +89,7 @@ class SpillBufferMiddleware(AgentMiddleware):
 
         if not saw_mcp_blocks:
             text_only = "\n".join(line for line in lines if line)
-            return text_only if text_only else content
+            return text_only or content
         return "\n".join(line for line in lines if line)
 
     # -- model call: pass-through ------------------------------------------

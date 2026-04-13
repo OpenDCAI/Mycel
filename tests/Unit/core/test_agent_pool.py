@@ -164,15 +164,15 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with_conflicting_legacy_member_shell(
+async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with_conflicting_stale_member_shell(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ):
     captured: dict[str, object] = {}
-    legacy_member_dir = tmp_path / "members" / "member-1"
-    legacy_member_dir.mkdir(parents=True)
-    (legacy_member_dir / "agent.md").write_text(
-        "---\nname: Legacy Toad\ndescription: stale shell\n---\nYou are the wrong source.\n",
+    stale_member_dir = tmp_path / "members" / "agent-user-1"
+    stale_member_dir.mkdir(parents=True)
+    (stale_member_dir / "agent.md").write_text(
+        "---\nname: Stale Toad\ndescription: stale shell\n---\nYou are the wrong source.\n",
         encoding="utf-8",
     )
 
@@ -202,7 +202,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
                 "id": thread_id,
                 "cwd": None,
                 "model": "leon:large",
-                "agent_user_id": "member-1",
+                "agent_user_id": "agent-user-1",
             }
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
@@ -484,7 +484,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_passes_repo_backed_memory_config_to_runtime(
+async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ):
     captured: dict[str, object] = {}
@@ -512,7 +512,7 @@ async def test_get_or_create_agent_passes_repo_backed_memory_config_to_runtime(
     class _AgentConfigRepo:
         def get_config(self, agent_config_id: str):
             assert agent_config_id == "cfg-12"
-            return {"memory": {"compaction": {"trigger_tokens": 80000}}}
+            return {"compact": {"trigger_tokens": 80000}}
 
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -531,7 +531,7 @@ async def test_get_or_create_agent_passes_repo_backed_memory_config_to_runtime(
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_does_not_fallback_to_local_preferences_when_repo_missing(
+async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_missing(
     monkeypatch: pytest.MonkeyPatch,
 ):
     captured: dict[str, object] = {}

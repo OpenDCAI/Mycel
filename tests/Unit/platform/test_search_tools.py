@@ -35,7 +35,7 @@ def workspace(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def mw(workspace: Path) -> SearchService:
-    """SearchService instance using the Python fallback (no ripgrep)."""
+    """SearchService instance using the Python implementation (no ripgrep)."""
     with patch("shutil.which", return_value=None):
         return SearchService(MagicMock(), workspace_root=workspace)
 
@@ -74,7 +74,7 @@ class TestGrepContent:
 
     def test_content_mode(self, mw: SearchService, workspace: Path):
         result = _grep(mw, pattern="hello", output_mode="content")
-        # Python fallback format: <filepath>:<lineno>:<line>
+        # Python implementation format: <filepath>:<lineno>:<line>
         assert ":2:" in result or ":5:" in result  # line2 or line5 in data.txt
         # The actual line text should be present
         assert "hello" in result
@@ -122,8 +122,8 @@ class TestGrepContext:
     """Context lines: after_context, before_context, context."""
 
     def test_after_context(self, mw: SearchService, workspace: Path):
-        """With ripgrep, -A adds trailing lines. Python fallback only returns matching lines."""
-        # Python fallback does not support context lines, so just verify no crash
+        """With ripgrep, -A adds trailing lines. Python implementation only returns matching lines."""
+        # Python implementation does not support context lines, so just verify no crash
         result = _grep(
             mw,
             pattern="hello",
@@ -221,21 +221,41 @@ class TestGrepGlobFilter:
 
 
 class TestGrepTypeFilter:
-    """type filter parameter (Python fallback ignores type, only ripgrep uses it)."""
+    """type filter parameter (Python implementation ignores type, only ripgrep uses it)."""
 
     def test_type_filter_no_crash(self, mw: SearchService):
-        # Python fallback does not implement --type, but should not crash
+        # Python implementation does not implement --type, but should not crash
         result = _grep(mw, pattern="hello", type="py")
-        # Should still return results (type is ignored in Python fallback)
+        # Should still return results (type is ignored in Python implementation)
         assert isinstance(result, str)
 
 
 class TestGrepMultiline:
-    """multiline mode (Python fallback does not support it, just verify no crash)."""
+    """multiline mode (Python implementation does not support it, just verify no crash)."""
 
     def test_multiline_no_crash(self, mw: SearchService, workspace: Path):
         result = _grep(mw, pattern="hello", multiline=True)
         assert isinstance(result, str)
+
+
+class TestGrepRipgrepFailure:
+    """ripgrep failures are not hidden by the Python implementation."""
+
+    def test_ripgrep_exception_fails_loudly(self, workspace: Path, monkeypatch: pytest.MonkeyPatch):
+        with patch("shutil.which", return_value="/usr/bin/rg"):
+            service = SearchService(MagicMock(), workspace_root=workspace)
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("rg exploded")
+
+        python_grep = MagicMock(return_value="hidden result")
+        monkeypatch.setattr(service, "_ripgrep_search", boom)
+        monkeypatch.setattr(service, "_python_grep", python_grep)
+
+        with pytest.raises(RuntimeError, match="rg exploded"):
+            _grep(service, pattern="hello")
+
+        python_grep.assert_not_called()
 
 
 class TestGrepDefaultExcludes:

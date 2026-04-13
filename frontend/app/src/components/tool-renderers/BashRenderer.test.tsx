@@ -14,12 +14,12 @@ describe("BashRenderer", () => {
     renderBashRenderer({
       id: "tool-1",
       name: "Bash",
-      args: { command: 123, description: "fallback description" },
+      args: { command: 123, description: "display description" },
       status: "done",
       timestamp: 1,
     });
 
-    expect(screen.getByText("fallback description")).toBeTruthy();
+    expect(screen.getByText("display description")).toBeTruthy();
     expect(screen.queryByText("123")).toBeNull();
   });
 });

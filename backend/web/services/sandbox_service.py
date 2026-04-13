@@ -5,6 +5,7 @@ import logging
 import os
 import threading
 import uuid
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -143,6 +144,40 @@ def list_user_leases(
             _apply_lease_recipe(lease, provider_name, lease["recipe"])
             leases.append(lease)
         return leases
+    finally:
+        monitor_repo.close()
+
+
+def count_user_visible_leases_by_provider(
+    user_id: str,
+    *,
+    thread_repo: Any = None,
+    supabase_client: Any | None = None,
+) -> dict[str, int]:
+    if thread_repo is None:
+        raise RuntimeError("thread_repo is required for count_user_visible_leases_by_provider")
+    repo_kwargs = {"supabase_client": supabase_client} if supabase_client is not None else {}
+    monitor_repo = make_sandbox_monitor_repo(**repo_kwargs)
+    try:
+        owned_thread_ids = {
+            str(thread.get("id") or "").strip()
+            for thread in thread_repo.list_by_owner_user_id(user_id)
+            if str(thread.get("id") or "").strip()
+        }
+        counts: Counter[str] = Counter()
+        counted_lease_ids: set[str] = set()
+        for row in monitor_repo.list_leases_with_threads():
+            lease_id = str(row.get("lease_id") or "").strip()
+            if not lease_id or lease_id in counted_lease_ids:
+                continue
+            thread_id = str(row.get("thread_id") or "").strip()
+            if not _is_user_visible_lease_thread(thread_id) or thread_id not in owned_thread_ids:
+                continue
+            if not _is_user_visible_lease_state(row):
+                continue
+            counts[str(row.get("provider_name") or "local")] += 1
+            counted_lease_ids.add(lease_id)
+        return dict(counts)
     finally:
         monitor_repo.close()
 
@@ -382,6 +417,48 @@ def load_all_sessions(managers: dict) -> list[dict]:
             str(row.get("session_id") or ""),
         )
     )
+    return sessions
+
+
+def load_provider_orphan_sessions(managers: dict) -> list[dict]:
+    """Load provider-visible sessions that are not backed by a known lease."""
+    sessions: list[dict] = []
+    for provider_name, manager in managers.items():
+        provider = getattr(manager, "provider", None)
+        list_provider_sessions = getattr(provider, "list_provider_sessions", None)
+        if not callable(list_provider_sessions):
+            continue
+        provider_slug = getattr(provider, "name", provider_name)
+
+        seen_instance_ids = {
+            str(row.get("current_instance_id") or "").strip()
+            for row in manager.lease_store.list_by_provider(provider_slug)
+            if str(row.get("current_instance_id") or "").strip()
+        }
+        raw_provider_sessions = list_provider_sessions()
+        provider_sessions = raw_provider_sessions if isinstance(raw_provider_sessions, list) else []
+
+        inspect_visible = manager.provider_capability.inspect_visible
+        for ps in provider_sessions:
+            instance_id = getattr(ps, "session_id", None)
+            status = getattr(ps, "status", None) or "unknown"
+            if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
+                continue
+            sessions.append(
+                {
+                    "session_id": instance_id,
+                    "thread_id": "(orphan)",
+                    "provider": provider_slug,
+                    "status": status,
+                    "created_at": None,
+                    "last_active": None,
+                    "lease_id": None,
+                    "instance_id": instance_id,
+                    "chat_session_id": None,
+                    "source": "provider_orphan",
+                    "inspect_visible": inspect_visible,
+                }
+            )
     return sessions
 
 

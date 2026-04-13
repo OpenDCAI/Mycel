@@ -39,7 +39,7 @@ class ToolDef(BaseModel):
     desc: str
     group: ToolGroup
     mode: ToolMode = ToolMode.INLINE
-    default: bool = True  # False → off by default in new member configs
+    default: bool = True  # False -> off by default in new agent configs
 
 
 # ── Catalog ────────────────────────────────────────────────────────────────

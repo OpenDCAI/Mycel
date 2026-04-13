@@ -56,6 +56,9 @@ class SupabaseContactRepo:
     def delete(self, owner_id: str, target_id: str) -> None:
         self._t().delete().eq("source_user_id", owner_id).eq("target_user_id", target_id).execute()
 
+    def delete_for_user(self, user_id: str) -> None:
+        self._t().delete().or_(f"source_user_id.eq.{user_id},target_user_id.eq.{user_id}").execute()
+
     def _to_row(self, r: dict[str, Any]) -> ContactEdgeRow:
         return ContactEdgeRow(
             source_user_id=r["source_user_id"],

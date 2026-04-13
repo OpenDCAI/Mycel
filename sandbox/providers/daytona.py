@@ -730,8 +730,8 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             snapshot_out,
             start_marker,
             end_marker,
-            cwd_fallback=state.cwd,
-            env_fallback=state.env_delta,
+            previous_cwd=state.cwd,
+            previous_env=state.env_delta,
         )
         env_delta = _compute_env_delta(env_map, self._baseline_env or {}, state.env_delta)
         from sandbox.terminal import TerminalState

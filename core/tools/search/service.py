@@ -1,7 +1,7 @@
 """Search Service - registers Grep and Glob tools with ToolRegistry.
 
 Tools:
-- Grep: Content search using regex (ripgrep preferred, Python fallback)
+- Grep: Content search using regex (ripgrep when available, Python implementation otherwise)
 - Glob: File pattern matching sorted by modification time
 """
 
@@ -172,7 +172,7 @@ class SearchService:
 
         try:
             resolved = Path(path).resolve()
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             return False, f"Invalid path: {path} ({e})", self.workspace_root
 
         try:
@@ -214,24 +214,21 @@ class SearchService:
             return f"Path not found: {path or self.workspace_root}"
 
         if self.has_ripgrep:
-            try:
-                return self._ripgrep_search(
-                    resolved,
-                    pattern,
-                    glob=glob,
-                    type_filter=type,
-                    case_insensitive=case_insensitive,
-                    after_context=after_context,
-                    before_context=before_context,
-                    context=context,
-                    output_mode=output_mode,
-                    head_limit=head_limit,
-                    offset=offset,
-                    multiline=multiline,
-                    line_numbers=line_numbers,
-                )
-            except Exception:
-                pass  # fallback to Python
+            return self._ripgrep_search(
+                resolved,
+                pattern,
+                glob=glob,
+                type_filter=type,
+                case_insensitive=case_insensitive,
+                after_context=after_context,
+                before_context=before_context,
+                context=context,
+                output_mode=output_mode,
+                head_limit=head_limit,
+                offset=offset,
+                multiline=multiline,
+                line_numbers=line_numbers,
+            )
 
         return self._python_grep(
             resolved,

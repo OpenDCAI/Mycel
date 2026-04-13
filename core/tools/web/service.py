@@ -1,7 +1,7 @@
 """Web Service - registers WebSearch and WebFetch tools with ToolRegistry.
 
 Tools:
-- WebSearch: Web search (Tavily -> Exa -> Firecrawl fallback)
+- WebSearch: Web search provider chain (Tavily -> Exa -> Firecrawl)
 - WebFetch: Fetch web content and extract information using AI
 """
 

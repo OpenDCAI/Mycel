@@ -22,7 +22,7 @@ export interface MarketplaceItemSummary {
   updated_at: string;
 }
 
-export interface VersionInfo {
+interface VersionInfo {
   id: string;
   version: string;
   release_notes: string | null;
@@ -48,7 +48,7 @@ export interface UpdateAvailable {
   release_notes: string;
 }
 
-export interface MarketplaceVersionSnapshot {
+interface MarketplaceVersionSnapshot {
   content?: string;
   meta?: Record<string, unknown>;
 }
@@ -94,7 +94,7 @@ interface MarketplaceState {
   downloading: boolean;
   download: (itemId: string) => Promise<{ resource_id: string; type: string; version: string }>;
   upgrade: (userId: string, itemId: string) => Promise<void>;
-  publishToMarketplace: (userId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
+  publishAgentUserToMarketplace: (userId: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
 }
 
 function isActiveMarketplaceRoute(): boolean {
@@ -271,12 +271,11 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
     });
   },
 
-  publishToMarketplace: async (userId, type, bumpType, releaseNotes, tags, visibility) => {
-    return backendApi("/publish", {
+  publishAgentUserToMarketplace: async (userId, bumpType, releaseNotes, tags, visibility) => {
+    return backendApi("/publish-agent-user", {
       method: "POST",
       body: JSON.stringify({
         user_id: userId,
-        type,
         bump_type: bumpType,
         release_notes: releaseNotes,
         tags,

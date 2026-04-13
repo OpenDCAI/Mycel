@@ -742,8 +742,7 @@ class ToolRunner(AgentMiddleware):
                     )
                 ),
             )
-        upstream = handler(request)
-        return upstream
+        return handler(request)
 
     async def awrap_tool_call(
         self,

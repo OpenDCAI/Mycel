@@ -1,7 +1,6 @@
 """Messaging API router — replaces chats.py.
 
 All operations go through MessagingService (Supabase-backed).
-No legacy fallback.
 """
 
 from __future__ import annotations
@@ -116,6 +115,13 @@ def _is_owned_participant(app: Any, participant_id: str, requester_user_id: str)
     return getattr(participant, "owner_user_id", None) == requester_user_id
 
 
+def _participant_access_targets(app: Any, participant_id: str) -> list[str]:
+    user_repo = getattr(app.state, "user_repo", None)
+    participant = user_repo.get_by_id(participant_id) if user_repo is not None else None
+    owner_user_id = getattr(participant, "owner_user_id", None)
+    return [participant_id, str(owner_user_id)] if owner_user_id else [participant_id]
+
+
 def _validate_group_chat_relationships(app: Any, participant_ids: list[str], requester_user_id: str) -> None:
     svc = getattr(app.state, "relationship_service", None)
     if svc is None:
@@ -125,12 +131,13 @@ def _validate_group_chat_relationships(app: Any, participant_ids: list[str], req
         if participant_id == requester_user_id or _is_owned_participant(app, participant_id, requester_user_id):
             continue
         try:
-            if has_active_contact(contact_repo, requester_user_id, participant_id):
+            access_targets = _participant_access_targets(app, participant_id)
+            if any(has_active_contact(contact_repo, requester_user_id, target_id) for target_id in access_targets):
                 continue
         except RuntimeError as exc:
             raise ValueError(str(exc)) from exc
-        state = svc.get_state(requester_user_id, participant_id)
-        if state not in ACTIVE_CHAT_RELATIONSHIP_STATES:
+        states = [svc.get_state(requester_user_id, target_id) for target_id in access_targets]
+        if not any(state in ACTIVE_CHAT_RELATIONSHIP_STATES for state in states):
             raise ValueError(f"Active relationship required for group chat participant: {participant_id}")
 
 

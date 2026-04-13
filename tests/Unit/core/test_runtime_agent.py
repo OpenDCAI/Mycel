@@ -33,7 +33,6 @@ def test_close_skips_sandbox_cleanup_and_stays_idempotent():
     agent._cleanup_sandbox = MagicMock()
     agent._mark_terminated = MagicMock()
     agent._cleanup_mcp_client = MagicMock()
-    agent._cleanup_sqlite_connection = MagicMock()
 
     LeonAgent.close(agent, cleanup_sandbox=False)
     LeonAgent.close(agent, cleanup_sandbox=True)
@@ -41,7 +40,6 @@ def test_close_skips_sandbox_cleanup_and_stays_idempotent():
     agent._cleanup_sandbox.assert_not_called()
     agent._mark_terminated.assert_called_once()
     agent._cleanup_mcp_client.assert_called_once()
-    agent._cleanup_sqlite_connection.assert_called_once()
 
 
 def test_memory_config_override_updates_compaction_trigger_without_losing_defaults():

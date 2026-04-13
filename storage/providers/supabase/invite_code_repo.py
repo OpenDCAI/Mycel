@@ -88,7 +88,7 @@ class SupabaseInviteCodeRepo:
             .is_("used_by", None)  # atomic: only update if not already used
             .execute()
         )
-        updated = resp.data if resp.data else []
+        updated = resp.data or []
         if not updated:
             # Either code doesn't exist, already used, or expired — check which
             existing = self.get(code)

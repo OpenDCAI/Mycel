@@ -55,15 +55,25 @@ async def get_thread_history_payload(
     limit: int = 20,
     truncate: int = 300,
 ) -> dict[str, Any]:
-    from backend.web.routers.threads import get_or_create_agent, resolve_thread_sandbox
+    from backend.web.routers.threads import resolve_thread_sandbox
     from sandbox.thread_context import set_current_thread_id
 
     sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     set_current_thread_id(thread_id)
-    state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    pool = getattr(app.state, "agent_pool", None)
+    if not isinstance(pool, dict):
+        raise RuntimeError("agent_pool is required for thread history reads")
 
-    values = getattr(state, "values", {}) if state else {}
+    agent = pool.get(f"{thread_id}:{sandbox_type}")
+    if agent is not None:
+        state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        values = getattr(state, "values", {}) if state else {}
+    else:
+        checkpoint_store = getattr(app.state, "thread_checkpoint_store", None)
+        if checkpoint_store is None:
+            raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
+        checkpoint_state = await checkpoint_store.load(thread_id)
+        values = {"messages": list(checkpoint_state.messages) if checkpoint_state is not None else []}
     all_messages = values.get("messages", []) if isinstance(values, dict) else []
     total = len(all_messages)
     messages = all_messages[-limit:] if limit > 0 else all_messages

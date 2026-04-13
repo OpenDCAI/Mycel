@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -41,6 +44,56 @@ async def test_get_current_user_id_uses_user_repo_instead_of_member_repo():
 
 
 @pytest.mark.asyncio
+async def test_get_current_user_returns_user_row_off_event_loop_thread():
+    event_loop_thread_id = threading.get_ident()
+    seen_thread_ids: list[int] = []
+    user = SimpleNamespace(id="user-1")
+
+    class _UserRepo:
+        def get_by_id(self, seen_user_id: str):
+            seen_thread_ids.append(threading.get_ident())
+            return user if seen_user_id == "user-1" else None
+
+    request = SimpleNamespace(
+        headers={"Authorization": "Bearer tok-1"},
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"}),
+                user_repo=_UserRepo(),
+            )
+        ),
+    )
+
+    assert await dependencies.get_current_user(request) is user
+    assert seen_thread_ids
+    assert seen_thread_ids[0] != event_loop_thread_id
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_id_coalesces_concurrent_user_existence_checks():
+    class CountingUserRepo:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get_by_id(self, _user_id: str):
+            self.calls += 1
+            time.sleep(0.02)
+            return object()
+
+    repo = CountingUserRepo()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"}),
+            user_repo=repo,
+        )
+    )
+    requests = [SimpleNamespace(headers={"Authorization": "Bearer tok-1"}, app=app) for _ in range(5)]
+
+    assert await asyncio.gather(*(dependencies.get_current_user_id(request) for request in requests)) == ["user-1"] * 5
+    assert repo.calls == 1
+
+
+@pytest.mark.asyncio
 async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
     request_app = SimpleNamespace(
         state=SimpleNamespace(
@@ -59,7 +112,7 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
 
 
 @pytest.mark.asyncio
-async def test_verify_thread_owner_purges_incomplete_legacy_thread(monkeypatch: pytest.MonkeyPatch):
+async def test_verify_thread_owner_purges_incomplete_thread(monkeypatch: pytest.MonkeyPatch):
     deleted: list[str] = []
     purged: list[str] = []
     rows = {"thread-1": {"agent_user_id": "agent-1"}}

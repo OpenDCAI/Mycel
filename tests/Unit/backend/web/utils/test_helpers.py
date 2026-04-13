@@ -1,0 +1,93 @@
+from backend.web.utils import helpers
+
+
+class _FakeContainer:
+    def __init__(self) -> None:
+        self.purged: list[str] = []
+
+    def purge_thread(self, thread_id: str) -> None:
+        self.purged.append(thread_id)
+
+
+class _ThreadRepo:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+        self.closed = False
+        self.timestamps = ("created", "updated")
+        self.lease = {"created_at": "lease-created", "updated_at": "lease-updated"}
+
+    def delete_by_thread(self, thread_id: str) -> None:
+        self.deleted.append(thread_id)
+
+    def get_timestamps(self, terminal_id: str) -> tuple[str, str]:
+        assert terminal_id == "terminal-1"
+        return self.timestamps
+
+    def get(self, lease_id: str) -> dict[str, str]:
+        assert lease_id == "lease-1"
+        return self.lease
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _SyncState:
+    def __init__(self) -> None:
+        self.cleared: list[str] = []
+        self.closed = False
+
+    def clear_thread(self, thread_id: str) -> int:
+        self.cleared.append(thread_id)
+        return 1
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_delete_thread_in_db_uses_runtime_repo_factories_without_db_path(monkeypatch, tmp_path):
+    sandbox_db = tmp_path / "sandbox.db"
+    sandbox_db.touch()
+    container = _FakeContainer()
+    session_repo = _ThreadRepo()
+    terminal_repo = _ThreadRepo()
+    sync_state = _SyncState()
+
+    monkeypatch.setattr(helpers, "_get_container", lambda: container)
+    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
+    monkeypatch.setattr(helpers, "make_chat_session_repo", lambda: session_repo)
+    monkeypatch.setattr(helpers, "make_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr(helpers, "SyncState", lambda: sync_state)
+
+    helpers.delete_thread_in_db("thread-1")
+
+    assert container.purged == ["thread-1"]
+    assert session_repo.deleted == ["thread-1"]
+    assert terminal_repo.deleted == ["thread-1"]
+    assert sync_state.cleared == ["thread-1"]
+    assert session_repo.closed
+    assert terminal_repo.closed
+    assert sync_state.closed
+
+
+def test_get_terminal_timestamps_uses_runtime_repo_factory_without_db_path(monkeypatch, tmp_path):
+    sandbox_db = tmp_path / "sandbox.db"
+    sandbox_db.touch()
+    terminal_repo = _ThreadRepo()
+
+    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
+    monkeypatch.setattr(helpers, "make_terminal_repo", lambda: terminal_repo)
+
+    assert helpers.get_terminal_timestamps("terminal-1") == ("created", "updated")
+    assert terminal_repo.closed
+
+
+def test_get_lease_timestamps_uses_runtime_repo_factory_without_db_path(monkeypatch, tmp_path):
+    sandbox_db = tmp_path / "sandbox.db"
+    sandbox_db.touch()
+    lease_repo = _ThreadRepo()
+
+    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
+    monkeypatch.setattr(helpers, "make_lease_repo", lambda: lease_repo)
+
+    assert helpers.get_lease_timestamps("lease-1") == ("lease-created", "lease-updated")
+    assert lease_repo.closed

@@ -87,17 +87,6 @@ class ObjectiveMetrics(BaseModel):
     slow_operations: list[str] = Field(default_factory=list)
 
 
-# --- Metrics: Tier 3 (Subjective, Phase 2 placeholder) ---
-
-
-class SubjectiveMetrics(BaseModel):
-    overall_score: float = 0.0
-    dimension_scores: dict[str, float] = Field(default_factory=dict)
-    flagged_issues: list[str] = Field(default_factory=list)
-    judge_model: str = ""
-    judge_reasoning: str = ""
-
-
 # --- Scenario definitions ---
 
 
@@ -137,4 +126,3 @@ class EvalResult(BaseModel):
     trajectory: RunTrajectory
     system_metrics: SystemMetrics = Field(default_factory=SystemMetrics)
     objective_metrics: ObjectiveMetrics = Field(default_factory=ObjectiveMetrics)
-    subjective_metrics: SubjectiveMetrics | None = None

@@ -123,8 +123,7 @@ class CommandService:
 
         if not run_in_background:
             return await self._execute_blocking(command, work_dir, timeout_secs)
-        else:
-            return await self._execute_async(command, work_dir, timeout_secs, description=description)
+        return await self._execute_async(command, work_dir, timeout_secs, description=description)
 
     async def _execute_blocking(self, command: str, work_dir: str | None, timeout_secs: float) -> str:
         try:
@@ -241,7 +240,7 @@ class CommandService:
                 if asyncio.iscoroutine(emission):
                     await emission
             except Exception:
-                pass
+                logger.exception("Failed to emit background command task_error event for task %s", task_id)
 
         if self._queue_manager:
             from core.runtime.middleware.queue.formatters import format_command_notification
