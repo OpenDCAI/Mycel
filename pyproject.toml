@@ -50,20 +50,21 @@ dependencies = [
     "fastapi>=0.118.0",
     "langgraph-checkpoint-postgres>=3.0.5",
     "psycopg[binary]>=3.3.3",
+    "wuying-agentbay-sdk>=0.10.0",
+    "e2b>=2.13.0",
+    "daytona-sdk>=0.139.0,<0.140.0",
+    "python-socks>=2.7.0",
 ]
 
 [project.optional-dependencies]
 pdf = ["pymupdf>=1.24.0"]
 pptx = ["python-pptx>=1.0.0"]
 docs = ["pymupdf>=1.24.0", "python-pptx>=1.0.0"]
-sandbox = ["wuying-agentbay-sdk>=0.10.0"]
-e2b = ["e2b>=2.13.0"]
-daytona = ["daytona-sdk>=0.139.0,<0.140.0", "python-socks>=2.7.0"]
 eval = ["httpx-sse>=0.4.0"]
 langfuse = ["langfuse>=3.0.0"]
 langsmith = ["langsmith>=0.1.0"]
 otel = ["opentelemetry-api>=1.20.0", "opentelemetry-sdk>=1.20.0", "opentelemetry-exporter-otlp>=1.20.0"]
-all = ["pymupdf>=1.24.0", "python-pptx>=1.0.0", "wuying-agentbay-sdk>=0.10.0", "e2b>=2.13.0", "daytona-sdk>=0.139.0,<0.140.0", "python-socks>=2.7.0", "httpx-sse>=0.4.0", "langfuse>=3.0.0", "langsmith>=0.1.0"]
+all = ["pymupdf>=1.24.0", "python-pptx>=1.0.0", "httpx-sse>=0.4.0", "langfuse>=3.0.0", "langsmith>=0.1.0"]
 
 [project.urls]
 Homepage = "https://github.com/Ju-Yi-AI-Lab/leonai"

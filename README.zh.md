@@ -51,15 +51,7 @@ uv sync
 cd frontend/app && npm install && cd ../..
 ```
 
-**沙箱提供商**需要额外依赖——按需安装：
-
-```bash
-uv sync --extra sandbox     # AgentBay
-uv sync --extra e2b         # E2B
-uv sync --extra daytona     # Daytona
-```
-
-Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.mdx)。
+沙箱 Provider SDK 默认随 `uv sync` 安装。Docker 仍需要本机安装 Docker。详见[沙箱文档](docs/zh/sandbox.mdx)。
 
 ### 3. 启动服务
 
