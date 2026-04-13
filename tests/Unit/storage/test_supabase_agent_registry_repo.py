@@ -56,6 +56,18 @@ def test_storage_container_agent_registry_repo_uses_staging_client_not_public_cl
     assert public_client.table_names == []
 
 
+def test_storage_container_user_settings_repo_uses_staging_client_not_public_client() -> None:
+    staging_client = _FakeClient("staging")
+    public_client = _FakeClient("public")
+    container = StorageContainer(supabase_client=staging_client, public_supabase_client=public_client)
+
+    repo = container.user_settings_repo()
+    repo.get("user-1")
+
+    assert staging_client.table_names == ["user_settings"]
+    assert public_client.table_names == []
+
+
 def test_runtime_agent_registry_builder_does_not_resolve_public_client(monkeypatch) -> None:
     staging_client = _FakeClient("staging")
 
