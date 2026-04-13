@@ -9,6 +9,7 @@ import uuid as _uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from backend.web.services import schedule_run_completion_service
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
 from backend.web.utils.serializers import extract_text_content
@@ -444,6 +445,8 @@ async def _run_agent_to_buffer(
     task = None
     stream_gen = None
     pending_tool_calls: dict[str, dict] = {}
+    terminal_status = "succeeded"
+    terminal_error: str | None = None
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
@@ -920,6 +923,8 @@ async def _run_agent_to_buffer(
                 await stream_gen.aclose()
                 await asyncio.sleep(wait)
             else:
+                terminal_status = "failed"
+                terminal_error = str(stream_err)
                 traceback.print_exc()
                 await emit({"event": "error", "data": json.dumps({"error": str(stream_err)}, ensure_ascii=False)})
                 break
@@ -955,6 +960,8 @@ async def _run_agent_to_buffer(
         # A5: emit run_done instead of done (persistent buffer — no mark_done)
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except asyncio.CancelledError:
+        terminal_status = "cancelled"
+        terminal_error = "Run cancelled by user"
         cancelled_tool_call_ids = await write_cancellation_markers(agent, config, pending_tool_calls)
         await emit(
             {
@@ -970,6 +977,8 @@ async def _run_agent_to_buffer(
         # Also emit run_done so frontend knows the run ended
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except Exception as e:
+        terminal_status = "failed"
+        terminal_error = str(e)
         traceback.print_exc()
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
@@ -1018,6 +1027,16 @@ async def _run_agent_to_buffer(
             logger.warning("Failed to cleanup old runs for thread %s", thread_id, exc_info=True)
         if run_event_repo is not None:
             run_event_repo.close()
+
+        meta = message_metadata or {}
+        schedule_run_completion_service.complete_schedule_run_from_runtime(
+            meta.get("schedule_run_id"),
+            source=meta.get("source"),
+            status=terminal_status,
+            runtime_run_id=run_id,
+            thread_id=thread_id,
+            error=terminal_error,
+        )
 
         # Consume followup queue: if messages are pending, start a new run
         await _consume_followup_queue(agent, thread_id, app)

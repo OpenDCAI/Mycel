@@ -11,6 +11,10 @@ from core.runtime.middleware.monitor import AgentState
 logger = logging.getLogger(__name__)
 
 
+class TargetThreadActiveError(RuntimeError):
+    """Raised when the caller requires a fresh run but the target is already active."""
+
+
 async def route_message_to_brain(
     app: Any,
     thread_id: str,
@@ -19,6 +23,8 @@ async def route_message_to_brain(
     sender_name: str | None = None,
     sender_avatar_url: str | None = None,
     attachments: list[str] | None = None,
+    require_new_run: bool = False,
+    extra_message_metadata: dict[str, Any] | None = None,
 ) -> dict:
     """Route message to agent brain thread.
 
@@ -40,6 +46,8 @@ async def route_message_to_brain(
     run_content = content
 
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
+        if require_new_run:
+            raise TargetThreadActiveError(f"target thread {thread_id} is already active")
         qm.enqueue(
             steer_content,
             thread_id,
@@ -58,6 +66,8 @@ async def route_message_to_brain(
         lock = locks.setdefault(thread_id, asyncio.Lock())
     async with lock:
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
+            if require_new_run:
+                raise TargetThreadActiveError(f"target thread {thread_id} is already active")
             qm.enqueue(
                 steer_content,
                 thread_id,
@@ -71,6 +81,8 @@ async def route_message_to_brain(
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
         logger.debug("[route] → START RUN (idle→active)")
         meta = {"source": source, "sender_name": sender_name, "sender_avatar_url": sender_avatar_url}
+        if extra_message_metadata:
+            meta.update(extra_message_metadata)
         if attachments:
             meta["attachments"] = attachments
         run_id = start_agent_run(agent, thread_id, run_content, app, message_metadata=meta)

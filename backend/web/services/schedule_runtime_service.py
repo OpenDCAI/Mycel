@@ -6,7 +6,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.services import schedule_service
-from backend.web.services.message_routing import route_message_to_brain
+from backend.web.services.message_routing import TargetThreadActiveError, route_message_to_brain
+from core.runtime.middleware.monitor import AgentState
+
+
+class TargetThreadBusyError(RuntimeError):
+    """Raised when a schedule trigger needs a fresh run but the target is active."""
 
 
 def _now_iso() -> str:
@@ -34,6 +39,14 @@ def _validate_thread(app: Any, schedule: dict[str, Any], thread_id: str, owner_u
         raise ValueError("target thread agent does not match schedule agent")
 
 
+def _thread_is_active(app: Any, thread_id: str) -> bool:
+    thread = app.state.thread_repo.get_by_id(thread_id)
+    sandbox_type = (thread or {}).get("sandbox_type", "local")
+    agent = getattr(app.state, "agent_pool", {}).get(f"{thread_id}:{sandbox_type}")
+    runtime = getattr(agent, "runtime", None)
+    return bool(runtime and getattr(runtime, "current_state", None) == AgentState.ACTIVE)
+
+
 def _validate_schedule(schedule: dict[str, Any] | None, owner_user_id: str) -> dict[str, Any]:
     if schedule is None:
         raise ValueError("schedule not found")
@@ -54,6 +67,8 @@ async def trigger_schedule(
     schedule = _validate_schedule(schedule_service.get_schedule(schedule_id), owner_user_id)
     thread_id = _target_thread(schedule)
     _validate_thread(app, schedule, thread_id, owner_user_id)
+    if _thread_is_active(app, thread_id):
+        raise TargetThreadBusyError("target thread is already active")
 
     run = schedule_service.create_schedule_run(
         schedule_id=schedule["id"],
@@ -69,7 +84,17 @@ async def trigger_schedule(
             thread_id,
             _schedule_instruction(schedule, run["id"]),
             source="schedule",
+            require_new_run=True,
+            extra_message_metadata={"schedule_run_id": run["id"]},
         )
+    except TargetThreadActiveError as exc:
+        schedule_service.update_schedule_run(
+            run["id"],
+            status="cancelled",
+            completed_at=_now_iso(),
+            error=str(exc),
+        )
+        raise TargetThreadBusyError(str(exc)) from exc
     except Exception as exc:
         schedule_service.update_schedule_run(
             run["id"],

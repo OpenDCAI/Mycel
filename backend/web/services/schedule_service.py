@@ -137,6 +137,15 @@ def list_schedule_runs(schedule_id: str) -> list[dict[str, Any]]:
         repo.close()
 
 
+def get_schedule_run(run_id: str) -> dict[str, Any] | None:
+    _require_non_empty("run_id", run_id)
+    repo = _repo()
+    try:
+        return repo.get_run(run_id)
+    finally:
+        repo.close()
+
+
 def update_schedule_run(run_id: str, **fields: Any) -> dict[str, Any] | None:
     if "status" in fields and fields["status"] not in _RUN_STATUSES:
         raise ValueError("status must be queued, running, succeeded, failed, or cancelled")

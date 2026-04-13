@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.web.services import schedule_runtime_service
+from core.runtime.middleware.monitor import AgentState
 
 
 class FakeThreadRepo:
@@ -62,8 +63,8 @@ async def test_trigger_schedule_routes_target_thread_and_marks_run_running(monke
     )
     routed: dict[str, str] = {}
 
-    async def fake_route_message_to_brain(_app, thread_id: str, content: str, source: str):
-        routed.update({"thread_id": thread_id, "content": content, "source": source})
+    async def fake_route_message_to_brain(_app, thread_id: str, content: str, source: str, **kwargs):
+        routed.update({"thread_id": thread_id, "content": content, "source": source, **kwargs})
         return {"status": "started", "routing": "direct", "run_id": "agent_run_1", "thread_id": thread_id}
 
     monkeypatch.setattr(schedule_runtime_service.schedule_service, "get_schedule", store.get_schedule)
@@ -76,6 +77,8 @@ async def test_trigger_schedule_routes_target_thread_and_marks_run_running(monke
 
     assert routed["thread_id"] == "thread_1"
     assert routed["source"] == "schedule"
+    assert routed["require_new_run"] is True
+    assert routed["extra_message_metadata"] == {"schedule_run_id": "run_1"}
     assert "Schedule ID: schedule_1" in routed["content"]
     assert "Schedule Run ID: run_1" in routed["content"]
     assert "Summarize today." in routed["content"]
@@ -150,3 +153,94 @@ async def test_trigger_schedule_marks_run_failed_when_routing_fails(monkeypatch:
     assert store.updated_runs[-1][1]["status"] == "failed"
     assert store.updated_runs[-1][1]["error"] == "route failed"
     assert "completed_at" in store.updated_runs[-1][1]
+
+
+@pytest.mark.asyncio
+async def test_trigger_schedule_rejects_active_target_before_creating_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = FakeScheduleStore(
+        {
+            "id": "schedule_1",
+            "owner_user_id": "owner_1",
+            "agent_user_id": "agent_1",
+            "target_thread_id": "thread_1",
+            "create_thread_on_run": False,
+            "enabled": True,
+            "instruction_template": "Work.",
+        }
+    )
+    active_runtime = SimpleNamespace(current_state=AgentState.ACTIVE)
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=FakeThreadRepo(
+                {
+                    "thread_1": {
+                        "owner_user_id": "owner_1",
+                        "member_id": "agent_1",
+                        "sandbox_type": "local",
+                    }
+                }
+            ),
+            agent_pool={"thread_1:local": SimpleNamespace(runtime=active_runtime)},
+        )
+    )
+    route_called = False
+
+    async def fake_route_message_to_brain(*_args, **_kwargs):
+        nonlocal route_called
+        route_called = True
+        return {}
+
+    monkeypatch.setattr(schedule_runtime_service.schedule_service, "get_schedule", store.get_schedule)
+    monkeypatch.setattr(schedule_runtime_service.schedule_service, "create_schedule_run", store.create_schedule_run)
+    monkeypatch.setattr(schedule_runtime_service, "route_message_to_brain", fake_route_message_to_brain)
+
+    with pytest.raises(schedule_runtime_service.TargetThreadBusyError):
+        await schedule_runtime_service.trigger_schedule(app, "schedule_1", owner_user_id="owner_1")
+
+    assert route_called is False
+    assert store.runs == []
+
+
+@pytest.mark.asyncio
+async def test_trigger_schedule_passes_schedule_run_id_as_structured_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = FakeScheduleStore(
+        {
+            "id": "schedule_1",
+            "owner_user_id": "owner_1",
+            "agent_user_id": "agent_1",
+            "target_thread_id": "thread_1",
+            "create_thread_on_run": False,
+            "enabled": True,
+            "instruction_template": "Work.",
+        }
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=FakeThreadRepo(
+                {
+                    "thread_1": {
+                        "owner_user_id": "owner_1",
+                        "member_id": "agent_1",
+                        "sandbox_type": "local",
+                    }
+                }
+            ),
+            agent_pool={},
+        )
+    )
+    route_kwargs: dict = {}
+
+    async def fake_route_message_to_brain(*_args, **kwargs):
+        route_kwargs.update(kwargs)
+        return {"status": "started", "routing": "direct", "run_id": "runtime_run_1", "thread_id": "thread_1"}
+
+    monkeypatch.setattr(schedule_runtime_service.schedule_service, "get_schedule", store.get_schedule)
+    monkeypatch.setattr(schedule_runtime_service.schedule_service, "create_schedule_run", store.create_schedule_run)
+    monkeypatch.setattr(schedule_runtime_service.schedule_service, "update_schedule_run", store.update_schedule_run)
+    monkeypatch.setattr(schedule_runtime_service.schedule_service, "update_schedule", store.update_schedule)
+    monkeypatch.setattr(schedule_runtime_service, "route_message_to_brain", fake_route_message_to_brain)
+
+    await schedule_runtime_service.trigger_schedule(app, "schedule_1", owner_user_id="owner_1")
+
+    assert route_kwargs["require_new_run"] is True
+    assert route_kwargs["extra_message_metadata"] == {"schedule_run_id": "run_1"}

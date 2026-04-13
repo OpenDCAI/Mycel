@@ -20,6 +20,8 @@ async def run_schedule(
 ) -> dict[str, Any]:
     try:
         item = await schedule_runtime_service.trigger_schedule(request.app, schedule_id, owner_user_id=user_id, triggered_by="manual")
+    except schedule_runtime_service.TargetThreadBusyError as exc:
+        raise HTTPException(409, str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(403, str(exc)) from exc
     except ValueError as exc:
