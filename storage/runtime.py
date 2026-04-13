@@ -83,12 +83,7 @@ def build_terminal_repo(*, supabase_client: Any | None = None, supabase_client_f
 
 
 def build_agent_registry_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
-    return _build_storage_repo(
-        "agent_registry_repo",
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        public_supabase_client_factory=_PUBLIC_SUPABASE_CLIENT_FACTORY,
-    )
+    return _build_storage_repo("agent_registry_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
 def build_sync_file_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
