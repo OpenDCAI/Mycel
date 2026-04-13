@@ -35,6 +35,7 @@ def test_thread_repo_lists_agent_threads_by_owner_under_staging_runtime(monkeypa
             "sandbox_type": "local",
             "model": "large",
             "cwd": "/work",
+            "owner_user_id": "owner_1",
             "observation_provider": None,
             "is_main": True,
             "branch_index": 0,
@@ -44,6 +45,33 @@ def test_thread_repo_lists_agent_threads_by_owner_under_staging_runtime(monkeypa
             "entity_name": None,
         }
     ]
+
+
+def test_thread_repo_get_by_id_exposes_owner_user_id_under_staging_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    client = FakeSupabaseClient(
+        tables={
+            "agent.threads": [
+                {
+                    "id": "thread_1",
+                    "agent_user_id": "agent_1",
+                    "owner_user_id": "owner_1",
+                    "sandbox_type": "local",
+                    "model": "large",
+                    "cwd": "/work",
+                    "is_main": True,
+                    "branch_index": 0,
+                    "created_at": "2026-04-14T00:00:00+00:00",
+                }
+            ],
+        }
+    )
+
+    row = SupabaseThreadRepo(client).get_by_id("thread_1")
+
+    assert row is not None
+    assert row["owner_user_id"] == "owner_1"
+    assert row["member_id"] == "agent_1"
 
 
 def test_thread_repo_creates_agent_thread_with_owner_and_timestamptz(monkeypatch: pytest.MonkeyPatch) -> None:

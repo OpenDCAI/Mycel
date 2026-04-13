@@ -14,6 +14,7 @@ _TABLE = "threads"
 _THREAD_MEMBER_COLUMN = "agent_user_id"
 _BASE_COLS = (
     "id",
+    "owner_user_id",
     "sandbox_type",
     "model",
     "cwd",
