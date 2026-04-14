@@ -75,11 +75,13 @@ class SupabaseThreadRepo:
         status: str = "active",
         updated_at: float | None = None,
         last_active_at: float | None = None,
-        current_workspace_id: str | None = None,
+        current_workspace_id: str,
     ) -> None:
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
         if not owner_user_id.strip():
             raise ValueError("owner_user_id is required for agent.threads create")
+        if not current_workspace_id.strip():
+            raise ValueError("current_workspace_id is required for agent.threads create")
         created_at_value = _to_timestamptz(created_at)
         updated_at_value = _to_timestamptz(updated_at) if updated_at is not None else created_at_value
         self._t().insert(

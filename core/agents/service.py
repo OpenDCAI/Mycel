@@ -575,6 +575,12 @@ class AgentService:
         branch_index = self._thread_repo.get_next_branch_index(agent_user_id)
         sandbox_type = parent_thread.get("sandbox_type") or "local"
         cwd = parent_thread.get("cwd")
+        current_workspace_id = str(parent_thread.get("current_workspace_id") or "").strip()
+        if not current_workspace_id:
+            # @@@subagent-thread-bridge-invariant - replay-17 treats a missing
+            # parent bridge as a hard contract failure for new runnable child
+            # thread metadata rather than silently minting a NULL bridge row.
+            raise ValueError("parent thread current_workspace_id is required for child thread create")
         self._thread_repo.create(
             thread_id=thread_id,
             agent_user_id=agent_user_id,
@@ -585,7 +591,7 @@ class AgentService:
             is_main=False,
             branch_index=branch_index,
             owner_user_id=str(parent_thread.get("owner_user_id") or ""),
-            current_workspace_id=parent_thread.get("current_workspace_id"),
+            current_workspace_id=current_workspace_id,
         )
 
     async def _handle_agent(
