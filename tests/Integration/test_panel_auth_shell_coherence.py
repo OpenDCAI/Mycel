@@ -385,7 +385,7 @@ def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytes
     assert seen == [("user-1", "repo-1", "cfg-repo")]
 
 
-def test_library_service_create_recipe_uses_provider_name_identity(monkeypatch: pytest.MonkeyPatch):
+def test_library_service_create_sandbox_template_uses_provider_name_identity(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         library_service.sandbox_service,
         "available_sandbox_types",
@@ -405,7 +405,7 @@ def test_library_service_create_recipe_uses_provider_name_identity(monkeypatch: 
             rows[(str(payload["owner_user_id"]), str(payload["recipe_id"]))] = {"data": payload["data"], **payload}
 
     item = library_service.create_resource(
-        "recipe",
+        "sandbox-template",
         "Selfhost Custom",
         "custom self-host sandbox",
         features={"lark_cli": True},
