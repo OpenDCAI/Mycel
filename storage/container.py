@@ -31,6 +31,7 @@ from .contracts import (
     ToolTaskRepo,
     UserRepo,
     UserSettingsRepo,
+    WorkspaceRepo,
 )
 
 _REPO_REGISTRY: dict[str, tuple[str, str]] = {
@@ -54,6 +55,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "user_repo": ("storage.providers.supabase.user_repo", "SupabaseUserRepo"),
     "thread_repo": ("storage.providers.supabase.thread_repo", "SupabaseThreadRepo"),
     "thread_launch_pref_repo": ("storage.providers.supabase.thread_launch_pref_repo", "SupabaseThreadLaunchPrefRepo"),
+    "workspace_repo": ("storage.providers.supabase.workspace_repo", "SupabaseWorkspaceRepo"),
     "recipe_repo": ("storage.providers.supabase.recipe_repo", "SupabaseRecipeRepo"),
     "chat_repo": ("storage.providers.supabase.chat_repo", "SupabaseChatRepo"),
     "invite_code_repo": ("storage.providers.supabase.invite_code_repo", "SupabaseInviteCodeRepo"),
@@ -136,6 +138,9 @@ class StorageContainer:
 
     def thread_launch_pref_repo(self) -> ThreadLaunchPrefRepo:
         return self._build("thread_launch_pref_repo")
+
+    def workspace_repo(self) -> WorkspaceRepo:
+        return self._build("workspace_repo")
 
     def recipe_repo(self) -> RecipeRepo:
         return self._build("recipe_repo")

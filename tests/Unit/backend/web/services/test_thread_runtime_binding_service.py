@@ -165,3 +165,37 @@ def test_service_does_not_import_legacy_runtime_glue() -> None:
     assert "chat_session" not in source
     assert "sandbox_volume" not in source
     assert "sync_file" not in source
+
+
+def test_resolves_binding_with_thin_workspace_shape() -> None:
+    binding = resolve_thread_runtime_binding(
+        **_repos(
+            thread=_thread(),
+            workspace={
+                "id": "workspace-1",
+                "owner_user_id": "owner-1",
+                "sandbox_id": "sandbox-1",
+                "workspace_path": "/workspace",
+            },
+            sandbox=_sandbox(),
+        ),
+        thread_id="thread-1",
+        owner_user_id="owner-1",
+    )
+
+    assert binding.workspace_id == "workspace-1"
+    assert binding.workspace_path == "/workspace"
+    assert binding.workspace_status is None
+    assert binding.workspace_desired_state is None
+    assert binding.workspace_observed_state is None
+
+
+def test_workspace_without_workspace_path_fails_loudly() -> None:
+    with pytest.raises(ThreadRuntimeBindingError) as excinfo:
+        resolve_thread_runtime_binding(
+            **_repos(thread=_thread(), workspace=_workspace(workspace_path=None), sandbox=_sandbox()),
+            thread_id="thread-1",
+            owner_user_id="owner-1",
+        )
+
+    assert "workspace_path" in str(excinfo.value)
