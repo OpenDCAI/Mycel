@@ -25,6 +25,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
 
@@ -269,6 +270,8 @@ class LeonAgent:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
 
         # Initialize model
+        self._model_http_client: httpx.Client | None = None
+        self._model_http_async_client: httpx.AsyncClient | None = None
         self.model = self._create_model()
 
         # Store current model config for per-request override via configurable_fields
@@ -366,6 +369,7 @@ class LeonAgent:
 
         # Wire CleanupRegistry for priority-ordered resource teardown
         self._cleanup_registry = CleanupRegistry()
+        self._cleanup_registry.register(self._cleanup_model_clients, priority=1)
         self._cleanup_registry.register(self._cleanup_sandbox, priority=2)
         self._cleanup_registry.register(self._mark_terminated, priority=3)
         self._cleanup_registry.register(self._cleanup_mcp_client, priority=4)
@@ -727,13 +731,32 @@ class LeonAgent:
         Uses configurable_fields so model/provider/api_key/base_url can be
         overridden per-request via LangGraph config without rebuilding the graph.
         """
-        kwargs = normalize_model_kwargs(self.model_name, self._build_model_kwargs())
+        kwargs = self._build_model_kwargs()
+        kwargs.update(self._build_openai_http_clients(kwargs.get("model_provider")))
+        kwargs = normalize_model_kwargs(self.model_name, kwargs)
         return init_chat_model(
             self.model_name,
             api_key=self.api_key,
             configurable_fields=("model", "model_provider", "api_key", "base_url"),
             **kwargs,
         )
+
+    def _build_openai_http_clients(self, provider: str | None) -> dict[str, Any]:
+        if provider != "openai":
+            return {}
+
+        # @@@configurable-openai-client-reuse - LangChain's configurable model
+        # rebuilds the concrete ChatOpenAI on each invoke. Reuse explicit httpx
+        # clients so provider traffic does not inherit process proxies and does
+        # not churn a fresh transport pool per call.
+        if self._model_http_client is None:
+            self._model_http_client = httpx.Client(trust_env=False)
+        if self._model_http_async_client is None:
+            self._model_http_async_client = httpx.AsyncClient(trust_env=False)
+        return {
+            "http_client": self._model_http_client,
+            "http_async_client": self._model_http_async_client,
+        }
 
     def _create_extraction_model(self):
         """Create a small model for WebFetch AI extraction (leon:mini)."""
@@ -911,6 +934,17 @@ class LeonAgent:
         finally:
             self._closed = True
             self._closing = False
+
+    async def _cleanup_model_clients(self) -> None:
+        async_client = getattr(self, "_model_http_async_client", None)
+        sync_client = getattr(self, "_model_http_client", None)
+        self._model_http_async_client = None
+        self._model_http_client = None
+
+        if async_client is not None:
+            await async_client.aclose()
+        if sync_client is not None:
+            await asyncio.to_thread(sync_client.close)
 
     def _build_session_hook_payload(self, event: str) -> dict[str, Any]:
         return {
