@@ -123,9 +123,7 @@ def _validate_saved_config(
     config = normalize_launch_config_payload(payload)
     provider_names = {str(item["name"]) for item in providers}
     sandbox_templates_by_id = {
-        str(item["id"]): item
-        for item in sandbox_templates
-        if item.get("available", True) and item.get("provider_type")
+        str(item["id"]): item for item in sandbox_templates if item.get("available", True) and item.get("provider_type")
     }
 
     if config["create_mode"] == "existing":
@@ -198,11 +196,7 @@ def _derive_default_config(
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
     sandbox_template = next(
-        (
-            item
-            for item in sandbox_templates
-            if item.get("available", True) and _sandbox_template_matches_provider(item, provider_config)
-        ),
+        (item for item in sandbox_templates if item.get("available", True) and _sandbox_template_matches_provider(item, provider_config)),
         None,
     )
     sandbox_template_snapshot = (

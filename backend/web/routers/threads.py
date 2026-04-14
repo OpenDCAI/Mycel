@@ -104,6 +104,7 @@ def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_
     _require_owned_agent(app, agent_user_id, owner_user_id)
     return resolve_default_config(app, owner_user_id, agent_user_id)
 
+
 def _save_default_config_for_owned_agent(
     app: Any,
     owner_user_id: str,
