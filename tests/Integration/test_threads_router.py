@@ -431,7 +431,7 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "lease_id": "lease-1",
+            "existing_sandbox_id": "lease-1",
             "cwd": "/workspace/reused",
         }
     )
@@ -463,7 +463,7 @@ async def test_create_thread_route_persists_current_workspace_id_for_existing_le
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "lease_id": "lease-1",
+            "existing_sandbox_id": "lease-1",
             "cwd": "/workspace/reused",
         }
     )
@@ -790,7 +790,7 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "lease_id": "lease-1",
+            "existing_sandbox_id": "lease-1",
         }
     )
 

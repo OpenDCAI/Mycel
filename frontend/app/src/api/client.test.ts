@@ -68,6 +68,24 @@ describe("thread api client contract", () => {
     );
   });
 
+  it("createThread sends existing_sandbox_id for existing sandbox selection", async () => {
+    authFetch.mockResolvedValue(okJson({ thread_id: "thread-1" }));
+
+    await api.createThread({
+      sandbox: "local",
+      agentUserId: "agent-1",
+      existingSandboxId: "lease-1",
+    });
+
+    expect(authFetch).toHaveBeenCalledWith(
+      "/api/threads",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ sandbox: "local", agent_user_id: "agent-1", existing_sandbox_id: "lease-1" }),
+      }),
+    );
+  });
+
   it("createThread surfaces backend error messages", async () => {
     authFetch.mockResolvedValue(errorJson(409, {
       error: "sandbox_quota_exceeded",
@@ -126,7 +144,7 @@ describe("thread api client contract", () => {
   it("getDefaultThreadConfig queries by agent_user_id", async () => {
     authFetch.mockResolvedValue(okJson({
       source: "derived",
-      config: { create_mode: "new", provider_config: "local", recipe: null, lease_id: null, model: null, workspace: null },
+      config: { create_mode: "new", provider_config: "local", recipe: null, existing_sandbox_id: null, model: null, workspace: null },
     }));
 
     await api.getDefaultThreadConfig("agent-1");
@@ -163,6 +181,33 @@ describe("thread api client contract", () => {
           provider_config: "local",
           recipe_id: "local:default",
           model: "gpt-5.4-mini",
+        }),
+      }),
+    );
+  });
+
+  it("saveDefaultThreadConfig posts existing_sandbox_id for existing-mode shell config", async () => {
+    authFetch.mockResolvedValue(okJson({ ok: true }));
+
+    await api.saveDefaultThreadConfig("agent-1", {
+      create_mode: "existing",
+      provider_config: "daytona_selfhost",
+      existing_sandbox_id: "lease-1",
+      model: "gpt-5.4",
+      workspace: "/workspace/reused",
+    });
+
+    expect(authFetch).toHaveBeenCalledWith(
+      "/api/threads/default-config",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          agent_user_id: "agent-1",
+          create_mode: "existing",
+          provider_config: "daytona_selfhost",
+          existing_sandbox_id: "lease-1",
+          model: "gpt-5.4",
+          workspace: "/workspace/reused",
         }),
       }),
     );

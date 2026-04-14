@@ -64,7 +64,7 @@ const MODEL_OPTIONS = [
 
 type ConfigSnapshot = {
   createMode: "new" | "existing";
-  selectedLeaseId: string;
+  selectedExistingSandboxId: string;
   selectedRecipeId: string;
   selectedRecipeFeatures: Record<string, boolean>;
   selectedWorkspace: string;
@@ -130,7 +130,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   const [leaseOptions, setLeaseOptions] = useState<UserLeaseSummary[]>([]);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [leaseLoading, setLeaseLoading] = useState(true);
-  const [selectedLeaseId, setSelectedLeaseId] = useState<string>("");
+  const [selectedExistingSandboxId, setSelectedExistingSandboxId] = useState<string>("");
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
   const [selectedRecipeFeatures, setSelectedRecipeFeatures] = useState<Record<string, boolean>>({});
   const [selectedProviderConfig, setSelectedProviderConfig] = useState<string>("");
@@ -233,7 +233,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         const leases = await listMyLeases(ac.signal);
         if (cancelled) return;
         setLeaseOptions(leases);
-        setSelectedLeaseId((current) => current || leases[0]?.lease_id || "");
+        setSelectedExistingSandboxId((current) => current || leases[0]?.lease_id || "");
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -268,7 +268,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         } satisfies RecipeSnapshot,
       }))
   ), [libraryRecipes]);
-  const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedLeaseId) ?? null;
+  const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedExistingSandboxId) ?? null;
   const sandboxResourceByProvider = useMemo(() => {
     const map = new Map<string, AccountResourceLimit>();
     for (const item of accountResources) {
@@ -296,10 +296,10 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   }, [recipeOptions, selectedRecipeId]);
 
   useEffect(() => {
-    if (!selectedLeaseId && leaseOptions[0]?.lease_id) {
-      setSelectedLeaseId(leaseOptions[0].lease_id);
+    if (!selectedExistingSandboxId && leaseOptions[0]?.lease_id) {
+      setSelectedExistingSandboxId(leaseOptions[0].lease_id);
     }
-  }, [leaseOptions, selectedLeaseId]);
+  }, [leaseOptions, selectedExistingSandboxId]);
 
   useEffect(() => {
     if (createModeInitialized || leaseLoading) return;
@@ -418,7 +418,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   function applyResolvedConfig(config: ThreadLaunchConfig) {
     setCreateMode(config.create_mode);
     setSelectedProviderConfig(config.provider_config || "");
-    setSelectedLeaseId(config.lease_id || "");
+    setSelectedExistingSandboxId(config.existing_sandbox_id || "");
     setSelectedRecipeId(config.recipe_id || config.recipe?.id || "");
     setSelectedRecipeFeatures(config.recipe?.features ?? {});
     setSelectedWorkspace(config.workspace || "");
@@ -442,7 +442,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   function buildConfigSnapshot(): ConfigSnapshot {
     return {
       createMode,
-      selectedLeaseId: selectedLeaseId || leaseOptions[0]?.lease_id || "",
+      selectedExistingSandboxId: selectedExistingSandboxId || leaseOptions[0]?.lease_id || "",
       selectedRecipeId,
       selectedRecipeFeatures: { ...selectedRecipeFeatures },
       selectedWorkspace: activeWorkspace,
@@ -463,7 +463,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   function cancelConfigChanges() {
     if (!configSnapshot) return resetConfigPanel();
     setCreateMode(configSnapshot.createMode);
-    setSelectedLeaseId(configSnapshot.selectedLeaseId);
+    setSelectedExistingSandboxId(configSnapshot.selectedExistingSandboxId);
     setSelectedRecipeId(configSnapshot.selectedRecipeId);
     setSelectedRecipeFeatures(configSnapshot.selectedRecipeFeatures);
     setSelectedWorkspace(configSnapshot.selectedWorkspace);
@@ -477,7 +477,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
       create_mode: createMode,
       provider_config: selectedProviderConfig,
       recipe_id: selectedRecipeSnapshot?.id || null,
-      lease_id: createMode === "existing" ? selectedLeaseId || null : null,
+      existing_sandbox_id: createMode === "existing" ? selectedExistingSandboxId || null : null,
       model: draftModel,
       workspace,
     });
@@ -596,7 +596,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),
             applyDisabled: (configStep === 1 && (newSandboxQuotaBlocked || newSandboxProviderUnavailable))
-              || (configStep === 2 && createMode === "existing" && !selectedLeaseId),
+              || (configStep === 2 && createMode === "existing" && !selectedExistingSandboxId),
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
@@ -709,7 +709,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                             }
                             const nextLease = leaseOptions.find((lease) => lease.provider_name === nextProviderConfig);
                             if (createMode === "existing") {
-                              setSelectedLeaseId(nextLease?.lease_id || "");
+                              setSelectedExistingSandboxId(nextLease?.lease_id || "");
                             }
                           }}
                         >
@@ -846,13 +846,13 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                           </div>
                           <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
                             {filteredLeaseOptions.map((lease) => {
-                              const isActive = selectedLeaseId === lease.lease_id;
+                              const isActive = selectedExistingSandboxId === lease.lease_id;
                               const stateMeta = leaseStateMeta(lease.observed_state);
                               return (
                                 <button
                                   key={lease.lease_id}
                                   type="button"
-                                  onClick={() => setSelectedLeaseId(lease.lease_id)}
+                                  onClick={() => setSelectedExistingSandboxId(lease.lease_id)}
                                   className={cn(
                                     "w-full rounded-2xl border p-3 text-left transition-colors",
                                     isActive ? "border-primary/40 bg-primary/5" : "border-border bg-background hover:bg-accent/40",
