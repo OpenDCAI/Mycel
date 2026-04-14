@@ -82,6 +82,19 @@ class _FakeWorkspaceRepo:
         self.by_sandbox_id.setdefault(row.sandbox_id, []).append(row)
 
 
+class _FakeSandboxRepo:
+    def __init__(self) -> None:
+        self.created: list[Any] = []
+        self.by_id: dict[str, Any] = {}
+
+    def get_by_id(self, sandbox_id: str):
+        return self.by_id.get(sandbox_id)
+
+    def create(self, row: Any) -> None:
+        self.created.append(row)
+        self.by_id[row.id] = row
+
+
 class _FakeAuthService:
     def __init__(self) -> None:
         self.tokens: list[str] = []
@@ -352,6 +365,7 @@ def _make_threads_app(
             thread_repo=thread_repo or _FakeThreadRepo(),
             recipe_repo=state_overrides.pop("recipe_repo", _FakeRecipeRepo()),
             workspace_repo=state_overrides.pop("workspace_repo", _FakeWorkspaceRepo()),
+            sandbox_repo=state_overrides.pop("sandbox_repo", _FakeSandboxRepo()),
             **state_overrides,
         )
     )
@@ -474,7 +488,8 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
 @pytest.mark.asyncio
 async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() -> None:
     workspace_repo = _FakeWorkspaceRepo()
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo)
+    sandbox_repo = _FakeSandboxRepo()
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
@@ -503,8 +518,10 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
         created = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
     row = app.state.thread_repo.rows[created["thread_id"]]
+    assert len(sandbox_repo.created) == 1
     assert len(workspace_repo.created) == 1
     assert row["current_workspace_id"] == workspace_repo.created[0].id
+    assert workspace_repo.created[0].sandbox_id == sandbox_repo.created[0].id
 
 
 @pytest.mark.asyncio
@@ -527,6 +544,7 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
         default_recipe_snapshot("local"),
         "/tmp/fresh-local-thread",
         workspace_repo=workspace_repo,
+        sandbox_repo=app.state.sandbox_repo,
         owner_user_id="owner-1",
     )
 
@@ -558,6 +576,7 @@ async def test_create_thread_route_persists_current_workspace_id_for_new_sandbox
         default_recipe_snapshot("local"),
         "/tmp/fresh-local-thread",
         workspace_repo=workspace_repo,
+        sandbox_repo=app.state.sandbox_repo,
         owner_user_id="owner-1",
     )
     row = app.state.thread_repo.rows[created["thread_id"]]
