@@ -70,7 +70,7 @@ def resolve_thread_runtime_binding(
         sandbox_status=_optional_text(sandbox, "status"),
         sandbox_desired_state=_optional_text(sandbox, "desired_state"),
         sandbox_observed_state=_optional_text(sandbox, "observed_state"),
-        sandbox_template_id=_optional_text(sandbox, "template_id"),
+        sandbox_template_id=_optional_text(sandbox, "sandbox_template_id"),
         sandbox_config=_config_dict(sandbox),
         model=_optional_text(thread, "model"),
         legacy_cwd=_optional_text(thread, "cwd"),
