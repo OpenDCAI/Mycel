@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import UTC
 from typing import Annotated, Any
@@ -60,6 +61,7 @@ from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_lease
 from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
+from storage.contracts import WorkspaceRow
 
 logger = logging.getLogger(__name__)
 
@@ -518,6 +520,9 @@ def _create_thread_sandbox_resources(
     sandbox_type: str,
     recipe: dict[str, Any] | None,
     cwd: str | None = None,
+    *,
+    workspace_repo: Any,
+    owner_user_id: str,
 ) -> str:
     """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
     from datetime import datetime
@@ -575,7 +580,42 @@ def _create_thread_sandbox_resources(
         )
     finally:
         terminal_repo.close()
-    return lease_id
+    return _materialize_workspace_for_sandbox(
+        workspace_repo,
+        sandbox_id=lease_id,
+        owner_user_id=owner_user_id,
+        workspace_path=initial_cwd,
+    )
+
+
+def _materialize_workspace_for_sandbox(
+    workspace_repo: Any,
+    *,
+    sandbox_id: str,
+    owner_user_id: str,
+    workspace_path: str | None,
+) -> str:
+    normalized_path = str(workspace_path or "").strip() or "/workspace"
+    for row in workspace_repo.list_by_sandbox_id(sandbox_id):
+        if row.owner_user_id == owner_user_id and row.workspace_path == normalized_path:
+            return row.id
+
+    workspace_id = f"workspace-{uuid.uuid4().hex}"
+    now = time.time()
+    # @@@workspace-bridge-write - Phase 2 only cuts thread create writes to a real
+    # workspace row; sandbox identity can stay lease-backed until container.sandboxes lands.
+    workspace_repo.create(
+        WorkspaceRow(
+            id=workspace_id,
+            sandbox_id=sandbox_id,
+            owner_user_id=owner_user_id,
+            workspace_path=normalized_path,
+            name=None,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return workspace_id
 
 
 def _resolve_owned_recipe_snapshot(
@@ -648,11 +688,16 @@ def _create_owned_thread(
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_user_id)
 
     if selected_lease_id:
-        current_workspace_id = selected_lease_id
         bound_cwd = bind_thread_to_existing_lease(
             new_thread_id,
             selected_lease_id,
             cwd=payload.cwd,
+        )
+        current_workspace_id = _materialize_workspace_for_sandbox(
+            app.state.workspace_repo,
+            sandbox_id=str(owned_lease.get("sandbox_id") or owned_lease["lease_id"]),
+            owner_user_id=owner_user_id,
+            workspace_path=bound_cwd,
         )
     else:
         # @@@create-write-bridge-first - replay-13 requires supported create paths
@@ -663,6 +708,8 @@ def _create_owned_thread(
             sandbox_type,
             selected_recipe,
             payload.cwd,
+            workspace_repo=app.state.workspace_repo,
+            owner_user_id=owner_user_id,
         )
         bound_cwd = None
 
