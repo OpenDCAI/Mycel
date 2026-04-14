@@ -80,7 +80,7 @@ class _FakeThreadRepo:
         is_main: bool,
         branch_index: int,
         owner_user_id: str,
-        current_workspace_id: str | None = None,
+        current_workspace_id: str,
     ):
         row = {
             "id": thread_id,
@@ -107,6 +107,23 @@ class _FakeUserRepo:
         if name is None:
             return None
         return SimpleNamespace(id=user_id, display_name=name, avatar=None)
+
+
+def test_fake_thread_repo_create_requires_current_workspace_id() -> None:
+    repo = _FakeThreadRepo()
+
+    with pytest.raises(TypeError):
+        repo.create(
+            thread_id="thread-1",
+            agent_user_id="agent-user-1",
+            sandbox_type="local",
+            cwd="/tmp",
+            created_at=1.0,
+            model="gpt-5",
+            is_main=True,
+            branch_index=0,
+            owner_user_id="owner-1",
+        )
 
 
 class _FakeChildAgent:
