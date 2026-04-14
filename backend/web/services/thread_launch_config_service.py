@@ -261,7 +261,18 @@ def _resolve_bridge_lease(
             workspace_owner_user_id = _required_bridge_text(workspace, "owner_user_id", "workspace")
             if workspace_owner_user_id != owner_user_id:
                 raise PermissionError(f"workspace owner mismatch: expected {owner_user_id}, got {workspace_owner_user_id}")
-            return leases_by_id.get(sandbox_id)
+            sandbox_repo = getattr(app.state, "sandbox_repo", None)
+            sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
+            if not callable(sandbox_get_by_id):
+                raise RuntimeError("sandbox_repo must support get_by_id")
+            sandbox = sandbox_get_by_id(sandbox_id)
+            if sandbox is None:
+                raise RuntimeError(f"sandbox not found: {sandbox_id}")
+            sandbox_owner_user_id = _required_bridge_text(sandbox, "owner_user_id", "sandbox")
+            if sandbox_owner_user_id != owner_user_id:
+                raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
+            legacy_lease_id = _required_bridge_config_text(sandbox, "legacy_lease_id", "sandbox")
+            return leases_by_id.get(legacy_lease_id)
     return leases_by_id.get(current_workspace_id)
 
 
@@ -271,6 +282,18 @@ def _required_bridge_text(row: Any, key: str, label: str) -> str:
         value = value.strip()
     if value is None or value == "":
         raise RuntimeError(f"{label}.{key} is required")
+    return str(value)
+
+
+def _required_bridge_config_text(row: Any, key: str, label: str) -> str:
+    config = row.get("config") if isinstance(row, dict) else getattr(row, "config", None)
+    if not isinstance(config, dict):
+        raise RuntimeError(f"{label}.config must be an object")
+    value = config.get(key)
+    if isinstance(value, str):
+        value = value.strip()
+    if value is None or value == "":
+        raise RuntimeError(f"{label}.config.{key} is required")
     return str(value)
 
 

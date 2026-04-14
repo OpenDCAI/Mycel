@@ -68,6 +68,8 @@ async def lifespan(app: FastAPI):
     app.state.sandbox_volume_repo = storage_container.sandbox_volume_repo()
     app.state.thread_launch_pref_repo = storage_container.thread_launch_pref_repo()
     app.state.recipe_repo = storage_container.recipe_repo()
+    app.state.workspace_repo = storage_container.workspace_repo()
+    app.state.sandbox_repo = storage_container.sandbox_repo()
     app.state.chat_repo = storage_container.chat_repo()
     app.state.invite_code_repo = storage_container.invite_code_repo()
     app.state.user_settings_repo = storage_container.user_settings_repo()

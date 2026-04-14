@@ -121,6 +121,19 @@ class _FakeWorkspaceRepo:
         self.by_sandbox_id.setdefault(row.sandbox_id, []).append(row)
 
 
+class _FakeSandboxRepo:
+    def __init__(self) -> None:
+        self.created: list[object] = []
+        self.by_id: dict[str, object] = {}
+
+    def get_by_id(self, sandbox_id: str):
+        return self.by_id.get(sandbox_id)
+
+    def create(self, row) -> None:
+        self.created.append(row)
+        self.by_id[row.id] = row
+
+
 def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
@@ -129,6 +142,7 @@ def _make_threads_app():
             thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
             recipe_repo=_FakeRecipeRepo(),
             workspace_repo=_FakeWorkspaceRepo(),
+            sandbox_repo=_FakeSandboxRepo(),
             thread_sandbox={},
             thread_cwd={},
         )
@@ -415,10 +429,26 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
     workspace_repo = _FakeWorkspaceRepo()
     workspace_repo.by_id["ws-2"] = SimpleNamespace(
         id="ws-2",
-        sandbox_id="lease-2",
+        sandbox_id="sandbox-2",
         owner_user_id="owner-1",
         workspace_path="/workspace/right",
         name=None,
+        created_at=2.0,
+        updated_at=2.0,
+    )
+    sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-2"] = SimpleNamespace(
+        id="sandbox-2",
+        owner_user_id="owner-1",
+        provider_name="daytona_selfhost",
+        provider_env_id="provider-env-2",
+        sandbox_template_id="daytona:default",
+        desired_state="running",
+        observed_state="running",
+        status="ready",
+        observed_at=2.0,
+        last_error=None,
+        config={"legacy_lease_id": "lease-2"},
         created_at=2.0,
         updated_at=2.0,
     )
@@ -429,6 +459,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
             workspace_repo=workspace_repo,
+            sandbox_repo=sandbox_repo,
         )
     )
 
@@ -499,6 +530,7 @@ def test_resolve_default_config_derives_existing_from_legacy_lease_backed_curren
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
             workspace_repo=_FakeWorkspaceRepo(),
+            sandbox_repo=_FakeSandboxRepo(),
         )
     )
 
@@ -1040,6 +1072,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         normalized_recipe,
         None,
         workspace_repo=app.state.workspace_repo,
+        sandbox_repo=app.state.sandbox_repo,
         owner_user_id="owner-1",
     )
     save_successful.assert_called_once_with(
