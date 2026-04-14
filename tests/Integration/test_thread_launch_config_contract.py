@@ -103,6 +103,19 @@ class _FakeRecipeRepo:
         return [row for (owner, _recipe_id), row in self.rows.items() if owner == owner_user_id]
 
 
+class _FakeWorkspaceRepo:
+    def __init__(self) -> None:
+        self.created: list[object] = []
+        self.by_sandbox_id: dict[str, list[object]] = {}
+
+    def list_by_sandbox_id(self, sandbox_id: str):
+        return list(self.by_sandbox_id.get(sandbox_id, []))
+
+    def create(self, row) -> None:
+        self.created.append(row)
+        self.by_sandbox_id.setdefault(row.sandbox_id, []).append(row)
+
+
 def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
@@ -110,6 +123,7 @@ def _make_threads_app():
             thread_repo=_FakeThreadRepo(),
             thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
             recipe_repo=_FakeRecipeRepo(),
+            workspace_repo=_FakeWorkspaceRepo(),
             thread_sandbox={},
             thread_cwd={},
         )
@@ -894,6 +908,8 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         "local",
         normalized_recipe,
         None,
+        workspace_repo=app.state.workspace_repo,
+        owner_user_id="owner-1",
     )
     save_successful.assert_called_once_with(
         app,
