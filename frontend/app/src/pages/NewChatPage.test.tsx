@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NewChatPage from "./NewChatPage";
 import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
-import type { AccountResourceLimit, SandboxType } from "../api/types";
+import type { AccountResourceLimit, SandboxType, UserLeaseSummary } from "../api/types";
 
 const handleGetDefaultThread = vi.fn();
 const handleCreateThread = vi.fn();
 const clientMocks = vi.hoisted(() => ({
   getDefaultThreadConfig: vi.fn(() => new Promise(() => {})),
-  listMyLeases: vi.fn(async () => []),
+  listMyLeases: vi.fn<() => Promise<UserLeaseSummary[]>>(async () => []),
   saveDefaultThreadConfig: vi.fn(async () => undefined),
   fetchAccountResourceLimits: vi.fn<() => Promise<AccountResourceLimit[]>>(async () => []),
 }));
@@ -509,7 +509,6 @@ describe("NewChatPage", () => {
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-1",
         recipe_name: "Existing One",
-        recipe: null,
         observed_state: "running",
         desired_state: "running",
         cwd: "/workspace/reused-1",
@@ -521,7 +520,6 @@ describe("NewChatPage", () => {
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-2",
         recipe_name: "Existing Two",
-        recipe: null,
         observed_state: "running",
         desired_state: "running",
         cwd: "/workspace/reused-2",
