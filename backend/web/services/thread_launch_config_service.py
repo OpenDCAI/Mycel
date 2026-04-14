@@ -102,6 +102,8 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
     return {
         "source": "derived",
         "config": _derive_default_config(
+            app=app,
+            owner_user_id=owner_user_id,
             agent_threads=agent_threads,
             leases=leases,
             providers=providers,
@@ -182,6 +184,8 @@ def _existing_config_from_lease(lease: dict[str, Any], *, model: str | None, wor
 
 def _derive_default_config(
     *,
+    app: Any,
+    owner_user_id: str,
     agent_threads: list[dict[str, Any]],
     leases: list[dict[str, Any]],
     providers: list[dict[str, Any]],
@@ -189,7 +193,14 @@ def _derive_default_config(
 ) -> dict[str, Any]:
     leases_by_id = {str(lease.get("lease_id") or "").strip(): lease for lease in leases if str(lease.get("lease_id") or "").strip()}
     for thread in _iter_default_bridge_threads(agent_threads):
-        lease = leases_by_id.get(thread["current_workspace_id"])
+        # @@@workspace-bridge-read-precedence - Phase 3 reads workspace-backed ids first,
+        # then falls through to legacy lease-backed bridge ids for old rows.
+        lease = _resolve_bridge_lease(
+            app=app,
+            current_workspace_id=thread["current_workspace_id"],
+            owner_user_id=owner_user_id,
+            leases_by_id=leases_by_id,
+        )
         if lease is not None:
             return _existing_config_from_lease(lease, model=None, workspace=lease.get("cwd"))
 
@@ -232,6 +243,35 @@ def _iter_default_bridge_threads(agent_threads: list[dict[str, Any]]) -> list[di
     if threads_with_bridge and all(item.get("created_at") is not None for item in threads_with_bridge):
         return sorted(threads_with_bridge, key=lambda item: item["created_at"], reverse=True)
     return threads_with_bridge
+
+
+def _resolve_bridge_lease(
+    *,
+    app: Any,
+    current_workspace_id: str,
+    owner_user_id: str,
+    leases_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    workspace_repo = getattr(app.state, "workspace_repo", None)
+    get_by_id = getattr(workspace_repo, "get_by_id", None)
+    if callable(get_by_id):
+        workspace = get_by_id(current_workspace_id)
+        if workspace is not None:
+            sandbox_id = _required_bridge_text(workspace, "sandbox_id", "workspace")
+            workspace_owner_user_id = _required_bridge_text(workspace, "owner_user_id", "workspace")
+            if workspace_owner_user_id != owner_user_id:
+                raise PermissionError(f"workspace owner mismatch: expected {owner_user_id}, got {workspace_owner_user_id}")
+            return leases_by_id.get(sandbox_id)
+    return leases_by_id.get(current_workspace_id)
+
+
+def _required_bridge_text(row: Any, key: str, label: str) -> str:
+    value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
+    if isinstance(value, str):
+        value = value.strip()
+    if value is None or value == "":
+        raise RuntimeError(f"{label}.{key} is required")
+    return str(value)
 
 
 def _sandbox_template_matches_provider(sandbox_template: dict[str, Any], provider_config: str) -> bool:
