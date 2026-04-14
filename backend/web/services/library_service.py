@@ -1,4 +1,4 @@
-"""Library CRUD for file-backed assets and DB-backed recipes."""
+"""Library CRUD for file-backed assets and DB-backed sandbox templates."""
 
 import json
 import shutil
@@ -30,8 +30,8 @@ def _write_json(path: Path, data: Any) -> None:
 
 
 def _require_recipe_owner(owner_user_id: str | None) -> str:
-    # @@@recipe-user-scope - custom recipes and builtin overrides are account-scoped resources.
-    # Callers must pass owner_user_id for recipe operations so one user's edits never leak into another's library.
+    # @@@sandbox-template-user-scope - custom sandbox templates and builtin overrides are account-scoped resources.
+    # Callers must pass owner_user_id so one user's template edits never leak into another user's library.
     if not owner_user_id:
         raise ValueError("owner_user_id is required for recipe operations")
     return str(owner_user_id or "")
@@ -45,7 +45,7 @@ def _normalize_recipe_item(data: dict[str, Any], *, builtin: bool) -> dict[str, 
     snapshot = normalize_recipe_snapshot(provider_type, {**data, "provider_name": provider_name})
     return {
         **snapshot,
-        "type": "recipe",
+        "type": "sandbox-template",
         "provider_name": provider_name,
         "provider_type": provider_type,
         "created_at": int(data.get("created_at") or 0),
@@ -101,7 +101,7 @@ def list_library(
     recipe_repo: RecipeRepo | None = None,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
         return [
@@ -146,7 +146,7 @@ def seed_default_recipes(
         provider_type = str(sandbox.get("provider") or provider_type_from_name(provider_name)).strip()
         recipe = {
             **default_recipe_snapshot(provider_type, provider_name=provider_name),
-            "type": "recipe",
+            "type": "sandbox-template",
             "provider_name": provider_name,
             "provider_type": provider_type,
             "available": bool(sandbox.get("available", True)),
@@ -208,7 +208,7 @@ def create_resource(
 ) -> dict[str, Any]:
     now = int(time.time() * 1000)
     cat = category or "未分类"
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
         provider_name, provider_type = _resolve_recipe_provider(provider_name)
@@ -276,7 +276,7 @@ def update_resource(
 ) -> dict[str, Any] | None:
     updates = {key: value for key, value in {"name": name, "desc": desc, "features": features}.items() if value is not None}
     now = int(time.time() * 1000)
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
         row = recipe_repo.get(owner_user_id, resource_id)
@@ -322,7 +322,7 @@ def delete_resource(
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
 ) -> bool:
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
         row = recipe_repo.get(owner_user_id, resource_id)
@@ -335,7 +335,7 @@ def delete_resource(
             now = int(time.time() * 1000)
             reset = {
                 **default_recipe_snapshot(provider_type, provider_name=provider_name),
-                "type": "recipe",
+                "type": "sandbox-template",
                 "provider_name": provider_name,
                 "provider_type": provider_type,
                 "available": bool(data.get("available", True)),
@@ -427,9 +427,9 @@ def get_resource_content(
     recipe_repo: RecipeRepo | None = None,
 ) -> str | None:
     """Read the .md content file for a skill or agent resource."""
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
-        for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
+        for item in list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
             if item["id"] == resource_id:
                 return json.dumps(item, ensure_ascii=False, indent=2)
         return None
@@ -456,7 +456,7 @@ def get_resource_content(
 def update_resource_content(resource_type: str, resource_id: str, content: str) -> bool:
     """Write the .md content file for a skill or agent resource."""
     now = int(time.time() * 1000)
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         return False
     content_path = _file_resource_content_path(resource_type, resource_id)
     meta_path = _file_resource_meta_path(resource_type, resource_id)

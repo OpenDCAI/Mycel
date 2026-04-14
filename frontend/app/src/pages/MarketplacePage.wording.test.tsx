@@ -62,7 +62,7 @@ describe("MarketplacePage wording contract", () => {
       id: "daytona_selfhost:custom:probe",
       name: "Selfhost Custom",
       desc: "custom self-host sandbox",
-      type: "recipe",
+      type: "sandbox-template",
       provider_name: "daytona_selfhost",
       provider_type: "daytona",
       features: { lark_cli: false },
@@ -74,12 +74,12 @@ describe("MarketplacePage wording contract", () => {
       agentsLoaded: true,
       librarySkills: [],
       libraryAgents: [],
-      libraryRecipes: [
+      librarySandboxTemplates: [
         {
           id: "daytona:selfhost:default",
           name: "Self-host Daytona",
           desc: "Use the self-host Daytona provider",
-          type: "recipe",
+          type: "sandbox-template",
           provider_type: "daytona",
           provider_name: "daytona_selfhost",
           features: { lark_cli: false },
@@ -90,7 +90,7 @@ describe("MarketplacePage wording contract", () => {
           }],
         },
       ],
-      librariesLoaded: { skill: true, mcp: true, agent: true, recipe: true },
+      librariesLoaded: { skill: true, mcp: true, agent: true, "sandbox-template": true },
       fetchLibrary: appStoreFetchLibrary,
       deleteResource: appStoreDeleteResource,
       addResource: appStoreAddResource,
@@ -153,7 +153,7 @@ describe("MarketplacePage wording contract", () => {
 
   it("shows installed sandbox recipes as the sandbox library tab", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=recipe"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -169,12 +169,12 @@ describe("MarketplacePage wording contract", () => {
   it("does not show installed sandbox empty state before recipe library is loaded", () => {
     appStoreState = {
       ...appStoreState,
-      libraryRecipes: [],
-      librariesLoaded: { skill: true, mcp: true, agent: true, recipe: false },
+      librarySandboxTemplates: [],
+      librariesLoaded: { skill: true, mcp: true, agent: true, "sandbox-template": false },
     };
 
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=recipe"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -187,7 +187,7 @@ describe("MarketplacePage wording contract", () => {
 
   it("creates sandbox recipes with concrete provider_name from backend-loaded recipes", async () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=recipe"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -200,7 +200,7 @@ describe("MarketplacePage wording contract", () => {
     fireEvent.click(screen.getByRole("button", { name: "创建" }));
 
     await waitFor(() => {
-      expect(appStoreAddResource).toHaveBeenCalledWith("recipe", "Selfhost Custom", "custom self-host sandbox", {
+      expect(appStoreAddResource).toHaveBeenCalledWith("sandbox-template", "Selfhost Custom", "custom self-host sandbox", {
         provider_name: "daytona_selfhost",
         features: { lark_cli: false },
       });

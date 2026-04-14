@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Zap, Users, RefreshCw } from "lucide-react";
-import RecipeEditor from "@/components/RecipeEditor";
+import SandboxTemplateEditor from "@/components/SandboxTemplateEditor";
 import { useAppStore } from "@/store/app-store";
 import type { ResourceItem } from "@/store/types";
 
-type DetailLibraryType = "skill" | "agent" | "recipe";
+type DetailLibraryType = "skill" | "agent" | "sandbox-template";
 
 function detailLibraryType(value: string | undefined): DetailLibraryType | null {
-  return value === "skill" || value === "agent" || value === "recipe" ? value : null;
+  return value === "skill" || value === "agent" || value === "sandbox-template" ? value : null;
 }
 
 export default function LibraryItemDetailPage() {
@@ -16,7 +16,7 @@ export default function LibraryItemDetailPage() {
   const navigate = useNavigate();
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
-  const libraryRecipes = useAppStore((s) => s.libraryRecipes);
+  const librarySandboxTemplates = useAppStore((s) => s.librarySandboxTemplates);
   const librariesLoaded = useAppStore((s) => s.librariesLoaded);
   const ensureLibrary = useAppStore((s) => s.ensureLibrary);
   const fetchResourceContent = useAppStore((s) => s.fetchResourceContent);
@@ -32,9 +32,9 @@ export default function LibraryItemDetailPage() {
 
   const item = useMemo<ResourceItem | null>(() => {
     if (!type || !id) return null;
-    const list = type === "skill" ? librarySkills : type === "agent" ? libraryAgents : type === "recipe" ? libraryRecipes : [];
+    const list = type === "skill" ? librarySkills : type === "agent" ? libraryAgents : type === "sandbox-template" ? librarySandboxTemplates : [];
     return list.find((i) => i.id === id) ?? null;
-  }, [librarySkills, libraryAgents, libraryRecipes, type, id]);
+  }, [librarySkills, libraryAgents, librarySandboxTemplates, type, id]);
 
   useEffect(() => {
     if (!libraryType || librariesLoaded[libraryType]) return;
@@ -50,7 +50,7 @@ export default function LibraryItemDetailPage() {
   }, [ensureLibrary, librariesLoaded, libraryType]);
 
   useEffect(() => {
-    if (!type || !id || type === "recipe") return;
+    if (!type || !id || type === "sandbox-template") return;
     const key = `${type}:${id}`;
     let cancelled = false;
     fetchResourceContent(type, id)
@@ -74,10 +74,10 @@ export default function LibraryItemDetailPage() {
   }, [type, id, fetchResourceContent]);
 
   const isSkill = type === "skill";
-  const isRecipe = type === "recipe";
+  const isSandboxTemplate = type === "sandbox-template";
   const filename = isSkill ? "SKILL.md" : "agent.md";
   const loadingLibrary = !!libraryType && !librariesLoaded[libraryType] && !libraryError;
-  const loading = loadingLibrary || (!isRecipe && !!contentKey && contentState.key !== contentKey);
+  const loading = loadingLibrary || (!isSandboxTemplate && !!contentKey && contentState.key !== contentKey);
   const content = contentState.key === contentKey ? contentState.content : "";
   const error = libraryError ?? (contentState.key === contentKey ? contentState.error : null);
 
@@ -101,7 +101,7 @@ export default function LibraryItemDetailPage() {
           返回
         </button>
 
-        {!isRecipe && (
+        {!isSandboxTemplate && (
           <div className="flex items-start gap-4 mb-6">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
@@ -122,8 +122,8 @@ export default function LibraryItemDetailPage() {
           </div>
         )}
 
-        {isRecipe && item ? (
-          <RecipeEditor item={item} onDeleted={() => navigate("/marketplace?tab=installed&sub=recipe")} />
+        {isSandboxTemplate && item ? (
+          <SandboxTemplateEditor item={item} onDeleted={() => navigate("/marketplace?tab=installed&sub=sandbox-template")} />
         ) : (
           <div className="surface-card p-4">
           <div className="flex items-center gap-2 mb-3">

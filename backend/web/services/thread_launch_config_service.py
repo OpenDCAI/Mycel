@@ -17,7 +17,7 @@ def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "create_mode": create_mode,
         "provider_config": str(payload.get("provider_config") or "").strip(),
-        "recipe_id": str(payload.get("recipe_id") or "").strip() or None,
+        "sandbox_template_id": str(payload.get("sandbox_template_id") or "").strip() or None,
         "existing_sandbox_id": existing_sandbox_id,
         "model": str(payload.get("model") or "").strip() or None,
         "workspace": str(payload.get("workspace") or "").strip() or None,
@@ -44,7 +44,7 @@ def build_existing_launch_config(
 def build_new_launch_config(
     *,
     provider_config: str,
-    recipe_id: str | None,
+    sandbox_template_id: str | None,
     model: str | None,
     workspace: str | None,
 ) -> dict[str, Any]:
@@ -52,7 +52,7 @@ def build_new_launch_config(
         {
             "create_mode": "new",
             "provider_config": provider_config,
-            "recipe_id": recipe_id,
+            "sandbox_template_id": sandbox_template_id,
             "existing_sandbox_id": None,
             "model": model,
             "workspace": workspace,
@@ -76,16 +76,26 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
         user_repo=app.state.user_repo,
     )
     providers = [item for item in sandbox_service.available_sandbox_types() if item.get("available")]
-    recipes = list_library("recipe", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
+    sandbox_templates = list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
     agent_threads = app.state.thread_repo.list_by_agent_user(agent_user_id)
 
     # @@@thread-launch-default-precedence - prefer the last successful thread config, then the last confirmed draft,
     # and only then derive from current leases/providers. This keeps defaults tied to actual agent usage first.
-    successful = _validate_saved_config(prefs.get("last_successful"), leases=leases, providers=providers, recipes=recipes)
+    successful = _validate_saved_config(
+        prefs.get("last_successful"),
+        leases=leases,
+        providers=providers,
+        sandbox_templates=sandbox_templates,
+    )
     if successful is not None:
         return {"source": "last_successful", "config": successful}
 
-    confirmed = _validate_saved_config(prefs.get("last_confirmed"), leases=leases, providers=providers, recipes=recipes)
+    confirmed = _validate_saved_config(
+        prefs.get("last_confirmed"),
+        leases=leases,
+        providers=providers,
+        sandbox_templates=sandbox_templates,
+    )
     if confirmed is not None:
         return {"source": "last_confirmed", "config": confirmed}
 
@@ -95,7 +105,7 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
             agent_threads=agent_threads,
             leases=leases,
             providers=providers,
-            recipes=recipes,
+            sandbox_templates=sandbox_templates,
         ),
     }
 
@@ -105,14 +115,18 @@ def _validate_saved_config(
     *,
     leases: list[dict[str, Any]],
     providers: list[dict[str, Any]],
-    recipes: list[dict[str, Any]],
+    sandbox_templates: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         return None
 
     config = normalize_launch_config_payload(payload)
     provider_names = {str(item["name"]) for item in providers}
-    recipes_by_id = {str(item["id"]): item for item in recipes if item.get("available", True) and item.get("provider_type")}
+    sandbox_templates_by_id = {
+        str(item["id"]): item
+        for item in sandbox_templates
+        if item.get("available", True) and item.get("provider_type")
+    }
 
     if config["create_mode"] == "existing":
         existing_sandbox_id = config.get("existing_sandbox_id")
@@ -124,21 +138,25 @@ def _validate_saved_config(
         return _existing_config_from_lease(lease, model=config.get("model"), workspace=lease.get("cwd"))
 
     provider_config = config.get("provider_config")
-    recipe_id = str(config.get("recipe_id") or "").strip()
-    if not provider_config or provider_config not in provider_names or not recipe_id:
+    sandbox_template_id = str(config.get("sandbox_template_id") or "").strip()
+    if not provider_config or provider_config not in provider_names or not sandbox_template_id:
         return None
-    if not recipe_id or recipe_id not in recipes_by_id:
+    if sandbox_template_id not in sandbox_templates_by_id:
         return None
-    recipe = recipes_by_id[recipe_id]
-    if not _recipe_matches_provider(recipe, provider_config):
+    sandbox_template = sandbox_templates_by_id[sandbox_template_id]
+    if not _sandbox_template_matches_provider(sandbox_template, provider_config):
         return None
-    recipe_snapshot = normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe, provider_name=provider_config)
+    sandbox_template_snapshot = normalize_recipe_snapshot(
+        provider_type_from_name(provider_config),
+        sandbox_template,
+        provider_name=provider_config,
+    )
 
     return {
         "create_mode": "new",
         "provider_config": provider_config,
-        "recipe_id": recipe_id,
-        "recipe": recipe_snapshot,
+        "sandbox_template_id": sandbox_template_id,
+        "sandbox_template": sandbox_template_snapshot,
         "existing_sandbox_id": None,
         "model": config.get("model"),
         "workspace": config.get("workspace"),
@@ -157,7 +175,7 @@ def _existing_config_from_lease(lease: dict[str, Any], *, model: str | None, wor
     return {
         "create_mode": "existing",
         "provider_config": lease.get("provider_name"),
-        "recipe": lease.get("recipe"),
+        "sandbox_template": lease.get("recipe"),
         "existing_sandbox_id": lease.get("lease_id"),
         "model": model,
         "workspace": workspace,
@@ -169,7 +187,7 @@ def _derive_default_config(
     agent_threads: list[dict[str, Any]],
     leases: list[dict[str, Any]],
     providers: list[dict[str, Any]],
-    recipes: list[dict[str, Any]],
+    sandbox_templates: list[dict[str, Any]],
 ) -> dict[str, Any]:
     leases_by_id = {str(lease.get("lease_id") or "").strip(): lease for lease in leases if str(lease.get("lease_id") or "").strip()}
     for thread in _iter_default_bridge_threads(agent_threads):
@@ -179,20 +197,28 @@ def _derive_default_config(
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
-    recipe = next(
-        (item for item in recipes if item.get("available", True) and _recipe_matches_provider(item, provider_config)),
+    sandbox_template = next(
+        (
+            item
+            for item in sandbox_templates
+            if item.get("available", True) and _sandbox_template_matches_provider(item, provider_config)
+        ),
         None,
     )
-    recipe_snapshot = (
-        normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe, provider_name=provider_config)
-        if recipe is not None
+    sandbox_template_snapshot = (
+        normalize_recipe_snapshot(
+            provider_type_from_name(provider_config),
+            sandbox_template,
+            provider_name=provider_config,
+        )
+        if sandbox_template is not None
         else None
     )
     return {
         "create_mode": "new",
         "provider_config": provider_config,
-        "recipe_id": str(recipe["id"]) if recipe is not None else None,
-        "recipe": recipe_snapshot,
+        "sandbox_template_id": str(sandbox_template["id"]) if sandbox_template is not None else None,
+        "sandbox_template": sandbox_template_snapshot,
         "existing_sandbox_id": None,
         "model": None,
         "workspace": None,
@@ -214,9 +240,9 @@ def _iter_default_bridge_threads(agent_threads: list[dict[str, Any]]) -> list[di
     return threads_with_bridge
 
 
-def _recipe_matches_provider(recipe: dict[str, Any], provider_config: str) -> bool:
-    provider_name = str(recipe.get("provider_name") or "").strip()
+def _sandbox_template_matches_provider(sandbox_template: dict[str, Any], provider_config: str) -> bool:
+    provider_name = str(sandbox_template.get("provider_name") or "").strip()
     if provider_name:
         return provider_name == provider_config
     provider_type = provider_type_from_name(provider_config)
-    return str(recipe.get("provider_type") or "") == provider_type
+    return str(sandbox_template.get("provider_type") or "") == provider_type
