@@ -276,10 +276,14 @@ class AgentSubAgentRow(BaseModel):
 class ThreadRow(BaseModel):
     id: str
     agent_user_id: str
+    owner_user_id: str | None = None
+    current_workspace_id: str | None = None
     sandbox_type: str
     model: str | None = None
     cwd: str | None = None
     status: str = "active"
+    is_main: bool = False
+    branch_index: int = 0
     created_at: float
     updated_at: float | None = None
     last_active_at: float | None = None
@@ -780,9 +784,11 @@ class ThreadRepo(Protocol):
         model: str | None = None,
         is_main: bool,
         branch_index: int,
+        owner_user_id: str,
         status: str = "active",
         updated_at: float | None = None,
         last_active_at: float | None = None,
+        current_workspace_id: str | None = None,
     ) -> None: ...
     def list_by_ids(self, thread_ids: list[str]) -> list[dict[str, Any]]: ...
     def get_by_id(self, thread_id: str) -> dict[str, Any] | None: ...

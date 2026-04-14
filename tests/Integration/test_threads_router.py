@@ -458,6 +458,34 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
 
 
 @pytest.mark.asyncio
+async def test_create_thread_route_persists_current_workspace_id_for_existing_lease() -> None:
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
+    payload = CreateThreadRequest.model_validate(
+        {
+            "agent_user_id": "agent-user-1",
+            "lease_id": "lease-1",
+            "cwd": "/workspace/reused",
+        }
+    )
+
+    with (
+        patch.object(
+            threads_router.sandbox_service,
+            "resolve_owned_lease",
+            return_value={"lease_id": "lease-1", "provider_name": "local", "recipe": None},
+        ),
+        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
+        patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
+        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
+        patch.object(threads_router, "save_last_successful_config", return_value=None),
+    ):
+        created = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
+
+    row = app.state.thread_repo.rows[created["thread_id"]]
+    assert row["current_workspace_id"] == "lease-1"
+
+
+@pytest.mark.asyncio
 async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
@@ -476,6 +504,36 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
         default_recipe_snapshot("local"),
         "/tmp/fresh-local-thread",
     )
+
+
+@pytest.mark.asyncio
+async def test_create_thread_route_persists_current_workspace_id_for_new_sandbox_bridge() -> None:
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
+    payload = CreateThreadRequest.model_validate(
+        {
+            "agent_user_id": "agent-user-1",
+            "cwd": "/tmp/fresh-local-thread",
+        }
+    )
+
+    with (
+        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
+        patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
+        patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
+        patch.object(threads_router, "_create_thread_sandbox_resources", return_value="lease-new") as create_resources,
+        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
+        patch.object(threads_router, "save_last_successful_config", return_value=None),
+    ):
+        created = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
+
+    create_resources.assert_called_once_with(
+        created["thread_id"],
+        "local",
+        default_recipe_snapshot("local"),
+        "/tmp/fresh-local-thread",
+    )
+    row = app.state.thread_repo.rows[created["thread_id"]]
+    assert row["current_workspace_id"] == "lease-new"
 
 
 @pytest.mark.asyncio

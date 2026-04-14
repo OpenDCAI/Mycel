@@ -71,20 +71,23 @@ class SupabaseThreadRepo:
         model: str | None = None,
         is_main: bool,
         branch_index: int,
+        owner_user_id: str,
         status: str = "active",
         updated_at: float | None = None,
         last_active_at: float | None = None,
-        owner_user_id: str | None = None,
+        current_workspace_id: str | None = None,
     ) -> None:
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
-        resolved_owner_user_id = owner_user_id or self._resolve_owner_user_id(agent_user_id)
+        if not owner_user_id.strip():
+            raise ValueError("owner_user_id is required for agent.threads create")
         created_at_value = _to_timestamptz(created_at)
         updated_at_value = _to_timestamptz(updated_at) if updated_at is not None else created_at_value
         self._t().insert(
             {
                 "id": thread_id,
                 "agent_user_id": agent_user_id,
-                "owner_user_id": resolved_owner_user_id,
+                "owner_user_id": owner_user_id,
+                "current_workspace_id": current_workspace_id,
                 "sandbox_type": sandbox_type,
                 "cwd": cwd,
                 "model": model,
@@ -239,13 +242,3 @@ class SupabaseThreadRepo:
 
     def _t(self) -> Any:
         return q.schema_table(self._client, _SCHEMA, _TABLE, _REPO)
-
-    def _resolve_owner_user_id(self, agent_user_id: str) -> str:
-        response = self._client.table("users").select("owner_user_id").eq("id", agent_user_id).execute()
-        rows = q.rows(response, _REPO, "resolve_owner_user_id")
-        if not rows:
-            raise ValueError(f"agent user {agent_user_id!r} not found while creating agent.threads row")
-        owner_user_id = rows[0].get("owner_user_id")
-        if not isinstance(owner_user_id, str) or not owner_user_id.strip():
-            raise ValueError(f"agent user {agent_user_id!r} has no owner_user_id for agent.threads row")
-        return owner_user_id
