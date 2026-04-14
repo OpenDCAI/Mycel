@@ -635,7 +635,11 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
         "resolve_default_config",
         lambda app_obj, owner_user_id, agent_user_id: {
             "source": "last_successful",
-            "config": {"create_mode": "existing", "provider_config": "local"},
+            "config": {
+                "create_mode": "existing",
+                "provider_config": "local",
+                "existing_sandbox_id": "lease-1",
+            },
         },
     )
 
@@ -646,7 +650,7 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
         "config": {
             "create_mode": "existing",
             "provider_config": "local",
-            "existing_sandbox_id": None,
+            "existing_sandbox_id": "lease-1",
         },
     }
     assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "agent-user-1"))]
@@ -684,12 +688,11 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
     app = _make_threads_app()
     payload = threads_router.SaveThreadLaunchConfigRequest(
         agent_user_id="agent-user-1",
-        create_mode="new",
-        provider_config="local",
-        recipe_id="local:default",
-        existing_sandbox_id=None,
+        create_mode="existing",
+        provider_config="daytona_selfhost",
+        existing_sandbox_id="lease-1",
         model="gpt-5.4-mini",
-        workspace="/tmp/demo",
+        workspace="/workspace/reused",
     )
     saved: list[tuple[object, str, str, dict[str, object]]] = []
     to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
@@ -717,12 +720,12 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
             "agent-user-1",
             {
                 "agent_user_id": "agent-user-1",
-                "create_mode": "new",
-                "provider_config": "local",
-                "recipe_id": "local:default",
-                "lease_id": None,
+                "create_mode": "existing",
+                "provider_config": "daytona_selfhost",
+                "recipe_id": None,
+                "existing_sandbox_id": "lease-1",
                 "model": "gpt-5.4-mini",
-                "workspace": "/tmp/demo",
+                "workspace": "/workspace/reused",
             },
         )
     ]
@@ -759,7 +762,6 @@ def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monk
         "config": {
             "create_mode": "existing",
             "provider_config": "local",
-            "existing_sandbox_id": None,
         },
     }
     assert calls == [(app, "owner-1", "agent-user-1")]
@@ -800,7 +802,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "create_mode": "new",
                 "provider_config": "local",
                 "recipe_id": "local:default",
-                "lease_id": None,
+                "existing_sandbox_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
             },

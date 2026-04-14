@@ -105,28 +105,13 @@ def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_
     return resolve_default_config(app, owner_user_id, agent_user_id)
 
 
-def _serialize_outward_shell_config(config: dict[str, Any]) -> dict[str, Any]:
-    outward = dict(config)
-    outward["existing_sandbox_id"] = outward.pop("lease_id", None)
-    return outward
-
-
-def _serialize_internal_shell_config(config: dict[str, Any]) -> dict[str, Any]:
-    internal = dict(config)
-    # @@@shell-contract-translation - replay-23 only cleans the outward
-    # request/frontend contract. Backend helper truth still speaks lease_id, so
-    # the route boundary must translate without creating a long-lived dual shell.
-    internal["lease_id"] = internal.pop("existing_sandbox_id", None)
-    return internal
-
-
 def _save_default_config_for_owned_agent(
     app: Any,
     owner_user_id: str,
     payload: SaveThreadLaunchConfigRequest,
 ) -> dict[str, bool]:
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
-    config = _serialize_internal_shell_config(payload.model_dump())
+    config = payload.model_dump()
     if payload.create_mode == "new":
         _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.recipe_id)
     save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, config)
@@ -813,7 +798,7 @@ async def get_default_thread_config(
     config = await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
     return {
         **config,
-        "config": _serialize_outward_shell_config(dict(config.get("config") or {})),
+        "config": dict(config.get("config") or {}),
     }
 
 
