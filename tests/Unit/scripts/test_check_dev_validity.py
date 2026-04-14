@@ -121,6 +121,31 @@ class CheckDevValidityScriptTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("/api/panel/agents returned no owned agents", result.stderr)
 
+    def test_fails_when_default_config_payload_is_frontend_malformed(self) -> None:
+        class MalformedDefaultConfigHandler(_SmokeHandler):
+            default_config_payload = {
+                "config": {
+                    "provider_config": "local",
+                },
+            }
+
+        with ThreadingHTTPServer(("127.0.0.1", 0), MalformedDefaultConfigHandler) as server:
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                result = self._run_script(
+                    {
+                        **REQUIRED_ENV,
+                        "MYCEL_BACKEND_BASE_URL": f"http://127.0.0.1:{server.server_port}",
+                    }
+                )
+            finally:
+                server.shutdown()
+                thread.join()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("/api/threads/default-config returned malformed launch config", result.stderr)
+
     def test_passes_when_real_smoke_sequence_succeeds(self) -> None:
         with ThreadingHTTPServer(("127.0.0.1", 0), _SmokeHandler) as server:
             thread = threading.Thread(target=server.serve_forever, daemon=True)
