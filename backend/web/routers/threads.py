@@ -105,15 +105,29 @@ def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_
     return resolve_default_config(app, owner_user_id, agent_user_id)
 
 
+def _translate_internal_launch_config_to_outward(config: dict[str, Any]) -> dict[str, Any]:
+    translated = dict(config)
+    translated["sandbox_template_id"] = translated.pop("recipe_id", None)
+    translated["sandbox_template"] = translated.pop("recipe", None)
+    return translated
+
+
+def _translate_outward_launch_config_to_internal(config: dict[str, Any]) -> dict[str, Any]:
+    translated = dict(config)
+    translated["recipe_id"] = translated.pop("sandbox_template_id", None)
+    translated.pop("sandbox_template", None)
+    return translated
+
+
 def _save_default_config_for_owned_agent(
     app: Any,
     owner_user_id: str,
     payload: SaveThreadLaunchConfigRequest,
 ) -> dict[str, bool]:
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
-    config = payload.model_dump()
+    config = _translate_outward_launch_config_to_internal(payload.model_dump())
     if payload.create_mode == "new":
-        _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.recipe_id)
+        _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.sandbox_template_id)
     save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, config)
     return {"ok": True}
 
@@ -636,7 +650,7 @@ def _create_owned_thread(
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
     selected_recipe = None
     if not selected_lease_id:
-        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.recipe_id)
+        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.sandbox_template_id)
 
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     # @@@user-owned-thread-seq - thread ids are now allocated from the unified
@@ -798,7 +812,7 @@ async def get_default_thread_config(
     config = await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
     return {
         **config,
-        "config": dict(config.get("config") or {}),
+        "config": _translate_internal_launch_config_to_outward(dict(config.get("config") or {})),
     }
 
 
