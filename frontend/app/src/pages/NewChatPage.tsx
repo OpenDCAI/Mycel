@@ -146,7 +146,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
 
   const authAgent = useAuthStore(s => s.agent);
   const agentList = useAppStore(s => s.agentList);
-  const libraryRecipes = useAppStore(s => s.libraryRecipes);
+  const librarySandboxTemplates = useAppStore(s => s.librarySandboxTemplates);
   const decodedAgentId = agentId ? decodeURIComponent(agentId) : null;
   const resolvedAgent = decodedAgentId ? agentList.find(agent => agent.id === decodedAgentId) : undefined;
   const isOwnedAgent = decodedAgentId === authAgent?.id;
@@ -251,7 +251,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   }, []);
 
   const sandboxTemplateOptions = useMemo(() => (
-    libraryRecipes
+    librarySandboxTemplates
       .filter((item) => item.available !== false && item.provider_type)
       .map((item) => ({
         value: item.id,
@@ -267,7 +267,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
           feature_options: (item as { feature_options?: RecipeFeatureOption[] }).feature_options ?? [],
         } satisfies SandboxTemplateSnapshot,
       }))
-  ), [libraryRecipes]);
+  ), [librarySandboxTemplates]);
   const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedExistingSandboxId) ?? null;
   const sandboxResourceByProvider = useMemo(() => {
     const map = new Map<string, AccountResourceLimit>();

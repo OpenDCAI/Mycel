@@ -133,7 +133,7 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
     recipe = default_recipe_snapshot(provider_type)
     return {
         **recipe,
-        "type": "recipe",
+        "type": "sandbox-template",
         "available": True,
         "created_at": 0,
         "updated_at": 0,
@@ -150,7 +150,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
         payload={
             "create_mode": "wat",
             "provider_config": "  local  ",
-            "recipe_id": "  local:default  ",
+            "sandbox_template_id": "  local:default  ",
             "existing_sandbox_id": "  ",
             "model": "  gpt-5.4-mini  ",
             "workspace": "  /tmp/demo  ",
@@ -164,7 +164,7 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
             {
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe_id": "local:default",
+                "sandbox_template_id": "local:default",
                 "existing_sandbox_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -183,7 +183,7 @@ def test_save_last_confirmed_config_drops_stray_lease_id_for_new_mode() -> None:
         payload={
             "create_mode": "new",
             "provider_config": "local",
-            "recipe_id": "local:default",
+            "sandbox_template_id": "local:default",
             "existing_sandbox_id": "lease-stray",
             "model": "gpt-5.4-mini",
             "workspace": "/tmp/demo",
@@ -197,7 +197,7 @@ def test_save_last_confirmed_config_drops_stray_lease_id_for_new_mode() -> None:
             {
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe_id": "local:default",
+                "sandbox_template_id": "local:default",
                 "existing_sandbox_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -219,17 +219,17 @@ def test_build_existing_launch_config_uses_canonical_shape() -> None:
     assert config == {
         "create_mode": "existing",
         "provider_config": "daytona_selfhost",
-        "recipe_id": None,
+        "sandbox_template_id": None,
         "existing_sandbox_id": "lease-1",
         "model": "gpt-5.4",
         "workspace": "/workspace/reused",
     }
 
 
-def test_build_new_launch_config_uses_recipe_id() -> None:
+def test_build_new_launch_config_uses_sandbox_template_id() -> None:
     config = thread_launch_config_service.build_new_launch_config(
         provider_config="local",
-        recipe_id="local:custom",
+        sandbox_template_id="local:custom",
         model="gpt-5.4-mini",
         workspace="/tmp/custom",
     )
@@ -237,7 +237,7 @@ def test_build_new_launch_config_uses_recipe_id() -> None:
     assert config == {
         "create_mode": "new",
         "provider_config": "local",
-        "recipe_id": "local:custom",
+        "sandbox_template_id": "local:custom",
         "existing_sandbox_id": None,
         "model": "gpt-5.4-mini",
         "workspace": "/tmp/custom",
@@ -252,7 +252,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
                     "last_successful": {
                         "create_mode": "existing",
                         "provider_config": "local",
-                        "recipe": {"id": "stale"},
+                        "sandbox_template": {"id": "stale"},
                         "existing_sandbox_id": "lease-1",
                         "model": "gpt-5.4",
                         "workspace": "/workspace/stale",
@@ -260,7 +260,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
                     "last_confirmed": {
                         "create_mode": "new",
                         "provider_config": "local",
-                        "recipe_id": "local:default",
+                        "sandbox_template_id": "local:default",
                         "existing_sandbox_id": None,
                         "model": "gpt-4.1",
                         "workspace": "/tmp/draft",
@@ -309,7 +309,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
         "config": {
             "create_mode": "existing",
             "provider_config": "local",
-            "recipe": default_recipe_snapshot("local"),
+            "sandbox_template": default_recipe_snapshot("local"),
             "existing_sandbox_id": "lease-1",
             "model": "gpt-5.4",
             "workspace": "/workspace/reused",
@@ -325,7 +325,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
                     "last_successful": {
                         "create_mode": "existing",
                         "provider_config": "local",
-                        "recipe": None,
+                        "sandbox_template": None,
                         "existing_sandbox_id": "missing-lease",
                         "model": "gpt-5.4",
                         "workspace": "/workspace/missing",
@@ -333,7 +333,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
                     "last_confirmed": {
                         "create_mode": "new",
                         "provider_config": "local",
-                        "recipe_id": "local:default",
+                        "sandbox_template_id": "local:default",
                         "existing_sandbox_id": None,
                         "model": "gpt-4.1",
                         "workspace": "/tmp/draft",
@@ -374,8 +374,8 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
         "config": {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe_id": "local:default",
-            "recipe": default_recipe_snapshot("local"),
+            "sandbox_template_id": "local:default",
+            "sandbox_template": default_recipe_snapshot("local"),
             "existing_sandbox_id": None,
             "model": "gpt-4.1",
             "workspace": "/tmp/draft",
@@ -443,7 +443,7 @@ def test_resolve_default_config_derives_existing_from_thread_current_workspace_i
         "config": {
             "create_mode": "existing",
             "provider_config": "daytona_selfhost",
-            "recipe": default_recipe_snapshot("daytona"),
+            "sandbox_template": default_recipe_snapshot("daytona"),
             "existing_sandbox_id": "lease-2",
             "model": None,
             "workspace": "/workspace/right",
@@ -505,8 +505,8 @@ def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_
         "config": {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe_id": "local:default",
-            "recipe": default_recipe_snapshot("local"),
+            "sandbox_template_id": "local:default",
+            "sandbox_template": default_recipe_snapshot("local"),
             "existing_sandbox_id": None,
             "model": None,
             "workspace": None,
@@ -570,7 +570,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
         {
             "create_mode": "existing",
             "provider_config": "daytona_selfhost",
-            "recipe_id": None,
+            "sandbox_template_id": None,
             "existing_sandbox_id": "lease-1",
             "model": "gpt-5.4",
             "workspace": "/workspace/reused",
@@ -651,8 +651,6 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
             "create_mode": "existing",
             "provider_config": "local",
             "existing_sandbox_id": "lease-1",
-            "sandbox_template_id": None,
-            "sandbox_template": None,
         },
     }
     assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "agent-user-1"))]
@@ -724,7 +722,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
                 "agent_user_id": "agent-user-1",
                 "create_mode": "existing",
                 "provider_config": "daytona_selfhost",
-                "recipe_id": None,
+                "sandbox_template_id": None,
                 "existing_sandbox_id": "lease-1",
                 "model": "gpt-5.4-mini",
                 "workspace": "/workspace/reused",
@@ -764,8 +762,6 @@ def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monk
         "config": {
             "create_mode": "existing",
             "provider_config": "local",
-            "sandbox_template_id": None,
-            "sandbox_template": None,
         },
     }
     assert calls == [(app, "owner-1", "agent-user-1")]
@@ -805,7 +801,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "agent_user_id": "agent-user-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe_id": "local:default",
+                "sandbox_template_id": "local:default",
                 "existing_sandbox_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -842,7 +838,7 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
         {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe_id": "local:default",
+            "sandbox_template_id": "local:default",
             "existing_sandbox_id": None,
             "model": "gpt-5.4-mini",
             "workspace": "/tmp/fresh-local-thread",
@@ -906,7 +902,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         {
             "create_mode": "new",
             "provider_config": "local",
-            "recipe_id": "local:custom:lark",
+            "sandbox_template_id": "local:custom:lark",
             "existing_sandbox_id": None,
             "model": "gpt-5.4-mini",
             "workspace": None,

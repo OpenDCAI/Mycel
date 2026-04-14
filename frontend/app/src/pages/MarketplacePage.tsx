@@ -6,13 +6,13 @@ import { useAppStore } from "@/store/app-store";
 import { useIsMobile } from "@/hooks/use-mobile";
 import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
 import UpdateDialog from "@/components/marketplace/UpdateDialog";
-import RecipeEditor from "@/components/RecipeEditor";
+import SandboxTemplateEditor from "@/components/SandboxTemplateEditor";
 import type { Agent, ResourceItem } from "@/store/types";
 import type { UpdateAvailable } from "@/store/marketplace-store";
 import { HUB_AGENT_USER_ITEM_TYPE } from "@/lib/marketplace-types";
 
 type Tab = "explore" | "installed";
-type InstalledSubTab = "agent-user" | "skill" | "agent" | "recipe";
+type InstalledSubTab = "agent-user" | "skill" | "agent" | "sandbox-template";
 type TypeFilter = "all" | typeof HUB_AGENT_USER_ITEM_TYPE | "agent" | "skill" | "env";
 type InstalledAgentUser = Agent & {
   source?: {
@@ -26,7 +26,7 @@ function isTab(value: string | null): value is Tab {
 }
 
 function isInstalledSubTab(value: string | null): value is InstalledSubTab {
-  return value === "agent-user" || value === "skill" || value === "agent" || value === "recipe";
+  return value === "agent-user" || value === "skill" || value === "agent" || value === "sandbox-template";
 }
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
@@ -69,7 +69,7 @@ export default function MarketplacePage() {
   const agentList = useAppStore((s) => s.agentList);
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
-  const libraryRecipes = useAppStore((s) => s.libraryRecipes);
+  const librarySandboxTemplates = useAppStore((s) => s.librarySandboxTemplates);
   const agentsLoaded = useAppStore((s) => s.agentsLoaded);
   const librariesLoaded = useAppStore((s) => s.librariesLoaded);
   const deleteResource = useAppStore((s) => s.deleteResource);
@@ -114,24 +114,24 @@ export default function MarketplacePage() {
   const filteredAgents = libraryAgents.filter((a) =>
     !installedSearch || a.name.toLowerCase().includes(installedSearch.toLowerCase())
   );
-  const filteredRecipes = libraryRecipes.filter((recipe) =>
-    !installedSearch || recipe.name.toLowerCase().includes(installedSearch.toLowerCase())
+  const filteredSandboxTemplates = librarySandboxTemplates.filter((sandboxTemplate) =>
+    !installedSearch || sandboxTemplate.name.toLowerCase().includes(installedSearch.toLowerCase())
   );
   const recipeProviderOptions = useMemo<ResourceItem[]>(() => {
     const seen = new Set<string>();
-    return libraryRecipes.filter((recipe) => {
-      const providerName = recipe.provider_name;
+    return librarySandboxTemplates.filter((sandboxTemplate) => {
+      const providerName = sandboxTemplate.provider_name;
       if (!providerName || seen.has(providerName)) return false;
       seen.add(providerName);
       return true;
     });
-  }, [libraryRecipes]);
+  }, [librarySandboxTemplates]);
 
   const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
     { id: "agent-user", label: "Agent", icon: Package, count: installedAgentUsers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
     { id: "agent", label: "Subagent", icon: Users, count: libraryAgents.length },
-    { id: "recipe", label: "Sandbox", icon: Box, count: libraryRecipes.length },
+    { id: "sandbox-template", label: "Sandbox", icon: Box, count: librarySandboxTemplates.length },
   ];
   const installedSubTabLoaded = installedSubTab === "agent-user" ? agentsLoaded : librariesLoaded[installedSubTab];
 
@@ -372,11 +372,11 @@ export default function MarketplacePage() {
                   ))}
                 </div>
 
-                {installedSubTabLoaded && installedSubTab === "recipe" && (
+                {installedSubTabLoaded && installedSubTab === "sandbox-template" && (
                   <div className="mb-4 flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
                     <div>
                       <p className="text-sm font-medium text-foreground">Sandbox 模板</p>
-                      <p className="text-xs text-muted-foreground">为当前账号创建可复用的 sandbox recipe。</p>
+                      <p className="text-xs text-muted-foreground">为当前账号创建可复用的 sandbox template。</p>
                     </div>
                     <button
                       type="button"
@@ -504,14 +504,14 @@ export default function MarketplacePage() {
                   </>
                 )}
 
-                {/* Sandbox recipe list */}
-                {installedSubTabLoaded && installedSubTab === "recipe" && (
+                {/* Sandbox template list */}
+                {installedSubTabLoaded && installedSubTab === "sandbox-template" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
-                      {filteredRecipes.map((recipe) => (
+                      {filteredSandboxTemplates.map((sandboxTemplate) => (
                         <div
-                          key={recipe.id}
-                          onClick={() => navigate(`/library/recipe/${recipe.id}`)}
+                          key={sandboxTemplate.id}
+                          onClick={() => navigate(`/library/sandbox-template/${sandboxTemplate.id}`)}
                           className="surface-interactive p-4 cursor-pointer group relative"
                         >
                           <div className="flex items-start gap-3">
@@ -519,16 +519,16 @@ export default function MarketplacePage() {
                               <Box className="w-4 h-4 text-primary" />
                             </div>
                             <div className="min-w-0 flex-1 pr-8">
-                              <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{recipe.name}</h4>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{recipe.desc || "暂无描述"}</p>
+                              <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{sandboxTemplate.name}</h4>
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{sandboxTemplate.desc || "暂无描述"}</p>
                               <p className="text-2xs text-muted-foreground mt-2 font-mono truncate">
-                                Sandbox · {recipe.provider_name || recipe.provider_type || "unknown"}
+                                Sandbox · {sandboxTemplate.provider_name || sandboxTemplate.provider_type || "unknown"}
                               </p>
                             </div>
                           </div>
-                          {!recipe.builtin && (
+                          {!sandboxTemplate.builtin && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); deleteResource("recipe", recipe.id); }}
+                              onClick={(e) => { e.stopPropagation(); deleteResource("sandbox-template", sandboxTemplate.id); }}
                               className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
                               title="删除"
                             >
@@ -538,7 +538,7 @@ export default function MarketplacePage() {
                         </div>
                       ))}
                     </div>
-                    {filteredRecipes.length === 0 && (
+                    {filteredSandboxTemplates.length === 0 && (
                       <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Sandbox</div>
                     )}
                   </>
@@ -573,7 +573,7 @@ export default function MarketplacePage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <RecipeEditor
+            <SandboxTemplateEditor
               item={null}
               providerOptions={recipeProviderOptions}
               onCreated={() => setRecipeCreateOpen(false)}

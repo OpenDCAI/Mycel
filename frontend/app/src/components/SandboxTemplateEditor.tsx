@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/store/app-store";
 import type { ResourceItem } from "@/store/types";
 
-interface RecipeEditorProps {
+interface SandboxTemplateEditorProps {
   item: ResourceItem | null;
   providerOptions?: ResourceItem[];
   onCreated?: (item: ResourceItem) => void;
@@ -26,7 +26,12 @@ function featureStateFor(options: RecipeFeatureOption[], item: ResourceItem | nu
   return Object.fromEntries(options.map((option) => [option.key, Boolean(item?.features?.[option.key])]));
 }
 
-export default function RecipeEditor({ item, providerOptions = EMPTY_PROVIDER_OPTIONS, onCreated, onDeleted }: RecipeEditorProps) {
+export default function SandboxTemplateEditor({
+  item,
+  providerOptions = EMPTY_PROVIDER_OPTIONS,
+  onCreated,
+  onDeleted,
+}: SandboxTemplateEditorProps) {
   const addResource = useAppStore((s) => s.addResource);
   const updateResource = useAppStore((s) => s.updateResource);
   const deleteResource = useAppStore((s) => s.deleteResource);
@@ -69,12 +74,12 @@ export default function RecipeEditor({ item, providerOptions = EMPTY_PROVIDER_OP
     try {
       if (isCreate) {
         if (!providerName) throw new Error("请选择 Sandbox provider");
-        const created = await addResource("recipe", name.trim(), desc.trim(), { provider_name: providerName, features });
-        toast.success("Sandbox recipe 已创建");
+        const created = await addResource("sandbox-template", name.trim(), desc.trim(), { provider_name: providerName, features });
+        toast.success("Sandbox template 已创建");
         onCreated?.(created);
       } else if (item) {
-        await updateResource("recipe", item.id, { name, desc, features });
-        toast.success("Sandbox recipe 已保存");
+        await updateResource("sandbox-template", item.id, { name, desc, features });
+        toast.success("Sandbox template 已保存");
       }
     } catch (error) {
       toast.error(`${isCreate ? "创建" : "保存"}失败: ${error instanceof Error ? error.message : String(error)}`);
@@ -85,12 +90,12 @@ export default function RecipeEditor({ item, providerOptions = EMPTY_PROVIDER_OP
 
   async function handleDeleteOrReset() {
     if (!item) return;
-    const action = item.builtin ? "重置" : "删除";
+      const action = item.builtin ? "重置" : "删除";
     if (!window.confirm(`${action} ${item.name}?`)) return;
     setSaving(true);
     try {
-      await deleteResource("recipe", item.id);
-      toast.success(item.builtin ? "Sandbox recipe 已重置" : "Sandbox recipe 已删除");
+      await deleteResource("sandbox-template", item.id);
+      toast.success(item.builtin ? "Sandbox template 已重置" : "Sandbox template 已删除");
       if (!item.builtin) onDeleted?.();
     } catch (error) {
       toast.error(`${action}失败: ${error instanceof Error ? error.message : String(error)}`);
@@ -117,19 +122,19 @@ export default function RecipeEditor({ item, providerOptions = EMPTY_PROVIDER_OP
 
       <div className="space-y-5 px-5 py-5">
         <div className="space-y-2">
-          <label htmlFor="recipe-name" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <label htmlFor="sandbox-template-name" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
             Name
           </label>
-          <Input id="recipe-name" value={name} onChange={(event) => setName(event.target.value)} />
+          <Input id="sandbox-template-name" value={name} onChange={(event) => setName(event.target.value)} />
         </div>
 
         {isCreate && (
           <div className="space-y-2">
-            <label htmlFor="recipe-provider" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            <label htmlFor="sandbox-template-provider" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
               Provider
             </label>
             <select
-              id="recipe-provider"
+              id="sandbox-template-provider"
               value={providerName}
               onChange={(event) => setProviderName(event.target.value)}
               className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/40"
@@ -144,10 +149,10 @@ export default function RecipeEditor({ item, providerOptions = EMPTY_PROVIDER_OP
         )}
 
         <div className="space-y-2">
-          <label htmlFor="recipe-desc" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <label htmlFor="sandbox-template-desc" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
             Description
           </label>
-          <Input id="recipe-desc" value={desc} onChange={(event) => setDesc(event.target.value)} />
+          <Input id="sandbox-template-desc" value={desc} onChange={(event) => setDesc(event.target.value)} />
         </div>
 
         <div className="space-y-2">

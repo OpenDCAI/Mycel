@@ -64,7 +64,7 @@ describe("frontend agent wording contract", () => {
       librarySkills: [],
       libraryMcps: [],
       libraryAgents: [],
-      libraryRecipes: [],
+      librarySandboxTemplates: [],
       userProfile: { name: "User", initials: "U", email: "" },
       loaded: true,
       error: null,

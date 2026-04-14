@@ -39,11 +39,11 @@ describe("LibraryItemDetailPage", () => {
         updated_at: 1,
       }],
       librarySkills: [],
-      libraryRecipes: [{
+      librarySandboxTemplates: [{
         id: "daytona:default",
         name: "Daytona Default",
         desc: "Default recipe for daytona",
-        type: "recipe",
+        type: "sandbox-template",
         provider_name: "daytona_selfhost",
         provider_type: "daytona",
         features: { lark_cli: false },
@@ -81,7 +81,7 @@ describe("LibraryItemDetailPage", () => {
 
   it("renders sandbox recipe details as an editor instead of a blank raw-content page", async () => {
     render(
-      <MemoryRouter initialEntries={["/library/recipe/daytona:default"]}>
+      <MemoryRouter initialEntries={["/library/sandbox-template/daytona:default"]}>
         <Routes>
           <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
         </Routes>
@@ -98,7 +98,7 @@ describe("LibraryItemDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
-      expect(updateResource).toHaveBeenCalledWith("recipe", "daytona:default", {
+      expect(updateResource).toHaveBeenCalledWith("sandbox-template", "daytona:default", {
         name: "Daytona Default",
         desc: "Updated sandbox template",
         features: { lark_cli: false },

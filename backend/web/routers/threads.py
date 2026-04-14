@@ -105,30 +105,15 @@ def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_
     return resolve_default_config(app, owner_user_id, agent_user_id)
 
 
-def _translate_internal_launch_config_to_outward(config: dict[str, Any]) -> dict[str, Any]:
-    translated = dict(config)
-    translated["sandbox_template_id"] = translated.pop("recipe_id", None)
-    translated["sandbox_template"] = translated.pop("recipe", None)
-    return translated
-
-
-def _translate_outward_launch_config_to_internal(config: dict[str, Any]) -> dict[str, Any]:
-    translated = dict(config)
-    translated["recipe_id"] = translated.pop("sandbox_template_id", None)
-    translated.pop("sandbox_template", None)
-    return translated
-
-
 def _save_default_config_for_owned_agent(
     app: Any,
     owner_user_id: str,
     payload: SaveThreadLaunchConfigRequest,
 ) -> dict[str, bool]:
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
-    config = _translate_outward_launch_config_to_internal(payload.model_dump())
     if payload.create_mode == "new":
         _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.sandbox_template_id)
-    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, config)
+    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, payload.model_dump())
     return {"ok": True}
 
 
@@ -711,7 +696,7 @@ def _create_owned_thread(
     else:
         successful_config = build_new_launch_config(
             provider_config=sandbox_type,
-            recipe_id=selected_recipe["id"] if selected_recipe else None,
+            sandbox_template_id=selected_recipe["id"] if selected_recipe else None,
             model=payload.model,
             workspace=app.state.thread_cwd.get(new_thread_id) or payload.cwd,
         )
@@ -810,10 +795,7 @@ async def get_default_thread_config(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     config = await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
-    return {
-        **config,
-        "config": _translate_internal_launch_config_to_outward(dict(config.get("config") or {})),
-    }
+    return config
 
 
 @router.post("/default-config")

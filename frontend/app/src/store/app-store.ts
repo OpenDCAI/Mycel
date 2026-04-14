@@ -13,7 +13,7 @@ interface AppState {
   librarySkills: ResourceItem[];
   libraryMcps: ResourceItem[];
   libraryAgents: ResourceItem[];
-  libraryRecipes: ResourceItem[];
+  librarySandboxTemplates: ResourceItem[];
   userProfile: UserProfile;
   loaded: boolean;
   agentsLoaded: boolean;
@@ -60,21 +60,21 @@ interface AppState {
   getResourceUsedBy: (type: string, name: string) => string[];
 }
 
-type LibraryType = "skill" | "mcp" | "agent" | "recipe";
-type LibraryStateKey = "librarySkills" | "libraryMcps" | "libraryAgents" | "libraryRecipes";
+type LibraryType = "skill" | "mcp" | "agent" | "sandbox-template";
+type LibraryStateKey = "librarySkills" | "libraryMcps" | "libraryAgents" | "librarySandboxTemplates";
 
 const DEFAULT_PROFILE: UserProfile = { name: "User", initials: "U", email: "" };
 const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
   skill: "librarySkills",
   mcp: "libraryMcps",
   agent: "libraryAgents",
-  recipe: "libraryRecipes",
+  "sandbox-template": "librarySandboxTemplates",
 };
 const EMPTY_LIBRARY_LOADED: Record<LibraryType, boolean> = {
   skill: false,
   mcp: false,
   agent: false,
-  recipe: false,
+  "sandbox-template": false,
 };
 const EMPTY_AGENT_CONFIG: Agent["config"] = {
   prompt: "",
@@ -100,7 +100,7 @@ function emptySessionState() {
     librarySkills: [],
     libraryMcps: [],
     libraryAgents: [],
-    libraryRecipes: [],
+    librarySandboxTemplates: [],
     userProfile: DEFAULT_PROFILE,
     loaded: false,
     agentsLoaded: false,
@@ -162,7 +162,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
           get().ensureLibrary("skill"),
           get().ensureLibrary("mcp"),
           get().ensureLibrary("agent"),
-          get().ensureLibrary("recipe"),
+          get().ensureLibrary("sandbox-template"),
           get().fetchProfile(),
         ]);
         set({ loaded: true });
@@ -332,9 +332,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deleteResource: async (type, id) => {
     await api(`/library/${type}/${id}`, { method: "DELETE" });
-    if (type === "recipe") {
+    if (type === "sandbox-template") {
       const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
-      set({ libraryRecipes: data.items });
+      set({ librarySandboxTemplates: data.items });
       return;
     }
     const key = getLibraryStateKey(type);
@@ -373,7 +373,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   getAgentNames: () => get().agentList.map((s) => ({ id: s.id, name: s.name })),
 
   getResourceUsedBy: (type, name) => {
-    if (type === "recipe") return [];
+    if (type === "sandbox-template") return [];
     const key = type === "skill" ? "skills" : type === "mcp" ? "mcps" : "subAgents";
     return get().agentList.filter((s) =>
       (s.config?.[key as keyof typeof s.config] as { name: string }[] | undefined)?.some((i) => i.name === name)

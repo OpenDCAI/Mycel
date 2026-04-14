@@ -320,8 +320,8 @@ async def get_resource_content(
 
 @router.put("/library/{resource_type}/{resource_id}/content")
 async def update_resource_content(resource_type: str, resource_id: str, req: UpdateResourceContentRequest) -> dict[str, Any]:
-    if resource_type == "recipe":
-        raise HTTPException(400, "Recipes are read-only")
+    if resource_type == "sandbox-template":
+        raise HTTPException(400, "Sandbox templates are read-only")
     ok = await asyncio.to_thread(library_service.update_resource_content, resource_type, resource_id, req.content)
     if not ok:
         raise HTTPException(404, "Resource not found or invalid content")
