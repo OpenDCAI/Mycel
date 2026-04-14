@@ -167,13 +167,11 @@ def _derive_default_config(
     providers: list[dict[str, Any]],
     recipes: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    agent_thread_ids = {str(item.get("id") or "").strip() for item in agent_threads if item.get("id")}
-    agent_leases = [
-        lease for lease in leases if any(str(thread_id or "").strip() in agent_thread_ids for thread_id in lease.get("thread_ids") or [])
-    ]
-    if agent_leases:
-        lease = agent_leases[0]
-        return _existing_config_from_lease(lease, model=None, workspace=lease.get("cwd"))
+    leases_by_id = {str(lease.get("lease_id") or "").strip(): lease for lease in leases if str(lease.get("lease_id") or "").strip()}
+    for thread in _iter_default_bridge_threads(agent_threads):
+        lease = leases_by_id.get(thread["current_workspace_id"])
+        if lease is not None:
+            return _existing_config_from_lease(lease, model=None, workspace=lease.get("cwd"))
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
@@ -195,6 +193,21 @@ def _derive_default_config(
         "model": None,
         "workspace": None,
     }
+
+
+def _iter_default_bridge_threads(agent_threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    threads_with_bridge = []
+    for thread in agent_threads:
+        current_workspace_id = str(thread.get("current_workspace_id") or "").strip()
+        if current_workspace_id:
+            threads_with_bridge.append({**thread, "current_workspace_id": current_workspace_id})
+
+    # @@@launch-config-thread-bridge-authority - replay-15 makes thread-owned
+    # current_workspace_id the discovery authority for derived existing-mode
+    # defaults; live lease lookup only materializes that bridge.
+    if threads_with_bridge and all(item.get("created_at") is not None for item in threads_with_bridge):
+        return sorted(threads_with_bridge, key=lambda item: item["created_at"], reverse=True)
+    return threads_with_bridge
 
 
 def _recipe_matches_provider(recipe: dict[str, Any], provider_config: str) -> bool:
