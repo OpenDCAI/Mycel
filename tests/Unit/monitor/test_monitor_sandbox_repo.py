@@ -86,10 +86,53 @@ def _terminal(terminal_id: str, lease_id: str, thread_id: str, created_at: str) 
     }
 
 
+def _sandbox(
+    sandbox_id: str,
+    *,
+    owner_user_id: str = "owner-1",
+    provider_name: str = "local",
+    provider_env_id: str | None = None,
+    sandbox_template_id: str | None = None,
+    desired_state: str = "running",
+    observed_state: str = "running",
+    status: str = "ready",
+    observed_at: str = "2026-04-05T10:00:00",
+    updated_at: str = "2026-04-05T10:00:00",
+    created_at: str = "2026-04-05T09:00:00",
+    last_error: str | None = None,
+    legacy_lease_id: str | None = None,
+    **config_extra,
+) -> dict:
+    config = dict(config_extra)
+    if legacy_lease_id is not None:
+        config["legacy_lease_id"] = legacy_lease_id
+    return {
+        "id": sandbox_id,
+        "owner_user_id": owner_user_id,
+        "provider_name": provider_name,
+        "provider_env_id": provider_env_id,
+        "sandbox_template_id": sandbox_template_id,
+        "desired_state": desired_state,
+        "observed_state": observed_state,
+        "status": status,
+        "observed_at": observed_at,
+        "updated_at": updated_at,
+        "created_at": created_at,
+        "last_error": last_error,
+        "config": config,
+    }
+
+
 def test_query_threads_accepts_optional_thread_filter() -> None:
     repo = _repo(
         {
-            "sandbox_leases": [_lease("lease-1", current_instance_id="instance-1")],
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_env_id="instance-1",
+                    legacy_lease_id="lease-1",
+                )
+            ],
             "chat_sessions": [
                 _session("sess-1", "thread-1", "lease-1", last_active_at="2026-04-05T10:01:00"),
                 _session("sess-2", "thread-2", "lease-1", last_active_at="2026-04-05T10:06:00"),
@@ -116,12 +159,14 @@ def test_query_threads_chunks_lease_lookup() -> None:
         _session(f"sess-{index}", f"thread-{index}", f"lease-{index}", last_active_at=f"2026-04-05T10:{index % 60:02d}:00")
         for index in range(175)
     ]
-    leases = [_lease(f"lease-{index}", current_instance_id=f"instance-{index}") for index in range(175)]
+    sandboxes = [
+        _sandbox(f"sandbox-{index}", provider_env_id=f"instance-{index}", legacy_lease_id=f"lease-{index}") for index in range(175)
+    ]
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {
                 "chat_sessions": sessions,
-                "sandbox_leases": leases,
+                "container.sandboxes": sandboxes,
             }
         )
     )
@@ -132,20 +177,90 @@ def test_query_threads_chunks_lease_lookup() -> None:
     assert next(row for row in rows if row["thread_id"] == "thread-174")["current_instance_id"] == "instance-174"
 
 
+def test_query_lease_reads_container_sandbox_row() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="provider-env-1",
+                    desired_state="paused",
+                    observed_state="paused",
+                    updated_at="2026-04-05T10:10:00",
+                    legacy_lease_id="lease-1",
+                    sandbox_template_id="template-1",
+                )
+            ]
+        }
+    )
+
+    assert repo.query_lease("lease-1") == {
+        "lease_id": "lease-1",
+        "provider_name": "daytona_selfhost",
+        "recipe_id": "template-1",
+        "recipe_json": None,
+        "desired_state": "paused",
+        "observed_state": "paused",
+        "current_instance_id": "provider-env-1",
+        "last_error": None,
+        "updated_at": "2026-04-05T10:10:00",
+    }
+
+
+def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="instance-1",
+                    desired_state="paused",
+                    observed_state="paused",
+                    legacy_lease_id="lease-1",
+                    last_error="last boom",
+                )
+            ],
+            "chat_sessions": [
+                {
+                    **_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
+                    "ended_at": None,
+                    "close_reason": None,
+                }
+            ],
+        }
+    )
+
+    assert repo.query_thread_sessions("thread-1") == [
+        {
+            "chat_session_id": "sess-1",
+            "status": "active",
+            "started_at": "2026-04-05T10:01:00",
+            "ended_at": None,
+            "close_reason": None,
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "desired_state": "paused",
+            "observed_state": "paused",
+            "current_instance_id": "instance-1",
+            "last_error": "last boom",
+        }
+    ]
+
+
 def test_query_leases_uses_latest_terminal_binding() -> None:
     repo = _repo(
         {
-            "sandbox_leases": [
-                _lease(
-                    "lease-1",
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
                     provider_name="daytona_selfhost",
+                    provider_env_id="instance-1",
                     desired_state="paused",
                     observed_state="paused",
-                    current_instance_id="instance-1",
                     updated_at="2026-04-05T10:10:00",
-                    recipe_id=None,
-                    recipe_json=None,
-                    last_error=None,
+                    legacy_lease_id="lease-1",
                 )
             ],
             "abstract_terminals": [
@@ -171,21 +286,57 @@ def test_query_leases_uses_latest_terminal_binding() -> None:
     ]
 
 
+def test_query_leases_reads_container_sandboxes_with_terminal_binding() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="provider-env-1",
+                    desired_state="paused",
+                    observed_state="paused",
+                    updated_at="2026-04-05T10:10:00",
+                    legacy_lease_id="lease-1",
+                )
+            ],
+            "abstract_terminals": [
+                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
+                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
+            ],
+        }
+    )
+
+    assert repo.query_leases() == [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "desired_state": "paused",
+            "observed_state": "paused",
+            "current_instance_id": "provider-env-1",
+            "updated_at": "2026-04-05T10:10:00",
+            "recipe_id": None,
+            "recipe_json": None,
+            "last_error": None,
+            "thread_id": "thread-new",
+        }
+    ]
+
+
 def test_query_leases_chunks_terminal_binding_lookup() -> None:
-    leases = [
-        _lease(
-            f"lease-{index}",
+    sandboxes = [
+        _sandbox(
+            f"sandbox-{index}",
+            provider_env_id=f"instance-{index}",
             updated_at=f"2026-04-05T10:{index % 60:02d}:00",
-            recipe_id=None,
-            recipe_json=None,
-            last_error=None,
+            legacy_lease_id=f"lease-{index}",
         )
         for index in range(175)
     ]
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {
-                "sandbox_leases": leases,
+                "container.sandboxes": sandboxes,
                 "abstract_terminals": [_terminal("term-174", "lease-174", "thread-174", "2026-04-05T10:02:00")],
             }
         )
@@ -246,28 +397,31 @@ def test_query_lease_instance_ids_chunks_large_lookup() -> None:
 def test_list_probe_targets_prefers_provider_session_id() -> None:
     repo = _repo(
         {
-            "sandbox_leases": [
-                _lease(
-                    "lease-running",
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-running",
                     provider_name="daytona_selfhost",
+                    provider_env_id="instance-lease",
                     observed_state="detached",
-                    current_instance_id="instance-lease",
                     updated_at="2026-04-05T10:10:00",
+                    legacy_lease_id="lease-running",
                 ),
-                _lease(
-                    "lease-paused",
+                _sandbox(
+                    "sandbox-paused",
+                    provider_env_id="instance-local",
                     desired_state="paused",
                     observed_state="paused",
-                    current_instance_id="instance-local",
                     updated_at="2026-04-05T10:11:00",
+                    legacy_lease_id="lease-paused",
                 ),
-                _lease(
-                    "lease-stopped",
+                _sandbox(
+                    "sandbox-stopped",
                     provider_name="docker",
+                    provider_env_id="instance-stopped",
                     desired_state="stopped",
                     observed_state="stopped",
-                    current_instance_id="instance-stopped",
                     updated_at="2026-04-05T10:12:00",
+                    legacy_lease_id="lease-stopped",
                 ),
             ],
             "sandbox_instances": [
@@ -301,10 +455,25 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
     ids=["query-lease-instance-id", "list-probe-targets"],
 )
 def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
-    lease = _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-lease")
+    tables = {
+        "sandbox_leases": [
+            _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-lease")
+        ]
+    }
     if include_updated_at:
-        lease["updated_at"] = "2026-04-05T10:10:00"
-    repo = SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient({"sandbox_leases": [lease]}))
+        tables = {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="instance-lease",
+                    observed_state="detached",
+                    updated_at="2026-04-05T10:10:00",
+                    legacy_lease_id="lease-1",
+                )
+            ]
+        }
+    repo = SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient(tables))
 
     with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
         caller(repo)
@@ -313,21 +482,23 @@ def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
 def test_list_sessions_with_leases_keeps_active_terminal_and_latest_closed_session_rows() -> None:
     repo = _repo(
         {
-            "sandbox_leases": [
-                _lease("lease-active", created_at="2026-04-05T10:00:00"),
-                _lease(
-                    "lease-terminal",
+            "container.sandboxes": [
+                _sandbox("sandbox-active", created_at="2026-04-05T10:00:00", legacy_lease_id="lease-active"),
+                _sandbox(
+                    "sandbox-terminal",
                     provider_name="daytona_selfhost",
                     desired_state="paused",
                     observed_state="paused",
                     created_at="2026-04-05T11:00:00",
+                    legacy_lease_id="lease-terminal",
                 ),
-                _lease(
-                    "lease-recent",
+                _sandbox(
+                    "sandbox-recent",
                     provider_name="docker",
                     desired_state="paused",
                     observed_state="paused",
                     created_at="2026-04-05T12:00:00",
+                    legacy_lease_id="lease-recent",
                 ),
             ],
             "abstract_terminals": [
