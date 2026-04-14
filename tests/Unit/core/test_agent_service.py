@@ -1189,6 +1189,46 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
 
 
 @pytest.mark.asyncio
+async def test_handle_agent_does_not_register_child_thread_when_parent_bridge_is_missing(monkeypatch, tmp_path):
+    _patch_create_leon_agent(monkeypatch)
+
+    thread_repo = _FakeThreadRepo(
+        rows={
+            "parent-thread": {
+                "id": "parent-thread",
+                "agent_user_id": "agent-user-1",
+                "owner_user_id": "owner-1",
+                "current_workspace_id": None,
+                "sandbox_type": "daytona_selfhost",
+                "cwd": "/home/daytona",
+                "model": "gpt-parent",
+                "is_main": True,
+                "branch_index": 0,
+                "created_at": 1.0,
+            }
+        }
+    )
+    user_repo = _FakeUserRepo({"agent-user-1": "Toad"})
+    service = _make_service(
+        tmp_path,
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    set_current_thread_id("parent-thread")
+    try:
+        with pytest.raises(ValueError, match="parent thread current_workspace_id is required"):
+            await service._handle_agent(
+                prompt="do work",
+                name="worker-1",
+                run_in_background=True,
+            )
+    finally:
+        await service.cleanup_background_runs()
+        set_current_thread_id("")
+
+
+@pytest.mark.asyncio
 async def test_handle_agent_reuses_existing_completed_child_thread_for_same_parent_and_name(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
