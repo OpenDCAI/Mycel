@@ -10,11 +10,15 @@ from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
 
 
 def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    create_mode = "existing" if payload.get("create_mode") == "existing" else "new"
+    lease_id = str(payload.get("lease_id") or "").strip() or None
+    if create_mode != "existing":
+        lease_id = None
     return {
-        "create_mode": "existing" if payload.get("create_mode") == "existing" else "new",
+        "create_mode": create_mode,
         "provider_config": str(payload.get("provider_config") or "").strip(),
         "recipe_id": str(payload.get("recipe_id") or "").strip() or None,
-        "lease_id": str(payload.get("lease_id") or "").strip() or None,
+        "lease_id": lease_id,
         "model": str(payload.get("model") or "").strip() or None,
         "workspace": str(payload.get("workspace") or "").strip() or None,
     }

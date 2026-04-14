@@ -173,6 +173,39 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
     ]
 
 
+def test_save_last_confirmed_config_drops_stray_lease_id_for_new_mode() -> None:
+    app = _make_threads_app()
+
+    thread_launch_config_service.save_last_confirmed_config(
+        app=app,
+        owner_user_id="owner-1",
+        agent_user_id="agent-user-1",
+        payload={
+            "create_mode": "new",
+            "provider_config": "local",
+            "recipe_id": "local:default",
+            "lease_id": "lease-stray",
+            "model": "gpt-5.4-mini",
+            "workspace": "/tmp/demo",
+        },
+    )
+
+    assert app.state.thread_launch_pref_repo.confirmed == [
+        (
+            "owner-1",
+            "agent-user-1",
+            {
+                "create_mode": "new",
+                "provider_config": "local",
+                "recipe_id": "local:default",
+                "lease_id": None,
+                "model": "gpt-5.4-mini",
+                "workspace": "/tmp/demo",
+            },
+        )
+    ]
+
+
 def test_build_existing_launch_config_uses_canonical_shape() -> None:
     config = thread_launch_config_service.build_existing_launch_config(
         lease={
