@@ -175,7 +175,7 @@ describe("NewChatPage", () => {
       librarySkills: [],
       libraryMcps: [],
       libraryAgents: [],
-      libraryRecipes: [],
+      librarySandboxTemplates: [],
       userProfile: { name: "User", initials: "U", email: "" },
       loaded: true,
       error: null,
@@ -332,9 +332,9 @@ describe("NewChatPage", () => {
       },
     });
     useAppStore.setState({
-      libraryRecipes: [{
+      librarySandboxTemplates: [{
         id: "local-recipe",
-        type: "recipe",
+        type: "sandbox-template",
         name: "Local",
         desc: "",
         provider_type: "local",
@@ -387,9 +387,9 @@ describe("NewChatPage", () => {
       },
     });
     useAppStore.setState({
-      libraryRecipes: [{
+      librarySandboxTemplates: [{
         id: "local-recipe",
-        type: "recipe",
+        type: "sandbox-template",
         name: "Local",
         desc: "",
         provider_type: "local",
@@ -439,9 +439,9 @@ describe("NewChatPage", () => {
       },
     });
     useAppStore.setState({
-      libraryRecipes: [{
+      librarySandboxTemplates: [{
         id: "other-recipe",
-        type: "recipe",
+        type: "sandbox-template",
         name: "Other Local",
         desc: "",
         provider_type: "local",
@@ -453,7 +453,7 @@ describe("NewChatPage", () => {
         updated_at: 0,
       }, {
         id: "local-recipe",
-        type: "recipe",
+        type: "sandbox-template",
         name: "Local",
         desc: "",
         provider_type: "local",
@@ -585,9 +585,9 @@ describe("NewChatPage", () => {
       },
     });
     useAppStore.setState({
-      libraryRecipes: [{
+      librarySandboxTemplates: [{
         id: "daytona-recipe",
-        type: "recipe",
+        type: "sandbox-template",
         name: "Self-host Daytona",
         desc: "",
         provider_type: "daytona",
@@ -648,9 +648,9 @@ describe("NewChatPage", () => {
       },
     });
     useAppStore.setState({
-      libraryRecipes: [{
+      librarySandboxTemplates: [{
         id: "daytona-recipe",
-        type: "recipe",
+        type: "sandbox-template",
         name: "Self-host Daytona",
         desc: "",
         provider_type: "daytona",
