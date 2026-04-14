@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
-
-
-BindingPurpose = Literal["run", "file_channel", "monitor", "launch_default"]
-_VALID_PURPOSES = {"run", "file_channel", "monitor", "launch_default"}
+from typing import Any
 
 
 class ThreadRuntimeBindingError(RuntimeError):
@@ -44,11 +40,7 @@ def resolve_thread_runtime_binding(
     sandbox_repo: Any,
     thread_id: str,
     owner_user_id: str | None = None,
-    purpose: BindingPurpose = "run",
 ) -> ThreadRuntimeBinding:
-    if purpose not in _VALID_PURPOSES:
-        raise ValueError(f"Unknown thread runtime binding purpose: {purpose}")
-
     thread = _load_row(thread_repo, thread_id, "thread")
     thread_owner_user_id = _required_text(thread, "owner_user_id", "thread")
     if owner_user_id is not None and owner_user_id != thread_owner_user_id:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
+from inspect import signature
 
 import pytest
 
@@ -78,7 +79,6 @@ def test_resolves_thread_workspace_sandbox_binding_without_legacy_runtime_ids() 
         **_repos(thread=_thread(), workspace=_workspace(), sandbox=_sandbox()),
         thread_id="thread-1",
         owner_user_id="owner-1",
-        purpose="run",
     )
 
     assert binding.thread_id == "thread-1"
@@ -115,7 +115,6 @@ def test_missing_workspace_pointer_fails_loudly() -> None:
             **_repos(thread=_thread(current_workspace_id=None), workspace=_workspace(), sandbox=_sandbox()),
             thread_id="thread-1",
             owner_user_id="owner-1",
-            purpose="run",
         )
 
     assert "current_workspace_id" in str(excinfo.value)
@@ -127,7 +126,6 @@ def test_owner_mismatch_fails_loudly() -> None:
             **_repos(thread=_thread(), workspace=_workspace(), sandbox=_sandbox()),
             thread_id="thread-1",
             owner_user_id="other-owner",
-            purpose="run",
         )
 
     assert "owner mismatch" in str(excinfo.value)
@@ -139,7 +137,6 @@ def test_missing_workspace_row_fails_loudly() -> None:
             **_repos(thread=_thread(), workspace=None, sandbox=_sandbox()),
             thread_id="thread-1",
             owner_user_id="owner-1",
-            purpose="run",
         )
 
     assert "workspace-1" in str(excinfo.value)
@@ -151,10 +148,13 @@ def test_workspace_without_sandbox_fails_loudly() -> None:
             **_repos(thread=_thread(), workspace=_workspace(sandbox_id=None), sandbox=_sandbox()),
             thread_id="thread-1",
             owner_user_id="owner-1",
-            purpose="run",
         )
 
     assert "sandbox_id" in str(excinfo.value)
+
+
+def test_service_signature_does_not_expose_unused_purpose_dimension() -> None:
+    assert "purpose" not in signature(resolve_thread_runtime_binding).parameters
 
 
 def test_service_does_not_import_legacy_runtime_glue() -> None:
