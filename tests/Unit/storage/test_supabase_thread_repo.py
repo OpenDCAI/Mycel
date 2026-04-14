@@ -1,3 +1,5 @@
+import pytest
+
 from storage.providers.supabase.thread_repo import SupabaseThreadRepo
 from tests.fakes.supabase import FakeSupabaseClient
 
@@ -159,6 +161,41 @@ def test_supabase_thread_repo_create_uses_agent_user_id_not_member_id() -> None:
     assert client.table_obj.insert_payload is not None
     assert client.table_obj.insert_payload["agent_user_id"] == "agent-1"
     assert "member_id" not in client.table_obj.insert_payload
+
+
+def test_supabase_thread_repo_create_writes_current_workspace_id() -> None:
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    repo.create(
+        thread_id="thread-1",
+        agent_user_id="agent-1",
+        sandbox_type="local",
+        created_at=1.0,
+        is_main=True,
+        branch_index=0,
+        owner_user_id="owner-1",
+        current_workspace_id="lease-1",
+    )
+
+    assert client.table_obj.insert_payload is not None
+    assert client.table_obj.insert_payload["current_workspace_id"] == "lease-1"
+
+
+def test_supabase_thread_repo_create_requires_explicit_owner_user_id() -> None:
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    with pytest.raises(TypeError):
+        repo.create(
+            thread_id="thread-1",
+            agent_user_id="agent-1",
+            sandbox_type="local",
+            created_at=1.0,
+            is_main=True,
+            branch_index=0,
+            current_workspace_id="lease-1",
+        )
 
 
 def test_supabase_thread_repo_update_writes_model_only():

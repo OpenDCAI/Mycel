@@ -519,7 +519,7 @@ def _create_thread_sandbox_resources(
     sandbox_type: str,
     recipe: dict[str, Any] | None,
     cwd: str | None = None,
-) -> None:
+) -> str:
     """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
     from datetime import datetime
 
@@ -576,6 +576,7 @@ def _create_thread_sandbox_resources(
         )
     finally:
         terminal_repo.close()
+    return lease_id
 
 
 def _resolve_owned_recipe_snapshot(
@@ -647,6 +648,25 @@ def _create_owned_thread(
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_user_id)
 
+    if selected_lease_id:
+        current_workspace_id = selected_lease_id
+        bound_cwd = bind_thread_to_existing_lease(
+            new_thread_id,
+            selected_lease_id,
+            cwd=payload.cwd,
+        )
+    else:
+        # @@@create-write-bridge-first - replay-13 requires supported create paths
+        # to persist the concrete workspace bridge at thread-row creation time,
+        # not bind runtime truth after a workspace-blind row already exists.
+        current_workspace_id = _create_thread_sandbox_resources(
+            new_thread_id,
+            sandbox_type,
+            selected_recipe,
+            payload.cwd,
+        )
+        bound_cwd = None
+
     app.state.thread_repo.create(
         thread_id=new_thread_id,
         agent_user_id=agent_user_id,
@@ -656,6 +676,8 @@ def _create_owned_thread(
         model=payload.model,
         is_main=resolved_is_main,
         branch_index=branch_index,
+        owner_user_id=owner_user_id,
+        current_workspace_id=current_workspace_id,
     )
 
     # Set thread state
@@ -664,22 +686,7 @@ def _create_owned_thread(
         app.state.thread_cwd[new_thread_id] = payload.cwd
 
     if selected_lease_id:
-        # @@@reuse-lease-binding - Reuse an existing lease by attaching a fresh terminal for the new thread.
-        bound_cwd = bind_thread_to_existing_lease(
-            new_thread_id,
-            selected_lease_id,
-            cwd=payload.cwd,
-        )
         app.state.thread_cwd[new_thread_id] = bound_cwd
-    else:
-        # @@@lease-early-creation - Create volume + lease + terminal at thread creation
-        # so volume exists BEFORE any file uploads.
-        _create_thread_sandbox_resources(
-            new_thread_id,
-            sandbox_type,
-            selected_recipe,
-            payload.cwd,
-        )
 
     if selected_lease_id and owned_lease is not None:
         successful_config = build_existing_launch_config(

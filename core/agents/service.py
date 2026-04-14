@@ -584,6 +584,8 @@ class AgentService:
             model=model_name or parent_thread.get("model"),
             is_main=False,
             branch_index=branch_index,
+            owner_user_id=str(parent_thread.get("owner_user_id") or ""),
+            current_workspace_id=parent_thread.get("current_workspace_id"),
         )
 
     async def _handle_agent(
