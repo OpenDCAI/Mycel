@@ -84,7 +84,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
 
   const handleSelect = (agent: typeof agentList[0]) => {
     onOpenChange(false);
-    navigate(`/chat/hire/${agent.id}`);
+    navigate(`/chat/hire/new/${agent.id}`);
   };
 
   const toggleSelected = (userId: string) => {
@@ -116,9 +116,9 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0 gap-0">
         <DialogHeader className="px-4 pt-4 pb-3">
-          <DialogTitle className="text-base">{mode === "thread" ? "打开 Agent 默认线程" : "创建群聊"}</DialogTitle>
+          <DialogTitle className="text-base">{mode === "thread" ? "创建 Agent 新线程" : "创建群聊"}</DialogTitle>
           <DialogDescription className="sr-only">
-            {mode === "thread" ? "选择 Agent 打开默认线程入口" : "选择联系人创建群聊"}
+            {mode === "thread" ? "选择 Agent 进入新线程创建入口" : "选择联系人创建群聊"}
           </DialogDescription>
         </DialogHeader>
         <div className="px-4 pb-3">
@@ -130,7 +130,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
                 mode === "thread" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              打开线程
+              新线程
             </button>
             <button
               type="button"

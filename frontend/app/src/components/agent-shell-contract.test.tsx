@@ -128,7 +128,7 @@ describe("frontend agent wording contract", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("打开 Agent 默认线程")).toBeTruthy();
+    expect(screen.getByText("创建 Agent 新线程")).toBeTruthy();
     expect(screen.getByPlaceholderText("搜索 Agent...")).toBeTruthy();
     expect(screen.getByText("暂无 Agent")).toBeTruthy();
   });

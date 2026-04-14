@@ -29,6 +29,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: null },
           { path: 'hire/thread/:threadId', element: <ChatPage /> },
+          { path: 'hire/new/:agentId', element: <NewChatPage mode="new" /> },
           { path: 'hire/:agentId', element: <NewChatPage /> },
           { path: 'visit/:chatId', element: <ChatConversationPage /> },
         ],

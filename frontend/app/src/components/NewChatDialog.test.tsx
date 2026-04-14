@@ -78,13 +78,13 @@ describe("NewChatDialog", () => {
     vi.clearAllMocks();
   });
 
-  it("opens an agent default thread from the thread mode", () => {
+  it("opens a new agent-thread entry from the thread mode", () => {
     const { onOpenChange } = renderDialog();
 
     fireEvent.click(screen.getByRole("button", { name: /Morel/ }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    expect(navigate).toHaveBeenCalledWith("/chat/hire/agent-1");
+    expect(navigate).toHaveBeenCalledWith("/chat/hire/new/agent-1");
     expect(authFetch).not.toHaveBeenCalled();
   });
 
