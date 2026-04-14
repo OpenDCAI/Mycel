@@ -17,12 +17,46 @@ def validate_client(client: Any, repo: str) -> Any:
     return client
 
 
+def _preserve_postgrest_session(client: Any, schema: str) -> Any | None:
+    postgrest = getattr(client, "postgrest", None)
+    if postgrest is None:
+        return None
+    session = getattr(postgrest, "session", None)
+    client_class = getattr(postgrest, "__class__", None)
+    base_url = getattr(postgrest, "base_url", None)
+    headers = getattr(postgrest, "headers", None)
+    if session is None or client_class is None or base_url is None or headers is None:
+        return None
+
+    # @@@preserve-schema-session - postgrest-py schema() reconstructs a fresh httpx client
+    # and drops any injected trust_env=False session; keep the original transport when scoping.
+    try:
+        scoped = client_class(
+            base_url=str(base_url),
+            schema=schema,
+            headers=dict(headers),
+            http_client=session,
+        )
+        if hasattr(postgrest, "timeout"):
+            scoped.timeout = postgrest.timeout
+        if hasattr(postgrest, "verify"):
+            scoped.verify = postgrest.verify
+        if hasattr(postgrest, "proxy"):
+            scoped.proxy = postgrest.proxy
+        return scoped
+    except TypeError:
+        return None
+
+
 def schema_table(client: Any, schema: str, table: str, repo: str) -> Any:
     """Return a schema-qualified table query root, failing loudly if unsupported."""
+    scoped = _preserve_postgrest_session(client, schema)
     schema_method = getattr(client, "schema", None)
-    if not callable(schema_method):
+    if scoped is None and not callable(schema_method):
         raise RuntimeError(f"Supabase {repo} requires client.schema({schema!r}) support for {schema}.{table}.")
-    scoped = schema_method(schema)
+    if scoped is None:
+        assert callable(schema_method)
+        scoped = schema_method(schema)
     table_method = getattr(scoped, "table", None)
     if not callable(table_method):
         raise RuntimeError(f"Supabase {repo} schema({schema!r}) result must expose table(name).")
