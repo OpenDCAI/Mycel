@@ -7,6 +7,10 @@ from typing import Any
 from storage.providers.supabase import _query as q
 
 _REPO = "sandbox_monitor repo"
+_SANDBOX_SELECT = (
+    "id,owner_user_id,provider_name,provider_env_id,sandbox_template_id,"
+    "desired_state,observed_state,status,observed_at,last_error,config,created_at,updated_at"
+)
 
 
 class SupabaseSandboxMonitorRepo:
@@ -89,19 +93,8 @@ class SupabaseSandboxMonitorRepo:
         return [self._session_with_lease(s, lease_map.get(s.get("lease_id") or "")) for s in sessions]
 
     def query_leases(self) -> list[dict]:
-        leases = q.rows(
-            q.order(
-                self._client.table("sandbox_leases").select(
-                    "lease_id,provider_name,recipe_id,recipe_json,desired_state,observed_state,current_instance_id,last_error,updated_at"
-                ),
-                "updated_at",
-                desc=True,
-                repo=_REPO,
-                operation="query_leases",
-            ).execute(),
-            _REPO,
-            "query_leases",
-        )
+        sandboxes = self._ordered_sandboxes("query_leases")
+        leases = [self._lease_row_from_sandbox(sandbox) for sandbox in sandboxes]
         if not leases:
             return []
 
@@ -129,12 +122,7 @@ class SupabaseSandboxMonitorRepo:
         return self.query_leases()
 
     def query_lease(self, lease_id: str) -> dict | None:
-        rows = q.rows(
-            self._client.table("sandbox_leases").select("*").eq("lease_id", lease_id).execute(),
-            _REPO,
-            "query_lease",
-        )
-        return dict(rows[0]) if rows else None
+        return self._sandboxes_by_legacy_lease_id("query_lease").get(lease_id)
 
     def query_lease_sessions(self, lease_id: str) -> list[dict]:
         sessions = q.rows(
@@ -250,19 +238,14 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def list_probe_targets(self) -> list[dict]:
-        leases = q.rows(
-            q.order(
-                self._client.table("sandbox_leases")
-                .select("lease_id,provider_name,current_instance_id,observed_state,updated_at")
-                .in_("observed_state", ["running", "detached", "paused"]),
-                "updated_at",
-                desc=True,
-                repo=_REPO,
-                operation="list_probe_targets",
-            ).execute(),
-            _REPO,
-            "list_probe_targets",
-        )
+        leases = [
+            lease
+            for lease in (
+                self._lease_row_from_sandbox(sandbox)
+                for sandbox in self._ordered_sandboxes("list_probe_targets")
+            )
+            if lease.get("observed_state") in {"running", "detached", "paused"}
+        ]
 
         instance_map = self.query_lease_instance_ids([lease["lease_id"] for lease in leases])
 
@@ -333,6 +316,45 @@ class SupabaseSandboxMonitorRepo:
             operation,
         )
         return {row["lease_id"]: row for row in rows}
+
+    def _ordered_sandboxes(self, operation: str) -> list[dict[str, Any]]:
+        query = q.order(
+            q.schema_table(self._client, "container", "sandboxes", _REPO).select(_SANDBOX_SELECT),
+            "updated_at",
+            desc=True,
+            repo=_REPO,
+            operation=operation,
+        )
+        return q.rows(query.execute(), _REPO, operation)
+
+    def _sandboxes_by_legacy_lease_id(self, operation: str) -> dict[str, dict[str, Any]]:
+        result: dict[str, dict[str, Any]] = {}
+        for sandbox in self._ordered_sandboxes(operation):
+            lease = self._lease_row_from_sandbox(sandbox)
+            result[lease["lease_id"]] = lease
+        return result
+
+    def _lease_row_from_sandbox(self, sandbox: dict[str, Any]) -> dict[str, Any]:
+        # @@@sandbox-monitor-bridge - summary surfaces now use container.sandboxes as the
+        # object truth, but still expose legacy lease_id while monitor/runtime residue
+        # remains lease-keyed.
+        config = sandbox.get("config")
+        if not isinstance(config, dict):
+            raise RuntimeError("sandbox.config must be an object")
+        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
+        if not legacy_lease_id:
+            raise RuntimeError("sandbox.config.legacy_lease_id is required")
+        return {
+            "lease_id": legacy_lease_id,
+            "provider_name": sandbox.get("provider_name"),
+            "recipe_id": sandbox.get("sandbox_template_id"),
+            "recipe_json": None,
+            "desired_state": sandbox.get("desired_state"),
+            "observed_state": sandbox.get("observed_state"),
+            "current_instance_id": sandbox.get("provider_env_id"),
+            "last_error": sandbox.get("last_error"),
+            "updated_at": sandbox.get("updated_at"),
+        }
 
     def _session_with_lease(self, session: dict, lease: dict | None, *, include_thread: bool = False) -> dict:
         row = {
