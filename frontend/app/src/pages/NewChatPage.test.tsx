@@ -318,7 +318,7 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "new",
         provider_config: "local",
-        recipe: {
+        sandbox_template: {
           id: "local-recipe",
           name: "Local",
           provider_type: "local",
@@ -326,7 +326,7 @@ describe("NewChatPage", () => {
           configurable_features: {},
           feature_options: [],
         },
-        lease_id: null,
+        existing_sandbox_id: null,
         model: "leon:large",
         workspace: null,
       },
@@ -373,7 +373,7 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "new",
         provider_config: "local",
-        recipe: {
+        sandbox_template: {
           id: "local-recipe",
           name: "Local",
           provider_type: "local",
@@ -381,7 +381,7 @@ describe("NewChatPage", () => {
           configurable_features: {},
           feature_options: [],
         },
-        lease_id: null,
+        existing_sandbox_id: null,
         model: "leon:large",
         workspace: null,
       },
@@ -424,8 +424,8 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "new",
         provider_config: "local",
-        recipe_id: "local-recipe",
-        recipe: {
+        sandbox_template_id: "local-recipe",
+        sandbox_template: {
           id: "stale-display-snapshot",
           name: "Local",
           provider_type: "local",
@@ -433,7 +433,7 @@ describe("NewChatPage", () => {
           configurable_features: { lark_cli: true },
           feature_options: [{ key: "lark_cli", name: "Lark CLI", description: "Install Lark CLI" }],
         },
-        lease_id: null,
+        existing_sandbox_id: null,
         model: "leon:large",
         workspace: null,
       },
@@ -571,7 +571,7 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "new",
         provider_config: "daytona_selfhost",
-        recipe: {
+        sandbox_template: {
           id: "daytona-recipe",
           name: "Self-host Daytona",
           provider_type: "daytona",
@@ -579,7 +579,7 @@ describe("NewChatPage", () => {
           configurable_features: {},
           feature_options: [],
         },
-        lease_id: null,
+        existing_sandbox_id: null,
         model: "leon:large",
         workspace: null,
       },
@@ -634,7 +634,7 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "new",
         provider_config: "daytona_selfhost",
-        recipe: {
+        sandbox_template: {
           id: "daytona-recipe",
           name: "Self-host Daytona",
           provider_type: "daytona",
@@ -642,7 +642,7 @@ describe("NewChatPage", () => {
           configurable_features: {},
           feature_options: [],
         },
-        lease_id: null,
+        existing_sandbox_id: null,
         model: "leon:large",
         workspace: null,
       },

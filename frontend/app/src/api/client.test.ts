@@ -50,20 +50,20 @@ describe("thread api client contract", () => {
     );
   });
 
-  it("createThread sends recipe_id instead of the recipe snapshot", async () => {
+  it("createThread sends sandbox_template_id instead of the template snapshot", async () => {
     authFetch.mockResolvedValue(okJson({ thread_id: "thread-1" }));
 
     await api.createThread({
       sandbox: "local",
       agentUserId: "agent-1",
-      recipeId: "local:default",
+      sandboxTemplateId: "local:default",
     });
 
     expect(authFetch).toHaveBeenCalledWith(
       "/api/threads",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ sandbox: "local", agent_user_id: "agent-1", recipe_id: "local:default" }),
+        body: JSON.stringify({ sandbox: "local", agent_user_id: "agent-1", sandbox_template_id: "local:default" }),
       }),
     );
   });
@@ -144,7 +144,7 @@ describe("thread api client contract", () => {
   it("getDefaultThreadConfig queries by agent_user_id", async () => {
     authFetch.mockResolvedValue(okJson({
       source: "derived",
-      config: { create_mode: "new", provider_config: "local", recipe: null, existing_sandbox_id: null, model: null, workspace: null },
+      config: { create_mode: "new", provider_config: "local", sandbox_template: null, existing_sandbox_id: null, model: null, workspace: null },
     }));
 
     await api.getDefaultThreadConfig("agent-1");
@@ -167,7 +167,7 @@ describe("thread api client contract", () => {
     await api.saveDefaultThreadConfig("agent-1", {
       create_mode: "new",
       provider_config: "local",
-      recipe_id: "local:default",
+      sandbox_template_id: "local:default",
       model: "gpt-5.4-mini",
     });
 
@@ -179,7 +179,7 @@ describe("thread api client contract", () => {
           agent_user_id: "agent-1",
           create_mode: "new",
           provider_config: "local",
-          recipe_id: "local:default",
+          sandbox_template_id: "local:default",
           model: "gpt-5.4-mini",
         }),
       }),

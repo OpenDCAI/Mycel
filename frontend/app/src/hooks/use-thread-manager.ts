@@ -29,7 +29,7 @@ export interface ThreadManagerActions {
     agentUserId?: string,
     model?: string,
     existingSandboxId?: string,
-    recipeId?: string,
+    sandboxTemplateId?: string,
   ) => Promise<string>;
   handleGetDefaultThread: (agentUserId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
 }
@@ -99,7 +99,7 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     agentUserId?: string,
     model?: string,
     existingSandboxId?: string,
-    recipeId?: string,
+    sandboxTemplateId?: string,
   ): Promise<string> => {
     const type = sandbox ?? selectedSandbox;
     const thread = await createThread({
@@ -108,7 +108,7 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
       agentUserId: agentUserId ?? "",
       model,
       existingSandboxId,
-      recipeId,
+      sandboxTemplateId,
     });
     setThreads((prev) => upsertThread(prev, thread));
     setSelectedSandbox(type);

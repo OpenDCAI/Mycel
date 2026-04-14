@@ -12,7 +12,7 @@ class CreateThreadRequest(BaseModel):
 
     agent_user_id: str
     sandbox: str = "local"
-    recipe_id: str | None = None
+    sandbox_template_id: str | None = None
     existing_sandbox_id: str | None = None
     cwd: str | None = None
     model: str | None = None
@@ -28,7 +28,7 @@ class SaveThreadLaunchConfigRequest(BaseModel):
     agent_user_id: str
     create_mode: Literal["new", "existing"]
     provider_config: str
-    recipe_id: str | None = None
+    sandbox_template_id: str | None = None
     existing_sandbox_id: str | None = None
     model: str | None = None
     workspace: str | None = None

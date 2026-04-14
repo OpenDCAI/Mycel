@@ -118,7 +118,7 @@ export interface RecipeFeatureOption {
   icon?: string;
 }
 
-export interface RecipeSnapshot {
+export interface SandboxTemplateSnapshot {
   id: string;
   name: string;
   desc?: string;
@@ -132,8 +132,8 @@ export interface RecipeSnapshot {
 export interface ThreadLaunchConfig {
   create_mode: "new" | "existing";
   provider_config: string;
-  recipe_id?: string | null;
-  recipe?: RecipeSnapshot | null;
+  sandbox_template_id?: string | null;
+  sandbox_template?: SandboxTemplateSnapshot | null;
   existing_sandbox_id?: string | null;
   model?: string | null;
   workspace?: string | null;
@@ -161,7 +161,7 @@ export interface UserLeaseSummary {
   provider_name: string;
   recipe_id: string;
   recipe_name: string;
-  recipe?: RecipeSnapshot;
+  recipe?: SandboxTemplateSnapshot;
   observed_state?: string | null;
   desired_state?: string | null;
   cwd?: string | null;

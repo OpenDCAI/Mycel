@@ -651,6 +651,8 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
             "create_mode": "existing",
             "provider_config": "local",
             "existing_sandbox_id": "lease-1",
+            "sandbox_template_id": None,
+            "sandbox_template": None,
         },
     }
     assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "agent-user-1"))]
@@ -762,6 +764,8 @@ def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monk
         "config": {
             "create_mode": "existing",
             "provider_config": "local",
+            "sandbox_template_id": None,
+            "sandbox_template": None,
         },
     }
     assert calls == [(app, "owner-1", "agent-user-1")]
@@ -783,7 +787,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "agent_user_id": "agent-user-1",
                 "create_mode": "new",
                 "provider_config": "local",
-                "recipe_id": "local:default",
+                "sandbox_template_id": "local:default",
                 "existing_sandbox_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
@@ -874,7 +878,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
             "agent_user_id": "agent-user-1",
             "model": "gpt-5.4-mini",
             "sandbox": "local",
-            "recipe_id": "local:custom:lark",
+            "sandbox_template_id": "local:custom:lark",
         }
     )
     normalized_recipe = normalize_recipe_snapshot("local", repo_recipe)
@@ -918,7 +922,7 @@ async def test_create_thread_rejects_unowned_recipe_snapshot() -> None:
             "agent_user_id": "agent-user-1",
             "model": "gpt-5.4-mini",
             "sandbox": "local",
-            "recipe_id": "local:custom:foreign",
+            "sandbox_template_id": "local:custom:foreign",
         }
     )
 
