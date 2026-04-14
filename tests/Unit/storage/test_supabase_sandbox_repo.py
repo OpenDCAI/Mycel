@@ -39,6 +39,10 @@ class _FakeClient:
         self.schema_name = None
         self.table_name = None
 
+    def table(self, name):
+        self.table_name = name
+        return self.table_obj
+
     def schema(self, name):
         self.schema_name = name
         return _FakeSchema(self.table_obj)
