@@ -50,19 +50,24 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
     volume_repo = _VolumeRepo()
     lease_repo = _LeaseRepo()
     terminal_repo = _TerminalRepo()
+    workspace_repo = object()
 
     monkeypatch.setattr(helpers, "_get_container", lambda: _Container(volume_repo))
     monkeypatch.setattr("backend.web.core.config.SANDBOX_VOLUME_ROOT", tmp_path / "volumes")
     monkeypatch.setattr("storage.runtime.build_lease_repo", lambda: lease_repo)
     monkeypatch.setattr("storage.runtime.build_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr(threads_router, "_materialize_workspace_for_sandbox", lambda *args, **kwargs: "workspace-1")
 
-    threads_router._create_thread_sandbox_resources(
+    workspace_id = threads_router._create_thread_sandbox_resources(
         "thread-1",
         "local",
         {"id": "local:default", "provider_name": "local", "provider_type": "local"},
         cwd="/tmp/workspace",
+        workspace_repo=workspace_repo,
+        owner_user_id="owner-1",
     )
 
+    assert workspace_id == "workspace-1"
     assert len(volume_repo.created) == 1
     assert len(lease_repo.created) == 1
     assert lease_repo.created[0]["provider_name"] == "local"
@@ -73,3 +78,27 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
     assert volume_repo.closed
     assert lease_repo.closed
     assert terminal_repo.closed
+
+
+def test_create_thread_sandbox_resources_returns_workspace_id(monkeypatch, tmp_path):
+    volume_repo = _VolumeRepo()
+    lease_repo = _LeaseRepo()
+    terminal_repo = _TerminalRepo()
+    workspace_repo = object()
+
+    monkeypatch.setattr(helpers, "_get_container", lambda: _Container(volume_repo))
+    monkeypatch.setattr("backend.web.core.config.SANDBOX_VOLUME_ROOT", tmp_path / "volumes")
+    monkeypatch.setattr("storage.runtime.build_lease_repo", lambda: lease_repo)
+    monkeypatch.setattr("storage.runtime.build_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr(threads_router, "_materialize_workspace_for_sandbox", lambda *args, **kwargs: "workspace-new")
+
+    workspace_id = threads_router._create_thread_sandbox_resources(
+        "thread-1",
+        "local",
+        {"id": "local:default", "provider_name": "local", "provider_type": "local"},
+        cwd="/tmp/workspace",
+        workspace_repo=workspace_repo,
+        owner_user_id="owner-1",
+    )
+
+    assert workspace_id == "workspace-new"
