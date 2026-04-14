@@ -23,7 +23,7 @@ class SupabaseSandboxMonitorRepo:
         return None
 
     def query_threads(self, *, thread_id: str | None = None) -> list[dict]:
-        # Fetch active chat_sessions joined with sandbox_leases via lease_id
+        # Fetch active chat_sessions joined with sandbox summaries via legacy lease bridge.
         q_sessions = self._client.table("chat_sessions").select("thread_id,chat_session_id,last_active_at,lease_id").neq("status", "closed")
         if thread_id is not None:
             q_sessions = q_sessions.eq("thread_id", thread_id)
@@ -35,11 +35,7 @@ class SupabaseSandboxMonitorRepo:
         if not sessions:
             return []
 
-        lease_map = self._leases_by_id(
-            [s["lease_id"] for s in sessions if s.get("lease_id")],
-            "lease_id,provider_name,desired_state,observed_state,current_instance_id",
-            "query_threads leases",
-        )
+        lease_map = self._sandboxes_by_legacy_lease_id("query_threads")
 
         # Aggregate per thread_id
         by_thread: dict[str, dict] = {}
@@ -85,11 +81,7 @@ class SupabaseSandboxMonitorRepo:
         if not sessions:
             return []
 
-        lease_map = self._leases_by_id(
-            [s["lease_id"] for s in sessions if s.get("lease_id")],
-            "lease_id,provider_name,desired_state,observed_state,current_instance_id,last_error",
-            "query_thread_sessions leases",
-        )
+        lease_map = self._sandboxes_by_legacy_lease_id("query_thread_sessions")
         return [self._session_with_lease(s, lease_map.get(s.get("lease_id") or "")) for s in sessions]
 
     def query_leases(self) -> list[dict]:
@@ -183,12 +175,14 @@ class SupabaseSandboxMonitorRepo:
             "list_sessions_with_leases active",
         )
 
-        # All leases for terminal-derived resource rows.
-        leases = q.rows(
-            self._client.table("sandbox_leases").select("lease_id,provider_name,observed_state,desired_state,created_at").execute(),
-            _REPO,
-            "list_sessions_with_leases leases",
-        )
+        # @@@sandbox-monitor-session-base - session aggregation surfaces now use
+        # container.sandboxes as the object base and only keep lease ids as the
+        # residue join key for chat_sessions / terminals / instances.
+        leases = []
+        for sandbox in self._ordered_sandboxes("list_sessions_with_leases"):
+            lease = self._lease_row_from_sandbox(sandbox)
+            lease["created_at"] = sandbox.get("created_at")
+            leases.append(lease)
         lease_map = {le["lease_id"]: le for le in leases}
 
         all_terminals = q.rows(
@@ -240,10 +234,7 @@ class SupabaseSandboxMonitorRepo:
     def list_probe_targets(self) -> list[dict]:
         leases = [
             lease
-            for lease in (
-                self._lease_row_from_sandbox(sandbox)
-                for sandbox in self._ordered_sandboxes("list_probe_targets")
-            )
+            for lease in (self._lease_row_from_sandbox(sandbox) for sandbox in self._ordered_sandboxes("list_probe_targets"))
             if lease.get("observed_state") in {"running", "detached", "paused"}
         ]
 
