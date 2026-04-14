@@ -350,6 +350,137 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
     }
 
 
+def test_resolve_default_config_derives_existing_from_thread_current_workspace_id_not_lease_thread_ids() -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "lease-2",
+        "is_main": True,
+        "branch_index": 0,
+    }
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            recipe_repo=object(),
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "list_user_leases",
+            return_value=[
+                {
+                    "lease_id": "lease-1",
+                    "provider_name": "local",
+                    "recipe": default_recipe_snapshot("local"),
+                    "cwd": "/workspace/wrong",
+                    "thread_ids": ["agent-user-1-1"],
+                },
+                {
+                    "lease_id": "lease-2",
+                    "provider_name": "daytona_selfhost",
+                    "recipe": default_recipe_snapshot("daytona"),
+                    "cwd": "/workspace/right",
+                    "thread_ids": [],
+                },
+            ],
+        ),
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "available_sandbox_types",
+            return_value=[
+                {"name": "local", "available": True},
+                {"name": "daytona_selfhost", "available": True},
+            ],
+        ),
+        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+    ):
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
+
+    assert result == {
+        "source": "derived",
+        "config": {
+            "create_mode": "existing",
+            "provider_config": "daytona_selfhost",
+            "recipe": default_recipe_snapshot("daytona"),
+            "lease_id": "lease-2",
+            "model": None,
+            "workspace": "/workspace/right",
+        },
+    }
+
+
+def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_bridge_is_missing() -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "missing-lease",
+        "is_main": True,
+        "branch_index": 0,
+    }
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            recipe_repo=object(),
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "list_user_leases",
+            return_value=[
+                {
+                    "lease_id": "lease-1",
+                    "provider_name": "daytona_selfhost",
+                    "recipe": default_recipe_snapshot("daytona"),
+                    "cwd": "/workspace/wrong",
+                    "thread_ids": ["agent-user-1-1"],
+                }
+            ],
+        ),
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "available_sandbox_types",
+            return_value=[{"name": "local", "available": True}],
+        ),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
+    ):
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
+
+    assert result == {
+        "source": "derived",
+        "config": {
+            "create_mode": "new",
+            "provider_config": "local",
+            "recipe_id": "local:default",
+            "recipe": default_recipe_snapshot("local"),
+            "lease_id": None,
+            "model": None,
+            "workspace": None,
+        },
+    }
+
+
 def test_find_owned_agent_returns_none_for_foreign_agent() -> None:
     app = _make_threads_app()
 
