@@ -36,6 +36,7 @@ from .contracts import (
 _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "checkpoint_repo": ("storage.providers.supabase.checkpoint_repo", "SupabaseCheckpointRepo"),
     "run_event_repo": ("storage.providers.supabase.run_event_repo", "SupabaseRunEventRepo"),
+    "schedule_repo": ("storage.providers.supabase.schedule_repo", "SupabaseScheduleRepo"),
     "file_operation_repo": ("storage.providers.supabase.file_operation_repo", "SupabaseFileOperationRepo"),
     "summary_repo": ("storage.providers.supabase.summary_repo", "SupabaseSummaryRepo"),
     "eval_repo": ("storage.providers.supabase.eval_repo", "SupabaseEvalRepo"),
@@ -81,6 +82,9 @@ class StorageContainer:
 
     def run_event_repo(self) -> RunEventRepo:
         return self._build("run_event_repo")
+
+    def schedule_repo(self) -> Any:
+        return self._build("schedule_repo")
 
     def file_operation_repo(self) -> FileOperationRepo:
         return self._build("file_operation_repo")
