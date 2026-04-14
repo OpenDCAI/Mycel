@@ -296,6 +296,23 @@ class ThreadRow(BaseModel):
         return value
 
 
+class WorkspaceRow(BaseModel):
+    id: str
+    sandbox_id: str
+    owner_user_id: str
+    workspace_path: str
+    name: str | None = None
+    created_at: float | str
+    updated_at: float | str | None = None
+
+    @field_validator("id", "sandbox_id", "owner_user_id", "workspace_path")
+    @classmethod
+    def _validate_non_blank(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"workspace.{info.field_name} must not be blank")
+        return value
+
+
 class ChatRow(BaseModel):
     id: str
     type: str
@@ -769,6 +786,13 @@ class ChatRepo(Protocol):
     def get_by_id(self, chat_id: str) -> ChatRow | None: ...
     def list_by_ids(self, chat_ids: list[str]) -> list[ChatRow]: ...
     def delete(self, chat_id: str) -> None: ...
+
+
+class WorkspaceRepo(Protocol):
+    def close(self) -> None: ...
+    def create(self, row: WorkspaceRow) -> None: ...
+    def get_by_id(self, workspace_id: str) -> WorkspaceRow | None: ...
+    def list_by_sandbox_id(self, sandbox_id: str) -> list[WorkspaceRow]: ...
 
 
 class ThreadRepo(Protocol):
