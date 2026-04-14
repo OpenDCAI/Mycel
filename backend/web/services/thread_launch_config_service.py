@@ -11,14 +11,14 @@ from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
 
 def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
     create_mode = "existing" if payload.get("create_mode") == "existing" else "new"
-    lease_id = str(payload.get("lease_id") or "").strip() or None
+    existing_sandbox_id = str(payload.get("existing_sandbox_id") or "").strip() or None
     if create_mode != "existing":
-        lease_id = None
+        existing_sandbox_id = None
     return {
         "create_mode": create_mode,
         "provider_config": str(payload.get("provider_config") or "").strip(),
         "recipe_id": str(payload.get("recipe_id") or "").strip() or None,
-        "lease_id": lease_id,
+        "existing_sandbox_id": existing_sandbox_id,
         "model": str(payload.get("model") or "").strip() or None,
         "workspace": str(payload.get("workspace") or "").strip() or None,
     }
@@ -34,7 +34,7 @@ def build_existing_launch_config(
         {
             "create_mode": "existing",
             "provider_config": lease.get("provider_name"),
-            "lease_id": lease.get("lease_id"),
+            "existing_sandbox_id": lease.get("lease_id"),
             "model": model,
             "workspace": workspace,
         }
@@ -53,7 +53,7 @@ def build_new_launch_config(
             "create_mode": "new",
             "provider_config": provider_config,
             "recipe_id": recipe_id,
-            "lease_id": None,
+            "existing_sandbox_id": None,
             "model": model,
             "workspace": workspace,
         }
@@ -115,10 +115,10 @@ def _validate_saved_config(
     recipes_by_id = {str(item["id"]): item for item in recipes if item.get("available", True) and item.get("provider_type")}
 
     if config["create_mode"] == "existing":
-        lease_id = config.get("lease_id")
-        if not lease_id:
+        existing_sandbox_id = config.get("existing_sandbox_id")
+        if not existing_sandbox_id:
             return None
-        lease = next((item for item in leases if item["lease_id"] == lease_id), None)
+        lease = next((item for item in leases if item["lease_id"] == existing_sandbox_id), None)
         if lease is None:
             return None
         return _existing_config_from_lease(lease, model=config.get("model"), workspace=lease.get("cwd"))
@@ -139,7 +139,7 @@ def _validate_saved_config(
         "provider_config": provider_config,
         "recipe_id": recipe_id,
         "recipe": recipe_snapshot,
-        "lease_id": None,
+        "existing_sandbox_id": None,
         "model": config.get("model"),
         "workspace": config.get("workspace"),
     }
@@ -158,7 +158,7 @@ def _existing_config_from_lease(lease: dict[str, Any], *, model: str | None, wor
         "create_mode": "existing",
         "provider_config": lease.get("provider_name"),
         "recipe": lease.get("recipe"),
-        "lease_id": lease.get("lease_id"),
+        "existing_sandbox_id": lease.get("lease_id"),
         "model": model,
         "workspace": workspace,
     }
@@ -193,7 +193,7 @@ def _derive_default_config(
         "provider_config": provider_config,
         "recipe_id": str(recipe["id"]) if recipe is not None else None,
         "recipe": recipe_snapshot,
-        "lease_id": None,
+        "existing_sandbox_id": None,
         "model": None,
         "workspace": None,
     }
