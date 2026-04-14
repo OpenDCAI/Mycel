@@ -313,6 +313,36 @@ class WorkspaceRow(BaseModel):
         return value
 
 
+class SandboxRow(BaseModel):
+    id: str
+    owner_user_id: str
+    provider_name: str
+    provider_env_id: str | None = None
+    sandbox_template_id: str | None = None
+    desired_state: str
+    observed_state: str
+    status: str
+    observed_at: float | str
+    last_error: str | None = None
+    config: Any = Field(default_factory=dict)
+    created_at: float | str
+    updated_at: float | str | None = None
+
+    @field_validator("id", "owner_user_id", "provider_name", "desired_state", "observed_state", "status")
+    @classmethod
+    def _validate_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"sandbox row requires {info.field_name}")
+        return value
+
+    @field_validator("config")
+    @classmethod
+    def _validate_config_object(cls, value: Any) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            raise ValueError("sandbox row config must be an object")
+        return dict(value)
+
+
 class ChatRow(BaseModel):
     id: str
     type: str
@@ -793,6 +823,12 @@ class WorkspaceRepo(Protocol):
     def create(self, row: WorkspaceRow) -> None: ...
     def get_by_id(self, workspace_id: str) -> WorkspaceRow | None: ...
     def list_by_sandbox_id(self, sandbox_id: str) -> list[WorkspaceRow]: ...
+
+
+class SandboxRepo(Protocol):
+    def close(self) -> None: ...
+    def create(self, row: SandboxRow) -> None: ...
+    def get_by_id(self, sandbox_id: str) -> SandboxRow | None: ...
 
 
 class ThreadRepo(Protocol):
