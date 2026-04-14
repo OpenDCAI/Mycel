@@ -78,6 +78,35 @@ def request_json(path: str, *, method: str, payload: dict[str, object] | None = 
     return parsed
 
 
+def _is_string_or_nullish(value: object) -> bool:
+    return value is None or isinstance(value, str)
+
+
+def has_frontend_valid_launch_config(payload: dict[str, object]) -> bool:
+    # @@@default-config-shape - keep smoke acceptance aligned with the frontend parser
+    # so this gate cannot pass a payload that `getDefaultThreadConfig()` would reject.
+    source = payload.get("source")
+    if source not in {"last_successful", "last_confirmed", "derived"}:
+        return False
+    config = payload.get("config")
+    if not isinstance(config, dict):
+        return False
+    create_mode = config.get("create_mode")
+    provider_config = config.get("provider_config")
+    sandbox_template = config.get("sandbox_template")
+    if create_mode not in {"new", "existing"}:
+        return False
+    if not isinstance(provider_config, str) or not provider_config:
+        return False
+    if sandbox_template is not None and not isinstance(sandbox_template, dict):
+        return False
+    return (
+        _is_string_or_nullish(config.get("existing_sandbox_id"))
+        and _is_string_or_nullish(config.get("model"))
+        and _is_string_or_nullish(config.get("workspace"))
+    )
+
+
 login = request_json(
     "/api/auth/login",
     method="POST",
@@ -107,9 +136,8 @@ default_config = request_json(
     method="GET",
     token=token,
 )
-config = default_config.get("config")
-if not isinstance(config, dict):
-    fail("/api/threads/default-config returned no config object")
+if not has_frontend_valid_launch_config(default_config):
+    fail("/api/threads/default-config returned malformed launch config")
 print("default-config ok")
 print("dev validity smoke passed")
 PY
