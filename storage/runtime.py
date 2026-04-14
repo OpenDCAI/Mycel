@@ -65,6 +65,10 @@ def build_workspace_repo(*, supabase_client: Any | None = None, supabase_client_
     return _build_storage_repo("workspace_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
+def build_sandbox_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
+    return _build_storage_repo("sandbox_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
+
+
 def build_user_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
     return _build_storage_repo("user_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 

@@ -10,6 +10,7 @@ from backend.web.services.thread_runtime_binding_service import (
     ThreadRuntimeBindingError,
     resolve_thread_runtime_binding,
 )
+from storage.contracts import SandboxRow
 
 
 class _Repo:
@@ -59,19 +60,22 @@ def _workspace(**overrides):
 
 
 def _sandbox(**overrides):
-    return {
-        "id": "sandbox-1",
-        "owner_user_id": "owner-1",
-        "device_id": "device-1",
-        "provider_name": "daytona",
-        "provider_env_id": "provider-env-1",
-        "status": "ready",
-        "desired_state": "running",
-        "observed_state": "running",
-        "template_id": "template-1",
-        "config": {"sdk": "preinstalled"},
-        **overrides,
-    }
+    sandbox = SandboxRow(
+        id="sandbox-1",
+        owner_user_id="owner-1",
+        provider_name="daytona",
+        provider_env_id="provider-env-1",
+        sandbox_template_id="template-1",
+        desired_state="running",
+        observed_state="running",
+        status="ready",
+        observed_at=123.0,
+        last_error=None,
+        config={"sdk": "preinstalled"},
+        created_at=100.0,
+        updated_at=123.0,
+    )
+    return sandbox.model_copy(update=overrides)
 
 
 def test_resolves_thread_workspace_sandbox_binding_without_legacy_runtime_ids() -> None:
@@ -90,7 +94,6 @@ def test_resolves_thread_workspace_sandbox_binding_without_legacy_runtime_ids() 
     assert binding.workspace_desired_state == "running"
     assert binding.workspace_observed_state == "running"
     assert binding.sandbox_id == "sandbox-1"
-    assert binding.device_id == "device-1"
     assert binding.provider_name == "daytona"
     assert binding.provider_env_id == "provider-env-1"
     assert binding.sandbox_status == "ready"
@@ -190,6 +193,20 @@ def test_resolves_binding_with_thin_workspace_shape() -> None:
     assert binding.workspace_observed_state is None
 
 
+def test_resolve_thread_runtime_binding_reads_sandbox_fields_from_workspace_chain() -> None:
+    binding = resolve_thread_runtime_binding(
+        **_repos(thread=_thread(), workspace=_workspace(sandbox_id="sandbox-1"), sandbox=_sandbox()),
+        thread_id="thread-1",
+        owner_user_id="owner-1",
+    )
+
+    assert binding.sandbox_id == "sandbox-1"
+    assert binding.provider_name == "daytona"
+    assert binding.provider_env_id == "provider-env-1"
+    assert binding.sandbox_template_id == "template-1"
+    assert binding.sandbox_config == {"sdk": "preinstalled"}
+
+
 def test_workspace_without_workspace_path_fails_loudly() -> None:
     with pytest.raises(ThreadRuntimeBindingError) as excinfo:
         resolve_thread_runtime_binding(
@@ -199,3 +216,12 @@ def test_workspace_without_workspace_path_fails_loudly() -> None:
         )
 
     assert "workspace_path" in str(excinfo.value)
+
+
+def test_resolve_thread_runtime_binding_rejects_non_object_sandbox_config() -> None:
+    with pytest.raises(ThreadRuntimeBindingError, match="sandbox.config must be an object"):
+        resolve_thread_runtime_binding(
+            **_repos(thread=_thread(), workspace=_workspace(sandbox_id="sandbox-1"), sandbox=_sandbox(config="bad")),
+            thread_id="thread-1",
+            owner_user_id="owner-1",
+        )

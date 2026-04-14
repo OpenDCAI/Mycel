@@ -22,6 +22,7 @@ from .contracts import (
     RecipeRepo,
     ResourceSnapshotRepo,
     RunEventRepo,
+    SandboxRepo,
     SandboxVolumeRepo,
     SummaryRepo,
     SyncFileRepo,
@@ -56,6 +57,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "thread_repo": ("storage.providers.supabase.thread_repo", "SupabaseThreadRepo"),
     "thread_launch_pref_repo": ("storage.providers.supabase.thread_launch_pref_repo", "SupabaseThreadLaunchPrefRepo"),
     "workspace_repo": ("storage.providers.supabase.workspace_repo", "SupabaseWorkspaceRepo"),
+    "sandbox_repo": ("storage.providers.supabase.sandbox_repo", "SupabaseSandboxRepo"),
     "recipe_repo": ("storage.providers.supabase.recipe_repo", "SupabaseRecipeRepo"),
     "chat_repo": ("storage.providers.supabase.chat_repo", "SupabaseChatRepo"),
     "invite_code_repo": ("storage.providers.supabase.invite_code_repo", "SupabaseInviteCodeRepo"),
@@ -141,6 +143,9 @@ class StorageContainer:
 
     def workspace_repo(self) -> WorkspaceRepo:
         return self._build("workspace_repo")
+
+    def sandbox_repo(self) -> SandboxRepo:
+        return self._build("sandbox_repo")
 
     def recipe_repo(self) -> RecipeRepo:
         return self._build("recipe_repo")
