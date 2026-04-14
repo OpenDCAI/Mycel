@@ -64,7 +64,7 @@ export async function listThreads(): Promise<ThreadSummary[]> {
 export interface CreateThreadOptions {
   sandbox: string;
   recipeId?: string;
-  leaseId?: string;
+  existingSandboxId?: string;
   cwd?: string;
   agentUserId: string;
   model?: string;
@@ -74,7 +74,7 @@ export interface CreateThreadOptions {
 export async function createThread(opts: CreateThreadOptions): Promise<ThreadSummary> {
   const body: Record<string, unknown> = { sandbox: opts.sandbox, agent_user_id: opts.agentUserId };
   if (opts.recipeId) body.recipe_id = opts.recipeId;
-  if (opts.leaseId) body.lease_id = opts.leaseId;
+  if (opts.existingSandboxId) body.existing_sandbox_id = opts.existingSandboxId;
   if (opts.cwd) body.cwd = opts.cwd;
   if (opts.model) body.model = opts.model;
   if (opts.agent) body.agent = opts.agent;
@@ -128,7 +128,7 @@ function parseThreadLaunchConfig(value: unknown): ThreadLaunchConfig | null {
   const create_mode = payload?.create_mode;
   const provider_config = payload ? recordString(payload, "provider_config") : undefined;
   const recipe = payload?.recipe;
-  const lease_id = payload?.lease_id;
+  const existing_sandbox_id = payload?.existing_sandbox_id;
   const model = payload?.model;
   const workspace = payload?.workspace;
   if (
@@ -136,13 +136,13 @@ function parseThreadLaunchConfig(value: unknown): ThreadLaunchConfig | null {
     !isLaunchCreateMode(create_mode) ||
     !provider_config ||
     (recipe !== undefined && recipe !== null && asRecord(recipe) === null) ||
-    !isStringOrNullish(lease_id) ||
+    !isStringOrNullish(existing_sandbox_id) ||
     !isStringOrNullish(model) ||
     !isStringOrNullish(workspace)
   ) {
     return null;
   }
-  return { ...payload, create_mode, provider_config, recipe, lease_id, model, workspace } as ThreadLaunchConfig;
+  return { ...payload, create_mode, provider_config, recipe, existing_sandbox_id, model, workspace } as ThreadLaunchConfig;
 }
 
 function parseDefaultThreadConfig(value: unknown): ThreadLaunchConfigResponse {

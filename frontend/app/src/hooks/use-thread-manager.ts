@@ -28,7 +28,7 @@ export interface ThreadManagerActions {
     cwd?: string,
     agentUserId?: string,
     model?: string,
-    leaseId?: string,
+    existingSandboxId?: string,
     recipeId?: string,
   ) => Promise<string>;
   handleGetDefaultThread: (agentUserId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
@@ -98,11 +98,18 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     cwd?: string,
     agentUserId?: string,
     model?: string,
-    leaseId?: string,
+    existingSandboxId?: string,
     recipeId?: string,
   ): Promise<string> => {
     const type = sandbox ?? selectedSandbox;
-    const thread = await createThread({ sandbox: type, cwd, agentUserId: agentUserId ?? "", model, leaseId, recipeId });
+    const thread = await createThread({
+      sandbox: type,
+      cwd,
+      agentUserId: agentUserId ?? "",
+      model,
+      existingSandboxId,
+      recipeId,
+    });
     setThreads((prev) => upsertThread(prev, thread));
     setSelectedSandbox(type);
     return thread.thread_id;

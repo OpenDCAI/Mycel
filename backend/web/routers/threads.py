@@ -105,13 +105,28 @@ def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_
     return resolve_default_config(app, owner_user_id, agent_user_id)
 
 
+def _serialize_outward_shell_config(config: dict[str, Any]) -> dict[str, Any]:
+    outward = dict(config)
+    outward["existing_sandbox_id"] = outward.pop("lease_id", None)
+    return outward
+
+
+def _serialize_internal_shell_config(config: dict[str, Any]) -> dict[str, Any]:
+    internal = dict(config)
+    # @@@shell-contract-translation - replay-23 only cleans the outward
+    # request/frontend contract. Backend helper truth still speaks lease_id, so
+    # the route boundary must translate without creating a long-lived dual shell.
+    internal["lease_id"] = internal.pop("existing_sandbox_id", None)
+    return internal
+
+
 def _save_default_config_for_owned_agent(
     app: Any,
     owner_user_id: str,
     payload: SaveThreadLaunchConfigRequest,
 ) -> dict[str, bool]:
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
-    config = payload.model_dump()
+    config = _serialize_internal_shell_config(payload.model_dump())
     if payload.create_mode == "new":
         _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.recipe_id)
     save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, config)
@@ -297,10 +312,10 @@ def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
 
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
-    if payload.lease_id:
+    if payload.existing_sandbox_id:
         owned_lease = sandbox_service.resolve_owned_lease(
             owner_user_id,
-            payload.lease_id,
+            payload.existing_sandbox_id,
             thread_repo=app.state.thread_repo,
             user_repo=app.state.user_repo,
         )
@@ -315,7 +330,7 @@ def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: Creat
 
 
 def _validate_sandbox_quota_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
-    if payload.lease_id:
+    if payload.existing_sandbox_id:
         return None
     sandbox_type = payload.sandbox or "local"
     try:
@@ -622,7 +637,7 @@ def _create_owned_thread(
     if not agent_user or agent_user.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
 
-    selected_lease_id = payload.lease_id
+    selected_lease_id = payload.existing_sandbox_id
     owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
         owned_lease = sandbox_service.resolve_owned_lease(
@@ -795,7 +810,11 @@ async def get_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
+    config = await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
+    return {
+        **config,
+        "config": _serialize_outward_shell_config(dict(config.get("config") or {})),
+    }
 
 
 @router.post("/default-config")

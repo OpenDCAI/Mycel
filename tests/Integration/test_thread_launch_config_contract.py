@@ -538,7 +538,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "lease_id": "lease-1",
+            "existing_sandbox_id": "lease-1",
             "model": "gpt-5.4",
             "cwd": "/workspace/requested",
         }
@@ -641,7 +641,14 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
 
     result = await threads_router.get_default_thread_config("agent-user-1", "owner-1", app)
 
-    assert result == {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
+    assert result == {
+        "source": "last_successful",
+        "config": {
+            "create_mode": "existing",
+            "provider_config": "local",
+            "existing_sandbox_id": None,
+        },
+    }
     assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "agent-user-1"))]
 
 
@@ -652,7 +659,7 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
         agent_user_id="agent-user-2",
         create_mode="new",
         provider_config="local",
-        lease_id=None,
+        existing_sandbox_id=None,
         model="gpt-5.4-mini",
         workspace="/tmp/demo",
     )
@@ -680,7 +687,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
         create_mode="new",
         provider_config="local",
         recipe_id="local:default",
-        lease_id=None,
+        existing_sandbox_id=None,
         model="gpt-5.4-mini",
         workspace="/tmp/demo",
     )
@@ -747,7 +754,14 @@ def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monk
         response = client.get("/api/threads/default-config", params={"agent_user_id": "agent-user-1"})
 
     assert response.status_code == 200
-    assert response.json() == {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
+    assert response.json() == {
+        "source": "last_successful",
+        "config": {
+            "create_mode": "existing",
+            "provider_config": "local",
+            "existing_sandbox_id": None,
+        },
+    }
     assert calls == [(app, "owner-1", "agent-user-1")]
 
 
@@ -768,7 +782,7 @@ def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(
                 "create_mode": "new",
                 "provider_config": "local",
                 "recipe_id": "local:default",
-                "lease_id": None,
+                "existing_sandbox_id": None,
                 "model": "gpt-5.4-mini",
                 "workspace": "/tmp/demo",
             },

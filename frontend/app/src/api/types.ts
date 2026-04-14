@@ -134,7 +134,7 @@ export interface ThreadLaunchConfig {
   provider_config: string;
   recipe_id?: string | null;
   recipe?: RecipeSnapshot | null;
-  lease_id?: string | null;
+  existing_sandbox_id?: string | null;
   model?: string | null;
   workspace?: string | null;
 }

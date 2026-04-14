@@ -12,6 +12,8 @@ const handleGetDefaultThread = vi.fn();
 const handleCreateThread = vi.fn();
 const clientMocks = vi.hoisted(() => ({
   getDefaultThreadConfig: vi.fn(() => new Promise(() => {})),
+  listMyLeases: vi.fn(async () => []),
+  saveDefaultThreadConfig: vi.fn(async () => undefined),
   fetchAccountResourceLimits: vi.fn<() => Promise<AccountResourceLimit[]>>(async () => []),
 }));
 
@@ -84,8 +86,8 @@ vi.mock("../api", () => ({
 
 vi.mock("../api/client", () => ({
   getDefaultThreadConfig: clientMocks.getDefaultThreadConfig,
-  listMyLeases: vi.fn(async () => []),
-  saveDefaultThreadConfig: vi.fn(async () => undefined),
+  listMyLeases: clientMocks.listMyLeases,
+  saveDefaultThreadConfig: clientMocks.saveDefaultThreadConfig,
 }));
 
 vi.mock("../api/settings", () => ({
@@ -129,6 +131,10 @@ describe("NewChatPage", () => {
     handleCreateThread.mockResolvedValue("thread-from-test");
     clientMocks.getDefaultThreadConfig.mockReset();
     clientMocks.getDefaultThreadConfig.mockImplementation(() => new Promise(() => {}));
+    clientMocks.listMyLeases.mockReset();
+    clientMocks.listMyLeases.mockResolvedValue([]);
+    clientMocks.saveDefaultThreadConfig.mockReset();
+    clientMocks.saveDefaultThreadConfig.mockResolvedValue(undefined);
     clientMocks.fetchAccountResourceLimits.mockReset();
     clientMocks.fetchAccountResourceLimits.mockResolvedValue([]);
     sandboxTypesForTest = [{ name: "local", available: true }];
@@ -482,6 +488,69 @@ describe("NewChatPage", () => {
         "leon:large",
         undefined,
         "local-recipe",
+      );
+    });
+  });
+
+  it("reuses the configured existing sandbox from existing_sandbox_id instead of falling back to the first lease", async () => {
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "last_successful",
+      config: {
+        create_mode: "existing",
+        provider_config: "daytona_selfhost",
+        existing_sandbox_id: "lease-2",
+        model: "leon:large",
+        workspace: "/workspace/reused-2",
+      },
+    });
+    clientMocks.listMyLeases.mockResolvedValue([
+      {
+        lease_id: "lease-1",
+        provider_name: "daytona_selfhost",
+        recipe_id: "recipe-1",
+        recipe_name: "Existing One",
+        recipe: null,
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/reused-1",
+        thread_ids: [],
+        agents: [],
+      },
+      {
+        lease_id: "lease-2",
+        provider_name: "daytona_selfhost",
+        recipe_id: "recipe-2",
+        recipe_name: "Existing Two",
+        recipe: null,
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/reused-2",
+        thread_ids: [],
+        agents: [],
+      },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+            <Route path="/chat/hire/thread/:threadId" element={<ThreadRouteProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.click(screen.getByRole("button", { name: "发送测试消息" }));
+
+    await waitFor(() => {
+      expect(handleCreateThread).toHaveBeenCalledWith(
+        "daytona_selfhost",
+        undefined,
+        "m_xVuNpKJNxblZ",
+        "leon:large",
+        "lease-2",
       );
     });
   });
