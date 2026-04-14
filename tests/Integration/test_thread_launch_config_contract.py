@@ -106,13 +106,18 @@ class _FakeRecipeRepo:
 class _FakeWorkspaceRepo:
     def __init__(self) -> None:
         self.created: list[object] = []
+        self.by_id: dict[str, object] = {}
         self.by_sandbox_id: dict[str, list[object]] = {}
+
+    def get_by_id(self, workspace_id: str):
+        return self.by_id.get(workspace_id)
 
     def list_by_sandbox_id(self, sandbox_id: str):
         return list(self.by_sandbox_id.get(sandbox_id, []))
 
     def create(self, row) -> None:
         self.created.append(row)
+        self.by_id[row.id] = row
         self.by_sandbox_id.setdefault(row.sandbox_id, []).append(row)
 
 
@@ -397,7 +402,87 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
     }
 
 
-def test_resolve_default_config_derives_existing_from_thread_current_workspace_id_not_lease_thread_ids() -> None:
+def test_resolve_default_config_derives_existing_from_workspace_backed_current_workspace_id() -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "ws-2",
+        "is_main": True,
+        "branch_index": 0,
+        "created_at": 2.0,
+    }
+    workspace_repo = _FakeWorkspaceRepo()
+    workspace_repo.by_id["ws-2"] = SimpleNamespace(
+        id="ws-2",
+        sandbox_id="lease-2",
+        owner_user_id="owner-1",
+        workspace_path="/workspace/right",
+        name=None,
+        created_at=2.0,
+        updated_at=2.0,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            recipe_repo=object(),
+            workspace_repo=workspace_repo,
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "list_user_leases",
+            return_value=[
+                {
+                    "lease_id": "lease-1",
+                    "provider_name": "local",
+                    "recipe": default_recipe_snapshot("local"),
+                    "cwd": "/workspace/wrong",
+                    "thread_ids": [],
+                },
+                {
+                    "lease_id": "lease-2",
+                    "provider_name": "daytona_selfhost",
+                    "recipe": default_recipe_snapshot("daytona"),
+                    "cwd": "/workspace/right",
+                    "thread_ids": [],
+                },
+            ],
+        ),
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "available_sandbox_types",
+            return_value=[
+                {"name": "local", "available": True},
+                {"name": "daytona_selfhost", "available": True},
+            ],
+        ),
+        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+    ):
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
+
+    assert result == {
+        "source": "derived",
+        "config": {
+            "create_mode": "existing",
+            "provider_config": "daytona_selfhost",
+            "sandbox_template": default_recipe_snapshot("daytona"),
+            "existing_sandbox_id": "lease-2",
+            "model": None,
+            "workspace": "/workspace/right",
+        },
+    }
+
+
+def test_resolve_default_config_derives_existing_from_legacy_lease_backed_current_workspace_id() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
         "thread_id": "agent-user-1-1",
@@ -405,6 +490,7 @@ def test_resolve_default_config_derives_existing_from_thread_current_workspace_i
         "current_workspace_id": "lease-2",
         "is_main": True,
         "branch_index": 0,
+        "created_at": 1.0,
     }
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -412,6 +498,7 @@ def test_resolve_default_config_derives_existing_from_thread_current_workspace_i
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
+            workspace_repo=_FakeWorkspaceRepo(),
         )
     )
 
@@ -465,6 +552,49 @@ def test_resolve_default_config_derives_existing_from_thread_current_workspace_i
     }
 
 
+def test_resolve_default_config_fails_loudly_for_malformed_workspace_bridge() -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "ws-bad",
+        "is_main": True,
+        "branch_index": 0,
+        "created_at": 3.0,
+    }
+    workspace_repo = _FakeWorkspaceRepo()
+    workspace_repo.by_id["ws-bad"] = SimpleNamespace(
+        id="ws-bad",
+        sandbox_id="",
+        owner_user_id="owner-1",
+        workspace_path="/workspace/bad",
+        name=None,
+        created_at=3.0,
+        updated_at=3.0,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            recipe_repo=object(),
+            workspace_repo=workspace_repo,
+        )
+    )
+
+    with (
+        patch.object(thread_launch_config_service.sandbox_service, "list_user_leases", return_value=[]),
+        patch.object(thread_launch_config_service.sandbox_service, "available_sandbox_types", return_value=[]),
+        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+        pytest.raises(RuntimeError, match="workspace.sandbox_id is required"),
+    ):
+        thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
+
+
 def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_bridge_is_missing() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
@@ -480,6 +610,7 @@ def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
+            workspace_repo=_FakeWorkspaceRepo(),
         )
     )
 
