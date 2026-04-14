@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import threading
 import unittest
@@ -82,8 +83,11 @@ class CheckDevValidityScriptTests(unittest.TestCase):
     def _run_script(self, extra_env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         env = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "")}
         env.update(extra_env)
+        command = [str(SCRIPT)]
+        if os.name == "nt":
+            command = [shutil.which("bash") or "bash", str(SCRIPT)]
         return subprocess.run(
-            [str(SCRIPT)],
+            command,
             cwd=ROOT,
             env=env,
             text=True,
