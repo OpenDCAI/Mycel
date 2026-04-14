@@ -351,11 +351,14 @@ def test_query_leases_chunks_terminal_binding_lookup() -> None:
 def test_query_lease_threads_returns_latest_unique_threads_first() -> None:
     repo = _repo(
         {
+            "container.sandboxes": [
+                _sandbox("sandbox-1", legacy_lease_id="lease-1"),
+            ],
             "abstract_terminals": [
                 _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
                 _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
                 _terminal("term-dupe", "lease-1", "thread-new", "2026-04-05T10:03:00"),
-            ]
+            ],
         }
     )
 
@@ -365,8 +368,14 @@ def test_query_lease_threads_returns_latest_unique_threads_first() -> None:
 def test_query_lease_instance_id_prefers_provider_session_id() -> None:
     repo = _repo(
         {
-            "sandbox_leases": [
-                _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-lease")
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    observed_state="detached",
+                    provider_env_id="instance-sandbox",
+                    legacy_lease_id="lease-1",
+                )
             ],
             "sandbox_instances": [
                 {"lease_id": "lease-1", "provider_session_id": "provider-session-1"},
@@ -382,7 +391,14 @@ def test_query_lease_instance_ids_chunks_large_lookup() -> None:
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {
-                "sandbox_leases": [{"lease_id": lease_id, "current_instance_id": f"lease-instance-{lease_id}"} for lease_id in lease_ids],
+                "container.sandboxes": [
+                    _sandbox(
+                        f"sandbox-{index}",
+                        provider_env_id=f"sandbox-instance-{lease_ids[index]}",
+                        legacy_lease_id=lease_ids[index],
+                    )
+                    for index in range(175)
+                ],
                 "sandbox_instances": [{"lease_id": "lease-174", "provider_session_id": "provider-session-174"}],
             }
         )
@@ -390,8 +406,43 @@ def test_query_lease_instance_ids_chunks_large_lookup() -> None:
 
     result = repo.query_lease_instance_ids(lease_ids)
 
-    assert result["lease-0"] == "lease-instance-lease-0"
+    assert result["lease-0"] == "sandbox-instance-lease-0"
     assert result["lease-174"] == "provider-session-174"
+
+
+def test_query_lease_events_requires_sandbox_bridge() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox("sandbox-1", legacy_lease_id="lease-1"),
+            ],
+            "provider_events": [
+                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
+                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
+            ],
+        }
+    )
+
+    assert repo.query_lease_events("lease-1") == [
+        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
+        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("caller", "expected"),
+    [
+        (lambda repo: repo.query_lease_threads("lease-missing"), "sandbox legacy bridge is required"),
+        (lambda repo: repo.query_lease_events("lease-missing"), "sandbox legacy bridge is required"),
+        (lambda repo: repo.query_lease_instance_id("lease-missing"), "sandbox legacy bridge is required"),
+    ],
+    ids=["lease-threads", "lease-events", "lease-instance-id"],
+)
+def test_residue_keyed_surfaces_fail_loud_without_sandbox_bridge(caller, expected) -> None:
+    repo = _repo({"container.sandboxes": []})
+
+    with pytest.raises(RuntimeError, match=expected):
+        caller(repo)
 
 
 def test_list_probe_targets_prefers_provider_session_id() -> None:
@@ -456,23 +507,17 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
 )
 def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
     tables = {
-        "sandbox_leases": [
-            _lease("lease-1", provider_name="daytona_selfhost", observed_state="detached", current_instance_id="instance-lease")
+        "container.sandboxes": [
+            _sandbox(
+                "sandbox-1",
+                provider_name="daytona_selfhost",
+                provider_env_id="instance-lease",
+                observed_state="detached",
+                updated_at="2026-04-05T10:10:00" if include_updated_at else "2026-04-05T10:00:00",
+                legacy_lease_id="lease-1",
+            )
         ]
     }
-    if include_updated_at:
-        tables = {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    provider_name="daytona_selfhost",
-                    provider_env_id="instance-lease",
-                    observed_state="detached",
-                    updated_at="2026-04-05T10:10:00",
-                    legacy_lease_id="lease-1",
-                )
-            ]
-        }
     repo = SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient(tables))
 
     with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
