@@ -18,6 +18,7 @@ type LeasesPayload = {
     };
   };
   items: Array<{
+    sandbox_id: string;
     lease_id: string;
     provider: string;
     instance_id?: string | null;
@@ -36,13 +37,7 @@ type LeasesPayload = {
 
 type TriageFilter = "all" | "active_drift" | "detached_residue" | "orphan_cleanup" | "healthy_capacity";
 
-export default function LeasesPage() {
-  const { data, error } = useMonitorData<LeasesPayload>("/leases");
-  const [selectedFilter, setSelectedFilter] = React.useState<TriageFilter>("all");
-
-  if (error) return <ErrorState title="Leases" error={error} />;
-  if (!data) return <div>Loading...</div>;
-
+export function buildLeaseWorkbenchShell(data: LeasesPayload) {
   const triage = data.triage?.summary ?? {};
   const triageCards = [
     { key: "active_drift" as const, label: "Active Drift", value: triage.active_drift ?? 0 },
@@ -50,18 +45,39 @@ export default function LeasesPage() {
     { key: "orphan_cleanup" as const, label: "Orphan Cleanup", value: triage.orphan_cleanup ?? 0 },
     { key: "healthy_capacity" as const, label: "Healthy Capacity", value: triage.healthy_capacity ?? 0 },
   ] satisfies Array<{ key: TriageFilter; label: string; value: number }>;
+
+  return {
+    triageTitle: "Lease Triage",
+    workbenchTitle: "Lease Workbench",
+    triageCards,
+    rows: data.items.map((item) => ({
+      ...item,
+      href: `/sandboxes/${item.sandbox_id}`,
+      compatibilityLeaseId: item.lease_id,
+    })),
+  };
+}
+
+export default function LeasesPage() {
+  const { data, error } = useMonitorData<LeasesPayload>("/leases");
+  const [selectedFilter, setSelectedFilter] = React.useState<TriageFilter>("all");
+
+  if (error) return <ErrorState title="Leases" error={error} />;
+  if (!data) return <div>Loading...</div>;
+
+  const shell = buildLeaseWorkbenchShell(data);
   const visibleItems =
     selectedFilter === "all"
-      ? data.items
-      : data.items.filter((item) => (item.triage?.category ?? "") === selectedFilter);
-  const activeCard = triageCards.find((card) => card.key === selectedFilter);
+      ? shell.rows
+      : shell.rows.filter((item) => (item.triage?.category ?? "") === selectedFilter);
+  const activeCard = shell.triageCards.find((card) => card.key === selectedFilter);
 
   return (
     <div className="page">
       <h1>{data.title}</h1>
       <p className="count">Total: {data.count}</p>
       <section className="surface-section">
-        <h2>Lease Triage</h2>
+        <h2>{shell.triageTitle}</h2>
         <div className="surface-grid">
           <button
             type="button"
@@ -71,7 +87,7 @@ export default function LeasesPage() {
             <p className="surface-card__eyebrow">All Triage</p>
             <p className="surface-card__value">{data.count}</p>
           </button>
-          {triageCards.map((card) => (
+          {shell.triageCards.map((card) => (
             <button
               type="button"
               className={`surface-card lease-triage-card ${selectedFilter === card.key ? "lease-triage-card--active" : ""}`}
@@ -86,7 +102,7 @@ export default function LeasesPage() {
       </section>
       <div className="leases-workbench-header">
         <div>
-          <h2>Lease Workbench</h2>
+          <h2>{shell.workbenchTitle}</h2>
           <p className="description">
             {activeCard ? `Showing ${activeCard.label}` : "Showing All Triage"}
           </p>
@@ -107,7 +123,7 @@ export default function LeasesPage() {
           {visibleItems.map((item) => (
             <tr key={item.lease_id}>
               <td className="mono">
-                <Link to={`/leases/${item.lease_id}`}>{item.lease_id}</Link>
+                <Link to={item.href}>{item.lease_id}</Link>
               </td>
               <td>
                 <div className="lease-topology">
