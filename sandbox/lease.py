@@ -943,18 +943,6 @@ class SQLiteLease(SandboxLease):
                     source="run.create",
                     payload={"created": True, "instance_id": session_info.session_id},
                 )
-            from sandbox.resource_snapshot import probe_and_upsert_for_instance
-
-            probe_result = probe_and_upsert_for_instance(
-                lease_id=self.lease_id,
-                provider_name=self.provider_name,
-                observed_state=self.observed_state,
-                probe_mode="create_running",
-                provider=provider,
-                instance_id=session_info.session_id,
-            )
-            if not probe_result["ok"]:
-                print(f"[lease:{self.lease_id}] create probe error: {probe_result['error']}")
             if not self._current_instance:
                 raise RuntimeError(f"Lease {self.lease_id}: failed to bind created instance")
             return self._current_instance
