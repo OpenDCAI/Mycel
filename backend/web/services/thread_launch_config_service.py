@@ -6,7 +6,7 @@ from typing import Any
 
 from backend.web.services import sandbox_service
 from backend.web.services.library_service import list_library
-from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
+from sandbox.recipes import default_recipe_id, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 
 
 def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -280,15 +280,53 @@ def _resolve_workspace_backed_existing_config(
             lease = leases_by_id.get(legacy_lease_id)
             if lease is None:
                 return None
+            sandbox_template = _resolve_workspace_backed_sandbox_template(
+                app=app,
+                owner_user_id=owner_user_id,
+                sandbox=sandbox,
+            )
             return {
                 "create_mode": "existing",
                 "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
-                "sandbox_template": lease.get("recipe"),
+                "sandbox_template": sandbox_template,
                 "existing_sandbox_id": lease.get("lease_id"),
                 "model": None,
                 "workspace": _required_bridge_text(workspace, "workspace_path", "workspace"),
             }
     return None
+
+
+def _resolve_workspace_backed_sandbox_template(
+    *,
+    app: Any,
+    owner_user_id: str,
+    sandbox: Any,
+) -> dict[str, Any]:
+    sandbox_template_id = _required_bridge_text(sandbox, "sandbox_template_id", "sandbox")
+    template_provider_name = str(sandbox_template_id.split(":", 1)[0]).strip()
+    if not template_provider_name:
+        raise RuntimeError("sandbox.sandbox_template_id must include provider name")
+
+    if sandbox_template_id == default_recipe_id(template_provider_name):
+        return default_recipe_snapshot(
+            provider_type_from_name(template_provider_name),
+            provider_name=template_provider_name,
+        )
+
+    recipe_repo = getattr(app.state, "recipe_repo", None)
+    get = getattr(recipe_repo, "get", None)
+    if not callable(get):
+        raise RuntimeError("recipe_repo must support get")
+    row = get(owner_user_id, sandbox_template_id)
+    if row is None:
+        raise RuntimeError(f"sandbox template not found: {sandbox_template_id}")
+    data = row.get("data") if isinstance(row, dict) else getattr(row, "data", None)
+    if not isinstance(data, dict):
+        raise RuntimeError("sandbox template row data must be an object")
+    provider_type = str(data.get("provider_type") or provider_type_from_name(template_provider_name)).strip()
+    if not provider_type:
+        raise RuntimeError("sandbox template provider_type is required")
+    return normalize_recipe_snapshot(provider_type, data)
 
 
 def _required_bridge_text(row: Any, key: str, label: str) -> str:
