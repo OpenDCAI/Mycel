@@ -53,10 +53,12 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
         status = map_lease_to_session_status(lease.get("observed_state"), lease.get("desired_state"))
         if status == "running":
             running_count += 1
+        sandbox_id = str(lease.get("sandbox_id") or "").strip() or None
+        session_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{lease['lease_id']}:{thread_id}"
         sessions.append(
             resource_service.build_resource_session_payload(
-                session_identity=f"{lease['lease_id']}:{thread_id}",
-                sandbox_id=str(lease.get("sandbox_id") or "").strip() or None,
+                session_identity=session_identity,
+                sandbox_id=sandbox_id,
                 lease_id=str(lease["lease_id"]),
                 thread_id=thread_id,
                 runtime_session_id=lease.get("runtime_session_id"),
@@ -188,8 +190,14 @@ def _is_resource_visible_thread(thread_id: str | None) -> bool:
 
 
 def _resource_session_identity(session: dict[str, Any]) -> str:
+    sandbox_id = str(session.get("sandbox_id") or "")
     lease_id = str(session.get("lease_id") or "")
     thread_id = str(session.get("thread_id") or "")
+    # @@@resource-session-shell - resource session shell is now sandbox-first.
+    # lease ids remain compatibility residue for enrichment joins, not the
+    # primary user-visible session identity.
+    if sandbox_id and thread_id:
+        return f"{sandbox_id}:{thread_id}"
     if lease_id and thread_id:
         # @@@resource-session-contract - resource cards are lease/thread scoped, not chat-session scoped.
         # Terminal-derived rows can carry distinct session ids for the same visible lease+thread binding.

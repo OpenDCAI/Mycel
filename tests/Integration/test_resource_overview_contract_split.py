@@ -61,6 +61,7 @@ def _patch_provider_contracts(monkeypatch, *, description: str, vendor: str, typ
 def _lease(
     lease_id: str,
     *,
+    sandbox_id: str | None = None,
     provider_name: str = "daytona_selfhost",
     thread_id: str,
     agent_user_id: str,
@@ -75,6 +76,7 @@ def _lease(
 ) -> dict:
     payload = {
         "lease_id": lease_id,
+        "sandbox_id": sandbox_id,
         "provider_name": provider_name,
         "thread_ids": [thread_id],
         "agents": [{"agent_user_id": agent_user_id, "agent_name": agent_name, "avatar_url": avatar_url}],
@@ -139,6 +141,7 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
         lambda owner_user_id, **_kwargs: [
             _lease(
                 "lease-1",
+                sandbox_id="sandbox-1",
                 thread_id="thread-1",
                 agent_user_id="agent-1",
                 agent_name="Morel",
@@ -167,6 +170,8 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["providers"][0]["type"] == "cloud"
     assert payload["providers"][0]["consoleUrl"] == "https://example.com/daytona"
     assert payload["providers"][0]["sessions"][0]["leaseId"] == "lease-1"
+    assert payload["providers"][0]["sessions"][0]["sandboxId"] == "sandbox-1"
+    assert payload["providers"][0]["sessions"][0]["id"] == "sandbox-1:thread-1"
     assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
     assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
     assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
