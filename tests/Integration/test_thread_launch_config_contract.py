@@ -440,7 +440,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
     sandbox_repo.by_id["sandbox-2"] = SimpleNamespace(
         id="sandbox-2",
         owner_user_id="owner-1",
-        provider_name="daytona_selfhost",
+        provider_name="agent_bay",
         provider_env_id="provider-env-2",
         sandbox_template_id="daytona:default",
         desired_state="running",
@@ -479,7 +479,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
                     "lease_id": "lease-2",
                     "provider_name": "daytona_selfhost",
                     "recipe": default_recipe_snapshot("daytona"),
-                    "cwd": "/workspace/right",
+                    "cwd": "/workspace/from-lease",
                     "thread_ids": [],
                 },
             ],
@@ -504,7 +504,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
         "source": "derived",
         "config": {
             "create_mode": "existing",
-            "provider_config": "daytona_selfhost",
+            "provider_config": "agent_bay",
             "sandbox_template": default_recipe_snapshot("daytona"),
             "existing_sandbox_id": "lease-2",
             "model": None,
