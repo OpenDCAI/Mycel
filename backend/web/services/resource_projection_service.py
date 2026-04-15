@@ -254,12 +254,11 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
         sandbox_id = str(group[0].get("sandbox_id") or "").strip()
         # @@@resource-visible-thread-fallback - visible resource cards are now
         # sandbox-first. If the raw monitor row lands on a hidden/subagent
-        # thread, prefer the canonical sandbox thread bridge and only fall back
-        # to legacy lease thread lookup when sandbox truth is absent.
-        if sandbox_id:
-            thread_rows = repo.query_sandbox_threads(sandbox_id)
-        else:
-            thread_rows = repo.query_lease_threads(lease_id)
+        # thread without sandbox truth, this row is no longer eligible for
+        # visible-parent projection on the user-facing resource surface.
+        if not sandbox_id:
+            continue
+        thread_rows = repo.query_sandbox_threads(sandbox_id)
         preferred_thread_id = next(
             (str(item.get("thread_id") or "").strip() for item in thread_rows if _is_resource_visible_thread(item.get("thread_id"))),
             "",
