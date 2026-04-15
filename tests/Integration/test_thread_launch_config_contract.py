@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -253,7 +254,7 @@ def test_build_existing_launch_config_uses_canonical_shape() -> None:
         "create_mode": "existing",
         "provider_config": "daytona_selfhost",
         "sandbox_template_id": None,
-        "existing_sandbox_id": "lease-1",
+        "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
         "model": "gpt-5.4",
         "workspace": "/workspace/reused",
     }
@@ -343,7 +344,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
             "create_mode": "existing",
             "provider_config": "local",
             "sandbox_template": default_recipe_snapshot("local"),
-            "existing_sandbox_id": "lease-1",
+            "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
             "model": "gpt-5.4",
             "workspace": "/workspace/reused",
         },
@@ -506,7 +507,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
             "create_mode": "existing",
             "provider_config": "agent_bay",
             "sandbox_template": default_recipe_snapshot("daytona"),
-            "existing_sandbox_id": "lease-2",
+            "existing_sandbox_id": "sandbox-2",
             "model": None,
             "workspace": "/workspace/right",
         },
@@ -615,7 +616,7 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
                 recipe_repo.rows[("owner-1", "daytona:custom:lark")]["data"],
                 provider_name="daytona_selfhost",
             ),
-            "existing_sandbox_id": "lease-3",
+            "existing_sandbox_id": "sandbox-3",
             "model": None,
             "workspace": "/workspace/template-from-sandbox",
         },
@@ -762,7 +763,7 @@ def test_resolve_default_config_derives_existing_from_legacy_lease_backed_curren
             "create_mode": "existing",
             "provider_config": "daytona_selfhost",
             "sandbox_template": default_recipe_snapshot("daytona"),
-            "existing_sandbox_id": "lease-2",
+            "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-2').hex}",
             "model": None,
             "workspace": "/workspace/right",
         },
@@ -933,7 +934,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
             "create_mode": "existing",
             "provider_config": "daytona_selfhost",
             "sandbox_template_id": None,
-            "existing_sandbox_id": "lease-1",
+            "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
             "model": "gpt-5.4",
             "workspace": "/workspace/reused",
         },
@@ -1097,7 +1098,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
                 "create_mode": "existing",
                 "provider_config": "daytona_selfhost",
                 "sandbox_template_id": None,
-                "existing_sandbox_id": "lease-1",
+                "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
                 "model": "gpt-5.4-mini",
                 "workspace": "/workspace/reused",
             },
@@ -1162,7 +1163,7 @@ async def test_save_default_thread_config_accepts_sandbox_shaped_existing_identi
                 "create_mode": "existing",
                 "provider_config": "daytona_selfhost",
                 "sandbox_template_id": None,
-                "existing_sandbox_id": "lease-1",
+                "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
                 "model": "gpt-5.4-mini",
                 "workspace": "/workspace/reused",
             },

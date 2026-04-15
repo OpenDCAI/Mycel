@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -658,7 +659,10 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
         result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
     bind_helper.assert_called_once_with(result["thread_id"], "lease-1", cwd="/workspace/reused")
-    assert save_config.call_args.args[3]["existing_sandbox_id"] == "lease-1"
+    assert (
+        save_config.call_args.args[3]["existing_sandbox_id"]
+        == f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}"
+    )
 
 
 @pytest.mark.asyncio

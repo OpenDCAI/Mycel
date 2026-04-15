@@ -39,6 +39,7 @@ from backend.web.services.streaming_service import (
     observe_thread_events,
 )
 from backend.web.services.thread_launch_config_service import (
+    _existing_sandbox_shell_id,
     build_existing_launch_config,
     build_new_launch_config,
     resolve_default_config,
@@ -115,15 +116,12 @@ def _save_default_config_for_owned_agent(
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
     normalized_payload = payload
     if payload.create_mode == "existing" and payload.existing_sandbox_id:
-        normalized_payload = payload.model_copy(
-            update={
-                "existing_sandbox_id": _normalize_existing_sandbox_request_lease_id(
-                    app,
-                    owner_user_id,
-                    payload.existing_sandbox_id,
-                )
-            }
+        normalized_existing_lease_id = _normalize_existing_sandbox_request_lease_id(
+            app,
+            owner_user_id,
+            payload.existing_sandbox_id,
         )
+        normalized_payload = payload.model_copy(update={"existing_sandbox_id": _existing_sandbox_shell_id(normalized_existing_lease_id)})
     if payload.create_mode == "new":
         _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.sandbox_template_id)
     save_last_confirmed_config(app, owner_user_id, normalized_payload.agent_user_id, normalized_payload.model_dump())
@@ -898,6 +896,7 @@ def _create_owned_thread(
             lease=owned_lease,
             model=payload.model,
             workspace=app.state.thread_cwd.get(new_thread_id),
+            existing_sandbox_id=sandbox_id,
         )
     else:
         successful_config = build_new_launch_config(

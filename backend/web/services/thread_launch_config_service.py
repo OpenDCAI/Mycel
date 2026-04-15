@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from backend.web.services import sandbox_service
@@ -24,17 +25,28 @@ def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _existing_sandbox_shell_id(lease_id: str) -> str:
+    normalized_lease_id = str(lease_id or "").strip()
+    if not normalized_lease_id:
+        raise RuntimeError("lease.lease_id is required")
+    # @@@existing-sandbox-shell-id - Phase B only cuts outward emit identity.
+    # Keep the bridge deterministic so old lease-backed reads can emit the same
+    # sandbox-shaped shell as workspace-backed paths without inventing aliases.
+    return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-lease-bridge:{normalized_lease_id}').hex}"
+
+
 def build_existing_launch_config(
     *,
     lease: dict[str, Any],
     model: str | None,
     workspace: str | None,
+    existing_sandbox_id: str | None = None,
 ) -> dict[str, Any]:
     return normalize_launch_config_payload(
         {
             "create_mode": "existing",
             "provider_config": lease.get("provider_name"),
-            "existing_sandbox_id": lease.get("lease_id"),
+            "existing_sandbox_id": existing_sandbox_id or _existing_sandbox_shell_id(str(lease.get("lease_id") or "")),
             "model": model,
             "workspace": workspace,
         }
@@ -132,7 +144,15 @@ def _validate_saved_config(
         existing_sandbox_id = config.get("existing_sandbox_id")
         if not existing_sandbox_id:
             return None
-        lease = next((item for item in leases if item["lease_id"] == existing_sandbox_id), None)
+        lease = next(
+            (
+                item
+                for item in leases
+                if item["lease_id"] == existing_sandbox_id
+                or _existing_sandbox_shell_id(str(item.get("lease_id") or "")) == existing_sandbox_id
+            ),
+            None,
+        )
         if lease is None:
             return None
         return _existing_config_from_lease(lease, model=config.get("model"), workspace=lease.get("cwd"))
@@ -176,7 +196,7 @@ def _existing_config_from_lease(lease: dict[str, Any], *, model: str | None, wor
         "create_mode": "existing",
         "provider_config": lease.get("provider_name"),
         "sandbox_template": lease.get("recipe"),
-        "existing_sandbox_id": lease.get("lease_id"),
+        "existing_sandbox_id": _existing_sandbox_shell_id(str(lease.get("lease_id") or "")),
         "model": model,
         "workspace": workspace,
     }
@@ -289,7 +309,7 @@ def _resolve_workspace_backed_existing_config(
                 "create_mode": "existing",
                 "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
                 "sandbox_template": sandbox_template,
-                "existing_sandbox_id": lease.get("lease_id"),
+                "existing_sandbox_id": _required_bridge_text(sandbox, "id", "sandbox"),
                 "model": None,
                 "workspace": _required_bridge_text(workspace, "workspace_path", "workspace"),
             }
