@@ -13,7 +13,7 @@ import pytest
 
 from sandbox.chat_session import ChatSessionManager
 from sandbox.interfaces.executor import ExecuteResult
-from sandbox.lease import SandboxInstance, lease_from_row
+from sandbox.lease import SandboxInstance, SQLiteLease, lease_from_row
 from sandbox.provider import ProviderExecResult
 from sandbox.providers.local import LocalPersistentShellRuntime
 from sandbox.runtime import (
@@ -126,6 +126,13 @@ def test_sqlite_lease_repo_delete_no_longer_carries_legacy_snapshot_cleanup_shel
     source = inspect.getsource(SQLiteLeaseRepo.delete)
 
     assert "lease_resource_snapshots" not in source
+
+
+def test_sqlite_lease_ensure_active_instance_no_longer_carries_create_snapshot_probe():
+    source = inspect.getsource(SQLiteLease.ensure_active_instance)
+
+    assert "probe_and_upsert_for_instance" not in source
+    assert "create_running" not in source
 
 
 def test_remote_runtime_treats_daytona_pty_1011_as_infra_error():
