@@ -275,17 +275,49 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
 @pytest.mark.parametrize(
     ("verb", "path", "service_name"),
     [
-        ("get", "/api/monitor/sandbox/lease-1/browse", "sandbox_browse"),
-        ("get", "/api/monitor/sandbox/lease-1/read?path=/README.md", "sandbox_read"),
+        ("get", "/api/monitor/sandbox/lease-1/browse", "browse_sandbox"),
+        ("get", "/api/monitor/sandbox/lease-1/read?path=/README.md", "read_sandbox"),
     ],
 )
 def test_monitor_sandbox_routes_map_runtime_failures_to_503(monkeypatch, verb, path, service_name):
     def _raise(*_args, **_kwargs):
         raise RuntimeError("provider unavailable")
 
+    monkeypatch.setattr(monitor, "_resolve_sandbox_id_for_lease", lambda _lease_id: "sandbox-1")
     monkeypatch.setattr(resource_service, service_name, _raise)
 
     response = _request(verb, path, raise_server_exceptions=False)
 
     assert response.status_code == 503
     assert "provider unavailable" in response.text
+
+
+@pytest.mark.parametrize(
+    ("path", "service_name", "expected_args"),
+    [
+        ("/api/monitor/sandbox/lease-1/browse?path=/workspace", "browse_sandbox", ("sandbox-1", "/workspace")),
+        ("/api/monitor/sandbox/lease-1/read?path=/README.md", "read_sandbox", ("sandbox-1", "/README.md")),
+    ],
+)
+def test_monitor_sandbox_routes_bridge_lease_wrapper_to_sandbox_shaped_service(monkeypatch, path, service_name, expected_args):
+    class _Repo:
+        def query_sandboxes(self):
+            return [{"sandbox_id": "sandbox-1", "lease_id": "lease-1"}]
+
+        def close(self):
+            return None
+
+    calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(monitor, "make_sandbox_monitor_repo", lambda: _Repo())
+    monkeypatch.setattr(
+        resource_service,
+        service_name,
+        lambda sandbox_id, value: calls.append((sandbox_id, value)) or {"ok": True},
+    )
+
+    response = _request("get", path)
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert calls == [expected_args]

@@ -12,6 +12,7 @@ from backend.web.services.resource_cache import (
     get_resource_overview_snapshot,
     refresh_resource_overview_sync,
 )
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 router = APIRouter(prefix="/api/monitor")
 
@@ -54,6 +55,30 @@ async def _resource_io(fn, *args):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+async def _lease_resource_io(fn, lease_id: str, *args):
+    try:
+        sandbox_id = _resolve_sandbox_id_for_lease(lease_id)
+        return await asyncio.to_thread(fn, sandbox_id, *args)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _resolve_sandbox_id_for_lease(lease_id: str) -> str:
+    repo = make_sandbox_monitor_repo()
+    try:
+        for row in repo.query_sandboxes():
+            if str(row.get("lease_id") or "").strip() == str(lease_id or "").strip():
+                sandbox_id = str(row.get("sandbox_id") or "").strip()
+                if sandbox_id:
+                    return sandbox_id
+                break
+    finally:
+        repo.close()
+    raise KeyError(f"Lease not found: {lease_id}")
 
 
 @router.get("/leases")
@@ -236,9 +261,9 @@ async def resources_refresh():
 
 @router.get("/sandbox/{lease_id}/browse")
 async def sandbox_browse(lease_id: str, path: str = Query(default="/")):
-    return await _resource_io(resource_service.sandbox_browse, lease_id, path)
+    return await _lease_resource_io(resource_service.browse_sandbox, lease_id, path)
 
 
 @router.get("/sandbox/{lease_id}/read")
 async def sandbox_read_file(lease_id: str, path: str = Query(...)):
-    return await _resource_io(resource_service.sandbox_read, lease_id, path)
+    return await _lease_resource_io(resource_service.read_sandbox, lease_id, path)
