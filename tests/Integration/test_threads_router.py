@@ -471,7 +471,9 @@ async def test_create_thread_route_rejects_lease_shaped_existing_identity():
             "resolve_owned_lease",
             return_value={"lease_id": "lease-1", "provider_name": "local", "recipe": None},
         ),
-        patch.object(threads_router, "bind_thread_to_existing_sandbox", return_value=("/workspace/reused", {"lease_id": "lease-1"})) as bind_helper,
+        patch.object(
+            threads_router, "bind_thread_to_existing_sandbox", return_value=("/workspace/reused", {"lease_id": "lease-1"})
+        ) as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
     ):
