@@ -61,6 +61,11 @@ def leases_snapshot():
     return monitor_service.list_leases()
 
 
+@router.get("/sandboxes")
+def sandboxes_snapshot():
+    return monitor_service.list_monitor_sandboxes()
+
+
 @router.get("/provider-sessions")
 def provider_sessions_snapshot():
     return monitor_service.list_monitor_provider_sessions()
@@ -82,6 +87,11 @@ def provider_detail_snapshot(provider_id: str):
 @router.get("/leases/{lease_id}")
 def lease_detail_snapshot(lease_id: str):
     return _or_404(monitor_service.get_monitor_lease_detail, lease_id)
+
+
+@router.get("/sandboxes/{sandbox_id}")
+def sandbox_detail_snapshot(sandbox_id: str):
+    return _or_404(monitor_service.get_monitor_sandbox_detail, sandbox_id)
 
 
 @router.post("/leases/{lease_id}/cleanup")
