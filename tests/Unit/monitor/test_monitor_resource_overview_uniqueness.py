@@ -490,7 +490,15 @@ def test_list_resource_snapshots_by_sandbox_rekeys_lease_snapshots_for_session_e
         "lease-b": {"lease_id": "lease-b", "cpu_used": 22},
     }
 
-    monkeypatch.setattr(storage_runtime, "list_resource_snapshots", lambda _lease_ids, **_kwargs: snapshot_by_lease)
+    class _LeaseOnlyRepo:
+        def close(self):
+            return None
+
+        def list_snapshots_by_lease_ids(self, lease_ids):
+            assert lease_ids == ["lease-a", "lease-b"]
+            return snapshot_by_lease
+
+    monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _LeaseOnlyRepo())
 
     snapshot_by_sandbox = storage_runtime.list_resource_snapshots_by_sandbox(sessions)
 
@@ -498,6 +506,32 @@ def test_list_resource_snapshots_by_sandbox_rekeys_lease_snapshots_for_session_e
         "sandbox-a": {"lease_id": "lease-a", "cpu_used": 11},
         "sandbox-b": {"lease_id": "lease-b", "cpu_used": 22},
     }
+
+
+def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeypatch):
+    sessions = [
+        {
+            "sandbox_id": "sandbox-a",
+            "lease_id": "lease-a",
+        },
+    ]
+
+    class _SandboxWrappedRepo:
+        def close(self):
+            return None
+
+        def list_snapshots_by_sandbox_ids(self, items):
+            assert items == sessions
+            return {"sandbox-a": {"lease_id": "lease-a", "cpu_used": 11}}
+
+        def list_snapshots_by_lease_ids(self, _lease_ids):
+            raise AssertionError("lease-keyed snapshot read should not be the active path")
+
+    monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _SandboxWrappedRepo())
+
+    snapshot_by_sandbox = storage_runtime.list_resource_snapshots_by_sandbox(sessions)
+
+    assert snapshot_by_sandbox == {"sandbox-a": {"lease_id": "lease-a", "cpu_used": 11}}
 
 
 def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_telemetry(monkeypatch):
