@@ -337,6 +337,36 @@ def test_query_lease_threads_no_longer_roundtrips_through_legacy_bridge_requirem
     ]
 
 
+def test_query_lease_events_no_longer_roundtrips_through_legacy_bridge_requirement(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    legacy_lease_id="lease-1",
+                )
+            ],
+            "provider_events": [
+                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
+                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "_require_sandbox_rows_by_legacy_lease_ids",
+        lambda lease_ids, operation: (_ for _ in ()).throw(
+            AssertionError("query_lease_events should not roundtrip through _require_sandbox_rows_by_legacy_lease_ids")
+        ),
+    )
+
+    assert repo.query_lease_events("lease-1") == [
+        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
+        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
+    ]
+
+
 def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
     repo = _repo(
         {

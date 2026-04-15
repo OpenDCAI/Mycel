@@ -278,7 +278,8 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def query_lease_events(self, lease_id: str) -> list[dict]:
-        self._require_sandbox_rows_by_legacy_lease_ids([lease_id], "query_lease_events")
+        if lease_id not in self._sandbox_rows_by_legacy_lease_id("query_lease_events"):
+            raise RuntimeError("sandbox legacy bridge is required")
         # provider_events is the Supabase equivalent
         rows = q.rows(
             q.order(
