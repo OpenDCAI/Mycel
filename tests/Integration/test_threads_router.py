@@ -455,7 +455,7 @@ async def test_create_thread_persists_agent_user_id():
 
 
 @pytest.mark.asyncio
-async def test_create_thread_route_uses_canonical_existing_lease_binding_helper():
+async def test_create_thread_route_rejects_lease_shaped_existing_identity():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
@@ -471,30 +471,32 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
             "resolve_owned_lease",
             return_value={"lease_id": "lease-1", "provider_name": "local", "recipe": None},
         ),
-        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused") as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
     ):
-        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
+        with pytest.raises(threads_router.HTTPException) as excinfo:
+            await threads_router.create_thread(payload, "owner-1", app)
 
-    bind_helper.assert_called_once_with(
-        result["thread_id"],
-        "lease-1",
-        cwd="/workspace/reused",
-    )
-    assert app.state.thread_cwd[result["thread_id"]] == "/workspace/reused"
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Lease not authorized"
+    bind_helper.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() -> None:
     workspace_repo = _FakeWorkspaceRepo()
     sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-1"] = {
+        "id": "sandbox-1",
+        "owner_user_id": "owner-1",
+        "config": {"legacy_lease_id": "lease-1"},
+    }
     app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "existing_sandbox_id": "lease-1",
+            "existing_sandbox_id": "sandbox-1",
             "cwd": "/workspace/reused",
         }
     )
@@ -511,7 +513,6 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
                 "recipe": None,
             },
         ),
-        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
@@ -587,11 +588,17 @@ async def test_create_thread_route_persists_current_workspace_id_for_new_sandbox
 @pytest.mark.asyncio
 async def test_create_thread_route_existing_sandbox_still_saves_existing_launch_config() -> None:
     workspace_repo = _FakeWorkspaceRepo()
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo)
+    sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-1"] = {
+        "id": "sandbox-1",
+        "owner_user_id": "owner-1",
+        "config": {"legacy_lease_id": "lease-1"},
+    }
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "existing_sandbox_id": "lease-1",
+            "existing_sandbox_id": "sandbox-1",
             "cwd": "/workspace/reused",
         }
     )
@@ -609,7 +616,6 @@ async def test_create_thread_route_existing_sandbox_still_saves_existing_launch_
                 "recipe": {"id": "local:default"},
             },
         ),
-        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", save_config),
@@ -941,10 +947,15 @@ async def test_create_thread_route_rejects_unavailable_provider():
 @pytest.mark.asyncio
 async def test_create_thread_route_rejects_unavailable_provider_for_existing_lease():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
+    app.state.sandbox_repo.by_id["sandbox-1"] = {
+        "id": "sandbox-1",
+        "owner_user_id": "owner-1",
+        "config": {"legacy_lease_id": "lease-1"},
+    }
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "existing_sandbox_id": "lease-1",
+            "existing_sandbox_id": "sandbox-1",
         }
     )
 
@@ -954,7 +965,6 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
             "resolve_owned_lease",
             return_value={"lease_id": "lease-1", "provider_name": "daytona", "recipe": None},
         ),
-        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None),
     ):
         result = await threads_router.create_thread(payload, "owner-1", app)
