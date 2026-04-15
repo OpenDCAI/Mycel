@@ -62,6 +62,7 @@ class _FakeMonitorRepo:
         self._rows = rows
         self._instance_ids = instance_ids or {}
         self.instance_id_calls: list[str] = []
+        self.sandbox_instance_id_calls: list[str] = []
 
     def query_sandboxes(self):
         return list(self._rows)
@@ -83,6 +84,7 @@ class _FakeMonitorRepo:
         return [{"thread_id": row.get("thread_id")} for row in self._rows if row.get("sandbox_id") == sandbox_id]
 
     def query_sandbox_instance_id(self, sandbox_id: str):
+        self.sandbox_instance_id_calls.append(sandbox_id)
         for row in self._rows:
             if row.get("sandbox_id") == sandbox_id:
                 return self._instance_ids.get(str(row.get("lease_id") or ""))
@@ -319,23 +321,32 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
 
 
 @pytest.mark.parametrize(
-    ("rows", "include_runtime_session_id", "instance_ids", "expected_runtime_session_id", "expected_calls"),
+    (
+        "rows",
+        "include_runtime_session_id",
+        "instance_ids",
+        "expected_runtime_session_id",
+        "expected_lease_calls",
+        "expected_sandbox_calls",
+    ),
     [
         (
             [
-                _lease_row("lease-1", "thread-a"),
-                _lease_row("lease-1", "thread-b", created_at="2026-04-07T10:00:01Z"),
+                _lease_row("lease-1", "thread-a", sandbox_id="sandbox-1"),
+                _lease_row("lease-1", "thread-b", created_at="2026-04-07T10:00:01Z", sandbox_id="sandbox-1"),
             ],
             True,
-            {"lease-1": "provider-session-1"},
+            {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             "provider-session-1",
-            ["lease-1"],
+            [],
+            ["sandbox-1"],
         ),
         (
             [
                 _lease_row(
                     "lease-1",
                     "thread-parent",
+                    sandbox_id="sandbox-1",
                     provider_name="daytona_selfhost",
                     recipe_id="daytona:default",
                     cwd="/home/daytona/files/app",
@@ -343,8 +354,9 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
                 )
             ],
             True,
-            {"lease-1": "provider-session-probed"},
+            {"lease-1": "provider-session-probed", "sandbox-1": "provider-session-probed"},
             "provider-session-inline",
+            [],
             [],
         ),
         (
@@ -352,33 +364,37 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
                 _lease_row(
                     "lease-1",
                     "thread-parent",
+                    sandbox_id="sandbox-1",
                     provider_name="daytona_selfhost",
                     recipe_id="daytona:default",
                     cwd="/home/daytona/files/app",
                 )
             ],
             True,
-            {"lease-1": "provider-session-1"},
+            {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             "provider-session-1",
-            ["lease-1"],
+            [],
+            ["sandbox-1"],
         ),
         (
             [
                 _lease_row(
                     "lease-1",
                     "thread-parent",
+                    sandbox_id="sandbox-1",
                     provider_name="daytona_selfhost",
                     recipe_id="daytona:default",
                     cwd="/home/daytona/files/app",
                 )
             ],
             False,
-            {"lease-1": "provider-session-1"},
+            {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             None,
+            [],
             [],
         ),
     ],
-    ids=["probe-once-per-lease", "prefer-inline-instance-id", "keep-runtime-session-id", "skip-probe-by-default"],
+    ids=["probe-once-per-sandbox", "prefer-inline-instance-id", "keep-runtime-session-id", "skip-probe-by-default"],
 )
 def test_list_user_leases_runtime_session_id_contract(
     monkeypatch,
@@ -386,7 +402,8 @@ def test_list_user_leases_runtime_session_id_contract(
     include_runtime_session_id,
     instance_ids,
     expected_runtime_session_id,
-    expected_calls,
+    expected_lease_calls,
+    expected_sandbox_calls,
 ):
     monitor_repo = _FakeMonitorRepo(rows, instance_ids=instance_ids)
     thread_ids = tuple(str(row["thread_id"]) for row in rows)
@@ -406,7 +423,8 @@ def test_list_user_leases_runtime_session_id_contract(
         assert "runtime_session_id" not in lease
     else:
         assert lease["runtime_session_id"] == expected_runtime_session_id
-    assert monitor_repo.instance_id_calls == expected_calls
+    assert monitor_repo.instance_id_calls == expected_lease_calls
+    assert monitor_repo.sandbox_instance_id_calls == expected_sandbox_calls
 
 
 def test_resolve_owned_lease_filters_to_single_authorized_lease(monkeypatch):
