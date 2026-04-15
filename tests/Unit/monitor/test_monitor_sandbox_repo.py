@@ -504,6 +504,31 @@ def test_query_sandbox_instance_ids_uses_legacy_bridge() -> None:
     }
 
 
+def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", legacy_lease_id="lease-1"),
+                _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", legacy_lease_id="lease-2"),
+            ],
+            "sandbox_instances": [
+                {"lease_id": "lease-2", "provider_session_id": "provider-session-2"},
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "query_lease_instance_ids",
+        lambda _lease_ids: (_ for _ in ()).throw(AssertionError("sandbox-shaped instance lookup should not roundtrip through query_lease_instance_ids")),
+    )
+
+    assert repo.query_sandbox_instance_ids(["sandbox-1", "sandbox-2"]) == {
+        "sandbox-1": "sandbox-instance-1",
+        "sandbox-2": "provider-session-2",
+    }
+
+
 def test_query_lease_events_requires_sandbox_bridge() -> None:
     repo = _repo(
         {

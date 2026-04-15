@@ -189,9 +189,38 @@ class SupabaseSandboxMonitorRepo:
         if not ordered_ids:
             return {}
 
-        sandbox_rows = {sandbox_id: self.query_sandbox(sandbox_id) for sandbox_id in ordered_ids}
-        lease_ids = [str(row.get("lease_id") or "").strip() for row in sandbox_rows.values() if row is not None]
-        lease_instance_ids = self.query_lease_instance_ids(lease_ids)
+        sandbox_rows = {
+            str(sandbox.get("id") or "").strip(): sandbox
+            for sandbox in self._ordered_sandboxes("query_sandbox_instance_ids")
+            if str(sandbox.get("id") or "").strip() in ordered_ids
+        }
+
+        instance_by_lease: dict[str, str | None] = {}
+        lease_ids = []
+        for sandbox_id in ordered_ids:
+            sandbox = sandbox_rows.get(sandbox_id)
+            if sandbox is None:
+                continue
+            lease = self._lease_row_from_sandbox(sandbox)
+            lease_id = str(lease.get("lease_id") or "").strip()
+            if not lease_id:
+                continue
+            lease_ids.append(lease_id)
+            instance_by_lease[lease_id] = None
+
+        if lease_ids:
+            instances = q.rows_in_chunks(
+                lambda: self._client.table("sandbox_instances").select("lease_id,provider_session_id"),
+                "lease_id",
+                lease_ids,
+                _REPO,
+                "query_sandbox_instance_ids instances",
+            )
+            for row in instances:
+                lease_id = str(row.get("lease_id") or "").strip()
+                provider_session_id = str(row.get("provider_session_id") or "").strip()
+                if lease_id and provider_session_id:
+                    instance_by_lease[lease_id] = provider_session_id
 
         result: dict[str, str | None] = {}
         for sandbox_id in ordered_ids:
@@ -199,7 +228,13 @@ class SupabaseSandboxMonitorRepo:
             if sandbox is None:
                 result[sandbox_id] = None
                 continue
-            result[sandbox_id] = lease_instance_ids.get(str(sandbox.get("lease_id") or "").strip())
+            lease = self._lease_row_from_sandbox(sandbox)
+            lease_id = str(lease.get("lease_id") or "").strip()
+            result[sandbox_id] = instance_by_lease.get(lease_id)
+            if result[sandbox_id]:
+                continue
+            provider_env_id = str(sandbox.get("provider_env_id") or "").strip()
+            result[sandbox_id] = provider_env_id or None
         return result
 
     def query_lease_events(self, lease_id: str) -> list[dict]:
