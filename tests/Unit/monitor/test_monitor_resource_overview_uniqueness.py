@@ -373,6 +373,50 @@ def test_list_resource_providers_uses_canonical_sandbox_thread_fallback(monkeypa
     ]
 
 
+def test_list_resource_providers_no_longer_uses_lease_shaped_visible_thread_fallback_without_sandbox_id(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-deadbeef",
+            "sandbox_id": None,
+            "lease_id": "lease-1",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    class _NoLeaseFallbackRepo(_FakeRepo):
+        def query_lease_threads(self, lease_id: str):
+            raise AssertionError(f"lease-shaped visible-thread fallback should be gone: {lease_id}")
+
+    monkeypatch.setattr(
+        resource_projection_service,
+        "make_sandbox_monitor_repo",
+        lambda: _NoLeaseFallbackRepo(rows),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda _thread_ids: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["sessions"] == []
+    assert payload["summary"]["running_sessions"] == 0
+
+
 def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distinct_session_ids(monkeypatch):
     rows = [
         {
