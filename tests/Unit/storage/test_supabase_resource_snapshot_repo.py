@@ -90,3 +90,10 @@ def test_resource_snapshot_repo_protocol_no_longer_declares_lease_shaped_methods
 def test_supabase_provider_package_no_longer_exports_lease_shaped_snapshot_helpers() -> None:
     assert not hasattr(supabase_provider, "upsert_lease_resource_snapshot")
     assert not hasattr(supabase_provider, "list_snapshots_by_lease_ids")
+
+
+def test_supabase_resource_snapshot_repo_instance_no_longer_exposes_lease_shaped_methods() -> None:
+    repo = SupabaseResourceSnapshotRepo(_FakeClient())
+
+    assert not hasattr(repo, "upsert_lease_resource_snapshot")
+    assert not hasattr(repo, "list_snapshots_by_lease_ids")
