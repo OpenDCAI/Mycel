@@ -11,7 +11,6 @@ from storage.runtime import build_resource_snapshot_repo
 def upsert_resource_snapshot_for_sandbox(
     *,
     sandbox_id: str,
-    legacy_lease_id: str,
     provider_name: str,
     observed_state: str,
     probe_mode: str,
@@ -29,7 +28,6 @@ def upsert_resource_snapshot_for_sandbox(
     try:
         repo.upsert_resource_snapshot_for_sandbox(
             sandbox_id=sandbox_id,
-            legacy_lease_id=legacy_lease_id,
             provider_name=provider_name,
             observed_state=observed_state,
             probe_mode=probe_mode,
@@ -129,7 +127,6 @@ def probe_and_upsert_for_instance(
                 raise RuntimeError("sandbox-shaped snapshot repo requires sandbox_id")
             repo.upsert_resource_snapshot_for_sandbox(
                 sandbox_id=sandbox_id,
-                legacy_lease_id=lease_id,
                 provider_name=provider_name,
                 observed_state=observed_state,
                 probe_mode=probe_mode,
@@ -146,7 +143,6 @@ def probe_and_upsert_for_instance(
         else:
             upsert_resource_snapshot_for_sandbox(
                 sandbox_id=sandbox_id,
-                legacy_lease_id=lease_id,
                 provider_name=provider_name,
                 observed_state=observed_state,
                 probe_mode=probe_mode,
