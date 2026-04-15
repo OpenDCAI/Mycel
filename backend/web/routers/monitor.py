@@ -99,6 +99,11 @@ def lease_cleanup_action(lease_id: str):
     return _or_404(monitor_service.request_monitor_lease_cleanup, lease_id)
 
 
+@router.post("/sandboxes/{sandbox_id}/cleanup")
+def sandbox_cleanup_action(sandbox_id: str):
+    return _or_404(monitor_service.request_monitor_sandbox_cleanup, sandbox_id)
+
+
 @router.post("/provider-sessions/{provider_id}/{session_id}/cleanup")
 def provider_session_cleanup_action(provider_id: str, session_id: str):
     return monitor_service.request_monitor_provider_session_cleanup(provider_id, session_id)

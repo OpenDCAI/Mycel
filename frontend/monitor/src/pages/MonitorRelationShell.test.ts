@@ -50,7 +50,7 @@ describe("monitor relation shell", () => {
       operation: { operation_id: "op-1", status: "succeeded" },
       target: { target_type: "lease", target_id: "lease-1" },
       sandbox_id: "sandbox-1",
-      result_truth: { lease_state_before: "running", lease_state_after: "destroyed" },
+      result_truth: { sandbox_state_before: "running", sandbox_state_after: "destroyed" },
       events: [],
     });
 
@@ -59,6 +59,8 @@ describe("monitor relation shell", () => {
     expect(shell.targetLabel).toBe("Sandbox");
     expect(shell.beforeLabel).toBe("Sandbox Before");
     expect(shell.afterLabel).toBe("Sandbox After");
+    expect(shell.runtimeBody).toBe("Runtime session linked to the target sandbox.");
+    expect(shell.providerBody).toBe("Provider surface responsible for the target sandbox runtime.");
   });
 
   it("uses sandbox detail link for resource group relation shell", () => {
