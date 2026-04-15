@@ -26,6 +26,12 @@ def _default_eval_batch_service(monkeypatch):
     monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
 
 
+@pytest.fixture(autouse=True)
+def _clear_monitor_cleanup_operations():
+    monitor_service.monitor_operation_service._OPERATIONS.clear()
+    monitor_service.monitor_operation_service._TARGET_INDEX.clear()
+
+
 def _lease_row(**overrides):
     row = {
         "sandbox_id": "sandbox-1",
@@ -636,6 +642,46 @@ def test_request_monitor_lease_cleanup_closes_stale_active_sessions(monkeypatch)
     assert calls == [("lease-1", "daytona", True)]
 
 
+def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypatch):
+    calls: list[tuple[str, str, bool]] = []
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_detached_lease(),
+            threads=[{"thread_id": "thread-historical"}],
+            runtime_session_id="runtime-1",
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        _record_destroy(calls),
+        raising=False,
+    )
+
+    payload = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
+
+    assert payload["accepted"] is True
+    assert payload["message"] == "Lease cleanup completed."
+    assert payload["operation"]["target_type"] == "sandbox"
+    assert payload["operation"]["target_id"] == "sandbox-1"
+    assert calls == [("lease-1", "daytona", True)]
+
+
+def test_request_monitor_lease_cleanup_wraps_canonical_sandbox_cleanup(monkeypatch):
+    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
+    calls: list[str] = []
+    monkeypatch.setattr(
+        monitor_service,
+        "request_monitor_sandbox_cleanup",
+        lambda sandbox_id: calls.append(sandbox_id) or {"accepted": True, "operation": {"target_type": "sandbox"}},
+    )
+
+    payload = monitor_service.request_monitor_lease_cleanup("lease-1")
+
+    assert payload == {"accepted": True, "operation": {"target_type": "sandbox"}}
+    assert calls == ["sandbox-1"]
+
+
 def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypatch):
     calls: list[tuple[str, str, str, str | None]] = []
     monkeypatch.setattr(
@@ -911,6 +957,33 @@ def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch
     assert payload["sandbox_id"] == "sandbox-1"
     assert payload["target"]["target_type"] == "lease"
     assert payload["target"]["target_id"] == "lease-1"
+
+
+def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service.monitor_operation_service,
+        "get_operation_detail",
+        lambda _operation_id: {
+            "operation": {"operation_id": "op-1", "kind": "lease_cleanup", "status": "succeeded"},
+            "target": {
+                "target_type": "sandbox",
+                "target_id": "sandbox-1",
+                "provider_id": "daytona",
+                "runtime_session_id": "runtime-1",
+            },
+            "result_truth": {
+                "lease_state_before": "running",
+                "lease_state_after": "destroyed",
+            },
+            "events": [],
+        },
+    )
+
+    payload = monitor_service.get_monitor_operation_detail("op-1")
+
+    assert payload["sandbox_id"] == "sandbox-1"
+    assert payload["target"]["target_type"] == "sandbox"
+    assert payload["target"]["target_id"] == "sandbox-1"
 
 
 @pytest.mark.asyncio

@@ -146,6 +146,7 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     )
 
     lease_id = str(lease.get("lease_id") or "")
+    sandbox_id = str(lease.get("sandbox_id") or "")
     if not cleanup["allowed"]:
         return {
             "accepted": False,
@@ -163,12 +164,12 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
 
     operation = _new_operation(
         kind="lease_cleanup",
-        target_type="lease",
-        target_id=lease_id,
+        target_type="sandbox",
+        target_id=sandbox_id,
         reason=cleanup["reason"],
         target={
-            "target_type": "lease",
-            "target_id": lease_id,
+            "target_type": "sandbox",
+            "target_id": sandbox_id,
             "provider_id": provider_name,
             "runtime_session_id": runtime_session_id or None,
             "thread_ids": thread_ids,
