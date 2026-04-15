@@ -975,7 +975,13 @@ def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
         caller(repo)
 
 
-def test_list_sessions_with_leases_keeps_active_terminal_and_latest_closed_session_rows() -> None:
+def test_resource_session_row_source_shell_is_removed() -> None:
+    repo = _repo({"container.sandboxes": []})
+
+    assert not hasattr(repo, "list_sessions_with_leases")
+
+
+def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -1009,7 +1015,7 @@ def test_list_sessions_with_leases_keeps_active_terminal_and_latest_closed_sessi
         }
     )
 
-    assert repo.list_sessions_with_leases() == [
+    assert repo.query_resource_sessions() == [
         {
             "provider": "docker",
             "session_id": None,
@@ -1053,7 +1059,7 @@ def test_list_sessions_with_leases_keeps_active_terminal_and_latest_closed_sessi
     ]
 
 
-def test_list_sessions_with_leases_no_longer_materializes_lease_map(monkeypatch) -> None:
+def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -1080,11 +1086,11 @@ def test_list_sessions_with_leases_no_longer_materializes_lease_map(monkeypatch)
         repo,
         "_lease_row_from_sandbox",
         lambda sandbox: (_ for _ in ()).throw(
-            AssertionError("list_sessions_with_leases should not materialize a lease_map through _lease_row_from_sandbox")
+            AssertionError("query_resource_sessions should not materialize a lease_map through _lease_row_from_sandbox")
         ),
     )
 
-    assert repo.list_sessions_with_leases() == [
+    assert repo.query_resource_sessions() == [
         {
             "provider": "daytona_selfhost",
             "session_id": None,

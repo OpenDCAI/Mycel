@@ -11,7 +11,7 @@ class _FakeRepo:
         self._sandbox_threads = sandbox_threads or {}
         self._instance_ids = instance_ids or {}
 
-    def list_sessions_with_leases(self):
+    def query_resource_sessions(self):
         return list(self._rows)
 
     def query_lease_threads(self, lease_id: str):
@@ -85,6 +85,36 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
 
 def test_storage_runtime_no_longer_exposes_lease_shaped_snapshot_read_shell() -> None:
     assert not hasattr(storage_runtime, "list_resource_snapshots")
+
+
+def test_list_resource_providers_no_longer_uses_lease_shaped_row_source_shell(monkeypatch) -> None:
+    class _Repo(_FakeRepo):
+        def list_sessions_with_leases(self):
+            raise AssertionError("resource projection should not use list_sessions_with_leases as row-source shell")
+
+    _patch_daytona_projection(
+        monkeypatch,
+        _Repo(
+            [
+                {
+                    "provider": "daytona_selfhost",
+                    "session_id": "sess-1",
+                    "thread_id": "thread-1",
+                    "sandbox_id": "sandbox-1",
+                    "lease_id": "lease-1",
+                    "observed_state": "running",
+                    "desired_state": "running",
+                    "created_at": "2026-04-04T00:00:00",
+                }
+            ],
+            instance_ids={"sandbox-1": "provider-session-1"},
+        ),
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["sessions"][0]["id"] == "sandbox-1:thread-1"
 
 
 def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch):
