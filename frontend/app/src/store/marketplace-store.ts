@@ -114,7 +114,15 @@ async function backendApi<T = unknown>(path: string, opts?: RequestInit): Promis
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API}${path}`, { headers, ...opts });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let payload: { detail?: string; message?: string } | null = null;
+    try {
+      payload = await res.json() as { detail?: string; message?: string };
+    } catch {
+      payload = null;
+    }
+    throw new Error(payload?.detail || payload?.message || `API error: ${res.status}`);
+  }
   return res.json();
 }
 

@@ -182,4 +182,18 @@ describe("useMarketplaceStore", () => {
       visibility: "public",
     });
   });
+
+  it("preserves backend detail when marketplace publish returns an honest 503", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: "Marketplace Hub unavailable" }),
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await expect(
+      useMarketplaceStore.getState().publishAgentUserToMarketplace("agent-1", "patch", "notes", ["coding"], "public"),
+    ).rejects.toThrow("Marketplace Hub unavailable");
+  });
 });
