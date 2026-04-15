@@ -58,17 +58,6 @@ class FakeLeaseRepo:
         self.runtime_session_id = runtime_session_id
         self.leases = leases or []
 
-    def query_lease(self, lease_id):
-        if self.lease is _MISSING:
-            return None
-        return self.lease if self.lease is not None else _lease_row(lease_id=lease_id)
-
-    def query_lease_threads(self, _lease_id):
-        return self.threads
-
-    def query_lease_sessions(self, _lease_id):
-        return self.sessions
-
     def query_leases(self):
         return self.leases
 
@@ -104,6 +93,14 @@ def test_fake_lease_repo_no_longer_exposes_lease_instance_shell() -> None:
     repo = FakeLeaseRepo()
 
     assert not hasattr(repo, "query_lease_instance_id")
+
+
+def test_fake_lease_repo_no_longer_exposes_broader_lease_protocol_shell() -> None:
+    repo = FakeLeaseRepo()
+
+    assert not hasattr(repo, "query_lease")
+    assert not hasattr(repo, "query_lease_threads")
+    assert not hasattr(repo, "query_lease_sessions")
 
 
 def _use_monitor_repo(monkeypatch, repo):
