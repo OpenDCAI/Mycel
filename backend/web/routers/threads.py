@@ -46,6 +46,7 @@ from backend.web.services.thread_launch_config_service import (
     save_last_confirmed_config,
     save_last_successful_config,
 )
+from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
     get_lease_status,
@@ -460,6 +461,7 @@ async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str
     state = await agent.agent.aget_state(config)
     values = getattr(state, "values", {}) if state else {}
     messages = values.get("messages", []) if isinstance(values, dict) else []
+    messages = repair_interrupted_tool_call_messages(list(messages))
     serialized = [serialize_message(msg) for msg in messages]
 
     from core.runtime.visibility import annotate_owner_visibility

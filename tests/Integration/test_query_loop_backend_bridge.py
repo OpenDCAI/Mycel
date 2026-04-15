@@ -740,6 +740,62 @@ async def test_get_thread_history_skips_empty_ai_messages_after_notifications():
 
 
 @pytest.mark.asyncio
+async def test_cold_detail_and_history_share_interrupted_tool_call_repair():
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(checkpointer=checkpointer)
+    broken_ai = AIMessage(
+        content="",
+        tool_calls=[{"name": "Read", "args": {"file_path": "/tmp/a.txt"}, "id": "tc-1"}],
+    )
+    checkpointer.store["cold-repair-thread"] = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="hello"),
+                broken_ai,
+            ]
+        }
+    }
+
+    fake_agent = SimpleNamespace(
+        agent=loop,
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    _put_local_agent_in_pool(fake_app, "cold-repair-thread", fake_agent)
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "cold-repair-thread",
+            user_id="u",
+            app=fake_app,
+        )
+        history = await get_thread_history(
+            "cold-repair-thread",
+            limit=20,
+            truncate=400,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert any(
+        entry.get("role") == "assistant"
+        and any(
+            seg.get("type") == "tool"
+            and seg.get("step", {}).get("name") == "Read"
+            and seg.get("step", {}).get("result") == "Error: task was interrupted (server restart or timeout). Results unavailable."
+            for seg in entry.get("segments", [])
+        )
+        for entry in detail["entries"]
+    )
+    assert [item["role"] for item in history["messages"]] == ["human", "tool_call", "tool_result"]
+    assert history["messages"][-1]["text"] == "Error: task was interrupted (server restart or timeout). Results unavailable."
+
+
+@pytest.mark.asyncio
 async def test_get_thread_history_retains_tool_search_inline_select_error():
     checkpointer = _MemoryCheckpointer()
     registry = ToolRegistry()
