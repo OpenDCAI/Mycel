@@ -66,17 +66,17 @@ export async function cleanupMonitorProviderSession(
   });
 }
 
-export async function browseMonitorSandbox(leaseId: string, path: string): Promise<{
+export async function browseMonitorSandbox(sandboxId: string, path: string): Promise<{
   current_path: string;
   parent_path: string | null;
   items: BrowseItem[];
 }> {
-  return fetchJsonOrThrow(`/api/monitor/sandbox/${leaseId}/browse?path=${encodeURIComponent(path)}`);
+  return fetchJsonOrThrow(`/api/monitor/sandboxes/${sandboxId}/browse?path=${encodeURIComponent(path)}`);
 }
 
 export async function readMonitorSandboxFile(
-  leaseId: string,
+  sandboxId: string,
   path: string,
 ): Promise<{ path: string; content: string; truncated: boolean }> {
-  return fetchJsonOrThrow(`/api/monitor/sandbox/${leaseId}/read?path=${encodeURIComponent(path)}`);
+  return fetchJsonOrThrow(`/api/monitor/sandboxes/${sandboxId}/read?path=${encodeURIComponent(path)}`);
 }
