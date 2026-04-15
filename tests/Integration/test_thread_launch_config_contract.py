@@ -449,7 +449,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
         status="ready",
         observed_at=2.0,
         last_error=None,
-        config={"legacy_lease_id": "lease-2"},
+        config={},
         created_at=2.0,
         updated_at=2.0,
     )
@@ -474,13 +474,6 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
                     "provider_name": "local",
                     "recipe": default_recipe_snapshot("local"),
                     "cwd": "/workspace/wrong",
-                    "thread_ids": [],
-                },
-                {
-                    "lease_id": "lease-2",
-                    "provider_name": "daytona_selfhost",
-                    "recipe": default_recipe_snapshot("daytona"),
-                    "cwd": "/workspace/from-lease",
                     "thread_ids": [],
                 },
             ],
@@ -546,7 +539,7 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
         status="ready",
         observed_at=3.0,
         last_error=None,
-        config={"legacy_lease_id": "lease-3"},
+        config={},
         created_at=3.0,
         updated_at=3.0,
     )
@@ -583,15 +576,7 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
         patch.object(
             thread_launch_config_service.sandbox_service,
             "list_user_leases",
-            return_value=[
-                {
-                    "lease_id": "lease-3",
-                    "provider_name": "daytona_selfhost",
-                    "recipe": default_recipe_snapshot("daytona"),
-                    "cwd": "/workspace/from-lease",
-                    "thread_ids": [],
-                }
-            ],
+            return_value=[],
         ),
         patch.object(
             thread_launch_config_service.sandbox_service,
