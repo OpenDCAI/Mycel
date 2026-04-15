@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth-store";
 
-const HUB_URL = import.meta.env.VITE_MYCEL_HUB_URL || "http://localhost:8090";
 const API = "/api/marketplace";
 
 export interface MarketplaceItemSummary {
@@ -107,24 +106,6 @@ function isActiveMarketplaceDetailRoute(itemId: string): boolean {
   return path === `/marketplace/${encodeURIComponent(itemId)}`;
 }
 
-async function hubApi<T = unknown>(path: string): Promise<T> {
-  try {
-    const res = await fetch(`${HUB_URL}/api/v1${path}`);
-    if (!res.ok) {
-      if (res.status >= 502) {
-        throw new Error("Marketplace Hub unavailable");
-      }
-      throw new Error(`Hub API error: ${res.status}`);
-    }
-    return res.json();
-  } catch (e) {
-    if (e instanceof TypeError) {
-      throw new Error("Marketplace Hub unavailable");
-    }
-    throw e;
-  }
-}
-
 async function backendApi<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
   const token = useAuthStore.getState().token;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -155,7 +136,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       params.set("sort", sort);
       params.set("page", String(page));
       params.set("page_size", "20");
-      const data = await hubApi<{ items: MarketplaceItemSummary[]; total: number }>(`/items?${params}`);
+      const data = await backendApi<{ items: MarketplaceItemSummary[]; total: number }>(`/items?${params}`);
       set({ items: data.items, total: data.total });
     } catch (e) {
       // @@@marketplace-route-teardown - explore fetches can resolve after the
@@ -175,7 +156,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   fetchDetail: async (id) => {
     set({ error: null, detailLoading: true, detail: null });
     try {
-      const data = await hubApi<MarketplaceItemDetail>(`/items/${id}`);
+      const data = await backendApi<MarketplaceItemDetail>(`/items/${id}`);
       set({ detail: data });
     } catch (e) {
       // @@@marketplace-detail-route-teardown - detail fetches can resolve after
@@ -197,7 +178,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   fetchVersionSnapshot: async (itemId, version) => {
     set({ snapshotLoading: true, versionSnapshot: null });
     try {
-      const data = await hubApi<{ snapshot: MarketplaceVersionSnapshot | null }>(`/items/${itemId}/versions/${version}`);
+      const data = await backendApi<{ snapshot: MarketplaceVersionSnapshot | null }>(`/items/${itemId}/versions/${version}`);
       set({ versionSnapshot: data.snapshot ?? null });
     } catch (e) {
       // @@@marketplace-snapshot-route-teardown - snapshot fetches can resolve
@@ -217,7 +198,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   fetchLineage: async (id) => {
     set({ error: null });
     try {
-      const data = await hubApi<{ ancestors: LineageNode[]; children: LineageNode[] }>(`/items/${id}/lineage`);
+      const data = await backendApi<{ ancestors: LineageNode[]; children: LineageNode[] }>(`/items/${id}/lineage`);
       set({ lineage: data });
     } catch (e) {
       // @@@marketplace-lineage-route-teardown - lineage fetches can resolve

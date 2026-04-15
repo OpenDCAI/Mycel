@@ -44,6 +44,38 @@ def _hub_api(method: str, path: str, **kwargs: Any) -> dict:
         raise HTTPException(status_code=503, detail="Marketplace Hub unavailable")
 
 
+def list_items(
+    *,
+    type: str | None = None,
+    q: str | None = None,
+    sort: str = "downloads",
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    params: dict[str, Any] = {
+        "sort": sort,
+        "page": page,
+        "page_size": page_size,
+    }
+    if type:
+        params["type"] = type
+    if q:
+        params["q"] = q
+    return _hub_api("GET", "/items", params=params)
+
+
+def get_item_detail(item_id: str) -> dict:
+    return _hub_api("GET", f"/items/{item_id}")
+
+
+def get_item_lineage(item_id: str) -> dict:
+    return _hub_api("GET", f"/items/{item_id}/lineage")
+
+
+def get_item_version_snapshot(item_id: str, version: str) -> dict:
+    return _hub_api("GET", f"/items/{item_id}/versions/{version}")
+
+
 def _read_json(path: Path) -> dict:
     if not path.exists():
         return {}

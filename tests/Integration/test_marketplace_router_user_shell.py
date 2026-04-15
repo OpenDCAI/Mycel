@@ -13,6 +13,10 @@ def test_marketplace_router_exposes_agent_user_publish_not_generic_publish() -> 
     paths = {route.path for route in marketplace_router.router.routes}
     assert "/api/marketplace/publish-agent-user" in paths
     assert "/api/marketplace/publish" not in paths
+    assert "/api/marketplace/items" in paths
+    assert "/api/marketplace/items/{item_id}" in paths
+    assert "/api/marketplace/items/{item_id}/lineage" in paths
+    assert "/api/marketplace/items/{item_id}/versions/{version}" in paths
 
 
 @pytest.mark.asyncio
@@ -109,6 +113,65 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
     assert seen["agent_config_repo"] is request.app.state.agent_config_repo
+
+
+@pytest.mark.asyncio
+async def test_list_marketplace_items_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        marketplace_router.marketplace_client,
+        "list_items",
+        lambda **kwargs: seen.update(kwargs) or {"items": [{"id": "item-1"}], "total": 1},
+        raising=False,
+    )
+
+    result = await marketplace_router.list_marketplace_items(type="skill", q="search", sort="newest", page=2, page_size=10)
+
+    assert result == {"items": [{"id": "item-1"}], "total": 1}
+    assert seen == {"type": "skill", "q": "search", "sort": "newest", "page": 2, "page_size": 10}
+
+
+@pytest.mark.asyncio
+async def test_get_marketplace_item_detail_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        marketplace_router.marketplace_client,
+        "get_item_detail",
+        lambda item_id: {"id": item_id, "name": "Repo Item"},
+        raising=False,
+    )
+
+    result = await marketplace_router.get_marketplace_item_detail("item-1")
+
+    assert result == {"id": "item-1", "name": "Repo Item"}
+
+
+@pytest.mark.asyncio
+async def test_get_marketplace_item_lineage_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        marketplace_router.marketplace_client,
+        "get_item_lineage",
+        lambda item_id: {"ancestors": [], "children": [{"id": item_id}]},
+        raising=False,
+    )
+
+    result = await marketplace_router.get_marketplace_item_lineage("item-1")
+
+    assert result == {"ancestors": [], "children": [{"id": "item-1"}]}
+
+
+@pytest.mark.asyncio
+async def test_get_marketplace_item_version_snapshot_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        marketplace_router.marketplace_client,
+        "get_item_version_snapshot",
+        lambda item_id, version: {"snapshot": {"meta": {"id": item_id, "version": version}}},
+        raising=False,
+    )
+
+    result = await marketplace_router.get_marketplace_item_version_snapshot("item-1", "1.2.3")
+
+    assert result == {"snapshot": {"meta": {"id": "item-1", "version": "1.2.3"}}}
 
 
 @pytest.mark.asyncio
