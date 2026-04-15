@@ -12,6 +12,14 @@ class _FakeProvider:
         return None
 
 
+class _ReadableProvider:
+    def list_dir(self, instance_id: str, path: str):
+        return [{"name": "README.md", "type": "file"}]
+
+    def read_file(self, instance_id: str, path: str):
+        return f"{instance_id}:{path}"
+
+
 def _make_probe_repo(targets: list[dict]):
     repo = MagicMock()
     repo.list_probe_targets.return_value = targets
@@ -39,6 +47,27 @@ class _FakeSandboxSnapshotRepo:
 
     def upsert_resource_snapshot_for_sandbox(self, **kwargs):
         self.upserts.append(kwargs)
+
+
+class _CanonicalOnlyResourceRepo:
+    def __init__(self, *, sandboxes: list[dict], instance_ids: dict[str, str | None]) -> None:
+        self._sandboxes = sandboxes
+        self._instance_ids = instance_ids
+
+    def query_sandboxes(self):
+        return self._sandboxes
+
+    def query_sandbox_instance_id(self, sandbox_id: str):
+        return self._instance_ids.get(sandbox_id)
+
+    def query_lease(self, _lease_id: str):
+        raise AssertionError("resource runtime-target helper should not use query_lease as single source")
+
+    def query_lease_instance_id(self, _lease_id: str):
+        raise AssertionError("resource runtime-target helper should not use query_lease_instance_id as single source")
+
+    def close(self):
+        return None
 
 
 def test_upsert_resource_snapshot_for_sandbox_requires_repo_sandbox_wrapper(monkeypatch) -> None:
@@ -345,3 +374,48 @@ def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatc
     assert result["running_targets"] == 0
     assert result["non_running_targets"] == 0
     assert captured == []
+
+
+def test_sandbox_browse_uses_canonical_sandbox_bridge_source(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_service,
+        "make_sandbox_monitor_repo",
+        lambda: _CanonicalOnlyResourceRepo(
+            sandboxes=[
+                {
+                    "sandbox_id": "sandbox-1",
+                    "lease_id": "lease-1",
+                    "provider_name": "daytona",
+                }
+            ],
+            instance_ids={"sandbox-1": "instance-1"},
+        ),
+    )
+    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _name: _ReadableProvider())
+
+    payload = resource_service.sandbox_browse("lease-1", "/workspace")
+
+    assert payload["current_path"] == "/workspace"
+    assert payload["items"] == [{"name": "README.md", "path": "/workspace/README.md", "is_dir": False}]
+
+
+def test_sandbox_read_uses_canonical_sandbox_instance_lookup(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_service,
+        "make_sandbox_monitor_repo",
+        lambda: _CanonicalOnlyResourceRepo(
+            sandboxes=[
+                {
+                    "sandbox_id": "sandbox-1",
+                    "lease_id": "lease-1",
+                    "provider_name": "daytona",
+                }
+            ],
+            instance_ids={"sandbox-1": "instance-1"},
+        ),
+    )
+    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _name: _ReadableProvider())
+
+    payload = resource_service.sandbox_read("lease-1", "/README.md")
+
+    assert payload == {"path": "/README.md", "content": "instance-1:/README.md", "truncated": False}
