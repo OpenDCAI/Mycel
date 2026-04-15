@@ -28,6 +28,7 @@ def _default_eval_batch_service(monkeypatch):
 
 def _lease_row(**overrides):
     row = {
+        "sandbox_id": "sandbox-1",
         "lease_id": "lease-1",
         "provider_name": "daytona",
         "desired_state": "running",
@@ -333,6 +334,7 @@ def test_get_monitor_lease_detail_merges_monitor_repo_state(monkeypatch):
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
+    assert payload["lease"]["sandbox_id"] == "sandbox-1"
     assert payload["lease"]["lease_id"] == "lease-1"
     assert payload["provider"] == {"id": "daytona", "name": "daytona"}
     assert payload["runtime"] == {"runtime_session_id": "runtime-1"}
@@ -586,6 +588,8 @@ def test_list_leases_ignores_stale_thread_refs_when_classifying_triage(monkeypat
 
     assert payload["triage"]["summary"]["orphan_cleanup"] == 1
     assert payload["triage"]["summary"]["healthy_capacity"] == 0
+    assert payload["items"][0]["sandbox_id"] == "sandbox-1"
+    assert payload["items"][0]["lease_id"] == "lease-1"
     assert payload["items"][0]["thread"] == {"thread_id": None, "is_orphan": True}
     assert payload["items"][0]["triage"]["category"] == "orphan_cleanup"
 

@@ -503,6 +503,7 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
         )
         items.append(
             {
+                "sandbox_id": row.get("sandbox_id"),
                 "lease_id": row["lease_id"],
                 "provider": row["provider_name"],
                 "instance_id": row["current_instance_id"],
@@ -593,6 +594,7 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
 
     return {
         "lease": {
+            "sandbox_id": lease.get("sandbox_id"),
             "lease_id": str(lease.get("lease_id") or lease_id),
             "provider_name": provider_name,
             "desired_state": lease.get("desired_state"),
