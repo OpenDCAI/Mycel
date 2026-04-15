@@ -23,7 +23,7 @@ from backend.web.services.sandbox_service import available_sandbox_types
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_lease_to_session_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
-from storage.runtime import list_resource_snapshots
+from storage.runtime import list_resource_snapshots_by_sandbox
 
 
 def _now_iso() -> str:
@@ -125,38 +125,6 @@ def _load_runtime_session_ids(sandbox_ids: list[str]) -> dict[str, str | None]:
         repo.close()
 
 
-def _index_session_snapshots_by_sandbox(
-    sessions: list[dict[str, Any]],
-    snapshot_by_lease: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    snapshot_by_sandbox: dict[str, dict[str, Any]] = {}
-    for session in sessions:
-        sandbox_id = str(session.get("sandbox_id") or "").strip()
-        lease_id = str(session.get("lease_id") or "").strip()
-        if not sandbox_id or not lease_id or sandbox_id in snapshot_by_sandbox:
-            continue
-        snapshot = snapshot_by_lease.get(lease_id)
-        if snapshot is not None:
-            snapshot_by_sandbox[sandbox_id] = snapshot
-    return snapshot_by_sandbox
-
-
-def _index_provider_snapshots_by_sandbox(
-    provider_sessions: list[dict[str, Any]],
-    snapshot_by_lease: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    snapshot_by_sandbox: dict[str, dict[str, Any]] = {}
-    for session in provider_sessions:
-        sandbox_id = str(session.get("sandbox_id") or "").strip()
-        lease_id = str(session.get("lease_id") or "").strip()
-        if not sandbox_id or not lease_id or sandbox_id in snapshot_by_sandbox:
-            continue
-        snapshot = snapshot_by_lease.get(lease_id)
-        if snapshot is not None:
-            snapshot_by_sandbox[sandbox_id] = snapshot
-    return snapshot_by_sandbox
-
-
 def _load_visible_resource_runtime() -> tuple[
     list[dict[str, Any]],
     dict[str, str | None],
@@ -170,8 +138,8 @@ def _load_visible_resource_runtime() -> tuple[
     finally:
         repo.close()
 
-    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
-    snapshot_by_sandbox = _index_session_snapshots_by_sandbox(sessions, snapshot_by_lease)
+    snapshot_by_sandbox = list_resource_snapshots_by_sandbox(sessions)
+    snapshot_by_lease: dict[str, dict[str, Any]] = {}
     return sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox
 
 
@@ -366,7 +334,11 @@ def list_resource_providers() -> dict[str, Any]:
         telemetry = _aggregate_provider_telemetry(
             provider_sessions=provider_sessions,
             running_count=running_count,
-            snapshot_by_sandbox=_index_provider_snapshots_by_sandbox(provider_sessions, snapshot_by_lease),
+            snapshot_by_sandbox={
+                str(session.get("sandbox_id") or "").strip(): snapshot_by_sandbox[str(session.get("sandbox_id") or "").strip()]
+                for session in provider_sessions
+                if str(session.get("sandbox_id") or "").strip() in snapshot_by_sandbox
+            },
         )
         if config_name == "local" and effective_available and capabilities.get("metrics"):
             host_metrics = LocalSessionProvider().get_metrics("host")

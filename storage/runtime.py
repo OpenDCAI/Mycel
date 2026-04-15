@@ -170,6 +170,35 @@ def list_resource_snapshots(
         repo.close()
 
 
+def list_resource_snapshots_by_sandbox(
+    sessions: list[dict[str, Any]],
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    lease_ids: list[str] = []
+    sandbox_by_lease: dict[str, str] = {}
+    for session in sessions:
+        sandbox_id = str(session.get("sandbox_id") or "").strip()
+        lease_id = str(session.get("lease_id") or "").strip()
+        if not sandbox_id or not lease_id or lease_id in sandbox_by_lease:
+            continue
+        sandbox_by_lease[lease_id] = sandbox_id
+        lease_ids.append(lease_id)
+
+    snapshot_by_lease = list_resource_snapshots(
+        lease_ids,
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+    )
+    snapshot_by_sandbox: dict[str, dict[str, Any]] = {}
+    for lease_id, snapshot in snapshot_by_lease.items():
+        sandbox_id = sandbox_by_lease.get(lease_id)
+        if sandbox_id:
+            snapshot_by_sandbox[sandbox_id] = snapshot
+    return snapshot_by_sandbox
+
+
 def upsert_resource_snapshot_for_sandbox(
     *,
     sandbox_id: str,
