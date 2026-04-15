@@ -501,7 +501,6 @@ def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
 
 
 def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path, monkeypatch):
-    monkeypatch.setattr("sandbox.resource_snapshot._upsert_lease_resource_snapshot", lambda **_kwargs: None)
     manager = SandboxManager(
         provider=LocalSessionProvider(default_cwd=str(tmp_path)),
         db_path=tmp_path / "sandbox.db",
