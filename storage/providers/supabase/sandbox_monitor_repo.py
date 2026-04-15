@@ -353,6 +353,7 @@ class SupabaseSandboxMonitorRepo:
         if not legacy_lease_id:
             raise RuntimeError("sandbox.config.legacy_lease_id is required")
         return {
+            "sandbox_id": str(sandbox.get("id") or "").strip() or None,
             "lease_id": legacy_lease_id,
             "provider_name": sandbox.get("provider_name"),
             "recipe_id": sandbox.get("sandbox_template_id"),

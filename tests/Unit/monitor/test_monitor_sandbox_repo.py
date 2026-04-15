@@ -196,6 +196,7 @@ def test_query_lease_reads_container_sandbox_row() -> None:
     )
 
     assert repo.query_lease("lease-1") == {
+        "sandbox_id": "sandbox-1",
         "lease_id": "lease-1",
         "provider_name": "daytona_selfhost",
         "recipe_id": "template-1",
@@ -272,6 +273,7 @@ def test_query_leases_uses_latest_terminal_binding() -> None:
 
     assert repo.query_leases() == [
         {
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
             "desired_state": "paused",
@@ -309,6 +311,7 @@ def test_query_leases_reads_container_sandboxes_with_terminal_binding() -> None:
 
     assert repo.query_leases() == [
         {
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
             "desired_state": "paused",
