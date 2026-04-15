@@ -269,3 +269,85 @@ def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
         ("sub_agents", "cfg-1"),
         ("skills", "cfg-1"),
     ]
+
+
+def test_load_bundle_from_repo_reads_sub_agent_tools_json() -> None:
+    class _Repo:
+        def get_config(self, _agent_config_id: str):
+            return {
+                "id": "cfg-1",
+                "name": "Toad",
+                "description": "test config",
+                "tools": ["search"],
+                "system_prompt": "be helpful",
+                "status": "active",
+                "version": "1.0.0",
+                "created_at": 1,
+                "updated_at": 2,
+                "meta": {},
+                "runtime": {},
+                "mcp": {},
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return [
+                {
+                    "name": "Scout",
+                    "description": "helper",
+                    "tools_json": ["search"],
+                    "system_prompt": "look around",
+                }
+            ]
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+    bundle = load_bundle_from_repo(_Repo(), "cfg-1")
+
+    assert bundle is not None
+    scout = next(agent for agent in bundle.agents if agent.name == "Scout")
+    assert scout.tools == ["search"]
+
+
+def test_load_bundle_from_repo_preserves_empty_sub_agent_tools_json() -> None:
+    class _Repo:
+        def get_config(self, _agent_config_id: str):
+            return {
+                "id": "cfg-1",
+                "name": "Toad",
+                "description": "test config",
+                "tools": ["search"],
+                "system_prompt": "be helpful",
+                "status": "active",
+                "version": "1.0.0",
+                "created_at": 1,
+                "updated_at": 2,
+                "meta": {},
+                "runtime": {},
+                "mcp": {},
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return [
+                {
+                    "name": "Scout",
+                    "description": "helper",
+                    "tools_json": [],
+                    "system_prompt": "look around",
+                }
+            ]
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+    bundle = load_bundle_from_repo(_Repo(), "cfg-1")
+
+    assert bundle is not None
+    scout = next(agent for agent in bundle.agents if agent.name == "Scout")
+    assert scout.tools == []

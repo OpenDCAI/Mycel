@@ -429,10 +429,11 @@ def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> Agent
     agents_by_name = {agent.name: agent for agent in loader._discover_agents(loader._system_defaults_dir)}
     sub_agent_rows = agent_config_repo.list_sub_agents(agent_config_id)
     for sa in sub_agent_rows:
+        tools = sa.get("tools_json") if "tools_json" in sa and sa.get("tools_json") is not None else sa.get("tools", ["*"])
         sub_agent = AgentConfig(
             name=sa.get("name", ""),
             description=sa.get("description", ""),
-            tools=sa.get("tools", ["*"]),
+            tools=tools,
             system_prompt=sa.get("system_prompt", ""),
             model=sa.get("model"),
             source_dir=None,
