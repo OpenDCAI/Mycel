@@ -69,9 +69,6 @@ class FakeLeaseRepo:
     def query_lease_sessions(self, _lease_id):
         return self.sessions
 
-    def query_lease_instance_id(self, _lease_id):
-        return self.runtime_session_id
-
     def query_leases(self):
         return self.leases
 
@@ -101,6 +98,12 @@ class FakeLeaseRepo:
 
     def close(self):
         return None
+
+
+def test_fake_lease_repo_no_longer_exposes_lease_instance_shell() -> None:
+    repo = FakeLeaseRepo()
+
+    assert not hasattr(repo, "query_lease_instance_id")
 
 
 def _use_monitor_repo(monkeypatch, repo):

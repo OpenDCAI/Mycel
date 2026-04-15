@@ -61,15 +61,10 @@ class _FakeMonitorRepo:
     def __init__(self, rows, instance_ids=None):
         self._rows = rows
         self._instance_ids = instance_ids or {}
-        self.instance_id_calls: list[str] = []
         self.sandbox_instance_id_calls: list[str] = []
 
     def query_sandboxes(self):
         return list(self._rows)
-
-    def query_lease_instance_id(self, lease_id: str):
-        self.instance_id_calls.append(lease_id)
-        return self._instance_ids.get(lease_id)
 
     def query_lease(self, lease_id: str):
         for row in self._rows:
@@ -92,6 +87,12 @@ class _FakeMonitorRepo:
 
     def close(self):
         pass
+
+
+def test_fake_monitor_repo_no_longer_exposes_lease_instance_shell() -> None:
+    repo = _FakeMonitorRepo([])
+
+    assert not hasattr(repo, "query_lease_instance_id")
 
 
 class _FakeThreadRepo:
@@ -326,7 +327,6 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
         "include_runtime_session_id",
         "instance_ids",
         "expected_runtime_session_id",
-        "expected_lease_calls",
         "expected_sandbox_calls",
     ),
     [
@@ -338,7 +338,6 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
             True,
             {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             "provider-session-1",
-            [],
             ["sandbox-1"],
         ),
         (
@@ -357,7 +356,6 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
             {"lease-1": "provider-session-probed", "sandbox-1": "provider-session-probed"},
             "provider-session-inline",
             [],
-            [],
         ),
         (
             [
@@ -373,7 +371,6 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
             True,
             {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             "provider-session-1",
-            [],
             ["sandbox-1"],
         ),
         (
@@ -391,7 +388,6 @@ def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_leas
             {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             None,
             [],
-            [],
         ),
     ],
     ids=["probe-once-per-sandbox", "prefer-inline-instance-id", "keep-runtime-session-id", "skip-probe-by-default"],
@@ -402,7 +398,6 @@ def test_list_user_leases_runtime_session_id_contract(
     include_runtime_session_id,
     instance_ids,
     expected_runtime_session_id,
-    expected_lease_calls,
     expected_sandbox_calls,
 ):
     monitor_repo = _FakeMonitorRepo(rows, instance_ids=instance_ids)
@@ -423,7 +418,6 @@ def test_list_user_leases_runtime_session_id_contract(
         assert "runtime_session_id" not in lease
     else:
         assert lease["runtime_session_id"] == expected_runtime_session_id
-    assert monitor_repo.instance_id_calls == expected_lease_calls
     assert monitor_repo.sandbox_instance_id_calls == expected_sandbox_calls
 
 

@@ -20,17 +20,18 @@ class _FakeRepo:
     def query_sandbox_threads(self, sandbox_id: str):
         return [{"thread_id": tid} for tid in self._sandbox_threads.get(sandbox_id, [])]
 
-    def query_lease_instance_id(self, lease_id: str):
-        return self._instance_ids.get(lease_id)
-
-    def query_lease_instance_ids(self, lease_ids: list[str]):
-        return {lease_id: self._instance_ids.get(lease_id) for lease_id in lease_ids}
-
     def query_sandbox_instance_ids(self, sandbox_ids: list[str]):
         return {sandbox_id: self._instance_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
 
     def close(self):
         pass
+
+
+def test_fake_resource_repo_no_longer_exposes_lease_instance_shell() -> None:
+    repo = _FakeRepo([])
+
+    assert not hasattr(repo, "query_lease_instance_id")
+    assert not hasattr(repo, "query_lease_instance_ids")
 
 
 class _FakeThreadRepo:
