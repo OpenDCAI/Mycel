@@ -145,6 +145,7 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
         ("get", "/api/monitor/leases/lease-1", "get_monitor_lease_detail", {"lease": {"lease_id": "lease-1"}}),
         ("get", "/api/monitor/sandboxes/sandbox-1", "get_monitor_sandbox_detail", {"sandbox": {"sandbox_id": "sandbox-1"}}),
         ("post", "/api/monitor/leases/lease-1/cleanup", "request_monitor_lease_cleanup", {"accepted": True}),
+        ("post", "/api/monitor/sandboxes/sandbox-1/cleanup", "request_monitor_sandbox_cleanup", {"accepted": True}),
         (
             "post",
             "/api/monitor/provider-sessions/daytona_selfhost/session-1/cleanup",

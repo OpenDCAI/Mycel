@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildSandboxDetailShell } from "./SandboxDetailPage";
 
 describe("sandbox detail page shell", () => {
-  it("uses sandbox-shaped read-only shell without cleanup lane", () => {
+  it("uses sandbox-shaped shell with cleanup lane", () => {
     const shell = buildSandboxDetailShell({
       sandbox: {
         sandbox_id: "sandbox-1",
@@ -33,6 +33,6 @@ describe("sandbox detail page shell", () => {
 
     expect(shell.title).toBe("Sandbox sandbox-1");
     expect(shell.surfaceHref).toBe("/sandboxes");
-    expect(shell.cleanupIncluded).toBe(false);
+    expect(shell.cleanupIncluded).toBe(true);
   });
 });

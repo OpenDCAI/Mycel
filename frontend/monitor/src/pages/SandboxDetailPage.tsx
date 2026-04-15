@@ -1,6 +1,7 @@
-import { Link, useParams } from "react-router-dom";
+import React from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { useMonitorData } from "../app/fetch";
+import { postMonitorData, useMonitorData } from "../app/fetch";
 import ErrorState from "../components/ErrorState";
 import StateBadge from "../components/StateBadge";
 
@@ -43,14 +44,17 @@ export function buildSandboxDetailShell(data: SandboxDetailPayload) {
     title: `Sandbox ${data.sandbox.sandbox_id}`,
     description: data.triage?.description ?? "Sandbox state and current read-only relations.",
     surfaceHref: "/sandboxes",
-    cleanupIncluded: false,
+    cleanupIncluded: true,
   };
 }
 
 export default function SandboxDetailPage() {
   const params = useParams<{ sandboxId: string }>();
+  const navigate = useNavigate();
   const sandboxId = params.sandboxId ?? "";
   const { data, error } = useMonitorData<SandboxDetailPayload>(`/sandboxes/${sandboxId}`);
+  const [cleanupPending, setCleanupPending] = React.useState(false);
+  const [cleanupMessage, setCleanupMessage] = React.useState<string | null>(null);
 
   if (error) return <ErrorState title={`Sandbox ${sandboxId}`} error={error} />;
   if (!data) return <div>Loading...</div>;
@@ -59,6 +63,22 @@ export default function SandboxDetailPage() {
   const threads = data.threads ?? [];
   const sessions = data.sessions ?? [];
   const latestSession = sessions[0] ?? null;
+  const cleanupAllowed = Boolean(data.triage?.category && data.triage.category !== "healthy_capacity");
+
+  async function startCleanup() {
+    setCleanupPending(true);
+    try {
+      const result = await postMonitorData<{ accepted?: boolean; message?: string | null; operation?: { operation_id?: string | null } | null }>(
+        `/sandboxes/${sandboxId}/cleanup`,
+      );
+      setCleanupMessage(result.message ?? null);
+      if (result.operation?.operation_id) {
+        navigate(`/operations/${result.operation.operation_id}`);
+      }
+    } finally {
+      setCleanupPending(false);
+    }
+  }
 
   return (
     <div className="page">
@@ -76,6 +96,26 @@ export default function SandboxDetailPage() {
             <p className="surface-card__value">{data.triage?.title ?? "-"}</p>
           </article>
         </div>
+      </section>
+      <section className="surface-section">
+        <h2>Cleanup</h2>
+        <div className="surface-grid cleanup-grid">
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Action Lane</p>
+            <button
+              type="button"
+              className="monitor-action-button"
+              disabled={!cleanupAllowed || cleanupPending}
+              onClick={() => void startCleanup()}
+            >
+              Start sandbox cleanup
+            </button>
+            <p className="surface-card__body">
+              {cleanupAllowed ? "This sandbox can enter the managed cleanup flow." : "This sandbox is not ready for managed cleanup."}
+            </p>
+          </article>
+        </div>
+        {cleanupMessage ? <p className="description">{cleanupMessage}</p> : null}
       </section>
       <section className="surface-section">
         <h2>Relations</h2>

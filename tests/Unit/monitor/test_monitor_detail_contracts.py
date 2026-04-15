@@ -664,6 +664,10 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
     assert payload["message"] == "Lease cleanup completed."
     assert payload["operation"]["target_type"] == "sandbox"
     assert payload["operation"]["target_id"] == "sandbox-1"
+    assert payload["operation"]["result_truth"]["sandbox_state_before"] == "detached"
+    assert payload["operation"]["result_truth"]["sandbox_state_after"] is None
+    assert "lease_state_before" not in payload["operation"]["result_truth"]
+    assert "lease_state_after" not in payload["operation"]["result_truth"]
     assert calls == [("lease-1", "daytona", True)]
 
 

@@ -20,8 +20,8 @@ type OperationDetailPayload = {
   } | null;
   sandbox_id?: string | null;
   result_truth?: {
-    lease_state_before?: string | null;
-    lease_state_after?: string | null;
+    sandbox_state_before?: string | null;
+    sandbox_state_after?: string | null;
     runtime_state_after?: string | null;
     thread_state_after?: string[] | string | null;
   } | null;
@@ -48,6 +48,8 @@ export function buildOperationDetailShell(data: OperationDetailPayload) {
     targetHref: sandboxId ? `/sandboxes/${sandboxId}` : null,
     beforeLabel: "Sandbox Before",
     afterLabel: "Sandbox After",
+    runtimeBody: "Runtime session linked to the target sandbox.",
+    providerBody: "Provider surface responsible for the target sandbox runtime.",
   };
 }
 
@@ -122,14 +124,14 @@ export default function OperationDetailPage() {
                 "-"
               )}
             </p>
-            <p className="surface-card__body">Runtime session linked to the target lease.</p>
+            <p className="surface-card__body">{shell.runtimeBody}</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Provider</p>
             <p className="surface-card__value surface-card__value--compact">
               {target.provider_id ? <Link to={`/providers/${target.provider_id}`}>{target.provider_id}</Link> : "-"}
             </p>
-            <p className="surface-card__body">Provider surface responsible for the target runtime.</p>
+            <p className="surface-card__body">{shell.providerBody}</p>
           </article>
         </div>
       </section>
@@ -138,12 +140,12 @@ export default function OperationDetailPage() {
         <div className="surface-grid">
           <article className="surface-card">
             <p className="surface-card__eyebrow">{shell.beforeLabel}</p>
-            <p className="surface-card__value surface-card__value--compact">{result.lease_state_before ?? "-"}</p>
+            <p className="surface-card__value surface-card__value--compact">{result.sandbox_state_before ?? "-"}</p>
             <p className="surface-card__body">Observed sandbox state when the operation started.</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">{shell.afterLabel}</p>
-            <p className="surface-card__value surface-card__value--compact">{result.lease_state_after ?? "-"}</p>
+            <p className="surface-card__value surface-card__value--compact">{result.sandbox_state_after ?? "-"}</p>
             <p className="surface-card__body">Most recent post-operation sandbox state.</p>
           </article>
           <article className="surface-card">

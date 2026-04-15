@@ -77,6 +77,17 @@ const CLEANUP_STATUS_CLASS_BY_STATUS: Record<string, string> = {
   rejected: "cleanup-status cleanup-status--danger",
 };
 
+export function buildLeaseDetailShell(data: Pick<LeaseDetailPayload, "lease" | "triage" | "cleanup">) {
+  return {
+    title: `Lease ${data.lease.lease_id}`,
+    description: data.triage?.description ?? "Lease state and cleanup readiness.",
+    cleanupTitle: "Compatibility Cleanup",
+    cleanupHint: "Legacy lease-shaped cleanup entry kept during sandbox cleanup rollout.",
+    cleanupButtonLabel: "Start compatibility cleanup",
+    compatibilityOnly: true,
+  };
+}
+
 export default function LeaseDetailPage() {
   const params = useParams<{ leaseId: string }>();
   const leaseId = params.leaseId ?? "";
@@ -104,6 +115,7 @@ export default function LeaseDetailPage() {
     (operation) => operation.operation_id !== cleanup.operation?.operation_id,
   );
   const latestSession = sessions[0] ?? null;
+  const shell = buildLeaseDetailShell(leaseData);
   const cleanupDecision = cleanup.allowed ? "Managed cleanup ready" : "Cleanup blocked";
   const cleanupActionSummary = cleanup.recommended_action ?? "No managed action";
   const cleanupActionHint = cleanup.allowed
@@ -142,8 +154,8 @@ export default function LeaseDetailPage() {
 
   return (
     <div className="page">
-      <h1>{`Lease ${leaseData.lease.lease_id}`}</h1>
-      <p className="description">{leaseData.triage?.description ?? "Lease state and cleanup readiness."}</p>
+      <h1>{shell.title}</h1>
+      <p className="description">{shell.description}</p>
       <section className="surface-section">
         <h2>State</h2>
         <div className="surface-grid">
@@ -158,8 +170,8 @@ export default function LeaseDetailPage() {
         </div>
       </section>
       <section className="surface-section">
-        <h2>Cleanup</h2>
-        <p className="description">{cleanup.reason ?? "Managed cleanup readiness for this lease."}</p>
+        <h2>{shell.cleanupTitle}</h2>
+        <p className="description">{cleanup.reason ?? shell.cleanupHint}</p>
         <div className="surface-grid cleanup-grid">
           <article className="surface-card">
             <p className="surface-card__eyebrow">Decision</p>
@@ -186,7 +198,7 @@ export default function LeaseDetailPage() {
               disabled={!cleanup.allowed || cleanupPending}
               onClick={() => void startCleanup()}
             >
-              Start lease cleanup
+              {shell.cleanupButtonLabel}
             </button>
             <p className="surface-card__body">{cleanupActionHint}</p>
           </article>

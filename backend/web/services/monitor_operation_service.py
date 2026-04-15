@@ -28,6 +28,7 @@ def _operation_view(operation: dict[str, Any]) -> dict[str, Any]:
         "updated_at": operation["updated_at"],
         "summary": operation["summary"],
         "reason": operation["reason"],
+        "result_truth": dict(operation.get("result_truth") or {}),
     }
 
 
@@ -194,8 +195,8 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         )
     except Exception as exc:
         operation["result_truth"] = {
-            "lease_state_before": lease.get("observed_state"),
-            "lease_state_after": lease.get("observed_state"),
+            "sandbox_state_before": lease.get("observed_state"),
+            "sandbox_state_after": lease.get("observed_state"),
             "runtime_state_after": str(runtime.get("runtime_session_id") or "").strip() or None,
             "thread_state_after": thread_ids or None,
         }
@@ -211,8 +212,8 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         }
 
     operation["result_truth"] = {
-        "lease_state_before": lease.get("observed_state"),
-        "lease_state_after": None,
+        "sandbox_state_before": lease.get("observed_state"),
+        "sandbox_state_after": None,
         "runtime_state_after": None,
         "thread_state_after": thread_ids or None,
         "destroy_result": result,
