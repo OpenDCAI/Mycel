@@ -220,7 +220,6 @@ def _derive_default_config(
             app=app,
             current_workspace_id=thread["current_workspace_id"],
             owner_user_id=owner_user_id,
-            leases_by_id=leases_by_id,
         )
         if config is not None:
             return config
@@ -275,7 +274,6 @@ def _resolve_workspace_backed_existing_config(
     app: Any,
     current_workspace_id: str,
     owner_user_id: str,
-    leases_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, Any] | None:
     workspace_repo = getattr(app.state, "workspace_repo", None)
     get_by_id = getattr(workspace_repo, "get_by_id", None)
@@ -296,10 +294,6 @@ def _resolve_workspace_backed_existing_config(
             sandbox_owner_user_id = _required_bridge_text(sandbox, "owner_user_id", "sandbox")
             if sandbox_owner_user_id != owner_user_id:
                 raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
-            legacy_lease_id = _required_bridge_config_text(sandbox, "legacy_lease_id", "sandbox")
-            lease = leases_by_id.get(legacy_lease_id)
-            if lease is None:
-                return None
             sandbox_template = _resolve_workspace_backed_sandbox_template(
                 app=app,
                 owner_user_id=owner_user_id,
