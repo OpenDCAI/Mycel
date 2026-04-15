@@ -184,6 +184,24 @@ class SupabaseSandboxMonitorRepo:
             return None
         return self.query_lease_instance_id(str(sandbox.get("lease_id") or ""))
 
+    def query_sandbox_instance_ids(self, sandbox_ids: list[str]) -> dict[str, str | None]:
+        ordered_ids = [str(sandbox_id or "").strip() for sandbox_id in sandbox_ids if str(sandbox_id or "").strip()]
+        if not ordered_ids:
+            return {}
+
+        sandbox_rows = {sandbox_id: self.query_sandbox(sandbox_id) for sandbox_id in ordered_ids}
+        lease_ids = [str(row.get("lease_id") or "").strip() for row in sandbox_rows.values() if row is not None]
+        lease_instance_ids = self.query_lease_instance_ids(lease_ids)
+
+        result: dict[str, str | None] = {}
+        for sandbox_id in ordered_ids:
+            sandbox = sandbox_rows.get(sandbox_id)
+            if sandbox is None:
+                result[sandbox_id] = None
+                continue
+            result[sandbox_id] = lease_instance_ids.get(str(sandbox.get("lease_id") or "").strip())
+        return result
+
     def query_lease_events(self, lease_id: str) -> list[dict]:
         self._require_sandbox_rows_by_legacy_lease_ids([lease_id], "query_lease_events")
         # provider_events is the Supabase equivalent

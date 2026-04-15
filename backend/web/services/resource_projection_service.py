@@ -102,11 +102,11 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
     }
 
 
-def _query_runtime_session_ids(repo: Any, lease_ids: list[str]) -> dict[str, str | None]:
+def _query_runtime_session_ids(repo: Any, sandbox_ids: list[str]) -> dict[str, str | None]:
     ordered_ids = []
     seen: set[str] = set()
-    for lease_id in lease_ids:
-        normalized = str(lease_id or "").strip()
+    for sandbox_id in sandbox_ids:
+        normalized = str(sandbox_id or "").strip()
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
@@ -114,13 +114,13 @@ def _query_runtime_session_ids(repo: Any, lease_ids: list[str]) -> dict[str, str
     if not ordered_ids:
         return {}
 
-    return repo.query_lease_instance_ids(ordered_ids)
+    return repo.query_sandbox_instance_ids(ordered_ids)
 
 
-def _load_runtime_session_ids(lease_ids: list[str]) -> dict[str, str | None]:
+def _load_runtime_session_ids(sandbox_ids: list[str]) -> dict[str, str | None]:
     repo = make_sandbox_monitor_repo()
     try:
-        return _query_runtime_session_ids(repo, lease_ids)
+        return _query_runtime_session_ids(repo, sandbox_ids)
     finally:
         repo.close()
 
@@ -129,7 +129,7 @@ def _load_visible_resource_runtime() -> tuple[list[dict[str, Any]], dict[str, st
     repo = make_sandbox_monitor_repo()
     try:
         sessions = _project_user_visible_resource_sessions(repo, repo.list_sessions_with_leases())
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("lease_id") or "") for session in sessions])
+        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("sandbox_id") or "") for session in sessions])
     finally:
         repo.close()
 
@@ -142,10 +142,10 @@ def _backfill_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
     if not pending_leases:
         return
 
-    runtime_session_ids = _load_runtime_session_ids([str(lease.get("lease_id") or "") for lease in pending_leases])
+    runtime_session_ids = _load_runtime_session_ids([str(lease.get("sandbox_id") or "") for lease in pending_leases])
     for lease in pending_leases:
-        lease_id = str(lease.get("lease_id") or "").strip()
-        runtime_session_id = runtime_session_ids.get(lease_id)
+        sandbox_id = str(lease.get("sandbox_id") or "").strip()
+        runtime_session_id = runtime_session_ids.get(sandbox_id)
         if runtime_session_id:
             lease["runtime_session_id"] = runtime_session_id
 
@@ -293,7 +293,7 @@ def list_resource_providers() -> dict[str, Any]:
             desired_state = session.get("desired_state")
             thread_id = str(session.get("thread_id") or "")
             lease_id = str(session.get("lease_id") or "")
-            runtime_session_id = runtime_session_ids.get(lease_id)
+            runtime_session_id = runtime_session_ids.get(str(session.get("sandbox_id") or "").strip())
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             normalized = _resource_display_status(
                 observed_state=observed_state,

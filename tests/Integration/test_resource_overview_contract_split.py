@@ -30,8 +30,11 @@ class _FakeMonitorRepo:
         raise AssertionError(f"unexpected per-lease runtime-session probe: {lease_id}")
 
     def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
-        self.batch_calls.append(list(lease_ids))
-        return {lease_id: self._runtime_session_ids.get(lease_id) for lease_id in lease_ids}
+        raise AssertionError(f"unexpected lease batch runtime-session probe: {lease_ids}")
+
+    def query_sandbox_instance_ids(self, sandbox_ids: list[str]) -> dict[str, str | None]:
+        self.batch_calls.append(list(sandbox_ids))
+        return {sandbox_id: self._runtime_session_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
 
     def close(self) -> None:
         return None
@@ -236,6 +239,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
             [
                 _lease(
                     "lease-local",
+                    sandbox_id="sandbox-local",
                     provider_name="local",
                     thread_id="thread-local",
                     agent_user_id="agent-local",
@@ -246,6 +250,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                 ),
                 _lease(
                     "lease-remote",
+                    sandbox_id="sandbox-remote",
                     thread_id="thread-remote",
                     agent_user_id="agent-remote",
                     agent_name="Remote",
@@ -255,7 +260,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                     created_at="2026-04-07T10:00:01Z",
                 ),
             ],
-            {"lease-local": None, "lease-remote": "provider-session-remote"},
+            {"sandbox-local": None, "sandbox-remote": "provider-session-remote"},
             lambda payload: (
                 "runtimeSessionId" not in {item["id"]: item for item in payload["providers"]}["local"]["sessions"][0],
                 {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["sessions"][0]["runtimeSessionId"]
@@ -266,6 +271,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
             [
                 _lease(
                     "lease-remote-a",
+                    sandbox_id="sandbox-a",
                     thread_id="thread-a",
                     agent_user_id="agent-a",
                     agent_name="A",
@@ -275,6 +281,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                 ),
                 _lease(
                     "lease-remote-b",
+                    sandbox_id="sandbox-b",
                     thread_id="thread-b",
                     agent_user_id="agent-b",
                     agent_name="B",
@@ -284,7 +291,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                     created_at="2026-04-07T10:00:01Z",
                 ),
             ],
-            {"lease-remote-a": "provider-session-a", "lease-remote-b": "provider-session-b"},
+            {"sandbox-a": "provider-session-a", "sandbox-b": "provider-session-b"},
             lambda payload: (
                 [session["runtimeSessionId"] for session in payload["providers"][0]["sessions"]]
                 == ["provider-session-a", "provider-session-b"],
@@ -313,7 +320,7 @@ def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases,
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     assert all(assertions(payload))
-    assert monitor_repo.batch_calls == [[lease["lease_id"] for lease in leases]]
+    assert monitor_repo.batch_calls == [[lease["sandbox_id"] for lease in leases]]
 
 
 def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch) -> None:
