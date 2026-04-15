@@ -247,6 +247,39 @@ def test_query_lease_reads_container_sandbox_row() -> None:
     }
 
 
+def test_query_lease_no_longer_roundtrips_through_legacy_lease_shell(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    legacy_lease_id="lease-1",
+                    provider_env_id="provider-env-1",
+                )
+            ]
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "_sandboxes_by_legacy_lease_id",
+        lambda operation: (_ for _ in ()).throw(AssertionError("query_lease should not roundtrip through _sandboxes_by_legacy_lease_id")),
+    )
+
+    assert repo.query_lease("lease-1") == {
+        "sandbox_id": "sandbox-1",
+        "lease_id": "lease-1",
+        "provider_name": "local",
+        "recipe_id": None,
+        "recipe_json": None,
+        "desired_state": "running",
+        "observed_state": "running",
+        "current_instance_id": "provider-env-1",
+        "last_error": None,
+        "updated_at": "2026-04-05T10:00:00",
+    }
+
+
 def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(monkeypatch) -> None:
     repo = _repo(
         {

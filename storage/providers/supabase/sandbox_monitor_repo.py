@@ -128,7 +128,11 @@ class SupabaseSandboxMonitorRepo:
         return None
 
     def query_lease(self, lease_id: str) -> dict | None:
-        return self._sandboxes_by_legacy_lease_id("query_lease").get(lease_id)
+        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_lease")
+        sandbox = sandbox_rows.get(str(lease_id or "").strip())
+        if sandbox is None:
+            return None
+        return self._lease_row_from_sandbox(sandbox)
 
     def query_sandbox_sessions(self, sandbox_id: str) -> list[dict]:
         sandbox = self.query_sandbox(sandbox_id)
