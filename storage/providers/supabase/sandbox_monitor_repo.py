@@ -279,7 +279,8 @@ class SupabaseSandboxMonitorRepo:
             if lid and lease.get("provider_name") and instance_id:
                 targets.append(
                     {
-                        "lease_id": lid,
+                        "sandbox_id": lease["sandbox_id"],
+                        "legacy_lease_id": lid,
                         "provider_name": lease["provider_name"],
                         "instance_id": instance_id,
                         "observed_state": lease.get("observed_state", "unknown"),
