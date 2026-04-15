@@ -19,6 +19,9 @@ class _FakeRepo:
     def query_lease_instance_ids(self, lease_ids: list[str]):
         return {lease_id: self._instance_ids.get(lease_id) for lease_id in lease_ids}
 
+    def query_sandbox_instance_ids(self, sandbox_ids: list[str]):
+        return {sandbox_id: self._instance_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
+
     def close(self):
         pass
 
@@ -353,6 +356,7 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
             "provider": "daytona_selfhost",
             "session_id": "provider-session-1",
             "thread_id": "thread-remote",
+            "sandbox_id": "sandbox-remote",
             "lease_id": "lease-remote",
             "observed_state": "running",
             "desired_state": "running",
@@ -362,7 +366,7 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
 
     _patch_daytona_projection(
         monkeypatch,
-        _FakeRepo(rows, instance_ids={"lease-remote": "provider-session-1"}),
+        _FakeRepo(rows, instance_ids={"sandbox-remote": "provider-session-1"}),
         lambda thread_ids: {
             tid: {
                 "agent_user_id": "agent-remote",
@@ -393,6 +397,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
             "provider": "daytona_selfhost",
             "session_id": None,
             "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
             "lease_id": "lease-a",
             "observed_state": "detached",
             "desired_state": "running",
@@ -402,6 +407,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
             "provider": "daytona_selfhost",
             "session_id": None,
             "thread_id": "thread-b",
+            "sandbox_id": "sandbox-b",
             "lease_id": "lease-b",
             "observed_state": "detached",
             "desired_state": "running",
@@ -411,15 +417,18 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
 
     class _BatchOnlyRepo(_FakeRepo):
         def __init__(self):
-            super().__init__(rows, instance_ids={"lease-a": "runtime-a", "lease-b": "runtime-b"})
+            super().__init__(rows, instance_ids={"sandbox-a": "runtime-a", "sandbox-b": "runtime-b"})
             self.batch_calls: list[list[str]] = []
 
         def query_lease_instance_id(self, lease_id: str):
             raise AssertionError(f"unexpected per-lease lookup: {lease_id}")
 
         def query_lease_instance_ids(self, lease_ids: list[str]):
-            self.batch_calls.append(list(lease_ids))
-            return super().query_lease_instance_ids(lease_ids)
+            raise AssertionError(f"unexpected lease batch lookup: {lease_ids}")
+
+        def query_sandbox_instance_ids(self, sandbox_ids: list[str]):
+            self.batch_calls.append(list(sandbox_ids))
+            return super().query_sandbox_instance_ids(sandbox_ids)
 
     repo = _BatchOnlyRepo()
     _patch_daytona_projection(
@@ -432,4 +441,4 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
     sessions = payload["providers"][0]["sessions"]
 
     assert [session["runtimeSessionId"] for session in sessions] == ["runtime-a", "runtime-b"]
-    assert repo.batch_calls == [["lease-a", "lease-b"]]
+    assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
