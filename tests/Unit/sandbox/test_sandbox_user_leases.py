@@ -66,15 +66,6 @@ class _FakeMonitorRepo:
     def query_sandboxes(self):
         return list(self._rows)
 
-    def query_lease(self, lease_id: str):
-        for row in self._rows:
-            if row.get("lease_id") == lease_id:
-                return dict(row)
-        return None
-
-    def query_lease_threads(self, lease_id: str):
-        return [{"thread_id": row.get("thread_id")} for row in self._rows if row.get("lease_id") == lease_id]
-
     def query_sandbox_threads(self, sandbox_id: str):
         return [{"thread_id": row.get("thread_id")} for row in self._rows if row.get("sandbox_id") == sandbox_id]
 
@@ -93,6 +84,13 @@ def test_fake_monitor_repo_no_longer_exposes_lease_instance_shell() -> None:
     repo = _FakeMonitorRepo([])
 
     assert not hasattr(repo, "query_lease_instance_id")
+
+
+def test_fake_monitor_repo_no_longer_exposes_broader_lease_protocol_shell() -> None:
+    repo = _FakeMonitorRepo([])
+
+    assert not hasattr(repo, "query_lease")
+    assert not hasattr(repo, "query_lease_threads")
 
 
 class _FakeThreadRepo:

@@ -14,9 +14,6 @@ class _FakeRepo:
     def query_resource_sessions(self):
         return list(self._rows)
 
-    def query_lease_threads(self, lease_id: str):
-        return [{"thread_id": tid} for tid in self._lease_threads.get(lease_id, [])]
-
     def query_sandbox_threads(self, sandbox_id: str):
         return [{"thread_id": tid} for tid in self._sandbox_threads.get(sandbox_id, [])]
 
@@ -32,6 +29,12 @@ def test_fake_resource_repo_no_longer_exposes_lease_instance_shell() -> None:
 
     assert not hasattr(repo, "query_lease_instance_id")
     assert not hasattr(repo, "query_lease_instance_ids")
+
+
+def test_fake_resource_repo_no_longer_exposes_lease_thread_shell() -> None:
+    repo = _FakeRepo([])
+
+    assert not hasattr(repo, "query_lease_threads")
 
 
 class _FakeThreadRepo:
