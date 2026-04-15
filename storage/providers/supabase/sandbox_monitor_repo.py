@@ -217,10 +217,10 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def query_sandbox_instance_id(self, sandbox_id: str) -> str | None:
-        sandbox = self.query_sandbox(sandbox_id)
-        if sandbox is None:
+        sandbox_key = str(sandbox_id or "").strip()
+        if not sandbox_key:
             return None
-        return self.query_lease_instance_id(str(sandbox.get("lease_id") or ""))
+        return self.query_sandbox_instance_ids([sandbox_key]).get(sandbox_key)
 
     def query_sandbox_instance_ids(self, sandbox_ids: list[str]) -> dict[str, str | None]:
         ordered_ids = [str(sandbox_id or "").strip() for sandbox_id in sandbox_ids if str(sandbox_id or "").strip()]
