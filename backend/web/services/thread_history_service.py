@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.utils.serializers import extract_text_content
 
 
@@ -75,6 +76,7 @@ async def get_thread_history_payload(
         checkpoint_state = await checkpoint_store.load(thread_id)
         values = {"messages": list(checkpoint_state.messages) if checkpoint_state is not None else []}
     all_messages = values.get("messages", []) if isinstance(values, dict) else []
+    all_messages = repair_interrupted_tool_call_messages(list(all_messages))
     total = len(all_messages)
     messages = all_messages[-limit:] if limit > 0 else all_messages
 
