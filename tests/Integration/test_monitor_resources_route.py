@@ -49,7 +49,7 @@ def _stub_dashboard_dependencies(monkeypatch):
     monkeypatch.setattr(monitor, "get_resource_overview_snapshot", _resource_snapshot)
     monkeypatch.setattr(
         monitor.monitor_service,
-        "list_leases",
+        "list_monitor_sandboxes",
         lambda: {
             "summary": {"total": 2, "diverged": 1, "orphan": 0, "orphan_diverged": 0},
             "groups": [],
@@ -108,6 +108,11 @@ def test_monitor_and_product_resource_routes_coexist(monkeypatch):
 
 def test_monitor_dashboard_uses_service_summaries(monkeypatch):
     _stub_dashboard_dependencies(monkeypatch)
+    monkeypatch.setattr(
+        monitor.monitor_service,
+        "list_leases",
+        lambda: (_ for _ in ()).throw(AssertionError("dashboard should not use legacy lease shell")),
+    )
 
     response = _request("get", "/api/monitor/dashboard")
 
@@ -117,9 +122,9 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
         "infra": {
             "providers_active": 1,
             "providers_unavailable": 0,
-            "leases_total": 2,
-            "leases_diverged": 1,
-            "leases_orphan": 0,
+            "sandboxes_total": 2,
+            "sandboxes_diverged": 1,
+            "sandboxes_orphan": 0,
         },
         "workload": {"running_sessions": 1, "evaluations_running": 1},
         "latest_evaluation": {

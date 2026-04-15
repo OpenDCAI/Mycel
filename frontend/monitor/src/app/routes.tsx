@@ -24,6 +24,8 @@ export function MonitorRoutes() {
         <Route path="/resources" element={<ResourcesPage />} />
         <Route path="/sandbox-configs" element={<SandboxConfigsPage />} />
         <Route path="/providers/:providerId" element={<ProviderDetailPage />} />
+        <Route path="/sandboxes" element={<LeasesPage />} />
+        <Route path="/sandboxes/:leaseId" element={<LeaseDetailPage />} />
         <Route path="/leases" element={<LeasesPage />} />
         <Route path="/leases/:leaseId" element={<LeaseDetailPage />} />
         <Route path="/operations/:operationId" element={<OperationDetailPage />} />
