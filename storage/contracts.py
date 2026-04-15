@@ -638,6 +638,24 @@ class SyncFileRepo(Protocol):
 
 class ResourceSnapshotRepo(Protocol):
     def close(self) -> None: ...
+    def upsert_resource_snapshot_for_sandbox(
+        self,
+        *,
+        sandbox_id: str,
+        legacy_lease_id: str,
+        provider_name: str,
+        observed_state: str,
+        probe_mode: str,
+        cpu_used: float | None = None,
+        cpu_limit: float | None = None,
+        memory_used_mb: float | None = None,
+        memory_total_mb: float | None = None,
+        disk_used_gb: float | None = None,
+        disk_total_gb: float | None = None,
+        network_rx_kbps: float | None = None,
+        network_tx_kbps: float | None = None,
+        probe_error: str | None = None,
+    ) -> None: ...
     def upsert_lease_resource_snapshot(
         self,
         *,
@@ -655,6 +673,7 @@ class ResourceSnapshotRepo(Protocol):
         network_tx_kbps: float | None = None,
         probe_error: str | None = None,
     ) -> None: ...
+    def list_snapshots_by_sandbox_ids(self, sessions: list[dict[str, str]]) -> dict[str, dict[str, Any]]: ...
     def list_snapshots_by_lease_ids(self, lease_ids: list[str]) -> dict[str, dict[str, Any]]: ...
 
 
