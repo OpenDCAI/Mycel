@@ -112,12 +112,6 @@ class SupabaseSandboxMonitorRepo:
             result.append(item)
         return result
 
-    def query_leases(self) -> list[dict]:
-        return self.query_sandboxes()
-
-    def list_leases_with_threads(self) -> list[dict]:
-        return self.query_leases()
-
     def query_sandbox(self, sandbox_id: str) -> dict | None:
         sandbox_key = str(sandbox_id or "").strip()
         if not sandbox_key:

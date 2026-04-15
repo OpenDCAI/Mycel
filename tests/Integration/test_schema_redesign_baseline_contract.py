@@ -23,9 +23,6 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
                 }
             ]
 
-        def list_leases_with_threads(self) -> list[dict[str, object]]:
-            return self.query_sandboxes()
-
         def close(self) -> None:
             return None
 
