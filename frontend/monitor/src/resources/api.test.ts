@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { cleanupMonitorProviderSession, fetchMonitorProviderSessions } from "./api";
+import {
+  browseMonitorSandbox,
+  cleanupMonitorProviderSession,
+  fetchMonitorProviderSessions,
+  readMonitorSandboxFile,
+} from "./api";
 
 describe("monitor resource API", () => {
   afterEach(() => {
@@ -57,5 +62,31 @@ describe("monitor resource API", () => {
       headers: { "Content-Type": "application/json" },
     });
     expect(payload.operation?.status).toBe("succeeded");
+  });
+
+  it("browses monitor sandbox files through sandbox-shaped route naming", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ current_path: "/workspace", parent_path: "/", items: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await browseMonitorSandbox("sandbox-1", "/workspace");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/monitor/sandboxes/sandbox-1/browse?path=%2Fworkspace", undefined);
+    expect(payload.current_path).toBe("/workspace");
+  });
+
+  it("reads monitor sandbox files through sandbox-shaped route naming", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ path: "/README.md", content: "hello", truncated: false }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await readMonitorSandboxFile("sandbox-1", "/README.md");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/monitor/sandboxes/sandbox-1/read?path=%2FREADME.md", undefined);
+    expect(payload.content).toBe("hello");
   });
 });

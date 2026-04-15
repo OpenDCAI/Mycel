@@ -1119,7 +1119,7 @@ function SandboxInspector({
             ) : null}
           </div>
           <MonitorFileBrowser
-            leaseId={group.leaseId}
+            sandboxId={group.sandboxId}
             providerType={providerType}
             disabled={group.status === "stopped" || group.status === "destroying"}
             unavailableReason={browserUnavailableReason}
@@ -1154,17 +1154,17 @@ function MetricBlock({
 }
 
 function MonitorFileBrowser({
-  leaseId,
+  sandboxId,
   providerType,
   disabled,
   unavailableReason,
 }: {
-  leaseId: string;
+  sandboxId: string;
   providerType: ProviderInfo["type"];
   disabled: boolean;
   unavailableReason?: string | null;
 }) {
-  const isLocal = providerType === "local" || !leaseId;
+  const isLocal = providerType === "local" || !sandboxId;
   const defaultPath = isLocal ? "~" : "/";
   const [currentPath, setCurrentPath] = React.useState(defaultPath);
   const [parentPath, setParentPath] = React.useState<string | null>(null);
@@ -1189,7 +1189,7 @@ function MonitorFileBrowser({
                 parent_path?: string | null;
                 items?: BrowseItem[];
               }>(`/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`)
-          : await browseMonitorSandbox(leaseId, path);
+          : await browseMonitorSandbox(sandboxId, path);
         setCurrentPath(data.current_path ?? path);
         setParentPath(data.parent_path ?? null);
         setItems(data.items ?? []);
@@ -1199,7 +1199,7 @@ function MonitorFileBrowser({
         setLoading(false);
       }
     },
-    [isLocal, leaseId],
+    [isLocal, sandboxId],
   );
 
   React.useEffect(() => {
@@ -1220,7 +1220,7 @@ function MonitorFileBrowser({
           ? await fetchJsonOrThrow<{ content: string; truncated: boolean }>(
               `/api/settings/read?path=${encodeURIComponent(path)}`,
             )
-          : await readMonitorSandboxFile(leaseId, path);
+          : await readMonitorSandboxFile(sandboxId, path);
         setFileContent(data.content);
         if (data.truncated) {
           setFileError("内容已截断至 100 KB");
@@ -1231,7 +1231,7 @@ function MonitorFileBrowser({
         setFileLoading(false);
       }
     },
-    [isLocal, leaseId],
+    [isLocal, sandboxId],
   );
 
   const openFile = React.useCallback(
