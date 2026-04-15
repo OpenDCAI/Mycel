@@ -5,9 +5,10 @@ from storage import runtime as storage_runtime
 
 
 class _FakeRepo:
-    def __init__(self, rows, lease_threads=None, instance_ids=None):
+    def __init__(self, rows, lease_threads=None, sandbox_threads=None, instance_ids=None):
         self._rows = rows
         self._lease_threads = lease_threads or {}
+        self._sandbox_threads = sandbox_threads or {}
         self._instance_ids = instance_ids or {}
 
     def list_sessions_with_leases(self):
@@ -15,6 +16,9 @@ class _FakeRepo:
 
     def query_lease_threads(self, lease_id: str):
         return [{"thread_id": tid} for tid in self._lease_threads.get(lease_id, [])]
+
+    def query_sandbox_threads(self, sandbox_id: str):
+        return [{"thread_id": tid} for tid in self._sandbox_threads.get(sandbox_id, [])]
 
     def query_lease_instance_id(self, lease_id: str):
         return self._instance_ids.get(lease_id)
@@ -268,7 +272,68 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
     monkeypatch.setattr(
         resource_projection_service,
         "make_sandbox_monitor_repo",
-        lambda: _FakeRepo(rows, lease_threads={"lease-1": ["subagent-deadbeef", "thread-parent"]}),
+        lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+
+    payload = resource_projection_service.list_resource_providers()
+    sessions = payload["providers"][0]["sessions"]
+
+    assert sessions == [
+        {
+            "id": "sandbox-1:thread-parent",
+            "sandboxId": "sandbox-1",
+            "leaseId": "lease-1",
+            "threadId": "thread-parent",
+            "agentUserId": "agent-1",
+            "agentName": "Morel",
+            "avatarUrl": None,
+            "status": "paused",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
+
+
+def test_list_resource_providers_uses_canonical_sandbox_thread_fallback(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-deadbeef",
+            "sandbox_id": "sandbox-1",
+            "lease_id": "lease-1",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    class _SandboxThreadOnlyRepo(_FakeRepo):
+        def query_lease_threads(self, lease_id: str):
+            raise AssertionError(f"unexpected lease-shaped visible-thread fallback: {lease_id}")
+
+    monkeypatch.setattr(
+        resource_projection_service,
+        "make_sandbox_monitor_repo",
+        lambda: _SandboxThreadOnlyRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
     )
     monkeypatch.setattr(
         resource_projection_service,
