@@ -98,7 +98,8 @@ def list_user_leases(
             if lease_id not in runtime_session_ids:
                 runtime_session_id = str(row.get("current_instance_id") or "").strip() or None
                 if include_runtime_session_id and runtime_session_id is None:
-                    runtime_session_id = monitor_repo.query_lease_instance_id(lease_id)
+                    sandbox_id = str(row.get("sandbox_id") or "").strip()
+                    runtime_session_id = monitor_repo.query_sandbox_instance_id(sandbox_id) if sandbox_id else None
                 runtime_session_ids[lease_id] = runtime_session_id
             group = grouped.setdefault(
                 lease_id,
