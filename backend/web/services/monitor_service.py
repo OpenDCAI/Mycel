@@ -686,10 +686,6 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
     return {
         "lease": lease_payload,
         "triage": payload["triage"],
-        "provider": payload["provider"],
-        "runtime": payload["runtime"],
-        "threads": payload["threads"],
-        "sessions": payload["sessions"],
         "cleanup": monitor_operation_service.build_lease_cleanup_truth(
             lease_id=lease_id,
             triage=payload["triage"],

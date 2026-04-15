@@ -402,19 +402,9 @@ def test_get_monitor_lease_detail_merges_monitor_repo_state(monkeypatch):
 
     assert payload["lease"]["sandbox_id"] == "sandbox-1"
     assert payload["lease"]["lease_id"] == "lease-1"
-    assert payload["provider"] == {"id": "daytona", "name": "daytona"}
-    assert payload["runtime"] == {"runtime_session_id": "runtime-1"}
-    assert payload["threads"] == [{"thread_id": "thread-1"}]
-    assert payload["sessions"] == [
-        {
-            "chat_session_id": "session-1",
-            "thread_id": "thread-1",
-            "status": "active",
-            "started_at": None,
-            "ended_at": None,
-            "close_reason": None,
-        }
-    ]
+    assert payload["triage"]["category"] == "healthy_capacity"
+    assert payload["cleanup"]["allowed"] is False
+    assert sorted(payload.keys()) == ["cleanup", "lease", "triage"]
 
 
 def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
@@ -523,6 +513,14 @@ def test_get_monitor_lease_detail_rewraps_cleanup_and_lease_identity(monkeypatch
     assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
 
 
+def test_get_monitor_lease_detail_exposes_only_redirect_payload(monkeypatch):
+    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
+
+    payload = monitor_service.get_monitor_lease_detail("lease-1")
+
+    assert sorted(payload.keys()) == ["cleanup", "lease", "triage"]
+
+
 def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
@@ -571,7 +569,6 @@ def test_get_monitor_lease_detail_allows_detached_residue_cleanup_with_thread_bi
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
-    assert payload["runtime"] == {"runtime_session_id": runtime_session_id}
     assert payload["triage"]["category"] == "detached_residue"
     assert payload["cleanup"] == _cleanup_state("Lease is detached residue and can detach stale thread bindings before cleanup.")
 
@@ -588,7 +585,6 @@ def test_get_monitor_lease_detail_ignores_stale_thread_refs_when_classifying_tri
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
-    assert payload["threads"] == []
     assert payload["triage"]["category"] == "orphan_cleanup"
     assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
 
@@ -606,7 +602,6 @@ def test_get_monitor_lease_detail_allows_orphan_cleanup_with_stale_active_sessio
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
-    assert payload["threads"] == []
     assert payload["triage"]["category"] == "orphan_cleanup"
     assert payload["cleanup"] == _cleanup_state("Lease has only stale active sessions and can close them before cleanup.")
 
