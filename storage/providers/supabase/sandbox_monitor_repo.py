@@ -390,39 +390,6 @@ class SupabaseSandboxMonitorRepo:
                 )
         return targets
 
-    def query_lease_instance_id(self, lease_id: str) -> str | None:
-        return self.query_lease_instance_ids([lease_id]).get(lease_id)
-
-    def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
-        ordered_ids = [str(lease_id or "").strip() for lease_id in lease_ids if str(lease_id or "").strip()]
-        if not ordered_ids:
-            return {}
-
-        sandbox_rows = self._require_sandbox_rows_by_legacy_lease_ids(ordered_ids, "query_lease_instance_ids")
-        instance_map: dict[str, str | None] = {lease_id: None for lease_id in ordered_ids}
-        instances = q.rows_in_chunks(
-            lambda: self._client.table("sandbox_instances").select("lease_id,provider_session_id"),
-            "lease_id",
-            ordered_ids,
-            _REPO,
-            "query_lease_instance_ids instances",
-        )
-        for row in instances:
-            lease_id = str(row.get("lease_id") or "").strip()
-            provider_session_id = str(row.get("provider_session_id") or "").strip()
-            if lease_id and provider_session_id:
-                instance_map[lease_id] = provider_session_id
-
-        missing_ids = [lease_id for lease_id, instance_id in instance_map.items() if not instance_id]
-        if not missing_ids:
-            return instance_map
-
-        for lease_id in missing_ids:
-            provider_env_id = str(sandbox_rows[lease_id].get("provider_env_id") or "").strip()
-            if provider_env_id:
-                instance_map[lease_id] = provider_env_id
-        return instance_map
-
     def _leases_by_id(self, lease_ids: list[str], select: str, operation: str) -> dict[str, dict]:
         ordered_ids = sorted({str(lease_id or "").strip() for lease_id in lease_ids if str(lease_id or "").strip()})
         if not ordered_ids:
