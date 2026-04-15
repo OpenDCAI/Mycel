@@ -63,6 +63,9 @@ class _FakeMonitorRepo:
         self._instance_ids = instance_ids or {}
         self.instance_id_calls: list[str] = []
 
+    def query_sandboxes(self):
+        return list(self._rows)
+
     def list_leases_with_threads(self):
         return list(self._rows)
 
@@ -270,6 +273,53 @@ def test_count_user_visible_leases_by_provider_uses_narrow_owner_surface(monkeyp
     assert counts == {"local": 1, "daytona_selfhost": 1}
     assert thread_repo.list_by_owner_calls == ["owner-1"]
     assert seen == {"supabase_client": supabase_client}
+
+
+def test_list_user_leases_no_longer_roundtrips_through_lease_summary_shell(monkeypatch):
+    rows = [_lease_row("lease-1", "thread-a")]
+    thread_repo, user_repo = _single_agent_repos("thread-a")
+    monitor_repo = _FakeMonitorRepo(rows)
+
+    monkeypatch.setattr(
+        monitor_repo,
+        "list_leases_with_threads",
+        lambda: (_ for _ in ()).throw(AssertionError("list_user_leases should not roundtrip through list_leases_with_threads")),
+    )
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert [lease["lease_id"] for lease in leases] == ["lease-1"]
+
+
+def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_lease_summary_shell(monkeypatch):
+    rows = [_lease_row("lease-1", "thread-a")]
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+        }
+    )
+    monitor_repo = _FakeMonitorRepo(rows)
+
+    monkeypatch.setattr(
+        monitor_repo,
+        "list_leases_with_threads",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("count_user_visible_leases_by_provider should not roundtrip through list_leases_with_threads")
+        ),
+    )
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda **kwargs: monitor_repo)
+
+    counts = sandbox_service.count_user_visible_leases_by_provider(
+        "owner-1",
+        thread_repo=thread_repo,
+    )
+
+    assert counts == {"local": 1}
 
 
 @pytest.mark.parametrize(
