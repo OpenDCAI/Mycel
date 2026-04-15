@@ -141,6 +141,22 @@ def _index_session_snapshots_by_sandbox(
     return snapshot_by_sandbox
 
 
+def _index_provider_snapshots_by_sandbox(
+    provider_sessions: list[dict[str, Any]],
+    snapshot_by_lease: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    snapshot_by_sandbox: dict[str, dict[str, Any]] = {}
+    for session in provider_sessions:
+        sandbox_id = str(session.get("sandbox_id") or "").strip()
+        lease_id = str(session.get("lease_id") or "").strip()
+        if not sandbox_id or not lease_id or sandbox_id in snapshot_by_sandbox:
+            continue
+        snapshot = snapshot_by_lease.get(lease_id)
+        if snapshot is not None:
+            snapshot_by_sandbox[sandbox_id] = snapshot
+    return snapshot_by_sandbox
+
+
 def _load_visible_resource_runtime() -> tuple[
     list[dict[str, Any]],
     dict[str, str | None],
@@ -350,7 +366,7 @@ def list_resource_providers() -> dict[str, Any]:
         telemetry = _aggregate_provider_telemetry(
             provider_sessions=provider_sessions,
             running_count=running_count,
-            snapshot_by_lease=snapshot_by_lease,
+            snapshot_by_sandbox=_index_provider_snapshots_by_sandbox(provider_sessions, snapshot_by_lease),
         )
         if config_name == "local" and effective_available and capabilities.get("metrics"):
             host_metrics = LocalSessionProvider().get_metrics("host")

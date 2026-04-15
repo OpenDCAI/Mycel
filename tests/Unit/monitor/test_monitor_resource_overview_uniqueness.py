@@ -498,3 +498,49 @@ def test_index_session_snapshots_by_sandbox_rekeys_lease_snapshots_for_session_e
         "sandbox-a": {"lease_id": "lease-a", "cpu_used": 11},
         "sandbox-b": {"lease_id": "lease-b", "cpu_used": 22},
     }
+
+
+def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_telemetry(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            "lease_id": "lease-a",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+    ]
+
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows),
+        lambda thread_ids: {tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "list_resource_snapshots",
+        lambda _lease_ids: {"lease-a": {"lease_id": "lease-a", "cpu_used": 11}},
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_aggregate_provider_telemetry(*, provider_sessions, running_count, snapshot_by_sandbox):
+        captured["provider_sessions"] = provider_sessions
+        captured["running_count"] = running_count
+        captured["snapshot_keys"] = sorted(snapshot_by_sandbox.keys())
+        return {
+            "running": {"used": running_count},
+            "cpu": {"used": 11},
+            "memory": {"used": None},
+            "disk": {"used": None},
+        }
+
+    monkeypatch.setattr(resource_projection_service, "_aggregate_provider_telemetry", _fake_aggregate_provider_telemetry)
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert captured["snapshot_keys"] == ["sandbox-a"]
+    assert payload["providers"][0]["telemetry"]["cpu"]["used"] == 11
