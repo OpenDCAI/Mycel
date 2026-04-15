@@ -49,6 +49,23 @@ def test_supabase_resource_snapshot_repo_upserts_with_client() -> None:
     assert client.table_obj.upsert_payload["provider_name"] == "daytona"
 
 
+def test_supabase_resource_snapshot_repo_upserts_for_sandbox_with_legacy_bridge() -> None:
+    client = _FakeClient()
+    repo = SupabaseResourceSnapshotRepo(client)
+
+    repo.upsert_resource_snapshot_for_sandbox(
+        sandbox_id="sandbox-1",
+        legacy_lease_id="lease-1",
+        provider_name="daytona",
+        observed_state="running",
+        probe_mode="runtime",
+    )
+
+    assert client.table_obj.upsert_payload is not None
+    assert client.table_obj.upsert_payload["lease_id"] == "lease-1"
+    assert client.table_obj.upsert_payload["provider_name"] == "daytona"
+
+
 def test_supabase_resource_snapshot_repo_lists_snapshots_by_lease_ids() -> None:
     client = _FakeClient()
     repo = SupabaseResourceSnapshotRepo(client)
@@ -56,6 +73,21 @@ def test_supabase_resource_snapshot_repo_lists_snapshots_by_lease_ids() -> None:
     rows = repo.list_snapshots_by_lease_ids(["lease-1", "lease-2"])
 
     assert rows == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
+    assert ("lease_id", ["lease-1", "lease-2"]) in client.table_obj.in_calls
+
+
+def test_supabase_resource_snapshot_repo_lists_snapshots_by_sandbox_ids() -> None:
+    client = _FakeClient()
+    repo = SupabaseResourceSnapshotRepo(client)
+
+    rows = repo.list_snapshots_by_sandbox_ids(
+        [
+            {"sandbox_id": "sandbox-1", "lease_id": "lease-1"},
+            {"sandbox_id": "sandbox-2", "lease_id": "lease-2"},
+        ]
+    )
+
+    assert rows == {"sandbox-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
     assert ("lease_id", ["lease-1", "lease-2"]) in client.table_obj.in_calls
 
 
