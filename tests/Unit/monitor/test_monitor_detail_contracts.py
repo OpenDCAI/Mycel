@@ -82,7 +82,13 @@ class FakeLeaseRepo:
         return {**lease, "sandbox_id": lease.get("sandbox_id") or sandbox_id}
 
     def query_sandboxes(self):
-        return self.leases
+        if self.leases:
+            return self.leases
+        if self.lease is _MISSING:
+            return []
+        if self.lease is not None:
+            return [self.lease]
+        return [_lease_row()]
 
     def query_sandbox_threads(self, _sandbox_id):
         return self.threads
@@ -480,6 +486,9 @@ def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
 
 def test_get_monitor_lease_detail_uses_canonical_sandbox_source(monkeypatch):
     class CanonicalOnlyRepo(FakeLeaseRepo):
+        def query_lease(self, _lease_id):
+            raise AssertionError("legacy lease wrapper should not keep query_lease as single source")
+
         def query_lease_threads(self, _lease_id):
             raise AssertionError("legacy lease detail queries should not remain single source")
 
@@ -672,7 +681,11 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
 
 
 def test_request_monitor_lease_cleanup_wraps_canonical_sandbox_cleanup(monkeypatch):
-    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
+    class CanonicalOnlyRepo(FakeLeaseRepo):
+        def query_lease(self, _lease_id):
+            raise AssertionError("legacy lease cleanup wrapper should not keep query_lease as single source")
+
+    _use_monitor_repo(monkeypatch, CanonicalOnlyRepo(lease=_detached_lease()))
     calls: list[str] = []
     monkeypatch.setattr(
         monitor_service,
@@ -684,6 +697,26 @@ def test_request_monitor_lease_cleanup_wraps_canonical_sandbox_cleanup(monkeypat
 
     assert payload == {"accepted": True, "operation": {"target_type": "sandbox"}}
     assert calls == ["sandbox-1"]
+
+
+def test_get_monitor_operation_detail_uses_canonical_sandbox_source(monkeypatch):
+    class CanonicalOnlyRepo(FakeLeaseRepo):
+        def query_lease(self, _lease_id):
+            raise AssertionError("legacy lease operation wrapper should not keep query_lease as single source")
+
+    _use_monitor_repo(monkeypatch, CanonicalOnlyRepo(lease=_lease_row()))
+    monkeypatch.setattr(
+        monitor_service.monitor_operation_service,
+        "get_operation_detail",
+        lambda operation_id: {
+            "operation": {"operation_id": operation_id},
+            "target": {"target_type": "lease", "target_id": "lease-1"},
+        },
+    )
+
+    payload = monitor_service.get_monitor_operation_detail("op-1")
+
+    assert payload["sandbox_id"] == "sandbox-1"
 
 
 def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypatch):

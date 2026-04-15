@@ -638,13 +638,24 @@ def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
         repo.close()
 
 
+def _sandbox_id_for_lease(repo: Any, lease_id: str, *, operation: str) -> str:
+    lease_key = str(lease_id or "").strip()
+    if not lease_key:
+        raise KeyError(f"Lease not found: {lease_id}")
+    for sandbox in repo.query_sandboxes():
+        if str(sandbox.get("lease_id") or "").strip() != lease_key:
+            continue
+        sandbox_id = str(sandbox.get("sandbox_id") or "").strip()
+        if not sandbox_id:
+            raise RuntimeError(f"{operation} lease target missing sandbox bridge")
+        return sandbox_id
+    raise KeyError(f"Lease not found: {lease_id}")
+
+
 def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
-        lease = repo.query_lease(lease_id)
-        if lease is None:
-            raise KeyError(f"Lease not found: {lease_id}")
-        payload = _build_monitor_sandbox_detail(repo, str(lease.get("sandbox_id") or ""))
+        payload = _build_monitor_sandbox_detail(repo, _sandbox_id_for_lease(repo, lease_id, operation="get_monitor_lease_detail"))
     finally:
         repo.close()
 
@@ -751,15 +762,9 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
 def request_monitor_lease_cleanup(lease_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
-        lease = repo.query_lease(lease_id)
+        sandbox_id = _sandbox_id_for_lease(repo, lease_id, operation="request_monitor_lease_cleanup")
     finally:
         repo.close()
-    if lease is None:
-        raise KeyError(f"Lease not found: {lease_id}")
-
-    sandbox_id = str(lease.get("sandbox_id") or "").strip()
-    if not sandbox_id:
-        raise RuntimeError("monitor lease cleanup target missing sandbox bridge")
     return request_monitor_sandbox_cleanup(sandbox_id)
 
 
@@ -821,15 +826,9 @@ def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
 
     repo = make_sandbox_monitor_repo()
     try:
-        lease = repo.query_lease(lease_id)
+        sandbox_id = _sandbox_id_for_lease(repo, lease_id, operation="get_monitor_operation_detail")
     finally:
         repo.close()
-    if lease is None:
-        raise RuntimeError("monitor operation lease target missing sandbox bridge")
-
-    sandbox_id = str(lease.get("sandbox_id") or "").strip()
-    if not sandbox_id:
-        raise RuntimeError("monitor operation lease target missing sandbox bridge")
     return {**payload, "sandbox_id": sandbox_id}
 
 
