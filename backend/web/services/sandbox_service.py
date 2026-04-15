@@ -87,7 +87,7 @@ def list_user_leases(
     try:
         threads_by_id = {str(thread.get("id") or ""): thread for thread in thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
         users_by_id = {str(user.id): user for user in user_repo.list_by_owner_user_id(user_id)}
-        rows = monitor_repo.list_leases_with_threads()
+        rows = monitor_repo.query_sandboxes()
         grouped: dict[str, dict[str, Any]] = {}
         runtime_session_ids: dict[str, str | None] = {}
         for row in rows:
@@ -166,7 +166,7 @@ def count_user_visible_leases_by_provider(
         }
         counts: Counter[str] = Counter()
         counted_lease_ids: set[str] = set()
-        for row in monitor_repo.list_leases_with_threads():
+        for row in monitor_repo.query_sandboxes():
             lease_id = str(row.get("lease_id") or "").strip()
             if not lease_id or lease_id in counted_lease_ids:
                 continue

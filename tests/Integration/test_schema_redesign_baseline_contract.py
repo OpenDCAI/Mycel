@@ -8,7 +8,7 @@ from backend.web.utils.serializers import avatar_url
 
 def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> None:
     class _FakeMonitorRepo:
-        def list_leases_with_threads(self) -> list[dict[str, object]]:
+        def query_sandboxes(self) -> list[dict[str, object]]:
             return [
                 {
                     "lease_id": "lease-1",
@@ -22,6 +22,9 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
                     "thread_id": "thread-1",
                 }
             ]
+
+        def list_leases_with_threads(self) -> list[dict[str, object]]:
+            return self.query_sandboxes()
 
         def close(self) -> None:
             return None
