@@ -113,9 +113,20 @@ def _save_default_config_for_owned_agent(
     payload: SaveThreadLaunchConfigRequest,
 ) -> dict[str, bool]:
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
+    normalized_payload = payload
+    if payload.create_mode == "existing" and payload.existing_sandbox_id:
+        normalized_payload = payload.model_copy(
+            update={
+                "existing_sandbox_id": _normalize_existing_sandbox_request_lease_id(
+                    app,
+                    owner_user_id,
+                    payload.existing_sandbox_id,
+                )
+            }
+        )
     if payload.create_mode == "new":
         _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.sandbox_template_id)
-    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, payload.model_dump())
+    save_last_confirmed_config(app, owner_user_id, normalized_payload.agent_user_id, normalized_payload.model_dump())
     return {"ok": True}
 
 
@@ -299,12 +310,7 @@ def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
     if payload.existing_sandbox_id:
-        owned_lease = sandbox_service.resolve_owned_lease(
-            owner_user_id,
-            payload.existing_sandbox_id,
-            thread_repo=app.state.thread_repo,
-            user_repo=app.state.user_repo,
-        )
+        owned_lease = _resolve_owned_existing_sandbox_request_lease(app, owner_user_id, payload.existing_sandbox_id)
         if owned_lease is not None:
             sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
     if sandbox_type == "local":
@@ -331,6 +337,79 @@ def _validate_sandbox_quota_gate(app: Any, owner_user_id: str, payload: CreateTh
             },
         )
     return None
+
+
+def _request_bridge_text(row: Any, key: str, *, label: str) -> str:
+    value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
+    if isinstance(value, str):
+        value = value.strip()
+    if value is None or value == "":
+        raise RuntimeError(f"{label}.{key} is required")
+    return str(value)
+
+
+def _request_bridge_config_text(row: Any, key: str, *, label: str) -> str:
+    config = row.get("config") if isinstance(row, dict) else getattr(row, "config", None)
+    if not isinstance(config, dict):
+        raise RuntimeError(f"{label}.config must be an object")
+    value = config.get(key)
+    if isinstance(value, str):
+        value = value.strip()
+    if value is None or value == "":
+        raise RuntimeError(f"{label}.config.{key} is required")
+    return str(value)
+
+
+def _resolve_owned_existing_sandbox_request_lease(
+    app: Any,
+    owner_user_id: str,
+    existing_sandbox_id: str,
+) -> dict[str, Any] | None:
+    normalized_id = str(existing_sandbox_id or "").strip()
+    if not normalized_id:
+        return None
+
+    owned_lease = sandbox_service.resolve_owned_lease(
+        owner_user_id,
+        normalized_id,
+        thread_repo=app.state.thread_repo,
+        user_repo=app.state.user_repo,
+    )
+    if owned_lease is not None:
+        return owned_lease
+
+    sandbox_repo = getattr(app.state, "sandbox_repo", None)
+    sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
+    if not callable(sandbox_get_by_id):
+        return None
+    sandbox = sandbox_get_by_id(normalized_id)
+    if sandbox is None:
+        return None
+
+    # @@@existing-sandbox-request-bridge - Phase A only widens request parsing.
+    # Incoming sandbox ids are normalized back to the canonical lease-shaped shell
+    # so existing create/save surfaces keep their outward contract unchanged.
+    sandbox_owner_user_id = _request_bridge_text(sandbox, "owner_user_id", label="sandbox")
+    if sandbox_owner_user_id != owner_user_id:
+        raise HTTPException(403, "Not authorized")
+    legacy_lease_id = _request_bridge_config_text(sandbox, "legacy_lease_id", label="sandbox")
+    return sandbox_service.resolve_owned_lease(
+        owner_user_id,
+        legacy_lease_id,
+        thread_repo=app.state.thread_repo,
+        user_repo=app.state.user_repo,
+    )
+
+
+def _normalize_existing_sandbox_request_lease_id(
+    app: Any,
+    owner_user_id: str,
+    existing_sandbox_id: str,
+) -> str:
+    owned_lease = _resolve_owned_existing_sandbox_request_lease(app, owner_user_id, existing_sandbox_id)
+    if owned_lease is None:
+        raise HTTPException(403, "Lease not authorized")
+    return _request_bridge_text(owned_lease, "lease_id", label="lease")
 
 
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
@@ -730,9 +809,14 @@ def _create_owned_thread(
     if not agent_user or agent_user.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
 
-    selected_lease_id = payload.existing_sandbox_id
+    selected_lease_id = None
     owned_lease: dict[str, Any] | None = None
-    if selected_lease_id:
+    if payload.existing_sandbox_id:
+        selected_lease_id = _normalize_existing_sandbox_request_lease_id(
+            app,
+            owner_user_id,
+            payload.existing_sandbox_id,
+        )
         owned_lease = sandbox_service.resolve_owned_lease(
             owner_user_id,
             selected_lease_id,
