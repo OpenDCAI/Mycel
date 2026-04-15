@@ -367,15 +367,6 @@ def _resolve_owned_existing_sandbox_request_lease(
     if not normalized_id:
         return None
 
-    owned_lease = sandbox_service.resolve_owned_lease(
-        owner_user_id,
-        normalized_id,
-        thread_repo=app.state.thread_repo,
-        user_repo=app.state.user_repo,
-    )
-    if owned_lease is not None:
-        return owned_lease
-
     sandbox_repo = getattr(app.state, "sandbox_repo", None)
     sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
     if not callable(sandbox_get_by_id):
@@ -384,9 +375,9 @@ def _resolve_owned_existing_sandbox_request_lease(
     if sandbox is None:
         return None
 
-    # @@@existing-sandbox-request-bridge - Phase A only widens request parsing.
-    # Incoming sandbox ids are normalized back to the canonical lease-shaped shell
-    # so existing create/save surfaces keep their outward contract unchanged.
+    # @@@existing-sandbox-request-cutover - Phase C removes lease-shaped request
+    # acceptance. Incoming existing_sandbox_id must already be sandbox-shaped;
+    # legacy lease identity remains an internal bridge only.
     sandbox_owner_user_id = _request_bridge_text(sandbox, "owner_user_id", label="sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")

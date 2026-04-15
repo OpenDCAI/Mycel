@@ -898,10 +898,15 @@ def test_require_owned_agent_raises_for_foreign_agent() -> None:
 @pytest.mark.asyncio
 async def test_create_thread_persists_existing_lease_successful_config() -> None:
     app = _make_threads_app()
+    app.state.sandbox_repo.by_id["sandbox-1"] = {
+        "id": "sandbox-1",
+        "owner_user_id": "owner-1",
+        "config": {"legacy_lease_id": "lease-1"},
+    }
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
-            "existing_sandbox_id": "lease-1",
+            "existing_sandbox_id": "sandbox-1",
             "model": "gpt-5.4",
             "cwd": "/workspace/requested",
         }
@@ -920,7 +925,6 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
                 "recipe": {"id": "daytona:recipe-1"},
             },
         ),
-        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
         patch.object(threads_router, "save_last_successful_config", return_value=None) as save_successful,
     ):
@@ -1049,66 +1053,6 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
 @pytest.mark.asyncio
 async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
-    payload = threads_router.SaveThreadLaunchConfigRequest(
-        agent_user_id="agent-user-1",
-        create_mode="existing",
-        provider_config="daytona_selfhost",
-        existing_sandbox_id="lease-1",
-        model="gpt-5.4-mini",
-        workspace="/workspace/reused",
-    )
-    saved: list[tuple[object, str, str, dict[str, object]]] = []
-    to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
-
-    async def _fake_to_thread(fn, *args):
-        to_thread_calls.append((fn.__name__, args))
-        return fn(*args)
-
-    monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
-    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, agent_user_id, owner_user_id: object())
-    monkeypatch.setattr(
-        threads_router,
-        "save_last_confirmed_config",
-        lambda app_obj, owner_user_id, agent_user_id, config: saved.append((app_obj, owner_user_id, agent_user_id, config)),
-    )
-    monkeypatch.setattr(
-        threads_router.sandbox_service,
-        "resolve_owned_lease",
-        lambda owner_user_id, lease_id, **_: (
-            {
-                "lease_id": "lease-1",
-                "provider_name": "daytona_selfhost",
-            }
-            if owner_user_id == "owner-1" and lease_id == "lease-1"
-            else None
-        ),
-    )
-
-    result = await threads_router.save_default_thread_config(payload, "owner-1", app)
-
-    assert result == {"ok": True}
-    assert to_thread_calls == [("_save_default_config_for_owned_agent", (app, "owner-1", payload))]
-    assert saved == [
-        (
-            app,
-            "owner-1",
-            "agent-user-1",
-            {
-                "agent_user_id": "agent-user-1",
-                "create_mode": "existing",
-                "provider_config": "daytona_selfhost",
-                "sandbox_template_id": None,
-                "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
-                "model": "gpt-5.4-mini",
-                "workspace": "/workspace/reused",
-            },
-        )
-    ]
-
-
-@pytest.mark.asyncio
-async def test_save_default_thread_config_accepts_sandbox_shaped_existing_identity(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _make_threads_app()
     app.state.sandbox_repo.by_id["sandbox-1"] = {
         "id": "sandbox-1",
         "owner_user_id": "owner-1",
@@ -1169,6 +1113,46 @@ async def test_save_default_thread_config_accepts_sandbox_shaped_existing_identi
             },
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_save_default_thread_config_accepts_sandbox_shaped_existing_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    payload = threads_router.SaveThreadLaunchConfigRequest(
+        agent_user_id="agent-user-1",
+        create_mode="existing",
+        provider_config="daytona_selfhost",
+        existing_sandbox_id="lease-1",
+        model="gpt-5.4-mini",
+        workspace="/workspace/reused",
+    )
+    to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def _fake_to_thread(fn, *args):
+        to_thread_calls.append((fn.__name__, args))
+        return fn(*args)
+
+    monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
+    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, agent_user_id, owner_user_id: object())
+    monkeypatch.setattr(
+        threads_router.sandbox_service,
+        "resolve_owned_lease",
+        lambda owner_user_id, lease_id, **_: (
+            {
+                "lease_id": "lease-1",
+                "provider_name": "daytona_selfhost",
+            }
+            if owner_user_id == "owner-1" and lease_id == "lease-1"
+            else None
+        ),
+    )
+
+    with pytest.raises(threads_router.HTTPException) as excinfo:
+        await threads_router.save_default_thread_config(payload, "owner-1", app)
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Lease not authorized"
+    assert to_thread_calls == [("_save_default_config_for_owned_agent", (app, "owner-1", payload))]
 
 
 def test_get_default_thread_config_route_rejects_unowned_agent() -> None:
