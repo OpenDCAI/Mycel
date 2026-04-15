@@ -25,6 +25,10 @@ class _SandboxSnapshotRepoAdapter:
     # @@@snapshot-write-bridge - resource probe callers are sandbox-shaped now,
     # but the storage contract is still lease-keyed. Keep the bridge inside the
     # adapter so service callers stop leaking lease as the outward write subject.
+    def upsert_resource_snapshot_for_sandbox(self, **kwargs) -> None:
+        kwargs.pop("sandbox_id", None)
+        upsert_resource_snapshot_for_sandbox(sandbox_id=self._sandbox_id, **kwargs)
+
     def upsert_lease_resource_snapshot(self, **kwargs) -> None:
         lease_id = kwargs.pop("lease_id", None)
         upsert_resource_snapshot_for_sandbox(
@@ -210,6 +214,7 @@ def refresh_resource_snapshots() -> dict[str, Any]:
             continue
 
         result = probe_and_upsert_for_instance(
+            sandbox_id=sandbox_id,
             lease_id=lease_id,
             provider_name=provider_key,
             observed_state=status,
