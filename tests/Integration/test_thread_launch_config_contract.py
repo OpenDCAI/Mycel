@@ -513,6 +513,191 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
     }
 
 
+def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_workspace_backed_existing_mode() -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "ws-3",
+        "is_main": True,
+        "branch_index": 0,
+        "created_at": 3.0,
+    }
+    workspace_repo = _FakeWorkspaceRepo()
+    workspace_repo.by_id["ws-3"] = SimpleNamespace(
+        id="ws-3",
+        sandbox_id="sandbox-3",
+        owner_user_id="owner-1",
+        workspace_path="/workspace/template-from-sandbox",
+        name=None,
+        created_at=3.0,
+        updated_at=3.0,
+    )
+    sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-3"] = SimpleNamespace(
+        id="sandbox-3",
+        owner_user_id="owner-1",
+        provider_name="daytona_selfhost",
+        provider_env_id="provider-env-3",
+        sandbox_template_id="daytona:custom:lark",
+        desired_state="running",
+        observed_state="running",
+        status="ready",
+        observed_at=3.0,
+        last_error=None,
+        config={"legacy_lease_id": "lease-3"},
+        created_at=3.0,
+        updated_at=3.0,
+    )
+    recipe_repo = _FakeRecipeRepo()
+    recipe_repo.rows[("owner-1", "daytona:custom:lark")] = {
+        "owner_user_id": "owner-1",
+        "recipe_id": "daytona:custom:lark",
+        "kind": "custom",
+        "provider_type": "daytona",
+        "data": {
+            "id": "daytona:custom:lark",
+            "name": "Daytona Custom Lark",
+            "desc": "custom",
+            "provider_name": "daytona_selfhost",
+            "provider_type": "daytona",
+            "features": {"lark_cli": True},
+            "builtin": False,
+        },
+        "created_at": 0,
+        "updated_at": 0,
+    }
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            recipe_repo=recipe_repo,
+            workspace_repo=workspace_repo,
+            sandbox_repo=sandbox_repo,
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "list_user_leases",
+            return_value=[
+                {
+                    "lease_id": "lease-3",
+                    "provider_name": "daytona_selfhost",
+                    "recipe": default_recipe_snapshot("daytona"),
+                    "cwd": "/workspace/from-lease",
+                    "thread_ids": [],
+                }
+            ],
+        ),
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "available_sandbox_types",
+            return_value=[{"name": "daytona_selfhost", "available": True}],
+        ),
+        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+    ):
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
+
+    assert result == {
+        "source": "derived",
+        "config": {
+            "create_mode": "existing",
+            "provider_config": "daytona_selfhost",
+            "sandbox_template": normalize_recipe_snapshot(
+                "daytona",
+                recipe_repo.rows[("owner-1", "daytona:custom:lark")]["data"],
+                provider_name="daytona_selfhost",
+            ),
+            "existing_sandbox_id": "lease-3",
+            "model": None,
+            "workspace": "/workspace/template-from-sandbox",
+        },
+    }
+
+
+def test_resolve_default_config_fails_loudly_when_workspace_backed_template_source_is_missing() -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "ws-missing-template",
+        "is_main": True,
+        "branch_index": 0,
+        "created_at": 4.0,
+    }
+    workspace_repo = _FakeWorkspaceRepo()
+    workspace_repo.by_id["ws-missing-template"] = SimpleNamespace(
+        id="ws-missing-template",
+        sandbox_id="sandbox-missing-template",
+        owner_user_id="owner-1",
+        workspace_path="/workspace/missing-template",
+        name=None,
+        created_at=4.0,
+        updated_at=4.0,
+    )
+    sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-missing-template"] = SimpleNamespace(
+        id="sandbox-missing-template",
+        owner_user_id="owner-1",
+        provider_name="daytona_selfhost",
+        provider_env_id="provider-env-4",
+        sandbox_template_id="daytona:custom:missing",
+        desired_state="running",
+        observed_state="running",
+        status="ready",
+        observed_at=4.0,
+        last_error=None,
+        config={"legacy_lease_id": "lease-4"},
+        created_at=4.0,
+        updated_at=4.0,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            recipe_repo=_FakeRecipeRepo(),
+            workspace_repo=workspace_repo,
+            sandbox_repo=sandbox_repo,
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "list_user_leases",
+            return_value=[
+                {
+                    "lease_id": "lease-4",
+                    "provider_name": "daytona_selfhost",
+                    "recipe": default_recipe_snapshot("daytona"),
+                    "cwd": "/workspace/from-lease",
+                    "thread_ids": [],
+                }
+            ],
+        ),
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "available_sandbox_types",
+            return_value=[{"name": "daytona_selfhost", "available": True}],
+        ),
+        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+        pytest.raises(RuntimeError, match="sandbox template not found: daytona:custom:missing"),
+    ):
+        thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
+
+
 def test_resolve_default_config_derives_existing_from_legacy_lease_backed_current_workspace_id() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
