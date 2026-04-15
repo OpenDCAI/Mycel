@@ -292,22 +292,22 @@ class SupabaseSandboxMonitorRepo:
         )
         return [dict(r) for r in rows]
 
-    def list_sessions_with_leases(self) -> list[dict]:
+    def query_resource_sessions(self) -> list[dict]:
         active_sessions = q.rows(
             self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,started_at").neq("status", "closed").execute(),
             _REPO,
-            "list_sessions_with_leases active",
+            "query_resource_sessions active",
         )
 
         # @@@sandbox-monitor-session-base - session aggregation surfaces now use
         # container.sandboxes as the object base and only keep lease ids as the
         # residue join key for chat_sessions / terminals / instances.
-        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("list_sessions_with_leases")
+        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_resource_sessions")
 
         all_terminals = q.rows(
             self._client.table("abstract_terminals").select("lease_id,thread_id,created_at").execute(),
             _REPO,
-            "list_sessions_with_leases terminals",
+            "query_resource_sessions terminals",
         )
         terminal_rows_by_lease: dict[str, list[dict[str, Any]]] = {}
         for row in all_terminals:
@@ -316,7 +316,7 @@ class SupabaseSandboxMonitorRepo:
         all_sessions = q.rows(
             self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,status,started_at").execute(),
             _REPO,
-            "list_sessions_with_leases all_sessions",
+            "query_resource_sessions all_sessions",
         )
         latest_session_thread_by_lease: dict[str, str] = {}
         for row in sorted(all_sessions, key=lambda x: x.get("started_at") or ""):
