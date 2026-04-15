@@ -309,7 +309,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
 
         def list_skills(self, agent_config_id: str):
             assert agent_config_id == "cfg-1"
-            return [{"name": "Search", "content": "skill content", "meta_json": {"name": "Search"}}]
+            return [{"name": "Search", "content": "skill content", "meta_json": {"name": "Search", "desc": "Repo Search"}}]
 
         def save_config(self, agent_config_id: str, data: dict):
             saved["agent_config_id"] = agent_config_id
@@ -346,7 +346,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     assert payload["snapshot"]["meta"]["version"] == "0.1.0"
     assert payload["snapshot"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}
     assert payload["snapshot"]["rules"] == [{"name": "default", "content": "Rule content"}]
-    assert payload["snapshot"]["skills"][0]["meta"] == {"name": "Search"}
+    assert payload["snapshot"]["skills"][0]["meta"] == {"name": "Search", "desc": "Repo Search"}
     assert saved["agent_config_id"] == "cfg-1"
     assert saved["data"]["version"] == "0.1.1"
     assert saved["data"]["status"] == "active"
