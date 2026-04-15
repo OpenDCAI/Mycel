@@ -70,6 +70,51 @@ def test_probe_and_upsert_for_instance_accepts_sandbox_shaped_repo() -> None:
     ]
 
 
+def test_probe_and_upsert_for_instance_without_repo_prefers_sandbox_shaped_helper(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    def _fake_upsert_resource_snapshot_for_sandbox(**kwargs):
+        captured.append(kwargs)
+
+    monkeypatch.setattr(resource_snapshot, "upsert_resource_snapshot_for_sandbox", _fake_upsert_resource_snapshot_for_sandbox)
+    monkeypatch.setattr(
+        resource_snapshot,
+        "upsert_lease_resource_snapshot",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("lease-shaped helper should not be the active path")),
+    )
+
+    result = resource_snapshot.probe_and_upsert_for_instance(
+        sandbox_id="sandbox-1",
+        lease_id="lease-1",
+        provider_name="p1",
+        observed_state="detached",
+        probe_mode="running_runtime",
+        provider=_FakeProvider(),
+        instance_id="instance-1",
+        repo=None,
+    )
+
+    assert result == {"ok": False, "error": "metrics unavailable"}
+    assert captured == [
+        {
+            "sandbox_id": "sandbox-1",
+            "legacy_lease_id": "lease-1",
+            "provider_name": "p1",
+            "observed_state": "detached",
+            "probe_mode": "running_runtime",
+            "cpu_used": None,
+            "cpu_limit": None,
+            "memory_used_mb": None,
+            "memory_total_mb": None,
+            "disk_used_gb": None,
+            "disk_total_gb": None,
+            "network_rx_kbps": None,
+            "network_tx_kbps": None,
+            "probe_error": "metrics unavailable",
+        }
+    ]
+
+
 def test_refresh_resource_snapshots_routes_successful_probe_through_sandbox_wrapper(monkeypatch):
     monkeypatch.setattr(
         resource_service,
