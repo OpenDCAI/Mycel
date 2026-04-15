@@ -11,6 +11,8 @@ export type UserChatCandidate = {
   can_chat: boolean;
 };
 
+let inflightUserChatCandidates: Promise<UserChatCandidate[]> | null = null;
+
 export function parseUserChatCandidates(value: unknown): UserChatCandidate[] {
   if (!Array.isArray(value)) throw new Error("Malformed user chat candidate list");
   return value.map((item) => {
@@ -40,7 +42,16 @@ export function parseUserChatCandidates(value: unknown): UserChatCandidate[] {
 }
 
 export async function fetchUserChatCandidates(): Promise<UserChatCandidate[]> {
-  const response = await authFetch("/api/users/chat-candidates");
-  if (!response.ok) throw new Error(`User chat candidates API ${response.status}: ${await response.text()}`);
-  return parseUserChatCandidates(await response.json());
+  if (inflightUserChatCandidates) return inflightUserChatCandidates;
+  const pending = (async () => {
+    const response = await authFetch("/api/users/chat-candidates");
+    if (!response.ok) throw new Error(`User chat candidates API ${response.status}: ${await response.text()}`);
+    return parseUserChatCandidates(await response.json());
+  })();
+  inflightUserChatCandidates = pending;
+  try {
+    return await pending;
+  } finally {
+    inflightUserChatCandidates = null;
+  }
 }
