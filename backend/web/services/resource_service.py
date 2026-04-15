@@ -159,7 +159,12 @@ def refresh_resource_snapshots() -> dict[str, Any]:
     non_running_targets = 0
 
     for item in probe_targets:
-        lease_id = item["lease_id"]
+        sandbox_id = item["sandbox_id"]
+        # @@@probe-target-bridge - probe targets are now sandbox-shaped outward,
+        # but snapshot persistence still joins on the legacy lease bridge.
+        lease_id = item["legacy_lease_id"]
+        if not sandbox_id:
+            raise RuntimeError("Probe target missing sandbox_id")
         provider_key = item["provider_name"]
         instance_id = item["instance_id"]
         status = item["observed_state"]

@@ -32,8 +32,20 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
-                {"provider_name": "p1", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
-                {"provider_name": "p1", "instance_id": "s-2", "lease_id": "l-2", "observed_state": "paused"},
+                {
+                    "provider_name": "p1",
+                    "instance_id": "s-1",
+                    "sandbox_id": "sandbox-1",
+                    "legacy_lease_id": "l-1",
+                    "observed_state": "detached",
+                },
+                {
+                    "provider_name": "p1",
+                    "instance_id": "s-2",
+                    "sandbox_id": "sandbox-2",
+                    "legacy_lease_id": "l-2",
+                    "observed_state": "paused",
+                },
             ]
         ),
     )
@@ -53,8 +65,7 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
     assert result["running_targets"] == 1
     assert result["non_running_targets"] == 0
     assert {call["lease_id"] for call in calls} == {"l-1"}
-    modes = {call["lease_id"]: call["probe_mode"] for call in calls}
-    assert modes["l-1"] == "running_runtime"
+    assert {call["probe_mode"] for call in calls} == {"running_runtime"}
 
 
 def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
@@ -63,7 +74,13 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
-                {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
+                {
+                    "provider_name": "p-missing",
+                    "instance_id": "s-1",
+                    "sandbox_id": "sandbox-1",
+                    "legacy_lease_id": "l-1",
+                    "observed_state": "detached",
+                },
             ]
         ),
     )
@@ -88,7 +105,13 @@ def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatc
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
-                {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "paused"},
+                {
+                    "provider_name": "p-missing",
+                    "instance_id": "s-1",
+                    "sandbox_id": "sandbox-1",
+                    "legacy_lease_id": "l-1",
+                    "observed_state": "paused",
+                },
             ]
         ),
     )

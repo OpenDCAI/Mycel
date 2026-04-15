@@ -558,13 +558,15 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
 
     assert repo.list_probe_targets() == [
         {
-            "lease_id": "lease-paused",
+            "sandbox_id": "sandbox-paused",
+            "legacy_lease_id": "lease-paused",
             "provider_name": "local",
             "instance_id": "instance-local",
             "observed_state": "paused",
         },
         {
-            "lease_id": "lease-running",
+            "sandbox_id": "sandbox-running",
+            "legacy_lease_id": "lease-running",
             "provider_name": "daytona_selfhost",
             "instance_id": "provider-session-1",
             "observed_state": "detached",
