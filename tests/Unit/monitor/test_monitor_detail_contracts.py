@@ -178,8 +178,13 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
                     "id": "daytona",
                     "name": "daytona",
                     "sessions": [
-                        {"leaseId": "lease-1", "threadId": "thread-1", "runtimeSessionId": "runtime-1"},
-                        {"leaseId": "lease-2", "threadId": "thread-2"},
+                        {
+                            "leaseId": "lease-1",
+                            "sandboxId": "sandbox-1",
+                            "threadId": "thread-1",
+                            "runtimeSessionId": "runtime-1",
+                        },
+                        {"leaseId": "lease-2", "sandboxId": "sandbox-2", "threadId": "thread-2"},
                     ],
                 }
             ]
@@ -189,9 +194,40 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
     payload = monitor_service.get_monitor_provider_detail("daytona")
 
     assert payload["provider"]["id"] == "daytona"
+    assert payload["sandbox_ids"] == ["sandbox-1", "sandbox-2"]
     assert payload["lease_ids"] == ["lease-1", "lease-2"]
     assert payload["thread_ids"] == ["thread-1", "thread-2"]
     assert payload["runtime_session_ids"] == ["runtime-1"]
+
+
+def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_resource_overview_snapshot",
+        lambda: {
+            "providers": [
+                {
+                    "id": "daytona",
+                    "name": "daytona",
+                    "status": "active",
+                    "sessions": [
+                        {
+                            "runtimeSessionId": "runtime-1",
+                            "leaseId": "lease-1",
+                            "sandboxId": "sandbox-1",
+                            "threadId": "thread-1",
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    payload = monitor_service.get_monitor_runtime_detail("runtime-1")
+
+    assert payload["sandbox_id"] == "sandbox-1"
+    assert payload["lease_id"] == "lease-1"
+    assert payload["thread_id"] == "thread-1"
 
 
 def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_path):
@@ -755,6 +791,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
         monkeypatch,
         FakeMonitorThreadRepo(
             summary={
+                "sandbox_id": "sandbox-1",
                 "provider_name": "daytona",
                 "lease_id": "lease-1",
                 "current_instance_id": "runtime-1",
@@ -794,6 +831,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
 
     assert payload["thread"]["thread_id"] == "thread-1"
     assert payload["owner"]["display_name"] == "Ada"
+    assert payload["summary"]["sandbox_id"] == "sandbox-1"
     assert payload["trajectory"]["run_id"] == "run-1"
     assert payload["trajectory"]["conversation"][0]["role"] == "human"
     assert payload["trajectory"]["events"][0]["event_type"] == "tool_call"
@@ -819,6 +857,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
                 {
                     "chat_session_id": "sess-1",
                     "status": "closed",
+                    "sandbox_id": "sandbox-1",
                     "lease_id": "lease-1",
                     "provider_name": "daytona",
                     "desired_state": "paused",
@@ -837,12 +876,41 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
     payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["summary"] == {
+        "sandbox_id": "sandbox-1",
         "provider_name": "daytona",
         "lease_id": "lease-1",
         "current_instance_id": "runtime-1",
         "desired_state": "paused",
         "observed_state": "paused",
     }
+
+
+def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch):
+    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_lease_row(sandbox_id="sandbox-1", lease_id="lease-1")))
+    monkeypatch.setattr(
+        monitor_service.monitor_operation_service,
+        "get_operation_detail",
+        lambda _operation_id: {
+            "operation": {"operation_id": "op-1", "kind": "lease_cleanup", "status": "succeeded"},
+            "target": {
+                "target_type": "lease",
+                "target_id": "lease-1",
+                "provider_id": "daytona",
+                "runtime_session_id": "runtime-1",
+            },
+            "result_truth": {
+                "lease_state_before": "running",
+                "lease_state_after": "destroyed",
+            },
+            "events": [],
+        },
+    )
+
+    payload = monitor_service.get_monitor_operation_detail("op-1")
+
+    assert payload["sandbox_id"] == "sandbox-1"
+    assert payload["target"]["target_type"] == "lease"
+    assert payload["target"]["target_id"] == "lease-1"
 
 
 @pytest.mark.asyncio

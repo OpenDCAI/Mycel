@@ -12,6 +12,7 @@ type ProviderDetailPayload = {
     status?: string | null;
     consoleUrl?: string | null;
   };
+  sandbox_ids?: string[] | null;
   lease_ids?: string[] | null;
   thread_ids?: string[] | null;
   runtime_session_ids?: string[] | null;
@@ -36,6 +37,14 @@ function RelatedIdSection({ title, ids, href }: { title: string; ids: string[]; 
   );
 }
 
+export function buildProviderRelationShell(data: ProviderDetailPayload) {
+  const sandboxIds = data.sandbox_ids ?? [];
+  return {
+    sandboxTitle: "Sandboxes",
+    sandboxHrefs: sandboxIds.map((sandboxId) => `/sandboxes/${sandboxId}`),
+  };
+}
+
 export default function ProviderDetailPage() {
   const params = useParams<{ providerId: string }>();
   const providerId = params.providerId ?? "";
@@ -45,7 +54,8 @@ export default function ProviderDetailPage() {
   if (!data) return <div>Loading...</div>;
 
   const provider = data.provider ?? {};
-  const leases = data.lease_ids ?? [];
+  const relationShell = buildProviderRelationShell(data);
+  const sandboxes = data.sandbox_ids ?? [];
   const runtimes = data.runtime_session_ids ?? [];
   const threads = data.thread_ids ?? [];
 
@@ -84,7 +94,7 @@ export default function ProviderDetailPage() {
           </div>
         </div>
       </section>
-      <RelatedIdSection title="Leases" ids={leases} href={(id) => `/leases/${id}`} />
+      <RelatedIdSection title={relationShell.sandboxTitle} ids={sandboxes} href={(id) => `/sandboxes/${id}`} />
       <RelatedIdSection title="Runtimes" ids={runtimes} href={(id) => `/runtimes/${id}`} />
       <RelatedIdSection title="Threads" ids={threads} href={(id) => `/threads/${id}`} />
     </div>

@@ -18,9 +18,18 @@ type RuntimeDetailPayload = {
     agentName?: string | null;
     webUrl?: string | null;
   } | null;
+  sandbox_id?: string | null;
   lease_id?: string | null;
   thread_id?: string | null;
 };
+
+export function buildRuntimeRelationShell(data: RuntimeDetailPayload) {
+  const sandboxId = data.sandbox_id ?? null;
+  return {
+    sandboxLabel: "Sandbox",
+    sandboxHref: sandboxId ? `/sandboxes/${sandboxId}` : null,
+  };
+}
 
 export default function RuntimeDetailPage() {
   const params = useParams<{ runtimeSessionId: string }>();
@@ -32,7 +41,7 @@ export default function RuntimeDetailPage() {
 
   const provider = data.provider ?? {};
   const runtime = data.runtime ?? {};
-  const leaseId = data.lease_id ?? runtime.leaseId ?? null;
+  const relationShell = buildRuntimeRelationShell(data);
   const threadId = data.thread_id ?? runtime.threadId ?? null;
 
   return (
@@ -51,8 +60,8 @@ export default function RuntimeDetailPage() {
             </span>
           </div>
           <div>
-            <strong>Lease</strong>
-            <span>{leaseId ? <Link to={`/leases/${leaseId}`}>{leaseId}</Link> : "-"}</span>
+            <strong>{relationShell.sandboxLabel}</strong>
+            <span>{relationShell.sandboxHref && data.sandbox_id ? <Link to={relationShell.sandboxHref}>{data.sandbox_id}</Link> : "-"}</span>
           </div>
           <div>
             <strong>Thread</strong>

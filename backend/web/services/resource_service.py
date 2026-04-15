@@ -44,6 +44,7 @@ def build_provider_availability_payload(*, available: bool, running_count: int, 
 def build_resource_session_payload(
     *,
     session_identity: str,
+    sandbox_id: str | None = None,
     lease_id: str,
     thread_id: str,
     runtime_session_id: str | None,
@@ -63,6 +64,8 @@ def build_resource_session_payload(
         "startedAt": started_at,
         "metrics": metrics,
     }
+    if sandbox_id:
+        payload["sandboxId"] = sandbox_id
     if runtime_session_id:
         payload["runtimeSessionId"] = runtime_session_id
     return payload

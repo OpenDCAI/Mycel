@@ -93,6 +93,7 @@ def _derive_thread_summary_from_sessions(sessions: list[dict[str, Any]]) -> dict
         return None
     latest = sessions[0]
     summary = {
+        "sandbox_id": latest.get("sandbox_id"),
         "provider_name": latest.get("provider_name"),
         "lease_id": latest.get("lease_id"),
         "current_instance_id": latest.get("current_instance_id"),
@@ -678,6 +679,7 @@ def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
     sessions = provider.get("sessions") or []
     return {
         "provider": provider,
+        "sandbox_ids": _session_values(sessions, "sandboxId"),
         "lease_ids": _session_values(sessions, "leaseId"),
         "thread_ids": _session_values(sessions, "threadId"),
         "runtime_session_ids": _session_values(sessions, "runtimeSessionId"),
@@ -703,6 +705,7 @@ def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
                     "consoleUrl": provider.get("consoleUrl"),
                 },
                 "runtime": session,
+                "sandbox_id": session.get("sandboxId"),
                 "lease_id": session.get("leaseId"),
                 "thread_id": session.get("threadId"),
             }
@@ -759,7 +762,27 @@ def request_monitor_provider_session_cleanup(provider_name: str, session_id: str
 
 
 def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
-    return monitor_operation_service.get_operation_detail(operation_id)
+    payload = monitor_operation_service.get_operation_detail(operation_id)
+    target = payload.get("target") or {}
+    if str(target.get("target_type") or "").strip() != "lease":
+        return payload
+
+    lease_id = str(target.get("target_id") or "").strip()
+    if not lease_id:
+        raise RuntimeError("monitor operation lease target is missing")
+
+    repo = make_sandbox_monitor_repo()
+    try:
+        lease = repo.query_lease(lease_id)
+    finally:
+        repo.close()
+    if lease is None:
+        raise RuntimeError("monitor operation lease target missing sandbox bridge")
+
+    sandbox_id = str(lease.get("sandbox_id") or "").strip()
+    if not sandbox_id:
+        raise RuntimeError("monitor operation lease target missing sandbox bridge")
+    return {**payload, "sandbox_id": sandbox_id}
 
 
 # ---------------------------------------------------------------------------
