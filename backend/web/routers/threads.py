@@ -59,7 +59,7 @@ from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
-from sandbox.manager import bind_thread_to_existing_lease
+from sandbox.manager import bind_thread_to_existing_sandbox, resolve_existing_sandbox_lease
 from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
 from storage.contracts import SandboxRow, WorkspaceRow
@@ -381,12 +381,14 @@ def _resolve_owned_existing_sandbox_request_lease(
     sandbox_owner_user_id = _request_bridge_text(sandbox, "owner_user_id", label="sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
-    legacy_lease_id = _request_bridge_config_text(sandbox, "legacy_lease_id", label="sandbox")
-    return sandbox_service.resolve_owned_lease(
-        owner_user_id,
-        legacy_lease_id,
-        thread_repo=app.state.thread_repo,
-        user_repo=app.state.user_repo,
+    return resolve_existing_sandbox_lease(
+        sandbox,
+        resolve_lease=lambda lease_id: sandbox_service.resolve_owned_lease(
+            owner_user_id,
+            lease_id,
+            thread_repo=app.state.thread_repo,
+            user_repo=app.state.user_repo,
+        ),
     )
 
 
@@ -798,27 +800,6 @@ def _create_owned_thread(
     if not agent_user or agent_user.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
 
-    selected_lease_id = None
-    owned_lease: dict[str, Any] | None = None
-    if payload.existing_sandbox_id:
-        selected_lease_id = _normalize_existing_sandbox_request_lease_id(
-            app,
-            owner_user_id,
-            payload.existing_sandbox_id,
-        )
-        owned_lease = sandbox_service.resolve_owned_lease(
-            owner_user_id,
-            selected_lease_id,
-            thread_repo=app.state.thread_repo,
-            user_repo=app.state.user_repo,
-        )
-        if owned_lease is None:
-            raise HTTPException(403, "Lease not authorized")
-        sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
-    selected_recipe = None
-    if not selected_lease_id:
-        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.sandbox_template_id)
-
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     # @@@user-owned-thread-seq - thread ids are now allocated from the unified
     # user identity root, so create-path sequencing must fail loudly through
@@ -829,12 +810,32 @@ def _create_owned_thread(
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_user_id)
 
-    if selected_lease_id:
-        bound_cwd = bind_thread_to_existing_lease(
+    selected_lease_id = None
+    owned_lease: dict[str, Any] | None = None
+    if payload.existing_sandbox_id:
+        sandbox = app.state.sandbox_repo.get_by_id(payload.existing_sandbox_id)
+        if sandbox is None:
+            raise HTTPException(403, "Lease not authorized")
+        bound_cwd, owned_lease = bind_thread_to_existing_sandbox(
             new_thread_id,
-            selected_lease_id,
+            sandbox,
+            resolve_lease=lambda lease_id: sandbox_service.resolve_owned_lease(
+                owner_user_id,
+                lease_id,
+                thread_repo=app.state.thread_repo,
+                user_repo=app.state.user_repo,
+            ),
             cwd=payload.cwd,
         )
+        selected_lease_id = _request_bridge_text(owned_lease, "lease_id", label="lease")
+        if owned_lease is None:
+            raise HTTPException(403, "Lease not authorized")
+        sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
+    selected_recipe = None
+    if not selected_lease_id:
+        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.sandbox_template_id)
+
+    if selected_lease_id:
         sandbox_id = _materialize_sandbox_for_lease(
             app.state.sandbox_repo,
             lease=owned_lease,

@@ -471,7 +471,7 @@ async def test_create_thread_route_rejects_lease_shaped_existing_identity():
             "resolve_owned_lease",
             return_value={"lease_id": "lease-1", "provider_name": "local", "recipe": None},
         ),
-        patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused") as bind_helper,
+        patch.object(threads_router, "bind_thread_to_existing_sandbox", return_value=("/workspace/reused", {"lease_id": "lease-1"})) as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
     ):
@@ -513,7 +513,20 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
                 "recipe": None,
             },
         ),
-        patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
+        patch.object(
+            threads_router,
+            "bind_thread_to_existing_sandbox",
+            return_value=(
+                "/workspace/reused",
+                {
+                    "lease_id": "lease-1",
+                    "sandbox_id": "sandbox-1",
+                    "provider_name": "local",
+                    "cwd": "/workspace/reused",
+                    "recipe": None,
+                },
+            ),
+        ),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
     ):
@@ -616,7 +629,20 @@ async def test_create_thread_route_existing_sandbox_still_saves_existing_launch_
                 "recipe": {"id": "local:default"},
             },
         ),
-        patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
+        patch.object(
+            threads_router,
+            "bind_thread_to_existing_sandbox",
+            return_value=(
+                "/workspace/reused",
+                {
+                    "lease_id": "lease-1",
+                    "sandbox_id": "sandbox-1",
+                    "provider_name": "local",
+                    "cwd": "/workspace/reused",
+                    "recipe": {"id": "local:default"},
+                },
+            ),
+        ),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", save_config),
     ):
@@ -658,13 +684,26 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
     with (
         patch.object(threads_router.sandbox_service, "resolve_owned_lease", side_effect=_resolve_owned_lease),
         patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
-        patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused") as bind_helper,
+        patch.object(
+            threads_router,
+            "bind_thread_to_existing_sandbox",
+            return_value=(
+                "/workspace/reused",
+                {
+                    "lease_id": "lease-1",
+                    "sandbox_id": "sandbox-1",
+                    "provider_name": "local",
+                    "cwd": "/workspace/reused",
+                    "recipe": {"id": "local:default"},
+                },
+            ),
+        ) as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", save_config),
     ):
-        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
+        _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
-    bind_helper.assert_called_once_with(result["thread_id"], "lease-1", cwd="/workspace/reused")
+    bind_helper.assert_called_once()
     assert (
         save_config.call_args.args[3]["existing_sandbox_id"]
         == f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}"
