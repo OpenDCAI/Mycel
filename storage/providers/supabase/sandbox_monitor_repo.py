@@ -197,6 +197,8 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def query_lease_threads(self, lease_id: str) -> list[dict]:
+        if lease_id not in self._sandbox_rows_by_legacy_lease_id("query_lease_threads"):
+            raise RuntimeError("sandbox legacy bridge is required")
         rows = q.rows(
             q.order(
                 self._client.table("abstract_terminals").select("thread_id").eq("lease_id", lease_id),
