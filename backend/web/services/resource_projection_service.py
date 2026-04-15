@@ -125,7 +125,28 @@ def _load_runtime_session_ids(sandbox_ids: list[str]) -> dict[str, str | None]:
         repo.close()
 
 
-def _load_visible_resource_runtime() -> tuple[list[dict[str, Any]], dict[str, str | None], dict[str, dict[str, Any]]]:
+def _index_session_snapshots_by_sandbox(
+    sessions: list[dict[str, Any]],
+    snapshot_by_lease: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    snapshot_by_sandbox: dict[str, dict[str, Any]] = {}
+    for session in sessions:
+        sandbox_id = str(session.get("sandbox_id") or "").strip()
+        lease_id = str(session.get("lease_id") or "").strip()
+        if not sandbox_id or not lease_id or sandbox_id in snapshot_by_sandbox:
+            continue
+        snapshot = snapshot_by_lease.get(lease_id)
+        if snapshot is not None:
+            snapshot_by_sandbox[sandbox_id] = snapshot
+    return snapshot_by_sandbox
+
+
+def _load_visible_resource_runtime() -> tuple[
+    list[dict[str, Any]],
+    dict[str, str | None],
+    dict[str, dict[str, Any]],
+    dict[str, dict[str, Any]],
+]:
     repo = make_sandbox_monitor_repo()
     try:
         sessions = _project_user_visible_resource_sessions(repo, repo.list_sessions_with_leases())
@@ -134,7 +155,8 @@ def _load_visible_resource_runtime() -> tuple[list[dict[str, Any]], dict[str, st
         repo.close()
 
     snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
-    return sessions, runtime_session_ids, snapshot_by_lease
+    snapshot_by_sandbox = _index_session_snapshots_by_sandbox(sessions, snapshot_by_lease)
+    return sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox
 
 
 def _backfill_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
@@ -262,7 +284,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
 
 
 def list_resource_providers() -> dict[str, Any]:
-    sessions, runtime_session_ids, snapshot_by_lease = _load_visible_resource_runtime()
+    sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox = _load_visible_resource_runtime()
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for session in sessions:
@@ -293,8 +315,9 @@ def list_resource_providers() -> dict[str, Any]:
             desired_state = session.get("desired_state")
             thread_id = str(session.get("thread_id") or "")
             lease_id = str(session.get("lease_id") or "")
+            sandbox_id = str(session.get("sandbox_id") or "").strip()
             runtime_session_id = runtime_session_ids.get(str(session.get("sandbox_id") or "").strip())
-            session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
+            session_metrics = _to_session_metrics(snapshot_by_sandbox.get(sandbox_id))
             normalized = _resource_display_status(
                 observed_state=observed_state,
                 desired_state=desired_state,
@@ -373,7 +396,7 @@ def list_resource_providers() -> dict[str, Any]:
 
 
 def visible_resource_session_stats() -> dict[str, dict[str, int]]:
-    sessions, runtime_session_ids, snapshot_by_lease = _load_visible_resource_runtime()
+    sessions, runtime_session_ids, _snapshot_by_lease, snapshot_by_sandbox = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_session_ids: set[str] = set()
     seen_running_leases: set[tuple[str, str]] = set()
@@ -392,7 +415,7 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
             observed_state=session.get("observed_state"),
             desired_state=session.get("desired_state"),
             runtime_session_id=runtime_session_id,
-            session_metrics=_to_session_metrics(snapshot_by_lease.get(lease_id)),
+            session_metrics=_to_session_metrics(snapshot_by_sandbox.get(sandbox_id)),
         )
         running_identity = (provider_instance, lease_id)
         if normalized == "running" and lease_id and running_identity not in seen_running_leases:
