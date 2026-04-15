@@ -8,7 +8,7 @@ class _FakeTable:
         self.upsert_payload = None
         self.in_calls: list[tuple[str, list[str]]] = []
         self.max_in_values: int | None = None
-        self.rows = [{"lease_id": "lease-1", "cpu_used": 1.0}]
+        self.rows = [{"sandbox_id": "sandbox-1", "cpu_used": 1.0}]
 
     def upsert(self, payload):
         self.upsert_payload = payload
@@ -30,28 +30,14 @@ class _FakeTable:
 class _FakeClient:
     def __init__(self) -> None:
         self.table_obj = _FakeTable()
+        self.last_table_name: str | None = None
 
-    def table(self, _name):
+    def table(self, name):
+        self.last_table_name = name
         return self.table_obj
 
 
-def test_supabase_resource_snapshot_repo_upserts_with_client() -> None:
-    client = _FakeClient()
-    repo = SupabaseResourceSnapshotRepo(client)
-
-    repo.upsert_lease_resource_snapshot(
-        lease_id="lease-1",
-        provider_name="daytona",
-        observed_state="running",
-        probe_mode="runtime",
-    )
-
-    assert client.table_obj.upsert_payload is not None
-    assert client.table_obj.upsert_payload["lease_id"] == "lease-1"
-    assert client.table_obj.upsert_payload["provider_name"] == "daytona"
-
-
-def test_supabase_resource_snapshot_repo_upserts_for_sandbox_with_legacy_bridge() -> None:
+def test_supabase_resource_snapshot_repo_upserts_for_sandbox_without_lease_shaped_row_key() -> None:
     client = _FakeClient()
     repo = SupabaseResourceSnapshotRepo(client)
 
@@ -64,18 +50,10 @@ def test_supabase_resource_snapshot_repo_upserts_for_sandbox_with_legacy_bridge(
     )
 
     assert client.table_obj.upsert_payload is not None
-    assert client.table_obj.upsert_payload["lease_id"] == "lease-1"
+    assert client.last_table_name == "sandbox_resource_snapshots"
+    assert client.table_obj.upsert_payload["sandbox_id"] == "sandbox-1"
+    assert "lease_id" not in client.table_obj.upsert_payload
     assert client.table_obj.upsert_payload["provider_name"] == "daytona"
-
-
-def test_supabase_resource_snapshot_repo_lists_snapshots_by_lease_ids() -> None:
-    client = _FakeClient()
-    repo = SupabaseResourceSnapshotRepo(client)
-
-    rows = repo.list_snapshots_by_lease_ids(["lease-1", "lease-2"])
-
-    assert rows == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
-    assert ("lease_id", ["lease-1", "lease-2"]) in client.table_obj.in_calls
 
 
 def test_supabase_resource_snapshot_repo_lists_snapshots_by_sandbox_ids() -> None:
@@ -89,8 +67,9 @@ def test_supabase_resource_snapshot_repo_lists_snapshots_by_sandbox_ids() -> Non
         ]
     )
 
-    assert rows == {"sandbox-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
-    assert ("lease_id", ["lease-1", "lease-2"]) in client.table_obj.in_calls
+    assert rows == {"sandbox-1": {"sandbox_id": "sandbox-1", "cpu_used": 1.0}}
+    assert client.last_table_name == "sandbox_resource_snapshots"
+    assert ("sandbox_id", ["sandbox-1", "sandbox-2"]) in client.table_obj.in_calls
 
 
 def test_supabase_resource_snapshot_repo_chunks_large_snapshot_lookup() -> None:
@@ -98,9 +77,9 @@ def test_supabase_resource_snapshot_repo_chunks_large_snapshot_lookup() -> None:
     client.table_obj.max_in_values = 80
     repo = SupabaseResourceSnapshotRepo(client)
 
-    rows = repo.list_snapshots_by_lease_ids([f"lease-{index}" for index in range(175)])
+    rows = repo.list_snapshots_by_sandbox_ids([{"sandbox_id": f"sandbox-{index}", "lease_id": f"lease-{index}"} for index in range(175)])
 
-    assert rows == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
+    assert rows == {"sandbox-1": {"sandbox_id": "sandbox-1", "cpu_used": 1.0}}
     assert [len(values) for _, values in client.table_obj.in_calls] == [80, 80, 15]
 
 

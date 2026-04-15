@@ -553,7 +553,7 @@ def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_tele
     monkeypatch.setattr(
         resource_projection_service,
         "list_resource_snapshots_by_sandbox",
-        lambda _sessions: {"sandbox-a": {"lease_id": "lease-a", "cpu_used": 11}},
+        lambda _sessions: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
 
     captured: dict[str, object] = {}
@@ -595,7 +595,7 @@ def test_load_visible_resource_runtime_uses_sandbox_snapshot_wrapper(monkeypatch
     monkeypatch.setattr(
         resource_projection_service,
         "list_resource_snapshots_by_sandbox",
-        lambda sessions: {"sandbox-a": {"lease_id": "lease-a", "cpu_used": 11}},
+        lambda sessions: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
 
     sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
@@ -603,4 +603,4 @@ def test_load_visible_resource_runtime_uses_sandbox_snapshot_wrapper(monkeypatch
     assert [session["sandbox_id"] for session in sessions] == ["sandbox-a"]
     assert runtime_session_ids == {"sandbox-a": None}
     assert snapshot_by_lease == {}
-    assert snapshot_by_sandbox == {"sandbox-a": {"lease_id": "lease-a", "cpu_used": 11}}
+    assert snapshot_by_sandbox == {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}
