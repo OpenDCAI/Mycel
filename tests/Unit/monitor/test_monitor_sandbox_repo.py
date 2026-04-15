@@ -215,71 +215,6 @@ def test_query_threads_chunks_lease_lookup() -> None:
     assert next(row for row in rows if row["thread_id"] == "thread-174")["current_instance_id"] == "instance-174"
 
 
-def test_query_lease_reads_container_sandbox_row() -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    provider_name="daytona_selfhost",
-                    provider_env_id="provider-env-1",
-                    desired_state="paused",
-                    observed_state="paused",
-                    updated_at="2026-04-05T10:10:00",
-                    legacy_lease_id="lease-1",
-                    sandbox_template_id="template-1",
-                )
-            ]
-        }
-    )
-
-    assert repo.query_lease("lease-1") == {
-        "sandbox_id": "sandbox-1",
-        "lease_id": "lease-1",
-        "provider_name": "daytona_selfhost",
-        "recipe_id": "template-1",
-        "recipe_json": None,
-        "desired_state": "paused",
-        "observed_state": "paused",
-        "current_instance_id": "provider-env-1",
-        "last_error": None,
-        "updated_at": "2026-04-05T10:10:00",
-    }
-
-
-def test_query_lease_no_longer_roundtrips_through_legacy_lease_shell(monkeypatch) -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    legacy_lease_id="lease-1",
-                    provider_env_id="provider-env-1",
-                )
-            ]
-        }
-    )
-
-    monkeypatch.setattr(
-        repo,
-        "_sandboxes_by_legacy_lease_id",
-        lambda operation: (_ for _ in ()).throw(AssertionError("query_lease should not roundtrip through _sandboxes_by_legacy_lease_id")),
-    )
-
-    assert repo.query_lease("lease-1") == {
-        "sandbox_id": "sandbox-1",
-        "lease_id": "lease-1",
-        "provider_name": "local",
-        "recipe_id": None,
-        "recipe_json": None,
-        "desired_state": "running",
-        "observed_state": "running",
-        "current_instance_id": "provider-env-1",
-        "last_error": None,
-        "updated_at": "2026-04-05T10:00:00",
-    }
-
-
 def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(monkeypatch) -> None:
     repo = _repo(
         {
@@ -296,11 +231,7 @@ def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(m
         }
     )
 
-    monkeypatch.setattr(
-        repo,
-        "query_lease_threads",
-        lambda lease_id: (_ for _ in ()).throw(AssertionError("query_sandbox_threads should not roundtrip through query_lease_threads")),
-    )
+    assert not hasattr(repo, "query_lease_threads")
 
     assert repo.query_sandbox_threads("sandbox-1") == [
         {"thread_id": "thread-2"},
@@ -338,66 +269,6 @@ def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
         "last_error": None,
         "updated_at": "2026-04-05T10:10:00",
     }
-
-
-def test_query_lease_threads_no_longer_roundtrips_through_legacy_bridge_requirement(monkeypatch) -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    legacy_lease_id="lease-1",
-                )
-            ],
-            "abstract_terminals": [
-                {"thread_id": "thread-2", "lease_id": "lease-1", "created_at": "2026-04-05T10:02:00"},
-                {"thread_id": "thread-1", "lease_id": "lease-1", "created_at": "2026-04-05T10:01:00"},
-            ],
-        }
-    )
-
-    monkeypatch.setattr(
-        repo,
-        "_require_sandbox_rows_by_legacy_lease_ids",
-        lambda lease_ids, operation: (_ for _ in ()).throw(
-            AssertionError("query_lease_threads should not roundtrip through _require_sandbox_rows_by_legacy_lease_ids")
-        ),
-    )
-
-    assert repo.query_lease_threads("lease-1") == [
-        {"thread_id": "thread-2"},
-        {"thread_id": "thread-1"},
-    ]
-
-
-def test_query_lease_events_no_longer_roundtrips_through_legacy_bridge_requirement(monkeypatch) -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    legacy_lease_id="lease-1",
-                )
-            ],
-            "provider_events": [
-                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
-                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
-            ],
-        }
-    )
-
-    monkeypatch.setattr(
-        repo,
-        "_require_sandbox_rows_by_legacy_lease_ids",
-        lambda lease_ids, operation: (_ for _ in ()).throw(
-            AssertionError("query_lease_events should not roundtrip through _require_sandbox_rows_by_legacy_lease_ids")
-        ),
-    )
-
-    assert repo.query_lease_events("lease-1") == [
-        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
-        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
-    ]
 
 
 def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
@@ -466,62 +337,9 @@ def test_query_sandbox_sessions_no_longer_roundtrips_through_lease_session_shell
         }
     )
 
-    monkeypatch.setattr(
-        repo,
-        "query_lease_sessions",
-        lambda lease_id: (_ for _ in ()).throw(AssertionError("query_sandbox_sessions should not roundtrip through query_lease_sessions")),
-    )
+    assert not hasattr(repo, "query_lease_sessions")
 
     assert repo.query_sandbox_sessions("sandbox-1") == [
-        {
-            "chat_session_id": "sess-1",
-            "status": "active",
-            "started_at": "2026-04-05T10:01:00",
-            "ended_at": None,
-            "close_reason": None,
-            "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
-            "provider_name": "daytona_selfhost",
-            "desired_state": "paused",
-            "observed_state": "paused",
-            "current_instance_id": "instance-1",
-            "last_error": "last boom",
-            "thread_id": "thread-1",
-        }
-    ]
-
-
-def test_query_lease_sessions_no_longer_roundtrips_through_query_lease(monkeypatch) -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    provider_name="daytona_selfhost",
-                    provider_env_id="instance-1",
-                    desired_state="paused",
-                    observed_state="paused",
-                    legacy_lease_id="lease-1",
-                    last_error="last boom",
-                )
-            ],
-            "chat_sessions": [
-                {
-                    **_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
-                    "ended_at": None,
-                    "close_reason": None,
-                }
-            ],
-        }
-    )
-
-    monkeypatch.setattr(
-        repo,
-        "query_lease",
-        lambda lease_id: (_ for _ in ()).throw(AssertionError("query_lease_sessions should not roundtrip through query_lease")),
-    )
-
-    assert repo.query_lease_sessions("lease-1") == [
         {
             "chat_session_id": "sess-1",
             "status": "active",
@@ -698,21 +516,13 @@ def test_lease_alias_summary_shells_are_removed() -> None:
     assert not hasattr(repo, "list_leases_with_threads")
 
 
-def test_query_lease_threads_returns_latest_unique_threads_first() -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox("sandbox-1", legacy_lease_id="lease-1"),
-            ],
-            "abstract_terminals": [
-                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
-                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
-                _terminal("term-dupe", "lease-1", "thread-new", "2026-04-05T10:03:00"),
-            ],
-        }
-    )
+def test_remaining_lease_protocol_shells_are_removed() -> None:
+    repo = _repo({"container.sandboxes": []})
 
-    assert repo.query_lease_threads("lease-1") == [{"thread_id": "thread-new"}, {"thread_id": "thread-old"}]
+    assert not hasattr(repo, "query_lease")
+    assert not hasattr(repo, "query_lease_sessions")
+    assert not hasattr(repo, "query_lease_threads")
+    assert not hasattr(repo, "query_lease_events")
 
 
 def test_lease_instance_protocol_shell_is_removed() -> None:
@@ -822,40 +632,6 @@ def test_query_sandbox_instance_id_no_longer_roundtrips_through_lease_bridge() -
     assert not hasattr(repo, "query_lease_instance_id")
 
     assert repo.query_sandbox_instance_id("sandbox-1") == "provider-session-1"
-
-
-def test_query_lease_events_requires_sandbox_bridge() -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox("sandbox-1", legacy_lease_id="lease-1"),
-            ],
-            "provider_events": [
-                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
-                {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
-            ],
-        }
-    )
-
-    assert repo.query_lease_events("lease-1") == [
-        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:02:00", "event": "newer"},
-        {"matched_lease_id": "lease-1", "created_at": "2026-04-05T10:01:00", "event": "older"},
-    ]
-
-
-@pytest.mark.parametrize(
-    ("caller", "expected"),
-    [
-        (lambda repo: repo.query_lease_threads("lease-missing"), "sandbox legacy bridge is required"),
-        (lambda repo: repo.query_lease_events("lease-missing"), "sandbox legacy bridge is required"),
-    ],
-    ids=["lease-threads", "lease-events"],
-)
-def test_residue_keyed_surfaces_fail_loud_without_sandbox_bridge(caller, expected) -> None:
-    repo = _repo({"container.sandboxes": []})
-
-    with pytest.raises(RuntimeError, match=expected):
-        caller(repo)
 
 
 def test_list_probe_targets_prefers_provider_session_id() -> None:
