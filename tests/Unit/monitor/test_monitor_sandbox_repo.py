@@ -348,9 +348,7 @@ def test_query_sandbox_sessions_no_longer_roundtrips_through_lease_session_shell
     monkeypatch.setattr(
         repo,
         "query_lease_sessions",
-        lambda lease_id: (_ for _ in ()).throw(
-            AssertionError("query_sandbox_sessions should not roundtrip through query_lease_sessions")
-        ),
+        lambda lease_id: (_ for _ in ()).throw(AssertionError("query_sandbox_sessions should not roundtrip through query_lease_sessions")),
     )
 
     assert repo.query_sandbox_sessions("sandbox-1") == [
@@ -399,9 +397,7 @@ def test_query_lease_sessions_no_longer_roundtrips_through_query_lease(monkeypat
     monkeypatch.setattr(
         repo,
         "query_lease",
-        lambda lease_id: (_ for _ in ()).throw(
-            AssertionError("query_lease_sessions should not roundtrip through query_lease")
-        ),
+        lambda lease_id: (_ for _ in ()).throw(AssertionError("query_lease_sessions should not roundtrip through query_lease")),
     )
 
     assert repo.query_lease_sessions("lease-1") == [
