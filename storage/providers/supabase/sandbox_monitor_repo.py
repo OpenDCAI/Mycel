@@ -134,7 +134,23 @@ class SupabaseSandboxMonitorRepo:
         sandbox = self.query_sandbox(sandbox_id)
         if sandbox is None:
             return []
-        return self.query_lease_sessions(str(sandbox.get("lease_id") or ""))
+        lease_id = str(sandbox.get("lease_id") or "").strip()
+        if not lease_id:
+            return []
+        sessions = q.rows(
+            q.order(
+                self._client.table("chat_sessions")
+                .select("chat_session_id,thread_id,status,started_at,ended_at,close_reason,lease_id")
+                .eq("lease_id", lease_id),
+                "started_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_sandbox_sessions",
+            ).execute(),
+            _REPO,
+            "query_sandbox_sessions",
+        )
+        return [self._session_with_lease(session, sandbox, include_thread=True) for session in sessions]
 
     def query_lease_sessions(self, lease_id: str) -> list[dict]:
         sessions = q.rows(
@@ -150,7 +166,8 @@ class SupabaseSandboxMonitorRepo:
             _REPO,
             "query_lease_sessions",
         )
-        lease = self.query_lease(lease_id)
+        sandbox_rows = self._require_sandbox_rows_by_legacy_lease_ids([lease_id], "query_lease_sessions")
+        lease = self._lease_row_from_sandbox(sandbox_rows[lease_id])
         return [self._session_with_lease(session, lease, include_thread=True) for session in sessions]
 
     def query_sandbox_threads(self, sandbox_id: str) -> list[dict]:
