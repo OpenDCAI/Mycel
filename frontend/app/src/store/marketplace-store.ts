@@ -106,6 +106,9 @@ function isActiveMarketplaceDetailRoute(itemId: string): boolean {
   return path === `/marketplace/${encodeURIComponent(itemId)}`;
 }
 
+function isMarketplaceUnavailableError(error: unknown): boolean {
+  return error instanceof Error && error.message === "Marketplace Hub unavailable";
+}
 async function backendApi<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
   const token = useAuthStore.getState().token;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -167,7 +170,9 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       // the user already left this marketplace detail page. Only log if this
       // item route is still active; otherwise this is stale UI noise.
       if (!isActiveMarketplaceDetailRoute(id)) return;
-      console.error("Failed to fetch detail:", e);
+      if (!isMarketplaceUnavailableError(e)) {
+        console.error("Failed to fetch detail:", e);
+      }
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       set({ detailLoading: false });
@@ -209,7 +214,9 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       // after the user already left this marketplace detail page. Only log if
       // this item route is still active; otherwise this is stale UI noise.
       if (!isActiveMarketplaceDetailRoute(id)) return;
-      console.error("Failed to fetch lineage:", e);
+      if (!isMarketplaceUnavailableError(e)) {
+        console.error("Failed to fetch lineage:", e);
+      }
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     }
   },
