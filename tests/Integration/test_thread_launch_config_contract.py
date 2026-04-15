@@ -910,7 +910,18 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
                 "recipe": {"id": "daytona:recipe-1"},
             },
         ),
-        patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused"),
+        patch.object(
+            threads_router,
+            "bind_thread_to_existing_sandbox",
+            return_value=(
+                "/workspace/reused",
+                {
+                    "lease_id": "lease-1",
+                    "provider_name": "daytona_selfhost",
+                    "recipe": {"id": "daytona:recipe-1"},
+                },
+            ),
+        ),
         patch.object(threads_router, "save_last_successful_config", return_value=None) as save_successful,
     ):
         _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))

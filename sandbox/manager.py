@@ -123,6 +123,47 @@ def bind_thread_to_existing_lease(
             _terminal_repo.close()
 
 
+def resolve_existing_sandbox_lease(
+    sandbox: Any,
+    *,
+    resolve_lease: Callable[[str], dict[str, Any] | None],
+) -> dict[str, Any] | None:
+    config = sandbox.get("config") if isinstance(sandbox, dict) else getattr(sandbox, "config", None)
+    if not isinstance(config, dict):
+        raise RuntimeError("sandbox.config must be an object")
+    legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
+    if not legacy_lease_id:
+        raise RuntimeError("sandbox.config.legacy_lease_id is required")
+    return resolve_lease(legacy_lease_id)
+
+
+def bind_thread_to_existing_sandbox(
+    thread_id: str,
+    sandbox: Any,
+    *,
+    resolve_lease: Callable[[str], dict[str, Any] | None],
+    cwd: str | None = None,
+    db_path: Path | None = None,
+    terminal_repo: Any | None = None,
+) -> tuple[str, dict[str, Any]]:
+    lease = resolve_existing_sandbox_lease(sandbox, resolve_lease=resolve_lease)
+    if lease is None:
+        config = sandbox.get("config") if isinstance(sandbox, dict) else getattr(sandbox, "config", None)
+        legacy_lease_id = str((config or {}).get("legacy_lease_id") or "").strip()
+        raise RuntimeError(f"lease not found: {legacy_lease_id}")
+    lease_id = str(lease.get("lease_id") or "").strip()
+    if not lease_id:
+        raise RuntimeError("lease.lease_id is required")
+    initial_cwd = bind_thread_to_existing_lease(
+        thread_id,
+        lease_id,
+        cwd=cwd,
+        db_path=db_path,
+        terminal_repo=terminal_repo,
+    )
+    return initial_cwd, lease
+
+
 def bind_thread_to_existing_thread_lease(
     thread_id: str,
     source_thread_id: str,
