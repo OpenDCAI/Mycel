@@ -266,9 +266,7 @@ def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(m
     monkeypatch.setattr(
         repo,
         "query_lease_threads",
-        lambda lease_id: (_ for _ in ()).throw(
-            AssertionError("query_sandbox_threads should not roundtrip through query_lease_threads")
-        ),
+        lambda lease_id: (_ for _ in ()).throw(AssertionError("query_sandbox_threads should not roundtrip through query_lease_threads")),
     )
 
     assert repo.query_sandbox_threads("sandbox-1") == [
