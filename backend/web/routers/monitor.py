@@ -12,6 +12,7 @@ from backend.web.services.resource_cache import (
     get_resource_overview_snapshot,
     refresh_resource_overview_sync,
 )
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 router = APIRouter(prefix="/api/monitor")
 
@@ -56,6 +57,20 @@ async def _resource_io(fn, *args):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _resolve_sandbox_id_for_lease(lease_id: str) -> str:
+    repo = make_sandbox_monitor_repo()
+    try:
+        for row in repo.query_sandboxes():
+            if str(row.get("lease_id") or "").strip() == str(lease_id or "").strip():
+                sandbox_id = str(row.get("sandbox_id") or "").strip()
+                if sandbox_id:
+                    return sandbox_id
+                break
+    finally:
+        repo.close()
+    raise KeyError(f"Lease not found: {lease_id}")
+
+
 @router.get("/leases")
 def leases_snapshot():
     return monitor_service.list_leases()
@@ -96,7 +111,7 @@ def sandbox_detail_snapshot(sandbox_id: str):
 
 @router.post("/leases/{lease_id}/cleanup")
 def lease_cleanup_action(lease_id: str):
-    return _or_404(monitor_service.request_monitor_lease_cleanup, lease_id)
+    return _or_404(monitor_service.request_monitor_sandbox_cleanup, _resolve_sandbox_id_for_lease(lease_id))
 
 
 @router.post("/sandboxes/{sandbox_id}/cleanup")
