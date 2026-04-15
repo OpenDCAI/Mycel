@@ -376,7 +376,7 @@ def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatc
     assert captured == []
 
 
-def test_sandbox_browse_uses_canonical_sandbox_bridge_source(monkeypatch) -> None:
+def test_browse_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> None:
     monkeypatch.setattr(
         resource_service,
         "make_sandbox_monitor_repo",
@@ -393,13 +393,13 @@ def test_sandbox_browse_uses_canonical_sandbox_bridge_source(monkeypatch) -> Non
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _name: _ReadableProvider())
 
-    payload = resource_service.sandbox_browse("lease-1", "/workspace")
+    payload = resource_service.browse_sandbox("sandbox-1", "/workspace")
 
     assert payload["current_path"] == "/workspace"
     assert payload["items"] == [{"name": "README.md", "path": "/workspace/README.md", "is_dir": False}]
 
 
-def test_sandbox_read_uses_canonical_sandbox_instance_lookup(monkeypatch) -> None:
+def test_read_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> None:
     monkeypatch.setattr(
         resource_service,
         "make_sandbox_monitor_repo",
@@ -416,6 +416,11 @@ def test_sandbox_read_uses_canonical_sandbox_instance_lookup(monkeypatch) -> Non
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _name: _ReadableProvider())
 
-    payload = resource_service.sandbox_read("lease-1", "/README.md")
+    payload = resource_service.read_sandbox("sandbox-1", "/README.md")
 
     assert payload == {"path": "/README.md", "content": "instance-1:/README.md", "truncated": False}
+
+
+def test_resource_service_no_longer_exposes_lease_shaped_browse_read_shell() -> None:
+    assert not hasattr(resource_service, "sandbox_browse")
+    assert not hasattr(resource_service, "sandbox_read")

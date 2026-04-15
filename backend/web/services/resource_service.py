@@ -84,35 +84,26 @@ def build_resource_session_payload(
     return payload
 
 
-def _query_sandbox_summary_for_lease(repo: Any, lease_id: str) -> dict[str, Any] | None:
-    lease_key = str(lease_id or "").strip()
-    if not lease_key:
-        return None
-    # @@@runtime-target-bridge-source - browse/read routes are still lease-shaped
-    # outward, but canonical runtime target truth now comes from sandbox summary.
-    for row in repo.query_sandboxes():
-        if str(row.get("lease_id") or "").strip() == lease_key:
-            return dict(row)
-    return None
+def _resolve_sandbox_provider(sandbox_id: str) -> tuple[Any, str]:
+    sandbox_key = str(sandbox_id or "").strip()
+    if not sandbox_key:
+        raise KeyError("Sandbox not found: ")
 
-
-def _resolve_sandbox_provider(lease_id: str) -> tuple[Any, str]:
     repo = make_sandbox_monitor_repo()
     try:
-        sandbox = _query_sandbox_summary_for_lease(repo, lease_id)
-        sandbox_id = str((sandbox or {}).get("sandbox_id") or "").strip()
-        instance_id = repo.query_sandbox_instance_id(sandbox_id) if sandbox_id else None
+        instance_id = repo.query_sandbox_instance_id(sandbox_key)
+        provider_name = ""
+        for row in repo.query_sandboxes():
+            if str(row.get("sandbox_id") or "").strip() == sandbox_key:
+                provider_name = str(row.get("provider_name") or "").strip()
+                break
     finally:
         repo.close()
 
-    if not sandbox:
-        raise KeyError(f"Lease not found: {lease_id}")
-
-    provider_name = str(sandbox.get("provider_name") or "").strip()
     if not provider_name:
-        raise RuntimeError("Lease has no provider")
+        raise KeyError(f"Sandbox not found: {sandbox_key}")
     if not instance_id:
-        raise RuntimeError("No active instance for this lease — sandbox may be destroyed or paused")
+        raise RuntimeError("No active instance for this sandbox — sandbox may be destroyed or paused")
 
     provider = build_provider_from_config_name(provider_name)
     if provider is None:
@@ -120,11 +111,11 @@ def _resolve_sandbox_provider(lease_id: str) -> tuple[Any, str]:
     return provider, instance_id
 
 
-def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
-    """Browse the filesystem of a sandbox lease via its provider."""
+def browse_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
+    """Browse the filesystem of a sandbox via its provider."""
     from pathlib import PurePosixPath
 
-    provider, instance_id = _resolve_sandbox_provider(lease_id)
+    provider, instance_id = _resolve_sandbox_provider(sandbox_id)
 
     try:
         entries = provider.list_dir(instance_id, path)
@@ -153,9 +144,9 @@ def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
 _READ_MAX_BYTES = 100 * 1024
 
 
-def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
-    """Read a file from a sandbox lease via its provider."""
-    provider, instance_id = _resolve_sandbox_provider(lease_id)
+def read_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
+    """Read a file from a sandbox via its provider."""
+    provider, instance_id = _resolve_sandbox_provider(sandbox_id)
 
     try:
         content = provider.read_file(instance_id, path)
