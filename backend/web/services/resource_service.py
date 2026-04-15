@@ -84,18 +84,31 @@ def build_resource_session_payload(
     return payload
 
 
+def _query_sandbox_summary_for_lease(repo: Any, lease_id: str) -> dict[str, Any] | None:
+    lease_key = str(lease_id or "").strip()
+    if not lease_key:
+        return None
+    # @@@runtime-target-bridge-source - browse/read routes are still lease-shaped
+    # outward, but canonical runtime target truth now comes from sandbox summary.
+    for row in repo.query_sandboxes():
+        if str(row.get("lease_id") or "").strip() == lease_key:
+            return dict(row)
+    return None
+
+
 def _resolve_sandbox_provider(lease_id: str) -> tuple[Any, str]:
     repo = make_sandbox_monitor_repo()
     try:
-        lease = repo.query_lease(lease_id)
-        instance_id = repo.query_lease_instance_id(lease_id)
+        sandbox = _query_sandbox_summary_for_lease(repo, lease_id)
+        sandbox_id = str((sandbox or {}).get("sandbox_id") or "").strip()
+        instance_id = repo.query_sandbox_instance_id(sandbox_id) if sandbox_id else None
     finally:
         repo.close()
 
-    if not lease:
+    if not sandbox:
         raise KeyError(f"Lease not found: {lease_id}")
 
-    provider_name = str(lease.get("provider_name") or "").strip()
+    provider_name = str(sandbox.get("provider_name") or "").strip()
     if not provider_name:
         raise RuntimeError("Lease has no provider")
     if not instance_id:
