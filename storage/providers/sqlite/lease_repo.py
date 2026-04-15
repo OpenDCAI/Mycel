@@ -396,11 +396,6 @@ class SQLiteLeaseRepo:
         with self._lock:
             self._conn.execute("DELETE FROM sandbox_instances WHERE lease_id = ?", (lease_id,))
             self._conn.execute("DELETE FROM lease_events WHERE lease_id = ?", (lease_id,))
-            # lease_resource_snapshots may not exist yet — guard with try
-            try:
-                self._conn.execute("DELETE FROM lease_resource_snapshots WHERE lease_id = ?", (lease_id,))
-            except sqlite3.OperationalError:
-                pass
             self._conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
             self._conn.commit()
 
