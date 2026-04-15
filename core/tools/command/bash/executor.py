@@ -23,6 +23,14 @@ class BashExecutor(BaseExecutor):
         self._session_lock = asyncio.Lock()
         self._current_cwd = default_cwd or os.getcwd()
 
+    @staticmethod
+    def _unsupported_on_windows_message() -> str:
+        return "BashExecutor is not supported on Windows. Use PowerShellExecutor instead."
+
+    def _ensure_supported(self) -> None:
+        if os.name == "nt":
+            raise RuntimeError(self._unsupported_on_windows_message())
+
     async def _ensure_session(self, env: dict[str, str]) -> asyncio.subprocess.Process:
         """Ensure persistent shell session exists."""
         if self._session is None or self._session.returncode is not None:
@@ -74,6 +82,12 @@ class BashExecutor(BaseExecutor):
         timeout: float | None = None,
         env: dict[str, str] | None = None,
     ) -> ExecuteResult:
+        if os.name == "nt":
+            return ExecuteResult(
+                exit_code=127,
+                stdout="",
+                stderr=self._unsupported_on_windows_message(),
+            )
         work_dir = cwd or self.default_cwd or os.getcwd()
 
         merged_env = os.environ.copy()
@@ -119,6 +133,7 @@ class BashExecutor(BaseExecutor):
         cwd: str | None = None,
         env: dict[str, str] | None = None,
     ) -> AsyncCommand:
+        self._ensure_supported()
         work_dir = cwd or self.default_cwd or os.getcwd()
         command_id = f"cmd_{uuid.uuid4().hex[:12]}"
 

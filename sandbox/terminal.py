@@ -42,6 +42,45 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return connect_sqlite(db_path)
 
 
+_REMOTE_PROVIDER_DEFAULT_CWDS = {
+    "agentbay": "/home/wuying",
+    "daytona": "/home/daytona",
+    "docker": "/workspace",
+    "e2b": "/home/user",
+}
+
+
+def _host_terminal_cwd() -> str:
+    try:
+        return str(Path.cwd())
+    except OSError:
+        return str(Path.home())
+
+
+def lease_provider_name(lease_id: str | None, db_path: Path) -> str | None:
+    if not lease_id:
+        return None
+    try:
+        with _connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT provider_name FROM sandbox_leases WHERE lease_id = ?",
+                (lease_id,),
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    if not row or not row[0]:
+        return None
+    return str(row[0])
+
+
+def default_terminal_cwd(provider_name: str | None = None) -> str:
+    if provider_name == "local":
+        return _host_terminal_cwd()
+    if provider_name:
+        return _REMOTE_PROVIDER_DEFAULT_CWDS.get(provider_name, "/home/user")
+    return _host_terminal_cwd()
+
+
 @dataclass
 class TerminalState:
     """Terminal state snapshot.
@@ -162,8 +201,9 @@ class SQLiteTerminal(AbstractTerminal):
 
 def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
     """Construct SQLiteTerminal from a repo dict."""
+    provider_name = lease_provider_name(row.get("lease_id"), db_path)
     state = TerminalState(
-        cwd=row.get("cwd", "/root"),
+        cwd=row.get("cwd") or default_terminal_cwd(provider_name=provider_name),
         env_delta=json.loads(row.get("env_delta_json", "{}")),
         state_version=int(row.get("state_version", 0)),
     )

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from sandbox.terminal import default_terminal_cwd
 from storage.providers.supabase import _query as q
 
 _REPO = "terminal repo"
@@ -29,6 +30,16 @@ class SupabaseTerminalRepo:
 
     def _pointers(self) -> Any:
         return self._client.table(_POINTERS_TABLE)
+
+    def _provider_name_for_lease(self, lease_id: str) -> str | None:
+        rows = q.rows(
+            self._client.table("sandbox_leases").select("provider_name").eq("lease_id", lease_id).limit(1).execute(),
+            _REPO,
+            "lookup lease provider",
+        )
+        if not rows or not rows[0].get("provider_name"):
+            return None
+        return str(rows[0]["provider_name"])
 
     # ------------------------------------------------------------------
     # Reads
@@ -145,17 +156,19 @@ class SupabaseTerminalRepo:
         terminal_id: str,
         thread_id: str,
         lease_id: str,
-        initial_cwd: str = "/root",
+        initial_cwd: str | None = None,
     ) -> dict[str, Any]:
         now = datetime.now().isoformat()
         env_delta_json = "{}"
         state_version = 0
+        provider_name = self._provider_name_for_lease(lease_id)
+        effective_cwd = initial_cwd or default_terminal_cwd(provider_name=provider_name)
         self._terminals().insert(
             {
                 "terminal_id": terminal_id,
                 "thread_id": thread_id,
                 "lease_id": lease_id,
-                "cwd": initial_cwd,
+                "cwd": effective_cwd,
                 "env_delta_json": env_delta_json,
                 "state_version": state_version,
                 "created_at": now,
@@ -167,7 +180,7 @@ class SupabaseTerminalRepo:
             "terminal_id": terminal_id,
             "thread_id": thread_id,
             "lease_id": lease_id,
-            "cwd": initial_cwd,
+            "cwd": effective_cwd,
             "env_delta_json": env_delta_json,
             "state_version": state_version,
             "created_at": now,

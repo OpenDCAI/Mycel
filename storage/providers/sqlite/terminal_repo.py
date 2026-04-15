@@ -11,6 +11,8 @@ from typing import Any
 from sandbox.terminal import (
     REQUIRED_ABSTRACT_TERMINAL_COLUMNS,
     REQUIRED_TERMINAL_POINTER_COLUMNS,
+    default_terminal_cwd,
+    lease_provider_name,
 )
 from storage.providers.sqlite.connection import create_connection
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
@@ -235,11 +237,13 @@ class SQLiteTerminalRepo:
         terminal_id: str,
         thread_id: str,
         lease_id: str,
-        initial_cwd: str = "/root",
+        initial_cwd: str | None = None,
     ) -> dict[str, Any]:
         now = datetime.now().isoformat()
         env_delta_json = "{}"
         state_version = 0
+        provider_name = lease_provider_name(lease_id, self._db_path)
+        effective_cwd = initial_cwd or default_terminal_cwd(provider_name=provider_name)
 
         with self._lock:
             self._conn.execute(
@@ -247,7 +251,7 @@ class SQLiteTerminalRepo:
                 INSERT INTO abstract_terminals (terminal_id, thread_id, lease_id, cwd, env_delta_json, state_version, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (terminal_id, thread_id, lease_id, initial_cwd, env_delta_json, state_version, now, now),
+                (terminal_id, thread_id, lease_id, effective_cwd, env_delta_json, state_version, now, now),
             )
             self._conn.commit()
 
@@ -257,7 +261,7 @@ class SQLiteTerminalRepo:
             "terminal_id": terminal_id,
             "thread_id": thread_id,
             "lease_id": lease_id,
-            "cwd": initial_cwd,
+            "cwd": effective_cwd,
             "env_delta_json": env_delta_json,
             "state_version": state_version,
             "created_at": now,

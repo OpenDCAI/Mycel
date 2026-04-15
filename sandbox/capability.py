@@ -21,6 +21,10 @@ if TYPE_CHECKING:
     from sandbox.manager import SandboxManager
 
 
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 class SandboxCapability:
     """Agent-facing capability object.
 
@@ -79,15 +83,25 @@ class _CommandWrapper(BaseExecutor):
         db_path = getattr(session.terminal, "db_path", None)
         self._db_path: Path | None = Path(db_path) if db_path else None
 
+    def _uses_windows_shell(self) -> bool:
+        return bool(getattr(self._session.runtime, "_use_windows_shell", False))
+
     def _wrap_command(self, command: str, cwd: str | None, env: dict[str, str] | None) -> tuple[str, str]:
         wrapped = command
+        windows_shell = self._uses_windows_shell()
         if env:
-            exports = "\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items())
+            if windows_shell:
+                exports = "\n".join(f"$env:{k} = {_ps_quote(str(v))}" for k, v in env.items())
+            else:
+                exports = "\n".join(f"export {k}={shlex.quote(str(v))}" for k, v in env.items())
             wrapped = f"{exports}\n{wrapped}"
         # @@@runtime-owned-cwd - Preserve runtime session cwd unless caller explicitly requests cwd override.
         work_dir = cwd or self._session.terminal.get_state().cwd
         if cwd:
-            wrapped = f"cd {shlex.quote(cwd)}\n{wrapped}"
+            if windows_shell:
+                wrapped = f"Set-Location -LiteralPath {_ps_quote(cwd)}\n{wrapped}"
+            else:
+                wrapped = f"cd {shlex.quote(cwd)}\n{wrapped}"
         return wrapped, work_dir
 
     async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env: dict[str, str] | None = None):

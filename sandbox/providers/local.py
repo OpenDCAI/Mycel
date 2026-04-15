@@ -259,6 +259,7 @@ def _build_windows_shell_script(
     lines = [
         "$ErrorActionPreference = 'Continue'",
         f"Set-Location -LiteralPath {_ps_quote(cwd)}",
+        "$leonErrorCount = $Error.Count",
     ]
     for key, value in env_delta.items():
         lines.append(f"$env:{key} = {_ps_quote(str(value))}")
@@ -268,7 +269,9 @@ def _build_windows_shell_script(
             command,
             "}",
             "$leonExit = $LASTEXITCODE",
-            "if ($null -eq $leonExit) { $leonExit = 0 }",
+            "if ($null -eq $leonExit -or $leonExit -eq 0) {",
+            "    if ($Error.Count -gt $leonErrorCount) { $leonExit = 1 } else { $leonExit = 0 }",
+            "}",
             f"Write-Output {_ps_quote(start)}",
             "(Get-Location).Path",
             'Get-ChildItem Env: | ForEach-Object { "{0}={1}" -f $_.Name, $_.Value }',
