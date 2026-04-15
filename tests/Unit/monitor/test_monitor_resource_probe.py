@@ -60,6 +60,7 @@ def test_resource_snapshot_adapter_no_longer_exposes_lease_shaped_write_shell() 
 
 def test_resource_snapshot_module_no_longer_exposes_lease_shaped_write_helper() -> None:
     assert not hasattr(resource_snapshot, "upsert_lease_resource_snapshot")
+    assert not hasattr(resource_snapshot, "_upsert_lease_resource_snapshot")
 
 
 def test_probe_and_upsert_for_instance_accepts_sandbox_shaped_repo() -> None:
@@ -104,11 +105,6 @@ def test_probe_and_upsert_for_instance_without_repo_prefers_sandbox_shaped_helpe
         captured.append(kwargs)
 
     monkeypatch.setattr(resource_snapshot, "upsert_resource_snapshot_for_sandbox", _fake_upsert_resource_snapshot_for_sandbox)
-    monkeypatch.setattr(
-        resource_snapshot,
-        "_upsert_lease_resource_snapshot",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("lease-shaped helper should not be the active path")),
-    )
 
     result = resource_snapshot.probe_and_upsert_for_instance(
         sandbox_id="sandbox-1",
@@ -140,6 +136,20 @@ def test_probe_and_upsert_for_instance_without_repo_prefers_sandbox_shaped_helpe
             "probe_error": "metrics unavailable",
         }
     ]
+
+
+def test_probe_and_upsert_for_instance_requires_sandbox_id() -> None:
+    result = resource_snapshot.probe_and_upsert_for_instance(
+        lease_id="lease-1",
+        provider_name="p1",
+        observed_state="detached",
+        probe_mode="running_runtime",
+        provider=_FakeProvider(),
+        instance_id="instance-1",
+        repo=None,
+    )
+
+    assert result == {"ok": False, "error": "sandbox-shaped snapshot helper requires sandbox_id"}
 
 
 def test_refresh_resource_snapshots_routes_successful_probe_through_sandbox_wrapper(monkeypatch):

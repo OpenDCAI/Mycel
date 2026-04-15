@@ -47,43 +47,6 @@ def upsert_resource_snapshot_for_sandbox(
         repo.close()
 
 
-def _upsert_lease_resource_snapshot(
-    *,
-    lease_id: str,
-    provider_name: str,
-    observed_state: str,
-    probe_mode: str,
-    cpu_used: float | None = None,
-    cpu_limit: float | None = None,
-    memory_used_mb: float | None = None,
-    memory_total_mb: float | None = None,
-    disk_used_gb: float | None = None,
-    disk_total_gb: float | None = None,
-    network_rx_kbps: float | None = None,
-    network_tx_kbps: float | None = None,
-    probe_error: str | None = None,
-) -> None:
-    repo = build_resource_snapshot_repo()
-    try:
-        repo.upsert_lease_resource_snapshot(
-            lease_id=lease_id,
-            provider_name=provider_name,
-            observed_state=observed_state,
-            probe_mode=probe_mode,
-            cpu_used=cpu_used,
-            cpu_limit=cpu_limit,
-            memory_used_mb=memory_used_mb,
-            memory_total_mb=memory_total_mb,
-            disk_used_gb=disk_used_gb,
-            disk_total_gb=disk_total_gb,
-            network_rx_kbps=network_rx_kbps,
-            network_tx_kbps=network_tx_kbps,
-            probe_error=probe_error,
-        )
-    finally:
-        repo.close()
-
-
 __all__ = [
     "upsert_resource_snapshot_for_sandbox",
     "probe_and_upsert_for_instance",
@@ -117,6 +80,9 @@ def probe_and_upsert_for_instance(
     repo: Any | None = None,
 ) -> dict[str, Any]:
     """Probe provider metrics and persist to storage."""
+    if not sandbox_id:
+        return {"ok": False, "error": "sandbox-shaped snapshot helper requires sandbox_id"}
+
     metrics = None
     cpu_used = None
     cpu_limit = None
@@ -178,43 +144,22 @@ def probe_and_upsert_for_instance(
                 probe_error=probe_error,
             )
         else:
-            # @@@snapshot-runtime-active-path - mainline runtime/helper flow should prefer
-            # sandbox-shaped write entry when sandbox_id is already present; the lease-shaped
-            # helper remains only as compatibility residue for callers that still lack sandbox truth.
-            if sandbox_id:
-                upsert_resource_snapshot_for_sandbox(
-                    sandbox_id=sandbox_id,
-                    legacy_lease_id=lease_id,
-                    provider_name=provider_name,
-                    observed_state=observed_state,
-                    probe_mode=probe_mode,
-                    cpu_used=cpu_used,
-                    cpu_limit=cpu_limit,
-                    memory_used_mb=memory_used_mb,
-                    memory_total_mb=memory_total_mb,
-                    disk_used_gb=disk_used_gb,
-                    disk_total_gb=disk_total_gb,
-                    network_rx_kbps=network_rx_kbps,
-                    network_tx_kbps=network_tx_kbps,
-                    probe_error=probe_error,
-                )
-            else:
-                upsert = repo.upsert_lease_resource_snapshot if repo is not None else _upsert_lease_resource_snapshot
-                upsert(
-                    lease_id=lease_id,
-                    provider_name=provider_name,
-                    observed_state=observed_state,
-                    probe_mode=probe_mode,
-                    cpu_used=cpu_used,
-                    cpu_limit=cpu_limit,
-                    memory_used_mb=memory_used_mb,
-                    memory_total_mb=memory_total_mb,
-                    disk_used_gb=disk_used_gb,
-                    disk_total_gb=disk_total_gb,
-                    network_rx_kbps=network_rx_kbps,
-                    network_tx_kbps=network_tx_kbps,
-                    probe_error=probe_error,
-                )
+            upsert_resource_snapshot_for_sandbox(
+                sandbox_id=sandbox_id,
+                legacy_lease_id=lease_id,
+                provider_name=provider_name,
+                observed_state=observed_state,
+                probe_mode=probe_mode,
+                cpu_used=cpu_used,
+                cpu_limit=cpu_limit,
+                memory_used_mb=memory_used_mb,
+                memory_total_mb=memory_total_mb,
+                disk_used_gb=disk_used_gb,
+                disk_total_gb=disk_total_gb,
+                network_rx_kbps=network_rx_kbps,
+                network_tx_kbps=network_tx_kbps,
+                probe_error=probe_error,
+            )
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
     return {"ok": probe_error is None, "error": probe_error}
