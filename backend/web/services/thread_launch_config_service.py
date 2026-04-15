@@ -193,14 +193,19 @@ def _derive_default_config(
 ) -> dict[str, Any]:
     leases_by_id = {str(lease.get("lease_id") or "").strip(): lease for lease in leases if str(lease.get("lease_id") or "").strip()}
     for thread in _iter_default_bridge_threads(agent_threads):
-        # @@@workspace-bridge-read-precedence - Phase 3 reads workspace-backed ids first,
-        # then falls through to legacy lease-backed bridge ids for old rows.
-        lease = _resolve_bridge_lease(
+        # @@@workspace-bridge-read-precedence - launch-config now resolves workspace-backed existing-mode
+        # defaults first, but only narrows field sources. `existing_sandbox_id` and `sandbox_template`
+        # still stay lease-shaped until their own cutover slice lands.
+        config = _resolve_workspace_backed_existing_config(
             app=app,
             current_workspace_id=thread["current_workspace_id"],
             owner_user_id=owner_user_id,
             leases_by_id=leases_by_id,
         )
+        if config is not None:
+            return config
+
+        lease = leases_by_id.get(thread["current_workspace_id"])
         if lease is not None:
             return _existing_config_from_lease(lease, model=None, workspace=lease.get("cwd"))
 
@@ -245,7 +250,7 @@ def _iter_default_bridge_threads(agent_threads: list[dict[str, Any]]) -> list[di
     return threads_with_bridge
 
 
-def _resolve_bridge_lease(
+def _resolve_workspace_backed_existing_config(
     *,
     app: Any,
     current_workspace_id: str,
@@ -272,8 +277,18 @@ def _resolve_bridge_lease(
             if sandbox_owner_user_id != owner_user_id:
                 raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
             legacy_lease_id = _required_bridge_config_text(sandbox, "legacy_lease_id", "sandbox")
-            return leases_by_id.get(legacy_lease_id)
-    return leases_by_id.get(current_workspace_id)
+            lease = leases_by_id.get(legacy_lease_id)
+            if lease is None:
+                return None
+            return {
+                "create_mode": "existing",
+                "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
+                "sandbox_template": lease.get("recipe"),
+                "existing_sandbox_id": lease.get("lease_id"),
+                "model": None,
+                "workspace": _required_bridge_text(workspace, "workspace_path", "workspace"),
+            }
+    return None
 
 
 def _required_bridge_text(row: Any, key: str, label: str) -> str:
