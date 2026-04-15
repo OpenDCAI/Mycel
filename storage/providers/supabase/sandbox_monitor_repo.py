@@ -35,7 +35,8 @@ class SupabaseSandboxMonitorRepo:
         if not sessions:
             return []
 
-        lease_map = self._sandboxes_by_legacy_lease_id("query_threads")
+        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_threads")
+        lease_map = {lease_id: self._lease_row_from_sandbox(sandbox) for lease_id, sandbox in sandbox_rows.items()}
 
         # Aggregate per thread_id
         by_thread: dict[str, dict] = {}
@@ -82,7 +83,8 @@ class SupabaseSandboxMonitorRepo:
         if not sessions:
             return []
 
-        lease_map = self._sandboxes_by_legacy_lease_id("query_thread_sessions")
+        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_thread_sessions")
+        lease_map = {lease_id: self._lease_row_from_sandbox(sandbox) for lease_id, sandbox in sandbox_rows.items()}
         return [self._session_with_lease(s, lease_map.get(s.get("lease_id") or "")) for s in sessions]
 
     def query_sandboxes(self) -> list[dict]:

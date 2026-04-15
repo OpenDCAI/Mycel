@@ -155,6 +155,45 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
     ]
 
 
+def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_env_id="instance-1",
+                    legacy_lease_id="lease-1",
+                )
+            ],
+            "chat_sessions": [
+                _session("sess-1", "thread-1", "lease-1", last_active_at="2026-04-05T10:01:00"),
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "_sandboxes_by_legacy_lease_id",
+        lambda operation: (_ for _ in ()).throw(
+            AssertionError("query_threads should not roundtrip through _sandboxes_by_legacy_lease_id")
+        ),
+    )
+
+    assert repo.query_threads() == [
+        {
+            "thread_id": "thread-1",
+            "session_count": 1,
+            "sandbox_id": "sandbox-1",
+            "last_active": "2026-04-05T10:01:00",
+            "lease_id": "lease-1",
+            "provider_name": "local",
+            "desired_state": "running",
+            "observed_state": "running",
+            "current_instance_id": "instance-1",
+        }
+    ]
+
+
 def test_query_threads_chunks_lease_lookup() -> None:
     sessions = [
         _session(f"sess-{index}", f"thread-{index}", f"lease-{index}", last_active_at=f"2026-04-05T10:{index % 60:02d}:00")
@@ -264,6 +303,56 @@ def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
                 }
             ],
         }
+    )
+
+    assert repo.query_thread_sessions("thread-1") == [
+        {
+            "chat_session_id": "sess-1",
+            "status": "active",
+            "started_at": "2026-04-05T10:01:00",
+            "ended_at": None,
+            "close_reason": None,
+            "sandbox_id": "sandbox-1",
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "desired_state": "paused",
+            "observed_state": "paused",
+            "current_instance_id": "instance-1",
+            "last_error": "last boom",
+        }
+    ]
+
+
+def test_query_thread_sessions_no_longer_roundtrips_through_lease_summary_shell(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="instance-1",
+                    desired_state="paused",
+                    observed_state="paused",
+                    legacy_lease_id="lease-1",
+                    last_error="last boom",
+                )
+            ],
+            "chat_sessions": [
+                {
+                    **_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
+                    "ended_at": None,
+                    "close_reason": None,
+                }
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "_sandboxes_by_legacy_lease_id",
+        lambda operation: (_ for _ in ()).throw(
+            AssertionError("query_thread_sessions should not roundtrip through _sandboxes_by_legacy_lease_id")
+        ),
     )
 
     assert repo.query_thread_sessions("thread-1") == [
