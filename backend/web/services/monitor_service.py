@@ -486,7 +486,7 @@ def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
     return make_eval_batch_service().get_batch_detail(batch_id)
 
 
-def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[str, Any]:
+def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str, include_lease_id: bool) -> dict[str, Any]:
     live_threads = _live_thread_ids([str(row.get("thread_id") or "").strip() for row in rows])
     items = []
     for row in rows:
@@ -501,21 +501,21 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[st
             desired_state=row["desired_state"],
             updated_at=row["updated_at"],
         )
-        items.append(
-            {
-                "sandbox_id": row.get("sandbox_id"),
-                "lease_id": row["lease_id"],
-                "provider": row["provider_name"],
-                "instance_id": row["current_instance_id"],
-                "thread": _thread_ref(thread_id),
-                "state_badge": badge,
-                "semantics": _classify_lease_semantics(thread_id=thread_id, badge=badge),
-                "triage": triage,
-                "error": row["last_error"],
-                "updated_at": row["updated_at"],
-                "updated_ago": _format_time_ago(row["updated_at"]),
-            }
-        )
+        item = {
+            "sandbox_id": row.get("sandbox_id"),
+            "provider": row["provider_name"],
+            "instance_id": row["current_instance_id"],
+            "thread": _thread_ref(thread_id),
+            "state_badge": badge,
+            "semantics": _classify_lease_semantics(thread_id=thread_id, badge=badge),
+            "triage": triage,
+            "error": row["last_error"],
+            "updated_at": row["updated_at"],
+            "updated_ago": _format_time_ago(row["updated_at"]),
+        }
+        if include_lease_id:
+            item["lease_id"] = row["lease_id"]
+        items.append(item)
 
     summary, groups = _lease_groups(
         items=items,
@@ -546,14 +546,17 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[st
 def list_monitor_sandboxes() -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
-        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Sandboxes")
+        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Sandboxes", include_lease_id=False)
     finally:
         repo.close()
 
 
 def list_leases() -> dict[str, Any]:
-    payload = list_monitor_sandboxes()
-    return {**payload, "title": "All Leases"}
+    repo = make_sandbox_monitor_repo()
+    try:
+        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Leases", include_lease_id=True)
+    finally:
+        repo.close()
 
 
 def list_monitor_provider_sessions() -> dict[str, Any]:
@@ -592,12 +595,9 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
         updated_at=sandbox.get("updated_at"),
     )
     provider_name = str(sandbox.get("provider_name") or "").strip()
-    lease_id = str(sandbox.get("lease_id") or "").strip()
-
     return {
         "sandbox": {
             "sandbox_id": sandbox.get("sandbox_id"),
-            "lease_id": lease_id,
             "provider_name": provider_name,
             "desired_state": sandbox.get("desired_state"),
             "observed_state": sandbox.get("observed_state"),
@@ -626,14 +626,6 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
             }
             for item in sessions
         ],
-        "cleanup": monitor_operation_service.build_lease_cleanup_truth(
-            lease_id=lease_id,
-            triage=triage,
-            provider_name=provider_name,
-            runtime_session_id=runtime_session_id,
-            sessions=sessions,
-            threads=live_thread_refs,
-        ),
     }
 
 
@@ -655,14 +647,24 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
     finally:
         repo.close()
 
+    sandbox_payload = payload["sandbox"]
+    lease_payload = {**sandbox_payload, "lease_id": lease_id}
+
     return {
-        "lease": payload["sandbox"],
+        "lease": lease_payload,
         "triage": payload["triage"],
         "provider": payload["provider"],
         "runtime": payload["runtime"],
         "threads": payload["threads"],
         "sessions": payload["sessions"],
-        "cleanup": payload["cleanup"],
+        "cleanup": monitor_operation_service.build_lease_cleanup_truth(
+            lease_id=lease_id,
+            triage=payload["triage"],
+            provider_name=str(sandbox_payload.get("provider_name") or ""),
+            runtime_session_id=payload["runtime"].get("runtime_session_id"),
+            sessions=payload["sessions"],
+            threads=payload["threads"],
+        ),
     }
 
 
