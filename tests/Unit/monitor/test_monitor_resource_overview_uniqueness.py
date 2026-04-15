@@ -491,6 +491,7 @@ def test_list_resource_snapshots_by_sandbox_requires_repo_sandbox_wrapper(monkey
             "lease_id": "lease-b",
         },
     ]
+
     class _LeaseOnlyRepo:
         def close(self):
             return None
