@@ -13,7 +13,7 @@ from .lease_repo import SupabaseLeaseRepo
 from .provider_event_repo import SupabaseProviderEventRepo
 from .queue_repo import SupabaseQueueRepo
 from .recipe_repo import SupabaseRecipeRepo
-from .resource_snapshot_repo import SupabaseResourceSnapshotRepo, list_snapshots_by_lease_ids, upsert_lease_resource_snapshot
+from .resource_snapshot_repo import SupabaseResourceSnapshotRepo
 from .run_event_repo import SupabaseRunEventRepo
 from .sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from .sandbox_volume_repo import SupabaseSandboxVolumeRepo
@@ -54,6 +54,4 @@ __all__ = [
     "SupabaseToolTaskRepo",
     "SupabaseUserSettingsRepo",
     "SupabaseUserRepo",
-    "list_snapshots_by_lease_ids",
-    "upsert_lease_resource_snapshot",
 ]
