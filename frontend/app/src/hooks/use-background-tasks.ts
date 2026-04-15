@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { UseThreadStreamResult } from './use-thread-stream';
 import type { StreamEvent } from '../api/types';
 import { asRecord, recordNumber, recordString } from '../lib/records';
+import { authFetch } from '../store/auth-store';
 
 export interface BackgroundTask {
   task_id: string;
@@ -76,7 +77,7 @@ function loadThreadTasks(threadId: string): Promise<BackgroundTask[]> {
   // @@@tasks-inflight-dedup - React StrictMode remounts the page in dev.
   // Reuse the first thread task fetch so the dev switch hot path does not
   // double-hit /tasks before the first response lands.
-  const pending = fetch(`/api/threads/${threadId}/tasks`)
+  const pending = authFetch(`/api/threads/${threadId}/tasks`)
     .then(async (response) => {
       if (!response.ok) {
         throw new Error(response.statusText || `HTTP ${response.status}`);

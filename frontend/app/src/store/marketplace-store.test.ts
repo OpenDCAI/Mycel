@@ -24,6 +24,17 @@ afterEach(async () => {
 });
 
 describe("useMarketplaceStore", () => {
+  it("does not emit a state update for a no-op filter change", async () => {
+    const { useMarketplaceStore } = await import("./marketplace-store");
+    const listener = vi.fn();
+    const unsubscribe = useMarketplaceStore.subscribe(listener);
+
+    useMarketplaceStore.getState().setFilter("q", "");
+
+    unsubscribe();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it("does not log a failed items fetch once navigation already left the marketplace route", async () => {
     window.history.replaceState({}, "", "/marketplace");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -60,6 +71,24 @@ describe("useMarketplaceStore", () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
+  it("keeps marketplace detail outage user-facing without logging expected hub 503 noise", async () => {
+    window.history.replaceState({}, "", "/marketplace/item-1");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "hub down",
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await useMarketplaceStore.getState().fetchDetail("item-1");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(useMarketplaceStore.getState().error).toBe("Marketplace Hub unavailable");
+  });
+
   it("does not log a failed lineage fetch once navigation already left the marketplace detail route", async () => {
     window.history.replaceState({}, "", "/marketplace/item-1");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -76,6 +105,24 @@ describe("useMarketplaceStore", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("/api/marketplace/items/item-1/lineage");
     expect(String(fetchMock.mock.calls[0][0])).not.toContain("localhost:8090");
     expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("keeps marketplace lineage outage user-facing without logging expected hub 503 noise", async () => {
+    window.history.replaceState({}, "", "/marketplace/item-1");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "hub down",
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await useMarketplaceStore.getState().fetchLineage("item-1");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(useMarketplaceStore.getState().error).toBe("Marketplace Hub unavailable");
   });
 
   it("does not log a failed snapshot fetch once navigation already left the marketplace detail route", async () => {
@@ -134,5 +181,19 @@ describe("useMarketplaceStore", () => {
       tags: ["coding"],
       visibility: "public",
     });
+  });
+
+  it("preserves backend detail when marketplace publish returns an honest 503", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: "Marketplace Hub unavailable" }),
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await expect(
+      useMarketplaceStore.getState().publishAgentUserToMarketplace("agent-1", "patch", "notes", ["coding"], "public"),
+    ).rejects.toThrow("Marketplace Hub unavailable");
   });
 });

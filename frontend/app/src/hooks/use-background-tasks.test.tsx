@@ -4,6 +4,11 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useBackgroundTasks } from "./use-background-tasks";
 import type { UseThreadStreamResult } from "./use-thread-stream";
+import { authFetch } from "../store/auth-store";
+
+vi.mock("../store/auth-store", () => ({
+  authFetch: vi.fn(),
+}));
 
 afterEach(() => {
   cleanup();
@@ -21,7 +26,7 @@ describe("useBackgroundTasks", () => {
   it("does not log a failed task fetch once navigation already left the thread route", async () => {
     window.history.replaceState({}, "", "/chat/hire/thread/thread-1");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    const authFetchMock = vi.mocked(authFetch).mockImplementation(async () => {
       window.history.replaceState({}, "", "/resources");
       throw new TypeError("Failed to fetch");
     });
@@ -29,7 +34,7 @@ describe("useBackgroundTasks", () => {
     render(<Harness />);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/threads/thread-1/tasks");
+      expect(authFetchMock).toHaveBeenCalledWith("/api/threads/thread-1/tasks");
     });
     await Promise.resolve();
 
@@ -39,7 +44,7 @@ describe("useBackgroundTasks", () => {
   it("reports malformed task list payloads instead of storing invalid task state", async () => {
     window.history.replaceState({}, "", "/chat/hire/thread/thread-1");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+    vi.mocked(authFetch).mockResolvedValue({
       ok: true,
       json: async () => ({ items: "not-a-task-list" }),
     } as Response);
@@ -58,7 +63,7 @@ describe("useBackgroundTasks", () => {
   });
 
   it("accepts the backend cancelled task status", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+    vi.mocked(authFetch).mockResolvedValue({
       ok: true,
       json: async () => [
         {
