@@ -35,6 +35,12 @@ class _FakeSandboxSnapshotRepo:
         self.upserts.append(kwargs)
 
 
+def test_resource_snapshot_adapter_no_longer_exposes_lease_shaped_write_shell() -> None:
+    adapter = resource_service._SandboxSnapshotRepoAdapter(sandbox_id="sandbox-1")
+
+    assert not hasattr(adapter, "upsert_lease_resource_snapshot")
+
+
 def test_probe_and_upsert_for_instance_accepts_sandbox_shaped_repo() -> None:
     repo = _FakeSandboxSnapshotRepo()
 

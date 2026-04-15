@@ -77,6 +77,10 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
 
+def test_storage_runtime_no_longer_exposes_lease_shaped_snapshot_read_shell() -> None:
+    assert not hasattr(storage_runtime, "list_resource_snapshots")
+
+
 def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch):
     rows = [
         {

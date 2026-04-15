@@ -29,14 +29,6 @@ class _SandboxSnapshotRepoAdapter:
         kwargs.pop("sandbox_id", None)
         upsert_resource_snapshot_for_sandbox(sandbox_id=self._sandbox_id, **kwargs)
 
-    def upsert_lease_resource_snapshot(self, **kwargs) -> None:
-        lease_id = kwargs.pop("lease_id", None)
-        upsert_resource_snapshot_for_sandbox(
-            sandbox_id=self._sandbox_id,
-            legacy_lease_id=lease_id,
-            **kwargs,
-        )
-
 
 def get_provider_display_contract(config_name: str) -> dict[str, Any]:
     provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)

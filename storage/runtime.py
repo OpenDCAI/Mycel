@@ -154,22 +154,6 @@ def build_summary_repo(*, supabase_client: Any | None = None, supabase_client_fa
     return _build_storage_repo("summary_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
-def list_resource_snapshots(
-    lease_ids: list[str],
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-) -> dict[str, Any]:
-    repo = build_resource_snapshot_repo(
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-    )
-    try:
-        return repo.list_snapshots_by_lease_ids(lease_ids)
-    finally:
-        repo.close()
-
-
 def list_resource_snapshots_by_sandbox(
     sessions: list[dict[str, Any]],
     *,
