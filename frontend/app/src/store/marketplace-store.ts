@@ -121,7 +121,13 @@ async function backendApi<T = unknown>(path: string, opts?: RequestInit): Promis
     } catch {
       payload = null;
     }
-    throw new Error(payload?.detail || payload?.message || `API error: ${res.status}`);
+    if (payload?.detail || payload?.message) {
+      throw new Error(payload.detail || payload.message);
+    }
+    if (res.status >= 502) {
+      throw new Error("Marketplace Hub unavailable");
+    }
+    throw new Error(`API error: ${res.status}`);
   }
   return res.json();
 }
