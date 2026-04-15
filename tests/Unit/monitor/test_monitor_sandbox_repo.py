@@ -1049,3 +1049,58 @@ def test_list_sessions_with_leases_keeps_active_terminal_and_latest_closed_sessi
             "created_at": "2026-04-05T10:00:00",
         },
     ]
+
+
+def test_list_sessions_with_leases_no_longer_materializes_lease_map(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox("sandbox-active", created_at="2026-04-05T10:00:00", legacy_lease_id="lease-active"),
+                _sandbox(
+                    "sandbox-terminal",
+                    provider_name="daytona_selfhost",
+                    desired_state="paused",
+                    observed_state="paused",
+                    created_at="2026-04-05T11:00:00",
+                    legacy_lease_id="lease-terminal",
+                ),
+            ],
+            "abstract_terminals": [
+                _terminal("term-parent", "lease-terminal", "thread-parent", "2026-04-05T11:05:00"),
+            ],
+            "chat_sessions": [
+                _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "_lease_row_from_sandbox",
+        lambda sandbox: (_ for _ in ()).throw(
+            AssertionError("list_sessions_with_leases should not materialize a lease_map through _lease_row_from_sandbox")
+        ),
+    )
+
+    assert repo.list_sessions_with_leases() == [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-terminal",
+            "lease_id": "lease-terminal",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-05T11:00:00",
+        },
+        {
+            "provider": "local",
+            "session_id": "sess-active",
+            "thread_id": "thread-active",
+            "sandbox_id": "sandbox-active",
+            "lease_id": "lease-active",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-05T10:00:00",
+        },
+    ]

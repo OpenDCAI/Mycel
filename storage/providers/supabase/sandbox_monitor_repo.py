@@ -304,12 +304,7 @@ class SupabaseSandboxMonitorRepo:
         # @@@sandbox-monitor-session-base - session aggregation surfaces now use
         # container.sandboxes as the object base and only keep lease ids as the
         # residue join key for chat_sessions / terminals / instances.
-        leases = []
-        for sandbox in self._ordered_sandboxes("list_sessions_with_leases"):
-            lease = self._lease_row_from_sandbox(sandbox)
-            lease["created_at"] = sandbox.get("created_at")
-            leases.append(lease)
-        lease_map = {le["lease_id"]: le for le in leases}
+        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("list_sessions_with_leases")
 
         all_terminals = q.rows(
             self._client.table("abstract_terminals").select("lease_id,thread_id,created_at").execute(),
@@ -336,23 +331,35 @@ class SupabaseSandboxMonitorRepo:
         seen_leases: set[str] = set()
 
         for s in active_sessions:
-            lease = lease_map.get(s.get("lease_id") or "")
-            if not lease:
+            lease_id = str(s.get("lease_id") or "")
+            sandbox = sandbox_rows.get(lease_id)
+            if not sandbox:
                 continue
-            seen_leases.add(lease["lease_id"])
-            result.append(self._resource_session_row(lease, session_id=s["chat_session_id"], thread_id=s["thread_id"]))
+            seen_leases.add(lease_id)
+            result.append(self._resource_session_row_from_sandbox(sandbox, session_id=s["chat_session_id"], thread_id=s["thread_id"]))
 
-        for lease in leases:
-            lid = lease["lease_id"]
+        for lid, sandbox in sandbox_rows.items():
             if lid in seen_leases:
                 continue
             terminal_rows = terminal_rows_by_lease.get(lid, [])
             if terminal_rows:
                 for terminal_row in terminal_rows:
-                    result.append(self._resource_session_row(lease, session_id=None, thread_id=terminal_row.get("thread_id")))
+                    result.append(
+                        self._resource_session_row_from_sandbox(
+                            sandbox,
+                            session_id=None,
+                            thread_id=terminal_row.get("thread_id"),
+                        )
+                    )
                 continue
 
-            result.append(self._resource_session_row(lease, session_id=None, thread_id=latest_session_thread_by_lease.get(lid)))
+            result.append(
+                self._resource_session_row_from_sandbox(
+                    sandbox,
+                    session_id=None,
+                    thread_id=latest_session_thread_by_lease.get(lid),
+                )
+            )
 
         result.sort(key=lambda x: x.get("created_at") or "", reverse=True)
         return result
@@ -522,4 +529,28 @@ class SupabaseSandboxMonitorRepo:
             "observed_state": lease.get("observed_state"),
             "desired_state": lease.get("desired_state"),
             "created_at": lease.get("created_at"),
+        }
+
+    def _resource_session_row_from_sandbox(
+        self,
+        sandbox: dict[str, Any],
+        *,
+        session_id: str | None,
+        thread_id: str | None,
+    ) -> dict:
+        config = sandbox.get("config")
+        if not isinstance(config, dict):
+            raise RuntimeError("sandbox.config must be an object")
+        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
+        if not legacy_lease_id:
+            raise RuntimeError("sandbox.config.legacy_lease_id is required")
+        return {
+            "provider": sandbox.get("provider_name") or "local",
+            "session_id": session_id,
+            "thread_id": thread_id,
+            "sandbox_id": str(sandbox.get("id") or "").strip() or None,
+            "lease_id": legacy_lease_id,
+            "observed_state": sandbox.get("observed_state"),
+            "desired_state": sandbox.get("desired_state"),
+            "created_at": sandbox.get("created_at"),
         }
