@@ -123,7 +123,11 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   filters: { type: null, q: "", sort: "downloads", page: 1 },
 
   setFilter: (key, value) => {
-    set((s) => ({ filters: { ...s.filters, [key]: value, ...(key !== "page" ? { page: 1 } : {}) } }));
+    set((s) => {
+      const nextPage = key === "page" ? s.filters.page : 1;
+      if (s.filters[key] === value && s.filters.page === nextPage) return s;
+      return { filters: { ...s.filters, [key]: value, page: nextPage } };
+    });
   },
 
   fetchItems: async () => {

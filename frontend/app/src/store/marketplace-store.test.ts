@@ -24,6 +24,17 @@ afterEach(async () => {
 });
 
 describe("useMarketplaceStore", () => {
+  it("does not emit a state update for a no-op filter change", async () => {
+    const { useMarketplaceStore } = await import("./marketplace-store");
+    const listener = vi.fn();
+    const unsubscribe = useMarketplaceStore.subscribe(listener);
+
+    useMarketplaceStore.getState().setFilter("q", "");
+
+    unsubscribe();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it("does not log a failed items fetch once navigation already left the marketplace route", async () => {
     window.history.replaceState({}, "", "/marketplace");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
