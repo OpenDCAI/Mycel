@@ -182,6 +182,16 @@ def count_user_visible_leases_by_provider(
         monitor_repo.close()
 
 
+def _query_sandbox_summary_for_lease(monitor_repo: Any, lease_id: str) -> dict[str, Any] | None:
+    lease_key = str(lease_id or "").strip()
+    if not lease_key:
+        return None
+    for row in monitor_repo.query_sandboxes():
+        if str(row.get("lease_id") or "").strip() == lease_key:
+            return dict(row)
+    return None
+
+
 def resolve_owned_lease(
     user_id: str,
     lease_id: str,
@@ -193,15 +203,18 @@ def resolve_owned_lease(
     if thread_repo is None or user_repo is None:
         raise RuntimeError("thread_repo and user_repo are required for resolve_owned_lease")
     try:
-        lease = monitor_repo.query_lease(lease_id)
+        lease = _query_sandbox_summary_for_lease(monitor_repo, lease_id)
         if lease is None:
             return None
         if not _is_user_visible_lease_state(lease):
             return None
+        sandbox_id = str(lease.get("sandbox_id") or "").strip()
+        if not sandbox_id:
+            raise RuntimeError("sandbox_id is required for resolve_owned_lease")
 
         thread_ids: list[str] = []
         agents: list[dict[str, Any]] = []
-        for row in monitor_repo.query_lease_threads(lease_id):
+        for row in monitor_repo.query_sandbox_threads(sandbox_id):
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id in thread_ids:
                 continue
@@ -227,7 +240,7 @@ def resolve_owned_lease(
         result["thread_ids"] = thread_ids
         result["agents"] = agents
         _apply_lease_recipe(result, provider_name, lease.get("recipe_json"))
-        runtime_session_id = monitor_repo.query_lease_instance_id(lease_id)
+        runtime_session_id = monitor_repo.query_sandbox_instance_id(sandbox_id)
         if runtime_session_id:
             result["runtime_session_id"] = runtime_session_id
         return result

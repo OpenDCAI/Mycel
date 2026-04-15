@@ -79,6 +79,15 @@ class _FakeMonitorRepo:
     def query_lease_threads(self, lease_id: str):
         return [{"thread_id": row.get("thread_id")} for row in self._rows if row.get("lease_id") == lease_id]
 
+    def query_sandbox_threads(self, sandbox_id: str):
+        return [{"thread_id": row.get("thread_id")} for row in self._rows if row.get("sandbox_id") == sandbox_id]
+
+    def query_sandbox_instance_id(self, sandbox_id: str):
+        for row in self._rows:
+            if row.get("sandbox_id") == sandbox_id:
+                return self._instance_ids.get(str(row.get("lease_id") or ""))
+        return None
+
     def close(self):
         pass
 
@@ -402,8 +411,14 @@ def test_list_user_leases_runtime_session_id_contract(
 
 def test_resolve_owned_lease_filters_to_single_authorized_lease(monkeypatch):
     rows = [
-        _lease_row("lease-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
-        _lease_row("lease-2", "thread-other", created_at="2026-04-07T10:01:00Z", cwd="/tmp/other"),
+        _lease_row(
+            "lease-1",
+            "thread-parent",
+            provider_name="daytona_selfhost",
+            cwd="/home/daytona/files/app",
+            sandbox_id="sandbox-1",
+        ),
+        _lease_row("lease-2", "thread-other", created_at="2026-04-07T10:01:00Z", cwd="/tmp/other", sandbox_id="sandbox-2"),
     ]
     thread_repo = _FakeThreadRepo(
         {
@@ -448,6 +463,53 @@ def test_resolve_owned_lease_filters_to_single_authorized_lease(monkeypatch):
             "avatar_url": "/api/users/agent-1/avatar",
         }
     ]
+    _assert_daytona_recipe(lease, runtime_session_id="provider-session-1")
+
+
+def test_resolve_owned_lease_uses_canonical_sandbox_source(monkeypatch):
+    rows = [
+        _lease_row("lease-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app", sandbox_id="sandbox-1"),
+    ]
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-parent": {"agent_user_id": "agent-1"},
+        }
+    )
+    user_repo = _FakeUserRepo(
+        {
+            "agent-1": _agent_user("agent-1", "Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    class _SandboxOnlyMonitorRepo:
+        def query_sandboxes(self):
+            return list(rows)
+
+        def query_sandbox_threads(self, sandbox_id: str):
+            assert sandbox_id == "sandbox-1"
+            return [{"thread_id": "thread-parent"}]
+
+        def query_sandbox_instance_id(self, sandbox_id: str):
+            assert sandbox_id == "sandbox-1"
+            return "provider-session-1"
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _SandboxOnlyMonitorRepo())
+
+    lease = sandbox_service.resolve_owned_lease(
+        "owner-1",
+        "lease-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert lease is not None
+    assert lease["lease_id"] == "lease-1"
+    assert lease["provider_name"] == "daytona_selfhost"
+    assert lease["thread_id"] == "thread-parent"
+    assert lease["thread_ids"] == ["thread-parent"]
     _assert_daytona_recipe(lease, runtime_session_id="provider-session-1")
 
 
