@@ -386,7 +386,8 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
             provider_stats["sessions"] += 1
 
         lease_id = str(session.get("lease_id") or "")
-        runtime_session_id = runtime_session_ids.get(lease_id)
+        sandbox_id = str(session.get("sandbox_id") or "").strip()
+        runtime_session_id = runtime_session_ids.get(sandbox_id)
         normalized = _resource_display_status(
             observed_state=session.get("observed_state"),
             desired_state=session.get("desired_state"),

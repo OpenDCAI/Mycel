@@ -442,3 +442,32 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
 
     assert [session["runtimeSessionId"] for session in sessions] == ["runtime-a", "runtime-b"]
     assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
+
+
+def test_visible_resource_session_stats_uses_sandbox_keyed_runtime_lookup(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            "lease_id": "lease-a",
+            "observed_state": "detached",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+    ]
+
+    class _BatchOnlyRepo(_FakeRepo):
+        def __init__(self):
+            super().__init__(rows, instance_ids={"sandbox-a": "runtime-a"})
+
+        def query_lease_instance_ids(self, lease_ids: list[str]):
+            raise AssertionError(f"unexpected lease batch lookup: {lease_ids}")
+
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _BatchOnlyRepo())
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
+
+    stats = resource_projection_service.visible_resource_session_stats()
+
+    assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
