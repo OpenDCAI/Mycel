@@ -36,7 +36,35 @@ export type SandboxDetailPayload = {
     chat_session_id?: string | null;
     thread_id?: string | null;
     status?: string | null;
+    started_at?: string | null;
+    ended_at?: string | null;
+    close_reason?: string | null;
   }> | null;
+  cleanup?: {
+    allowed?: boolean;
+    recommended_action?: string | null;
+    reason?: string | null;
+    operation?: {
+      operation_id?: string | null;
+      kind?: string | null;
+      status?: string | null;
+      summary?: string | null;
+    } | null;
+    recent_operations?: Array<{
+      operation_id?: string | null;
+      kind?: string | null;
+      status?: string | null;
+      summary?: string | null;
+    }> | null;
+  } | null;
+};
+
+const CLEANUP_STATUS_CLASS_BY_STATUS: Record<string, string> = {
+  pending: "cleanup-status cleanup-status--warning",
+  running: "cleanup-status cleanup-status--warning",
+  succeeded: "cleanup-status cleanup-status--ok",
+  failed: "cleanup-status cleanup-status--danger",
+  rejected: "cleanup-status cleanup-status--danger",
 };
 
 export function buildSandboxDetailShell(data: SandboxDetailPayload) {
@@ -45,6 +73,10 @@ export function buildSandboxDetailShell(data: SandboxDetailPayload) {
     description: data.triage?.description ?? "Sandbox state and current read-only relations.",
     surfaceHref: "/sandboxes",
     cleanupIncluded: true,
+    cleanupTitle: "Cleanup",
+    cleanupHint: "Canonical sandbox cleanup lane for current operation and recent cleanup history.",
+    cleanupButtonLabel: "Start sandbox cleanup",
+    cleanupLedgerTitle: "Recent Operations",
   };
 }
 
@@ -63,7 +95,19 @@ export default function SandboxDetailPage() {
   const threads = data.threads ?? [];
   const sessions = data.sessions ?? [];
   const latestSession = sessions[0] ?? null;
-  const cleanupAllowed = Boolean(data.triage?.category && data.triage.category !== "healthy_capacity");
+  const cleanup = data.cleanup ?? {};
+  const cleanupAllowed = Boolean(cleanup.allowed);
+  const recentOperations = (cleanup.recent_operations ?? []).filter(
+    (operation) => operation.operation_id !== cleanup.operation?.operation_id,
+  );
+  const cleanupDecision = cleanup.allowed ? "Managed cleanup ready" : "Cleanup blocked";
+  const cleanupActionSummary = cleanup.recommended_action ?? "No managed action";
+  const cleanupActionHint = cleanup.allowed
+    ? "This sandbox can enter the managed cleanup flow."
+    : "This sandbox is not ready for managed cleanup.";
+  const cleanupOperationStatus = cleanup.operation?.status ?? "idle";
+  const cleanupOperationSummary = cleanup.operation?.summary ?? "No active cleanup operation.";
+  const cleanupOperationClass = CLEANUP_STATUS_CLASS_BY_STATUS[cleanupOperationStatus] ?? "cleanup-status cleanup-status--muted";
 
   async function startCleanup() {
     setCleanupPending(true);
@@ -98,8 +142,26 @@ export default function SandboxDetailPage() {
         </div>
       </section>
       <section className="surface-section">
-        <h2>Cleanup</h2>
+        <h2>{shell.cleanupTitle}</h2>
+        <p className="description">{cleanup.reason ?? shell.cleanupHint}</p>
         <div className="surface-grid cleanup-grid">
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Decision</p>
+            <p className="surface-card__value surface-card__value--compact">{cleanupDecision}</p>
+            <p className="surface-card__body">{cleanupActionSummary}</p>
+          </article>
+          <article className="surface-card">
+            <p className="surface-card__eyebrow">Current Operation</p>
+            <div className="cleanup-current-op">
+              <span className={cleanupOperationClass}>{cleanupOperationStatus}</span>
+              {cleanup.operation?.operation_id ? (
+                <Link to={`/operations/${cleanup.operation.operation_id}`} className="cleanup-operation-link">
+                  {cleanup.operation.operation_id}
+                </Link>
+              ) : null}
+            </div>
+            <p className="surface-card__body">{cleanupOperationSummary}</p>
+          </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Action Lane</p>
             <button
@@ -108,14 +170,41 @@ export default function SandboxDetailPage() {
               disabled={!cleanupAllowed || cleanupPending}
               onClick={() => void startCleanup()}
             >
-              Start sandbox cleanup
+              {shell.cleanupButtonLabel}
             </button>
-            <p className="surface-card__body">
-              {cleanupAllowed ? "This sandbox can enter the managed cleanup flow." : "This sandbox is not ready for managed cleanup."}
-            </p>
+            <p className="surface-card__body">{cleanupActionHint}</p>
           </article>
         </div>
         {cleanupMessage ? <p className="description">{cleanupMessage}</p> : null}
+        <div className="cleanup-ledger">
+          <h3>{shell.cleanupLedgerTitle}</h3>
+          {recentOperations.length > 0 ? (
+            <div className="cleanup-ledger__list">
+              {recentOperations.map((operation) => {
+                const operationStatus = operation.status ?? "unknown";
+                const operationClass =
+                  CLEANUP_STATUS_CLASS_BY_STATUS[operationStatus] ?? "cleanup-status cleanup-status--muted";
+                return (
+                  <article className="cleanup-ledger__item" key={operation.operation_id ?? "missing-operation"}>
+                    <div className="cleanup-ledger__header">
+                      <span className={operationClass}>{operationStatus}</span>
+                      {operation.operation_id ? (
+                        <Link to={`/operations/${operation.operation_id}`} className="cleanup-operation-link mono">
+                          {operation.operation_id}
+                        </Link>
+                      ) : (
+                        <span className="mono">-</span>
+                      )}
+                    </div>
+                    <p className="cleanup-ledger__summary">{operation.summary ?? "-"}</p>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="cleanup-ledger__empty">No recorded cleanup operations.</p>
+          )}
+        </div>
       </section>
       <section className="surface-section">
         <h2>Relations</h2>

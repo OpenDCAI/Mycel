@@ -432,7 +432,7 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
     assert payload["provider"] == {"id": "daytona", "name": "daytona"}
     assert payload["runtime"] == {"runtime_session_id": "runtime-1"}
     assert payload["threads"] == [{"thread_id": "thread-1"}]
-    assert "cleanup" not in payload
+    assert payload["cleanup"]["allowed"] is False
     assert "lease" not in payload
 
 
@@ -537,7 +537,17 @@ def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in payload["sandbox"]
-    assert "cleanup" not in payload
+    assert payload["cleanup"]["allowed"] is False
+    assert payload["cleanup"]["recommended_action"] is None
+
+
+def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
+    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
+
+    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+
+    assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
+    assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
 
 
 def test_get_monitor_lease_detail_exposes_cleanup_state(monkeypatch):

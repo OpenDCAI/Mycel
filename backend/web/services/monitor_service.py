@@ -579,6 +579,9 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
     sandbox = repo.query_sandbox(sandbox_id)
     if sandbox is None:
         raise KeyError(f"Sandbox not found: {sandbox_id}")
+    lease_id = str(sandbox.get("lease_id") or "").strip()
+    if not lease_id:
+        raise RuntimeError("monitor sandbox detail target missing lease bridge")
 
     threads = repo.query_sandbox_threads(sandbox_id)
     sessions = repo.query_sandbox_sessions(sandbox_id)
@@ -627,6 +630,24 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
             }
             for item in sessions
         ],
+        "cleanup": monitor_operation_service.build_lease_cleanup_truth(
+            lease_id=lease_id,
+            triage=triage,
+            provider_name=provider_name,
+            runtime_session_id=runtime_session_id,
+            sessions=[
+                {
+                    "chat_session_id": item.get("chat_session_id"),
+                    "thread_id": item.get("thread_id"),
+                    "status": item.get("status"),
+                    "started_at": item.get("started_at"),
+                    "ended_at": item.get("ended_at"),
+                    "close_reason": item.get("close_reason"),
+                }
+                for item in sessions
+            ],
+            threads=live_thread_refs,
+        ),
     }
 
 
