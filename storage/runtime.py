@@ -170,6 +170,54 @@ def list_resource_snapshots(
         repo.close()
 
 
+def upsert_resource_snapshot_for_sandbox(
+    *,
+    sandbox_id: str,
+    legacy_lease_id: str,
+    provider_name: str,
+    observed_state: str,
+    probe_mode: str,
+    cpu_used: float | None = None,
+    cpu_limit: float | None = None,
+    memory_used_mb: float | None = None,
+    memory_total_mb: float | None = None,
+    disk_used_gb: float | None = None,
+    disk_total_gb: float | None = None,
+    network_rx_kbps: float | None = None,
+    network_tx_kbps: float | None = None,
+    probe_error: str | None = None,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+) -> None:
+    if not sandbox_id:
+        raise RuntimeError("Resource snapshot write requires sandbox_id.")
+    if not legacy_lease_id:
+        raise RuntimeError("Resource snapshot write requires legacy_lease_id bridge.")
+
+    repo = build_resource_snapshot_repo(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+    )
+    try:
+        repo.upsert_lease_resource_snapshot(
+            lease_id=legacy_lease_id,
+            provider_name=provider_name,
+            observed_state=observed_state,
+            probe_mode=probe_mode,
+            cpu_used=cpu_used,
+            cpu_limit=cpu_limit,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+            network_rx_kbps=network_rx_kbps,
+            network_tx_kbps=network_tx_kbps,
+            probe_error=probe_error,
+        )
+    finally:
+        repo.close()
+
+
 def _resolve_supabase_client(
     client: Any | None = None,
     factory_ref: str | None = None,

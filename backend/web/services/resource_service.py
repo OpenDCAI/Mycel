@@ -13,8 +13,25 @@ from backend.web.services.resource_common import resolve_provider_name
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.web.services.resource_common import to_resource_status as _to_resource_status
 from backend.web.services.sandbox_service import build_provider_from_config_name
-from sandbox.resource_snapshot import probe_and_upsert_for_instance, upsert_lease_resource_snapshot
+from sandbox.resource_snapshot import probe_and_upsert_for_instance
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
+from storage.runtime import upsert_resource_snapshot_for_sandbox
+
+
+class _SandboxSnapshotRepoAdapter:
+    def __init__(self, *, sandbox_id: str) -> None:
+        self._sandbox_id = sandbox_id
+
+    # @@@snapshot-write-bridge - resource probe callers are sandbox-shaped now,
+    # but the storage contract is still lease-keyed. Keep the bridge inside the
+    # adapter so service callers stop leaking lease as the outward write subject.
+    def upsert_lease_resource_snapshot(self, **kwargs) -> None:
+        lease_id = kwargs.pop("lease_id", None)
+        upsert_resource_snapshot_for_sandbox(
+            sandbox_id=self._sandbox_id,
+            legacy_lease_id=lease_id,
+            **kwargs,
+        )
 
 
 def get_provider_display_contract(config_name: str) -> dict[str, Any]:
@@ -181,8 +198,9 @@ def refresh_resource_snapshots() -> dict[str, Any]:
             provider = build_provider_from_config_name(provider_key)
             provider_cache[provider_key] = provider
         if provider is None:
-            upsert_lease_resource_snapshot(
-                lease_id=lease_id,
+            upsert_resource_snapshot_for_sandbox(
+                sandbox_id=sandbox_id,
+                legacy_lease_id=lease_id,
                 provider_name=provider_key,
                 observed_state=status,
                 probe_mode=probe_mode,
@@ -198,6 +216,7 @@ def refresh_resource_snapshots() -> dict[str, Any]:
             probe_mode=probe_mode,
             provider=provider,
             instance_id=instance_id,
+            repo=_SandboxSnapshotRepoAdapter(sandbox_id=sandbox_id),
         )
         probed += 1
         if not result["ok"]:
