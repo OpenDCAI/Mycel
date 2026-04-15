@@ -61,8 +61,16 @@ def _skills_from_repo(agent_config_id: str, config: dict[str, Any], agent_config
     for row in agent_config_repo.list_skills(agent_config_id):
         runtime_key = f"skills:{row['name']}"
         override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
-        desc = override.get("desc")
-        if not desc:
+        desc = None
+        if "desc" in override and override.get("desc") is not None:
+            desc = str(override.get("desc") or "")
+        else:
+            # @@@skill-desc-precedence - repo skill meta is the stable slow-variable truth.
+            # Library desc is only a last fallback when neither runtime override nor repo meta carries one.
+            meta = row.get("meta_json") if isinstance(row.get("meta_json"), dict) else {}
+            if "desc" in meta and meta.get("desc") is not None:
+                desc = str(meta.get("desc") or "")
+        if desc is None:
             from backend.web.services.library_service import get_library_skill_desc
 
             desc = get_library_skill_desc(str(row["name"]))
@@ -735,7 +743,9 @@ def install_from_snapshot(
         if not isinstance(skill, dict):
             continue
         skill_name = _sanitize_name(str(skill.get("name") or "default"))
-        skill_meta = skill.get("meta") if isinstance(skill.get("meta"), dict) else None
+        skill_meta = dict(skill.get("meta")) if isinstance(skill.get("meta"), dict) else {}
+        if skill.get("desc") is not None:
+            skill_meta["desc"] = str(skill.get("desc") or "")
         agent_config_repo.save_skill(agent_config_id, skill_name, str(skill.get("content") or ""), meta=skill_meta)
 
     for row in agent_config_repo.list_sub_agents(agent_config_id):

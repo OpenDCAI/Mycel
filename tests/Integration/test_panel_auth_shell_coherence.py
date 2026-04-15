@@ -553,6 +553,222 @@ def test_agent_config_exposes_and_persists_compaction_trigger_tokens():
     assert configs["cfg-1"]["runtime"] == {"tools:Bash": {"enabled": True, "desc": "shell"}}
 
 
+def test_get_agent_user_prefers_repo_skill_desc_over_library_fallback(monkeypatch: pytest.MonkeyPatch):
+    agent = UserRow(
+        id="agent-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="user-1",
+        agent_config_id="cfg-1",
+        created_at=1.0,
+    )
+    monkeypatch.setattr(library_service, "get_library_skill_desc", lambda _name: "library desc")
+
+    class _AgentConfigRepo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return {
+                "agent_user_id": "agent-1",
+                "name": "Toad",
+                "description": "probe",
+                "model": "leon:large",
+                "tools": ["*"],
+                "system_prompt": "",
+                "status": "draft",
+                "version": "0.1.0",
+                "created_at": 1,
+                "updated_at": 1,
+                "runtime": {},
+                "mcp": {},
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return [{"name": "Search", "content": "skill body", "meta_json": {"desc": "repo desc"}}]
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.get_agent_user(
+        "agent-1",
+        user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "repo desc"}]
+
+
+def test_get_agent_user_keeps_runtime_skill_desc_override_ahead_of_repo_meta(monkeypatch: pytest.MonkeyPatch):
+    agent = UserRow(
+        id="agent-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="user-1",
+        agent_config_id="cfg-1",
+        created_at=1.0,
+    )
+    monkeypatch.setattr(library_service, "get_library_skill_desc", lambda _name: "library desc")
+
+    class _AgentConfigRepo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return {
+                "agent_user_id": "agent-1",
+                "name": "Toad",
+                "description": "probe",
+                "model": "leon:large",
+                "tools": ["*"],
+                "system_prompt": "",
+                "status": "draft",
+                "version": "0.1.0",
+                "created_at": 1,
+                "updated_at": 1,
+                "runtime": {"skills:Search": {"desc": "runtime desc"}},
+                "mcp": {},
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return [{"name": "Search", "content": "skill body", "meta_json": {"desc": "repo desc"}}]
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.get_agent_user(
+        "agent-1",
+        user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "runtime desc"}]
+
+
+def test_get_agent_user_preserves_explicit_empty_repo_skill_desc(monkeypatch: pytest.MonkeyPatch):
+    agent = UserRow(
+        id="agent-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="user-1",
+        agent_config_id="cfg-1",
+        created_at=1.0,
+    )
+    monkeypatch.setattr(library_service, "get_library_skill_desc", lambda _name: "library desc")
+
+    class _AgentConfigRepo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return {
+                "agent_user_id": "agent-1",
+                "name": "Toad",
+                "description": "probe",
+                "model": "leon:large",
+                "tools": ["*"],
+                "system_prompt": "",
+                "status": "draft",
+                "version": "0.1.0",
+                "created_at": 1,
+                "updated_at": 1,
+                "runtime": {},
+                "mcp": {},
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return [{"name": "Search", "content": "skill body", "meta_json": {"desc": ""}}]
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.get_agent_user(
+        "agent-1",
+        user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": ""}]
+
+
+def test_install_from_snapshot_persists_skill_desc_from_snapshot_meta_into_repo_meta():
+    saved_skill_rows: list[dict[str, object]] = []
+
+    class _UserRepo:
+        def create(self, _row: UserRow) -> None:
+            return None
+
+    class _AgentConfigRepo:
+        def save_config(self, _agent_config_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def delete_rule(self, _row_id: str) -> None:
+            return None
+
+        def save_rule(self, _agent_config_id: str, _filename: str, _content: str) -> None:
+            return None
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def delete_skill(self, _row_id: str) -> None:
+            return None
+
+        def save_skill(self, agent_config_id: str, name: str, content: str, meta: dict[str, object] | None = None) -> None:
+            saved_skill_rows.append(
+                {
+                    "agent_config_id": agent_config_id,
+                    "name": name,
+                    "content": content,
+                    "meta": meta,
+                }
+            )
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+        def delete_sub_agent(self, _row_id: str) -> None:
+            return None
+
+        def save_sub_agent(self, *_args, **_kwargs) -> None:
+            return None
+
+    agent_user_service.install_from_snapshot(
+        snapshot={
+            "agent_md": "---\nname: Repo Agent\n---\nhello\n",
+            "skills": [
+                {
+                    "name": "Search",
+                    "content": "skill body",
+                    "meta": {"name": "Search", "desc": "repo desc"},
+                }
+            ],
+        },
+        name="Repo Agent",
+        description="probe",
+        marketplace_item_id="item-1",
+        installed_version="1.0.0",
+        owner_user_id="user-1",
+        user_repo=_UserRepo(),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert saved_skill_rows == [
+        {
+            "agent_config_id": saved_skill_rows[0]["agent_config_id"],
+            "name": "Search",
+            "content": "skill body",
+            "meta": {"name": "Search", "desc": "repo desc"},
+        }
+    ]
+
+
 def _agent_delete_runner(*, pref_error: str | None = None, contact_error: str | None = None):
     agent = UserRow(
         id="agent-1",
