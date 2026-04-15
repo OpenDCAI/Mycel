@@ -590,7 +590,7 @@ def test_query_thread_sessions_no_longer_roundtrips_through_lease_summary_shell(
     ]
 
 
-def test_query_leases_uses_latest_terminal_binding() -> None:
+def test_query_sandboxes_uses_latest_terminal_binding() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -611,7 +611,7 @@ def test_query_leases_uses_latest_terminal_binding() -> None:
         }
     )
 
-    assert repo.query_leases() == [
+    assert repo.query_sandboxes() == [
         {
             "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
@@ -628,7 +628,7 @@ def test_query_leases_uses_latest_terminal_binding() -> None:
     ]
 
 
-def test_query_sandboxes_uses_latest_terminal_binding() -> None:
+def test_query_sandboxes_reads_container_sandboxes_with_terminal_binding() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -666,45 +666,7 @@ def test_query_sandboxes_uses_latest_terminal_binding() -> None:
     ]
 
 
-def test_query_leases_reads_container_sandboxes_with_terminal_binding() -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    provider_name="daytona_selfhost",
-                    provider_env_id="provider-env-1",
-                    desired_state="paused",
-                    observed_state="paused",
-                    updated_at="2026-04-05T10:10:00",
-                    legacy_lease_id="lease-1",
-                )
-            ],
-            "abstract_terminals": [
-                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
-                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
-            ],
-        }
-    )
-
-    assert repo.query_leases() == [
-        {
-            "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
-            "provider_name": "daytona_selfhost",
-            "desired_state": "paused",
-            "observed_state": "paused",
-            "current_instance_id": "provider-env-1",
-            "updated_at": "2026-04-05T10:10:00",
-            "recipe_id": None,
-            "recipe_json": None,
-            "last_error": None,
-            "thread_id": "thread-new",
-        }
-    ]
-
-
-def test_query_leases_chunks_terminal_binding_lookup() -> None:
+def test_query_sandboxes_chunks_terminal_binding_lookup() -> None:
     sandboxes = [
         _sandbox(
             f"sandbox-{index}",
@@ -723,10 +685,17 @@ def test_query_leases_chunks_terminal_binding_lookup() -> None:
         )
     )
 
-    rows = repo.query_leases()
+    rows = repo.query_sandboxes()
 
     assert len(rows) == 175
     assert next(row for row in rows if row["lease_id"] == "lease-174")["thread_id"] == "thread-174"
+
+
+def test_lease_alias_summary_shells_are_removed() -> None:
+    repo = _repo({"container.sandboxes": []})
+
+    assert not hasattr(repo, "query_leases")
+    assert not hasattr(repo, "list_leases_with_threads")
 
 
 def test_query_lease_threads_returns_latest_unique_threads_first() -> None:
