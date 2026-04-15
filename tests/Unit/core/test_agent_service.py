@@ -1059,7 +1059,7 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
         db_path=temp_db,
     )
     monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(temp_db))
-    monkeypatch.setattr("sandbox.resource_snapshot.upsert_lease_resource_snapshot", lambda **_kwargs: None)
+    monkeypatch.setattr("sandbox.resource_snapshot._upsert_lease_resource_snapshot", lambda **_kwargs: None)
     monkeypatch.setattr(manager, "_setup_mounts", lambda thread_id: {"source": object(), "remote_path": str(tmp_path)})
     monkeypatch.setattr(manager, "_sync_to_sandbox", lambda *args, **kwargs: None)
 

@@ -47,7 +47,7 @@ def upsert_resource_snapshot_for_sandbox(
         repo.close()
 
 
-def upsert_lease_resource_snapshot(
+def _upsert_lease_resource_snapshot(
     *,
     lease_id: str,
     provider_name: str,
@@ -86,7 +86,6 @@ def upsert_lease_resource_snapshot(
 
 __all__ = [
     "upsert_resource_snapshot_for_sandbox",
-    "upsert_lease_resource_snapshot",
     "probe_and_upsert_for_instance",
 ]
 
@@ -200,7 +199,7 @@ def probe_and_upsert_for_instance(
                     probe_error=probe_error,
                 )
             else:
-                upsert = repo.upsert_lease_resource_snapshot if repo is not None else upsert_lease_resource_snapshot
+                upsert = repo.upsert_lease_resource_snapshot if repo is not None else _upsert_lease_resource_snapshot
                 upsert(
                     lease_id=lease_id,
                     provider_name=provider_name,

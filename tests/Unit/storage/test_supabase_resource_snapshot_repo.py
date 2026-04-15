@@ -1,3 +1,5 @@
+import storage.providers.supabase as supabase_provider
+from storage.contracts import ResourceSnapshotRepo
 from storage.providers.supabase.resource_snapshot_repo import SupabaseResourceSnapshotRepo
 
 
@@ -100,3 +102,13 @@ def test_supabase_resource_snapshot_repo_chunks_large_snapshot_lookup() -> None:
 
     assert rows == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
     assert [len(values) for _, values in client.table_obj.in_calls] == [80, 80, 15]
+
+
+def test_resource_snapshot_repo_protocol_no_longer_declares_lease_shaped_methods() -> None:
+    assert "upsert_lease_resource_snapshot" not in ResourceSnapshotRepo.__dict__
+    assert "list_snapshots_by_lease_ids" not in ResourceSnapshotRepo.__dict__
+
+
+def test_supabase_provider_package_no_longer_exports_lease_shaped_snapshot_helpers() -> None:
+    assert not hasattr(supabase_provider, "upsert_lease_resource_snapshot")
+    assert not hasattr(supabase_provider, "list_snapshots_by_lease_ids")
