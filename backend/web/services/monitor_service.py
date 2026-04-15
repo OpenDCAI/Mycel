@@ -486,7 +486,7 @@ def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
     return make_eval_batch_service().get_batch_detail(batch_id)
 
 
-def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[str, Any]:
     live_threads = _live_thread_ids([str(row.get("thread_id") or "").strip() for row in rows])
     items = []
     for row in rows:
@@ -531,7 +531,7 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
 
     return {
-        "title": "All Leases",
+        "title": title,
         "count": len(items),
         "summary": summary,
         "groups": groups,
@@ -543,12 +543,17 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def list_leases() -> dict[str, Any]:
+def list_monitor_sandboxes() -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
-        return _map_leases(repo.query_leases())
+        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Sandboxes")
     finally:
         repo.close()
+
+
+def list_leases() -> dict[str, Any]:
+    payload = list_monitor_sandboxes()
+    return {**payload, "title": "All Leases"}
 
 
 def list_monitor_provider_sessions() -> dict[str, Any]:
@@ -566,42 +571,39 @@ def list_monitor_provider_sessions() -> dict[str, Any]:
     return {"count": len(sessions), "sessions": sessions}
 
 
-def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        lease = repo.query_lease(lease_id)
-        if lease is None:
-            raise KeyError(f"Lease not found: {lease_id}")
+def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
+    sandbox = repo.query_sandbox(sandbox_id)
+    if sandbox is None:
+        raise KeyError(f"Sandbox not found: {sandbox_id}")
 
-        threads = repo.query_lease_threads(lease_id)
-        sessions = repo.query_lease_sessions(lease_id)
-        runtime_session_id = repo.query_lease_instance_id(lease_id)
-    finally:
-        repo.close()
+    threads = repo.query_sandbox_threads(sandbox_id)
+    sessions = repo.query_sandbox_sessions(sandbox_id)
+    runtime_session_id = repo.query_sandbox_instance_id(sandbox_id)
 
     raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
     live_threads = _live_thread_ids(raw_thread_ids)
     live_thread_refs = [{"thread_id": thread_id} for thread_id in raw_thread_ids if thread_id in live_threads]
-    badge = _make_badge(lease.get("desired_state"), lease.get("observed_state"))
+    badge = _make_badge(sandbox.get("desired_state"), sandbox.get("observed_state"))
     triage = _classify_lease_triage(
         thread_id=live_thread_refs[0]["thread_id"] if live_thread_refs else None,
         badge=badge,
-        observed_state=lease.get("observed_state"),
-        desired_state=lease.get("desired_state"),
-        updated_at=lease.get("updated_at"),
+        observed_state=sandbox.get("observed_state"),
+        desired_state=sandbox.get("desired_state"),
+        updated_at=sandbox.get("updated_at"),
     )
-    provider_name = str(lease.get("provider_name") or "").strip()
+    provider_name = str(sandbox.get("provider_name") or "").strip()
+    lease_id = str(sandbox.get("lease_id") or "").strip()
 
     return {
-        "lease": {
-            "sandbox_id": lease.get("sandbox_id"),
-            "lease_id": str(lease.get("lease_id") or lease_id),
+        "sandbox": {
+            "sandbox_id": sandbox.get("sandbox_id"),
+            "lease_id": lease_id,
             "provider_name": provider_name,
-            "desired_state": lease.get("desired_state"),
-            "observed_state": lease.get("observed_state"),
-            "current_instance_id": lease.get("current_instance_id"),
-            "updated_at": lease.get("updated_at"),
-            "last_error": lease.get("last_error"),
+            "desired_state": sandbox.get("desired_state"),
+            "observed_state": sandbox.get("observed_state"),
+            "current_instance_id": sandbox.get("current_instance_id"),
+            "updated_at": sandbox.get("updated_at"),
+            "last_error": sandbox.get("last_error"),
             "badge": badge,
         },
         "triage": triage,
@@ -625,13 +627,42 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
             for item in sessions
         ],
         "cleanup": monitor_operation_service.build_lease_cleanup_truth(
-            lease_id=str(lease.get("lease_id") or lease_id),
+            lease_id=lease_id,
             triage=triage,
             provider_name=provider_name,
             runtime_session_id=runtime_session_id,
             sessions=sessions,
             threads=live_thread_refs,
         ),
+    }
+
+
+def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        return _build_monitor_sandbox_detail(repo, sandbox_id)
+    finally:
+        repo.close()
+
+
+def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        lease = repo.query_lease(lease_id)
+        if lease is None:
+            raise KeyError(f"Lease not found: {lease_id}")
+        payload = _build_monitor_sandbox_detail(repo, str(lease.get("sandbox_id") or ""))
+    finally:
+        repo.close()
+
+    return {
+        "lease": payload["sandbox"],
+        "triage": payload["triage"],
+        "provider": payload["provider"],
+        "runtime": payload["runtime"],
+        "threads": payload["threads"],
+        "sessions": payload["sessions"],
+        "cleanup": payload["cleanup"],
     }
 
 

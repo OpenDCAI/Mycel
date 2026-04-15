@@ -209,6 +209,38 @@ def test_query_lease_reads_container_sandbox_row() -> None:
     }
 
 
+def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="provider-env-1",
+                    desired_state="paused",
+                    observed_state="paused",
+                    updated_at="2026-04-05T10:10:00",
+                    legacy_lease_id="lease-1",
+                    sandbox_template_id="template-1",
+                )
+            ]
+        }
+    )
+
+    assert repo.query_sandbox("sandbox-1") == {
+        "sandbox_id": "sandbox-1",
+        "lease_id": "lease-1",
+        "provider_name": "daytona_selfhost",
+        "recipe_id": "template-1",
+        "recipe_json": None,
+        "desired_state": "paused",
+        "observed_state": "paused",
+        "current_instance_id": "provider-env-1",
+        "last_error": None,
+        "updated_at": "2026-04-05T10:10:00",
+    }
+
+
 def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
     repo = _repo(
         {
@@ -283,6 +315,44 @@ def test_query_leases_uses_latest_terminal_binding() -> None:
             "recipe_id": None,
             "recipe_json": None,
             "last_error": None,
+            "thread_id": "thread-new",
+        }
+    ]
+
+
+def test_query_sandboxes_uses_latest_terminal_binding() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="instance-1",
+                    desired_state="paused",
+                    observed_state="paused",
+                    updated_at="2026-04-05T10:10:00",
+                    legacy_lease_id="lease-1",
+                )
+            ],
+            "abstract_terminals": [
+                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
+                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
+            ],
+        }
+    )
+
+    assert repo.query_sandboxes() == [
+        {
+            "sandbox_id": "sandbox-1",
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "recipe_id": None,
+            "recipe_json": None,
+            "desired_state": "paused",
+            "observed_state": "paused",
+            "current_instance_id": "instance-1",
+            "last_error": None,
+            "updated_at": "2026-04-05T10:10:00",
             "thread_id": "thread-new",
         }
     ]
