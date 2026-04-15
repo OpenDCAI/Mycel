@@ -715,7 +715,14 @@ def test_query_lease_threads_returns_latest_unique_threads_first() -> None:
     assert repo.query_lease_threads("lease-1") == [{"thread_id": "thread-new"}, {"thread_id": "thread-old"}]
 
 
-def test_query_lease_instance_id_prefers_provider_session_id() -> None:
+def test_lease_instance_protocol_shell_is_removed() -> None:
+    repo = _repo({"container.sandboxes": []})
+
+    assert not hasattr(repo, "query_lease_instance_id")
+    assert not hasattr(repo, "query_lease_instance_ids")
+
+
+def test_query_sandbox_instance_id_prefers_provider_session_id() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -733,19 +740,19 @@ def test_query_lease_instance_id_prefers_provider_session_id() -> None:
         }
     )
 
-    assert repo.query_lease_instance_id("lease-1") == "provider-session-1"
+    assert repo.query_sandbox_instance_id("sandbox-1") == "provider-session-1"
 
 
-def test_query_lease_instance_ids_chunks_large_lookup() -> None:
-    lease_ids = [f"lease-{index}" for index in range(175)]
+def test_query_sandbox_instance_ids_chunks_large_lookup() -> None:
+    sandbox_ids = [f"sandbox-{index}" for index in range(175)]
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {
                 "container.sandboxes": [
                     _sandbox(
                         f"sandbox-{index}",
-                        provider_env_id=f"sandbox-instance-{lease_ids[index]}",
-                        legacy_lease_id=lease_ids[index],
+                        provider_env_id=f"sandbox-instance-sandbox-{index}",
+                        legacy_lease_id=f"lease-{index}",
                     )
                     for index in range(175)
                 ],
@@ -754,10 +761,10 @@ def test_query_lease_instance_ids_chunks_large_lookup() -> None:
         )
     )
 
-    result = repo.query_lease_instance_ids(lease_ids)
+    result = repo.query_sandbox_instance_ids(sandbox_ids)
 
-    assert result["lease-0"] == "sandbox-instance-lease-0"
-    assert result["lease-174"] == "provider-session-174"
+    assert result["sandbox-0"] == "sandbox-instance-sandbox-0"
+    assert result["sandbox-174"] == "provider-session-174"
 
 
 def test_query_sandbox_instance_ids_uses_legacy_bridge() -> None:
@@ -779,7 +786,7 @@ def test_query_sandbox_instance_ids_uses_legacy_bridge() -> None:
     }
 
 
-def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge(monkeypatch) -> None:
+def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -792,13 +799,7 @@ def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge(mo
         }
     )
 
-    monkeypatch.setattr(
-        repo,
-        "query_lease_instance_ids",
-        lambda _lease_ids: (_ for _ in ()).throw(
-            AssertionError("sandbox-shaped instance lookup should not roundtrip through query_lease_instance_ids")
-        ),
-    )
+    assert not hasattr(repo, "query_lease_instance_ids")
 
     assert repo.query_sandbox_instance_ids(["sandbox-1", "sandbox-2"]) == {
         "sandbox-1": "sandbox-instance-1",
@@ -806,7 +807,7 @@ def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge(mo
     }
 
 
-def test_query_sandbox_instance_id_no_longer_roundtrips_through_lease_bridge(monkeypatch) -> None:
+def test_query_sandbox_instance_id_no_longer_roundtrips_through_lease_bridge() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -818,13 +819,7 @@ def test_query_sandbox_instance_id_no_longer_roundtrips_through_lease_bridge(mon
         }
     )
 
-    monkeypatch.setattr(
-        repo,
-        "query_lease_instance_id",
-        lambda _lease_id: (_ for _ in ()).throw(
-            AssertionError("single sandbox instance lookup should not roundtrip through query_lease_instance_id")
-        ),
-    )
+    assert not hasattr(repo, "query_lease_instance_id")
 
     assert repo.query_sandbox_instance_id("sandbox-1") == "provider-session-1"
 
@@ -853,9 +848,8 @@ def test_query_lease_events_requires_sandbox_bridge() -> None:
     [
         (lambda repo: repo.query_lease_threads("lease-missing"), "sandbox legacy bridge is required"),
         (lambda repo: repo.query_lease_events("lease-missing"), "sandbox legacy bridge is required"),
-        (lambda repo: repo.query_lease_instance_id("lease-missing"), "sandbox legacy bridge is required"),
     ],
-    ids=["lease-threads", "lease-events", "lease-instance-id"],
+    ids=["lease-threads", "lease-events"],
 )
 def test_residue_keyed_surfaces_fail_loud_without_sandbox_bridge(caller, expected) -> None:
     repo = _repo({"container.sandboxes": []})
@@ -918,7 +912,7 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
     ]
 
 
-def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge(monkeypatch) -> None:
+def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -945,13 +939,7 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge(m
         }
     )
 
-    monkeypatch.setattr(
-        repo,
-        "query_lease_instance_ids",
-        lambda lease_ids: (_ for _ in ()).throw(
-            AssertionError("probe-target assembly should not roundtrip through query_lease_instance_ids")
-        ),
-    )
+    assert not hasattr(repo, "query_lease_instance_ids")
 
     assert repo.list_probe_targets() == [
         {
@@ -974,10 +962,10 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge(m
 @pytest.mark.parametrize(
     ("include_updated_at", "caller"),
     [
-        (False, lambda repo: repo.query_lease_instance_id("lease-1")),
+        (False, lambda repo: repo.query_sandbox_instance_id("sandbox-1")),
         (True, lambda repo: repo.list_probe_targets()),
     ],
-    ids=["query-lease-instance-id", "list-probe-targets"],
+    ids=["query-sandbox-instance-id", "list-probe-targets"],
 )
 def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
     tables = {
