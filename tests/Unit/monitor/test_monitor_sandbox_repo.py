@@ -520,7 +520,9 @@ def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge(mo
     monkeypatch.setattr(
         repo,
         "query_lease_instance_ids",
-        lambda _lease_ids: (_ for _ in ()).throw(AssertionError("sandbox-shaped instance lookup should not roundtrip through query_lease_instance_ids")),
+        lambda _lease_ids: (_ for _ in ()).throw(
+            AssertionError("sandbox-shaped instance lookup should not roundtrip through query_lease_instance_ids")
+        ),
     )
 
     assert repo.query_sandbox_instance_ids(["sandbox-1", "sandbox-2"]) == {
