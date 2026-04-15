@@ -37,6 +37,8 @@ describe("useMarketplaceStore", () => {
     await useMarketplaceStore.getState().fetchItems();
 
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/marketplace/items?");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("localhost:8090");
     expect(consoleError).not.toHaveBeenCalled();
   });
 
@@ -53,6 +55,8 @@ describe("useMarketplaceStore", () => {
     await useMarketplaceStore.getState().fetchDetail("item-1");
 
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/marketplace/items/item-1");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("localhost:8090");
     expect(consoleError).not.toHaveBeenCalled();
   });
 
@@ -69,6 +73,8 @@ describe("useMarketplaceStore", () => {
     await useMarketplaceStore.getState().fetchLineage("item-1");
 
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/marketplace/items/item-1/lineage");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("localhost:8090");
     expect(consoleError).not.toHaveBeenCalled();
   });
 
@@ -85,6 +91,8 @@ describe("useMarketplaceStore", () => {
     await useMarketplaceStore.getState().fetchVersionSnapshot("item-1", "1.0.0");
 
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/marketplace/items/item-1/versions/1.0.0");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("localhost:8090");
     expect(consoleError).not.toHaveBeenCalled();
   });
 
