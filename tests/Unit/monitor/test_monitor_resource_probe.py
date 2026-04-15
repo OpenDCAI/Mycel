@@ -1,7 +1,10 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from backend.web.services import resource_service
 from sandbox import resource_snapshot
+from storage import runtime as storage_runtime
 
 
 class _FakeProvider:
@@ -33,6 +36,20 @@ class _FakeSandboxSnapshotRepo:
 
     def upsert_resource_snapshot_for_sandbox(self, **kwargs):
         self.upserts.append(kwargs)
+
+
+def test_upsert_resource_snapshot_for_sandbox_requires_repo_sandbox_wrapper(monkeypatch) -> None:
+    repo = _FakeSnapshotRepo()
+    monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: repo)
+
+    with pytest.raises(RuntimeError, match="sandbox-shaped snapshot repo write requires upsert_resource_snapshot_for_sandbox"):
+        storage_runtime.upsert_resource_snapshot_for_sandbox(
+            sandbox_id="sandbox-1",
+            legacy_lease_id="lease-1",
+            provider_name="p1",
+            observed_state="detached",
+            probe_mode="running_runtime",
+        )
 
 
 def test_resource_snapshot_adapter_no_longer_exposes_lease_shaped_write_shell() -> None:

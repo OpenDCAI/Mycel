@@ -165,26 +165,9 @@ def list_resource_snapshots_by_sandbox(
         supabase_client_factory=supabase_client_factory,
     )
     try:
-        if hasattr(repo, "list_snapshots_by_sandbox_ids"):
-            return repo.list_snapshots_by_sandbox_ids(sessions)
-
-        lease_ids: list[str] = []
-        sandbox_by_lease: dict[str, str] = {}
-        for session in sessions:
-            sandbox_id = str(session.get("sandbox_id") or "").strip()
-            lease_id = str(session.get("lease_id") or "").strip()
-            if not sandbox_id or not lease_id or lease_id in sandbox_by_lease:
-                continue
-            sandbox_by_lease[lease_id] = sandbox_id
-            lease_ids.append(lease_id)
-
-        snapshot_by_lease = repo.list_snapshots_by_lease_ids(lease_ids)
-        snapshot_by_sandbox: dict[str, dict[str, Any]] = {}
-        for lease_id, snapshot in snapshot_by_lease.items():
-            sandbox_id = sandbox_by_lease.get(lease_id)
-            if sandbox_id:
-                snapshot_by_sandbox[sandbox_id] = snapshot
-        return snapshot_by_sandbox
+        if not hasattr(repo, "list_snapshots_by_sandbox_ids"):
+            raise RuntimeError("sandbox-shaped snapshot repo read requires list_snapshots_by_sandbox_ids")
+        return repo.list_snapshots_by_sandbox_ids(sessions)
     finally:
         repo.close()
 
@@ -218,39 +201,24 @@ def upsert_resource_snapshot_for_sandbox(
         supabase_client_factory=supabase_client_factory,
     )
     try:
-        if hasattr(repo, "upsert_resource_snapshot_for_sandbox"):
-            repo.upsert_resource_snapshot_for_sandbox(
-                sandbox_id=sandbox_id,
-                legacy_lease_id=legacy_lease_id,
-                provider_name=provider_name,
-                observed_state=observed_state,
-                probe_mode=probe_mode,
-                cpu_used=cpu_used,
-                cpu_limit=cpu_limit,
-                memory_used_mb=memory_used_mb,
-                memory_total_mb=memory_total_mb,
-                disk_used_gb=disk_used_gb,
-                disk_total_gb=disk_total_gb,
-                network_rx_kbps=network_rx_kbps,
-                network_tx_kbps=network_tx_kbps,
-                probe_error=probe_error,
-            )
-        else:
-            repo.upsert_lease_resource_snapshot(
-                lease_id=legacy_lease_id,
-                provider_name=provider_name,
-                observed_state=observed_state,
-                probe_mode=probe_mode,
-                cpu_used=cpu_used,
-                cpu_limit=cpu_limit,
-                memory_used_mb=memory_used_mb,
-                memory_total_mb=memory_total_mb,
-                disk_used_gb=disk_used_gb,
-                disk_total_gb=disk_total_gb,
-                network_rx_kbps=network_rx_kbps,
-                network_tx_kbps=network_tx_kbps,
-                probe_error=probe_error,
-            )
+        if not hasattr(repo, "upsert_resource_snapshot_for_sandbox"):
+            raise RuntimeError("sandbox-shaped snapshot repo write requires upsert_resource_snapshot_for_sandbox")
+        repo.upsert_resource_snapshot_for_sandbox(
+            sandbox_id=sandbox_id,
+            legacy_lease_id=legacy_lease_id,
+            provider_name=provider_name,
+            observed_state=observed_state,
+            probe_mode=probe_mode,
+            cpu_used=cpu_used,
+            cpu_limit=cpu_limit,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+            network_rx_kbps=network_rx_kbps,
+            network_tx_kbps=network_tx_kbps,
+            probe_error=probe_error,
+        )
     finally:
         repo.close()
 

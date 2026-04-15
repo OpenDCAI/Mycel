@@ -1,3 +1,5 @@
+import pytest
+
 from backend.web.services import resource_common, resource_projection_service
 from storage import runtime as storage_runtime
 
@@ -478,7 +480,7 @@ def test_visible_resource_session_stats_uses_sandbox_keyed_runtime_lookup(monkey
     assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
 
 
-def test_list_resource_snapshots_by_sandbox_rekeys_lease_snapshots_for_session_enrichment(monkeypatch):
+def test_list_resource_snapshots_by_sandbox_requires_repo_sandbox_wrapper(monkeypatch):
     sessions = [
         {
             "sandbox_id": "sandbox-a",
@@ -489,27 +491,18 @@ def test_list_resource_snapshots_by_sandbox_rekeys_lease_snapshots_for_session_e
             "lease_id": "lease-b",
         },
     ]
-    snapshot_by_lease = {
-        "lease-a": {"lease_id": "lease-a", "cpu_used": 11},
-        "lease-b": {"lease_id": "lease-b", "cpu_used": 22},
-    }
 
     class _LeaseOnlyRepo:
         def close(self):
             return None
 
         def list_snapshots_by_lease_ids(self, lease_ids):
-            assert lease_ids == ["lease-a", "lease-b"]
-            return snapshot_by_lease
+            raise AssertionError("lease-shaped snapshot read shell should not remain an active runtime bridge")
 
     monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _LeaseOnlyRepo())
 
-    snapshot_by_sandbox = storage_runtime.list_resource_snapshots_by_sandbox(sessions)
-
-    assert snapshot_by_sandbox == {
-        "sandbox-a": {"lease_id": "lease-a", "cpu_used": 11},
-        "sandbox-b": {"lease_id": "lease-b", "cpu_used": 22},
-    }
+    with pytest.raises(RuntimeError, match="sandbox-shaped snapshot repo read requires list_snapshots_by_sandbox_ids"):
+        storage_runtime.list_resource_snapshots_by_sandbox(sessions)
 
 
 def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeypatch):
