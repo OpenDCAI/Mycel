@@ -42,7 +42,7 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
     monkeypatch.setattr(
         cache,
         "monitor_service",
-        type("_MonitorService", (), {"list_leases": staticmethod(lambda: _triage_payload("detached_residue"))}),
+        type("_MonitorService", (), {"list_monitor_sandboxes": staticmethod(lambda: _triage_payload("detached_residue"))}),
         raising=False,
     )
 
@@ -81,7 +81,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
     monkeypatch.setattr(
         cache,
         "monitor_service",
-        type("_MonitorService", (), {"list_leases": staticmethod(lambda: _triage_payload("orphan_cleanup"))}),
+        type("_MonitorService", (), {"list_monitor_sandboxes": staticmethod(lambda: _triage_payload("orphan_cleanup"))}),
         raising=False,
     )
     cache.refresh_resource_overview_sync()
@@ -157,7 +157,7 @@ def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkey
     monkeypatch.setattr(
         cache,
         "monitor_service",
-        type("_MonitorService", (), {"list_leases": staticmethod(lambda: _triage_payload("healthy_capacity"))}),
+        type("_MonitorService", (), {"list_monitor_sandboxes": staticmethod(lambda: _triage_payload("healthy_capacity"))}),
         raising=False,
     )
 

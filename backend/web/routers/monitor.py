@@ -130,11 +130,11 @@ async def thread_detail_snapshot(request: Request, thread_id: str):
 @router.get("/dashboard")
 def dashboard_snapshot():
     resources = get_resource_overview_snapshot()
-    leases = monitor_service.list_leases()
+    sandboxes = monitor_service.list_monitor_sandboxes()
     evaluation = monitor_service.get_monitor_evaluation_workbench()
 
     resource_summary = resources.get("summary") or {}
-    lease_summary = leases.get("summary") or {}
+    sandbox_summary = sandboxes.get("summary") or {}
     evaluation_overview = evaluation.get("overview") or {}
     latest_evaluation = evaluation.get("selected_run") or {}
 
@@ -143,9 +143,9 @@ def dashboard_snapshot():
         "infra": {
             "providers_active": int(resource_summary.get("active_providers") or 0),
             "providers_unavailable": int(resource_summary.get("unavailable_providers") or 0),
-            "leases_total": int(lease_summary.get("total") or leases.get("count") or 0),
-            "leases_diverged": int(lease_summary.get("diverged") or 0) + int(lease_summary.get("orphan_diverged") or 0),
-            "leases_orphan": int(lease_summary.get("orphan") or 0) + int(lease_summary.get("orphan_diverged") or 0),
+            "sandboxes_total": int(sandbox_summary.get("total") or sandboxes.get("count") or 0),
+            "sandboxes_diverged": int(sandbox_summary.get("diverged") or 0) + int(sandbox_summary.get("orphan_diverged") or 0),
+            "sandboxes_orphan": int(sandbox_summary.get("orphan") or 0) + int(sandbox_summary.get("orphan_diverged") or 0),
         },
         "workload": {
             "running_sessions": int(resource_summary.get("running_sessions") or 0),

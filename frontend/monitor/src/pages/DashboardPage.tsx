@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 import ErrorState from "../components/ErrorState";
 import { useMonitorData } from "../app/fetch";
 
-type DashboardPayload = {
+export type DashboardPayload = {
   snapshot_at: string;
   infra: {
     providers_active: number;
     providers_unavailable: number;
-    leases_total: number;
-    leases_diverged: number;
-    leases_orphan: number;
+    sandboxes_total: number;
+    sandboxes_diverged: number;
+    sandboxes_orphan: number;
   };
   workload: {
     running_sessions: number;
@@ -21,28 +21,25 @@ type DashboardPayload = {
   };
 };
 
-export default function DashboardPage() {
-  const { data, error } = useMonitorData<DashboardPayload>("/dashboard");
-
-  if (error) return <ErrorState title="Dashboard" error={error} />;
-  if (!data) return <div>Loading...</div>;
-
-  const surfaces = [
+export function buildDashboardSurfaces(data: DashboardPayload) {
+  return [
     { label: "Running Sessions", value: data.workload.running_sessions, to: "/resources" },
     { label: "Evaluations Running", value: data.workload.evaluations_running, to: "/evaluation" },
-    { label: "Tracked Leases", value: data.infra.leases_total, to: "/leases" },
+    { label: "Tracked Sandboxes", value: data.infra.sandboxes_total, to: "/sandboxes" },
   ];
+}
 
-  const attentionLinks = [
+export function buildDashboardAttentionLinks(data: DashboardPayload) {
+  return [
     {
       label: "Provider Coverage",
       body: `${data.infra.providers_active} active providers, ${data.infra.providers_unavailable} unavailable.`,
       to: "/resources",
     },
     {
-      label: "Lease Drift",
-      body: `${data.infra.leases_diverged} diverged leases, ${data.infra.leases_orphan} orphan leases.`,
-      to: "/leases",
+      label: "Sandbox Drift",
+      body: `${data.infra.sandboxes_diverged} diverged sandboxes, ${data.infra.sandboxes_orphan} orphan sandboxes.`,
+      to: "/sandboxes",
     },
     {
       label: "Latest Evaluation",
@@ -50,6 +47,16 @@ export default function DashboardPage() {
       to: "/evaluation",
     },
   ];
+}
+
+export default function DashboardPage() {
+  const { data, error } = useMonitorData<DashboardPayload>("/dashboard");
+
+  if (error) return <ErrorState title="Dashboard" error={error} />;
+  if (!data) return <div>Loading...</div>;
+
+  const surfaces = buildDashboardSurfaces(data);
+  const attentionLinks = buildDashboardAttentionLinks(data);
 
   return (
     <div className="page">

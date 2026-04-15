@@ -39,8 +39,8 @@ def _read_refresh_interval_sec() -> float:
 
 
 def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
-    lease_payload = monitor_service.list_leases()
-    triage = lease_payload.get("triage") or {"summary": {}, "groups": []}
+    sandbox_payload = monitor_service.list_monitor_sandboxes()
+    triage = sandbox_payload.get("triage") or {"summary": {}, "groups": []}
     payload["triage"] = triage
     return payload
 
