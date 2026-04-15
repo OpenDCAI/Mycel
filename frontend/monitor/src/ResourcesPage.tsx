@@ -78,11 +78,23 @@ const SESSION_STATUS_ORDER: Record<ResourceSession["status"], number> = {
 const SANDBOX_FILTER_STATUSES: ResourceSession["status"][] = ["running", "paused", "stopped", "destroying"];
 
 interface LeaseGroup {
+  sandboxId: string;
   leaseId: string;
   status: ResourceSession["status"];
   sessions: ResourceSession[];
   startedAt: string;
   metrics: SessionMetrics | null;
+}
+
+export function buildSandboxGroupDetailLink(group: { sandboxId?: string | null; leaseId?: string | null }) {
+  const sandboxId = String(group.sandboxId || "").trim();
+  if (!sandboxId) {
+    return null;
+  }
+  return {
+    href: `/sandboxes/${sandboxId}`,
+    label: sandboxId,
+  };
 }
 
 const AGENT_FALLBACK_COLORS = [
@@ -236,6 +248,7 @@ function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
         group[0].startedAt,
       );
       return {
+        sandboxId: group[0].sandboxId ?? "",
         leaseId: group[0].leaseId ?? "",
         status: best.status,
         sessions: sorted,
@@ -1021,6 +1034,7 @@ function SandboxInspector({
       : providerType !== "local" && group.leaseId && !group.sessions.some((session) => Boolean(session.runtimeSessionId))
         ? "当前 lease 没有 active runtime session，无法浏览文件。"
         : null;
+  const detailLink = buildSandboxGroupDetailLink(group);
 
   return (
     <div className="sandbox-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
@@ -1098,9 +1112,9 @@ function SandboxInspector({
         <div className="sandbox-modal__section sandbox-modal__section--fill">
           <div className="sandbox-modal__section-header">
             <h4>工作区文件</h4>
-            {group.leaseId ? (
-              <Link className="sandbox-link" to={`/leases/${group.leaseId}`}>
-                {group.leaseId}
+            {detailLink ? (
+              <Link className="sandbox-link" to={detailLink.href}>
+                {detailLink.label}
               </Link>
             ) : null}
           </div>

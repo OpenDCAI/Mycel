@@ -18,6 +18,7 @@ type ThreadDetailPayload = {
   } | null;
   summary?: {
     provider_name?: string | null;
+    sandbox_id?: string | null;
     lease_id?: string | null;
     current_instance_id?: string | null;
     desired_state?: string | null;
@@ -99,6 +100,14 @@ function TrajectoryEvents({ items }: { items: NonNullable<NonNullable<ThreadDeta
   );
 }
 
+export function buildThreadRelationShell(summary: NonNullable<ThreadDetailPayload["summary"]>) {
+  const sandboxId = summary.sandbox_id ?? null;
+  return {
+    sandboxLabel: "Sandbox",
+    sandboxHref: sandboxId ? `/sandboxes/${sandboxId}` : null,
+  };
+}
+
 export default function ThreadDetailPage() {
   const params = useParams<{ threadId: string }>();
   const threadId = params.threadId ?? "";
@@ -110,6 +119,7 @@ export default function ThreadDetailPage() {
 
   const summary = data.summary ?? {};
   const owner = data.owner ?? {};
+  const relationShell = buildThreadRelationShell(summary);
   const evaluationBatchRuns = data.evaluation_batch_runs ?? [];
   const trajectory = data.trajectory ?? {};
   const conversation = trajectory.conversation ?? [];
@@ -139,9 +149,9 @@ export default function ThreadDetailPage() {
             </span>
           </div>
           <div>
-            <strong>Lease</strong>
+            <strong>{relationShell.sandboxLabel}</strong>
             <span>
-              {summary.lease_id ? <Link to={`/leases/${summary.lease_id}`}>{summary.lease_id}</Link> : "-"}
+              {relationShell.sandboxHref && summary.sandbox_id ? <Link to={relationShell.sandboxHref}>{summary.sandbox_id}</Link> : "-"}
             </span>
           </div>
           <div>

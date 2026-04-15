@@ -47,6 +47,7 @@ class SupabaseSandboxMonitorRepo:
                 by_thread[tid] = {
                     "thread_id": tid,
                     "session_count": 0,
+                    "sandbox_id": lease.get("sandbox_id") if lease else None,
                     "last_active": last_active,
                     "lease_id": s.get("lease_id"),
                     "provider_name": lease.get("provider_name") if lease else None,
@@ -401,6 +402,7 @@ class SupabaseSandboxMonitorRepo:
             "started_at": session.get("started_at"),
             "ended_at": session.get("ended_at"),
             "close_reason": session.get("close_reason"),
+            "sandbox_id": lease.get("sandbox_id") if lease else None,
             "lease_id": session.get("lease_id"),
             "provider_name": lease.get("provider_name") if lease else None,
             "desired_state": lease.get("desired_state") if lease else None,
@@ -417,6 +419,7 @@ class SupabaseSandboxMonitorRepo:
             "provider": lease.get("provider_name") or "local",
             "session_id": session_id,
             "thread_id": thread_id,
+            "sandbox_id": lease.get("sandbox_id"),
             "lease_id": lease["lease_id"],
             "observed_state": lease.get("observed_state"),
             "desired_state": lease.get("desired_state"),

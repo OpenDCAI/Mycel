@@ -18,6 +18,7 @@ type OperationDetailPayload = {
     runtime_session_id?: string | null;
     thread_ids?: string[] | null;
   } | null;
+  sandbox_id?: string | null;
   result_truth?: {
     lease_state_before?: string | null;
     lease_state_after?: string | null;
@@ -39,6 +40,17 @@ const OPERATION_STATUS_CLASS_BY_STATUS: Record<string, string> = {
   rejected: "cleanup-status cleanup-status--danger",
 };
 
+export function buildOperationDetailShell(data: OperationDetailPayload) {
+  const sandboxId = data.sandbox_id ?? null;
+  return {
+    surfaceHref: "/sandboxes",
+    targetLabel: "Sandbox",
+    targetHref: sandboxId ? `/sandboxes/${sandboxId}` : null,
+    beforeLabel: "Sandbox Before",
+    afterLabel: "Sandbox After",
+  };
+}
+
 export default function OperationDetailPage() {
   const params = useParams<{ operationId: string }>();
   const operationId = params.operationId ?? "";
@@ -51,6 +63,7 @@ export default function OperationDetailPage() {
   const target = data.target ?? {};
   const result = data.result_truth ?? {};
   const events = data.events ?? [];
+  const shell = buildOperationDetailShell(data);
   const description = operation.reason ?? operation.summary ?? "Monitor operation state";
   const operationStatus = operation.status ?? "idle";
   const operationStatusClass = OPERATION_STATUS_CLASS_BY_STATUS[operationStatus] ?? "cleanup-status cleanup-status--muted";
@@ -80,9 +93,9 @@ export default function OperationDetailPage() {
           <article className="surface-card">
             <p className="surface-card__eyebrow">Surface</p>
             <p className="surface-card__value surface-card__value--compact">
-              <Link to="/leases">Leases</Link>
+              <Link to={shell.surfaceHref}>Sandboxes</Link>
             </p>
-            <p className="surface-card__body">Lease workbench currently owning this action.</p>
+            <p className="surface-card__body">Sandbox workbench currently owning this action.</p>
           </article>
         </div>
       </section>
@@ -90,15 +103,15 @@ export default function OperationDetailPage() {
         <h2>Target</h2>
         <div className="surface-grid">
           <article className="surface-card">
-            <p className="surface-card__eyebrow">Lease</p>
+            <p className="surface-card__eyebrow">{shell.targetLabel}</p>
             <p className="surface-card__value surface-card__value--compact">
-              {target.target_type === "lease" && target.target_id ? (
-                <Link to={`/leases/${target.target_id}`}>{target.target_id}</Link>
+              {shell.targetHref && data.sandbox_id ? (
+                <Link to={shell.targetHref}>{data.sandbox_id}</Link>
               ) : (
                 "-"
               )}
             </p>
-            <p className="surface-card__body">Primary lease object touched by this action.</p>
+            <p className="surface-card__body">Primary sandbox read surface touched by this action.</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Runtime</p>
@@ -124,14 +137,14 @@ export default function OperationDetailPage() {
         <h2>Result State</h2>
         <div className="surface-grid">
           <article className="surface-card">
-            <p className="surface-card__eyebrow">Lease Before</p>
+            <p className="surface-card__eyebrow">{shell.beforeLabel}</p>
             <p className="surface-card__value surface-card__value--compact">{result.lease_state_before ?? "-"}</p>
-            <p className="surface-card__body">Observed lease state when the operation started.</p>
+            <p className="surface-card__body">Observed sandbox state when the operation started.</p>
           </article>
           <article className="surface-card">
-            <p className="surface-card__eyebrow">Lease After</p>
+            <p className="surface-card__eyebrow">{shell.afterLabel}</p>
             <p className="surface-card__value surface-card__value--compact">{result.lease_state_after ?? "-"}</p>
-            <p className="surface-card__body">Most recent post-operation lease state.</p>
+            <p className="surface-card__body">Most recent post-operation sandbox state.</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Runtime After</p>

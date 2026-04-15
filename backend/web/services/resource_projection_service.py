@@ -56,6 +56,7 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
         sessions.append(
             resource_service.build_resource_session_payload(
                 session_identity=f"{lease['lease_id']}:{thread_id}",
+                sandbox_id=str(lease.get("sandbox_id") or "").strip() or None,
                 lease_id=str(lease["lease_id"]),
                 thread_id=thread_id,
                 runtime_session_id=lease.get("runtime_session_id"),
@@ -303,6 +304,7 @@ def list_resource_providers() -> dict[str, Any]:
             normalized_sessions.append(
                 resource_service.build_resource_session_payload(
                     session_identity=session_identity,
+                    sandbox_id=str(session.get("sandbox_id") or "").strip() or None,
                     lease_id=lease_id,
                     thread_id=thread_id,
                     runtime_session_id=runtime_session_id,
