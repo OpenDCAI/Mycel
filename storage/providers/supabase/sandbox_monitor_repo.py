@@ -84,37 +84,54 @@ class SupabaseSandboxMonitorRepo:
         lease_map = self._sandboxes_by_legacy_lease_id("query_thread_sessions")
         return [self._session_with_lease(s, lease_map.get(s.get("lease_id") or "")) for s in sessions]
 
-    def query_leases(self) -> list[dict]:
-        sandboxes = self._ordered_sandboxes("query_leases")
-        leases = [self._lease_row_from_sandbox(sandbox) for sandbox in sandboxes]
-        if not leases:
+    def query_sandboxes(self) -> list[dict]:
+        sandboxes = self._ordered_sandboxes("query_sandboxes")
+        rows = [self._lease_row_from_sandbox(sandbox) for sandbox in sandboxes]
+        if not rows:
             return []
 
-        lease_ids = [le["lease_id"] for le in leases]
+        lease_ids = [row["lease_id"] for row in rows]
         terminals = q.rows_in_chunks(
             lambda: self._client.table("abstract_terminals").select("lease_id,thread_id,created_at"),
             "lease_id",
             lease_ids,
             _REPO,
-            "query_leases terminals",
+            "query_sandboxes terminals",
         )
-        # Pick most recent terminal per lease
-        term_map: dict[str, str] = {}
-        for t in sorted(terminals, key=lambda x: x.get("created_at") or ""):
-            term_map[t["lease_id"]] = t["thread_id"]
+        thread_by_lease: dict[str, str] = {}
+        for row in sorted(terminals, key=lambda x: x.get("created_at") or ""):
+            thread_by_lease[str(row.get("lease_id") or "")] = row["thread_id"]
 
         result = []
-        for lease in leases:
-            row = dict(lease)
-            row["thread_id"] = term_map.get(lease["lease_id"])
-            result.append(row)
+        for row in rows:
+            item = dict(row)
+            item["thread_id"] = thread_by_lease.get(row["lease_id"])
+            result.append(item)
         return result
+
+    def query_leases(self) -> list[dict]:
+        return self.query_sandboxes()
 
     def list_leases_with_threads(self) -> list[dict]:
         return self.query_leases()
 
+    def query_sandbox(self, sandbox_id: str) -> dict | None:
+        sandbox_key = str(sandbox_id or "").strip()
+        if not sandbox_key:
+            return None
+        for sandbox in self._ordered_sandboxes("query_sandbox"):
+            if str(sandbox.get("id") or "").strip() == sandbox_key:
+                return self._lease_row_from_sandbox(sandbox)
+        return None
+
     def query_lease(self, lease_id: str) -> dict | None:
         return self._sandboxes_by_legacy_lease_id("query_lease").get(lease_id)
+
+    def query_sandbox_sessions(self, sandbox_id: str) -> list[dict]:
+        sandbox = self.query_sandbox(sandbox_id)
+        if sandbox is None:
+            return []
+        return self.query_lease_sessions(str(sandbox.get("lease_id") or ""))
 
     def query_lease_sessions(self, lease_id: str) -> list[dict]:
         sessions = q.rows(
@@ -132,6 +149,12 @@ class SupabaseSandboxMonitorRepo:
         )
         lease = self.query_lease(lease_id)
         return [self._session_with_lease(session, lease, include_thread=True) for session in sessions]
+
+    def query_sandbox_threads(self, sandbox_id: str) -> list[dict]:
+        sandbox = self.query_sandbox(sandbox_id)
+        if sandbox is None:
+            return []
+        return self.query_lease_threads(str(sandbox.get("lease_id") or ""))
 
     def query_lease_threads(self, lease_id: str) -> list[dict]:
         self._require_sandbox_rows_by_legacy_lease_ids([lease_id], "query_lease_threads")
@@ -153,6 +176,12 @@ class SupabaseSandboxMonitorRepo:
                 seen.add(r["thread_id"])
                 result.append({"thread_id": r["thread_id"]})
         return result
+
+    def query_sandbox_instance_id(self, sandbox_id: str) -> str | None:
+        sandbox = self.query_sandbox(sandbox_id)
+        if sandbox is None:
+            return None
+        return self.query_lease_instance_id(str(sandbox.get("lease_id") or ""))
 
     def query_lease_events(self, lease_id: str) -> list[dict]:
         self._require_sandbox_rows_by_legacy_lease_ids([lease_id], "query_lease_events")

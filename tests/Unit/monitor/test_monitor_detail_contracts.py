@@ -69,6 +69,24 @@ class FakeLeaseRepo:
     def query_leases(self):
         return self.leases
 
+    def query_sandbox(self, sandbox_id):
+        lease = self.lease if self.lease is not None else _lease_row(sandbox_id=sandbox_id)
+        if lease is _MISSING:
+            return None
+        return {**lease, "sandbox_id": lease.get("sandbox_id") or sandbox_id}
+
+    def query_sandboxes(self):
+        return self.leases
+
+    def query_sandbox_threads(self, _sandbox_id):
+        return self.threads
+
+    def query_sandbox_sessions(self, _sandbox_id):
+        return self.sessions
+
+    def query_sandbox_instance_id(self, _sandbox_id):
+        return self.runtime_session_id
+
     def close(self):
         return None
 
@@ -351,6 +369,76 @@ def test_get_monitor_lease_detail_merges_monitor_repo_state(monkeypatch):
     ]
 
 
+def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            threads=[{"thread_id": "thread-1"}],
+            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
+        ),
+    )
+
+    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+
+    assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
+    assert payload["sandbox"]["lease_id"] == "lease-1"
+    assert payload["provider"] == {"id": "daytona", "name": "daytona"}
+    assert payload["runtime"] == {"runtime_session_id": "runtime-1"}
+    assert payload["threads"] == [{"thread_id": "thread-1"}]
+    assert "lease" not in payload
+
+
+def test_list_leases_uses_canonical_sandbox_source(monkeypatch):
+    class CanonicalOnlyRepo(FakeLeaseRepo):
+        def query_leases(self):
+            raise AssertionError("legacy lease source should not be the single source anymore")
+
+        def query_sandboxes(self):
+            return [
+                _lease_row(
+                    sandbox_id="sandbox-1",
+                    lease_id="lease-1",
+                    desired_state="paused",
+                    observed_state="paused",
+                    thread_id="thread-gone",
+                )
+            ]
+
+    _use_monitor_repo(monkeypatch, CanonicalOnlyRepo())
+    monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
+
+    payload = monitor_service.list_leases()
+
+    assert payload["items"][0]["sandbox_id"] == "sandbox-1"
+    assert payload["items"][0]["lease_id"] == "lease-1"
+
+
+def test_get_monitor_lease_detail_uses_canonical_sandbox_source(monkeypatch):
+    class CanonicalOnlyRepo(FakeLeaseRepo):
+        def query_lease_threads(self, _lease_id):
+            raise AssertionError("legacy lease detail queries should not remain single source")
+
+        def query_lease_sessions(self, _lease_id):
+            raise AssertionError("legacy lease detail queries should not remain single source")
+
+        def query_lease_instance_id(self, _lease_id):
+            raise AssertionError("legacy lease detail queries should not remain single source")
+
+    _use_monitor_repo(
+        monkeypatch,
+        CanonicalOnlyRepo(
+            threads=[{"thread_id": "thread-1"}],
+            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
+        ),
+    )
+
+    payload = monitor_service.get_monitor_lease_detail("lease-1")
+
+    assert payload["lease"]["sandbox_id"] == "sandbox-1"
+    assert payload["lease"]["lease_id"] == "lease-1"
+    assert "sandbox" not in payload
+
+
 def test_get_monitor_lease_detail_exposes_cleanup_state(monkeypatch):
     _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
 
@@ -592,6 +680,23 @@ def test_list_leases_ignores_stale_thread_refs_when_classifying_triage(monkeypat
     assert payload["items"][0]["lease_id"] == "lease-1"
     assert payload["items"][0]["thread"] == {"thread_id": None, "is_orphan": True}
     assert payload["items"][0]["triage"]["category"] == "orphan_cleanup"
+
+
+def test_list_monitor_sandboxes_ignores_stale_thread_refs_when_classifying_triage(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            leases=[_lease_row(sandbox_id="sandbox-1", desired_state="paused", observed_state="paused", thread_id="thread-gone")]
+        ),
+    )
+    monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
+
+    payload = monitor_service.list_monitor_sandboxes()
+
+    assert payload["title"] == "All Sandboxes"
+    assert payload["triage"]["summary"]["orphan_cleanup"] == 1
+    assert payload["items"][0]["sandbox_id"] == "sandbox-1"
+    assert payload["items"][0]["lease_id"] == "lease-1"
 
 
 @pytest.mark.asyncio
