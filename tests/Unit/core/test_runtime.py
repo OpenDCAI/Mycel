@@ -1,6 +1,7 @@
 """Unit tests for PhysicalTerminalRuntime."""
 
 import asyncio
+import inspect
 import re
 import sqlite3
 import sys
@@ -119,6 +120,12 @@ def test_sqlite_terminal_repo_create_repairs_stale_active_pointer(temp_db):
         assert active["terminal_id"] == "term-new"
     finally:
         repo.close()
+
+
+def test_sqlite_lease_repo_delete_no_longer_carries_legacy_snapshot_cleanup_shell():
+    source = inspect.getsource(SQLiteLeaseRepo.delete)
+
+    assert "lease_resource_snapshots" not in source
 
 
 def test_remote_runtime_treats_daytona_pty_1011_as_infra_error():
