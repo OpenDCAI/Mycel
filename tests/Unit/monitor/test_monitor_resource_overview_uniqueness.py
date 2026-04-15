@@ -79,6 +79,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
             "provider": "local",
             "session_id": None,
             "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "observed_state": "running",
             "desired_state": "running",
@@ -88,6 +89,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
             "provider": "local",
             "session_id": None,
             "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "observed_state": "running",
             "desired_state": "running",
@@ -119,7 +121,8 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
     assert local["telemetry"]["running"]["used"] == 1
     assert local["sessions"] == [
         {
-            "id": "lease-1:thread-1",
+            "id": "sandbox-1:thread-1",
+            "sandboxId": "sandbox-1",
             "leaseId": "lease-1",
             "threadId": "thread-1",
             "agentUserId": "agent-1",
@@ -138,6 +141,7 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
             "provider": "daytona",
             "session_id": "sess-1",
             "thread_id": "thread-supabase",
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "observed_state": "running",
             "desired_state": "running",
@@ -174,7 +178,8 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
 
     assert payload["providers"][0]["sessions"] == [
         {
-            "id": "lease-1:thread-supabase",
+            "id": "sandbox-1:thread-supabase",
+            "sandboxId": "sandbox-1",
             "leaseId": "lease-1",
             "threadId": "thread-supabase",
             "agentUserId": "agent-1",
@@ -242,6 +247,7 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
             "provider": "daytona_selfhost",
             "session_id": None,
             "thread_id": "subagent-deadbeef",
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "observed_state": "paused",
             "desired_state": "paused",
@@ -278,7 +284,8 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
 
     assert sessions == [
         {
-            "id": "lease-1:thread-parent",
+            "id": "sandbox-1:thread-parent",
+            "sandboxId": "sandbox-1",
             "leaseId": "lease-1",
             "threadId": "thread-parent",
             "agentUserId": "agent-1",
@@ -297,6 +304,7 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
             "provider": "daytona_selfhost",
             "session_id": "sess-a",
             "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "observed_state": "running",
             "desired_state": "running",
@@ -306,6 +314,7 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
             "provider": "daytona_selfhost",
             "session_id": "sess-b",
             "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
             "observed_state": "running",
             "desired_state": "running",
@@ -324,7 +333,8 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
 
     assert sessions == [
         {
-            "id": "lease-1:thread-parent",
+            "id": "sandbox-1:thread-parent",
+            "sandboxId": "sandbox-1",
             "leaseId": "lease-1",
             "threadId": "thread-parent",
             "agentUserId": "agent-1",
