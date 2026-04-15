@@ -247,6 +247,36 @@ def test_query_lease_reads_container_sandbox_row() -> None:
     }
 
 
+def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    legacy_lease_id="lease-1",
+                )
+            ],
+            "abstract_terminals": [
+                {"thread_id": "thread-2", "lease_id": "lease-1", "created_at": "2026-04-05T10:02:00"},
+                {"thread_id": "thread-1", "lease_id": "lease-1", "created_at": "2026-04-05T10:01:00"},
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "query_lease_threads",
+        lambda lease_id: (_ for _ in ()).throw(
+            AssertionError("query_sandbox_threads should not roundtrip through query_lease_threads")
+        ),
+    )
+
+    assert repo.query_sandbox_threads("sandbox-1") == [
+        {"thread_id": "thread-2"},
+        {"thread_id": "thread-1"},
+    ]
+
+
 def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
     repo = _repo(
         {
@@ -277,6 +307,36 @@ def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
         "last_error": None,
         "updated_at": "2026-04-05T10:10:00",
     }
+
+
+def test_query_lease_threads_no_longer_roundtrips_through_legacy_bridge_requirement(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    legacy_lease_id="lease-1",
+                )
+            ],
+            "abstract_terminals": [
+                {"thread_id": "thread-2", "lease_id": "lease-1", "created_at": "2026-04-05T10:02:00"},
+                {"thread_id": "thread-1", "lease_id": "lease-1", "created_at": "2026-04-05T10:01:00"},
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "_require_sandbox_rows_by_legacy_lease_ids",
+        lambda lease_ids, operation: (_ for _ in ()).throw(
+            AssertionError("query_lease_threads should not roundtrip through _require_sandbox_rows_by_legacy_lease_ids")
+        ),
+    )
+
+    assert repo.query_lease_threads("lease-1") == [
+        {"thread_id": "thread-2"},
+        {"thread_id": "thread-1"},
+    ]
 
 
 def test_query_thread_sessions_reads_container_sandbox_rows() -> None:

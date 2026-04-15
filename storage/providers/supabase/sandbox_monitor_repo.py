@@ -174,10 +174,29 @@ class SupabaseSandboxMonitorRepo:
         sandbox = self.query_sandbox(sandbox_id)
         if sandbox is None:
             return []
-        return self.query_lease_threads(str(sandbox.get("lease_id") or ""))
+        lease_id = str(sandbox.get("lease_id") or "").strip()
+        if not lease_id:
+            return []
+        rows = q.rows(
+            q.order(
+                self._client.table("abstract_terminals").select("thread_id").eq("lease_id", lease_id),
+                "created_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_sandbox_threads",
+            ).execute(),
+            _REPO,
+            "query_sandbox_threads",
+        )
+        seen: set[str] = set()
+        result = []
+        for r in rows:
+            if r["thread_id"] not in seen:
+                seen.add(r["thread_id"])
+                result.append({"thread_id": r["thread_id"]})
+        return result
 
     def query_lease_threads(self, lease_id: str) -> list[dict]:
-        self._require_sandbox_rows_by_legacy_lease_ids([lease_id], "query_lease_threads")
         rows = q.rows(
             q.order(
                 self._client.table("abstract_terminals").select("thread_id").eq("lease_id", lease_id),
