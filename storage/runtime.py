@@ -175,7 +175,6 @@ def list_resource_snapshots_by_sandbox(
 def upsert_resource_snapshot_for_sandbox(
     *,
     sandbox_id: str,
-    legacy_lease_id: str,
     provider_name: str,
     observed_state: str,
     probe_mode: str,
@@ -193,8 +192,6 @@ def upsert_resource_snapshot_for_sandbox(
 ) -> None:
     if not sandbox_id:
         raise RuntimeError("Resource snapshot write requires sandbox_id.")
-    if not legacy_lease_id:
-        raise RuntimeError("Resource snapshot write requires legacy_lease_id bridge.")
 
     repo = build_resource_snapshot_repo(
         supabase_client=supabase_client,
@@ -205,7 +202,6 @@ def upsert_resource_snapshot_for_sandbox(
             raise RuntimeError("sandbox-shaped snapshot repo write requires upsert_resource_snapshot_for_sandbox")
         repo.upsert_resource_snapshot_for_sandbox(
             sandbox_id=sandbox_id,
-            legacy_lease_id=legacy_lease_id,
             provider_name=provider_name,
             observed_state=observed_state,
             probe_mode=probe_mode,

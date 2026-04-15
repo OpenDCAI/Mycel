@@ -642,7 +642,6 @@ class ResourceSnapshotRepo(Protocol):
         self,
         *,
         sandbox_id: str,
-        legacy_lease_id: str,
         provider_name: str,
         observed_state: str,
         probe_mode: str,

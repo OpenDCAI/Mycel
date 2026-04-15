@@ -34,6 +34,9 @@ class _FakeSandboxSnapshotRepo:
     def __init__(self) -> None:
         self.upserts: list[dict] = []
 
+    def close(self) -> None:
+        return None
+
     def upsert_resource_snapshot_for_sandbox(self, **kwargs):
         self.upserts.append(kwargs)
 
@@ -45,11 +48,40 @@ def test_upsert_resource_snapshot_for_sandbox_requires_repo_sandbox_wrapper(monk
     with pytest.raises(RuntimeError, match="sandbox-shaped snapshot repo write requires upsert_resource_snapshot_for_sandbox"):
         storage_runtime.upsert_resource_snapshot_for_sandbox(
             sandbox_id="sandbox-1",
-            legacy_lease_id="lease-1",
             provider_name="p1",
             observed_state="detached",
             probe_mode="running_runtime",
         )
+
+
+def test_upsert_resource_snapshot_for_sandbox_no_longer_requires_legacy_lease_bridge(monkeypatch) -> None:
+    repo = _FakeSandboxSnapshotRepo()
+    monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: repo)
+
+    storage_runtime.upsert_resource_snapshot_for_sandbox(
+        sandbox_id="sandbox-1",
+        provider_name="p1",
+        observed_state="detached",
+        probe_mode="running_runtime",
+    )
+
+    assert repo.upserts == [
+        {
+            "sandbox_id": "sandbox-1",
+            "provider_name": "p1",
+            "observed_state": "detached",
+            "probe_mode": "running_runtime",
+            "cpu_used": None,
+            "cpu_limit": None,
+            "memory_used_mb": None,
+            "memory_total_mb": None,
+            "disk_used_gb": None,
+            "disk_total_gb": None,
+            "network_rx_kbps": None,
+            "network_tx_kbps": None,
+            "probe_error": None,
+        }
+    ]
 
 
 def test_resource_snapshot_adapter_no_longer_exposes_lease_shaped_write_shell() -> None:
@@ -81,7 +113,6 @@ def test_probe_and_upsert_for_instance_accepts_sandbox_shaped_repo() -> None:
     assert repo.upserts == [
         {
             "sandbox_id": "sandbox-1",
-            "legacy_lease_id": "lease-1",
             "provider_name": "p1",
             "observed_state": "detached",
             "probe_mode": "running_runtime",
@@ -121,7 +152,6 @@ def test_probe_and_upsert_for_instance_without_repo_prefers_sandbox_shaped_helpe
     assert captured == [
         {
             "sandbox_id": "sandbox-1",
-            "legacy_lease_id": "lease-1",
             "provider_name": "p1",
             "observed_state": "detached",
             "probe_mode": "running_runtime",
@@ -184,7 +214,6 @@ def test_refresh_resource_snapshots_routes_successful_probe_through_sandbox_wrap
     assert captured == [
         {
             "sandbox_id": "sandbox-1",
-            "legacy_lease_id": "l-1",
             "provider_name": "p1",
             "observed_state": "detached",
             "probe_mode": "running_runtime",
@@ -276,7 +305,6 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     assert captured == [
         {
             "sandbox_id": "sandbox-1",
-            "legacy_lease_id": "l-1",
             "provider_name": "p-missing",
             "observed_state": "detached",
             "probe_mode": "running_runtime",

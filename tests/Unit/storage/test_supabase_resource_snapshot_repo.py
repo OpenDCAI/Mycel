@@ -43,7 +43,6 @@ def test_supabase_resource_snapshot_repo_upserts_for_sandbox_without_lease_shape
 
     repo.upsert_resource_snapshot_for_sandbox(
         sandbox_id="sandbox-1",
-        legacy_lease_id="lease-1",
         provider_name="daytona",
         observed_state="running",
         probe_mode="runtime",

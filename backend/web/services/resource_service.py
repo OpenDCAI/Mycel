@@ -196,7 +196,6 @@ def refresh_resource_snapshots() -> dict[str, Any]:
         if provider is None:
             upsert_resource_snapshot_for_sandbox(
                 sandbox_id=sandbox_id,
-                legacy_lease_id=lease_id,
                 provider_name=provider_key,
                 observed_state=status,
                 probe_mode=probe_mode,
