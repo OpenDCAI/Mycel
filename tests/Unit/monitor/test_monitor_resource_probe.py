@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from backend.web.services import resource_service
+from sandbox import resource_snapshot
 
 
 class _FakeProvider:
@@ -24,6 +25,49 @@ class _FakeSnapshotRepo:
 
     def upsert_lease_resource_snapshot(self, **kwargs):
         self.upserts.append(kwargs)
+
+
+class _FakeSandboxSnapshotRepo:
+    def __init__(self) -> None:
+        self.upserts: list[dict] = []
+
+    def upsert_resource_snapshot_for_sandbox(self, **kwargs):
+        self.upserts.append(kwargs)
+
+
+def test_probe_and_upsert_for_instance_accepts_sandbox_shaped_repo() -> None:
+    repo = _FakeSandboxSnapshotRepo()
+
+    result = resource_snapshot.probe_and_upsert_for_instance(
+        sandbox_id="sandbox-1",
+        lease_id="lease-1",
+        provider_name="p1",
+        observed_state="detached",
+        probe_mode="running_runtime",
+        provider=_FakeProvider(),
+        instance_id="instance-1",
+        repo=repo,
+    )
+
+    assert result == {"ok": False, "error": "metrics unavailable"}
+    assert repo.upserts == [
+        {
+            "sandbox_id": "sandbox-1",
+            "legacy_lease_id": "lease-1",
+            "provider_name": "p1",
+            "observed_state": "detached",
+            "probe_mode": "running_runtime",
+            "cpu_used": None,
+            "cpu_limit": None,
+            "memory_used_mb": None,
+            "memory_total_mb": None,
+            "disk_used_gb": None,
+            "disk_total_gb": None,
+            "network_rx_kbps": None,
+            "network_tx_kbps": None,
+            "probe_error": "metrics unavailable",
+        }
+    ]
 
 
 def test_refresh_resource_snapshots_routes_successful_probe_through_sandbox_wrapper(monkeypatch):
@@ -114,6 +158,7 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
     assert result["running_targets"] == 1
     assert result["non_running_targets"] == 0
     assert {call["lease_id"] for call in calls} == {"l-1"}
+    assert {call["sandbox_id"] for call in calls} == {"sandbox-1"}
     assert {call["probe_mode"] for call in calls} == {"running_runtime"}
 
 
