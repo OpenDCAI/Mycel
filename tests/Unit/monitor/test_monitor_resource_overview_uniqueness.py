@@ -471,3 +471,30 @@ def test_visible_resource_session_stats_uses_sandbox_keyed_runtime_lookup(monkey
     stats = resource_projection_service.visible_resource_session_stats()
 
     assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
+
+
+def test_index_session_snapshots_by_sandbox_rekeys_lease_snapshots_for_session_enrichment():
+    sessions = [
+        {
+            "sandbox_id": "sandbox-a",
+            "lease_id": "lease-a",
+        },
+        {
+            "sandbox_id": "sandbox-b",
+            "lease_id": "lease-b",
+        },
+    ]
+    snapshot_by_lease = {
+        "lease-a": {"lease_id": "lease-a", "cpu_used": 11},
+        "lease-b": {"lease_id": "lease-b", "cpu_used": 22},
+    }
+
+    snapshot_by_sandbox = resource_projection_service._index_session_snapshots_by_sandbox(  # type: ignore[attr-defined]
+        sessions,
+        snapshot_by_lease,
+    )
+
+    assert snapshot_by_sandbox == {
+        "sandbox-a": {"lease_id": "lease-a", "cpu_used": 11},
+        "sandbox-b": {"lease_id": "lease-b", "cpu_used": 22},
+    }
