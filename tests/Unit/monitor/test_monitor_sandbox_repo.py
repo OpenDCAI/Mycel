@@ -620,6 +620,59 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
     ]
 
 
+def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge(monkeypatch) -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-running",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="instance-lease",
+                    observed_state="detached",
+                    updated_at="2026-04-05T10:10:00",
+                    legacy_lease_id="lease-running",
+                ),
+                _sandbox(
+                    "sandbox-paused",
+                    provider_env_id="instance-local",
+                    desired_state="paused",
+                    observed_state="paused",
+                    updated_at="2026-04-05T10:11:00",
+                    legacy_lease_id="lease-paused",
+                ),
+            ],
+            "sandbox_instances": [
+                {"lease_id": "lease-running", "provider_session_id": "provider-session-1"},
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        repo,
+        "query_lease_instance_ids",
+        lambda lease_ids: (_ for _ in ()).throw(
+            AssertionError("probe-target assembly should not roundtrip through query_lease_instance_ids")
+        ),
+    )
+
+    assert repo.list_probe_targets() == [
+        {
+            "sandbox_id": "sandbox-paused",
+            "legacy_lease_id": "lease-paused",
+            "provider_name": "local",
+            "instance_id": "instance-local",
+            "observed_state": "paused",
+        },
+        {
+            "sandbox_id": "sandbox-running",
+            "legacy_lease_id": "lease-running",
+            "provider_name": "daytona_selfhost",
+            "instance_id": "provider-session-1",
+            "observed_state": "detached",
+        },
+    ]
+
+
 @pytest.mark.parametrize(
     ("include_updated_at", "caller"),
     [

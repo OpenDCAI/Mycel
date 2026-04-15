@@ -323,12 +323,15 @@ class SupabaseSandboxMonitorRepo:
             if lease.get("observed_state") in {"running", "detached", "paused"}
         ]
 
-        instance_map = self.query_lease_instance_ids([lease["lease_id"] for lease in leases])
+        instance_map = self.query_sandbox_instance_ids(
+            [sandbox_id for sandbox_id in (lease.get("sandbox_id") for lease in leases) if sandbox_id]
+        )
 
         targets = []
         for lease in leases:
             lid = lease["lease_id"]
-            instance_id = instance_map.get(lid) or lease.get("current_instance_id") or ""
+            sandbox_id = str(lease.get("sandbox_id") or "").strip()
+            instance_id = instance_map.get(sandbox_id) or lease.get("current_instance_id") or ""
             if lid and lease.get("provider_name") and instance_id:
                 targets.append(
                     {
