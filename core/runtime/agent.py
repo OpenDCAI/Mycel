@@ -46,7 +46,6 @@ from config.observation_loader import ObservationLoader  # noqa: E402
 from config.observation_schema import ObservationConfig  # noqa: E402
 
 # Multi-agent services
-from core.agents.registry import AgentRegistry as _AgentRegistry  # noqa: E402
 from core.agents.service import AgentService  # noqa: E402
 from core.model_params import normalize_model_kwargs  # noqa: E402
 
@@ -84,8 +83,6 @@ from core.tools.web.service import WebService  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
 
 logger = logging.getLogger(__name__)
-
-AgentRegistry = _AgentRegistry
 
 if TYPE_CHECKING:
     from sandbox import Sandbox
