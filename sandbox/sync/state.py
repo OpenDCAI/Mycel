@@ -20,17 +20,11 @@ class SyncState:
     def close(self) -> None:
         self._repo.close()
 
-    def track_file(self, thread_id: str, relative_path: str, checksum: str, timestamp: int):
-        self._repo.track_file(thread_id, relative_path, checksum, timestamp)
-
     def track_files_batch(self, thread_id: str, file_records: list[tuple[str, str, int]]):
         """Batch insert/update multiple files in a single transaction.
         file_records: list of (relative_path, checksum, timestamp)
         """
         self._repo.track_files_batch(thread_id, file_records)
-
-    def get_file_info(self, thread_id: str, relative_path: str) -> dict | None:
-        return self._repo.get_file_info(thread_id, relative_path)
 
     def get_all_files(self, thread_id: str) -> dict[str, str]:
         """Batch fetch all tracked files for a thread. Returns {relative_path: checksum}."""
