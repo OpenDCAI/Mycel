@@ -164,7 +164,9 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       // user already left /marketplace. Only log if the marketplace route is
       // still active; otherwise this is stale UI noise.
       if (!isActiveMarketplaceRoute()) return;
-      console.error("Failed to fetch marketplace items:", e);
+      if (!isMarketplaceUnavailableError(e)) {
+        console.error("Failed to fetch marketplace items:", e);
+      }
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       set({ loading: false });

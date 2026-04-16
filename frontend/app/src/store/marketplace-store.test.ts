@@ -53,6 +53,24 @@ describe("useMarketplaceStore", () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
+  it("keeps marketplace explore outage user-facing without logging expected hub 503 noise", async () => {
+    window.history.replaceState({}, "", "/marketplace");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "hub down",
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await useMarketplaceStore.getState().fetchItems();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(useMarketplaceStore.getState().error).toBe("Marketplace Hub unavailable");
+  });
+
   it("does not log a failed detail fetch once navigation already left the marketplace detail route", async () => {
     window.history.replaceState({}, "", "/marketplace/item-1");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
