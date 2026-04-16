@@ -338,6 +338,8 @@ def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing
 
 @_patch_env_api_key()
 def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch, tmp_path, _patch_runtime_storage_container):
+    import core.agents.registry as agent_registry_module
+    import core.runtime.agent as runtime_agent
     from core.runtime.agent import LeonAgent
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
@@ -359,6 +361,8 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
         assert agent._agent_registry is None
         assert agent._agent_service._agent_registry is None
         assert "agent_registry" not in captured
+        assert hasattr(runtime_agent, "AgentRegistry") is False
+        assert hasattr(agent_registry_module, "AgentRegistry") is False
     finally:
         agent.close()
 
@@ -964,10 +968,6 @@ def test_leon_agent_chat_tool_wiring_rejects_user_id_only_runtime_shape(monkeypa
         def __init__(self, *args, **kwargs) -> None:
             return None
 
-    class _NoopRegistry:
-        def __init__(self, *args, **kwargs) -> None:
-            return None
-
     class _FakeChatToolService:
         def __init__(self, *args, **kwargs) -> None:
             raise AssertionError("chat tool should not initialize from user_id-only runtime shape")
@@ -975,7 +975,6 @@ def test_leon_agent_chat_tool_wiring_rejects_user_id_only_runtime_shape(monkeypa
     monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
-    monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
     monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
     monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
 
@@ -1076,10 +1075,6 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
         def __init__(self, *args, **kwargs) -> None:
             return None
 
-    class _NoopRegistry:
-        def __init__(self, *args, **kwargs) -> None:
-            return None
-
     class _FakeChatToolService:
         def __init__(self, *args, **kwargs) -> None:
             captured.update(kwargs)
@@ -1087,7 +1082,6 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
     monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
     monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
-    monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
     monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
     monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
 
