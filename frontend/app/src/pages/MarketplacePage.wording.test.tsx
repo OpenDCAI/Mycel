@@ -129,6 +129,42 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByLabelText("location").textContent).not.toContain("sub=member");
   });
 
+  it("shows 检查更新 only on the installed Agent tab", () => {
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent-user"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "检查更新" })).toBeTruthy();
+
+    unmount();
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=skill"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+  });
+
+  it("does not show 检查更新 on the installed Sandbox tab", () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+  });
+
   it("uses Subagent wording for marketplace agent resources", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent"]}>
