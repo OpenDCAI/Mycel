@@ -365,19 +365,19 @@ class SandboxManager:
     def _destroy_volume_entry(self, volume_id: str) -> None:
         import json
 
-        from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
+        from sandbox.volume_source import deserialize_volume_source
 
         repo = self._sandbox_volume_repo()
         try:
             entry = repo.get(volume_id)
             if not entry:
                 raise RuntimeError(f"Volume not found: {volume_id}")
-            source = deserialize_volume_source(json.loads(entry["source"]))
             # @@@managed-volume-destroy-seam - provider-managed volumes must be reclaimed
             # through the manager-owned lease destroy path or Daytona quotas will leak.
             if self.provider_capability.runtime_kind == "daytona_pty":
-                volume_name = source.volume_name if isinstance(source, DaytonaVolume) else f"leon-volume-{volume_id}"
+                volume_name = f"leon-volume-{volume_id}"
                 self.provider.delete_managed_volume(volume_name)
+            source = deserialize_volume_source(json.loads(entry["source"]))
             source.cleanup()
             if not repo.delete(volume_id):
                 raise RuntimeError(f"Failed to delete volume metadata: {volume_id}")
@@ -386,10 +386,6 @@ class SandboxManager:
 
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
-        import json
-
-        from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
-
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
@@ -404,32 +400,20 @@ class SandboxManager:
             return {"source_path": source_path, "remote_path": remote_path}
 
         self._ensure_thread_volume(thread_id, lease)
-        entry = self._resolve_volume_entry(thread_id, lease)
-
-        source = deserialize_volume_source(json.loads(entry["source"]))
+        self._resolve_volume_entry(thread_id, lease)
         volume_id = lease.volume_id
-
         # @@@daytona-upgrade - first startup creates managed volume
-        if not isinstance(source, DaytonaVolume):
-            source = self._upgrade_to_daytona_volume(
-                thread_id,
-                source,
-                volume_id,
-                remote_path,
-            )
-
-        if isinstance(source, DaytonaVolume):
-            self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
-        else:
-            self.volume.mount(thread_id, source_path, remote_path)
+        volume_name = self._upgrade_to_daytona_volume(
+            thread_id,
+            volume_id,
+            remote_path,
+        )
+        self.volume.mount_managed_volume(thread_id, volume_name, remote_path)
 
         return {"source_path": source_path, "remote_path": remote_path}
 
-    def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
-        """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
-        import json
-
-        from sandbox.volume_source import DaytonaVolume
+    def _upgrade_to_daytona_volume(self, thread_id: str, volume_id: str, remote_path: str):
+        """Ensure Daytona managed volume exists and return provider backend ref."""
 
         try:
             volume_name = self.provider.create_managed_volume(volume_id, remote_path)
@@ -441,18 +425,7 @@ class SandboxManager:
             else:
                 raise
 
-        new_source = DaytonaVolume(
-            staging_path=current_source.host_path,
-            volume_name=volume_name,
-        )
-
-        repo = self._sandbox_volume_repo()
-        try:
-            repo.update_source(volume_id, json.dumps(new_source.serialize()))
-        finally:
-            repo.close()
-
-        return new_source
+        return volume_name
 
     def _fire_session_ready(self, session_id: str, reason: str) -> None:
         if self._on_session_ready:

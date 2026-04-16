@@ -9,7 +9,7 @@ import sandbox.manager as sandbox_manager_module
 from config.user_paths import user_home_path
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
-from sandbox.volume_source import DaytonaVolume, HostVolume
+from sandbox.volume_source import HostVolume, deserialize_volume_source
 
 
 class _FakeVolumeRepo:
@@ -338,6 +338,19 @@ def test_manager_no_longer_exposes_generic_volume_source_helper():
     assert not hasattr(manager, "resolve_volume_source")
 
 
+def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_path):
+    source = deserialize_volume_source(
+        {
+            "type": "daytona",
+            "staging_path": str(tmp_path / "staging"),
+            "volume_name": "leon-volume-volume-1",
+        }
+    )
+
+    assert isinstance(source, HostVolume)
+    assert source.host_path == (tmp_path / "staging").resolve()
+
+
 def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
@@ -620,7 +633,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
-    repo = _FakeVolumeRepo(DaytonaVolume(tmp_path / "staging", "leon-volume-volume-1").serialize())
+    repo = _FakeVolumeRepo(HostVolume(tmp_path / "staging").serialize())
     manager._sandbox_volume_repo = lambda: repo
 
     class _Lease:
@@ -963,17 +976,16 @@ def test_upgrade_to_daytona_volume_uses_volume_id_for_provider_backend_ref(monke
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
 
-    new_source = manager._upgrade_to_daytona_volume(
+    volume_name = manager._upgrade_to_daytona_volume(
         "thread-supabase",
-        HostVolume(tmp_path / "staging"),
         "volume-1",
         "/workspace",
     )
 
     assert manager.provider.calls == [("volume-1", "/workspace")]
-    assert isinstance(new_source, DaytonaVolume)
-    assert update_repo.closed is True
-    assert update_repo.updated
+    assert volume_name == "leon-volume-volume-1"
+    assert update_repo.closed is False
+    assert update_repo.updated == []
 
 
 def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(monkeypatch, tmp_path):
@@ -989,14 +1001,13 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
 
     provider.create_managed_volume = _already_exists
 
-    new_source = manager._upgrade_to_daytona_volume(
+    volume_name = manager._upgrade_to_daytona_volume(
         "thread-supabase",
-        HostVolume(tmp_path / "staging"),
         "volume-1",
         "/workspace",
     )
 
-    assert isinstance(new_source, DaytonaVolume)
+    assert volume_name == "leon-volume-volume-1"
     assert provider.ready_waits == ["leon-volume-volume-1"]
 
 
