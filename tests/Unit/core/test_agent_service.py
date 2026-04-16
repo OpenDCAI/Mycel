@@ -188,6 +188,14 @@ def test_agent_registry_no_longer_exposes_child_continuity_lookup() -> None:
     assert hasattr(registry, "update_status") is False
 
 
+def test_process_local_agent_registry_backing_no_longer_exposes_dead_methods() -> None:
+    registry = AgentRegistry()
+
+    assert hasattr(registry._repo, "get_by_id") is False
+    assert hasattr(registry._repo, "update_status") is False
+    assert hasattr(registry._repo, "list_running") is False
+
+
 class _FakeChildAgent:
     def __init__(self, workspace_root: Path, model_name: str):
         self.workspace_root = workspace_root

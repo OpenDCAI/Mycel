@@ -138,3 +138,12 @@ def test_supabase_agent_registry_repo_lists_running_by_name() -> None:
     assert result == [("agent-1", "Scout", "thread-1", "running", "parent-1", "General")]
     assert client.table_names == ["agent_registry"]
     assert client.table_obj.eq_calls == [("name", "Scout"), ("status", "running")]
+
+
+def test_supabase_agent_registry_repo_no_longer_exposes_dead_methods() -> None:
+    repo = SupabaseAgentRegistryRepo(_FakeClient("staging"))
+
+    assert hasattr(repo, "get_by_id") is False
+    assert hasattr(repo, "update_status") is False
+    assert hasattr(repo, "get_latest_by_name_and_parent") is False
+    assert hasattr(repo, "list_running") is False
