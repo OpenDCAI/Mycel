@@ -12,6 +12,21 @@ afterEach(() => {
 });
 
 describe("ModelMappingSection", () => {
+  it("shows mapped model even when enabled model pool is empty", () => {
+    render(
+      <ModelMappingSection
+        virtualModels={[{ id: "leon:mini", name: "Mini", description: "virtual", icon: "V" }]}
+        availableModels={[{ id: "gpt-5.4", name: "GPT-5.4" }]}
+        modelMapping={{ "leon:mini": "gpt-5.4" }}
+        enabledModels={[]}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("请在下方模型池中启用模型")).toBeNull();
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("gpt-5.4");
+  });
+
   it("does not log a failed mapping save once navigation already left /settings", async () => {
     window.history.replaceState({}, "", "/settings");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
