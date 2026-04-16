@@ -338,6 +338,7 @@ def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing
 
 @_patch_env_api_key()
 def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch, tmp_path, _patch_runtime_storage_container):
+    import core.agents.registry as agent_registry_module
     import core.runtime.agent as runtime_agent
     from core.runtime.agent import LeonAgent
 
@@ -361,6 +362,7 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
         assert agent._agent_service._agent_registry is None
         assert "agent_registry" not in captured
         assert hasattr(runtime_agent, "AgentRegistry") is False
+        assert hasattr(agent_registry_module, "AgentRegistry") is False
     finally:
         agent.close()
 

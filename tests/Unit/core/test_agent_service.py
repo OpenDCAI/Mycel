@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from core.agents.registry import AgentEntry, AgentRegistry
 from core.agents.service import (
     AGENT_DISALLOWED,
     AGENT_SCHEMA,
@@ -121,44 +120,6 @@ def test_fake_thread_repo_create_requires_current_workspace_id() -> None:
             branch_index=0,
             owner_user_id="owner-1",
         )
-
-
-@pytest.mark.asyncio
-async def test_agent_registry_defaults_to_process_local_in_memory_repo() -> None:
-    registry = AgentRegistry()
-    entry = AgentEntry(
-        agent_id="agent-1",
-        name="general",
-        thread_id="thread-1",
-        status="running",
-        parent_agent_id="parent-1",
-        subagent_type="general",
-    )
-
-    await registry.register(entry)
-
-    assert await registry.list_running_by_name("general") == [entry]
-
-    await registry.remove("agent-1")
-
-    assert await registry.list_running_by_name("general") == []
-
-
-def test_agent_registry_no_longer_exposes_child_continuity_lookup() -> None:
-    registry = AgentRegistry()
-
-    assert hasattr(registry, "get_latest_by_name_and_parent") is False
-    assert hasattr(registry, "get_by_id") is False
-    assert hasattr(registry, "list_running") is False
-    assert hasattr(registry, "update_status") is False
-
-
-def test_process_local_agent_registry_backing_no_longer_exposes_dead_methods() -> None:
-    registry = AgentRegistry()
-
-    assert hasattr(registry._repo, "get_by_id") is False
-    assert hasattr(registry._repo, "update_status") is False
-    assert hasattr(registry._repo, "list_running") is False
 
 
 class _FakeChildAgent:
