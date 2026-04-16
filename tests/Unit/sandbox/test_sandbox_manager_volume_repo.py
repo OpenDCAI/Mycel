@@ -608,6 +608,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_without_volume_
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
+
     class _Lease:
         lease_id = "lease-1"
         observed_state = "detached"
@@ -654,6 +655,7 @@ def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
+
     class _Lease:
         lease_id = "lease-1"
         observed_state = "detached"
