@@ -36,6 +36,7 @@ export default function ContactList() {
   const tab: Tab = location.pathname.startsWith("/contacts/users") ? "contacts" : "agents";
 
   const agentsState = useAppStore((s) => s.agentList);
+  const agentsLoaded = useAppStore((s) => s.agentsLoaded);
   const myUserId = useAuthStore((s) => s.userId);
 
   // Filter user-created agents.
@@ -133,7 +134,11 @@ export default function ContactList() {
       {/* List */}
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pt-2 space-y-0.5 custom-scrollbar">
         {tab === "agents" ? (
-          filtered.length === 0 ? (
+          !agentsLoaded ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4">
+              <p className="text-xs text-muted-foreground">加载 Agent...</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4">
               <p className="text-xs text-muted-foreground">
                 {search ? "无匹配结果" : "暂无 Agent"}

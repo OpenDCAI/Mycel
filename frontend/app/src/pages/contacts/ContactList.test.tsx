@@ -62,6 +62,7 @@ describe("ContactList", () => {
           avatar_url: "/api/users/agent-1/avatar",
         },
       ],
+      agentsLoaded: true,
       ensureAgents,
     });
   });
@@ -75,6 +76,20 @@ describe("ContactList", () => {
 
     expect(ensureAgents).not.toHaveBeenCalled();
     expect(screen.getByText("Morel")).toBeTruthy();
+  });
+
+  it("shows agent loading instead of empty state before panel bootstrap completes", () => {
+    useAppStore.setState({ agentList: [], agentsLoaded: false });
+
+    render(
+      <MemoryRouter>
+        <ContactList />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("加载 Agent...")).toBeTruthy();
+    expect(screen.queryByText("暂无 Agent")).toBeNull();
+    expect(screen.queryByText("无匹配结果")).toBeNull();
   });
 
   it("shows backend-approved external contacts from the user candidate surface", async () => {
