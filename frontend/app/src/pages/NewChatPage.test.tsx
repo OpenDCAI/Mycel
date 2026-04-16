@@ -553,6 +553,71 @@ describe("NewChatPage", () => {
     });
   });
 
+  it("persists existing-sandbox defaults with the selected sandbox-shaped id instead of the lease id", async () => {
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "existing",
+        provider_config: "daytona_selfhost",
+        existing_sandbox_id: null,
+        model: "leon:large",
+        workspace: "/workspace/reused-1",
+      },
+    });
+    clientMocks.listMyLeases.mockResolvedValue([
+      {
+        lease_id: "lease-1",
+        sandbox_id: "sandbox-1",
+        provider_name: "daytona_selfhost",
+        recipe_id: "recipe-1",
+        recipe_name: "Existing One",
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/reused-1",
+        thread_ids: [],
+        agents: [],
+      } as UserLeaseSummary,
+      {
+        lease_id: "lease-2",
+        sandbox_id: "sandbox-2",
+        provider_name: "daytona_selfhost",
+        recipe_id: "recipe-2",
+        recipe_name: "Existing Two",
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/reused-2",
+        thread_ids: [],
+        agents: [],
+      } as UserLeaseSummary,
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.click(screen.getByRole("button", { name: /Daytona .* Existing Two/ }));
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+
+    await waitFor(() => {
+      expect(clientMocks.saveDefaultThreadConfig).toHaveBeenCalledWith(
+        "m_xVuNpKJNxblZ",
+        expect.objectContaining({
+          create_mode: "existing",
+          existing_sandbox_id: "sandbox-2",
+          workspace: "/workspace/reused-2",
+        }),
+      );
+    });
+  });
+
   it("blocks advancing a new sandbox selection when backend account resources say the provider is exhausted", async () => {
     sandboxTypesForTest = [{ name: "daytona_selfhost", provider: "daytona", available: true }];
     clientMocks.fetchAccountResourceLimits.mockResolvedValue([

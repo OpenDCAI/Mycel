@@ -233,7 +233,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         const leases = await listMyLeases(ac.signal);
         if (cancelled) return;
         setLeaseOptions(leases);
-        setSelectedExistingSandboxId((current) => current || leases[0]?.lease_id || "");
+        setSelectedExistingSandboxId((current) => current || (leases[0] ? leaseSandboxId(leases[0]) : ""));
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -268,7 +268,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         } satisfies SandboxTemplateSnapshot,
       }))
   ), [librarySandboxTemplates]);
-  const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedExistingSandboxId) ?? null;
+  const selectedLease = leaseOptions.find((lease) => leaseSandboxId(lease) === selectedExistingSandboxId) ?? null;
   const sandboxResourceByProvider = useMemo(() => {
     const map = new Map<string, AccountResourceLimit>();
     for (const item of accountResources) {
@@ -296,8 +296,8 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   }, [sandboxTemplateOptions, selectedSandboxTemplateId]);
 
   useEffect(() => {
-    if (!selectedExistingSandboxId && leaseOptions[0]?.lease_id) {
-      setSelectedExistingSandboxId(leaseOptions[0].lease_id);
+    if (!selectedExistingSandboxId && leaseOptions[0]) {
+      setSelectedExistingSandboxId(leaseSandboxId(leaseOptions[0]));
     }
   }, [leaseOptions, selectedExistingSandboxId]);
 
@@ -442,7 +442,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   function buildConfigSnapshot(): ConfigSnapshot {
     return {
       createMode,
-      selectedExistingSandboxId: selectedExistingSandboxId || leaseOptions[0]?.lease_id || "",
+      selectedExistingSandboxId: selectedExistingSandboxId || (leaseOptions[0] ? leaseSandboxId(leaseOptions[0]) : ""),
       selectedSandboxTemplateId,
       selectedSandboxTemplateFeatures: { ...selectedSandboxTemplateFeatures },
       selectedWorkspace: activeWorkspace,
@@ -846,13 +846,14 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                           </div>
                           <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
                             {filteredLeaseOptions.map((lease) => {
-                              const isActive = selectedExistingSandboxId === lease.lease_id;
+                              const leaseSandboxKey = leaseSandboxId(lease);
+                              const isActive = selectedExistingSandboxId === leaseSandboxKey;
                               const stateMeta = leaseStateMeta(lease.observed_state);
                               return (
                                 <button
                                   key={lease.lease_id}
                                   type="button"
-                                  onClick={() => setSelectedExistingSandboxId(lease.lease_id)}
+                                  onClick={() => setSelectedExistingSandboxId(leaseSandboxKey)}
                                   className={cn(
                                     "w-full rounded-2xl border p-3 text-left transition-colors",
                                     isActive ? "border-primary/40 bg-primary/5" : "border-border bg-background hover:bg-accent/40",
@@ -932,3 +933,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     </div>
   );
 }
+  function leaseSandboxId(lease: UserLeaseSummary): string {
+    return String(lease.sandbox_id || "").trim() || lease.lease_id;
+  }

@@ -105,6 +105,7 @@ def list_user_leases(
                 lease_id,
                 {
                     "lease_id": lease_id,
+                    "sandbox_id": str(row.get("sandbox_id") or "").strip() or None,
                     "provider_name": str(row.get("provider_name") or "local"),
                     "recipe_id": str(row.get("recipe_id") or "") or None,
                     "recipe": row.get("recipe_json"),
@@ -118,6 +119,8 @@ def list_user_leases(
             )
             if include_runtime_session_id and runtime_session_id and not group.get("runtime_session_id"):
                 group["runtime_session_id"] = runtime_session_id
+            if not group.get("sandbox_id"):
+                group["sandbox_id"] = str(row.get("sandbox_id") or "").strip() or None
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id in group["thread_ids"]:
                 continue
