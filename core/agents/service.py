@@ -1290,7 +1290,6 @@ class AgentService:
                     await running.task
                 except asyncio.CancelledError:
                     pass
-                await self._agent_registry.update_status(running.agent_id, "error")
             self._tasks.pop(task_id, None)
             return
 

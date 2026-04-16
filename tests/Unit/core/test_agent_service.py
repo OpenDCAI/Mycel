@@ -996,7 +996,8 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
 
 @pytest.mark.asyncio
 async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_path):
-    service = _make_service(tmp_path)
+    registry = _FakeAgentRegistry()
+    service = _make_service(tmp_path, agent_registry=registry)
     agent_task = asyncio.create_task(_sleep_forever())
     shell_cmd = _FakeAsyncCommand()
     service._tasks["agent-task"] = _RunningTask(
@@ -1014,6 +1015,7 @@ async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_
     await service.cleanup_background_runs()
 
     assert agent_task.cancelled() is True
+    assert registry.status_updates == []
     assert shell_cmd.terminated is True
     assert shell_cmd.wait_calls == 1
     assert service._tasks == {}
