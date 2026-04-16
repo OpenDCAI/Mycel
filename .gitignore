@@ -58,6 +58,8 @@ teams/
 
 # Pytest
 .pytest_cache/
+.coverage
+.coverage.*
 
 # Ruff
 .ruff_cache/
