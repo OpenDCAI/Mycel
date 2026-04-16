@@ -97,7 +97,6 @@ class SupabaseLeaseRepo:
                 "needs_refresh": 0,
                 "refresh_hint_at": None,
                 "status": "active",
-                "volume_id": None,
                 "created_at": now,
                 "updated_at": now,
             }

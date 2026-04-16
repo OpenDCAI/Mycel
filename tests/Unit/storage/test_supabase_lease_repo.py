@@ -98,6 +98,16 @@ def test_supabase_lease_repo_create_persists_utc_timestamps():
     assert payload["observed_at"].endswith("+00:00")
 
 
+def test_supabase_lease_repo_create_does_not_write_legacy_volume_id():
+    client = _FakeClient()
+    repo = SupabaseLeaseRepo(client)
+
+    repo.create("lease-1", "local")
+
+    payload = client.tables["sandbox_leases"].insert_payload
+    assert "volume_id" not in payload
+
+
 def test_supabase_lease_repo_adopt_instance_persists_integer_refresh_flag():
     tables = {
         "sandbox_leases": [

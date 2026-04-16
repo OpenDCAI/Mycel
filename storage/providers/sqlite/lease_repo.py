@@ -105,10 +105,9 @@ class SQLiteLeaseRepo:
                 INSERT INTO sandbox_leases (
                     lease_id, provider_name, recipe_id, recipe_json, desired_state, observed_state,
                     instance_status, version, observed_at, last_error,
-                    needs_refresh, refresh_hint_at, status, volume_id,
-                    created_at, updated_at
+                    needs_refresh, refresh_hint_at, status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     lease_id,
@@ -124,7 +123,6 @@ class SQLiteLeaseRepo:
                     0,
                     None,
                     "active",
-                    None,
                     now,
                     now,
                 ),
