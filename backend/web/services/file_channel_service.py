@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.web.utils.helpers import _get_container
+from config.user_paths import user_home_path
 from sandbox.clock import utc_now_iso
 from sandbox.control_plane_repos import make_lease_repo, make_terminal_repo
 from storage.runtime import build_chat_session_repo as make_chat_session_repo
@@ -73,7 +74,10 @@ def get_file_channel_source(thread_id: str):
 
     Primary entry point for all app-layer code paths (upload, list, download, delete).
     """
-    return _resolve_volume_source(thread_id)
+    from sandbox.volume_source import HostVolume
+
+    binding = get_file_channel_binding(thread_id)
+    return HostVolume(_required_path(binding.local_staging_root, "file_channel.local_staging_root"))
 
 
 def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
@@ -101,19 +105,11 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
     if workspace_row is None:
         raise ValueError(f"Workspace not found: {workspace_id}")
 
-    local_staging_root: Path | None = None
-    try:
-        source = get_file_channel_source(thread_id)
-    except ValueError:
-        source = None
-    if source is not None:
-        local_staging_root = getattr(source, "host_path", None)
-
     return FileChannelBinding(
         thread_id=thread_id,
         workspace_id=workspace_id,
         workspace_path=_required_text(workspace_row, "workspace_path", "workspace"),
-        local_staging_root=local_staging_root,
+        local_staging_root=_workspace_file_channel_root(workspace_id),
         remote_files_dir="/workspace/files",
     )
 
@@ -165,6 +161,16 @@ def _required_text(row, key: str, label: str) -> str:
     if value in (None, ""):
         raise ValueError(f"{label}.{key} is required")
     return str(value)
+
+
+def _required_path(value: Path | None, label: str) -> Path:
+    if value is None:
+        raise ValueError(f"{label} is required")
+    return value
+
+
+def _workspace_file_channel_root(workspace_id: str) -> Path:
+    return user_home_path("file_channels", workspace_id).expanduser().resolve()
 
 
 def _close_repo(repo) -> None:

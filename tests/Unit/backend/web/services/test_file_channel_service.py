@@ -26,17 +26,24 @@ class _Container:
         return _WorkspaceRepo()
 
 
-def test_get_file_channel_binding_splits_workspace_truth_from_local_staging_root(monkeypatch):
+def test_get_file_channel_binding_uses_workspace_owned_local_channel_root(monkeypatch):
     monkeypatch.setattr(file_channel_service, "_get_container", lambda: _Container())
-    monkeypatch.setattr(
-        file_channel_service,
-        "get_file_channel_source",
-        lambda thread_id: SimpleNamespace(host_path=Path("/tmp/channel-root")),
-    )
+    monkeypatch.setattr(file_channel_service, "user_home_path", lambda *parts: Path("/tmp/leon-home").joinpath(*parts))
+    expected_root = Path("/tmp/leon-home/file_channels/workspace-1").resolve()
 
     binding = file_channel_service.get_file_channel_binding("thread-1")
 
     assert binding.thread_id == "thread-1"
     assert binding.workspace_id == "workspace-1"
     assert binding.workspace_path == "/workspace/root"
-    assert binding.local_staging_root == Path("/tmp/channel-root")
+    assert binding.local_staging_root == expected_root
+
+
+def test_get_file_channel_source_uses_workspace_owned_local_channel_root(monkeypatch):
+    monkeypatch.setattr(file_channel_service, "_get_container", lambda: _Container())
+    monkeypatch.setattr(file_channel_service, "user_home_path", lambda *parts: Path("/tmp/leon-home").joinpath(*parts))
+    expected_root = Path("/tmp/leon-home/file_channels/workspace-1").resolve()
+
+    source = file_channel_service.get_file_channel_source("thread-1")
+
+    assert source.host_path == expected_root

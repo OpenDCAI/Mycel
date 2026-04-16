@@ -597,25 +597,9 @@ def _create_thread_sandbox_resources(
     sandbox_repo: Any,
     owner_user_id: str,
 ) -> str:
-    """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
-    from datetime import datetime
-
-    from backend.web.core.config import SANDBOX_VOLUME_ROOT
-    from backend.web.utils.helpers import _get_container
-    from sandbox.volume_source import HostVolume
+    """Create lease and terminal resources without pre-provisioning volume metadata."""
     from storage.runtime import build_lease_repo as make_lease_repo
     from storage.runtime import build_terminal_repo as make_terminal_repo
-
-    now_str = datetime.now().isoformat()
-    volume_id = str(uuid.uuid4())
-    vol_path = SANDBOX_VOLUME_ROOT / volume_id
-    source = HostVolume(vol_path)
-
-    vol_repo = _get_container().sandbox_volume_repo()
-    try:
-        vol_repo.create(volume_id, json.dumps(source.serialize()), f"vol-{thread_id}", now_str)
-    finally:
-        vol_repo.close()
 
     lease_repo = make_lease_repo()
     try:
@@ -624,7 +608,6 @@ def _create_thread_sandbox_resources(
         lease_repo.create(
             lease_id,
             sandbox_type,
-            volume_id=volume_id,
             recipe_id=normalized_recipe["id"],
             recipe_json=json.dumps(normalized_recipe, ensure_ascii=False),
         )
