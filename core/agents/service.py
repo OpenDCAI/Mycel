@@ -692,7 +692,6 @@ class AgentService:
         # Default: parent blocks until sub-agent completes (does not block frontend event loop)
         try:
             result = await task
-            await self._agent_registry.update_status(task_id, "completed")
             return tool_success(
                 result,
                 metadata={
@@ -702,7 +701,6 @@ class AgentService:
                 },
             )
         except Exception as e:
-            await self._agent_registry.update_status(task_id, "error")
             return tool_error(
                 f"<tool_use_error>Agent failed: {e}</tool_use_error>",
                 metadata={
