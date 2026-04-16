@@ -320,6 +320,7 @@ def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
     manager._sandbox_volume_repo = lambda: repo
 
@@ -327,9 +328,9 @@ def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
 
     assert repo.requested_ids == ["volume-1"]
     assert repo.closed is True
-    assert result == {"source_path": Path(tmp_path) / "vol", "remote_path": "/workspace"}
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.volume.mount_calls == [("thread-1", "/workspace")]
-    assert manager.volume.mount_sources == [Path(tmp_path) / "vol"]
+    assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
 
 def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
@@ -352,6 +353,7 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     lease = SimpleNamespace(lease_id="lease-1", volume_id=None)
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
@@ -365,8 +367,8 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
     assert repo.created == [(lease.volume_id, "vol-thread-1")]
     assert manager.lease_store.volume_updates == [("lease-1", lease.volume_id)]
     assert repo.requested_ids == [lease.volume_id]
-    assert result == {"source_path": Path(tmp_path) / "volumes" / lease.volume_id, "remote_path": "/workspace"}
-    assert manager.volume.mount_sources == [Path(tmp_path) / "volumes" / lease.volume_id]
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
+    assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
 
 def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id(monkeypatch, tmp_path):
@@ -392,6 +394,7 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
     manager.provider = _FakeDaytonaProvider()
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     lease = SimpleNamespace(lease_id="lease-1", volume_id="volume-missing")
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
@@ -404,7 +407,7 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
     assert repo.created == [("volume-missing", "vol-thread-1")]
     assert manager.lease_store.volume_updates == []
     assert repo.requested_ids == ["volume-missing", "volume-missing"]
-    assert result == {"source_path": Path(tmp_path) / "volumes" / "volume-missing", "remote_path": "/workspace"}
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.provider.calls == [("volume-missing", "/workspace")]
 
 

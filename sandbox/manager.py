@@ -411,7 +411,7 @@ class SandboxManager:
                 remote_path,
             )
 
-        source_path = source.host_path
+        source_path = self._resolve_sync_source_path(thread_id)
 
         if isinstance(source, DaytonaVolume):
             self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
