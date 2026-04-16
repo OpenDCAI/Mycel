@@ -521,7 +521,7 @@ def test_enforce_idle_timeouts_accepts_aware_supabase_timestamps():
     assert manager.enforce_idle_timeouts() == 0
 
 
-def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id():
+def test_destroy_thread_resources_skips_local_sync_even_with_legacy_volume_id():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.provider = SimpleNamespace(name="local")
@@ -547,7 +547,7 @@ def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id()
     class _Lease:
         lease_id = "lease-1"
         observed_state = "running"
-        volume_id = None
+        volume_id = "legacy-volume-1"
 
         def get_instance(self):
             return SimpleNamespace(instance_id="instance-1")
@@ -762,13 +762,13 @@ def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized
     assert deleted_leases == ["lease-1"]
 
 
-def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
+def test_sync_uploads_skips_local_volume_sync_even_with_legacy_volume_id():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id=None)
-    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id=None)
+    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="legacy-volume-1")
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id="legacy-volume-1")
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: SimpleNamespace(

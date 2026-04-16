@@ -451,9 +451,9 @@ class SandboxManager:
         return user_home_path("file_channels", str(workspace_id)).expanduser().resolve()
 
     def _skip_volume_sync_for_local_lease(self, lease) -> bool:
-        # @@@local-no-volume-sync - local sessions may execute directly in host cwd with no sandbox volume row.
-        # In that shape there is nothing to upload/download, so sync paths must no-op instead of inventing one.
-        return lease is not None and not self._requires_volume_bootstrap() and not lease.volume_id
+        # @@@local-no-volume-sync - local sessions execute directly in host cwd, so upload/download
+        # must always no-op there. Legacy volume_id residue is not allowed to reactivate volume-backed sync.
+        return lease is not None and not self._requires_volume_bootstrap()
 
     def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
         if source is None:
@@ -901,7 +901,7 @@ class SandboxManager:
         lease.destroy_instance(self.provider)
         if self.provider_capability.runtime_kind == "daytona_pty":
             self._destroy_daytona_managed_volume(lease_id)
-        elif lease.volume_id:
+        elif lease.volume_id and self._requires_volume_bootstrap():
             self._destroy_volume_entry(lease.volume_id)
         self.lease_store.delete(lease_id)
         return True
