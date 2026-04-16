@@ -222,25 +222,22 @@ def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_t
     assert lease_repo.closed is False
 
 
-def test_resolve_existing_lease_cwd_keeps_latest_terminal_cwd_when_present(monkeypatch):
-    terminal_repo = _FakeTerminalRepo(row={"cwd": "/terminal/latest"})
+def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_provider_default(monkeypatch):
     lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
     monkeypatch.setattr(
         sandbox_manager_module,
         "_build_provider_from_name",
-        lambda _name: (_ for _ in ()).throw(AssertionError("provider default should not be used")),
+        lambda name: SimpleNamespace(default_cwd=f"/providers/{name}"),
     )
 
     cwd = sandbox_manager_module.resolve_existing_lease_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
-        terminal_repo=terminal_repo,
         lease_repo=lease_repo,
     )
 
-    assert cwd == "/terminal/latest"
-    assert terminal_repo.requested_lease_ids == ["lease-1"]
-    assert lease_repo.requested_ids == []
+    assert cwd == "/providers/local"
+    assert lease_repo.requested_ids == ["lease-1"]
 
 
 def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider_default_exists(monkeypatch):
