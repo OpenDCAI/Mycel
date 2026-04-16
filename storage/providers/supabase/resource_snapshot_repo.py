@@ -10,6 +10,16 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _raise_if_snapshot_schema_drift(err: Exception) -> None:
+    message = str(err)
+    if "staging.sandbox_resource_snapshots" not in message or "staging.lease_resource_snapshots" not in message:
+        return
+    raise RuntimeError(
+        "live schema still exposes staging.lease_resource_snapshots; "
+        "land sandbox_resource_snapshots instead of falling back to the old lease table"
+    ) from err
+
+
 def upsert_sandbox_resource_snapshot(
     *,
     sandbox_id: str,
@@ -30,25 +40,29 @@ def upsert_sandbox_resource_snapshot(
     if client is None:
         raise RuntimeError("upsert_sandbox_resource_snapshot requires a client")
     now = _now_iso()
-    client.table("sandbox_resource_snapshots").upsert(
-        {
-            "sandbox_id": sandbox_id,
-            "provider_name": provider_name,
-            "observed_state": observed_state,
-            "probe_mode": probe_mode,
-            "cpu_used": cpu_used,
-            "cpu_limit": cpu_limit,
-            "memory_used_mb": memory_used_mb,
-            "memory_total_mb": memory_total_mb,
-            "disk_used_gb": disk_used_gb,
-            "disk_total_gb": disk_total_gb,
-            "network_rx_kbps": network_rx_kbps,
-            "network_tx_kbps": network_tx_kbps,
-            "probe_error": probe_error,
-            "collected_at": now,
-            "updated_at": now,
-        }
-    ).execute()
+    try:
+        client.table("sandbox_resource_snapshots").upsert(
+            {
+                "sandbox_id": sandbox_id,
+                "provider_name": provider_name,
+                "observed_state": observed_state,
+                "probe_mode": probe_mode,
+                "cpu_used": cpu_used,
+                "cpu_limit": cpu_limit,
+                "memory_used_mb": memory_used_mb,
+                "memory_total_mb": memory_total_mb,
+                "disk_used_gb": disk_used_gb,
+                "disk_total_gb": disk_total_gb,
+                "network_rx_kbps": network_rx_kbps,
+                "network_tx_kbps": network_tx_kbps,
+                "probe_error": probe_error,
+                "collected_at": now,
+                "updated_at": now,
+            }
+        ).execute()
+    except Exception as err:
+        _raise_if_snapshot_schema_drift(err)
+        raise
 
 
 def list_snapshots_by_sandbox_ids(
@@ -64,13 +78,17 @@ def list_snapshots_by_sandbox_ids(
         return {}
     from storage.providers.supabase import _query as q
 
-    rows = q.rows_in_chunks(
-        lambda: client.table("sandbox_resource_snapshots").select("*"),
-        "sandbox_id",
-        unique_ids,
-        "resource_snapshot",
-        "list_by_ids",
-    )
+    try:
+        rows = q.rows_in_chunks(
+            lambda: client.table("sandbox_resource_snapshots").select("*"),
+            "sandbox_id",
+            unique_ids,
+            "resource_snapshot",
+            "list_by_ids",
+        )
+    except Exception as err:
+        _raise_if_snapshot_schema_drift(err)
+        raise
     return {str(r["sandbox_id"]): dict(r) for r in rows}
 
 
