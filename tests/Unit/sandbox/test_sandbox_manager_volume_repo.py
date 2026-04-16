@@ -271,7 +271,7 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
     assert terminal_repo.created[0]["initial_cwd"] == "/providers/local"
 
 
-def test_bind_thread_to_existing_thread_lease_keeps_latest_terminal_cwd_continuity(monkeypatch):
+def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monkeypatch):
     terminal_repo = _FakeBindTerminalRepo(
         latest_by_lease={"cwd": "/terminal/latest"},
         active_by_thread={"thread-parent": {"lease_id": "lease-1"}},
@@ -284,16 +284,18 @@ def test_bind_thread_to_existing_thread_lease_keeps_latest_terminal_cwd_continui
         lambda _name: (_ for _ in ()).throw(AssertionError("provider default should stay unused for continuity path")),
     )
 
-    initial_cwd = sandbox_manager_module.bind_thread_to_existing_thread_lease(
-        "thread-child",
-        "thread-parent",
-        db_path=Path("/tmp/fake-sandbox.db"),
-        terminal_repo=terminal_repo,
-        lease_repo=lease_repo,
-    )
-
-    assert initial_cwd == "/terminal/latest"
-    assert terminal_repo.created[0]["initial_cwd"] == "/terminal/latest"
+    try:
+        sandbox_manager_module.bind_thread_to_existing_thread_lease(
+            "thread-child",
+            "thread-parent",
+            db_path=Path("/tmp/fake-sandbox.db"),
+            terminal_repo=terminal_repo,
+            lease_repo=lease_repo,
+        )
+    except ValueError as exc:
+        assert str(exc) == "thread reuse cwd is required"
+    else:
+        raise AssertionError("expected bind_thread_to_existing_thread_lease to fail loudly without cwd")
 
 
 def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):

@@ -1088,9 +1088,42 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
             return
 
     _patch_create_leon_agent(monkeypatch, child_cls=_LeaseCapturingChild, created=created)
+
+    async def _fake_run_child_thread_live(agent, thread_id, message, app, *, input_messages):
+        child_capability = manager.get_sandbox(thread_id)
+        observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
+        observed["child_lease_id"] = child_capability._session.lease.lease_id
+        return "(Agent completed with no text output)"
+
+    monkeypatch.setattr(
+        "backend.web.services.streaming_service.run_child_thread_live",
+        _fake_run_child_thread_live,
+    )
     set_current_thread_id(parent_thread_id)
 
-    service = _make_service(tmp_path)
+    thread_repo = _FakeThreadRepo(
+        rows={
+            parent_thread_id: {
+                "id": parent_thread_id,
+                "agent_user_id": "agent-user-1",
+                "owner_user_id": "owner-user-1",
+                "current_workspace_id": "workspace-parent",
+            }
+        }
+    )
+    workspace_repo = _FakeWorkspaceRepo(
+        rows={
+            "workspace-parent": SimpleNamespace(
+                id="workspace-parent",
+                workspace_path=str(tmp_path / "parent-workspace"),
+            )
+        }
+    )
+    service = _make_service(
+        tmp_path,
+        thread_repo=thread_repo,
+        web_app=SimpleNamespace(state=SimpleNamespace(workspace_repo=workspace_repo)),
+    )
 
     try:
         result = await service._run_agent(

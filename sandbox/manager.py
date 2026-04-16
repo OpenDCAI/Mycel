@@ -238,6 +238,8 @@ def bind_thread_to_existing_thread_lease(
     lease_repo: Any | None = None,
 ) -> str | None:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    if not cwd:
+        raise ValueError("thread reuse cwd is required")
     _terminal_repo = terminal_repo
     own_terminal_repo = _terminal_repo is None
     if _terminal_repo is None:
