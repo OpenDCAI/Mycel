@@ -271,6 +271,38 @@ def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
     }
 
 
+def test_query_sandbox_allows_missing_legacy_lease_bridge() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="local",
+                    provider_env_id=None,
+                    desired_state="running",
+                    observed_state="running",
+                    updated_at="2026-04-05T10:10:00",
+                    sandbox_template_id="local:default",
+                    legacy_lease_id=None,
+                )
+            ]
+        }
+    )
+
+    assert repo.query_sandbox("sandbox-1") == {
+        "sandbox_id": "sandbox-1",
+        "lease_id": None,
+        "provider_name": "local",
+        "recipe_id": "local:default",
+        "recipe_json": None,
+        "desired_state": "running",
+        "observed_state": "running",
+        "current_instance_id": None,
+        "last_error": None,
+        "updated_at": "2026-04-05T10:10:00",
+    }
+
+
 def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
     repo = _repo(
         {
@@ -553,6 +585,24 @@ def test_query_sandbox_instance_id_prefers_provider_session_id() -> None:
     assert repo.query_sandbox_instance_id("sandbox-1") == "provider-session-1"
 
 
+def test_query_sandbox_instance_id_falls_back_without_legacy_lease_bridge() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="local",
+                    provider_env_id="sandbox-instance-1",
+                    observed_state="running",
+                    legacy_lease_id=None,
+                )
+            ],
+        }
+    )
+
+    assert repo.query_sandbox_instance_id("sandbox-1") == "sandbox-instance-1"
+
+
 def test_query_sandbox_instance_ids_chunks_large_lookup() -> None:
     sandbox_ids = [f"sandbox-{index}" for index in range(175)]
     repo = SupabaseSandboxMonitorRepo(
@@ -686,6 +736,24 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
             "observed_state": "detached",
         },
     ]
+
+
+def test_list_probe_targets_skips_sandbox_without_legacy_lease_bridge() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-stale",
+                    provider_name="local",
+                    provider_env_id=None,
+                    observed_state="running",
+                    legacy_lease_id=None,
+                ),
+            ],
+        }
+    )
+
+    assert repo.list_probe_targets() == []
 
 
 def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge() -> None:

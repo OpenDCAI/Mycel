@@ -356,15 +356,19 @@ class SupabaseSandboxMonitorRepo:
             result[lease_id] = lease
         return result
 
+    def _legacy_lease_id(self, sandbox: dict[str, Any]) -> str | None:
+        config = sandbox.get("config")
+        if not isinstance(config, dict):
+            raise RuntimeError("sandbox.config must be an object")
+        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
+        return legacy_lease_id or None
+
     def _sandbox_rows_by_legacy_lease_id(self, operation: str) -> dict[str, dict[str, Any]]:
         result: dict[str, dict[str, Any]] = {}
         for sandbox in self._ordered_sandboxes(operation):
-            config = sandbox.get("config")
-            if not isinstance(config, dict):
-                raise RuntimeError("sandbox.config must be an object")
-            legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
+            legacy_lease_id = self._legacy_lease_id(sandbox)
             if not legacy_lease_id:
-                raise RuntimeError("sandbox legacy bridge is required")
+                continue
             result[legacy_lease_id] = sandbox
         return result
 
@@ -382,12 +386,7 @@ class SupabaseSandboxMonitorRepo:
         # @@@sandbox-monitor-bridge - summary surfaces now use container.sandboxes as the
         # object truth, but still expose legacy lease_id while monitor/runtime residue
         # remains lease-keyed.
-        config = sandbox.get("config")
-        if not isinstance(config, dict):
-            raise RuntimeError("sandbox.config must be an object")
-        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
-        if not legacy_lease_id:
-            raise RuntimeError("sandbox.config.legacy_lease_id is required")
+        legacy_lease_id = self._legacy_lease_id(sandbox)
         return {
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
             "lease_id": legacy_lease_id,
@@ -439,12 +438,7 @@ class SupabaseSandboxMonitorRepo:
         session_id: str | None,
         thread_id: str | None,
     ) -> dict:
-        config = sandbox.get("config")
-        if not isinstance(config, dict):
-            raise RuntimeError("sandbox.config must be an object")
-        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
-        if not legacy_lease_id:
-            raise RuntimeError("sandbox.config.legacy_lease_id is required")
+        legacy_lease_id = self._legacy_lease_id(sandbox)
         return {
             "provider": sandbox.get("provider_name") or "local",
             "session_id": session_id,
