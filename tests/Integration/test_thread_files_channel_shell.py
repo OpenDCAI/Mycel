@@ -17,7 +17,7 @@ def test_file_channel_service_no_longer_imports_storage_factory() -> None:
 
     assert "backend.web.core.storage_factory" not in file_channel_source
     assert "storage.runtime" in file_channel_source
-    assert "sandbox.control_plane_repos" in file_channel_source
+    assert "backend.web.utils.helpers" in file_channel_source
     assert "SQLiteTerminalRepo" not in file_channel_source
     assert "SQLiteLeaseRepo" not in file_channel_source
 

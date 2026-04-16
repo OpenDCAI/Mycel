@@ -837,6 +837,45 @@ def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
     assert capability._session is session
 
 
+def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
+    manager = _new_test_manager()
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+        update_state=lambda _state: None,
+    )
+    lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="agentbay",
+        observed_state="running",
+        recipe=None,
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+    )
+    sync_calls: list[tuple[str, str, Path]] = []
+    expected_path = Path("/tmp/workspace-files")
+
+    manager.provider = SimpleNamespace(name="agentbay")
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay", eager_instance_binding=False)
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager._get_lease = lambda _lease_id: lease
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    manager._setup_mounts = lambda _thread_id: {"source_path": expected_path, "remote_path": "/workspace"}
+    manager._sync_to_sandbox = (
+        lambda thread_id, instance_id, source=None, files=None: sync_calls.append((thread_id, instance_id, source))
+    )
+    manager._fire_session_ready = lambda *_args, **_kwargs: None
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: None,
+        create=lambda **_kwargs: SimpleNamespace(terminal=terminal, lease=lease, status="active"),
+    )
+
+    manager.get_sandbox("thread-1")
+
+    assert sync_calls == [("thread-1", "instance-1", expected_path)]
+
+
 def test_resume_session_rebinds_live_session_lease_after_resume():
     manager = _new_test_manager()
     terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")

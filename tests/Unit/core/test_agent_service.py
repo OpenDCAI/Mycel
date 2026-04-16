@@ -1260,6 +1260,46 @@ async def test_run_agent_fails_loud_when_parent_workspace_repo_is_missing(monkey
 
 
 @pytest.mark.asyncio
+async def test_run_agent_falls_back_to_child_workspace_root_when_parent_workspace_truth_is_absent(monkeypatch, tmp_path):
+    _patch_create_leon_agent(monkeypatch)
+    monkeypatch.setattr(
+        "backend.web.services.streaming_service.run_child_thread_live",
+        AsyncMock(return_value="LIVE_CHILD_DONE"),
+    )
+
+    captured: dict[str, Any] = {}
+
+    def fake_bind(thread_id: str, parent_thread_id: str, *, cwd=None, **_kwargs):
+        captured["thread_id"] = thread_id
+        captured["parent_thread_id"] = parent_thread_id
+        captured["cwd"] = cwd
+        return cwd
+
+    monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_lease", fake_bind)
+
+    service = _make_service(tmp_path)
+
+    set_current_thread_id("parent-thread")
+    try:
+        result = await service._run_agent(
+            task_id="task-1",
+            agent_name="child",
+            thread_id="subagent-child",
+            prompt="hello",
+            subagent_type="explore",
+            max_turns=None,
+        )
+        assert result == "(Agent completed with no text output)"
+        assert captured == {
+            "thread_id": "subagent-child",
+            "parent_thread_id": "parent-thread",
+            "cwd": str(tmp_path),
+        }
+    finally:
+        set_current_thread_id("")
+
+
+@pytest.mark.asyncio
 async def test_run_agent_inherits_parent_sandbox_when_forking_child(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
     _patch_create_leon_agent(monkeypatch, captured=captured)

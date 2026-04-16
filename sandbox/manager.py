@@ -411,12 +411,14 @@ class SandboxManager:
                 remote_path,
             )
 
+        source_path = source.host_path
+
         if isinstance(source, DaytonaVolume):
             self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
         else:
             self.volume.mount(thread_id, source, remote_path)
 
-        return {"source": source, "remote_path": remote_path}
+        return {"source": source, "source_path": source_path, "remote_path": remote_path}
 
     def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
         """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
@@ -673,7 +675,7 @@ class SandboxManager:
 
         if instance and storage is not None:
             # @@@workspace-upload - sync files to sandbox after creation
-            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
+            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source_path"])
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)

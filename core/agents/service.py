@@ -886,10 +886,11 @@ class AgentService:
             if parent_thread_id and parent_thread_id != thread_id:
                 from sandbox.manager import bind_thread_to_existing_thread_lease
 
+                parent_workspace_cwd = self._resolve_parent_workspace_path(parent_thread_id) or str(child_workspace_root)
                 bind_thread_to_existing_thread_lease(
                     thread_id,
                     parent_thread_id,
-                    cwd=self._resolve_parent_workspace_path(parent_thread_id),
+                    cwd=parent_workspace_cwd,
                 )
 
             # Wire child agent events to the parent's EventBus subscription
