@@ -66,18 +66,9 @@ class ProcessLocalSyncFileBacking:
     def close(self) -> None:
         return None
 
-    def track_file(self, thread_id: str, relative_path: str, checksum: str, timestamp: int) -> None:
-        self._rows.setdefault(thread_id, {})[relative_path] = (checksum, timestamp)
-
     def track_files_batch(self, thread_id: str, file_records: list[tuple[str, str, int]]) -> None:
         for relative_path, checksum, timestamp in file_records:
-            self.track_file(thread_id, relative_path, checksum, timestamp)
-
-    def get_file_info(self, thread_id: str, relative_path: str) -> dict | None:
-        info = self._rows.get(thread_id, {}).get(relative_path)
-        if info is None:
-            return None
-        return {"checksum": info[0], "last_synced": info[1]}
+            self._rows.setdefault(thread_id, {})[relative_path] = (checksum, timestamp)
 
     def get_all_files(self, thread_id: str) -> dict[str, str]:
         return {path: checksum for path, (checksum, _timestamp) in self._rows.get(thread_id, {}).items()}
