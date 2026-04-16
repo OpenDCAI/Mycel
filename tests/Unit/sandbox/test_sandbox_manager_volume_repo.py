@@ -314,9 +314,9 @@ def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monk
         raise AssertionError("expected bind_thread_to_existing_thread_lease to fail loudly without cwd")
 
 
-def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
+def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_path):
     manager = _new_test_manager()
-    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
@@ -326,8 +326,7 @@ def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
 
     result = manager._setup_mounts("thread-1")
 
-    assert repo.requested_ids == ["volume-1"]
-    assert repo.closed is True
+    assert repo.requested_ids == []
     assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.volume.mount_calls == [("thread-1", "/workspace")]
     assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
@@ -363,10 +362,10 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
 
     result = manager._setup_mounts("thread-1")
 
-    assert lease.volume_id is not None
-    assert repo.created == [(lease.volume_id, "vol-thread-1")]
-    assert manager.lease_store.volume_updates == [("lease-1", lease.volume_id)]
-    assert repo.requested_ids == [lease.volume_id]
+    assert lease.volume_id is None
+    assert repo.created == []
+    assert manager.lease_store.volume_updates == []
+    assert repo.requested_ids == []
     assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 

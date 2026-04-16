@@ -395,23 +395,27 @@ class SandboxManager:
         lease = self._get_lease(terminal.lease_id)
         if not lease:
             raise ValueError(f"No volume for thread {thread_id}")
+        remote_path = self.volume.resolve_mount_path()
+        source_path = self._resolve_sync_source_path(thread_id)
+
+        if self.provider_capability.runtime_kind != "daytona_pty":
+            self.volume.mount(thread_id, source_path, remote_path)
+            return {"source_path": source_path, "remote_path": remote_path}
+
         self._ensure_thread_volume(thread_id, lease)
         entry = self._resolve_volume_entry(thread_id, lease)
 
         source = deserialize_volume_source(json.loads(entry["source"]))
         volume_id = lease.volume_id
-        remote_path = self.volume.resolve_mount_path()
 
         # @@@daytona-upgrade - first startup creates managed volume
-        if self.provider_capability.runtime_kind == "daytona_pty" and not isinstance(source, DaytonaVolume):
+        if not isinstance(source, DaytonaVolume):
             source = self._upgrade_to_daytona_volume(
                 thread_id,
                 source,
                 volume_id,
                 remote_path,
             )
-
-        source_path = self._resolve_sync_source_path(thread_id)
 
         if isinstance(source, DaytonaVolume):
             self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
