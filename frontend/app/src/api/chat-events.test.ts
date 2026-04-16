@@ -85,9 +85,13 @@ describe("chat event stream", () => {
 
   it("treats abort-time reader network errors as clean teardown, not a stream failure", async () => {
     const cancel = vi.fn();
-    let rejectRead: ((reason?: unknown) => void) | null = null;
+    let capturedReject = false;
+    let rejectRead: (reason?: unknown) => void = () => {
+      throw new Error("expected read reject handler to be captured");
+    };
     const read = vi.fn(() =>
-      new Promise<never>((_, reject) => {
+      new Promise<void>((_, reject: (reason?: unknown) => void) => {
+        capturedReject = true;
         rejectRead = reject;
       }),
     );
@@ -105,7 +109,10 @@ describe("chat event stream", () => {
     const stream = api.streamChatEvents("chat-1", () => undefined, ac.signal);
     await Promise.resolve();
     ac.abort();
-    rejectRead?.(new TypeError("network error"));
+    if (!capturedReject) {
+      throw new Error("expected read reject handler to be captured");
+    }
+    rejectRead(new TypeError("network error"));
 
     await expect(stream).resolves.toBeUndefined();
     expect(cancel).toHaveBeenCalled();
