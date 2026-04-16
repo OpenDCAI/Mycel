@@ -60,4 +60,31 @@ describe("authFetch header contract", () => {
     expect(headers.get("Content-Type")).toBeNull();
     expect(headers.get("Authorization")).toBe("Bearer token-1");
   });
+
+  it("marks auth state hydrated after persisted session restore", async () => {
+    const persisted = JSON.stringify({
+      state: {
+        token: "persisted-token",
+        user: { id: "u-1", name: "tester", type: "human", avatar: null },
+        agent: null,
+        userId: "u-1",
+        setupInfo: null,
+      },
+      version: 0,
+    });
+    const storage = {
+      getItem: vi.fn((key: string) => (key === "leon-auth" ? persisted : null)),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", storage);
+    vi.stubGlobal("window", { __MYCEL_CONFIG__: {}, localStorage: storage });
+    vi.resetModules();
+
+    const mod = await import("./auth-store");
+    await Promise.resolve();
+
+    expect(mod.useAuthStore.getState().token).toBe("persisted-token");
+    expect(mod.useAuthStore.getState().hydrated).toBe(true);
+  });
 });
