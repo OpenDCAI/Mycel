@@ -116,6 +116,9 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   // SSE for real-time messages
   useEffect(() => {
     const ac = new AbortController();
+    // @@@pagehide-abort — browser-level navigation can destroy the page before React unmount finishes
+    const handlePageHide = () => ac.abort();
+    window.addEventListener("pagehide", handlePageHide);
 
     void streamChatEvents(
       chatId,
@@ -165,6 +168,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     });
 
     return () => {
+      window.removeEventListener("pagehide", handlePageHide);
       ac.abort();
       refreshChatList(); // refresh sidebar on leave
     };
