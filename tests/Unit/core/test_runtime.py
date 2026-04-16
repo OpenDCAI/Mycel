@@ -522,6 +522,12 @@ def test_docker_provider_create_runtime(terminal_store, lease_store):
     assert isinstance(runtime, DockerPtyRuntimeDirect)
 
 
+def test_docker_provider_no_longer_advertises_managed_volume_support():
+    from sandbox.providers.docker import DockerProvider
+
+    assert DockerProvider.CAPABILITY.mount.supports_managed_volume is False
+
+
 def test_local_provider_create_runtime(terminal_store, lease_store):
     from sandbox.providers.local import LocalPersistentShellRuntime as LocalRuntimeDirect
     from sandbox.providers.local import LocalSessionProvider

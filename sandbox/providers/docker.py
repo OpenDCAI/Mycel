@@ -79,7 +79,7 @@ class DockerProvider(SandboxProvider):
             supports_copy=True,
             supports_read_only=True,
             mode_handlers={"mount": True, "copy": True},
-            supports_managed_volume=True,
+            supports_managed_volume=False,
         ),
     )
 
