@@ -594,6 +594,26 @@ class AgentService:
             current_workspace_id=current_workspace_id,
         )
 
+    def _resolve_parent_workspace_path(self, parent_thread_id: str | None) -> str | None:
+        if self._thread_repo is None or not parent_thread_id:
+            return None
+        parent_thread = self._thread_repo.get_by_id(parent_thread_id)
+        if parent_thread is None:
+            return None
+        current_workspace_id = str(parent_thread.get("current_workspace_id") or "").strip()
+        if not current_workspace_id:
+            return None
+        workspace_repo = getattr(getattr(self._web_app, "state", None), "workspace_repo", None)
+        if workspace_repo is None:
+            raise ValueError("parent workspace_repo is required")
+        workspace = workspace_repo.get_by_id(current_workspace_id)
+        if workspace is None:
+            raise ValueError(f"parent workspace {current_workspace_id} not found")
+        workspace_path = str(getattr(workspace, "workspace_path", "") or "").strip()
+        if not workspace_path:
+            raise ValueError(f"parent workspace {current_workspace_id} missing workspace_path")
+        return workspace_path
+
     async def _handle_agent(
         self,
         prompt: str,
@@ -866,7 +886,11 @@ class AgentService:
             if parent_thread_id and parent_thread_id != thread_id:
                 from sandbox.manager import bind_thread_to_existing_thread_lease
 
-                bind_thread_to_existing_thread_lease(thread_id, parent_thread_id)
+                bind_thread_to_existing_thread_lease(
+                    thread_id,
+                    parent_thread_id,
+                    cwd=self._resolve_parent_workspace_path(parent_thread_id),
+                )
 
             # Wire child agent events to the parent's EventBus subscription
             # so the parent SSE stream shows sub-agent activity.
