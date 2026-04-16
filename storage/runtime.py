@@ -93,14 +93,6 @@ def build_terminal_repo(*, supabase_client: Any | None = None, supabase_client_f
     return _build_storage_repo("terminal_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
-def build_sync_file_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
-    return _build_storage_repo(
-        "sync_file_repo",
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-    )
-
-
 def build_resource_snapshot_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
     return _build_storage_repo(
         "resource_snapshot_repo",

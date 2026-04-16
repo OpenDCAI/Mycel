@@ -81,35 +81,6 @@ class _FakeToolTaskRepo:
         self._rows.get(thread_id, {}).pop(str(task_id), None)
 
 
-class _FakeSyncFileRepo:
-    def __init__(self) -> None:
-        self._rows: dict[str, dict[str, tuple[str, int]]] = {}
-
-    def close(self) -> None:
-        return None
-
-    def track_file(self, thread_id: str, relative_path: str, checksum: str, timestamp: int) -> None:
-        self._rows.setdefault(thread_id, {})[relative_path] = (checksum, timestamp)
-
-    def track_files_batch(self, thread_id: str, file_records: list[tuple[str, str, int]]) -> None:
-        for relative_path, checksum, timestamp in file_records:
-            self.track_file(thread_id, relative_path, checksum, timestamp)
-
-    def get_file_info(self, thread_id: str, relative_path: str) -> dict[str, Any] | None:
-        info = self._rows.get(thread_id, {}).get(relative_path)
-        if info is None:
-            return None
-        return {"checksum": info[0], "last_synced": info[1]}
-
-    def get_all_files(self, thread_id: str) -> dict[str, str]:
-        return {path: checksum for path, (checksum, _timestamp) in self._rows.get(thread_id, {}).items()}
-
-    def clear_thread(self, thread_id: str) -> int:
-        removed = len(self._rows.get(thread_id, {}))
-        self._rows.pop(thread_id, None)
-        return removed
-
-
 class _FakeSummaryRepo:
     def ensure_tables(self) -> None:
         return None
@@ -128,7 +99,6 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
     class _FakeRuntimeContainer:
         def __init__(self) -> None:
             self._tool_task_repo = _FakeToolTaskRepo()
-            self._sync_file_repo = _FakeSyncFileRepo()
             self._queue_repo = object()
             self._summary_repo = _FakeSummaryRepo()
             self._terminal_repo = _FakeControlPlaneRepo()
@@ -137,9 +107,6 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
 
         def tool_task_repo(self) -> _FakeToolTaskRepo:
             return self._tool_task_repo
-
-        def sync_file_repo(self) -> _FakeSyncFileRepo:
-            return self._sync_file_repo
 
         def queue_repo(self) -> object:
             return self._queue_repo
@@ -336,7 +303,9 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
         assert hasattr(runtime_agent, "AgentRegistry") is False
         assert hasattr(agent_registry_module, "AgentRegistry") is False
         assert hasattr(storage_runtime, "build_agent_registry_repo") is False
+        assert hasattr(storage_runtime, "build_sync_file_repo") is False
         assert hasattr(StorageContainer, "agent_registry_repo") is False
+        assert hasattr(StorageContainer, "sync_file_repo") is False
     finally:
         agent.close()
 
