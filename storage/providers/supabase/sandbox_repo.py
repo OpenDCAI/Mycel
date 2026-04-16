@@ -84,6 +84,14 @@ class SupabaseSandboxRepo:
             }
         ).execute()
 
+    def update_runtime_binding(self, *, sandbox_id: str, provider_env_id: str | None, updated_at: float | str) -> None:
+        self._t().update(
+            {
+                "provider_env_id": provider_env_id,
+                "updated_at": _to_timestamptz(updated_at),
+            }
+        ).eq("id", sandbox_id).execute()
+
     def get_by_id(self, sandbox_id: str) -> SandboxRow | None:
         response = self._t().select(", ".join(_COLS)).eq("id", sandbox_id).execute()
         rows = q.rows(response, _REPO, "get_by_id")
