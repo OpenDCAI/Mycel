@@ -1032,8 +1032,7 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
 
 @pytest.mark.asyncio
 async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_path):
-    registry = _FakeAgentRegistry()
-    service = _make_service(tmp_path, agent_registry=registry)
+    service = _make_service(tmp_path, agent_registry=None)
     agent_task = asyncio.create_task(_sleep_forever())
     shell_cmd = _FakeAsyncCommand()
     service._tasks["agent-task"] = _RunningTask(
@@ -1051,7 +1050,7 @@ async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_
     await service.cleanup_background_runs()
 
     assert agent_task.cancelled() is True
-    assert registry.status_updates == []
+    assert service._active_agents == {}
     assert shell_cmd.terminated is True
     assert shell_cmd.wait_calls == 1
     assert service._tasks == {}
@@ -1059,8 +1058,7 @@ async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_
 
 @pytest.mark.asyncio
 async def test_cleanup_background_runs_does_not_relabel_completed_agent_run(tmp_path):
-    registry = _FakeAgentRegistry()
-    service = _make_service(tmp_path, agent_registry=registry)
+    service = _make_service(tmp_path, agent_registry=None)
     completed_task = asyncio.create_task(asyncio.sleep(0, result="done"))
     await completed_task
     service._tasks["agent-task"] = _RunningTask(
@@ -1072,7 +1070,7 @@ async def test_cleanup_background_runs_does_not_relabel_completed_agent_run(tmp_
 
     await service.cleanup_background_runs()
 
-    assert getattr(registry, "last_status", None) is None
+    assert service._active_agents == {}
     assert service._tasks == {}
 
 
@@ -1573,8 +1571,7 @@ async def test_handle_agent_mints_fresh_child_thread_without_child_continuity_lo
 async def test_handle_agent_blocking_path_does_not_duplicate_completed_status(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
-    registry = _FakeAgentRegistry()
-    service = _make_service(tmp_path, agent_registry=registry)
+    service = _make_service(tmp_path, agent_registry=None)
 
     raw = await service._handle_agent(
         prompt="do work",
@@ -1583,16 +1580,14 @@ async def test_handle_agent_blocking_path_does_not_duplicate_completed_status(mo
     )
 
     assert raw.content == "(Agent completed with no text output)"
-    assert registry.status_updates == []
-    assert await registry.list_running_by_name("worker-1") == []
+    assert service._active_agents == {}
 
 
 @pytest.mark.asyncio
 async def test_handle_agent_blocking_path_removes_registry_entry_on_finish(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
-    registry = _FakeAgentRegistry()
-    service = _make_service(tmp_path, agent_registry=registry)
+    service = _make_service(tmp_path, agent_registry=None)
 
     raw = await service._handle_agent(
         prompt="do work",
@@ -1601,8 +1596,7 @@ async def test_handle_agent_blocking_path_removes_registry_entry_on_finish(monke
     )
 
     assert raw.content == "(Agent completed with no text output)"
-    assert await registry.list_running_by_name("worker-1") == []
-    assert await registry.list_running_by_name("worker-1") == []
+    assert service._active_agents == {}
 
 
 @pytest.mark.asyncio
@@ -1612,10 +1606,9 @@ async def test_handle_agent_blocking_path_does_not_duplicate_error_status(monkey
             raise RuntimeError("boom")
             yield
 
-    registry = _FakeAgentRegistry()
     service = _make_service(
         tmp_path,
-        agent_registry=registry,
+        agent_registry=None,
         child_agent_factory=lambda *, model_name, workspace_root, **kwargs: _FailingChildAgent(
             Path(workspace_root),
             model_name,
@@ -1629,8 +1622,7 @@ async def test_handle_agent_blocking_path_does_not_duplicate_error_status(monkey
     )
 
     assert "Agent failed: boom" in raw.content
-    assert registry.status_updates == []
-    assert await registry.list_running_by_name("worker-1") == []
+    assert service._active_agents == {}
 
 
 @pytest.mark.asyncio
