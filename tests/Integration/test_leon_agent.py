@@ -81,32 +81,6 @@ class _FakeToolTaskRepo:
         self._rows.get(thread_id, {}).pop(str(task_id), None)
 
 
-class _FakeAgentRegistryRepo:
-    def __init__(self) -> None:
-        self._rows: dict[str, tuple[str, str, str, str, str | None, str | None]] = {}
-
-    def close(self) -> None:
-        return None
-
-    def register(
-        self,
-        *,
-        agent_id: str,
-        name: str,
-        thread_id: str,
-        status: str,
-        parent_agent_id: str | None,
-        subagent_type: str | None,
-    ) -> None:
-        self._rows[agent_id] = (agent_id, name, thread_id, status, parent_agent_id, subagent_type)
-
-    def list_running_by_name(self, name: str) -> list[tuple[str, str, str, str, str | None, str | None]]:
-        return [row for row in self._rows.values() if row[1] == name and row[3] == "running"]
-
-    def remove(self, agent_id: str) -> None:
-        self._rows.pop(agent_id, None)
-
-
 class _FakeSyncFileRepo:
     def __init__(self) -> None:
         self._rows: dict[str, dict[str, tuple[str, int]]] = {}
@@ -154,7 +128,6 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
     class _FakeRuntimeContainer:
         def __init__(self) -> None:
             self._tool_task_repo = _FakeToolTaskRepo()
-            self._agent_registry_repo = _FakeAgentRegistryRepo()
             self._sync_file_repo = _FakeSyncFileRepo()
             self._queue_repo = object()
             self._summary_repo = _FakeSummaryRepo()
@@ -164,9 +137,6 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
 
         def tool_task_repo(self) -> _FakeToolTaskRepo:
             return self._tool_task_repo
-
-        def agent_registry_repo(self) -> _FakeAgentRegistryRepo:
-            return self._agent_registry_repo
 
         def sync_file_repo(self) -> _FakeSyncFileRepo:
             return self._sync_file_repo
@@ -340,7 +310,9 @@ def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing
 def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch, tmp_path, _patch_runtime_storage_container):
     import core.agents.registry as agent_registry_module
     import core.runtime.agent as runtime_agent
+    import storage.runtime as storage_runtime
     from core.runtime.agent import LeonAgent
+    from storage.container import StorageContainer
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
     captured: dict[str, Any] = {}
@@ -363,6 +335,8 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
         assert "agent_registry" not in captured
         assert hasattr(runtime_agent, "AgentRegistry") is False
         assert hasattr(agent_registry_module, "AgentRegistry") is False
+        assert hasattr(storage_runtime, "build_agent_registry_repo") is False
+        assert hasattr(StorageContainer, "agent_registry_repo") is False
     finally:
         agent.close()
 
