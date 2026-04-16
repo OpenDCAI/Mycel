@@ -11,6 +11,8 @@ function LocationProbe() {
   return <output aria-label="location">{location.pathname + location.search}</output>;
 }
 
+let fetchItemsMock: ReturnType<typeof vi.fn>;
+
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
@@ -33,7 +35,7 @@ vi.mock("@/store/marketplace-store", () => ({
       updates: [],
       filters: { type: null, sort: "downloads" },
       setFilter: vi.fn(),
-      fetchItems: vi.fn(),
+      fetchItems: fetchItemsMock,
       checkUpdates: vi.fn(),
   }),
 }));
@@ -55,6 +57,7 @@ afterEach(() => {
 describe("MarketplacePage wording contract", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    fetchItemsMock = vi.fn();
     appStoreFetchLibrary.mockReset();
     appStoreDeleteResource.mockReset();
     appStoreAddResource.mockReset();
@@ -230,5 +233,29 @@ describe("MarketplacePage wording contract", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Explore" })).toBeTruthy();
+  });
+
+  it("aborts the explore fetch when navigation leaves the marketplace page", () => {
+    const seenSignals: AbortSignal[] = [];
+    fetchItemsMock.mockImplementation((signal?: AbortSignal) => {
+      if (signal) seenSignals.push(signal);
+      return Promise.resolve();
+    });
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/marketplace"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(fetchItemsMock).toHaveBeenCalledOnce();
+    expect(seenSignals).toHaveLength(1);
+    expect(seenSignals[0].aborted).toBe(false);
+
+    unmount();
+
+    expect(seenSignals[0].aborted).toBe(true);
   });
 });

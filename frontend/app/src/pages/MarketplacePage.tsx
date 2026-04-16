@@ -88,7 +88,12 @@ export default function MarketplacePage() {
 
   // Fetch explore items when filters change
   useEffect(() => {
-    if (tab === "explore") fetchItems();
+    if (tab !== "explore") return;
+    const controller = new AbortController();
+    void fetchItems(controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [tab, filters, fetchItems]);
 
   // Debounced search
