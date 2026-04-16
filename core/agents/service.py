@@ -462,7 +462,7 @@ class AgentService:
     def __init__(
         self,
         tool_registry: ToolRegistry,
-        agent_registry: AgentRegistry,
+        agent_registry: AgentRegistry | None,
         workspace_root: Path,
         model_name: str,
         queue_manager: Any | None = None,
@@ -474,6 +474,7 @@ class AgentService:
         child_agent_factory: ChildAgentFactory | None = None,
     ):
         self._agent_registry = agent_registry
+        self._active_agents: dict[str, AgentEntry] = {}
         self._workspace_root = workspace_root
         self._model_name = model_name
         self._queue_manager = queue_manager
@@ -541,6 +542,23 @@ class AgentService:
                 is_concurrency_safe=True,
             )
         )
+
+    async def _register_active_entry(self, entry: AgentEntry) -> None:
+        if self._agent_registry is not None:
+            await self._agent_registry.register(entry)
+            return
+        self._active_agents[entry.agent_id] = entry
+
+    async def _list_running_entries_by_name(self, name: str) -> list[AgentEntry]:
+        if self._agent_registry is not None:
+            return await self._agent_registry.list_running_by_name(name)
+        return [entry for entry in self._active_agents.values() if entry.name == name and entry.status == "running"]
+
+    async def _remove_active_entry(self, agent_id: str) -> None:
+        if self._agent_registry is not None:
+            await self._agent_registry.remove(agent_id)
+            return
+        self._active_agents.pop(agent_id, None)
 
     @staticmethod
     def _normalize_child_sandbox(sandbox_type: str | None) -> str | None:
@@ -643,7 +661,7 @@ class AgentService:
             parent_agent_id=parent_thread_id,
             subagent_type=subagent_type,
         )
-        await self._agent_registry.register(entry)
+        await self._register_active_entry(entry)
         self._ensure_subagent_thread_metadata(
             thread_id=thread_id,
             parent_thread_id=parent_thread_id,
@@ -993,7 +1011,7 @@ class AgentService:
                                                 output_parts.append(text)
                                                 latest_progress = self._summarize_progress(text, description or agent_name)
 
-            await self._agent_registry.remove(task_id)
+            await self._remove_active_entry(task_id)
             result = "\n".join(output_parts) or "(Agent completed with no text output)"
             if progress_stop is not None:
                 progress_stop.set()
@@ -1036,7 +1054,7 @@ class AgentService:
             if progress_task is not None:
                 await progress_task
             logger.exception("[AgentService] Agent %s failed", agent_name)
-            await self._agent_registry.remove(task_id)
+            await self._remove_active_entry(task_id)
             # Notify frontend: task error
             if emit_fn is not None:
                 try:
@@ -1225,7 +1243,7 @@ class AgentService:
         if self._queue_manager is None:
             return "<tool_use_error>SendMessage requires queue_manager</tool_use_error>"
 
-        matches = await self._agent_registry.list_running_by_name(target_name)
+        matches = await self._list_running_entries_by_name(target_name)
         if not matches:
             return f"<tool_use_error>Running agent '{target_name}' not found</tool_use_error>"
         if len(matches) > 1:

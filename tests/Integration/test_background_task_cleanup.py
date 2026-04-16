@@ -292,6 +292,40 @@ async def test_sendmessage_enqueues_real_agent_notification_for_target_thread(tm
 
 
 @pytest.mark.asyncio
+async def test_sendmessage_uses_service_local_active_state_when_registry_missing(tmp_path):
+    registry = ToolRegistry()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    service = AgentService(
+        tool_registry=registry,
+        agent_registry=None,
+        workspace_root=Path(tmp_path),
+        model_name="gpt-test",
+        queue_manager=queue_manager,
+    )
+    await service._register_active_entry(
+        AgentEntry(
+            agent_id="agent-1",
+            name="worker-1",
+            thread_id="thread-worker-1",
+            status="running",
+        )
+    )
+
+    result = await service._handle_send_message(
+        target_name="worker-1",
+        message="hello from coordinator",
+        sender_name="coordinator",
+    )
+
+    assert result == "Message sent to worker-1."
+    items = queue_manager.drain_all("thread-worker-1")
+    assert len(items) == 1
+    assert items[0].notification_type == "agent"
+    assert items[0].sender_name == "coordinator"
+    assert "hello from coordinator" in items[0].content
+
+
+@pytest.mark.asyncio
 async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_path):
     registry = ToolRegistry()
     agent_registry = cast(AgentRegistry, _FakeAgentRegistry())

@@ -349,8 +349,8 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
 
     try:
-        assert agent._agent_registry._repo is not _patch_runtime_storage_container.agent_registry_repo()
-        assert agent._agent_registry._repo.__class__.__name__ == "_InMemoryAgentRegistryRepo"
+        assert agent._agent_registry is None
+        assert agent._agent_service._agent_registry is None
     finally:
         agent.close()
 
