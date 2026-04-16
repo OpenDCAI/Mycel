@@ -27,6 +27,21 @@ def _default_eval_batch_service(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _default_monitor_thread_repo(monkeypatch):
+    class FakeCanonicalThreadRepo:
+        def list_by_ids(self, thread_ids: list[str]):
+            return [
+                {"id": thread_id, "agent_user_id": "agent-1", "branch_index": 0, "is_main": True}
+                for thread_id in thread_ids
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "build_thread_repo", lambda: FakeCanonicalThreadRepo())
+
+
+@pytest.fixture(autouse=True)
 def _clear_monitor_cleanup_operations():
     monitor_service.monitor_operation_service._OPERATIONS.clear()
     monitor_service.monitor_operation_service._TARGET_INDEX.clear()
@@ -424,6 +439,33 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
     assert payload["threads"] == [{"thread_id": "thread-1"}]
     assert payload["cleanup"]["allowed"] is False
     assert "lease" not in payload
+
+
+def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_thread(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            threads=[{"thread_id": "thread-child"}, {"thread_id": "thread-main"}],
+            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-main", "status": "active"}],
+        ),
+    )
+
+    class _ThreadRepo:
+        def list_by_ids(self, thread_ids: list[str]):
+            assert thread_ids == ["thread-child", "thread-main"]
+            return [
+                {"id": "thread-child", "agent_user_id": "agent-1", "branch_index": 2, "is_main": False},
+                {"id": "thread-main", "agent_user_id": "agent-1", "branch_index": 0, "is_main": True},
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "build_thread_repo", lambda: _ThreadRepo())
+
+    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+
+    assert payload["threads"] == [{"thread_id": "thread-main"}]
 
 
 def test_list_leases_uses_canonical_sandbox_source(monkeypatch):

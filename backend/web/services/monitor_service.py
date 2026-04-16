@@ -9,6 +9,7 @@ from typing import Any
 from backend.web.core import config as web_config
 from backend.web.services import monitor_operation_service, sandbox_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
+from backend.web.services.thread_visibility import canonical_owner_threads
 from eval.batch_executor import EvaluationBatchExecutor
 from eval.batch_service import EvaluationBatchService
 from eval.harness.client import EvalClient
@@ -16,7 +17,7 @@ from eval.harness.runner import EvalRunner
 from eval.harness.scenario import load_scenarios_from_dir
 from eval.models import EvalScenario
 from eval.storage import TrajectoryStore
-from storage.runtime import build_evaluation_batch_repo
+from storage.runtime import build_evaluation_batch_repo, build_thread_repo
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 # ---------------------------------------------------------------------------
@@ -86,6 +87,21 @@ def _thread_ref(thread_id: str | None) -> dict[str, Any]:
         "thread_id": thread_id,
         "is_orphan": not thread_id,
     }
+
+
+def _canonical_live_thread_refs(raw_thread_ids: list[str]) -> list[dict[str, Any]]:
+    live_threads = _live_thread_ids(raw_thread_ids)
+    if not live_threads:
+        return []
+
+    repo = build_thread_repo()
+    try:
+        rows = repo.list_by_ids([thread_id for thread_id in raw_thread_ids if thread_id in live_threads])
+    finally:
+        repo.close()
+
+    canonical = canonical_owner_threads(rows)
+    return [{"thread_id": str(row.get("id") or "").strip()} for row in canonical if str(row.get("id") or "").strip()]
 
 
 def _derive_thread_summary_from_sessions(sessions: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -588,8 +604,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
     runtime_session_id = repo.query_sandbox_instance_id(sandbox_id)
 
     raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
-    live_threads = _live_thread_ids(raw_thread_ids)
-    live_thread_refs = [{"thread_id": thread_id} for thread_id in raw_thread_ids if thread_id in live_threads]
+    live_thread_refs = _canonical_live_thread_refs(raw_thread_ids)
     badge = _make_badge(sandbox.get("desired_state"), sandbox.get("observed_state"))
     triage = _classify_lease_triage(
         thread_id=live_thread_refs[0]["thread_id"] if live_thread_refs else None,
