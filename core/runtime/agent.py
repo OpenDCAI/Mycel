@@ -1237,7 +1237,6 @@ class LeonAgent:
         self._agent_registry = None
         self._agent_service = AgentService(
             tool_registry=self._tool_registry,
-            agent_registry=self._agent_registry,
             workspace_root=self.workspace_root,
             model_name=self.model_name,
             thread_repo=self._thread_repo,

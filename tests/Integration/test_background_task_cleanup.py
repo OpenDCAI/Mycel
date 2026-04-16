@@ -124,7 +124,6 @@ def test_taskstop_terminates_real_background_bash_run(tmp_path):
         )
         agent_service = AgentService(
             tool_registry=registry,
-            agent_registry=None,
             workspace_root=Path(tmp_path),
             model_name="gpt-test",
             shared_runs=shared_runs,
@@ -206,7 +205,6 @@ def test_sendmessage_search_hint_uses_queue_naming(tmp_path):
     registry = ToolRegistry()
     AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
     )
@@ -224,7 +222,6 @@ async def test_sendmessage_enqueues_real_agent_notification_for_target_thread(tm
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -258,7 +255,6 @@ async def test_sendmessage_uses_service_local_active_state_when_registry_missing
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -292,7 +288,6 @@ async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -332,7 +327,6 @@ async def test_sendmessage_rejects_ambiguous_running_agent_names(tmp_path):
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -379,7 +373,6 @@ async def test_background_agent_progress_notification_reaches_parent_next_turn(t
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -426,7 +419,6 @@ async def test_background_agent_completion_notification_waits_for_followthrough_
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -480,7 +472,6 @@ async def test_mixed_success_and_init_failure_background_agents_queue_both_termi
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,

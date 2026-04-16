@@ -263,11 +263,9 @@ def _make_tool_request(
 
 def _make_service(tmp_path: Path, **kwargs) -> AgentService:
     tool_registry = kwargs.pop("tool_registry", None) or _CapturingRegistry()
-    agent_registry = kwargs.pop("agent_registry", None)
     model_name = kwargs.pop("model_name", "gpt-test")
     return AgentService(
         tool_registry=tool_registry,
-        agent_registry=agent_registry,
         workspace_root=tmp_path,
         model_name=model_name,
         **kwargs,
@@ -997,7 +995,7 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
 
 @pytest.mark.asyncio
 async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_path):
-    service = _make_service(tmp_path, agent_registry=None)
+    service = _make_service(tmp_path)
     agent_task = asyncio.create_task(_sleep_forever())
     shell_cmd = _FakeAsyncCommand()
     service._tasks["agent-task"] = _RunningTask(
@@ -1023,7 +1021,7 @@ async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_
 
 @pytest.mark.asyncio
 async def test_cleanup_background_runs_does_not_relabel_completed_agent_run(tmp_path):
-    service = _make_service(tmp_path, agent_registry=None)
+    service = _make_service(tmp_path)
     completed_task = asyncio.create_task(asyncio.sleep(0, result="done"))
     await completed_task
     service._tasks["agent-task"] = _RunningTask(
@@ -1509,7 +1507,6 @@ async def test_handle_agent_mints_fresh_child_thread_without_child_continuity_lo
     )
     service = _make_service(
         tmp_path,
-        agent_registry=None,
         thread_repo=thread_repo,
         user_repo=_FakeUserRepo({"agent-user-1": "Toad"}),
     )
@@ -1535,7 +1532,7 @@ async def test_handle_agent_mints_fresh_child_thread_without_child_continuity_lo
 async def test_handle_agent_blocking_path_does_not_duplicate_completed_status(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
-    service = _make_service(tmp_path, agent_registry=None)
+    service = _make_service(tmp_path)
 
     raw = await service._handle_agent(
         prompt="do work",
@@ -1551,7 +1548,7 @@ async def test_handle_agent_blocking_path_does_not_duplicate_completed_status(mo
 async def test_handle_agent_blocking_path_removes_registry_entry_on_finish(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
-    service = _make_service(tmp_path, agent_registry=None)
+    service = _make_service(tmp_path)
 
     raw = await service._handle_agent(
         prompt="do work",
@@ -1572,7 +1569,6 @@ async def test_handle_agent_blocking_path_does_not_duplicate_error_status(monkey
 
     service = _make_service(
         tmp_path,
-        agent_registry=None,
         child_agent_factory=lambda *, model_name, workspace_root, **kwargs: _FailingChildAgent(
             Path(workspace_root),
             model_name,
