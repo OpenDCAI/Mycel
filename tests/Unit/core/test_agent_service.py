@@ -44,16 +44,14 @@ class _CapturingRegistry(ToolRegistry):
 
 class _FakeAgentRegistry(AgentRegistry):
     def __init__(self) -> None:
-        self._latest_by_name_parent: dict[tuple[str, str | None], AgentEntry] = {}
+        self.entry = None
+        self.last_status = None
 
     async def register(self, entry):
         self.entry = entry
 
     async def update_status(self, agent_id: str, status: str):
         self.last_status = (agent_id, status)
-
-    async def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None):
-        return self._latest_by_name_parent.get((name, parent_agent_id))
 
 
 class _FakeThreadRepo:
@@ -159,6 +157,12 @@ async def test_agent_registry_defaults_to_process_local_in_memory_repo() -> None
     updated = await registry.get_by_id("agent-1")
     assert updated is not None
     assert updated.status == "completed"
+
+
+def test_agent_registry_no_longer_exposes_child_continuity_lookup() -> None:
+    registry = AgentRegistry()
+
+    assert hasattr(registry, "get_latest_by_name_and_parent") is False
 
 
 class _FakeChildAgent:
@@ -1469,7 +1473,7 @@ async def test_handle_agent_does_not_register_child_thread_when_parent_bridge_is
 
 
 @pytest.mark.asyncio
-async def test_handle_agent_mints_fresh_child_thread_even_when_completed_child_exists(monkeypatch, tmp_path):
+async def test_handle_agent_mints_fresh_child_thread_without_child_continuity_lookup(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
     thread_repo = _FakeThreadRepo(
@@ -1501,14 +1505,6 @@ async def test_handle_agent_mints_fresh_child_thread_even_when_completed_child_e
         }
     )
     registry = _FakeAgentRegistry()
-    registry._latest_by_name_parent[("worker-1", "parent-thread")] = AgentEntry(
-        agent_id="old-agent",
-        name="worker-1",
-        thread_id="subagent-existing",
-        status="completed",
-        parent_agent_id="parent-thread",
-        subagent_type="general",
-    )
     service = _make_service(
         tmp_path,
         agent_registry=registry,
