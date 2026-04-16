@@ -41,6 +41,7 @@ class _FakeVolumeRepo:
 class _FakeVolume:
     def __init__(self) -> None:
         self.mount_calls: list[tuple[str, str]] = []
+        self.mount_sources: list[Path | None] = []
         self.upload_calls: list[tuple[str, str, Path, str]] = []
         self.download_calls: list[tuple[str, str, Path, str]] = []
         self.cleared: list[str] = []
@@ -48,8 +49,9 @@ class _FakeVolume:
     def resolve_mount_path(self) -> str:
         return "/workspace"
 
-    def mount(self, thread_id: str, source, remote_path: str) -> None:
+    def mount(self, thread_id: str, source_path: Path | None, remote_path: str) -> None:
         self.mount_calls.append((thread_id, remote_path))
+        self.mount_sources.append(source_path)
 
     def mount_managed_volume(self, thread_id: str, volume_name: str, remote_path: str) -> None:
         self.mount_calls.append((thread_id, remote_path))
@@ -325,8 +327,9 @@ def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
 
     assert repo.requested_ids == ["volume-1"]
     assert repo.closed is True
-    assert isinstance(result["source"], HostVolume)
+    assert result == {"source_path": Path(tmp_path) / "vol", "remote_path": "/workspace"}
     assert manager.volume.mount_calls == [("thread-1", "/workspace")]
+    assert manager.volume.mount_sources == [Path(tmp_path) / "vol"]
 
 
 def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
@@ -362,7 +365,8 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
     assert repo.created == [(lease.volume_id, "vol-thread-1")]
     assert manager.lease_store.volume_updates == [("lease-1", lease.volume_id)]
     assert repo.requested_ids == [lease.volume_id]
-    assert isinstance(result["source"], HostVolume)
+    assert result == {"source_path": Path(tmp_path) / "volumes" / lease.volume_id, "remote_path": "/workspace"}
+    assert manager.volume.mount_sources == [Path(tmp_path) / "volumes" / lease.volume_id]
 
 
 def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id(monkeypatch, tmp_path):
@@ -400,7 +404,7 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
     assert repo.created == [("volume-missing", "vol-thread-1")]
     assert manager.lease_store.volume_updates == []
     assert repo.requested_ids == ["volume-missing", "volume-missing"]
-    assert isinstance(result["source"], DaytonaVolume)
+    assert result == {"source_path": Path(tmp_path) / "volumes" / "volume-missing", "remote_path": "/workspace"}
     assert manager.provider.calls == [("volume-missing", "/workspace")]
 
 

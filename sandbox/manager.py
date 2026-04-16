@@ -416,9 +416,9 @@ class SandboxManager:
         if isinstance(source, DaytonaVolume):
             self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
         else:
-            self.volume.mount(thread_id, source, remote_path)
+            self.volume.mount(thread_id, source_path, remote_path)
 
-        return {"source": source, "source_path": source_path, "remote_path": remote_path}
+        return {"source_path": source_path, "remote_path": remote_path}
 
     def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
         """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
