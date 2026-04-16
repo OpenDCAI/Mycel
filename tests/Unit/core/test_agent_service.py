@@ -1542,10 +1542,9 @@ async def test_handle_agent_mints_fresh_child_thread_without_child_continuity_lo
             },
         }
     )
-    registry = _FakeAgentRegistry()
     service = _make_service(
         tmp_path,
-        agent_registry=registry,
+        agent_registry=None,
         thread_repo=thread_repo,
         user_repo=_FakeUserRepo({"agent-user-1": "Toad"}),
     )
