@@ -74,19 +74,6 @@ class AgentRegistry:
                 subagent_type=entry.subagent_type,
             )
 
-    async def get_by_id(self, agent_id: str) -> AgentEntry | None:
-        row = self._repo.get_by_id(agent_id)
-        if row is None:
-            return None
-        return AgentEntry(
-            agent_id=row[0],
-            name=row[1],
-            thread_id=row[2],
-            status=row[3],
-            parent_agent_id=row[4],
-            subagent_type=row[5],
-        )
-
     async def list_running_by_name(self, name: str) -> list[AgentEntry]:
         rows = self._repo.list_running_by_name(name)
         return [
@@ -108,17 +95,3 @@ class AgentRegistry:
     async def remove(self, agent_id: str) -> None:
         async with self._lock:
             self._repo.remove(agent_id)
-
-    async def list_running(self) -> list[AgentEntry]:
-        rows = self._repo.list_running()
-        return [
-            AgentEntry(
-                agent_id=r[0],
-                name=r[1],
-                thread_id=r[2],
-                status=r[3],
-                parent_agent_id=r[4],
-                subagent_type=r[5],
-            )
-            for r in rows
-        ]
