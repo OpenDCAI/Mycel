@@ -54,7 +54,12 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
 
   const groupCandidates = useMemo(() => {
     const query = filter.trim().toLowerCase();
-    const items = chatCandidates.filter((item) => item.user_id !== myUserId && (item.is_owned || item.can_chat));
+    const items = chatCandidates.filter((item) => {
+      if (item.user_id === myUserId) return false;
+      // @@@owned-agent-group-ingress - group-chat POST only accepts owned agents
+      // once they have a real default thread backing their actor identity.
+      return item.is_owned ? Boolean(item.default_thread_id) : item.can_chat;
+    });
     if (!query) return items;
     return items.filter((item) => [item.name, item.owner_name ?? "", item.type].join(" ").toLowerCase().includes(query));
   }, [chatCandidates, filter, myUserId]);

@@ -9,6 +9,7 @@ export type UserChatCandidate = {
   is_owned: boolean;
   relationship_state: string;
   can_chat: boolean;
+  default_thread_id?: string | null;
 };
 
 let inflightUserChatCandidates: Promise<UserChatCandidate[]> | null = null;
@@ -37,6 +38,7 @@ export function parseUserChatCandidates(value: unknown): UserChatCandidate[] {
       is_owned: row.is_owned,
       relationship_state: row.relationship_state,
       can_chat: row.can_chat,
+      default_thread_id: typeof row.default_thread_id === "string" ? row.default_thread_id : null,
     };
   });
 }

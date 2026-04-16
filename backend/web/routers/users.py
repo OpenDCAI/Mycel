@@ -182,6 +182,7 @@ async def list_chat_candidates(
         raise HTTPException(503, str(exc)) from exc
 
     items = []
+    thread_repo = getattr(app.state, "thread_repo", None)
 
     for user in users:
         if user.id == user_id:
@@ -212,19 +213,21 @@ async def list_chat_candidates(
             )
         else:
             owner = user_map.get(user.owner_user_id) if user.owner_user_id else None
-            items.append(
-                {
-                    "user_id": user.id,
-                    "name": user.display_name,
-                    "type": user.type.value,
-                    "avatar_url": avatar_url(user.id, bool(user.avatar)),
-                    "owner_name": owner.display_name if owner else None,
-                    "agent_name": user.display_name,
-                    "is_owned": is_owned,
-                    "relationship_state": relationship_state,
-                    "can_chat": can_chat,
-                }
-            )
+            default_thread = thread_repo.get_default_thread(user.id) if is_owned and thread_repo is not None else None
+            item = {
+                "user_id": user.id,
+                "name": user.display_name,
+                "type": user.type.value,
+                "avatar_url": avatar_url(user.id, bool(user.avatar)),
+                "owner_name": owner.display_name if owner else None,
+                "agent_name": user.display_name,
+                "is_owned": is_owned,
+                "relationship_state": relationship_state,
+                "can_chat": can_chat,
+            }
+            if is_owned:
+                item["default_thread_id"] = default_thread["id"] if default_thread else None
+            items.append(item)
     return items
 
 
