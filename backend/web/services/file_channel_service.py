@@ -1,13 +1,7 @@
-"""File channel service — per-lease file storage for user↔agent file transfer.
-
-File channel is an application-layer concept. Under the hood it uses
-sandbox volumes (VolumeSource + SandboxVolume mount/sync engine).
-This service provides the app-layer API for file CRUD on a thread's channel.
-"""
+"""File channel service for workspace-owned user↔agent file transfer."""
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,7 +9,6 @@ from pathlib import Path
 from backend.web.utils.helpers import _get_container
 from config.user_paths import user_home_path
 from sandbox.clock import utc_now_iso
-from sandbox.control_plane_repos import make_lease_repo, make_terminal_repo
 from storage.runtime import build_chat_session_repo as make_chat_session_repo
 
 logger = logging.getLogger(__name__)
@@ -29,51 +22,8 @@ class FileChannelBinding:
     local_staging_root: Path | None
     remote_files_dir: str
 
-
-def _resolve_volume_source(thread_id: str):
-    """Resolve VolumeSource for a thread via lease chain.
-
-    This is the application-layer entry point. Uses sandbox-layer stores
-    to walk: thread → terminal → lease → volume_id → sandbox_volumes.
-    """
-    from sandbox.volume_source import deserialize_volume_source
-
-    terminal_repo = make_terminal_repo()
-    try:
-        terminal_row = terminal_repo.get_active(thread_id)
-    finally:
-        terminal_repo.close()
-    if not terminal_row:
-        raise ValueError(f"No active terminal for thread {thread_id}")
-
-    lease_repo = make_lease_repo()
-    try:
-        lease_row = lease_repo.get(terminal_row["lease_id"])
-    finally:
-        lease_repo.close()
-    if not lease_row:
-        raise ValueError(f"Lease not found: {terminal_row['lease_id']}")
-    volume_id = lease_row.get("volume_id")
-    if not volume_id:
-        raise ValueError(f"Lease {terminal_row['lease_id']} has no volume_id")
-
-    repo = _get_container().sandbox_volume_repo()
-    try:
-        entry = repo.get(volume_id)
-    finally:
-        repo.close()
-
-    if not entry:
-        raise ValueError(f"Volume not found: {volume_id}")
-
-    return deserialize_volume_source(json.loads(entry["source"]))
-
-
 def get_file_channel_source(thread_id: str):
-    """Get VolumeSource for a thread's file channel.
-
-    Primary entry point for all app-layer code paths (upload, list, download, delete).
-    """
+    """Get the local file-channel source for a thread."""
     from sandbox.volume_source import HostVolume
 
     binding = get_file_channel_binding(thread_id)
