@@ -3,6 +3,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
+
 import sandbox.manager as sandbox_manager_module
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
@@ -237,6 +239,24 @@ def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_prov
     )
 
     assert cwd == "/providers/local"
+    assert lease_repo.requested_ids == ["lease-1"]
+
+
+def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavailable(monkeypatch):
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "missing-provider"})
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda _name: None,
+    )
+
+    with pytest.raises(ValueError, match="provider default cwd is required"):
+        sandbox_manager_module.resolve_existing_lease_cwd(
+            "lease-1",
+            db_path=Path("/tmp/fake-sandbox.db"),
+            lease_repo=lease_repo,
+        )
+
     assert lease_repo.requested_ids == ["lease-1"]
 
 

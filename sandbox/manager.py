@@ -98,7 +98,7 @@ def resolve_existing_lease_cwd(
     provider = _build_provider_from_name(provider_name) if provider_name else None
     if provider is not None:
         return resolve_provider_cwd(provider)
-    return str(Path.home())
+    raise ValueError("provider default cwd is required")
 
 
 def bind_thread_to_existing_lease(
