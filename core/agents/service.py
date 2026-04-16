@@ -632,11 +632,7 @@ class AgentService:
         task_id = uuid.uuid4().hex[:8]
         agent_name = name or f"agent-{task_id}"
         parent_thread_id = get_current_thread_id()
-        existing_child = None
-        lookup_existing_child = getattr(self._agent_registry, "get_latest_by_name_and_parent", None)
-        if name and parent_thread_id and lookup_existing_child is not None:
-            existing_child = await lookup_existing_child(name, parent_thread_id)
-        thread_id = existing_child.thread_id if existing_child is not None and existing_child.status != "running" else f"subagent-{task_id}"
+        thread_id = f"subagent-{task_id}"
 
         # Register in AgentRegistry immediately
         entry = AgentEntry(
