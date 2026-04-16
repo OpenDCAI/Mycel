@@ -333,6 +333,19 @@ class SQLiteLease(SandboxLease):
         finally:
             repo.close()
 
+    def _sync_sandbox_observed_state(self, observed_state: str, *, updated_at: Any) -> None:
+        if not _use_supabase_storage(self.db_path):
+            return
+        repo = _make_sandbox_repo()
+        try:
+            repo.update_observed_state(
+                sandbox_id=self._sandbox_bridge_id(),
+                observed_state=observed_state,
+                updated_at=updated_at,
+            )
+        finally:
+            repo.close()
+
     def _append_event(
         self,
         *,
@@ -558,6 +571,7 @@ class SQLiteLease(SandboxLease):
         self._sync_from(lease_from_row(row, self.db_path))
         if observed == "detached":
             self._sync_sandbox_runtime_binding(None, updated_at=row.get("updated_at") or row.get("observed_at"))
+            self._sync_sandbox_observed_state("detached", updated_at=row.get("updated_at") or row.get("observed_at"))
 
     def _destroy_via_strategy_repos(self, provider: SandboxProvider, *, source: str) -> None:
         capability = provider.get_capability()

@@ -92,6 +92,14 @@ class SupabaseSandboxRepo:
             }
         ).eq("id", sandbox_id).execute()
 
+    def update_observed_state(self, *, sandbox_id: str, observed_state: str, updated_at: float | str) -> None:
+        self._t().update(
+            {
+                "observed_state": observed_state,
+                "updated_at": _to_timestamptz(updated_at),
+            }
+        ).eq("id", sandbox_id).execute()
+
     def get_by_id(self, sandbox_id: str) -> SandboxRow | None:
         response = self._t().select(", ".join(_COLS)).eq("id", sandbox_id).execute()
         rows = q.rows(response, _REPO, "get_by_id")

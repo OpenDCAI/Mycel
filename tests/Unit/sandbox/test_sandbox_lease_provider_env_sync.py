@@ -86,6 +86,7 @@ class _FakeEventRepo:
 class _FakeSandboxRepo:
     def __init__(self) -> None:
         self.binding_updates = []
+        self.observed_state_updates = []
         self.closed = False
 
     def update_runtime_binding(self, *, sandbox_id: str, provider_env_id: str | None, updated_at: str) -> None:
@@ -93,6 +94,15 @@ class _FakeSandboxRepo:
             {
                 "sandbox_id": sandbox_id,
                 "provider_env_id": provider_env_id,
+                "updated_at": updated_at,
+            }
+        )
+
+    def update_observed_state(self, *, sandbox_id: str, observed_state: str, updated_at: str) -> None:
+        self.observed_state_updates.append(
+            {
+                "sandbox_id": sandbox_id,
+                "observed_state": observed_state,
                 "updated_at": updated_at,
             }
         )
@@ -167,6 +177,13 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
         {
             "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
             "provider_env_id": None,
+            "updated_at": "2026-04-17T00:00:05+00:00",
+        }
+    ]
+    assert fake_sandbox_repo.observed_state_updates == [
+        {
+            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
+            "observed_state": "detached",
             "updated_at": "2026-04-17T00:00:05+00:00",
         }
     ]
