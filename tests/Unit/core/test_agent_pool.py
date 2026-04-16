@@ -291,6 +291,52 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_allowed_paths(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["extra_allowed_paths"] = kwargs.get("extra_allowed_paths")
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-binding",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-binding", agent_config_id="cfg-binding")
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-binding")
+    monkeypatch.setattr(
+        agent_pool,
+        "get_file_channel_binding",
+        lambda thread_id: SimpleNamespace(local_staging_root=Path("/tmp/channel-root")),
+        raising=False,
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-binding")
+
+    assert captured["extra_allowed_paths"] == ["/tmp/channel-root"]
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_agent_requires_thread_agent_user_id_for_chat_identity(monkeypatch: pytest.MonkeyPatch):
     def _fake_create_agent_sync(**kwargs) -> object:
         return SimpleNamespace()

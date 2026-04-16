@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from backend.web.services.file_channel_service import get_file_channel_binding
 from core.identity.agent_registry import get_or_create_agent_id
 from core.runtime.agent import create_leon_agent
 from sandbox.manager import lookup_sandbox_for_thread
@@ -173,13 +174,13 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
             }
 
-        # @@@per-thread-file-access - ensure thread files are accessible from agent
-        from backend.web.services.file_channel_service import get_file_channel_source
-
         try:
-            source = get_file_channel_source(thread_id)
-            extra_allowed_paths: list[str] = [str(source.host_path)] if sandbox_type == "local" else []
-        except ValueError:
+            binding = get_file_channel_binding(thread_id)
+            if sandbox_type == "local" and binding.local_staging_root is not None:
+                extra_allowed_paths: list[str] = [str(binding.local_staging_root)]
+            else:
+                extra_allowed_paths = []
+        except Exception:
             extra_allowed_paths: list[str] = []
 
         # Merge user-configured allowed_paths from sandbox config

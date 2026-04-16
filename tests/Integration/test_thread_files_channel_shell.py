@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -97,3 +98,27 @@ async def test_list_channel_files_returns_entries_payload(monkeypatch: pytest.Mo
     result = await thread_files_router.list_channel_files("thread-1")
 
     assert result == {"thread_id": "thread-1", "entries": [{"path": "notes.txt"}]}
+
+
+@pytest.mark.asyncio
+async def test_get_sandbox_files_exposes_workspace_binding_alongside_local_staging_root(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        thread_files_router.file_channel_service,
+        "get_file_channel_binding",
+        lambda thread_id: SimpleNamespace(
+            thread_id=thread_id,
+            workspace_id="workspace-1",
+            workspace_path="/workspace/root",
+            local_staging_root=Path("/tmp/channel-root"),
+        ),
+        raising=False,
+    )
+
+    result = await thread_files_router.get_sandbox_files("thread-1")
+
+    assert result == {
+        "thread_id": "thread-1",
+        "files_path": "/tmp/channel-root",
+        "workspace_id": "workspace-1",
+        "workspace_path": "/workspace/root",
+    }

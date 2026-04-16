@@ -30,7 +30,7 @@ from backend.web.models.requests import (
 from backend.web.services import account_resource_service, sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.file_channel_service import get_file_channel_source
+from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
@@ -155,8 +155,8 @@ async def _prepare_attachment_message(
     # For remote providers: container-side path
     if mgr and mgr.volume.capability.runtime_kind == "local":
         try:
-            source = get_file_channel_source(thread_id)
-            files_dir = str(source.host_path)
+            binding = get_file_channel_binding(thread_id)
+            files_dir = str(binding.local_staging_root) if binding.local_staging_root is not None else binding.workspace_path
         except ValueError:
             files_dir = "/workspace/files"
     else:
