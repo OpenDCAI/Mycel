@@ -42,41 +42,6 @@ class _CapturingRegistry(ToolRegistry):
         super().register(entry)
 
 
-class _FakeAgentRegistry(AgentRegistry):
-    def __init__(self) -> None:
-        self.entry = None
-        self.last_status = None
-        self.status_updates: list[tuple[str, str]] = []
-        self._entries: dict[str, AgentEntry] = {}
-
-    async def register(self, entry):
-        self.entry = entry
-        self._entries[entry.agent_id] = entry
-
-    async def update_status(self, agent_id: str, status: str):
-        self.last_status = (agent_id, status)
-        self.status_updates.append((agent_id, status))
-        if agent_id in self._entries:
-            current = self._entries[agent_id]
-            self._entries[agent_id] = AgentEntry(
-                agent_id=current.agent_id,
-                name=current.name,
-                thread_id=current.thread_id,
-                status=status,
-                parent_agent_id=current.parent_agent_id,
-                subagent_type=current.subagent_type,
-            )
-
-    async def get_by_id(self, agent_id: str) -> AgentEntry | None:
-        return self._entries.get(agent_id)
-
-    async def list_running_by_name(self, name: str) -> list[AgentEntry]:
-        return [entry for entry in self._entries.values() if entry.name == name and entry.status == "running"]
-
-    async def remove(self, agent_id: str) -> None:
-        self._entries.pop(agent_id, None)
-
-
 class _FakeThreadRepo:
     def __init__(self, rows: dict[str, dict] | None = None):
         self.rows = rows or {}
