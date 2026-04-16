@@ -774,6 +774,7 @@ class LeonAgent:
         base_url = self.models_config.resolve_base_url(provider)
         if base_url:
             kwargs["base_url"] = self._normalize_base_url(base_url, provider)
+        kwargs.update(self._build_openai_http_clients(provider))
         return init_chat_model(model_name, **kwargs)
 
     def _build_model_kwargs(self) -> dict:
