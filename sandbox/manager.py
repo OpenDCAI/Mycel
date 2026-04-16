@@ -284,9 +284,9 @@ class SandboxManager:
             return None
         return lease_from_row(row, self.db_path)
 
-    def _create_lease(self, lease_id: str, provider_name: str, volume_id: str | None = None):
+    def _create_lease(self, lease_id: str, provider_name: str):
         """Create lease and return as domain object."""
-        row = self.lease_store.create(lease_id, provider_name, volume_id=volume_id)
+        row = self.lease_store.create(lease_id, provider_name)
         return lease_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):

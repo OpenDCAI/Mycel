@@ -245,39 +245,3 @@ def test_supabase_lease_repo_observe_status_detaches_instance_and_clears_refresh
     assert type(lease_row["needs_refresh"]) is int
     assert lease_row["version"] == 1
     assert instance_row["status"] == "stopped"
-
-
-def test_supabase_lease_repo_set_volume_id_updates_lease_row():
-    tables = {
-        "sandbox_leases": [
-            {
-                "lease_id": "lease-1",
-                "provider_name": "local",
-                "recipe_id": None,
-                "workspace_key": None,
-                "recipe_json": None,
-                "current_instance_id": None,
-                "instance_created_at": None,
-                "desired_state": "running",
-                "observed_state": "detached",
-                "version": 0,
-                "observed_at": "2026-04-07T00:00:00+00:00",
-                "last_error": None,
-                "needs_refresh": 0,
-                "refresh_hint_at": None,
-                "status": "active",
-                "volume_id": None,
-                "created_at": "2026-04-07T00:00:00+00:00",
-                "updated_at": "2026-04-07T00:00:00+00:00",
-            }
-        ],
-        "sandbox_instances": [],
-    }
-    repo = SupabaseLeaseRepo(client=FakeSupabaseClient(tables=tables))
-
-    updated = repo.set_volume_id("lease-1", "volume-1")
-
-    lease_row = tables["sandbox_leases"][0]
-    assert updated is True
-    assert lease_row["volume_id"] == "volume-1"
-    assert lease_row["updated_at"].endswith("+00:00")

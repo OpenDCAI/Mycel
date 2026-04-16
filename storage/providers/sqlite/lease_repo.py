@@ -95,7 +95,6 @@ class SQLiteLeaseRepo:
         self,
         lease_id: str,
         provider_name: str,
-        volume_id: str | None = None,
         recipe_id: str | None = None,
         recipe_json: str | None = None,
     ) -> dict[str, Any]:
@@ -125,7 +124,7 @@ class SQLiteLeaseRepo:
                     0,
                     None,
                     "active",
-                    volume_id,
+                    None,
                     now,
                     now,
                 ),
@@ -374,20 +373,6 @@ class SQLiteLeaseRepo:
                 WHERE lease_id = ?
                 """,
                 (hinted_at, datetime.now().isoformat(), lease_id),
-            )
-            self._conn.commit()
-            return cursor.rowcount > 0
-
-    def set_volume_id(self, lease_id: str, volume_id: str) -> bool:
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                UPDATE sandbox_leases
-                SET volume_id = ?,
-                    updated_at = ?
-                WHERE lease_id = ?
-                """,
-                (volume_id, datetime.now().isoformat(), lease_id),
             )
             self._conn.commit()
             return cursor.rowcount > 0

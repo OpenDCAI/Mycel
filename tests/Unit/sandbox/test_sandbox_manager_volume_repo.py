@@ -91,11 +91,7 @@ class _FakeUpdateRepo:
 
 
 class _FakeLeaseStore:
-    def __init__(self) -> None:
-        self.volume_updates: list[tuple[str, str]] = []
-
-    def set_volume_id(self, lease_id: str, volume_id: str) -> None:
-        self.volume_updates.append((lease_id, volume_id))
+    pass
 
 
 class _FakeTerminalRepo:
@@ -368,7 +364,6 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
 
     assert lease.volume_id is None
     assert repo.created == []
-    assert manager.lease_store.volume_updates == []
     assert repo.requested_ids == []
     assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
@@ -391,7 +386,6 @@ def test_setup_mounts_daytona_does_not_require_volume_id(monkeypatch, tmp_path):
     result = manager._setup_mounts("thread-1")
 
     assert repo.created == []
-    assert manager.lease_store.volume_updates == []
     assert repo.requested_ids == []
     assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.provider.calls == [("lease-1", "/workspace")]
