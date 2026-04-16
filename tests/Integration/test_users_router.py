@@ -55,11 +55,14 @@ def _users_app(
     *,
     relationships: dict[str, str] | None = None,
     contact_repo: object | None = None,
+    default_threads: dict[str, dict[str, object] | None] | None = None,
 ) -> SimpleNamespace:
     relationships = relationships or {}
+    default_threads = default_threads or {}
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: users),
+            thread_repo=SimpleNamespace(get_default_thread=lambda agent_user_id: default_threads.get(agent_user_id)),
             relationship_service=SimpleNamespace(
                 list_for_user=lambda _user_id: [
                     SimpleNamespace(other_user_id=other_user_id, state=state) for other_user_id, state in relationships.items()
@@ -138,6 +141,24 @@ async def test_list_chat_candidates_marks_owned_agents_as_chat_candidates_withou
     assert result[0]["is_owned"] is True
     assert result[0]["relationship_state"] == "none"
     assert result[0]["can_chat"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_chat_candidates_exposes_default_thread_id_for_owned_agents_only():
+    app = _users_app(
+        [_human("u1", "owner"), _agent("a-owned-ready", "Ready Agent", "u1"), _agent("a-owned-cold", "Cold Agent", "u1")],
+        default_threads={
+            "a-owned-ready": {"id": "thread-ready"},
+            "a-owned-cold": None,
+        },
+    )
+
+    result = await users_router.list_chat_candidates(user_id="u1", app=app)
+
+    ready = next(item for item in result if item["user_id"] == "a-owned-ready")
+    cold = next(item for item in result if item["user_id"] == "a-owned-cold")
+    assert ready["default_thread_id"] == "thread-ready"
+    assert cold["default_thread_id"] is None
 
 
 @pytest.mark.asyncio

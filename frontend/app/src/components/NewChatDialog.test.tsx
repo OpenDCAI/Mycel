@@ -216,4 +216,49 @@ describe("NewChatDialog", () => {
       );
     });
   });
+
+  it("hides owned agents without a default thread from the group-chat picker", async () => {
+    authFetch.mockResolvedValueOnce(okJson([
+      {
+        user_id: "agent-ready",
+        name: "Ready Agent",
+        type: "agent",
+        avatar_url: null,
+        owner_name: "Me",
+        is_owned: true,
+        relationship_state: "none",
+        can_chat: true,
+        default_thread_id: "thread-ready",
+      },
+      {
+        user_id: "agent-cold",
+        name: "Cold Agent",
+        type: "agent",
+        avatar_url: null,
+        owner_name: "Me",
+        is_owned: true,
+        relationship_state: "none",
+        can_chat: true,
+        default_thread_id: null,
+      },
+      {
+        user_id: "human-2",
+        name: "Ada",
+        type: "human",
+        avatar_url: null,
+        owner_name: null,
+        is_owned: false,
+        relationship_state: "visit",
+        can_chat: true,
+      },
+    ]));
+
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "创建群聊" }));
+
+    expect(await screen.findByRole("button", { name: /Ready Agent/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Ada/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Cold Agent/ })).toBeNull();
+  });
 });
