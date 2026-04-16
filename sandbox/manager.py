@@ -300,36 +300,11 @@ class SandboxManager:
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
 
-    def _sandbox_volume_repo(self):
-        # @@@volume-repo-align - legacy non-daytona cleanup still reads persisted
-        # sandbox volume rows through the active storage container.
-        container = build_storage_container()
-        return container.sandbox_volume_repo()
-
     def _requires_volume_bootstrap(self) -> bool:
         # @@@local-shell-no-volume-gate - local runtimes execute directly on the host
         # and should not fail to start a shell just because file-channel volume
         # metadata is absent or stored in a different backend.
         return self.provider_capability.runtime_kind != "local"
-
-    def _destroy_volume_entry(self, volume_id: str) -> None:
-        import json
-
-        from sandbox.volume_source import deserialize_volume_source
-
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(volume_id)
-            if not entry:
-                raise RuntimeError(f"Volume not found: {volume_id}")
-            # @@@managed-volume-destroy-seam - provider-managed volumes must be reclaimed
-            # through the manager-owned lease destroy path or Daytona quotas will leak.
-            source = deserialize_volume_source(json.loads(entry["source"]))
-            source.cleanup()
-            if not repo.delete(volume_id):
-                raise RuntimeError(f"Failed to delete volume metadata: {volume_id}")
-        finally:
-            repo.close()
 
     def _destroy_daytona_managed_volume(self, lease_id: str) -> None:
         # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
@@ -902,7 +877,7 @@ class SandboxManager:
         if self.provider_capability.runtime_kind == "daytona_pty":
             self._destroy_daytona_managed_volume(lease_id)
         elif lease.volume_id and self._requires_volume_bootstrap():
-            self._destroy_volume_entry(lease.volume_id)
+            raise ValueError("legacy volume_id is not allowed for non-daytona runtime cleanup")
         self.lease_store.delete(lease_id)
         return True
 

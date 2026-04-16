@@ -792,6 +792,26 @@ def test_non_daytona_runtime_rejects_legacy_volume_id_during_mount_setup(tmp_pat
         manager._setup_mounts("thread-1")
 
 
+def test_non_daytona_runtime_rejects_legacy_volume_id_during_destroy():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.provider = SimpleNamespace(name="agentbay")
+    manager.terminal_store = SimpleNamespace(list_all=lambda: [])
+
+    class _Lease:
+        lease_id = "lease-1"
+        volume_id = "legacy-volume-1"
+
+        def destroy_instance(self, _provider):
+            return None
+
+    manager._get_lease = lambda _lease_id: _Lease()
+    manager.lease_store = SimpleNamespace(delete=lambda _lease_id: (_ for _ in ()).throw(AssertionError("lease delete should not happen")))
+
+    with pytest.raises(ValueError, match="legacy volume_id is not allowed"):
+        manager.destroy_lease_resources("lease-1")
+
+
 def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(monkeypatch):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
