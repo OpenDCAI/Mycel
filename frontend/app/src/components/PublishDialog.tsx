@@ -4,10 +4,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useAppStore } from "@/store/app-store";
-import { useMarketplaceStore } from "@/store/marketplace-store";
 import { toast } from "sonner";
 
 interface Props {
@@ -29,10 +27,7 @@ export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
   const agent = useAppStore(s => s.getAgentById(agentId));
   const publishAgent = useAppStore(s => s.publishAgent);
   const [bumpType, setBumpType] = useState<BumpType>("patch");
-  const [notes, setNotes] = useState("");
-  const [tags, setTags] = useState("");
   const [publishing, setPublishing] = useState(false);
-  const publishAgentUserToMarketplace = useMarketplaceStore(s => s.publishAgentUserToMarketplace);
 
   if (!agent) return null;
 
@@ -42,7 +37,6 @@ export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
     try {
       setPublishing(true);
       await publishAgent(agentId, bumpType);
-      await publishAgentUserToMarketplace(agentId, bumpType, notes, tags.split(",").map(t => t.trim()).filter(Boolean), "public");
       toast.success(`${agent.name} v${newVersion} 已发布`);
       onOpenChange(false);
     } catch (err) {
@@ -99,26 +93,6 @@ export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
           <div className="p-3 rounded-lg bg-muted text-center">
             <p className="text-xs text-muted-foreground">新版本号</p>
             <p className="text-lg font-mono font-semibold text-primary mt-0.5">v{newVersion}</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm">发布说明 <span className="text-muted-foreground text-xs">（可选）</span></Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="描述此版本的变更..."
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm">Tags <span className="text-muted-foreground text-xs">(comma separated)</span></Label>
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="e.g. coding, research, writing"
-              className="w-full px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40"
-            />
           </div>
         </div>
 
