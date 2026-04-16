@@ -29,6 +29,7 @@ interface AuthState {
   userId: string | null;
   setupInfo: { userId: string; defaultName: string } | null;
 
+  markHydrated: () => void;
   login: (identifier: string, password: string) => Promise<void>;
   sendOtp: (email: string, password: string, inviteCode: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<{ tempToken: string }>;
@@ -67,6 +68,10 @@ export const useAuthStore = create<AuthState>()(
       agent: null,
       userId: null,
       setupInfo: null,
+
+      markHydrated: () => {
+        set({ hydrated: true });
+      },
 
       login: async (identifier, password) => {
         const data = await apiPost("login", { identifier, password });
@@ -113,9 +118,16 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "leon-auth",
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+        agent: state.agent,
+        userId: state.userId,
+        setupInfo: state.setupInfo,
+      }),
       onRehydrateStorage: () => {
-        return () => {
-          useAuthStore.setState({ hydrated: true });
+        return (state) => {
+          state?.markHydrated();
         };
       },
     },
