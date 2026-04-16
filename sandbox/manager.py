@@ -400,6 +400,8 @@ class SandboxManager:
         source_path = self._resolve_sync_source_path(thread_id)
 
         if self.provider_capability.runtime_kind != "daytona_pty":
+            if lease.volume_id:
+                raise ValueError("legacy volume_id is not allowed for non-daytona runtime")
             self.volume.mount(thread_id, source_path, remote_path)
             return {"source_path": source_path, "remote_path": remote_path}
 

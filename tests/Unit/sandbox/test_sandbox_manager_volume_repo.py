@@ -319,7 +319,7 @@ def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_pat
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
+    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id=None)
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
     manager._sandbox_volume_repo = lambda: repo
@@ -801,6 +801,18 @@ def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
 
     assert manager.sync_uploads("thread-1") is True
     assert manager.volume.upload_calls == []
+
+
+def test_non_daytona_runtime_rejects_legacy_volume_id_during_mount_setup(tmp_path):
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
+    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="legacy-volume-1")
+
+    with pytest.raises(ValueError, match="legacy volume_id is not allowed"):
+        manager._setup_mounts("thread-1")
 
 
 def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(monkeypatch):
