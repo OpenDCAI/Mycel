@@ -1469,7 +1469,7 @@ async def test_handle_agent_does_not_register_child_thread_when_parent_bridge_is
 
 
 @pytest.mark.asyncio
-async def test_handle_agent_reuses_existing_completed_child_thread_for_same_parent_and_name(monkeypatch, tmp_path):
+async def test_handle_agent_mints_fresh_child_thread_even_when_completed_child_exists(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
     thread_repo = _FakeThreadRepo(
@@ -1477,6 +1477,8 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
             "parent-thread": {
                 "id": "parent-thread",
                 "agent_user_id": "agent-user-1",
+                "owner_user_id": "owner-1",
+                "current_workspace_id": "workspace-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-parent",
@@ -1487,6 +1489,8 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
             "subagent-existing": {
                 "id": "subagent-existing",
                 "agent_user_id": "agent-user-1",
+                "owner_user_id": "owner-1",
+                "current_workspace_id": "workspace-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-test",
@@ -1521,8 +1525,9 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         )
 
         payload = _agent_tool_json(raw)
-        assert payload["thread_id"] == "subagent-existing"
-        assert len(thread_repo.created) == 0
+        assert payload["thread_id"] != "subagent-existing"
+        assert payload["thread_id"].startswith("subagent-")
+        assert len(thread_repo.created) == 1
     finally:
         await service.cleanup_background_runs()
         set_current_thread_id("")
