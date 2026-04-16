@@ -6,12 +6,11 @@ import shlex
 import shutil
 import sys
 from pathlib import Path
-from typing import cast
 
 import pytest
 from langchain_core.messages import AIMessage
 
-from core.agents.registry import AgentEntry, AgentRegistry
+from core.agents.registry import AgentEntry
 from core.agents.service import AgentService, BackgroundRun, _BashBackgroundRun, _RunningTask, request_background_run_stop
 from core.runtime.middleware.queue import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
@@ -20,43 +19,6 @@ from core.tools.command.bash.executor import BashExecutor
 from core.tools.command.service import CommandService
 from core.tools.command.zsh.executor import ZshExecutor
 from sandbox.thread_context import set_current_thread_id
-
-
-class _FakeAgentRegistry:
-    def __init__(self):
-        self._entries: dict[str, AgentEntry] = {}
-
-    async def register(self, entry):
-        self._entries[entry.agent_id] = entry
-        self.entry = entry
-
-    async def update_status(self, agent_id: str, status: str):
-        self.last_status = (agent_id, status)
-        if agent_id in self._entries:
-            self._entries[agent_id] = AgentEntry(
-                agent_id=agent_id,
-                name=self._entries[agent_id].name,
-                thread_id=self._entries[agent_id].thread_id,
-                status=status,
-                parent_agent_id=self._entries[agent_id].parent_agent_id,
-                subagent_type=self._entries[agent_id].subagent_type,
-            )
-
-    async def list_running_by_name(self, name: str) -> list[AgentEntry]:
-        return [e for e in self._entries.values() if e.name == name and e.status == "running"]
-
-    async def get_by_id(self, agent_id: str) -> AgentEntry | None:
-        return self._entries.get(agent_id)
-
-    async def list_running(self) -> list[AgentEntry]:
-        return [e for e in self._entries.values() if e.status == "running"]
-
-    async def remove(self, agent_id: str) -> None:
-        self._entries.pop(agent_id, None)
-
-
-def _fake_agent_registry() -> AgentRegistry:
-    return cast(AgentRegistry, _FakeAgentRegistry())
 
 
 def _require_bash_run(run: BackgroundRun) -> _BashBackgroundRun:
