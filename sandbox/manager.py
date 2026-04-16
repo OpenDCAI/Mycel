@@ -505,22 +505,6 @@ class SandboxManager:
         lease = self._get_lease(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
-    def resolve_volume_source(self, thread_id: str):
-        """Resolve VolumeSource for a thread via lease chain. Pure sandbox-layer lookup."""
-        import json
-
-        from sandbox.volume_source import deserialize_volume_source
-
-        terminal = self._get_active_terminal(thread_id)
-        if not terminal:
-            raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self._get_lease(terminal.lease_id)
-        if not lease:
-            raise ValueError(f"No volume for thread {thread_id}")
-        self._ensure_thread_volume(thread_id, lease)
-        entry = self._resolve_volume_entry(thread_id, lease)
-        return deserialize_volume_source(json.loads(entry["source"]))
-
     def _resolve_sync_source_path(self, thread_id: str) -> Path:
         # @@@sync-source-truth - sync no longer needs volume metadata truth; it only needs
         # the workspace-owned local staging root that backs the current file channel.

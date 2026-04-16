@@ -332,19 +332,10 @@ def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_pat
     assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
 
-def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
+def test_manager_no_longer_exposes_generic_volume_source_helper():
     manager = _new_test_manager()
-    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
-    repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
-    manager._sandbox_volume_repo = lambda: repo
 
-    source = manager.resolve_volume_source("thread-1")
-
-    assert repo.requested_ids == ["volume-1"]
-    assert repo.closed is True
-    assert isinstance(source, HostVolume)
+    assert not hasattr(manager, "resolve_volume_source")
 
 
 def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp_path):
