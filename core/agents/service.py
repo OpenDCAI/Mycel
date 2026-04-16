@@ -3,7 +3,6 @@
 Creates independent LeonAgent instances per spawn. Sub-agents run as asyncio
 tasks; parent blocks until completion by default. `run_in_background=True`
 fires-and-forgets and returns a task_id for polling via TaskOutput.
-Backed by AgentRegistry (SQLite).
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from config.loader import AgentLoader
-from core.agents.registry import AgentEntry, AgentRegistry
+from core.agents.registry import AgentEntry
 from core.runtime.middleware.queue.formatters import (
     format_agent_message,
     format_background_notification,
@@ -462,7 +461,6 @@ class AgentService:
     def __init__(
         self,
         tool_registry: ToolRegistry,
-        agent_registry: AgentRegistry | None,
         workspace_root: Path,
         model_name: str,
         queue_manager: Any | None = None,
@@ -473,7 +471,7 @@ class AgentService:
         web_app: Any = None,
         child_agent_factory: ChildAgentFactory | None = None,
     ):
-        self._agent_registry = agent_registry
+        self._agent_registry = None
         self._active_agents: dict[str, AgentEntry] = {}
         self._workspace_root = workspace_root
         self._model_name = model_name
@@ -544,20 +542,12 @@ class AgentService:
         )
 
     async def _register_active_entry(self, entry: AgentEntry) -> None:
-        if self._agent_registry is not None:
-            await self._agent_registry.register(entry)
-            return
         self._active_agents[entry.agent_id] = entry
 
     async def _list_running_entries_by_name(self, name: str) -> list[AgentEntry]:
-        if self._agent_registry is not None:
-            return await self._agent_registry.list_running_by_name(name)
         return [entry for entry in self._active_agents.values() if entry.name == name and entry.status == "running"]
 
     async def _remove_active_entry(self, agent_id: str) -> None:
-        if self._agent_registry is not None:
-            await self._agent_registry.remove(agent_id)
-            return
         self._active_agents.pop(agent_id, None)
 
     @staticmethod

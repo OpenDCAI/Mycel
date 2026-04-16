@@ -341,16 +341,24 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
     from core.runtime.agent import LeonAgent
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    captured: dict[str, Any] = {}
+
+    class _CapturingAgentService:
+        def __init__(self, *args, **kwargs) -> None:
+            captured.update(kwargs)
+            self._agent_registry = None
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=_mock_model("registry wiring")),
         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.AgentService", _CapturingAgentService),
     ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
 
     try:
         assert agent._agent_registry is None
         assert agent._agent_service._agent_registry is None
+        assert "agent_registry" not in captured
     finally:
         agent.close()
 
