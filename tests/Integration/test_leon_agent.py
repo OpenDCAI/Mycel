@@ -351,6 +351,25 @@ def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing
         agent.close()
 
 
+@_patch_env_api_key()
+def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch, tmp_path, _patch_runtime_storage_container):
+    from core.runtime.agent import LeonAgent
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=_mock_model("registry wiring")),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+    ):
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+
+    try:
+        assert agent._agent_registry._repo is not _patch_runtime_storage_container.agent_registry_repo()
+        assert agent._agent_registry._repo.__class__.__name__ == "_InMemoryAgentRegistryRepo"
+    finally:
+        agent.close()
+
+
 # ---------------------------------------------------------------------------
 # Integration Tests
 # ---------------------------------------------------------------------------

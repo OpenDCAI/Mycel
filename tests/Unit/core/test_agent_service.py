@@ -137,6 +137,30 @@ def test_fake_thread_repo_create_requires_current_workspace_id() -> None:
         )
 
 
+@pytest.mark.asyncio
+async def test_agent_registry_defaults_to_process_local_in_memory_repo() -> None:
+    registry = AgentRegistry()
+    entry = AgentEntry(
+        agent_id="agent-1",
+        name="general",
+        thread_id="thread-1",
+        status="running",
+        parent_agent_id="parent-1",
+        subagent_type="general",
+    )
+
+    await registry.register(entry)
+
+    assert await registry.get_by_id("agent-1") == entry
+    assert await registry.list_running_by_name("general") == [entry]
+
+    await registry.update_status("agent-1", "completed")
+
+    updated = await registry.get_by_id("agent-1")
+    assert updated is not None
+    assert updated.status == "completed"
+
+
 class _FakeChildAgent:
     def __init__(self, workspace_root: Path, model_name: str):
         self.workspace_root = workspace_root
