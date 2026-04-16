@@ -165,6 +165,33 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
   });
 
+  it("disables check-updates when no installed agents have marketplace source metadata", () => {
+    appStoreState = {
+      ...appStoreState,
+      agentList: [{
+        id: "agent-1",
+        name: "Local Agent",
+        description: "local only",
+        status: "active",
+        version: "1.0.0",
+        config: { prompt: "", rules: [], tools: [], mcps: [], skills: [], subAgents: [] },
+        created_at: 1,
+        updated_at: 1,
+        builtin: false,
+      }],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent-user"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "检查更新" }).hasAttribute("disabled")).toBe(true);
+  });
+
   it("uses Subagent wording for marketplace agent resources", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent"]}>

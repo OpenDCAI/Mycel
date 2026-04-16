@@ -112,6 +112,7 @@ export default function MarketplacePage() {
 
   // Installed agent users with marketplace source info
   const installedAgentUsers: InstalledAgentUser[] = agentList.filter((agent) => !agent.builtin);
+  const updateCheckableAgentUsers = installedAgentUsers.filter((agent) => agent.source?.marketplace_item_id);
   const filteredAgentUsers = installedAgentUsers.filter((agent) =>
     !installedSearch || agent.name.toLowerCase().includes(installedSearch.toLowerCase())
   );
@@ -143,8 +144,9 @@ export default function MarketplacePage() {
   const installedSubTabLoaded = installedSubTab === "agent-user" ? agentsLoaded : librariesLoaded[installedSubTab];
 
   const handleCheckUpdates = async () => {
+    if (updateCheckableAgentUsers.length === 0) return;
     // source field comes from meta.json; agent users without it cannot be checked
-    const payload = installedAgentUsers.flatMap((agent) => {
+    const payload = updateCheckableAgentUsers.flatMap((agent) => {
       const source = agent.source;
       if (!source?.marketplace_item_id) return [];
       return [{
@@ -227,6 +229,7 @@ export default function MarketplacePage() {
           {tab === "installed" && installedSubTab === "agent-user" && (
             <button
               onClick={handleCheckUpdates}
+              disabled={updateCheckableAgentUsers.length === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast"
             >
               <RefreshCw className="w-3.5 h-3.5" />
