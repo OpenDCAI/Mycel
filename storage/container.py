@@ -23,7 +23,6 @@ from .contracts import (
     ResourceSnapshotRepo,
     RunEventRepo,
     SandboxRepo,
-    SandboxVolumeRepo,
     SummaryRepo,
     SyncFileRepo,
     TerminalRepo,
@@ -44,7 +43,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "eval_repo": ("storage.providers.supabase.eval_repo", "SupabaseEvalRepo"),
     "evaluation_batch_repo": ("storage.providers.supabase.eval_batch_repo", "SupabaseEvaluationBatchRepo"),
     "queue_repo": ("storage.providers.supabase.queue_repo", "SupabaseQueueRepo"),
-    "sandbox_volume_repo": ("storage.providers.supabase.sandbox_volume_repo", "SupabaseSandboxVolumeRepo"),
     "provider_event_repo": ("storage.providers.supabase.provider_event_repo", "SupabaseProviderEventRepo"),
     "lease_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
     "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
@@ -104,9 +102,6 @@ class StorageContainer:
 
     def evaluation_batch_repo(self) -> EvaluationBatchRepo:
         return self._build("evaluation_batch_repo")
-
-    def sandbox_volume_repo(self) -> SandboxVolumeRepo:
-        return self._build("sandbox_volume_repo")
 
     def provider_event_repo(self) -> ProviderEventRepo:
         return self._build("provider_event_repo")
