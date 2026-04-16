@@ -19,3 +19,9 @@ def test_sync_state_exposes_only_batch_list_and_clear_protocol() -> None:
     assert hasattr(state, "clear_thread")
     assert not hasattr(state, "track_file")
     assert not hasattr(state, "get_file_info")
+
+
+def test_sync_state_defaults_to_process_local_backing() -> None:
+    state = SyncState()
+
+    assert isinstance(state._repo, ProcessLocalSyncFileBacking)
