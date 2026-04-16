@@ -176,9 +176,9 @@ class _FakeDaytonaProvider:
         self.ready_waits: list[str] = []
         self.deleted_volumes: list[str] = []
 
-    def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
-        self.calls.append((volume_id, mount_path))
-        return f"leon-volume-{volume_id}"
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
+        self.calls.append((managed_ref, mount_path))
+        return f"leon-volume-{managed_ref}"
 
     def wait_managed_volume_ready(self, volume_name: str) -> None:
         self.ready_waits.append(volume_name)
@@ -1047,8 +1047,8 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
     manager.provider = provider
     manager._sandbox_volume_repo = lambda: update_repo
 
-    def _already_exists(volume_id: str, mount_path: str) -> str:
-        provider.calls.append((volume_id, mount_path))
+    def _already_exists(managed_ref: str, mount_path: str) -> str:
+        provider.calls.append((managed_ref, mount_path))
         raise RuntimeError("volume already exists")
 
     provider.create_managed_volume = _already_exists
