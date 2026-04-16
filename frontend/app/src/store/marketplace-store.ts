@@ -67,7 +67,7 @@ interface MarketplaceState {
   error: string | null;
   filters: MarketplaceFilters;
   setFilter: <K extends keyof MarketplaceFilters>(key: K, value: MarketplaceFilters[K]) => void;
-  fetchItems: () => Promise<void>;
+  fetchItems: (signal?: AbortSignal) => Promise<void>;
 
   // Detail
   detail: MarketplaceItemDetail | null;
@@ -147,7 +147,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
     });
   },
 
-  fetchItems: async () => {
+  fetchItems: async (signal) => {
     set({ error: null, loading: true });
     try {
       const { type, q, sort, page } = get().filters;
@@ -157,9 +157,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       params.set("sort", sort);
       params.set("page", String(page));
       params.set("page_size", "20");
-      const data = await backendApi<{ items: MarketplaceItemSummary[]; total: number }>(`/items?${params}`);
+      const data = await backendApi<{ items: MarketplaceItemSummary[]; total: number }>(`/items?${params}`, { signal });
       set({ items: data.items, total: data.total });
     } catch (e) {
+      if (signal?.aborted) return;
       // @@@marketplace-route-teardown - explore fetches can resolve after the
       // user already left /marketplace. Only log if the marketplace route is
       // still active; otherwise this is stale UI noise.
