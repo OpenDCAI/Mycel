@@ -185,6 +185,7 @@ def test_agent_registry_no_longer_exposes_child_continuity_lookup() -> None:
     assert hasattr(registry, "get_latest_by_name_and_parent") is False
     assert hasattr(registry, "get_by_id") is False
     assert hasattr(registry, "list_running") is False
+    assert hasattr(registry, "update_status") is False
 
 
 class _FakeChildAgent:
