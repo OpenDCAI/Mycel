@@ -39,6 +39,7 @@ export const router = createBrowserRouter([
         element: <ContactsLayout />,
         children: [
           { index: true, element: <AgentsPage /> },
+          { path: 'agents', element: <AgentsPage /> },
           { path: 'agents/:id', element: <AgentDetailPage /> },
           { path: 'users', element: null },
           { path: 'users/:userId', element: <ContactDetailPage /> },
