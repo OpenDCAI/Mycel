@@ -10,8 +10,6 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from storage.runtime import build_agent_registry_repo
-
 
 @dataclass
 class AgentEntry:
@@ -23,12 +21,52 @@ class AgentEntry:
     subagent_type: str | None = None
 
 
+class _InMemoryAgentRegistryRepo:
+    def __init__(self) -> None:
+        self._rows: dict[str, tuple[str, str, str, str, str | None, str | None]] = {}
+
+    def register(
+        self,
+        *,
+        agent_id: str,
+        name: str,
+        thread_id: str,
+        status: str,
+        parent_agent_id: str | None,
+        subagent_type: str | None,
+    ) -> None:
+        self._rows[agent_id] = (agent_id, name, thread_id, status, parent_agent_id, subagent_type)
+
+    def get_by_id(self, agent_id: str) -> tuple[str, str, str, str, str | None, str | None] | None:
+        return self._rows.get(agent_id)
+
+    def list_running_by_name(self, name: str) -> list[tuple[str, str, str, str, str | None, str | None]]:
+        return [row for row in self._rows.values() if row[1] == name and row[3] == "running"]
+
+    def get_latest_by_name_and_parent(
+        self,
+        name: str,
+        parent_agent_id: str | None,
+    ) -> tuple[str, str, str, str, str | None, str | None] | None:
+        matches = [row for row in self._rows.values() if row[1] == name and row[4] == parent_agent_id]
+        return matches[-1] if matches else None
+
+    def update_status(self, agent_id: str, status: str) -> None:
+        row = self._rows.get(agent_id)
+        if row is None:
+            return
+        self._rows[agent_id] = (row[0], row[1], row[2], status, row[4], row[5])
+
+    def list_running(self) -> list[tuple[str, str, str, str, str | None, str | None]]:
+        return [row for row in self._rows.values() if row[3] == "running"]
+
+
 class AgentRegistry:
-    """Supabase-backed registry mapping agent_ids to thread IDs."""
+    """Registry mapping agent_ids to thread IDs."""
 
     def __init__(self, repo: Any = None):
         self._lock = asyncio.Lock()
-        self._repo = repo or build_agent_registry_repo()
+        self._repo = repo or _InMemoryAgentRegistryRepo()
 
     async def register(self, entry: AgentEntry) -> None:
         async with self._lock:
