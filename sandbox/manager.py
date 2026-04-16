@@ -81,22 +81,24 @@ def resolve_existing_lease_cwd(
     *,
     terminal_repo: Any | None = None,
     lease_repo: Any | None = None,
+    allow_latest_terminal_cwd: bool = True,
 ) -> str:
     if requested_cwd:
         return requested_cwd
 
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    _terminal_repo = terminal_repo
-    own_terminal_repo = _terminal_repo is None
-    if _terminal_repo is None:
-        _terminal_repo = make_terminal_repo(db_path=target_db)
-    try:
-        row = _terminal_repo.get_latest_by_lease(lease_id)
-    finally:
-        if own_terminal_repo:
-            _terminal_repo.close()
-    if row and row.get("cwd"):
-        return str(row["cwd"])
+    if allow_latest_terminal_cwd:
+        _terminal_repo = terminal_repo
+        own_terminal_repo = _terminal_repo is None
+        if _terminal_repo is None:
+            _terminal_repo = make_terminal_repo(db_path=target_db)
+        try:
+            row = _terminal_repo.get_latest_by_lease(lease_id)
+        finally:
+            if own_terminal_repo:
+                _terminal_repo.close()
+        if row and row.get("cwd"):
+            return str(row["cwd"])
     _lease_repo = lease_repo
     own_lease_repo = _lease_repo is None
     if _lease_repo is None:
@@ -120,6 +122,8 @@ def bind_thread_to_existing_lease(
     cwd: str | None = None,
     db_path: Path | None = None,
     terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
+    allow_latest_terminal_cwd: bool = True,
 ) -> str:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     _terminal_repo = terminal_repo
@@ -130,7 +134,14 @@ def bind_thread_to_existing_lease(
         existing = _terminal_repo.get_active(thread_id)
         if existing is not None:
             return str(existing["cwd"])
-        initial_cwd = resolve_existing_lease_cwd(lease_id, cwd, db_path=target_db, terminal_repo=_terminal_repo)
+        initial_cwd = resolve_existing_lease_cwd(
+            lease_id,
+            cwd,
+            db_path=target_db,
+            terminal_repo=_terminal_repo,
+            lease_repo=lease_repo,
+            allow_latest_terminal_cwd=allow_latest_terminal_cwd,
+        )
         _terminal_repo.create(
             terminal_id=f"term-{uuid.uuid4().hex[:12]}",
             thread_id=thread_id,
@@ -190,8 +201,14 @@ def bind_thread_to_existing_sandbox(
     cwd: str | None = None,
     db_path: Path | None = None,
     terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    lease = resolve_existing_sandbox_lease(sandbox, resolve_lease=resolve_lease, db_path=db_path)
+    lease = resolve_existing_sandbox_lease(
+        sandbox,
+        resolve_lease=resolve_lease,
+        db_path=db_path,
+        lease_repo=lease_repo,
+    )
     if lease is None:
         config = sandbox.get("config") if isinstance(sandbox, dict) else getattr(sandbox, "config", None)
         legacy_lease_id = str((config or {}).get("legacy_lease_id") or "").strip()
@@ -205,6 +222,8 @@ def bind_thread_to_existing_sandbox(
         cwd=cwd,
         db_path=db_path,
         terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+        allow_latest_terminal_cwd=False,
     )
     return initial_cwd, lease
 
@@ -216,6 +235,7 @@ def bind_thread_to_existing_thread_lease(
     cwd: str | None = None,
     db_path: Path | None = None,
     terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
 ) -> str | None:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     _terminal_repo = terminal_repo
@@ -238,6 +258,7 @@ def bind_thread_to_existing_thread_lease(
         cwd=cwd,
         db_path=target_db,
         terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
     )
 
 

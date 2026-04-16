@@ -107,15 +107,51 @@ class _FakeTerminalRepo:
         self.closed = True
 
 
+class _FakeBindTerminalRepo:
+    def __init__(self, latest_by_lease: dict[str, Any] | None = None, active_by_thread: dict[str, Any] | None = None) -> None:
+        self._latest_by_lease = latest_by_lease
+        self._active_by_thread = active_by_thread or {}
+        self.closed = False
+        self.requested_lease_ids: list[str] = []
+        self.requested_active_threads: list[str] = []
+        self.created: list[dict[str, Any]] = []
+
+    def get_latest_by_lease(self, lease_id: str):
+        self.requested_lease_ids.append(lease_id)
+        return self._latest_by_lease
+
+    def get_active(self, thread_id: str):
+        self.requested_active_threads.append(thread_id)
+        return self._active_by_thread.get(thread_id)
+
+    def create(self, *, terminal_id: str, thread_id: str, lease_id: str, initial_cwd: str) -> None:
+        self.created.append(
+            {
+                "terminal_id": terminal_id,
+                "thread_id": thread_id,
+                "lease_id": lease_id,
+                "initial_cwd": initial_cwd,
+            }
+        )
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class _FakeLeaseRepo:
     def __init__(self, row: dict[str, Any] | None = None) -> None:
         self._row = row
         self.closed = False
         self.requested_ids: list[str] = []
+        self.instance_queries: list[tuple[str, str]] = []
 
     def get(self, lease_id: str):
         self.requested_ids.append(lease_id)
         return self._row
+
+    def find_by_instance(self, *, provider_name: str, instance_id: str):
+        self.instance_queries.append((provider_name, instance_id))
+        return None
 
     def close(self) -> None:
         self.closed = True
@@ -205,6 +241,59 @@ def test_resolve_existing_lease_cwd_keeps_latest_terminal_cwd_when_present(monke
     assert cwd == "/terminal/latest"
     assert terminal_repo.requested_lease_ids == ["lease-1"]
     assert lease_repo.requested_ids == []
+
+
+def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider_default_exists(monkeypatch):
+    terminal_repo = _FakeBindTerminalRepo(latest_by_lease={"cwd": "/terminal/latest"})
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda name: SimpleNamespace(default_cwd=f"/providers/{name}"),
+    )
+
+    initial_cwd, lease = sandbox_manager_module.bind_thread_to_existing_sandbox(
+        "thread-1",
+        {
+            "provider_name": "local",
+            "provider_env_id": "env-1",
+            "config": {"legacy_lease_id": "legacy-lease"},
+        },
+        resolve_lease=lambda _lease_id: {"lease_id": "lease-1"},
+        db_path=Path("/tmp/fake-sandbox.db"),
+        terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+    )
+
+    assert initial_cwd == "/providers/local"
+    assert lease["lease_id"] == "lease-1"
+    assert terminal_repo.created[0]["initial_cwd"] == "/providers/local"
+
+
+def test_bind_thread_to_existing_thread_lease_keeps_latest_terminal_cwd_continuity(monkeypatch):
+    terminal_repo = _FakeBindTerminalRepo(
+        latest_by_lease={"cwd": "/terminal/latest"},
+        active_by_thread={"thread-parent": {"lease_id": "lease-1"}},
+    )
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda _name: (_ for _ in ()).throw(AssertionError("provider default should stay unused for continuity path")),
+    )
+
+    initial_cwd = sandbox_manager_module.bind_thread_to_existing_thread_lease(
+        "thread-child",
+        "thread-parent",
+        db_path=Path("/tmp/fake-sandbox.db"),
+        terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+    )
+
+    assert initial_cwd == "/terminal/latest"
+    assert terminal_repo.created[0]["initial_cwd"] == "/terminal/latest"
 
 
 def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
