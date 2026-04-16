@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from sandbox.control_plane_repos import resolve_sandbox_db_path
-from sandbox.sync.state import SyncState
+from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
 from storage.container import StorageContainer
 from storage.runtime import build_chat_session_repo as make_chat_session_repo
 from storage.runtime import build_lease_repo as make_lease_repo
@@ -142,7 +142,7 @@ def delete_thread_in_db(thread_id: str) -> None:
 
     session_repo = make_chat_session_repo()
     terminal_repo = make_terminal_repo()
-    sync_state = SyncState()
+    sync_state = SyncState(repo=ProcessLocalSyncFileBacking())
     try:
         session_repo.delete_by_thread(thread_id)
         terminal_repo.delete_by_thread(thread_id)
