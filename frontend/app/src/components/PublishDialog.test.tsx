@@ -67,30 +67,22 @@ afterEach(() => {
 });
 
 describe("PublishDialog", () => {
-  it("fails loudly when marketplace publish fails", async () => {
+  it("publishes locally without requiring marketplace availability", async () => {
     publishAgent.mockResolvedValue(undefined);
-    publishAgentUserToMarketplace.mockRejectedValue(new Error("Marketplace Hub unavailable"));
+    const onOpenChange = vi.fn();
 
-    render(<PublishDialog open onOpenChange={vi.fn()} agentId="agent-1" />);
+    render(<PublishDialog open onOpenChange={onOpenChange} agentId="agent-1" />);
 
     fireEvent.click(screen.getByRole("button", { name: "发布 v1.0.1" }));
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("发布失败：Marketplace Hub unavailable");
+      expect(publishAgent).toHaveBeenCalledWith("agent-1", "patch");
     });
-    expect(toast.success).not.toHaveBeenCalled();
-  });
-
-  it("publishes agent users without exposing the hub member type to the dialog", async () => {
-    publishAgent.mockResolvedValue(undefined);
-    publishAgentUserToMarketplace.mockResolvedValue({});
-
-    render(<PublishDialog open onOpenChange={vi.fn()} agentId="agent-1" />);
-
-    fireEvent.click(screen.getByRole("button", { name: "发布 v1.0.1" }));
-
     await waitFor(() => {
-      expect(publishAgentUserToMarketplace).toHaveBeenCalledWith("agent-1", "patch", "", [], "public");
+      expect(toast.success).toHaveBeenCalledWith("Morel v1.0.1 已发布");
     });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(publishAgentUserToMarketplace).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
