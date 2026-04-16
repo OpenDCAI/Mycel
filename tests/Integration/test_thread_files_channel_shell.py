@@ -118,7 +118,7 @@ async def test_get_sandbox_files_exposes_workspace_binding_alongside_local_stagi
 
     assert result == {
         "thread_id": "thread-1",
-        "files_path": "/tmp/channel-root",
+        "files_path": str(Path("/tmp/channel-root")),
         "workspace_id": "workspace-1",
         "workspace_path": "/workspace/root",
     }

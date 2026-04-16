@@ -35,5 +35,5 @@ async def test_prepare_attachment_message_uses_binding_local_staging_root(monkey
         attachments=["notes.txt"],
     )
 
-    assert "/tmp/channel-root/" in message
+    assert f"{Path('/tmp/channel-root')}/" in message
     assert metadata == {"attachments": ["notes.txt"], "original_message": "hello"}

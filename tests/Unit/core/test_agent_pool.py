@@ -333,7 +333,7 @@ async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_all
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-binding")
 
-    assert captured["extra_allowed_paths"] == ["/tmp/channel-root"]
+    assert captured["extra_allowed_paths"] == [str(Path("/tmp/channel-root"))]
 
 
 @pytest.mark.asyncio
