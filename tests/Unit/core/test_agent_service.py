@@ -46,12 +46,14 @@ class _FakeAgentRegistry(AgentRegistry):
     def __init__(self) -> None:
         self.entry = None
         self.last_status = None
+        self.status_updates: list[tuple[str, str]] = []
 
     async def register(self, entry):
         self.entry = entry
 
     async def update_status(self, agent_id: str, status: str):
         self.last_status = (agent_id, status)
+        self.status_updates.append((agent_id, status))
 
 
 class _FakeThreadRepo:
@@ -1527,6 +1529,50 @@ async def test_handle_agent_mints_fresh_child_thread_without_child_continuity_lo
     finally:
         await service.cleanup_background_runs()
         set_current_thread_id("")
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_blocking_path_does_not_duplicate_completed_status(monkeypatch, tmp_path):
+    _patch_create_leon_agent(monkeypatch)
+
+    registry = _FakeAgentRegistry()
+    service = _make_service(tmp_path, agent_registry=registry)
+
+    raw = await service._handle_agent(
+        prompt="do work",
+        name="worker-1",
+        run_in_background=False,
+    )
+
+    assert raw.content == "(Agent completed with no text output)"
+    assert registry.status_updates == [(registry.entry.agent_id, "completed")]
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_blocking_path_does_not_duplicate_error_status(monkeypatch, tmp_path):
+    class _FailingChildAgent(_FakeChildAgent):
+        async def _astream(self, *args, **kwargs):
+            raise RuntimeError("boom")
+            yield
+
+    registry = _FakeAgentRegistry()
+    service = _make_service(
+        tmp_path,
+        agent_registry=registry,
+        child_agent_factory=lambda *, model_name, workspace_root, **kwargs: _FailingChildAgent(
+            Path(workspace_root),
+            model_name,
+        ),
+    )
+
+    raw = await service._handle_agent(
+        prompt="do work",
+        name="worker-1",
+        run_in_background=False,
+    )
+
+    assert "Agent failed: boom" in raw.content
+    assert registry.status_updates == [(registry.entry.agent_id, "error")]
 
 
 @pytest.mark.asyncio
