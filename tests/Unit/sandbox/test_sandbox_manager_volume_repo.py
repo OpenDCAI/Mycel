@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -9,38 +8,13 @@ import sandbox.manager as sandbox_manager_module
 from config.user_paths import user_home_path
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
-from sandbox.volume_source import DaytonaVolume, HostVolume
-
-
-class _FakeVolumeRepo:
-    def __init__(self, source: dict[str, str]) -> None:
-        self._source = source
-        self.closed = False
-        self.requested_ids: list[str] = []
-        self.created: list[tuple[str, str | None]] = []
-        self.deleted: list[str] = []
-
-    def get(self, volume_id: str) -> dict[str, str] | None:
-        self.requested_ids.append(volume_id)
-        if self.created and volume_id == self.created[-1][0]:
-            return {"source": json.dumps(self._source)}
-        return {"source": json.dumps(self._source)}
-
-    def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None:
-        self.created.append((volume_id, name))
-        self._source = json.loads(source_json)
-
-    def delete(self, volume_id: str) -> bool:
-        self.deleted.append(volume_id)
-        return True
-
-    def close(self) -> None:
-        self.closed = True
+from sandbox.volume_source import HostVolume, deserialize_volume_source
 
 
 class _FakeVolume:
     def __init__(self) -> None:
         self.mount_calls: list[tuple[str, str]] = []
+        self.mount_sources: list[Path | None] = []
         self.upload_calls: list[tuple[str, str, Path, str]] = []
         self.download_calls: list[tuple[str, str, Path, str]] = []
         self.cleared: list[str] = []
@@ -48,8 +22,9 @@ class _FakeVolume:
     def resolve_mount_path(self) -> str:
         return "/workspace"
 
-    def mount(self, thread_id: str, source, remote_path: str) -> None:
+    def mount(self, thread_id: str, source_path: Path | None, remote_path: str) -> None:
         self.mount_calls.append((thread_id, remote_path))
+        self.mount_sources.append(source_path)
 
     def mount_managed_volume(self, thread_id: str, volume_name: str, remote_path: str) -> None:
         self.mount_calls.append((thread_id, remote_path))
@@ -76,24 +51,8 @@ class _FakeThreadRepo:
         self.closed = True
 
 
-class _FakeUpdateRepo:
-    def __init__(self) -> None:
-        self.updated: list[tuple[str, str]] = []
-        self.closed = False
-
-    def update_source(self, volume_id: str, source_json: str) -> None:
-        self.updated.append((volume_id, source_json))
-
-    def close(self) -> None:
-        self.closed = True
-
-
 class _FakeLeaseStore:
-    def __init__(self) -> None:
-        self.volume_updates: list[tuple[str, str]] = []
-
-    def set_volume_id(self, lease_id: str, volume_id: str) -> None:
-        self.volume_updates.append((lease_id, volume_id))
+    pass
 
 
 class _FakeTerminalRepo:
@@ -178,9 +137,9 @@ class _FakeDaytonaProvider:
         self.ready_waits: list[str] = []
         self.deleted_volumes: list[str] = []
 
-    def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
-        self.calls.append((volume_id, mount_path))
-        return f"leon-volume-{volume_id}"
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
+        self.calls.append((managed_ref, mount_path))
+        return f"leon-volume-{managed_ref}"
 
     def wait_managed_volume_ready(self, volume_name: str) -> None:
         self.ready_waits.append(volume_name)
@@ -312,36 +271,37 @@ def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monk
         raise AssertionError("expected bind_thread_to_existing_thread_lease to fail loudly without cwd")
 
 
-def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
-    manager = _new_test_manager()
-    manager.provider_capability = SimpleNamespace(runtime_kind="local")
-    manager.volume = _FakeVolume()
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
-    repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
-    manager._sandbox_volume_repo = lambda: repo
-
-    result = manager._setup_mounts("thread-1")
-
-    assert repo.requested_ids == ["volume-1"]
-    assert repo.closed is True
-    assert isinstance(result["source"], HostVolume)
-    assert manager.volume.mount_calls == [("thread-1", "/workspace")]
-
-
-def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
+def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_path):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
-    repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
-    manager._sandbox_volume_repo = lambda: repo
+    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id=None)
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
+    result = manager._setup_mounts("thread-1")
 
-    source = manager.resolve_volume_source("thread-1")
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
+    assert manager.volume.mount_calls == [("thread-1", "/workspace")]
+    assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
-    assert repo.requested_ids == ["volume-1"]
-    assert repo.closed is True
+
+def test_manager_no_longer_exposes_generic_volume_source_helper():
+    manager = _new_test_manager()
+
+    assert not hasattr(manager, "resolve_volume_source")
+
+
+def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_path):
+    source = deserialize_volume_source(
+        {
+            "type": "daytona",
+            "staging_path": str(tmp_path / "staging"),
+            "volume_name": "leon-volume-volume-1",
+        }
+    )
+
     assert isinstance(source, HostVolume)
+    assert source.host_path == (tmp_path / "staging").resolve()
 
 
 def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp_path):
@@ -349,59 +309,84 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     lease = SimpleNamespace(lease_id="lease-1", volume_id=None)
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
-    repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
-    manager._sandbox_volume_repo = lambda: repo
     monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
 
     result = manager._setup_mounts("thread-1")
 
-    assert lease.volume_id is not None
-    assert repo.created == [(lease.volume_id, "vol-thread-1")]
-    assert manager.lease_store.volume_updates == [("lease-1", lease.volume_id)]
-    assert repo.requested_ids == [lease.volume_id]
-    assert isinstance(result["source"], HostVolume)
+    assert lease.volume_id is None
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
+    assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
 
-def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id(monkeypatch, tmp_path):
-    class _MissingRowRepo(_FakeVolumeRepo):
-        def __init__(self) -> None:
-            super().__init__(HostVolume(tmp_path / "vol").serialize())
-            self._rows: dict[str, dict[str, str]] = {}
-
-        def get(self, volume_id: str):
-            self.requested_ids.append(volume_id)
-            return self._rows.get(volume_id)
-
-        def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None:
-            super().create(volume_id, source_json, name, created_at)
-            self._rows[volume_id] = {"source": source_json}
-
-        def update_source(self, volume_id: str, source_json: str) -> None:
-            self._rows[volume_id] = {"source": source_json}
-            self._source = json.loads(source_json)
-
+def test_setup_mounts_daytona_does_not_require_volume_id(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = _FakeDaytonaProvider()
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    lease = SimpleNamespace(lease_id="lease-1", volume_id="volume-missing")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
+    lease = SimpleNamespace(lease_id="lease-1", volume_id=None)
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
-    repo = _MissingRowRepo()
-    manager._sandbox_volume_repo = lambda: repo
     monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
 
     result = manager._setup_mounts("thread-1")
 
-    assert repo.created == [("volume-missing", "vol-thread-1")]
-    assert manager.lease_store.volume_updates == []
-    assert repo.requested_ids == ["volume-missing", "volume-missing"]
-    assert isinstance(result["source"], DaytonaVolume)
-    assert manager.provider.calls == [("volume-missing", "/workspace")]
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
+    assert manager.provider.calls == [("lease-1", "/workspace")]
+
+
+def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_sessions: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+        volume_id = "volume-1"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
+    assert deleted_terminals == ["term-1"]
+    assert deleted_sessions == [("thread-1", "thread_deleted")]
+    assert deleted_leases == ["lease-1"]
+    assert all_terminals == []
 
 
 def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
@@ -471,7 +456,7 @@ def test_enforce_idle_timeouts_accepts_aware_supabase_timestamps():
     assert manager.enforce_idle_timeouts() == 0
 
 
-def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id():
+def test_destroy_thread_resources_skips_local_sync_even_with_legacy_volume_id():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.provider = SimpleNamespace(name="local")
@@ -497,7 +482,7 @@ def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id()
     class _Lease:
         lease_id = "lease-1"
         observed_state = "running"
-        volume_id = None
+        volume_id = "legacy-volume-1"
 
         def get_instance(self):
             return SimpleNamespace(instance_id="instance-1")
@@ -613,7 +598,7 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     assert deleted_leases == []
 
 
-def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(tmp_path):
+def test_destroy_thread_resources_deletes_daytona_managed_volume_without_volume_id(tmp_path):
     manager = _new_test_manager()
     provider = _FakeDaytonaProvider()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
@@ -623,8 +608,53 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
-    repo = _FakeVolumeRepo(DaytonaVolume(tmp_path / "staging", "leon-volume-volume-1").serialize())
-    manager._sandbox_volume_repo = lambda: repo
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+        volume_id = None
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
+    assert deleted_leases == ["lease-1"]
+    assert all_terminals == []
+
+
+def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized_daytona_source(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_sessions: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
 
     class _Lease:
         lease_id = "lease-1"
@@ -657,19 +687,17 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert destroyed_leases == ["lease-1"]
-    assert provider.deleted_volumes == ["leon-volume-volume-1"]
-    assert repo.deleted == ["volume-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
     assert deleted_leases == ["lease-1"]
-    assert all_terminals == []
 
 
-def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
+def test_sync_uploads_skips_local_volume_sync_even_with_legacy_volume_id():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id=None)
-    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id=None)
+    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="legacy-volume-1")
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id="legacy-volume-1")
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: SimpleNamespace(
@@ -679,6 +707,38 @@ def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
 
     assert manager.sync_uploads("thread-1") is True
     assert manager.volume.upload_calls == []
+
+
+def test_non_daytona_runtime_rejects_legacy_volume_id_during_mount_setup(tmp_path):
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
+    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="legacy-volume-1")
+
+    with pytest.raises(ValueError, match="legacy volume_id is not allowed"):
+        manager._setup_mounts("thread-1")
+
+
+def test_non_daytona_runtime_rejects_legacy_volume_id_during_destroy():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.provider = SimpleNamespace(name="agentbay")
+    manager.terminal_store = SimpleNamespace(list_all=lambda: [])
+
+    class _Lease:
+        lease_id = "lease-1"
+        volume_id = "legacy-volume-1"
+
+        def destroy_instance(self, _provider):
+            return None
+
+    manager._get_lease = lambda _lease_id: _Lease()
+    manager.lease_store = SimpleNamespace(delete=lambda _lease_id: (_ for _ in ()).throw(AssertionError("lease delete should not happen")))
+
+    with pytest.raises(ValueError, match="legacy volume_id is not allowed"):
+        manager.destroy_lease_resources("lease-1")
 
 
 def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(monkeypatch):
@@ -909,49 +969,41 @@ def test_resume_session_rebinds_live_session_lease_after_resume():
     assert runtime.lease is resumed_lease
 
 
-def test_upgrade_to_daytona_volume_uses_volume_id_for_provider_backend_ref(monkeypatch, tmp_path):
+def test_upgrade_to_daytona_volume_uses_lease_id_for_provider_backend_ref(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider = _FakeDaytonaProvider()
-    update_repo = _FakeUpdateRepo()
-    manager._sandbox_volume_repo = lambda: update_repo
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
 
-    new_source = manager._upgrade_to_daytona_volume(
+    volume_name = manager._upgrade_to_daytona_volume(
         "thread-supabase",
-        HostVolume(tmp_path / "staging"),
-        "volume-1",
+        "lease-1",
         "/workspace",
     )
 
-    assert manager.provider.calls == [("volume-1", "/workspace")]
-    assert isinstance(new_source, DaytonaVolume)
-    assert update_repo.closed is True
-    assert update_repo.updated
+    assert manager.provider.calls == [("lease-1", "/workspace")]
+    assert volume_name == "leon-volume-lease-1"
 
 
 def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(monkeypatch, tmp_path):
     manager = _new_test_manager()
     provider = _FakeDaytonaProvider()
-    update_repo = _FakeUpdateRepo()
     manager.provider = provider
-    manager._sandbox_volume_repo = lambda: update_repo
 
-    def _already_exists(volume_id: str, mount_path: str) -> str:
-        provider.calls.append((volume_id, mount_path))
+    def _already_exists(managed_ref: str, mount_path: str) -> str:
+        provider.calls.append((managed_ref, mount_path))
         raise RuntimeError("volume already exists")
 
     provider.create_managed_volume = _already_exists
 
-    new_source = manager._upgrade_to_daytona_volume(
+    volume_name = manager._upgrade_to_daytona_volume(
         "thread-supabase",
-        HostVolume(tmp_path / "staging"),
-        "volume-1",
+        "lease-1",
         "/workspace",
     )
 
-    assert isinstance(new_source, DaytonaVolume)
-    assert provider.ready_waits == ["leon-volume-volume-1"]
+    assert volume_name == "leon-volume-lease-1"
+    assert provider.ready_waits == ["leon-volume-lease-1"]
 
 
 def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):

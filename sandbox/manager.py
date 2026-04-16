@@ -13,7 +13,7 @@ from typing import Any
 from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
-from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
+from sandbox.clock import parse_runtime_datetime, utc_now
 from sandbox.control_plane_repos import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from sandbox.lease import lease_from_row
 from sandbox.provider import SandboxProvider
@@ -284,9 +284,9 @@ class SandboxManager:
             return None
         return lease_from_row(row, self.db_path)
 
-    def _create_lease(self, lease_id: str, provider_name: str, volume_id: str | None = None):
+    def _create_lease(self, lease_id: str, provider_name: str):
         """Create lease and return as domain object."""
-        row = self.lease_store.create(lease_id, provider_name, volume_id=volume_id)
+        row = self.lease_store.create(lease_id, provider_name)
         return lease_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
@@ -300,154 +300,63 @@ class SandboxManager:
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
 
-    def _sandbox_volume_repo(self):
-        # @@@volume-repo-align - thread creation persists volume metadata through the
-        # active storage container; sandbox startup must read the same repo instead
-        # of hardcoding SQLite or Supabase-backed threads lose their volume row.
-        container = build_storage_container()
-        return container.sandbox_volume_repo()
-
     def _requires_volume_bootstrap(self) -> bool:
         # @@@local-shell-no-volume-gate - local runtimes execute directly on the host
         # and should not fail to start a shell just because file-channel volume
         # metadata is absent or stored in a different backend.
         return self.provider_capability.runtime_kind != "local"
 
-    def _ensure_thread_volume(self, thread_id: str, lease) -> None:
-        if not self._requires_volume_bootstrap() or lease.volume_id:
-            return
+    def _destroy_daytona_managed_volume(self, lease_id: str) -> None:
+        # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
+        # ref from lease identity directly, so cleanup no longer depends on lease.volume_id.
+        self.provider.delete_managed_volume(f"leon-volume-{lease_id}")
 
-        volume_id = str(uuid.uuid4())
-        self._create_volume_entry(thread_id, volume_id)
-
-        # @@@remote-volume-self-heal - incomplete remote lease bindings can miss their volume row
-        # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
-        self.lease_store.set_volume_id(lease.lease_id, volume_id)
-        lease.volume_id = volume_id
-
-    def _create_volume_entry(self, thread_id: str, volume_id: str) -> None:
-        import json
-        import os
-
-        from sandbox.volume_source import HostVolume
-
-        now_str = utc_now_iso()
-        volume_root = Path(os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))).expanduser().resolve()
-        volume_root.mkdir(parents=True, exist_ok=True)
-        source = HostVolume(volume_root / volume_id)
-
-        repo = self._sandbox_volume_repo()
-        try:
-            repo.create(volume_id, json.dumps(source.serialize()), f"vol-{thread_id}", now_str)
-        finally:
-            repo.close()
-
-    def _resolve_volume_entry(self, thread_id: str, lease) -> dict[str, Any]:
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(lease.volume_id)
-        finally:
-            repo.close()
-        if entry:
-            return entry
-        # @@@missing-volume-row-self-heal - old remote threads can retain a live lease.volume_id
-        # after the sandbox volume row was pruned; recreate the row in place before mount/sync.
-        self._create_volume_entry(thread_id, lease.volume_id)
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(lease.volume_id)
-        finally:
-            repo.close()
-        if not entry:
-            raise ValueError(f"Volume not found: {lease.volume_id}")
-        return entry
-
-    def _destroy_volume_entry(self, volume_id: str) -> None:
-        import json
-
-        from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
-
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(volume_id)
-            if not entry:
-                raise RuntimeError(f"Volume not found: {volume_id}")
-            source = deserialize_volume_source(json.loads(entry["source"]))
-            # @@@managed-volume-destroy-seam - provider-managed volumes must be reclaimed
-            # through the manager-owned lease destroy path or Daytona quotas will leak.
-            if isinstance(source, DaytonaVolume):
-                self.provider.delete_managed_volume(source.volume_name)
-            source.cleanup()
-            if not repo.delete(volume_id):
-                raise RuntimeError(f"Failed to delete volume metadata: {volume_id}")
-        finally:
-            repo.close()
+    def _assert_no_legacy_volume_id(self, lease, *, action: str) -> None:
+        # @@@legacy-volume-stopline - after sandbox_volumes collapse, non-daytona runtime may only
+        # encounter volume_id as stale storage residue. Treat it as explicit data drift, not fallback input.
+        if self._requires_volume_bootstrap() and self.provider_capability.runtime_kind != "daytona_pty" and lease.volume_id:
+            raise ValueError(f"legacy volume_id is not allowed for non-daytona runtime {action}")
 
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
-        import json
-
-        from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
-
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
         lease = self._get_lease(terminal.lease_id)
         if not lease:
             raise ValueError(f"No volume for thread {thread_id}")
-        self._ensure_thread_volume(thread_id, lease)
-        entry = self._resolve_volume_entry(thread_id, lease)
-
-        source = deserialize_volume_source(json.loads(entry["source"]))
-        volume_id = lease.volume_id
         remote_path = self.volume.resolve_mount_path()
+        source_path = self._resolve_sync_source_path(thread_id)
+
+        if self.provider_capability.runtime_kind != "daytona_pty":
+            self._assert_no_legacy_volume_id(lease, action="mount")
+            self.volume.mount(thread_id, source_path, remote_path)
+            return {"source_path": source_path, "remote_path": remote_path}
 
         # @@@daytona-upgrade - first startup creates managed volume
-        if self.provider_capability.runtime_kind == "daytona_pty" and not isinstance(source, DaytonaVolume):
-            source = self._upgrade_to_daytona_volume(
-                thread_id,
-                source,
-                volume_id,
-                remote_path,
-            )
+        volume_name = self._upgrade_to_daytona_volume(
+            thread_id,
+            lease.lease_id,
+            remote_path,
+        )
+        self.volume.mount_managed_volume(thread_id, volume_name, remote_path)
 
-        source_path = source.host_path
+        return {"source_path": source_path, "remote_path": remote_path}
 
-        if isinstance(source, DaytonaVolume):
-            self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
-        else:
-            self.volume.mount(thread_id, source, remote_path)
-
-        return {"source": source, "source_path": source_path, "remote_path": remote_path}
-
-    def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
-        """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
-        import json
-
-        from sandbox.volume_source import DaytonaVolume
+    def _upgrade_to_daytona_volume(self, thread_id: str, lease_id: str, remote_path: str):
+        """Ensure Daytona managed volume exists and return provider backend ref."""
 
         try:
-            volume_name = self.provider.create_managed_volume(volume_id, remote_path)
+            volume_name = self.provider.create_managed_volume(lease_id, remote_path)
         except Exception as e:
             if "already exists" in str(e):
-                volume_name = f"leon-volume-{volume_id}"
+                volume_name = f"leon-volume-{lease_id}"
                 logger.info("Daytona volume already exists: %s, reusing", volume_name)
                 self.provider.wait_managed_volume_ready(volume_name)
             else:
                 raise
 
-        new_source = DaytonaVolume(
-            staging_path=current_source.host_path,
-            volume_name=volume_name,
-        )
-
-        repo = self._sandbox_volume_repo()
-        try:
-            repo.update_source(volume_id, json.dumps(new_source.serialize()))
-        finally:
-            repo.close()
-
-        return new_source
+        return volume_name
 
     def _fire_session_ready(self, session_id: str, reason: str) -> None:
         if self._on_session_ready:
@@ -501,22 +410,6 @@ class SandboxManager:
         lease = self._get_lease(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
-    def resolve_volume_source(self, thread_id: str):
-        """Resolve VolumeSource for a thread via lease chain. Pure sandbox-layer lookup."""
-        import json
-
-        from sandbox.volume_source import deserialize_volume_source
-
-        terminal = self._get_active_terminal(thread_id)
-        if not terminal:
-            raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self._get_lease(terminal.lease_id)
-        if not lease:
-            raise ValueError(f"No volume for thread {thread_id}")
-        self._ensure_thread_volume(thread_id, lease)
-        entry = self._resolve_volume_entry(thread_id, lease)
-        return deserialize_volume_source(json.loads(entry["source"]))
-
     def _resolve_sync_source_path(self, thread_id: str) -> Path:
         # @@@sync-source-truth - sync no longer needs volume metadata truth; it only needs
         # the workspace-owned local staging root that backs the current file channel.
@@ -538,9 +431,9 @@ class SandboxManager:
         return user_home_path("file_channels", str(workspace_id)).expanduser().resolve()
 
     def _skip_volume_sync_for_local_lease(self, lease) -> bool:
-        # @@@local-no-volume-sync - local sessions may execute directly in host cwd with no sandbox volume row.
-        # In that shape there is nothing to upload/download, so sync paths must no-op instead of inventing one.
-        return lease is not None and not self._requires_volume_bootstrap() and not lease.volume_id
+        # @@@local-no-volume-sync - local sessions execute directly in host cwd, so upload/download
+        # must always no-op there. Legacy volume_id residue is not allowed to reactivate volume-backed sync.
+        return lease is not None and not self._requires_volume_bootstrap()
 
     def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
         if source is None:
@@ -986,8 +879,10 @@ class SandboxManager:
         if any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all()):
             raise RuntimeError(f"Lease {lease_id} still has bound terminals")
         lease.destroy_instance(self.provider)
-        if lease.volume_id:
-            self._destroy_volume_entry(lease.volume_id)
+        if self.provider_capability.runtime_kind == "daytona_pty":
+            self._destroy_daytona_managed_volume(lease_id)
+        else:
+            self._assert_no_legacy_volume_id(lease, action="cleanup")
         self.lease_store.delete(lease_id)
         return True
 

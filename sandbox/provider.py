@@ -242,7 +242,7 @@ class SandboxProvider(ABC):
     def get_web_url(self, session_id: str) -> str | None:
         return None
 
-    def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
         """Create provider-managed persistent volume. Returns backend_ref (volume name).
         Override in providers with managed volume support (Daytona, Docker).
         """

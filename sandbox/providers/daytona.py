@@ -126,7 +126,7 @@ class DaytonaProvider(SandboxProvider):
         self.client._get_proxy_toolbox_url = _wrapped_get_proxy_toolbox_url
         self._sandboxes: dict[str, Any] = {}
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
-        self._volume_mounts: dict[str, tuple[str, str]] = {}  # thread_id -> (volume_id, mount_path)
+        self._managed_mounts: dict[str, tuple[str, str]] = {}  # thread_id -> (backend_ref, mount_path)
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
@@ -134,9 +134,9 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Managed Volume ====================
 
-    def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
         """Create a Daytona managed volume. Returns volume name as backend_ref."""
-        volume_name = f"leon-volume-{volume_id}"
+        volume_name = f"leon-volume-{managed_ref}"
         logger.info("Creating managed volume: %s", volume_name)
         # @@@volume-ready - volume transitions pending_create → ready (~6s)
         self.client.volume.create(volume_name)
@@ -153,7 +153,7 @@ class DaytonaProvider(SandboxProvider):
         raise RuntimeError(f"Volume {backend_ref} did not become ready within 30s")
 
     def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        self._volume_mounts[thread_id] = (backend_ref, mount_path)
+        self._managed_mounts[thread_id] = (backend_ref, mount_path)
 
     def delete_managed_volume(self, backend_ref: str) -> None:
         """Delete provider-managed volume. backend_ref is the volume name."""
@@ -167,8 +167,8 @@ class DaytonaProvider(SandboxProvider):
         from daytona_sdk import CreateSandboxFromSnapshotParams, VolumeMount
 
         # @@@volume-mount - use SDK VolumeMount instead of bind mount HTTP workaround
-        if thread_id and thread_id in self._volume_mounts:
-            volume_name, vol_mount_path = self._volume_mounts.pop(thread_id)
+        if thread_id and thread_id in self._managed_mounts:
+            volume_name, vol_mount_path = self._managed_mounts.pop(thread_id)
             vol = self.client.volume.get(volume_name)
             params = CreateSandboxFromSnapshotParams(
                 auto_stop_interval=0,

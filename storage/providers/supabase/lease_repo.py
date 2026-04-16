@@ -78,7 +78,6 @@ class SupabaseLeaseRepo:
         self,
         lease_id: str,
         provider_name: str,
-        volume_id: str | None = None,
         recipe_id: str | None = None,
         recipe_json: str | None = None,
     ) -> dict[str, Any]:
@@ -98,7 +97,6 @@ class SupabaseLeaseRepo:
                 "needs_refresh": 0,
                 "refresh_hint_at": None,
                 "status": "active",
-                "volume_id": volume_id,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -271,21 +269,6 @@ class SupabaseLeaseRepo:
             .execute()
         )
         updated = q.rows(response, _REPO, "mark_needs_refresh")
-        return len(updated) > 0
-
-    def set_volume_id(self, lease_id: str, volume_id: str) -> bool:
-        response = (
-            self._leases()
-            .update(
-                {
-                    "volume_id": volume_id,
-                    "updated_at": _utc_now_iso(),
-                }
-            )
-            .eq("lease_id", lease_id)
-            .execute()
-        )
-        updated = q.rows(response, _REPO, "set_volume_id")
         return len(updated) > 0
 
     def delete(self, lease_id: str) -> None:

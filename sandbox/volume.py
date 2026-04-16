@@ -13,8 +13,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from sandbox.volume_source import VolumeSource
-
 logger = logging.getLogger(__name__)
 
 
@@ -32,19 +30,21 @@ class SandboxVolume:
 
         self._sync = SyncManager(provider_capability=provider_capability)
 
-    def mount(self, thread_id: str, source: VolumeSource, target_path: str) -> None:
-        """Make source visible at target_path inside sandbox.
+    def mount(self, thread_id: str, source_path: Path | None, target_path: str) -> None:
+        """Make source_path visible at target_path inside sandbox.
         local: no-op. providers without mount support: no-op (sync handles it).
         docker/daytona with mount: bind mount.
         """
         if self.capability.runtime_kind == "local":
             return
-        host = source.host_path
-        if not host or not self.capability.mount.supports_mount:
+        if source_path is None or not self.capability.mount.supports_mount:
             return
         from sandbox.config import MountSpec
 
-        self.provider.set_thread_bind_mounts(thread_id, [MountSpec(source=str(host), target=target_path, read_only=False)])
+        self.provider.set_thread_bind_mounts(
+            thread_id,
+            [MountSpec(source=str(source_path), target=target_path, read_only=False)],
+        )
 
     def mount_managed_volume(self, thread_id: str, backend_ref: str, target_path: str) -> None:
         """Mount provider-managed persistent volume."""
