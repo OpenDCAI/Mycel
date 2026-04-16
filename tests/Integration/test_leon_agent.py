@@ -112,6 +112,9 @@ class _FakeAgentRegistryRepo:
             return
         self._rows[agent_id] = (row[0], row[1], row[2], status, row[4], row[5])
 
+    def remove(self, agent_id: str) -> None:
+        self._rows.pop(agent_id, None)
+
     def list_running(self) -> list[tuple[str, str, str, str, str | None, str | None]]:
         return [row for row in self._rows.values() if row[3] == "running"]
 

@@ -47,13 +47,34 @@ class _FakeAgentRegistry(AgentRegistry):
         self.entry = None
         self.last_status = None
         self.status_updates: list[tuple[str, str]] = []
+        self._entries: dict[str, AgentEntry] = {}
 
     async def register(self, entry):
         self.entry = entry
+        self._entries[entry.agent_id] = entry
 
     async def update_status(self, agent_id: str, status: str):
         self.last_status = (agent_id, status)
         self.status_updates.append((agent_id, status))
+        if agent_id in self._entries:
+            current = self._entries[agent_id]
+            self._entries[agent_id] = AgentEntry(
+                agent_id=current.agent_id,
+                name=current.name,
+                thread_id=current.thread_id,
+                status=status,
+                parent_agent_id=current.parent_agent_id,
+                subagent_type=current.subagent_type,
+            )
+
+    async def get_by_id(self, agent_id: str) -> AgentEntry | None:
+        return self._entries.get(agent_id)
+
+    async def list_running_by_name(self, name: str) -> list[AgentEntry]:
+        return [entry for entry in self._entries.values() if entry.name == name and entry.status == "running"]
+
+    async def remove(self, agent_id: str) -> None:
+        self._entries.pop(agent_id, None)
 
 
 class _FakeThreadRepo:
@@ -1547,7 +1568,26 @@ async def test_handle_agent_blocking_path_does_not_duplicate_completed_status(mo
     )
 
     assert raw.content == "(Agent completed with no text output)"
-    assert registry.status_updates == [(registry.entry.agent_id, "completed")]
+    assert registry.status_updates == []
+    assert await registry.get_by_id(registry.entry.agent_id) is None
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_blocking_path_removes_registry_entry_on_finish(monkeypatch, tmp_path):
+    _patch_create_leon_agent(monkeypatch)
+
+    registry = _FakeAgentRegistry()
+    service = _make_service(tmp_path, agent_registry=registry)
+
+    raw = await service._handle_agent(
+        prompt="do work",
+        name="worker-1",
+        run_in_background=False,
+    )
+
+    assert raw.content == "(Agent completed with no text output)"
+    assert await registry.get_by_id(registry.entry.agent_id) is None
+    assert await registry.list_running_by_name("worker-1") == []
 
 
 @pytest.mark.asyncio
@@ -1574,7 +1614,8 @@ async def test_handle_agent_blocking_path_does_not_duplicate_error_status(monkey
     )
 
     assert "Agent failed: boom" in raw.content
-    assert registry.status_updates == [(registry.entry.agent_id, "error")]
+    assert registry.status_updates == []
+    assert await registry.get_by_id(registry.entry.agent_id) is None
 
 
 @pytest.mark.asyncio
