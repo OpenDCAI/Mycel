@@ -89,7 +89,9 @@ def _normalize_model_base_url(base_url: str, provider_name: str | None) -> str:
     return url
 
 
-def _build_model_http_client_kwargs(provider_name: str | None) -> tuple[dict[str, Any], tuple[httpx.AsyncClient | None, httpx.Client | None]]:
+def _build_model_http_client_kwargs(
+    provider_name: str | None,
+) -> tuple[dict[str, Any], tuple[httpx.AsyncClient | None, httpx.Client | None]]:
     if provider_name != "openai":
         return {}, (None, None)
 

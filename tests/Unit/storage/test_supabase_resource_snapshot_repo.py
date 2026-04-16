@@ -1,5 +1,6 @@
-import storage.providers.supabase as supabase_provider
 import pytest
+
+import storage.providers.supabase as supabase_provider
 from storage.contracts import ResourceSnapshotRepo
 from storage.providers.supabase.resource_snapshot_repo import SupabaseResourceSnapshotRepo
 
