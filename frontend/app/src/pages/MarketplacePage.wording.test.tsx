@@ -142,6 +142,20 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByText("暂无已安装的 Subagent")).toBeTruthy();
   });
 
+  it("treats legacy installed subagent query key as the Subagent tab", () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=subagent"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: /Subagent/ })).toBeTruthy();
+    expect(screen.getByText("暂无已安装的 Subagent")).toBeTruthy();
+    expect(screen.queryByText("暂无已安装的 Agent")).toBeNull();
+  });
+
   it("does not bootstrap installed libraries because RootLayout owns panel loading", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent"]}>

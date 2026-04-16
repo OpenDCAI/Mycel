@@ -25,8 +25,10 @@ function isTab(value: string | null): value is Tab {
   return value === "explore" || value === "installed";
 }
 
-function isInstalledSubTab(value: string | null): value is InstalledSubTab {
-  return value === "agent-user" || value === "skill" || value === "agent" || value === "sandbox-template";
+function normalizeInstalledSubTab(value: string | null): InstalledSubTab | null {
+  if (value === "subagent") return "agent";
+  if (value === "agent-user" || value === "skill" || value === "agent" || value === "sandbox-template") return value;
+  return null;
 }
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
@@ -51,7 +53,7 @@ export default function MarketplacePage() {
   const rawTab = searchParams.get("tab");
   const rawInstalledSubTab = searchParams.get("sub");
   const tab = isTab(rawTab) ? rawTab : "explore";
-  const installedSubTab = isInstalledSubTab(rawInstalledSubTab) ? rawInstalledSubTab : "agent-user";
+  const installedSubTab = normalizeInstalledSubTab(rawInstalledSubTab) ?? "agent-user";
 
   const setTab = (t: Tab) => setSearchParams((p) => { p.set("tab", t); p.delete("sub"); return p; }, { replace: true });
   const setInstalledSubTab = (s: InstalledSubTab) => setSearchParams((p) => { p.set("sub", s); return p; }, { replace: true });
