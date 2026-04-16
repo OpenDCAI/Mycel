@@ -110,6 +110,21 @@ async def verify_thread_owner(
     return user_id
 
 
+async def verify_thread_row_owner(
+    thread_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[FastAPI, Depends(get_app)],
+) -> str:
+    """Verify ownership without mutating or converging thread runtime state."""
+    thread = app.state.thread_repo.get_by_id(thread_id)
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if not agent_user or agent_user.owner_user_id != user_id:
+        raise HTTPException(403, "Not authorized")
+    return user_id
+
+
 async def get_thread_lock(app: Annotated[FastAPI, Depends(get_app)], thread_id: str) -> asyncio.Lock:
     """Get or create a lock for a specific thread."""
     async with app.state.thread_locks_guard:

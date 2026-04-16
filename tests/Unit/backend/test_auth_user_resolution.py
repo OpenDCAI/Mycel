@@ -112,6 +112,20 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
 
 
 @pytest.mark.asyncio
+async def test_verify_thread_row_owner_allows_terminal_less_visible_thread():
+    request_app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-1"}),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            ),
+        )
+    )
+
+    assert await dependencies.verify_thread_row_owner("thread-1", "owner-1", request_app) == "owner-1"
+
+
+@pytest.mark.asyncio
 async def test_verify_thread_owner_fails_loud_without_purging_terminal_less_thread(monkeypatch: pytest.MonkeyPatch):
     deleted: list[str] = []
     purged: list[str] = []

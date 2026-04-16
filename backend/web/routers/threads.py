@@ -18,6 +18,7 @@ from backend.web.core.dependencies import (
     get_thread_agent,
     get_thread_lock,
     verify_thread_owner,
+    verify_thread_row_owner,
 )
 from backend.web.models.requests import (
     CreateThreadRequest,
@@ -1421,6 +1422,7 @@ async def get_thread_terminal_status(
 @router.get("/{thread_id}/lease")
 async def get_thread_lease_status(
     thread_id: str,
+    user_id: Annotated[str | None, Depends(verify_thread_row_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any] | None:
     """Get SandboxLease status for a thread."""
