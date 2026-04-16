@@ -65,7 +65,9 @@ export default function ModelMappingSection({
     }
   };
 
-  const enabledModelsList = availableModels.filter((m) => enabledModels.includes(m.id));
+  const mappingTargets = new Set(Object.values(modelMapping).filter(Boolean));
+  const selectableModelIds = new Set([...enabledModels, ...mappingTargets]);
+  const enabledModelsList = availableModels.filter((m) => selectableModelIds.has(m.id));
 
   return (
     <div className="space-y-4 relative">
