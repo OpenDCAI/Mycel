@@ -726,3 +726,51 @@ def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
         assert repo.__class__.__name__ == "SupabaseSandboxMonitorRepo"
     finally:
         repo.close()
+
+
+def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
+    lease_repo = SimpleNamespace(
+        find_by_instance=lambda **kwargs: {
+            "lease_id": "lease-live",
+            "provider_name": kwargs["provider_name"],
+            "current_instance_id": kwargs["instance_id"],
+        },
+        close=lambda: None,
+    )
+
+    lease = sandbox_manager_module.resolve_existing_sandbox_lease(
+        {
+            "provider_name": "daytona",
+            "provider_env_id": "sandbox-env-1",
+            "config": {"legacy_lease_id": "lease-legacy"},
+        },
+        resolve_lease=lambda _lease_id: (_ for _ in ()).throw(AssertionError("legacy fallback should stay unused")),
+        lease_repo=lease_repo,
+    )
+
+    assert lease == {
+        "lease_id": "lease-live",
+        "provider_name": "daytona",
+        "current_instance_id": "sandbox-env-1",
+    }
+
+
+def test_resolve_existing_sandbox_lease_falls_back_to_legacy_lease_id_when_instance_lookup_misses() -> None:
+    lease_repo = SimpleNamespace(
+        find_by_instance=lambda **_kwargs: None,
+        close=lambda: None,
+    )
+    seen_lease_ids: list[str] = []
+
+    lease = sandbox_manager_module.resolve_existing_sandbox_lease(
+        {
+            "provider_name": "daytona",
+            "provider_env_id": "sandbox-env-1",
+            "config": {"legacy_lease_id": "lease-legacy"},
+        },
+        resolve_lease=lambda lease_id: seen_lease_ids.append(lease_id) or {"lease_id": lease_id},
+        lease_repo=lease_repo,
+    )
+
+    assert seen_lease_ids == ["lease-legacy"]
+    assert lease == {"lease_id": "lease-legacy"}
