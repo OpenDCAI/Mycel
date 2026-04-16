@@ -374,34 +374,17 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
     assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
 
-def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id(monkeypatch, tmp_path):
-    class _MissingRowRepo(_FakeVolumeRepo):
-        def __init__(self) -> None:
-            super().__init__(HostVolume(tmp_path / "vol").serialize())
-            self._rows: dict[str, dict[str, str]] = {}
-
-        def get(self, volume_id: str):
-            self.requested_ids.append(volume_id)
-            return self._rows.get(volume_id)
-
-        def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None:
-            super().create(volume_id, source_json, name, created_at)
-            self._rows[volume_id] = {"source": source_json}
-
-        def update_source(self, volume_id: str, source_json: str) -> None:
-            self._rows[volume_id] = {"source": source_json}
-            self._source = json.loads(source_json)
-
+def test_setup_mounts_daytona_does_not_require_volume_id(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = _FakeDaytonaProvider()
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
-    lease = SimpleNamespace(lease_id="lease-1", volume_id="volume-missing")
+    lease = SimpleNamespace(lease_id="lease-1", volume_id=None)
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
-    repo = _MissingRowRepo()
+    repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
     manager._sandbox_volume_repo = lambda: repo
     monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
 
@@ -411,7 +394,7 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
     assert manager.lease_store.volume_updates == []
     assert repo.requested_ids == []
     assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
-    assert manager.provider.calls == [("volume-missing", "/workspace")]
+    assert manager.provider.calls == [("lease-1", "/workspace")]
 
 
 def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
@@ -471,9 +454,9 @@ def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert destroyed_leases == ["lease-1"]
-    assert provider.deleted_volumes == ["leon-volume-volume-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
     assert repo.requested_ids == []
-    assert repo.deleted == ["volume-1"]
+    assert repo.deleted == []
     assert deleted_leases == ["lease-1"]
 
 
@@ -686,7 +669,7 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     assert deleted_leases == []
 
 
-def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(tmp_path):
+def test_destroy_thread_resources_deletes_daytona_managed_volume_without_volume_id(tmp_path):
     manager = _new_test_manager()
     provider = _FakeDaytonaProvider()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
@@ -702,7 +685,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(
     class _Lease:
         lease_id = "lease-1"
         observed_state = "detached"
-        volume_id = "volume-1"
+        volume_id = None
 
         def get_instance(self):
             return None
@@ -730,8 +713,8 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert destroyed_leases == ["lease-1"]
-    assert provider.deleted_volumes == ["leon-volume-volume-1"]
-    assert repo.deleted == ["volume-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
+    assert repo.deleted == []
     assert deleted_leases == ["lease-1"]
     assert all_terminals == []
 
@@ -780,8 +763,8 @@ def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert destroyed_leases == ["lease-1"]
-    assert provider.deleted_volumes == ["leon-volume-volume-1"]
-    assert repo.deleted == ["volume-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
+    assert repo.deleted == []
     assert deleted_leases == ["lease-1"]
 
 
@@ -1043,7 +1026,7 @@ def test_resume_session_rebinds_live_session_lease_after_resume():
     assert runtime.lease is resumed_lease
 
 
-def test_upgrade_to_daytona_volume_uses_volume_id_for_provider_backend_ref(monkeypatch, tmp_path):
+def test_upgrade_to_daytona_volume_uses_lease_id_for_provider_backend_ref(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider = _FakeDaytonaProvider()
     update_repo = _FakeUpdateRepo()
@@ -1053,12 +1036,12 @@ def test_upgrade_to_daytona_volume_uses_volume_id_for_provider_backend_ref(monke
 
     volume_name = manager._upgrade_to_daytona_volume(
         "thread-supabase",
-        "volume-1",
+        "lease-1",
         "/workspace",
     )
 
-    assert manager.provider.calls == [("volume-1", "/workspace")]
-    assert volume_name == "leon-volume-volume-1"
+    assert manager.provider.calls == [("lease-1", "/workspace")]
+    assert volume_name == "leon-volume-lease-1"
     assert update_repo.closed is False
     assert update_repo.updated == []
 
@@ -1078,12 +1061,12 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
 
     volume_name = manager._upgrade_to_daytona_volume(
         "thread-supabase",
-        "volume-1",
+        "lease-1",
         "/workspace",
     )
 
-    assert volume_name == "leon-volume-volume-1"
-    assert provider.ready_waits == ["leon-volume-volume-1"]
+    assert volume_name == "leon-volume-lease-1"
+    assert provider.ready_waits == ["leon-volume-lease-1"]
 
 
 def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):

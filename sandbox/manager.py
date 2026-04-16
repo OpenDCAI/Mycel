@@ -317,9 +317,11 @@ class SandboxManager:
         if not self._requires_volume_bootstrap() or lease.volume_id:
             return
 
+        if self.provider_capability.runtime_kind == "daytona_pty":
+            return
+
         volume_id = str(uuid.uuid4())
-        if self.provider_capability.runtime_kind != "daytona_pty":
-            self._create_volume_entry(thread_id, volume_id)
+        self._create_volume_entry(thread_id, volume_id)
 
         # @@@remote-volume-self-heal - incomplete remote lease bindings can miss their volume row
         # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
@@ -388,6 +390,11 @@ class SandboxManager:
         finally:
             repo.close()
 
+    def _destroy_daytona_managed_volume(self, lease_id: str) -> None:
+        # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
+        # ref from lease identity directly, so cleanup no longer depends on lease.volume_id.
+        self.provider.delete_managed_volume(f"leon-volume-{lease_id}")
+
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
         terminal = self._get_active_terminal(thread_id)
@@ -406,25 +413,24 @@ class SandboxManager:
             return {"source_path": source_path, "remote_path": remote_path}
 
         self._ensure_thread_volume(thread_id, lease)
-        volume_id = lease.volume_id
         # @@@daytona-upgrade - first startup creates managed volume
         volume_name = self._upgrade_to_daytona_volume(
             thread_id,
-            volume_id,
+            lease.lease_id,
             remote_path,
         )
         self.volume.mount_managed_volume(thread_id, volume_name, remote_path)
 
         return {"source_path": source_path, "remote_path": remote_path}
 
-    def _upgrade_to_daytona_volume(self, thread_id: str, volume_id: str, remote_path: str):
+    def _upgrade_to_daytona_volume(self, thread_id: str, lease_id: str, remote_path: str):
         """Ensure Daytona managed volume exists and return provider backend ref."""
 
         try:
-            volume_name = self.provider.create_managed_volume(volume_id, remote_path)
+            volume_name = self.provider.create_managed_volume(lease_id, remote_path)
         except Exception as e:
             if "already exists" in str(e):
-                volume_name = f"leon-volume-{volume_id}"
+                volume_name = f"leon-volume-{lease_id}"
                 logger.info("Daytona volume already exists: %s, reusing", volume_name)
                 self.provider.wait_managed_volume_ready(volume_name)
             else:
@@ -953,7 +959,9 @@ class SandboxManager:
         if any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all()):
             raise RuntimeError(f"Lease {lease_id} still has bound terminals")
         lease.destroy_instance(self.provider)
-        if lease.volume_id:
+        if self.provider_capability.runtime_kind == "daytona_pty":
+            self._destroy_daytona_managed_volume(lease_id)
+        elif lease.volume_id:
             self._destroy_volume_entry(lease.volume_id)
         self.lease_store.delete(lease_id)
         return True
