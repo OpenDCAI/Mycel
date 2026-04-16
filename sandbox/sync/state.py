@@ -1,8 +1,6 @@
 import hashlib
 from pathlib import Path
 
-from storage.runtime import build_sync_file_repo
-
 
 def _calculate_checksum(file_path: Path) -> str:
     """Calculate SHA256 checksum of file."""
@@ -15,7 +13,7 @@ def _calculate_checksum(file_path: Path) -> str:
 
 class SyncState:
     def __init__(self, repo=None):
-        self._repo = repo or build_sync_file_repo()
+        self._repo = repo or ProcessLocalSyncFileBacking()
 
     def close(self) -> None:
         self._repo.close()
