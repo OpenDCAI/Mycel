@@ -33,15 +33,8 @@ def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
         queue_manager.clear_all(thread_id)
 
 
-def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
-    """Converge an owner-visible thread to the current runtime contract.
-
-    Returns one of:
-    - ``missing``: no thread row exists
-    - ``ready``: active terminal already present
-    - ``repaired_pointer``: terminal rows exist and active pointer was restored
-    - ``purged``: incomplete thread was deleted
-    """
+def inspect_owner_thread_runtime(app: Any, thread_id: str) -> str:
+    """Check an owner-visible thread against the runtime contract without mutating thread rows."""
 
     thread = app.state.thread_repo.get_by_id(thread_id)
     if thread is None:
@@ -59,6 +52,23 @@ def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
     if terminals:
         terminal_repo.set_active(thread_id, str(terminals[0]["terminal_id"]))
         return "repaired_pointer"
+
+    return "incomplete"
+
+
+def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
+    """Converge an owner-visible thread to the current runtime contract.
+
+    Returns one of:
+    - ``missing``: no thread row exists
+    - ``ready``: active terminal already present
+    - ``repaired_pointer``: terminal rows exist and active pointer was restored
+    - ``purged``: incomplete thread was deleted
+    """
+
+    runtime_state = inspect_owner_thread_runtime(app, thread_id)
+    if runtime_state != "incomplete":
+        return runtime_state
 
     purge_incomplete_owner_thread(app, thread_id)
     return "purged"

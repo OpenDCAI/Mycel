@@ -112,7 +112,7 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
 
 
 @pytest.mark.asyncio
-async def test_verify_thread_owner_purges_incomplete_thread(monkeypatch: pytest.MonkeyPatch):
+async def test_verify_thread_owner_fails_loud_without_purging_terminal_less_thread(monkeypatch: pytest.MonkeyPatch):
     deleted: list[str] = []
     purged: list[str] = []
     rows = {"thread-1": {"agent_user_id": "agent-1"}}
@@ -149,7 +149,7 @@ async def test_verify_thread_owner_purges_incomplete_thread(monkeypatch: pytest.
     with pytest.raises(HTTPException) as exc_info:
         await dependencies.verify_thread_owner("thread-1", "owner-1", request_app)
 
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Thread not found"
-    assert purged == ["thread-1"]
-    assert deleted == ["thread-1"]
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Thread runtime incomplete: missing terminal"
+    assert purged == []
+    assert deleted == []
