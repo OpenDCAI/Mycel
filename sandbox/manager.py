@@ -13,7 +13,7 @@ from typing import Any
 from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
-from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
+from sandbox.clock import parse_runtime_datetime, utc_now
 from sandbox.control_plane_repos import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from sandbox.lease import lease_from_row
 from sandbox.provider import SandboxProvider
@@ -301,9 +301,8 @@ class SandboxManager:
         return resolve_provider_cwd(self.provider)
 
     def _sandbox_volume_repo(self):
-        # @@@volume-repo-align - thread creation persists volume metadata through the
-        # active storage container; sandbox startup must read the same repo instead
-        # of hardcoding SQLite or Supabase-backed threads lose their volume row.
+        # @@@volume-repo-align - legacy non-daytona cleanup still reads persisted
+        # sandbox volume rows through the active storage container.
         container = build_storage_container()
         return container.sandbox_volume_repo()
 
@@ -313,58 +312,6 @@ class SandboxManager:
         # metadata is absent or stored in a different backend.
         return self.provider_capability.runtime_kind != "local"
 
-    def _ensure_thread_volume(self, thread_id: str, lease) -> None:
-        if not self._requires_volume_bootstrap() or lease.volume_id:
-            return
-
-        if self.provider_capability.runtime_kind == "daytona_pty":
-            return
-
-        volume_id = str(uuid.uuid4())
-        self._create_volume_entry(thread_id, volume_id)
-
-        # @@@remote-volume-self-heal - incomplete remote lease bindings can miss their volume row
-        # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
-        self.lease_store.set_volume_id(lease.lease_id, volume_id)
-        lease.volume_id = volume_id
-
-    def _create_volume_entry(self, thread_id: str, volume_id: str) -> None:
-        import json
-        import os
-
-        from sandbox.volume_source import HostVolume
-
-        now_str = utc_now_iso()
-        volume_root = Path(os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))).expanduser().resolve()
-        volume_root.mkdir(parents=True, exist_ok=True)
-        source = HostVolume(volume_root / volume_id)
-
-        repo = self._sandbox_volume_repo()
-        try:
-            repo.create(volume_id, json.dumps(source.serialize()), f"vol-{thread_id}", now_str)
-        finally:
-            repo.close()
-
-    def _resolve_volume_entry(self, thread_id: str, lease) -> dict[str, Any]:
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(lease.volume_id)
-        finally:
-            repo.close()
-        if entry:
-            return entry
-        # @@@missing-volume-row-self-heal - old remote threads can retain a live lease.volume_id
-        # after the sandbox volume row was pruned; recreate the row in place before mount/sync.
-        self._create_volume_entry(thread_id, lease.volume_id)
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(lease.volume_id)
-        finally:
-            repo.close()
-        if not entry:
-            raise ValueError(f"Volume not found: {lease.volume_id}")
-        return entry
-
     def _destroy_volume_entry(self, volume_id: str) -> None:
         import json
 
@@ -372,12 +319,6 @@ class SandboxManager:
 
         repo = self._sandbox_volume_repo()
         try:
-            if self.provider_capability.runtime_kind == "daytona_pty":
-                volume_name = f"leon-volume-{volume_id}"
-                self.provider.delete_managed_volume(volume_name)
-                repo.delete(volume_id)
-                return
-
             entry = repo.get(volume_id)
             if not entry:
                 raise RuntimeError(f"Volume not found: {volume_id}")
@@ -412,7 +353,6 @@ class SandboxManager:
             self.volume.mount(thread_id, source_path, remote_path)
             return {"source_path": source_path, "remote_path": remote_path}
 
-        self._ensure_thread_volume(thread_id, lease)
         # @@@daytona-upgrade - first startup creates managed volume
         volume_name = self._upgrade_to_daytona_volume(
             thread_id,
