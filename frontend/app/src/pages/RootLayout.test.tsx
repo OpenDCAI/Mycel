@@ -69,6 +69,7 @@ describe("RootLayout setup-name contract", () => {
       configurable: true,
     });
     useAuthStore.setState({
+      hydrated: true,
       token: "token-1",
       user: { id: "user-1", name: "old", type: "human", avatar: null },
       agent: null,
@@ -129,6 +130,7 @@ describe("RootLayout agent wording contract", () => {
       configurable: true,
     });
     useAuthStore.setState({
+      hydrated: true,
       token: "token-1",
       user: { id: "user-1", name: "tester", type: "human", avatar: null },
       agent: null,
@@ -208,19 +210,68 @@ describe("RootLayout agent wording contract", () => {
   });
 });
 
+describe("RootLayout auth hydration gate", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    const storage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", storage);
+    Object.defineProperty(window, "localStorage", {
+      value: storage,
+      configurable: true,
+    });
+    useAuthStore.setState({
+      token: null,
+      user: null,
+      agent: null,
+      userId: null,
+      setupInfo: null,
+      hydrated: false,
+      login: vi.fn(),
+      sendOtp: vi.fn(),
+      verifyOtp: vi.fn(),
+      completeRegister: vi.fn(),
+      clearSetupInfo: vi.fn(),
+      logout: vi.fn(),
+    });
+  });
+
+  it("does not render LoginForm before auth persistence finishes hydrating", () => {
+    render(
+      <MemoryRouter initialEntries={["/chat"]}>
+        <Routes>
+          <Route path="*" element={<RootLayout />}>
+            <Route path="chat" element={<div>chat-page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByPlaceholderText("邮箱或 Mycel ID")).toBeNull();
+    expect(screen.queryByText("chat-page")).toBeNull();
+  });
+});
+
 describe("LoginForm", () => {
   beforeEach(() => {
     useAuthStore.setState({
       token: null,
       user: null,
       agent: null,
+      userId: null,
       setupInfo: null,
+      hydrated: true,
       login: vi.fn(async () => {
         useAuthStore.setState({
           token: "token",
           user: { id: "u-1", name: "tester", type: "human", avatar: null },
           agent: null,
+          userId: "u-1",
           setupInfo: null,
+          hydrated: true,
         });
       }),
       sendOtp: vi.fn(async () => undefined),
