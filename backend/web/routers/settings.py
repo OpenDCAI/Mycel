@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
@@ -86,6 +87,18 @@ def _normalize_model_base_url(base_url: str, provider_name: str | None) -> str:
     if provider_name != "anthropic":
         url = f"{url}/v1"
     return url
+
+
+def _build_model_http_client_kwargs(provider_name: str | None) -> tuple[dict[str, Any], tuple[httpx.AsyncClient | None, httpx.Client | None]]:
+    if provider_name != "openai":
+        return {}, (None, None)
+
+    async_client = httpx.AsyncClient(trust_env=False)
+    sync_client = httpx.Client(trust_env=False)
+    return {
+        "http_client": sync_client,
+        "http_async_client": async_client,
+    }, (async_client, sync_client)
 
 
 # ============================================================================
@@ -462,8 +475,6 @@ class ModelTestRequest(BaseModel):
 @router.post("/models/test")
 async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUserId) -> dict[str, Any]:
     """Test if a model is reachable by sending a minimal request."""
-    import asyncio
-
     repo = _get_settings_repo(req)
     mc = _load_merged_models_for_storage(repo, user_id)
 
@@ -483,6 +494,8 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
 
         provider_name = _attempt_infer_model_provider(resolved)
 
+    async_client: httpx.AsyncClient | None = None
+    sync_client: httpx.Client | None = None
     try:
         from langchain.chat_models import init_chat_model
 
@@ -497,6 +510,8 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
         base_url = mc.resolve_base_url(provider_name)
         if base_url:
             kwargs["base_url"] = _normalize_model_base_url(base_url, provider_name)
+        client_kwargs, (async_client, sync_client) = _build_model_http_client_kwargs(provider_name)
+        kwargs.update(client_kwargs)
 
         kwargs = normalize_model_kwargs(resolved, kwargs)
         model = init_chat_model(resolved, **kwargs)
@@ -508,6 +523,11 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
         return {"success": False, "error": "Request timed out (15s)"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+    finally:
+        if async_client is not None:
+            await async_client.aclose()
+        if sync_client is not None:
+            await asyncio.to_thread(sync_client.close)
 
 
 @router.delete("/models/custom")

@@ -376,7 +376,11 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
         "model_provider": "openai",
         "api_key": "repo-key",
         "base_url": "https://repo.example/v1",
+        "http_client": captured["kwargs"]["http_client"],
+        "http_async_client": captured["kwargs"]["http_async_client"],
     }
+    assert captured["kwargs"]["http_client"]._trust_env is False
+    assert captured["kwargs"]["http_async_client"]._trust_env is False
 
 
 def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monkeypatch):
@@ -398,4 +402,8 @@ def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monke
         "model_provider": "openai",
         "api_key": "platform-key",
         "base_url": "https://platform.example/v1",
+        "http_client": captured["kwargs"]["http_client"],
+        "http_async_client": captured["kwargs"]["http_async_client"],
     }
+    assert captured["kwargs"]["http_client"]._trust_env is False
+    assert captured["kwargs"]["http_async_client"]._trust_env is False
