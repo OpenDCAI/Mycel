@@ -7,11 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LibraryItemDetailPage from "./LibraryItemDetailPage";
 import { useAppStore } from "@/store/app-store";
 
+const { navigateMock } = vi.hoisted(() => ({
+  navigateMock: vi.fn(),
+}));
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
-    useNavigate: () => vi.fn(),
+    useNavigate: () => navigateMock,
   };
 });
 
@@ -26,6 +30,7 @@ describe("LibraryItemDetailPage", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    navigateMock.mockReset();
     fetchLibrary = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     fetchResourceContent = vi.fn<(type: string, id: string) => Promise<string>>().mockResolvedValue("# Agent doc");
     updateResource = vi.fn<(type: string, id: string, fields: Record<string, unknown>) => Promise<void>>().mockResolvedValue(undefined);
@@ -103,6 +108,43 @@ describe("LibraryItemDetailPage", () => {
         desc: "Updated sandbox template",
         features: { lark_cli: false },
       });
+    });
+  });
+
+  it("returns sandbox detail deletions to the sandbox installed subtab", async () => {
+    const deleteResource = vi.fn<(type: string, id: string) => Promise<void>>().mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    useAppStore.setState({
+      deleteResource,
+      librarySandboxTemplates: [{
+        id: "daytona:custom",
+        name: "Daytona Custom",
+        desc: "Custom recipe",
+        type: "sandbox-template",
+        provider_name: "daytona_selfhost",
+        provider_type: "daytona",
+        features: { lark_cli: false },
+        feature_options: [],
+        builtin: false,
+        created_at: 0,
+        updated_at: 0,
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/library/sandbox-template/daytona:custom"]}>
+        <Routes>
+          <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Daytona Custom" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+
+    await waitFor(() => {
+      expect(deleteResource).toHaveBeenCalledWith("sandbox-template", "daytona:custom");
+      expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=sandbox");
     });
   });
 });
