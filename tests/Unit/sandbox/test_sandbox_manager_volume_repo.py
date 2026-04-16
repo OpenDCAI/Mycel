@@ -6,6 +6,7 @@ from typing import Any, cast
 import pytest
 
 import sandbox.manager as sandbox_manager_module
+from config.user_paths import user_home_path
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.volume_source import DaytonaVolume, HostVolume
@@ -40,8 +41,8 @@ class _FakeVolumeRepo:
 class _FakeVolume:
     def __init__(self) -> None:
         self.mount_calls: list[tuple[str, str]] = []
-        self.upload_calls: list[tuple[str, str]] = []
-        self.download_calls: list[tuple[str, str]] = []
+        self.upload_calls: list[tuple[str, str, Path, str]] = []
+        self.download_calls: list[tuple[str, str, Path, str]] = []
         self.cleared: list[str] = []
 
     def resolve_mount_path(self) -> str:
@@ -53,11 +54,11 @@ class _FakeVolume:
     def mount_managed_volume(self, thread_id: str, volume_name: str, remote_path: str) -> None:
         self.mount_calls.append((thread_id, remote_path))
 
-    def sync_upload(self, thread_id: str, session_id: str, source, remote_path: str, files=None) -> None:
-        self.upload_calls.append((thread_id, session_id))
+    def sync_upload(self, thread_id: str, session_id: str, source_path: Path, remote_path: str, files=None) -> None:
+        self.upload_calls.append((thread_id, session_id, source_path, remote_path))
 
-    def sync_download(self, thread_id: str, session_id: str, source, remote_path: str) -> None:
-        self.download_calls.append((thread_id, session_id))
+    def sync_download(self, thread_id: str, session_id: str, source_path: Path, remote_path: str) -> None:
+        self.download_calls.append((thread_id, session_id, source_path, remote_path))
 
     def clear_sync_state(self, thread_id: str) -> None:
         self.cleared.append(thread_id)
@@ -198,7 +199,6 @@ def _new_test_manager() -> Any:
 
 
 def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
-    terminal_repo = _FakeTerminalRepo(row=None)
     lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
 
     def build_provider(name: str):
@@ -213,14 +213,11 @@ def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_t
     cwd = sandbox_manager_module.resolve_existing_lease_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
-        terminal_repo=terminal_repo,
         lease_repo=lease_repo,
     )
 
     assert cwd == "/providers/local"
-    assert terminal_repo.requested_lease_ids == ["lease-1"]
     assert lease_repo.requested_ids == ["lease-1"]
-    assert terminal_repo.closed is False
     assert lease_repo.closed is False
 
 
@@ -682,6 +679,34 @@ def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
 
     assert manager.sync_uploads("thread-1") is True
     assert manager.volume.upload_calls == []
+
+
+def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(monkeypatch):
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id="volume-1")
+    manager.resolve_volume_source = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume source should stay unused"))
+
+    class _ThreadRepo:
+        def get_by_id(self, _thread_id: str):
+            return {"current_workspace_id": "ws-1"}
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "build_storage_container",
+        lambda: SimpleNamespace(thread_repo=lambda: _ThreadRepo()),
+    )
+
+    manager._sync_to_sandbox("thread-1", "instance-1")
+    manager._sync_from_sandbox("thread-1", "instance-1")
+
+    expected_root = user_home_path("file_channels", "ws-1").expanduser().resolve()
+    assert manager.volume.upload_calls == [("thread-1", "instance-1", expected_root, "/workspace")]
+    assert manager.volume.download_calls == [("thread-1", "instance-1", expected_root, "/workspace")]
 
 
 def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path, monkeypatch):

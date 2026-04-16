@@ -11,6 +11,7 @@ This is sandbox infrastructure. It doesn't know what's being mounted
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from sandbox.volume_source import VolumeSource
 
@@ -53,19 +54,13 @@ class SandboxVolume:
         """Container-side path where volumes are mounted."""
         return getattr(self.provider, "WORKSPACE_ROOT", "/workspace") + "/files"
 
-    def sync_upload(self, thread_id: str, session_id: str, source: VolumeSource, remote_path: str, files: list[str] | None = None) -> None:
-        """Sync files from VolumeSource to sandbox."""
-        host = source.host_path
-        if not host:
-            return
-        self._sync.upload(host, remote_path, session_id, self.provider, files=files, state_key=thread_id)
+    def sync_upload(self, thread_id: str, session_id: str, source_path: Path, remote_path: str, files: list[str] | None = None) -> None:
+        """Sync files from local staging path to sandbox."""
+        self._sync.upload(source_path, remote_path, session_id, self.provider, files=files, state_key=thread_id)
 
-    def sync_download(self, thread_id: str, session_id: str, source: VolumeSource, remote_path: str) -> None:
-        """Sync files from sandbox back to VolumeSource."""
-        host = source.host_path
-        if not host:
-            return
-        self._sync.download(host, remote_path, session_id, self.provider, state_key=thread_id)
+    def sync_download(self, thread_id: str, session_id: str, source_path: Path, remote_path: str) -> None:
+        """Sync files from sandbox back to local staging path."""
+        self._sync.download(source_path, remote_path, session_id, self.provider, state_key=thread_id)
 
     def clear_sync_state(self, thread_id: str) -> None:
         """Remove all sync tracking state for a thread."""

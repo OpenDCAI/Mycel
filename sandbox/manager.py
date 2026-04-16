@@ -515,6 +515,28 @@ class SandboxManager:
         entry = self._resolve_volume_entry(thread_id, lease)
         return deserialize_volume_source(json.loads(entry["source"]))
 
+    def _resolve_sync_source_path(self, thread_id: str) -> Path:
+        # @@@sync-source-truth - sync no longer needs volume metadata truth; it only needs
+        # the workspace-owned local staging root that backs the current file channel.
+        container = build_storage_container()
+        thread_repo = container.thread_repo()
+        try:
+            thread_row = thread_repo.get_by_id(thread_id)
+        finally:
+            close = getattr(thread_repo, "close", None)
+            if callable(close):
+                close()
+        if thread_row is None:
+            raise ValueError(f"Thread not found: {thread_id}")
+        workspace_id = (
+            thread_row.get("current_workspace_id")
+            if isinstance(thread_row, dict)
+            else getattr(thread_row, "current_workspace_id", None)
+        )
+        if not workspace_id:
+            raise ValueError("thread.current_workspace_id is required")
+        return user_home_path("file_channels", str(workspace_id)).expanduser().resolve()
+
     def _skip_volume_sync_for_local_lease(self, lease) -> bool:
         # @@@local-no-volume-sync - local sessions may execute directly in host cwd with no sandbox volume row.
         # In that shape there is nothing to upload/download, so sync paths must no-op instead of inventing one.
@@ -525,7 +547,7 @@ class SandboxManager:
             lease = self._get_thread_lease(thread_id)
             if self._skip_volume_sync_for_local_lease(lease):
                 return
-            source = self.resolve_volume_source(thread_id)
+            source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
 
     def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
@@ -533,7 +555,7 @@ class SandboxManager:
             lease = self._get_thread_lease(thread_id)
             if self._skip_volume_sync_for_local_lease(lease):
                 return
-            source = self.resolve_volume_source(thread_id)
+            source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_mount_path())
 
     def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
