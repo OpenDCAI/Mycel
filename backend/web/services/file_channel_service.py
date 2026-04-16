@@ -22,6 +22,7 @@ class FileChannelBinding:
     local_staging_root: Path | None
     remote_files_dir: str
 
+
 def get_file_channel_source(thread_id: str):
     """Get the local file-channel source for a thread."""
     from sandbox.volume_source import HostVolume

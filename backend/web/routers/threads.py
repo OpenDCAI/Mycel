@@ -391,6 +391,7 @@ def _resolve_owned_existing_sandbox_request_lease(
         ),
     )
 
+
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
     """Get agent instance for a thread from the agent pool."""
     pool = getattr(app.state, "agent_pool", None)

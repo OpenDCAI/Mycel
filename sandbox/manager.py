@@ -531,9 +531,7 @@ class SandboxManager:
         if thread_row is None:
             raise ValueError(f"Thread not found: {thread_id}")
         workspace_id = (
-            thread_row.get("current_workspace_id")
-            if isinstance(thread_row, dict)
-            else getattr(thread_row, "current_workspace_id", None)
+            thread_row.get("current_workspace_id") if isinstance(thread_row, dict) else getattr(thread_row, "current_workspace_id", None)
         )
         if not workspace_id:
             raise ValueError("thread.current_workspace_id is required")

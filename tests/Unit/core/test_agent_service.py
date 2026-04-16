@@ -6,7 +6,7 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -121,9 +121,10 @@ class _FakeWorkspaceRepo:
 
 def test_fake_thread_repo_create_requires_current_workspace_id() -> None:
     repo = _FakeThreadRepo()
+    create = cast(Any, repo.create)
 
     with pytest.raises(TypeError):
-        repo.create(
+        create(
             thread_id="thread-1",
             agent_user_id="agent-user-1",
             sandbox_type="local",

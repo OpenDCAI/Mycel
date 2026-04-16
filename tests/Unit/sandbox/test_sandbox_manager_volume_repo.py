@@ -852,7 +852,7 @@ def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
         recipe=None,
         get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
     )
-    sync_calls: list[tuple[str, str, Path]] = []
+    sync_calls: list[tuple[str, str, Path | None]] = []
     expected_path = Path("/tmp/workspace-files")
 
     manager.provider = SimpleNamespace(name="agentbay")
@@ -862,9 +862,7 @@ def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
     manager._assert_lease_provider = lambda _lease, _thread_id: None
     manager._ensure_bound_instance = lambda _lease: None
     manager._setup_mounts = lambda _thread_id: {"source_path": expected_path, "remote_path": "/workspace"}
-    manager._sync_to_sandbox = (
-        lambda thread_id, instance_id, source=None, files=None: sync_calls.append((thread_id, instance_id, source))
-    )
+    manager._sync_to_sandbox = lambda thread_id, instance_id, source=None, files=None: sync_calls.append((thread_id, instance_id, source))
     manager._fire_session_ready = lambda *_args, **_kwargs: None
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: None,
