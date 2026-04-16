@@ -24,8 +24,10 @@ const mobileNavItems = [
 
 // @@@auth-guard — wrapper that shows LoginForm when not authenticated
 export default function RootLayout() {
+  const hydrated = useAuthStore(s => s.hydrated);
   const token = useAuthStore(s => s.token);
   const setupInfo = useAuthStore(s => s.setupInfo);
+  if (!hydrated) return null;
   if (!token) return <LoginForm />;
   if (setupInfo) return <SetupNameStep userId={setupInfo.userId} defaultName={setupInfo.defaultName} />;
   return <AuthenticatedLayout />;

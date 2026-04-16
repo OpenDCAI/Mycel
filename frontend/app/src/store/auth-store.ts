@@ -22,6 +22,7 @@ interface AuthIdentity {
 }
 
 interface AuthState {
+  hydrated: boolean;
   token: string | null;
   user: AuthIdentity | null;
   agent: AuthIdentity | null;
@@ -60,6 +61,7 @@ async function apiPost(endpoint: string, body: Record<string, string>) {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
+      hydrated: false,
       token: null,
       user: null,
       agent: null,
@@ -69,6 +71,7 @@ export const useAuthStore = create<AuthState>()(
       login: async (identifier, password) => {
         const data = await apiPost("login", { identifier, password });
         set({
+          hydrated: true,
           token: data.token,
           user: data.user,
           agent: data.agent,
@@ -91,6 +94,7 @@ export const useAuthStore = create<AuthState>()(
           invite_code: inviteCode,
         });
         set({
+          hydrated: true,
           token: data.token,
           user: data.user,
           agent: data.agent ?? null,
@@ -104,11 +108,16 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({ token: null, user: null, agent: null, userId: null, setupInfo: null });
+        set({ hydrated: true, token: null, user: null, agent: null, userId: null, setupInfo: null });
       },
     }),
     {
       name: "leon-auth",
+      onRehydrateStorage: () => {
+        return () => {
+          useAuthStore.setState({ hydrated: true });
+        };
+      },
     },
   ),
 );
