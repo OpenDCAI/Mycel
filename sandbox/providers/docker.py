@@ -106,41 +106,10 @@ class DockerProvider(SandboxProvider):
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
-        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> managed volume bind mount
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
         self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
-
-    # ==================== Managed Volume ====================
-
-    def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
-        """Create a host directory as managed volume. Returns host path as backend_ref."""
-        volume_dir = Path.home() / ".leon" / "managed_volumes" / volume_id
-        volume_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Created Docker managed volume: %s", volume_dir)
-        return str(volume_dir)
-
-    def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        self._volume_mounts[thread_id] = MountSpec(
-            source=backend_ref,
-            target=mount_path,
-            mode="mount",
-            read_only=False,
-        )
-
-    def delete_managed_volume(self, backend_ref: str) -> None:
-        """Delete managed volume host directory. backend_ref is the host path."""
-        import shutil
-
-        volume_dir = Path(backend_ref).resolve()
-        # @@@safe-volume-delete - refuse to delete outside expected directory
-        expected_parent = (Path.home() / ".leon" / "managed_volumes").resolve()
-        if not str(volume_dir).startswith(str(expected_parent)):
-            raise ValueError(f"Refusing to delete volume outside {expected_parent}: {volume_dir}")
-        if volume_dir.exists():
-            logger.info("Deleting Docker managed volume: %s", volume_dir)
-            shutil.rmtree(volume_dir)
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         session_id = f"leon-{uuid.uuid4().hex[:12]}"
@@ -158,8 +127,6 @@ class DockerProvider(SandboxProvider):
 
         # Merge global bind_mounts with thread-specific mounts + managed volume mount
         all_mounts = list(self.bind_mounts)
-        if thread_id and thread_id in self._volume_mounts:
-            all_mounts.append(self._volume_mounts.pop(thread_id))
         if thread_id and thread_id in self._thread_bind_mounts:
             all_mounts.extend(self._thread_bind_mounts[thread_id])
 
