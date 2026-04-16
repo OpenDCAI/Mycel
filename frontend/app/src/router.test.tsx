@@ -36,5 +36,6 @@ describe("router removed route contract", () => {
     expect(routePaths.has("hire/new/:agentId")).toBe(true);
     expect(routePaths.has("hire/:agentId")).toBe(true);
     expect(routePaths.has("contacts")).toBe(true);
+    expect(routePaths.has("agents")).toBe(true);
   });
 });
