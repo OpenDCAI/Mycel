@@ -48,10 +48,6 @@ class _FakeAgentRegistry:
     async def get_by_id(self, agent_id: str) -> AgentEntry | None:
         return self._entries.get(agent_id)
 
-    async def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None) -> AgentEntry | None:
-        matches = [e for e in self._entries.values() if e.name == name and e.parent_agent_id == parent_agent_id]
-        return matches[-1] if matches else None
-
     async def list_running(self) -> list[AgentEntry]:
         return [e for e in self._entries.values() if e.status == "running"]
 

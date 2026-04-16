@@ -112,12 +112,6 @@ class _FakeAgentRegistryRepo:
             return
         self._rows[agent_id] = (row[0], row[1], row[2], status, row[4], row[5])
 
-    def get_latest_by_name_and_parent(
-        self, name: str, parent_agent_id: str | None
-    ) -> tuple[str, str, str, str, str | None, str | None] | None:
-        matches = [row for row in self._rows.values() if row[1] == name and row[4] == parent_agent_id]
-        return matches[-1] if matches else None
-
     def list_running(self) -> list[tuple[str, str, str, str, str | None, str | None]]:
         return [row for row in self._rows.values() if row[3] == "running"]
 

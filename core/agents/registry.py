@@ -43,14 +43,6 @@ class _InMemoryAgentRegistryRepo:
     def list_running_by_name(self, name: str) -> list[tuple[str, str, str, str, str | None, str | None]]:
         return [row for row in self._rows.values() if row[1] == name and row[3] == "running"]
 
-    def get_latest_by_name_and_parent(
-        self,
-        name: str,
-        parent_agent_id: str | None,
-    ) -> tuple[str, str, str, str, str | None, str | None] | None:
-        matches = [row for row in self._rows.values() if row[1] == name and row[4] == parent_agent_id]
-        return matches[-1] if matches else None
-
     def update_status(self, agent_id: str, status: str) -> None:
         row = self._rows.get(agent_id)
         if row is None:
@@ -105,19 +97,6 @@ class AgentRegistry:
             )
             for row in rows
         ]
-
-    async def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None) -> AgentEntry | None:
-        row = self._repo.get_latest_by_name_and_parent(name, parent_agent_id)
-        if row is None:
-            return None
-        return AgentEntry(
-            agent_id=row[0],
-            name=row[1],
-            thread_id=row[2],
-            status=row[3],
-            parent_agent_id=row[4],
-            subagent_type=row[5],
-        )
 
     async def update_status(self, agent_id: str, status: str) -> None:
         async with self._lock:
