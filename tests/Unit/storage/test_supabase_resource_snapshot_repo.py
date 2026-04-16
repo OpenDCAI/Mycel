@@ -1,4 +1,5 @@
 import storage.providers.supabase as supabase_provider
+import pytest
 from storage.contracts import ResourceSnapshotRepo
 from storage.providers.supabase.resource_snapshot_repo import SupabaseResourceSnapshotRepo
 
@@ -9,6 +10,7 @@ class _FakeTable:
         self.in_calls: list[tuple[str, list[str]]] = []
         self.max_in_values: int | None = None
         self.rows = [{"sandbox_id": "sandbox-1", "cpu_used": 1.0}]
+        self.error: Exception | None = None
 
     def upsert(self, payload):
         self.upsert_payload = payload
@@ -24,6 +26,8 @@ class _FakeTable:
         return self
 
     def execute(self):
+        if self.error is not None:
+            raise self.error
         return type("Resp", (), {"data": self.rows})()
 
 
@@ -97,3 +101,32 @@ def test_supabase_resource_snapshot_repo_instance_no_longer_exposes_lease_shaped
 
     assert not hasattr(repo, "upsert_lease_resource_snapshot")
     assert not hasattr(repo, "list_snapshots_by_lease_ids")
+
+
+def test_supabase_resource_snapshot_repo_fails_loudly_when_live_schema_still_uses_lease_table_name() -> None:
+    client = _FakeClient()
+    client.table_obj.error = RuntimeError(
+        "Could not find the table 'staging.sandbox_resource_snapshots' in the schema cache; "
+        "Perhaps you meant the table 'staging.lease_resource_snapshots'"
+    )
+    repo = SupabaseResourceSnapshotRepo(client)
+
+    with pytest.raises(RuntimeError, match="live schema still exposes staging\\.lease_resource_snapshots"):
+        repo.list_snapshots_by_sandbox_ids([{"sandbox_id": "sandbox-1"}])
+
+
+def test_supabase_resource_snapshot_repo_write_fails_loudly_when_live_schema_still_uses_lease_table_name() -> None:
+    client = _FakeClient()
+    client.table_obj.error = RuntimeError(
+        "Could not find the table 'staging.sandbox_resource_snapshots' in the schema cache; "
+        "Perhaps you meant the table 'staging.lease_resource_snapshots'"
+    )
+    repo = SupabaseResourceSnapshotRepo(client)
+
+    with pytest.raises(RuntimeError, match="land sandbox_resource_snapshots instead of falling back"):
+        repo.upsert_resource_snapshot_for_sandbox(
+            sandbox_id="sandbox-1",
+            provider_name="daytona",
+            observed_state="running",
+            probe_mode="runtime",
+        )
