@@ -1043,6 +1043,30 @@ def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch
     assert payload["target"]["target_id"] == "lease-1"
 
 
+def test_request_monitor_sandbox_cleanup_no_longer_records_thread_list_residue(monkeypatch):
+    calls: list[tuple[str, str, bool]] = []
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_detached_lease(),
+            threads=[{"thread_id": "thread-historical"}],
+            runtime_session_id="runtime-1",
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        _record_destroy(calls),
+        raising=False,
+    )
+
+    payload = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
+
+    assert payload["accepted"] is True
+    assert "thread_ids" not in (payload["operation"].get("target") or {})
+    assert "thread_state_after" not in (payload["operation"].get("result_truth") or {})
+    assert calls == [("lease-1", "daytona", True)]
+
+
 def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeypatch):
     monkeypatch.setattr(
         monitor_service.monitor_operation_service,

@@ -16,14 +16,12 @@ type OperationDetailPayload = {
     target_id?: string | null;
     provider_id?: string | null;
     runtime_session_id?: string | null;
-    thread_ids?: string[] | null;
   } | null;
   sandbox_id?: string | null;
   result_truth?: {
     sandbox_state_before?: string | null;
     sandbox_state_after?: string | null;
     runtime_state_after?: string | null;
-    thread_state_after?: string[] | string | null;
   } | null;
   events?: Array<{
     at?: string | null;

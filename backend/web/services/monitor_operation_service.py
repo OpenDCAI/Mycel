@@ -161,8 +161,6 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
 
     provider_name = str(provider.get("id") or lease.get("provider_name") or "").strip()
     runtime_session_id = str(runtime.get("runtime_session_id") or "").strip()
-    thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
-
     operation = _new_operation(
         kind="lease_cleanup",
         target_type="sandbox",
@@ -173,7 +171,6 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
             "target_id": sandbox_id,
             "provider_id": provider_name,
             "runtime_session_id": runtime_session_id or None,
-            "thread_ids": thread_ids,
         },
     )
     _append_event(operation, status="running", message="Destroy flow started")
@@ -198,7 +195,6 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
             "sandbox_state_before": lease.get("observed_state"),
             "sandbox_state_after": lease.get("observed_state"),
             "runtime_state_after": str(runtime.get("runtime_session_id") or "").strip() or None,
-            "thread_state_after": thread_ids or None,
         }
         _append_event(operation, status="failed", message=str(exc))
         return {
@@ -215,7 +211,6 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         "sandbox_state_before": lease.get("observed_state"),
         "sandbox_state_after": None,
         "runtime_state_after": None,
-        "thread_state_after": thread_ids or None,
         "destroy_result": result,
     }
     _append_event(operation, status="succeeded", message="Lease cleanup completed.")
