@@ -259,16 +259,15 @@ def test_sendmessage_search_hint_uses_queue_naming(tmp_path):
 @pytest.mark.asyncio
 async def test_sendmessage_enqueues_real_agent_notification_for_target_thread(tmp_path):
     registry = ToolRegistry()
-    agent_registry = cast(AgentRegistry, _FakeAgentRegistry())
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=agent_registry,
+        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
     )
-    await agent_registry.register(
+    await service._register_active_entry(
         AgentEntry(
             agent_id="agent-1",
             name="worker-1",
@@ -328,16 +327,15 @@ async def test_sendmessage_uses_service_local_active_state_when_registry_missing
 @pytest.mark.asyncio
 async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_path):
     registry = ToolRegistry()
-    agent_registry = cast(AgentRegistry, _FakeAgentRegistry())
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=agent_registry,
+        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
     )
-    await agent_registry.register(
+    await service._register_active_entry(
         AgentEntry(
             agent_id="agent-1",
             name="worker-1",
@@ -369,16 +367,15 @@ async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_
 @pytest.mark.asyncio
 async def test_sendmessage_rejects_ambiguous_running_agent_names(tmp_path):
     registry = ToolRegistry()
-    agent_registry = cast(AgentRegistry, _FakeAgentRegistry())
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=agent_registry,
+        agent_registry=None,
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
     )
-    await agent_registry.register(
+    await service._register_active_entry(
         AgentEntry(
             agent_id="agent-1",
             name="worker",
@@ -386,7 +383,7 @@ async def test_sendmessage_rejects_ambiguous_running_agent_names(tmp_path):
             status="running",
         )
     )
-    await agent_registry.register(
+    await service._register_active_entry(
         AgentEntry(
             agent_id="agent-2",
             name="worker",
