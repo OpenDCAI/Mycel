@@ -34,6 +34,12 @@ def resolve_provider_cwd(provider) -> str:
     return "/home/user"
 
 
+def _build_provider_from_name(name: str):
+    from backend.web.services.sandbox_service import build_provider_from_config_name
+
+    return build_provider_from_config_name(name)
+
+
 def lookup_sandbox_for_thread(
     thread_id: str,
     db_path: Path | None = None,
@@ -73,24 +79,26 @@ def resolve_existing_lease_cwd(
     requested_cwd: str | None = None,
     db_path: Path | None = None,
     *,
-    terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
 ) -> str:
     if requested_cwd:
         return requested_cwd
 
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    _terminal_repo = terminal_repo
-    own_terminal_repo = _terminal_repo is None
-    if _terminal_repo is None:
-        _terminal_repo = make_terminal_repo(db_path=target_db)
+    _lease_repo = lease_repo
+    own_lease_repo = _lease_repo is None
+    if _lease_repo is None:
+        _lease_repo = make_lease_repo(db_path=target_db)
     try:
-        row = _terminal_repo.get_latest_by_lease(lease_id)
+        lease = _lease_repo.get(lease_id)
     finally:
-        if own_terminal_repo:
-            _terminal_repo.close()
-    if row and row.get("cwd"):
-        return str(row["cwd"])
-    return str(Path.home())
+        if own_lease_repo:
+            _lease_repo.close()
+    provider_name = str((lease or {}).get("provider_name") or "").strip()
+    provider = _build_provider_from_name(provider_name) if provider_name else None
+    if provider is not None:
+        return resolve_provider_cwd(provider)
+    raise ValueError("provider default cwd is required")
 
 
 def bind_thread_to_existing_lease(
@@ -100,6 +108,7 @@ def bind_thread_to_existing_lease(
     cwd: str | None = None,
     db_path: Path | None = None,
     terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
 ) -> str:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     _terminal_repo = terminal_repo
@@ -110,7 +119,12 @@ def bind_thread_to_existing_lease(
         existing = _terminal_repo.get_active(thread_id)
         if existing is not None:
             return str(existing["cwd"])
-        initial_cwd = resolve_existing_lease_cwd(lease_id, cwd, db_path=target_db, terminal_repo=_terminal_repo)
+        initial_cwd = resolve_existing_lease_cwd(
+            lease_id,
+            cwd,
+            db_path=target_db,
+            lease_repo=lease_repo,
+        )
         _terminal_repo.create(
             terminal_id=f"term-{uuid.uuid4().hex[:12]}",
             thread_id=thread_id,
@@ -127,7 +141,32 @@ def resolve_existing_sandbox_lease(
     sandbox: Any,
     *,
     resolve_lease: Callable[[str], dict[str, Any] | None],
+    db_path: Path | None = None,
+    lease_repo: Any | None = None,
 ) -> dict[str, Any] | None:
+    provider_name = str(
+        (sandbox.get("provider_name") if isinstance(sandbox, dict) else getattr(sandbox, "provider_name", None)) or ""
+    ).strip()
+    provider_env_id = str(
+        (sandbox.get("provider_env_id") if isinstance(sandbox, dict) else getattr(sandbox, "provider_env_id", None)) or ""
+    ).strip()
+    if provider_name and provider_env_id:
+        # @@@existing-sandbox-live-lease-first
+        # Existing-sandbox reuse should resolve the live lease from sandbox runtime identity first.
+        # legacy_lease_id stays only as the compatibility fallback when the live provider-env binding
+        # has not been materialized yet.
+        target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        _lease_repo = lease_repo
+        own_lease_repo = _lease_repo is None
+        if _lease_repo is None:
+            _lease_repo = make_lease_repo(db_path=target_db)
+        try:
+            lease = _lease_repo.find_by_instance(provider_name=provider_name, instance_id=provider_env_id)
+            if lease is not None:
+                return lease
+        finally:
+            if own_lease_repo:
+                _lease_repo.close()
     config = sandbox.get("config") if isinstance(sandbox, dict) else getattr(sandbox, "config", None)
     if not isinstance(config, dict):
         raise RuntimeError("sandbox.config must be an object")
@@ -145,8 +184,14 @@ def bind_thread_to_existing_sandbox(
     cwd: str | None = None,
     db_path: Path | None = None,
     terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    lease = resolve_existing_sandbox_lease(sandbox, resolve_lease=resolve_lease)
+    lease = resolve_existing_sandbox_lease(
+        sandbox,
+        resolve_lease=resolve_lease,
+        db_path=db_path,
+        lease_repo=lease_repo,
+    )
     if lease is None:
         config = sandbox.get("config") if isinstance(sandbox, dict) else getattr(sandbox, "config", None)
         legacy_lease_id = str((config or {}).get("legacy_lease_id") or "").strip()
@@ -160,6 +205,7 @@ def bind_thread_to_existing_sandbox(
         cwd=cwd,
         db_path=db_path,
         terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
     )
     return initial_cwd, lease
 
@@ -171,8 +217,11 @@ def bind_thread_to_existing_thread_lease(
     cwd: str | None = None,
     db_path: Path | None = None,
     terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
 ) -> str | None:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    if not cwd:
+        raise ValueError("thread reuse cwd is required")
     _terminal_repo = terminal_repo
     own_terminal_repo = _terminal_repo is None
     if _terminal_repo is None:
@@ -193,6 +242,7 @@ def bind_thread_to_existing_thread_lease(
         cwd=cwd,
         db_path=target_db,
         terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
     )
 
 
@@ -361,12 +411,14 @@ class SandboxManager:
                 remote_path,
             )
 
+        source_path = source.host_path
+
         if isinstance(source, DaytonaVolume):
             self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
         else:
             self.volume.mount(thread_id, source, remote_path)
 
-        return {"source": source, "remote_path": remote_path}
+        return {"source": source, "source_path": source_path, "remote_path": remote_path}
 
     def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
         """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
@@ -465,6 +517,26 @@ class SandboxManager:
         entry = self._resolve_volume_entry(thread_id, lease)
         return deserialize_volume_source(json.loads(entry["source"]))
 
+    def _resolve_sync_source_path(self, thread_id: str) -> Path:
+        # @@@sync-source-truth - sync no longer needs volume metadata truth; it only needs
+        # the workspace-owned local staging root that backs the current file channel.
+        container = build_storage_container()
+        thread_repo = container.thread_repo()
+        try:
+            thread_row = thread_repo.get_by_id(thread_id)
+        finally:
+            close = getattr(thread_repo, "close", None)
+            if callable(close):
+                close()
+        if thread_row is None:
+            raise ValueError(f"Thread not found: {thread_id}")
+        workspace_id = (
+            thread_row.get("current_workspace_id") if isinstance(thread_row, dict) else getattr(thread_row, "current_workspace_id", None)
+        )
+        if not workspace_id:
+            raise ValueError("thread.current_workspace_id is required")
+        return user_home_path("file_channels", str(workspace_id)).expanduser().resolve()
+
     def _skip_volume_sync_for_local_lease(self, lease) -> bool:
         # @@@local-no-volume-sync - local sessions may execute directly in host cwd with no sandbox volume row.
         # In that shape there is nothing to upload/download, so sync paths must no-op instead of inventing one.
@@ -475,7 +547,7 @@ class SandboxManager:
             lease = self._get_thread_lease(thread_id)
             if self._skip_volume_sync_for_local_lease(lease):
                 return
-            source = self.resolve_volume_source(thread_id)
+            source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
 
     def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
@@ -483,7 +555,7 @@ class SandboxManager:
             lease = self._get_thread_lease(thread_id)
             if self._skip_volume_sync_for_local_lease(lease):
                 return
-            source = self.resolve_volume_source(thread_id)
+            source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_mount_path())
 
     def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
@@ -601,7 +673,7 @@ class SandboxManager:
 
         if instance and storage is not None:
             # @@@workspace-upload - sync files to sandbox after creation
-            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
+            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source_path"])
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)

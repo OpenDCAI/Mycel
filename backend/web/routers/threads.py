@@ -30,7 +30,7 @@ from backend.web.models.requests import (
 from backend.web.services import account_resource_service, sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.file_channel_service import get_file_channel_source
+from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
@@ -39,7 +39,6 @@ from backend.web.services.streaming_service import (
     observe_thread_events,
 )
 from backend.web.services.thread_launch_config_service import (
-    _existing_sandbox_shell_id,
     build_existing_launch_config,
     build_new_launch_config,
     resolve_default_config,
@@ -115,17 +114,17 @@ def _save_default_config_for_owned_agent(
     payload: SaveThreadLaunchConfigRequest,
 ) -> dict[str, bool]:
     _require_owned_agent(app, payload.agent_user_id, owner_user_id)
-    normalized_payload = payload
     if payload.create_mode == "existing" and payload.existing_sandbox_id:
-        normalized_existing_lease_id = _normalize_existing_sandbox_request_lease_id(
+        owned_lease = _resolve_owned_existing_sandbox_request_lease(
             app,
             owner_user_id,
             payload.existing_sandbox_id,
         )
-        normalized_payload = payload.model_copy(update={"existing_sandbox_id": _existing_sandbox_shell_id(normalized_existing_lease_id)})
+        if owned_lease is None:
+            raise HTTPException(403, "Lease not authorized")
     if payload.create_mode == "new":
         _resolve_owned_recipe_snapshot(app, owner_user_id, payload.provider_config, payload.sandbox_template_id)
-    save_last_confirmed_config(app, owner_user_id, normalized_payload.agent_user_id, normalized_payload.model_dump())
+    save_last_confirmed_config(app, owner_user_id, payload.agent_user_id, payload.model_dump())
     return {"ok": True}
 
 
@@ -155,8 +154,8 @@ async def _prepare_attachment_message(
     # For remote providers: container-side path
     if mgr and mgr.volume.capability.runtime_kind == "local":
         try:
-            source = get_file_channel_source(thread_id)
-            files_dir = str(source.host_path)
+            binding = get_file_channel_binding(thread_id)
+            files_dir = str(binding.local_staging_root) if binding.local_staging_root is not None else binding.workspace_path
         except ValueError:
             files_dir = "/workspace/files"
     else:
@@ -393,17 +392,6 @@ def _resolve_owned_existing_sandbox_request_lease(
     )
 
 
-def _normalize_existing_sandbox_request_lease_id(
-    app: Any,
-    owner_user_id: str,
-    existing_sandbox_id: str,
-) -> str:
-    owned_lease = _resolve_owned_existing_sandbox_request_lease(app, owner_user_id, existing_sandbox_id)
-    if owned_lease is None:
-        raise HTTPException(403, "Lease not authorized")
-    return _request_bridge_text(owned_lease, "lease_id", label="lease")
-
-
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
     """Get agent instance for a thread from the agent pool."""
     pool = getattr(app.state, "agent_pool", None)
@@ -597,25 +585,9 @@ def _create_thread_sandbox_resources(
     sandbox_repo: Any,
     owner_user_id: str,
 ) -> str:
-    """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
-    from datetime import datetime
-
-    from backend.web.core.config import SANDBOX_VOLUME_ROOT
-    from backend.web.utils.helpers import _get_container
-    from sandbox.volume_source import HostVolume
+    """Create lease and terminal resources without pre-provisioning volume metadata."""
     from storage.runtime import build_lease_repo as make_lease_repo
     from storage.runtime import build_terminal_repo as make_terminal_repo
-
-    now_str = datetime.now().isoformat()
-    volume_id = str(uuid.uuid4())
-    vol_path = SANDBOX_VOLUME_ROOT / volume_id
-    source = HostVolume(vol_path)
-
-    vol_repo = _get_container().sandbox_volume_repo()
-    try:
-        vol_repo.create(volume_id, json.dumps(source.serialize()), f"vol-{thread_id}", now_str)
-    finally:
-        vol_repo.close()
 
     lease_repo = make_lease_repo()
     try:
@@ -624,7 +596,6 @@ def _create_thread_sandbox_resources(
         lease_repo.create(
             lease_id,
             sandbox_type,
-            volume_id=volume_id,
             recipe_id=normalized_recipe["id"],
             recipe_json=json.dumps(normalized_recipe, ensure_ascii=False),
         )
@@ -759,6 +730,26 @@ def _materialize_workspace_for_sandbox(
     return workspace_id
 
 
+def _resolve_existing_sandbox_bind_cwd(
+    workspace_repo: Any,
+    *,
+    sandbox_id: str,
+    owner_user_id: str,
+    requested_cwd: str | None,
+) -> str | None:
+    normalized_requested = str(requested_cwd or "").strip()
+    if normalized_requested:
+        return normalized_requested
+
+    owned_rows = [row for row in workspace_repo.list_by_sandbox_id(sandbox_id) if row.owner_user_id == owner_user_id]
+    if len(owned_rows) != 1:
+        return None
+
+    # @@@existing-sandbox-workspace-cwd-candidate - only reuse workspace truth when
+    # caller side can point at one unambiguous owned workspace row for this sandbox.
+    return str(owned_rows[0].workspace_path or "").strip() or None
+
+
 def _resolve_owned_recipe_snapshot(
     app: Any,
     owner_user_id: str,
@@ -818,6 +809,24 @@ def _create_owned_thread(
         sandbox = app.state.sandbox_repo.get_by_id(payload.existing_sandbox_id)
         if sandbox is None:
             raise HTTPException(403, "Lease not authorized")
+        preview_lease = _resolve_owned_existing_sandbox_request_lease(
+            app,
+            owner_user_id,
+            payload.existing_sandbox_id,
+        )
+        if preview_lease is None:
+            raise HTTPException(403, "Lease not authorized")
+        sandbox_id = _materialize_sandbox_for_lease(
+            app.state.sandbox_repo,
+            lease=preview_lease,
+            owner_user_id=owner_user_id,
+        )
+        bind_cwd = _resolve_existing_sandbox_bind_cwd(
+            app.state.workspace_repo,
+            sandbox_id=sandbox_id,
+            owner_user_id=owner_user_id,
+            requested_cwd=payload.cwd,
+        )
         bound_cwd, owned_lease = bind_thread_to_existing_sandbox(
             new_thread_id,
             sandbox,
@@ -827,7 +836,7 @@ def _create_owned_thread(
                 thread_repo=app.state.thread_repo,
                 user_repo=app.state.user_repo,
             ),
-            cwd=payload.cwd,
+            cwd=bind_cwd,
         )
         selected_lease_id = _request_bridge_text(owned_lease, "lease_id", label="lease")
         if owned_lease is None:
@@ -838,16 +847,11 @@ def _create_owned_thread(
         selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.sandbox_template_id)
 
     if selected_lease_id:
-        sandbox_id = _materialize_sandbox_for_lease(
-            app.state.sandbox_repo,
-            lease=owned_lease,
-            owner_user_id=owner_user_id,
-        )
         current_workspace_id = _materialize_workspace_for_sandbox(
             app.state.workspace_repo,
             sandbox_id=sandbox_id,
             owner_user_id=owner_user_id,
-            workspace_path=bound_cwd,
+            workspace_path=bind_cwd or bound_cwd,
         )
     else:
         # @@@create-write-bridge-first - replay-13 requires supported create paths

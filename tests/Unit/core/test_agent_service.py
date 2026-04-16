@@ -6,7 +6,7 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -109,11 +109,22 @@ class _FakeUserRepo:
         return SimpleNamespace(id=user_id, display_name=name, avatar=None)
 
 
+class _FakeWorkspaceRepo:
+    def __init__(self, rows: dict[str, Any] | None = None):
+        self.rows = rows or {}
+        self.requested_ids: list[str] = []
+
+    def get_by_id(self, workspace_id: str):
+        self.requested_ids.append(workspace_id)
+        return self.rows.get(workspace_id)
+
+
 def test_fake_thread_repo_create_requires_current_workspace_id() -> None:
     repo = _FakeThreadRepo()
+    create = cast(Any, repo.create)
 
     with pytest.raises(TypeError):
-        repo.create(
+        create(
             thread_id="thread-1",
             agent_user_id="agent-user-1",
             sandbox_type="local",
@@ -1078,9 +1089,42 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
             return
 
     _patch_create_leon_agent(monkeypatch, child_cls=_LeaseCapturingChild, created=created)
+
+    async def _fake_run_child_thread_live(agent, thread_id, message, app, *, input_messages):
+        child_capability = manager.get_sandbox(thread_id)
+        observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
+        observed["child_lease_id"] = child_capability._session.lease.lease_id
+        return "(Agent completed with no text output)"
+
+    monkeypatch.setattr(
+        "backend.web.services.streaming_service.run_child_thread_live",
+        _fake_run_child_thread_live,
+    )
     set_current_thread_id(parent_thread_id)
 
-    service = _make_service(tmp_path)
+    thread_repo = _FakeThreadRepo(
+        rows={
+            parent_thread_id: {
+                "id": parent_thread_id,
+                "agent_user_id": "agent-user-1",
+                "owner_user_id": "owner-user-1",
+                "current_workspace_id": "workspace-parent",
+            }
+        }
+    )
+    workspace_repo = _FakeWorkspaceRepo(
+        rows={
+            "workspace-parent": SimpleNamespace(
+                id="workspace-parent",
+                workspace_path=str(tmp_path / "parent-workspace"),
+            )
+        }
+    )
+    service = _make_service(
+        tmp_path,
+        thread_repo=thread_repo,
+        web_app=SimpleNamespace(state=SimpleNamespace(workspace_repo=workspace_repo)),
+    )
 
     try:
         result = await service._run_agent(
@@ -1098,6 +1142,162 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
         assert observed["child_lease_id"] == parent_lease_id
     finally:
         manager.close()
+
+
+@pytest.mark.asyncio
+async def test_run_agent_passes_parent_workspace_path_into_thread_reuse_bind(monkeypatch, tmp_path):
+    _patch_create_leon_agent(monkeypatch)
+    monkeypatch.setattr(
+        "backend.web.services.streaming_service.run_child_thread_live",
+        AsyncMock(return_value="LIVE_CHILD_DONE"),
+    )
+
+    thread_repo = _FakeThreadRepo(
+        rows={
+            "parent-thread": {
+                "id": "parent-thread",
+                "agent_user_id": "agent-user-1",
+                "owner_user_id": "owner-1",
+                "current_workspace_id": "workspace-parent",
+                "sandbox_type": "daytona_selfhost",
+                "cwd": "/home/daytona",
+                "model": "gpt-parent",
+                "is_main": True,
+                "branch_index": 0,
+                "created_at": 1.0,
+            }
+        }
+    )
+    user_repo = _FakeUserRepo({"agent-user-1": "Toad"})
+    workspace_repo = _FakeWorkspaceRepo(
+        rows={
+            "workspace-parent": SimpleNamespace(
+                id="workspace-parent",
+                workspace_path="/workspace/parent",
+            )
+        }
+    )
+    web_app = SimpleNamespace(state=SimpleNamespace(workspace_repo=workspace_repo))
+    captured: dict[str, Any] = {}
+
+    def fake_bind(thread_id: str, parent_thread_id: str, *, cwd=None, **_kwargs):
+        captured["thread_id"] = thread_id
+        captured["parent_thread_id"] = parent_thread_id
+        captured["cwd"] = cwd
+        return "/workspace/parent"
+
+    monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_lease", fake_bind)
+
+    service = _make_service(
+        tmp_path,
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+        web_app=web_app,
+    )
+
+    set_current_thread_id("parent-thread")
+    try:
+        result = await service._run_agent(
+            task_id="task-1",
+            agent_name="child",
+            thread_id="subagent-child",
+            prompt="hello",
+            subagent_type="explore",
+            max_turns=None,
+        )
+        assert result == "LIVE_CHILD_DONE"
+        assert captured["parent_thread_id"] == "parent-thread"
+        assert captured["cwd"] == "/workspace/parent"
+        assert workspace_repo.requested_ids == ["workspace-parent"]
+    finally:
+        set_current_thread_id("")
+
+
+@pytest.mark.asyncio
+async def test_run_agent_fails_loud_when_parent_workspace_repo_is_missing(monkeypatch, tmp_path):
+    _patch_create_leon_agent(monkeypatch)
+    monkeypatch.setattr(
+        "backend.web.services.streaming_service.run_child_thread_live",
+        AsyncMock(return_value="LIVE_CHILD_DONE"),
+    )
+
+    thread_repo = _FakeThreadRepo(
+        rows={
+            "parent-thread": {
+                "id": "parent-thread",
+                "agent_user_id": "agent-user-1",
+                "owner_user_id": "owner-1",
+                "current_workspace_id": "workspace-parent",
+                "sandbox_type": "daytona_selfhost",
+                "cwd": "/home/daytona",
+                "model": "gpt-parent",
+                "is_main": True,
+                "branch_index": 0,
+                "created_at": 1.0,
+            }
+        }
+    )
+    user_repo = _FakeUserRepo({"agent-user-1": "Toad"})
+    service = _make_service(
+        tmp_path,
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+        web_app=SimpleNamespace(state=SimpleNamespace()),
+    )
+
+    set_current_thread_id("parent-thread")
+    try:
+        with pytest.raises(ValueError, match="parent workspace_repo is required"):
+            await service._run_agent(
+                task_id="task-1",
+                agent_name="child",
+                thread_id="subagent-child",
+                prompt="hello",
+                subagent_type="explore",
+                max_turns=None,
+            )
+    finally:
+        set_current_thread_id("")
+
+
+@pytest.mark.asyncio
+async def test_run_agent_falls_back_to_child_workspace_root_when_parent_workspace_truth_is_absent(monkeypatch, tmp_path):
+    _patch_create_leon_agent(monkeypatch)
+    monkeypatch.setattr(
+        "backend.web.services.streaming_service.run_child_thread_live",
+        AsyncMock(return_value="LIVE_CHILD_DONE"),
+    )
+
+    captured: dict[str, Any] = {}
+
+    def fake_bind(thread_id: str, parent_thread_id: str, *, cwd=None, **_kwargs):
+        captured["thread_id"] = thread_id
+        captured["parent_thread_id"] = parent_thread_id
+        captured["cwd"] = cwd
+        return cwd
+
+    monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_lease", fake_bind)
+
+    service = _make_service(tmp_path)
+
+    set_current_thread_id("parent-thread")
+    try:
+        result = await service._run_agent(
+            task_id="task-1",
+            agent_name="child",
+            thread_id="subagent-child",
+            prompt="hello",
+            subagent_type="explore",
+            max_turns=None,
+        )
+        assert result == "(Agent completed with no text output)"
+        assert captured == {
+            "thread_id": "subagent-child",
+            "parent_thread_id": "parent-thread",
+            "cwd": str(tmp_path),
+        }
+    finally:
+        set_current_thread_id("")
 
 
 @pytest.mark.asyncio

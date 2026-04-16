@@ -542,6 +542,66 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
 
 
 @pytest.mark.asyncio
+async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_path_for_bind_cwd() -> None:
+    workspace_repo = _FakeWorkspaceRepo()
+    sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-1"] = {
+        "id": "sandbox-1",
+        "owner_user_id": "owner-1",
+        "config": {"legacy_lease_id": "lease-1"},
+    }
+    bridge_sandbox_id = f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}"
+    existing_workspace = SimpleNamespace(
+        id="workspace-existing",
+        sandbox_id=bridge_sandbox_id,
+        owner_user_id="owner-1",
+        workspace_path="/workspace/existing",
+    )
+    workspace_repo.by_sandbox_id[bridge_sandbox_id] = [existing_workspace]
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
+    payload = CreateThreadRequest.model_validate(
+        {
+            "agent_user_id": "agent-user-1",
+            "existing_sandbox_id": "sandbox-1",
+        }
+    )
+
+    with (
+        patch.object(
+            threads_router.sandbox_service,
+            "resolve_owned_lease",
+            return_value={
+                "lease_id": "lease-1",
+                "sandbox_id": "sandbox-1",
+                "provider_name": "local",
+                "recipe": None,
+            },
+        ),
+        patch.object(
+            threads_router,
+            "bind_thread_to_existing_sandbox",
+            return_value=(
+                "/workspace/existing",
+                {
+                    "lease_id": "lease-1",
+                    "sandbox_id": "sandbox-1",
+                    "provider_name": "local",
+                    "recipe": None,
+                },
+            ),
+        ) as bind_helper,
+        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
+        patch.object(threads_router, "save_last_successful_config", return_value=None),
+    ):
+        created = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
+
+    row = app.state.thread_repo.rows[created["thread_id"]]
+    assert row["current_workspace_id"] == "workspace-existing"
+    assert workspace_repo.created == []
+    assert bind_helper.call_args.kwargs["cwd"] == "/workspace/existing"
+
+
+@pytest.mark.asyncio
 async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
     workspace_repo = _FakeWorkspaceRepo()
     app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo)

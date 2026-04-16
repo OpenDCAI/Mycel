@@ -165,8 +165,14 @@ async def get_sandbox_files(
     thread_id: str,
 ) -> dict[str, Any]:
     """Get thread-scoped upload/download channel paths."""
-    source = await asyncio.to_thread(file_channel_service.get_file_channel_source, thread_id)
-    return {"thread_id": thread_id, "files_path": str(source.host_path)}
+    binding = await asyncio.to_thread(file_channel_service.get_file_channel_binding, thread_id)
+    files_path = str(binding.local_staging_root) if binding.local_staging_root is not None else binding.remote_files_dir
+    return {
+        "thread_id": thread_id,
+        "files_path": files_path,
+        "workspace_id": binding.workspace_id,
+        "workspace_path": binding.workspace_path,
+    }
 
 
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
