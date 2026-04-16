@@ -88,10 +88,6 @@ class AgentRegistry:
             for row in rows
         ]
 
-    async def update_status(self, agent_id: str, status: str) -> None:
-        async with self._lock:
-            self._repo.update_status(agent_id, status)
-
     async def remove(self, agent_id: str) -> None:
         async with self._lock:
             self._repo.remove(agent_id)
