@@ -51,6 +51,9 @@ class _FakeAgentRegistry:
     async def list_running(self) -> list[AgentEntry]:
         return [e for e in self._entries.values() if e.status == "running"]
 
+    async def remove(self, agent_id: str) -> None:
+        self._entries.pop(agent_id, None)
+
 
 def _fake_agent_registry() -> AgentRegistry:
     return cast(AgentRegistry, _FakeAgentRegistry())

@@ -993,7 +993,7 @@ class AgentService:
                                                 output_parts.append(text)
                                                 latest_progress = self._summarize_progress(text, description or agent_name)
 
-            await self._agent_registry.update_status(task_id, "completed")
+            await self._agent_registry.remove(task_id)
             result = "\n".join(output_parts) or "(Agent completed with no text output)"
             if progress_stop is not None:
                 progress_stop.set()
@@ -1036,7 +1036,7 @@ class AgentService:
             if progress_task is not None:
                 await progress_task
             logger.exception("[AgentService] Agent %s failed", agent_name)
-            await self._agent_registry.update_status(task_id, "error")
+            await self._agent_registry.remove(task_id)
             # Notify frontend: task error
             if emit_fn is not None:
                 try:
