@@ -13,7 +13,6 @@ type ProviderDetailPayload = {
     consoleUrl?: string | null;
   };
   sandbox_ids?: string[] | null;
-  thread_ids?: string[] | null;
   runtime_session_ids?: string[] | null;
 };
 
@@ -56,12 +55,11 @@ export default function ProviderDetailPage() {
   const relationShell = buildProviderRelationShell(data);
   const sandboxes = data.sandbox_ids ?? [];
   const runtimes = data.runtime_session_ids ?? [];
-  const threads = data.thread_ids ?? [];
 
   return (
     <div className="page">
       <h1>{`Provider ${provider.name ?? provider.id ?? providerId}`}</h1>
-      <p className="description">{provider.description ?? "Provider state, related leases, runtimes, and threads."}</p>
+      <p className="description">{provider.description ?? "Provider state, related sandboxes, and runtimes."}</p>
       <section className="surface-section">
         <h2>Relations</h2>
         <div className="info-grid">
@@ -95,7 +93,6 @@ export default function ProviderDetailPage() {
       </section>
       <RelatedIdSection title={relationShell.sandboxTitle} ids={sandboxes} href={(id) => `/sandboxes/${id}`} />
       <RelatedIdSection title="Runtimes" ids={runtimes} href={(id) => `/runtimes/${id}`} />
-      <RelatedIdSection title="Threads" ids={threads} href={(id) => `/threads/${id}`} />
     </div>
   );
 }

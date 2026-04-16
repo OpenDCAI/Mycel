@@ -723,7 +723,6 @@ def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
     return {
         "provider": provider,
         "sandbox_ids": _session_values(sessions, "sandboxId"),
-        "thread_ids": _session_values(sessions, "threadId"),
         "runtime_session_ids": _session_values(sessions, "runtimeSessionId"),
     }
 

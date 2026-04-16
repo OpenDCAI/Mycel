@@ -23,7 +23,6 @@ describe("monitor relation shell", () => {
     const shell = buildProviderRelationShell({
       provider: { id: "daytona", name: "daytona" },
       sandbox_ids: ["sandbox-1", "sandbox-2"],
-      thread_ids: ["thread-1"],
       runtime_session_ids: ["runtime-1"],
     });
 
