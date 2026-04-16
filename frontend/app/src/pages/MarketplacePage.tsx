@@ -27,6 +27,7 @@ function isTab(value: string | null): value is Tab {
 
 function normalizeInstalledSubTab(value: string | null): InstalledSubTab | null {
   if (value === "subagent") return "agent";
+  if (value === "sandbox") return "sandbox-template";
   if (value === "agent-user" || value === "skill" || value === "agent" || value === "sandbox-template") return value;
   return null;
 }

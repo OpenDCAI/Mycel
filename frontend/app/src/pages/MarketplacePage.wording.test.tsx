@@ -165,6 +165,18 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
   });
 
+  it("treats legacy installed sandbox query key as the Sandbox tab", () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+  });
+
   it("disables check-updates when no installed agents have marketplace source metadata", () => {
     appStoreState = {
       ...appStoreState,
