@@ -93,6 +93,34 @@ class _FakeLeaseStore:
         self.volume_updates.append((lease_id, volume_id))
 
 
+class _FakeTerminalRepo:
+    def __init__(self, row: dict[str, Any] | None = None) -> None:
+        self._row = row
+        self.closed = False
+        self.requested_lease_ids: list[str] = []
+
+    def get_latest_by_lease(self, lease_id: str):
+        self.requested_lease_ids.append(lease_id)
+        return self._row
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeLeaseRepo:
+    def __init__(self, row: dict[str, Any] | None = None) -> None:
+        self._row = row
+        self.closed = False
+        self.requested_ids: list[str] = []
+
+    def get(self, lease_id: str):
+        self.requested_ids.append(lease_id)
+        return self._row
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class _FakeSessionManager:
     def __init__(self, active_rows) -> None:
         self._active_rows = active_rows
@@ -129,6 +157,54 @@ def _new_test_manager() -> Any:
     manager = cast(Any, object.__new__(SandboxManager))
     manager.db_path = Path("/tmp/fake-sandbox.db")
     return manager
+
+
+def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
+    terminal_repo = _FakeTerminalRepo(row=None)
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+
+    def build_provider(name: str):
+        return SimpleNamespace(default_cwd=f"/providers/{name}") if name == "local" else None
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        build_provider,
+    )
+
+    cwd = sandbox_manager_module.resolve_existing_lease_cwd(
+        "lease-1",
+        db_path=Path("/tmp/fake-sandbox.db"),
+        terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+    )
+
+    assert cwd == "/providers/local"
+    assert terminal_repo.requested_lease_ids == ["lease-1"]
+    assert lease_repo.requested_ids == ["lease-1"]
+    assert terminal_repo.closed is False
+    assert lease_repo.closed is False
+
+
+def test_resolve_existing_lease_cwd_keeps_latest_terminal_cwd_when_present(monkeypatch):
+    terminal_repo = _FakeTerminalRepo(row={"cwd": "/terminal/latest"})
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda _name: (_ for _ in ()).throw(AssertionError("provider default should not be used")),
+    )
+
+    cwd = sandbox_manager_module.resolve_existing_lease_cwd(
+        "lease-1",
+        db_path=Path("/tmp/fake-sandbox.db"),
+        terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+    )
+
+    assert cwd == "/terminal/latest"
+    assert terminal_repo.requested_lease_ids == ["lease-1"]
+    assert lease_repo.requested_ids == []
 
 
 def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):

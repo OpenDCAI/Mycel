@@ -34,6 +34,12 @@ def resolve_provider_cwd(provider) -> str:
     return "/home/user"
 
 
+def _build_provider_from_name(name: str):
+    from backend.web.services.sandbox_service import build_provider_from_config_name
+
+    return build_provider_from_config_name(name)
+
+
 def lookup_sandbox_for_thread(
     thread_id: str,
     db_path: Path | None = None,
@@ -74,6 +80,7 @@ def resolve_existing_lease_cwd(
     db_path: Path | None = None,
     *,
     terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
 ) -> str:
     if requested_cwd:
         return requested_cwd
@@ -90,6 +97,19 @@ def resolve_existing_lease_cwd(
             _terminal_repo.close()
     if row and row.get("cwd"):
         return str(row["cwd"])
+    _lease_repo = lease_repo
+    own_lease_repo = _lease_repo is None
+    if _lease_repo is None:
+        _lease_repo = make_lease_repo(db_path=target_db)
+    try:
+        lease = _lease_repo.get(lease_id)
+    finally:
+        if own_lease_repo:
+            _lease_repo.close()
+    provider_name = str((lease or {}).get("provider_name") or "").strip()
+    provider = _build_provider_from_name(provider_name) if provider_name else None
+    if provider is not None:
+        return resolve_provider_cwd(provider)
     return str(Path.home())
 
 
