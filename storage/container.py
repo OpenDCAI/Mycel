@@ -7,7 +7,6 @@ from typing import Any
 
 from .contracts import (
     AgentConfigRepo,
-    AgentRegistryRepo,
     ChatRepo,
     ChatSessionRepo,
     CheckpointRepo,
@@ -47,7 +46,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "lease_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
     "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
     "chat_session_repo": ("storage.providers.supabase.chat_session_repo", "SupabaseChatSessionRepo"),
-    "agent_registry_repo": ("storage.providers.supabase.agent_registry_repo", "SupabaseAgentRegistryRepo"),
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
     "sync_file_repo": ("storage.providers.supabase.sync_file_repo", "SupabaseSyncFileRepo"),
     "resource_snapshot_repo": ("storage.providers.supabase.resource_snapshot_repo", "SupabaseResourceSnapshotRepo"),
@@ -114,9 +112,6 @@ class StorageContainer:
 
     def chat_session_repo(self) -> ChatSessionRepo:
         return self._build("chat_session_repo")
-
-    def agent_registry_repo(self) -> AgentRegistryRepo:
-        return self._build("agent_registry_repo")
 
     def tool_task_repo(self) -> ToolTaskRepo:
         return self._build("tool_task_repo")
