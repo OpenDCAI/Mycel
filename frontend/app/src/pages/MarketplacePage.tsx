@@ -222,7 +222,7 @@ export default function MarketplacePage() {
               </h3>
             )}
           </div>
-          {tab === "installed" && (
+          {tab === "installed" && installedSubTab === "agent-user" && (
             <button
               onClick={handleCheckUpdates}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast"
