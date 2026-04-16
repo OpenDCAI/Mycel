@@ -7,6 +7,12 @@ export interface ChatStreamEvent {
   data: unknown;
 }
 
+function isAbortTeardownError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof TypeError && error.message === "network error";
+}
+
 function requiredString(value: Record<string, unknown>, key: string): string {
   const field = value[key];
   if (typeof field !== "string") {
@@ -84,7 +90,14 @@ export async function streamChatEvents(
 
   try {
     while (!signal?.aborted) {
-      const { done, value } = await reader.read();
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        if (signal?.aborted && isAbortTeardownError(error)) break;
+        throw error;
+      }
+      const { done, value } = chunk;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const chunks = buffer.split(/\r?\n\r?\n/);
