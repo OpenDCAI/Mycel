@@ -13,7 +13,6 @@ type ProviderDetailPayload = {
     consoleUrl?: string | null;
   };
   sandbox_ids?: string[] | null;
-  lease_ids?: string[] | null;
   thread_ids?: string[] | null;
   runtime_session_ids?: string[] | null;
 };

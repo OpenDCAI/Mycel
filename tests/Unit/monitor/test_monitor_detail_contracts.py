@@ -222,7 +222,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
 
     assert payload["provider"]["id"] == "daytona"
     assert payload["sandbox_ids"] == ["sandbox-1", "sandbox-2"]
-    assert payload["lease_ids"] == ["lease-1", "lease-2"]
+    assert "lease_ids" not in payload
     assert payload["thread_ids"] == ["thread-1", "thread-2"]
     assert payload["runtime_session_ids"] == ["runtime-1"]
 
