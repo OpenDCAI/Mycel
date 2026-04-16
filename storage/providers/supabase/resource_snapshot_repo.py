@@ -5,6 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from storage.providers.supabase import _query as q
+
+_REPO = "resource snapshot repo"
+_SCHEMA = "container"
+_TABLE = "resource_snapshots"
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
@@ -12,12 +18,16 @@ def _now_iso() -> str:
 
 def _raise_if_snapshot_schema_drift(err: Exception) -> None:
     message = str(err)
-    if "staging.sandbox_resource_snapshots" not in message or "staging.lease_resource_snapshots" not in message:
+    if f"{_SCHEMA}.{_TABLE}" not in message or "staging.lease_resource_snapshots" not in message:
         return
     raise RuntimeError(
         "live schema still exposes staging.lease_resource_snapshots; "
-        "land sandbox_resource_snapshots instead of falling back to the old lease table"
+        "land container.resource_snapshots instead of falling back to the old lease table"
     ) from err
+
+
+def _t(client: Any) -> Any:
+    return q.schema_table(client, _SCHEMA, _TABLE, _REPO)
 
 
 def upsert_sandbox_resource_snapshot(
@@ -41,7 +51,7 @@ def upsert_sandbox_resource_snapshot(
         raise RuntimeError("upsert_sandbox_resource_snapshot requires a client")
     now = _now_iso()
     try:
-        client.table("sandbox_resource_snapshots").upsert(
+        _t(client).upsert(
             {
                 "sandbox_id": sandbox_id,
                 "provider_name": provider_name,
@@ -76,11 +86,10 @@ def list_snapshots_by_sandbox_ids(
     unique_ids = sorted({sid for sid in sandbox_ids if sid})
     if not unique_ids:
         return {}
-    from storage.providers.supabase import _query as q
 
     try:
         rows = q.rows_in_chunks(
-            lambda: client.table("sandbox_resource_snapshots").select("*"),
+            lambda: _t(client).select("*"),
             "sandbox_id",
             unique_ids,
             "resource_snapshot",
@@ -94,7 +103,7 @@ def list_snapshots_by_sandbox_ids(
 
 class SupabaseResourceSnapshotRepo:
     def __init__(self, client: Any) -> None:
-        self._client = client
+        self._client = q.validate_client(client, _REPO)
 
     def close(self) -> None:
         return None

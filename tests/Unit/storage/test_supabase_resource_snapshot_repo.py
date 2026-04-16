@@ -35,7 +35,12 @@ class _FakeTable:
 class _FakeClient:
     def __init__(self) -> None:
         self.table_obj = _FakeTable()
+        self.last_schema_name: str | None = None
         self.last_table_name: str | None = None
+
+    def schema(self, name):
+        self.last_schema_name = name
+        return self
 
     def table(self, name):
         self.last_table_name = name
@@ -54,7 +59,8 @@ def test_supabase_resource_snapshot_repo_upserts_for_sandbox_without_lease_shape
     )
 
     assert client.table_obj.upsert_payload is not None
-    assert client.last_table_name == "sandbox_resource_snapshots"
+    assert client.last_schema_name == "container"
+    assert client.last_table_name == "resource_snapshots"
     assert client.table_obj.upsert_payload["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in client.table_obj.upsert_payload
     assert client.table_obj.upsert_payload["provider_name"] == "daytona"
@@ -72,7 +78,8 @@ def test_supabase_resource_snapshot_repo_lists_snapshots_by_sandbox_ids() -> Non
     )
 
     assert rows == {"sandbox-1": {"sandbox_id": "sandbox-1", "cpu_used": 1.0}}
-    assert client.last_table_name == "sandbox_resource_snapshots"
+    assert client.last_schema_name == "container"
+    assert client.last_table_name == "resource_snapshots"
     assert ("sandbox_id", ["sandbox-1", "sandbox-2"]) in client.table_obj.in_calls
 
 
@@ -107,7 +114,7 @@ def test_supabase_resource_snapshot_repo_instance_no_longer_exposes_lease_shaped
 def test_supabase_resource_snapshot_repo_fails_loudly_when_live_schema_still_uses_lease_table_name() -> None:
     client = _FakeClient()
     client.table_obj.error = RuntimeError(
-        "Could not find the table 'staging.sandbox_resource_snapshots' in the schema cache; "
+        "Could not find the table 'container.resource_snapshots' in the schema cache; "
         "Perhaps you meant the table 'staging.lease_resource_snapshots'"
     )
     repo = SupabaseResourceSnapshotRepo(client)
@@ -119,12 +126,12 @@ def test_supabase_resource_snapshot_repo_fails_loudly_when_live_schema_still_use
 def test_supabase_resource_snapshot_repo_write_fails_loudly_when_live_schema_still_uses_lease_table_name() -> None:
     client = _FakeClient()
     client.table_obj.error = RuntimeError(
-        "Could not find the table 'staging.sandbox_resource_snapshots' in the schema cache; "
+        "Could not find the table 'container.resource_snapshots' in the schema cache; "
         "Perhaps you meant the table 'staging.lease_resource_snapshots'"
     )
     repo = SupabaseResourceSnapshotRepo(client)
 
-    with pytest.raises(RuntimeError, match="land sandbox_resource_snapshots instead of falling back"):
+    with pytest.raises(RuntimeError, match="land container\\.resource_snapshots instead of falling back"):
         repo.upsert_resource_snapshot_for_sandbox(
             sandbox_id="sandbox-1",
             provider_name="daytona",
