@@ -100,23 +100,11 @@ class _FakeAgentRegistryRepo:
     ) -> None:
         self._rows[agent_id] = (agent_id, name, thread_id, status, parent_agent_id, subagent_type)
 
-    def get_by_id(self, agent_id: str) -> tuple[str, str, str, str, str | None, str | None] | None:
-        return self._rows.get(agent_id)
-
     def list_running_by_name(self, name: str) -> list[tuple[str, str, str, str, str | None, str | None]]:
         return [row for row in self._rows.values() if row[1] == name and row[3] == "running"]
 
-    def update_status(self, agent_id: str, status: str) -> None:
-        row = self._rows.get(agent_id)
-        if row is None:
-            return
-        self._rows[agent_id] = (row[0], row[1], row[2], status, row[4], row[5])
-
     def remove(self, agent_id: str) -> None:
         self._rows.pop(agent_id, None)
-
-    def list_running(self) -> list[tuple[str, str, str, str, str | None, str | None]]:
-        return [row for row in self._rows.values() if row[3] == "running"]
 
 
 class _FakeSyncFileRepo:
