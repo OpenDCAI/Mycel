@@ -43,7 +43,14 @@ describe("LibraryItemDetailPage", () => {
         created_at: 1,
         updated_at: 1,
       }],
-      librarySkills: [],
+      librarySkills: [{
+        id: "skill-lib-1",
+        name: "Skill One",
+        desc: "skill desc",
+        type: "skill",
+        created_at: 1,
+        updated_at: 1,
+      }],
       librarySandboxTemplates: [{
         id: "daytona:default",
         name: "Daytona Default",
@@ -66,6 +73,53 @@ describe("LibraryItemDetailPage", () => {
       fetchResourceContent,
       updateResource,
     });
+  });
+
+  it("uses the canonical installed route for the back button on sandbox detail pages", async () => {
+    render(
+      <MemoryRouter initialEntries={["/library/sandbox-template/daytona:default"]}>
+        <Routes>
+          <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Daytona Default" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=sandbox-template");
+  });
+
+  it("uses the canonical installed route for the back button on agent detail pages", async () => {
+    render(
+      <MemoryRouter initialEntries={["/library/agent/agent-lib-1"]}>
+        <Routes>
+          <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Explorer" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=agent");
+  });
+
+  it("uses the canonical installed route for the back button on skill detail pages", async () => {
+    fetchResourceContent.mockResolvedValue("# Skill doc");
+
+    render(
+      <MemoryRouter initialEntries={["/library/skill/skill-lib-1"]}>
+        <Routes>
+          <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Skill One" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=skill");
   });
 
   it("uses bootstrapped library state instead of refetching the whole list", async () => {
