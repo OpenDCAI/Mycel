@@ -144,7 +144,7 @@ describe("LibraryItemDetailPage", () => {
 
     await waitFor(() => {
       expect(deleteResource).toHaveBeenCalledWith("sandbox-template", "daytona:custom");
-      expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=sandbox");
+      expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=sandbox-template");
     });
   });
 });
