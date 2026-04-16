@@ -230,11 +230,10 @@ def resolve_owned_lease(
         if not sandbox_id:
             raise RuntimeError("sandbox_id is required for resolve_owned_lease")
 
-        thread_ids: list[str] = []
-        agents: list[dict[str, Any]] = []
+        visible_threads: list[dict[str, Any]] = []
         for row in monitor_repo.query_sandbox_threads(sandbox_id):
             thread_id = str(row.get("thread_id") or "").strip()
-            if not _is_user_visible_lease_thread(thread_id) or thread_id in thread_ids:
+            if not _is_user_visible_lease_thread(thread_id):
                 continue
             thread = thread_repo.get_by_id(thread_id)
             if thread is None:
@@ -242,6 +241,16 @@ def resolve_owned_lease(
             agent_user_id = str(thread.get("agent_user_id") or "").strip()
             if not agent_user_id:
                 continue
+            agent_user = user_repo.get_by_id(agent_user_id)
+            if agent_user is None or agent_user.owner_user_id != user_id:
+                continue
+            visible_threads.append({"id": thread_id, **thread})
+        visible_threads = canonical_owner_threads(visible_threads)
+        thread_ids: list[str] = []
+        agents: list[dict[str, Any]] = []
+        for thread in visible_threads:
+            thread_id = str(thread.get("id") or "").strip()
+            agent_user_id = str(thread.get("agent_user_id") or "").strip()
             agent_user = user_repo.get_by_id(agent_user_id)
             if agent_user is None or agent_user.owner_user_id != user_id:
                 continue

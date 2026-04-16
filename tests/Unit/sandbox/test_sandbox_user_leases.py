@@ -530,6 +530,59 @@ def test_resolve_owned_lease_uses_canonical_sandbox_source(monkeypatch):
     _assert_daytona_recipe(lease, runtime_session_id="provider-session-1")
 
 
+def test_resolve_owned_lease_collapses_visible_threads_to_canonical_owner_thread(monkeypatch):
+    rows = [
+        _lease_row("lease-1", "thread-a", sandbox_id="sandbox-1"),
+        _lease_row("lease-1", "thread-b", sandbox_id="sandbox-1"),
+    ]
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1", "branch_index": 2, "is_main": False},
+            "thread-b": {"agent_user_id": "agent-1", "owner_user_id": "owner-1", "branch_index": 0, "is_main": True},
+        }
+    )
+    user_repo = _FakeUserRepo(
+        {
+            "agent-1": _agent_user("agent-1", "Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    class _MultiThreadSandboxMonitorRepo:
+        def query_sandboxes(self):
+            return list(rows)
+
+        def query_sandbox_threads(self, sandbox_id: str):
+            assert sandbox_id == "sandbox-1"
+            return [{"thread_id": "thread-a"}, {"thread_id": "thread-b"}]
+
+        def query_sandbox_instance_id(self, sandbox_id: str):
+            assert sandbox_id == "sandbox-1"
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _MultiThreadSandboxMonitorRepo())
+
+    lease = sandbox_service.resolve_owned_lease(
+        "owner-1",
+        "lease-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert lease is not None
+    assert lease["thread_ids"] == ["thread-b"]
+    assert lease["agents"] == [
+        {
+            "thread_id": "thread-b",
+            "agent_user_id": "agent-1",
+            "agent_name": "Morel",
+            "avatar_url": "/api/users/agent-1/avatar",
+        }
+    ]
+
+
 def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch):
     rows = [
         _lease_row("lease-running", "thread-running", cwd="/tmp/running"),
