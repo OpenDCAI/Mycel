@@ -281,7 +281,9 @@ class AuthService:
             from backend.web.routers.users import process_and_save_avatar
 
             avatar_path = process_and_save_avatar(src_avatar, agent_id)
-            self._users.update(agent_id, avatar=avatar_path)
+            # @@@file-backed-avatar-shell - current web avatar truth is the served
+            # file surface, not a path string stored in users.avatar. Keep the
+            # DB column untouched here so auth bootstrap does not fake an assets FK.
             ensure_owner_agent_contact(self._contact_repo, owner_user_id, agent_id, now=now)
             if i == 0:
                 first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "agent", "avatar": avatar_path}
