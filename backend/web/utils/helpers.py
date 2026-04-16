@@ -88,8 +88,8 @@ def _get_thread_repo(thread_repo=None):
     return _cached_thread_repo
 
 
-def load_thread_config(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
-    """Load thread data. Returns dict or None."""
+def load_thread_row(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
+    """Load the current thread row. Returns dict or None."""
     return _get_thread_repo(thread_repo).get_by_id(thread_id)
 
 
@@ -111,7 +111,7 @@ def resolve_local_workspace_path(
         if thread_cwd_map:
             thread_cwd = thread_cwd_map.get(thread_id)
         if not thread_cwd:
-            tc = load_thread_config(thread_id)
+            tc = load_thread_row(thread_id)
             if tc:
                 thread_cwd = tc.get("cwd")
     # @@@workspace-base-normalize - relative LOCAL_WORKSPACE_ROOT must be normalized, or target.relative_to(base) always fails.

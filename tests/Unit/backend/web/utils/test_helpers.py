@@ -91,3 +91,18 @@ def test_get_lease_timestamps_uses_runtime_repo_factory_without_db_path(monkeypa
 
     assert helpers.get_lease_timestamps("lease-1") == ("lease-created", "lease-updated")
     assert lease_repo.closed
+
+
+def test_load_thread_row_returns_current_thread_row(monkeypatch) -> None:
+    thread_repo = _ThreadRepo()
+    thread_repo.row = {"id": "thread-1", "cwd": "/workspace"}
+    thread_repo.requested_ids = []
+
+    def get_by_id(thread_id: str):
+        thread_repo.requested_ids.append(thread_id)
+        return thread_repo.row
+
+    thread_repo.get_by_id = get_by_id
+
+    assert helpers.load_thread_row("thread-1", thread_repo=thread_repo) == {"id": "thread-1", "cwd": "/workspace"}
+    assert thread_repo.requested_ids == ["thread-1"]
