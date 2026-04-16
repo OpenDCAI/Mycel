@@ -23,7 +23,6 @@ from .contracts import (
     RunEventRepo,
     SandboxRepo,
     SummaryRepo,
-    SyncFileRepo,
     TerminalRepo,
     ThreadLaunchPrefRepo,
     ThreadRepo,
@@ -47,7 +46,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
     "chat_session_repo": ("storage.providers.supabase.chat_session_repo", "SupabaseChatSessionRepo"),
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
-    "sync_file_repo": ("storage.providers.supabase.sync_file_repo", "SupabaseSyncFileRepo"),
     "resource_snapshot_repo": ("storage.providers.supabase.resource_snapshot_repo", "SupabaseResourceSnapshotRepo"),
     "user_repo": ("storage.providers.supabase.user_repo", "SupabaseUserRepo"),
     "thread_repo": ("storage.providers.supabase.thread_repo", "SupabaseThreadRepo"),
@@ -115,9 +113,6 @@ class StorageContainer:
 
     def tool_task_repo(self) -> ToolTaskRepo:
         return self._build("tool_task_repo")
-
-    def sync_file_repo(self) -> SyncFileRepo:
-        return self._build("sync_file_repo")
 
     def resource_snapshot_repo(self) -> ResourceSnapshotRepo:
         return self._build("resource_snapshot_repo")
