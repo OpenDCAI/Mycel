@@ -407,11 +407,74 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
 
     result = manager._setup_mounts("thread-1")
 
-    assert repo.created == [("volume-missing", "vol-thread-1")]
+    assert repo.created == []
     assert manager.lease_store.volume_updates == []
-    assert repo.requested_ids == ["volume-missing", "volume-missing"]
+    assert repo.requested_ids == []
     assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.provider.calls == [("volume-missing", "/workspace")]
+
+
+def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_sessions: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+
+    class _MissingDeleteRepo(_FakeVolumeRepo):
+        def __init__(self) -> None:
+            super().__init__(HostVolume(tmp_path / "staging").serialize())
+
+        def get(self, volume_id: str):
+            self.requested_ids.append(volume_id)
+            return None
+
+        def delete(self, volume_id: str) -> bool:
+            self.deleted.append(volume_id)
+            return False
+
+    repo = _MissingDeleteRepo()
+    manager._sandbox_volume_repo = lambda: repo
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+        volume_id = "volume-1"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-volume-1"]
+    assert repo.requested_ids == []
+    assert repo.deleted == ["volume-1"]
+    assert deleted_leases == ["lease-1"]
 
 
 def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):

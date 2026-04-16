@@ -318,7 +318,8 @@ class SandboxManager:
             return
 
         volume_id = str(uuid.uuid4())
-        self._create_volume_entry(thread_id, volume_id)
+        if self.provider_capability.runtime_kind != "daytona_pty":
+            self._create_volume_entry(thread_id, volume_id)
 
         # @@@remote-volume-self-heal - incomplete remote lease bindings can miss their volume row
         # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
@@ -369,14 +370,17 @@ class SandboxManager:
 
         repo = self._sandbox_volume_repo()
         try:
+            if self.provider_capability.runtime_kind == "daytona_pty":
+                volume_name = f"leon-volume-{volume_id}"
+                self.provider.delete_managed_volume(volume_name)
+                repo.delete(volume_id)
+                return
+
             entry = repo.get(volume_id)
             if not entry:
                 raise RuntimeError(f"Volume not found: {volume_id}")
             # @@@managed-volume-destroy-seam - provider-managed volumes must be reclaimed
             # through the manager-owned lease destroy path or Daytona quotas will leak.
-            if self.provider_capability.runtime_kind == "daytona_pty":
-                volume_name = f"leon-volume-{volume_id}"
-                self.provider.delete_managed_volume(volume_name)
             source = deserialize_volume_source(json.loads(entry["source"]))
             source.cleanup()
             if not repo.delete(volume_id):
@@ -400,7 +404,6 @@ class SandboxManager:
             return {"source_path": source_path, "remote_path": remote_path}
 
         self._ensure_thread_volume(thread_id, lease)
-        self._resolve_volume_entry(thread_id, lease)
         volume_id = lease.volume_id
         # @@@daytona-upgrade - first startup creates managed volume
         volume_name = self._upgrade_to_daytona_volume(
