@@ -729,6 +729,26 @@ def _materialize_workspace_for_sandbox(
     return workspace_id
 
 
+def _resolve_existing_sandbox_bind_cwd(
+    workspace_repo: Any,
+    *,
+    sandbox_id: str,
+    owner_user_id: str,
+    requested_cwd: str | None,
+) -> str | None:
+    normalized_requested = str(requested_cwd or "").strip()
+    if normalized_requested:
+        return normalized_requested
+
+    owned_rows = [row for row in workspace_repo.list_by_sandbox_id(sandbox_id) if row.owner_user_id == owner_user_id]
+    if len(owned_rows) != 1:
+        return None
+
+    # @@@existing-sandbox-workspace-cwd-candidate - only reuse workspace truth when
+    # caller side can point at one unambiguous owned workspace row for this sandbox.
+    return str(owned_rows[0].workspace_path or "").strip() or None
+
+
 def _resolve_owned_recipe_snapshot(
     app: Any,
     owner_user_id: str,
@@ -788,6 +808,24 @@ def _create_owned_thread(
         sandbox = app.state.sandbox_repo.get_by_id(payload.existing_sandbox_id)
         if sandbox is None:
             raise HTTPException(403, "Lease not authorized")
+        preview_lease = _resolve_owned_existing_sandbox_request_lease(
+            app,
+            owner_user_id,
+            payload.existing_sandbox_id,
+        )
+        if preview_lease is None:
+            raise HTTPException(403, "Lease not authorized")
+        sandbox_id = _materialize_sandbox_for_lease(
+            app.state.sandbox_repo,
+            lease=preview_lease,
+            owner_user_id=owner_user_id,
+        )
+        bind_cwd = _resolve_existing_sandbox_bind_cwd(
+            app.state.workspace_repo,
+            sandbox_id=sandbox_id,
+            owner_user_id=owner_user_id,
+            requested_cwd=payload.cwd,
+        )
         bound_cwd, owned_lease = bind_thread_to_existing_sandbox(
             new_thread_id,
             sandbox,
@@ -797,7 +835,7 @@ def _create_owned_thread(
                 thread_repo=app.state.thread_repo,
                 user_repo=app.state.user_repo,
             ),
-            cwd=payload.cwd,
+            cwd=bind_cwd,
         )
         selected_lease_id = _request_bridge_text(owned_lease, "lease_id", label="lease")
         if owned_lease is None:
@@ -808,16 +846,11 @@ def _create_owned_thread(
         selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.sandbox_template_id)
 
     if selected_lease_id:
-        sandbox_id = _materialize_sandbox_for_lease(
-            app.state.sandbox_repo,
-            lease=owned_lease,
-            owner_user_id=owner_user_id,
-        )
         current_workspace_id = _materialize_workspace_for_sandbox(
             app.state.workspace_repo,
             sandbox_id=sandbox_id,
             owner_user_id=owner_user_id,
-            workspace_path=bound_cwd,
+            workspace_path=bind_cwd or bound_cwd,
         )
     else:
         # @@@create-write-bridge-first - replay-13 requires supported create paths
