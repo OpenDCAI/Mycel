@@ -298,7 +298,7 @@ def _make_tool_request(
 
 def _make_service(tmp_path: Path, **kwargs) -> AgentService:
     tool_registry = kwargs.pop("tool_registry", None) or _CapturingRegistry()
-    agent_registry = kwargs.pop("agent_registry", None) or _FakeAgentRegistry()
+    agent_registry = kwargs.pop("agent_registry", None)
     model_name = kwargs.pop("model_name", "gpt-test")
     return AgentService(
         tool_registry=tool_registry,
@@ -353,6 +353,13 @@ async def test_task_output_reports_running_command_honestly(tmp_path):
         "status": "running",
         "message": "Command is still running.",
     }
+
+
+@pytest.mark.asyncio
+async def test_make_service_defaults_to_no_injected_agent_registry(tmp_path):
+    service = _make_service(tmp_path)
+
+    assert service._agent_registry is None
 
 
 @pytest.mark.asyncio
