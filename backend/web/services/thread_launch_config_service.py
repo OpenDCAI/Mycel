@@ -94,7 +94,9 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
     # @@@thread-launch-default-precedence - prefer the last successful thread config, then the last confirmed draft,
     # and only then derive from current leases/providers. This keeps defaults tied to actual agent usage first.
     successful = _validate_saved_config(
-        prefs.get("last_successful"),
+        app=app,
+        owner_user_id=owner_user_id,
+        payload=prefs.get("last_successful"),
         leases=leases,
         providers=providers,
         sandbox_templates=sandbox_templates,
@@ -103,7 +105,9 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
         return {"source": "last_successful", "config": successful}
 
     confirmed = _validate_saved_config(
-        prefs.get("last_confirmed"),
+        app=app,
+        owner_user_id=owner_user_id,
+        payload=prefs.get("last_confirmed"),
         leases=leases,
         providers=providers,
         sandbox_templates=sandbox_templates,
@@ -125,6 +129,8 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
 
 
 def _validate_saved_config(
+    app: Any,
+    owner_user_id: str,
     payload: dict[str, Any] | None,
     *,
     leases: list[dict[str, Any]],
@@ -144,18 +150,16 @@ def _validate_saved_config(
         existing_sandbox_id = config.get("existing_sandbox_id")
         if not existing_sandbox_id:
             return None
-        lease = next(
-            (
-                item
-                for item in leases
-                if item["lease_id"] == existing_sandbox_id
-                or _existing_sandbox_shell_id(str(item.get("lease_id") or "")) == existing_sandbox_id
-            ),
-            None,
+        workspace = _resolve_saved_existing_workspace(
+            app=app,
+            owner_user_id=owner_user_id,
+            existing_sandbox_id=existing_sandbox_id,
+            model=config.get("model"),
+            workspace_path=config.get("workspace"),
         )
-        if lease is None:
+        if workspace is None:
             return None
-        return _existing_config_from_lease(lease, model=config.get("model"), workspace=lease.get("cwd"))
+        return workspace
 
     provider_config = config.get("provider_config")
     sandbox_template_id = str(config.get("sandbox_template_id") or "").strip()
@@ -211,7 +215,6 @@ def _derive_default_config(
     providers: list[dict[str, Any]],
     sandbox_templates: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    leases_by_id = {str(lease.get("lease_id") or "").strip(): lease for lease in leases if str(lease.get("lease_id") or "").strip()}
     for thread in _iter_default_bridge_threads(agent_threads):
         # @@@workspace-bridge-read-precedence - launch-config now resolves workspace-backed existing-mode
         # defaults first, but only narrows field sources. `existing_sandbox_id` and `sandbox_template`
@@ -223,10 +226,6 @@ def _derive_default_config(
         )
         if config is not None:
             return config
-
-        lease = leases_by_id.get(thread["current_workspace_id"])
-        if lease is not None:
-            return _existing_config_from_lease(lease, model=None, workspace=lease.get("cwd"))
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
@@ -350,6 +349,53 @@ def _required_bridge_text(row: Any, key: str, label: str) -> str:
     if value is None or value == "":
         raise RuntimeError(f"{label}.{key} is required")
     return str(value)
+
+
+def _resolve_saved_existing_workspace(
+    *,
+    app: Any,
+    owner_user_id: str,
+    existing_sandbox_id: str,
+    model: str | None,
+    workspace_path: str | None,
+) -> dict[str, Any] | None:
+    sandbox_repo = getattr(app.state, "sandbox_repo", None)
+    sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
+    if not callable(sandbox_get_by_id):
+        return None
+    sandbox = sandbox_get_by_id(existing_sandbox_id)
+    if sandbox is None:
+        return None
+    sandbox_owner_user_id = _required_bridge_text(sandbox, "owner_user_id", "sandbox")
+    if sandbox_owner_user_id != owner_user_id:
+        raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
+    workspace_repo = getattr(app.state, "workspace_repo", None)
+    list_by_sandbox_id = getattr(workspace_repo, "list_by_sandbox_id", None)
+    resolved_workspace_path = ""
+    if callable(list_by_sandbox_id):
+        for workspace in list_by_sandbox_id(_required_bridge_text(sandbox, "id", "sandbox")):
+            workspace_owner_user_id = _required_bridge_text(workspace, "owner_user_id", "workspace")
+            if workspace_owner_user_id != owner_user_id:
+                continue
+            resolved_workspace_path = _required_bridge_text(workspace, "workspace_path", "workspace")
+            break
+    if not resolved_workspace_path:
+        resolved_workspace_path = str(workspace_path or "").strip()
+    if not resolved_workspace_path:
+        return None
+    sandbox_template = _resolve_workspace_backed_sandbox_template(
+        app=app,
+        owner_user_id=owner_user_id,
+        sandbox=sandbox,
+    )
+    return {
+        "create_mode": "existing",
+        "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
+        "sandbox_template": sandbox_template,
+        "existing_sandbox_id": _required_bridge_text(sandbox, "id", "sandbox"),
+        "model": model,
+        "workspace": resolved_workspace_path,
+    }
 
 
 def _required_bridge_config_text(row: Any, key: str, label: str) -> str:

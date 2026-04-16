@@ -279,6 +279,33 @@ def test_build_new_launch_config_uses_sandbox_template_id() -> None:
 
 
 def test_resolve_default_config_prefers_last_successful_over_last_confirmed() -> None:
+    workspace_repo = _FakeWorkspaceRepo()
+    workspace_repo.by_id["ws-successful"] = SimpleNamespace(
+        id="ws-successful",
+        sandbox_id="sandbox-successful",
+        owner_user_id="owner-1",
+        workspace_path="/workspace/reused",
+        name=None,
+        created_at=1.0,
+        updated_at=1.0,
+    )
+    workspace_repo.by_sandbox_id["sandbox-successful"] = [workspace_repo.by_id["ws-successful"]]
+    sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-successful"] = SimpleNamespace(
+        id="sandbox-successful",
+        owner_user_id="owner-1",
+        provider_name="local",
+        provider_env_id="provider-env-successful",
+        sandbox_template_id="local:default",
+        desired_state="running",
+        observed_state="running",
+        status="ready",
+        observed_at=1.0,
+        last_error=None,
+        config={},
+        created_at=1.0,
+        updated_at=1.0,
+    )
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_launch_pref_repo=SimpleNamespace(
@@ -287,7 +314,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
                         "create_mode": "existing",
                         "provider_config": "local",
                         "sandbox_template": {"id": "stale"},
-                        "existing_sandbox_id": "lease-1",
+                        "existing_sandbox_id": "sandbox-successful",
                         "model": "gpt-5.4",
                         "workspace": "/workspace/stale",
                     },
@@ -304,6 +331,8 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
             thread_repo=_FakeThreadRepo(),
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
+            workspace_repo=workspace_repo,
+            sandbox_repo=sandbox_repo,
         )
     )
 
@@ -311,15 +340,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
         patch.object(
             thread_launch_config_service.sandbox_service,
             "list_user_leases",
-            return_value=[
-                {
-                    "lease_id": "lease-1",
-                    "provider_name": "local",
-                    "recipe": default_recipe_snapshot("local"),
-                    "cwd": "/workspace/reused",
-                    "thread_ids": [],
-                }
-            ],
+            return_value=[],
         ),
         patch.object(
             thread_launch_config_service.sandbox_service,
@@ -344,7 +365,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
             "create_mode": "existing",
             "provider_config": "local",
             "sandbox_template": default_recipe_snapshot("local"),
-            "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
+            "existing_sandbox_id": "sandbox-successful",
             "model": "gpt-5.4",
             "workspace": "/workspace/reused",
         },
@@ -486,7 +507,11 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
                 {"name": "daytona_selfhost", "available": True},
             ],
         ),
-        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
     ):
         result = thread_launch_config_service.resolve_default_config(
             app=app,
@@ -583,7 +608,11 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
             "available_sandbox_types",
             return_value=[{"name": "daytona_selfhost", "available": True}],
         ),
-        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
     ):
         result = thread_launch_config_service.resolve_default_config(
             app=app,
@@ -674,7 +703,11 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
             "available_sandbox_types",
             return_value=[{"name": "daytona_selfhost", "available": True}],
         ),
-        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
         pytest.raises(RuntimeError, match="sandbox template not found: daytona:custom:missing"),
     ):
         thread_launch_config_service.resolve_default_config(
@@ -734,7 +767,11 @@ def test_resolve_default_config_derives_existing_from_legacy_lease_backed_curren
                 {"name": "daytona_selfhost", "available": True},
             ],
         ),
-        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
     ):
         result = thread_launch_config_service.resolve_default_config(
             app=app,
@@ -745,12 +782,13 @@ def test_resolve_default_config_derives_existing_from_legacy_lease_backed_curren
     assert result == {
         "source": "derived",
         "config": {
-            "create_mode": "existing",
-            "provider_config": "daytona_selfhost",
-            "sandbox_template": default_recipe_snapshot("daytona"),
-            "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-2').hex}",
+            "create_mode": "new",
+            "provider_config": "local",
+            "sandbox_template_id": "local:default",
+            "sandbox_template": default_recipe_snapshot("local"),
+            "existing_sandbox_id": None,
             "model": None,
-            "workspace": "/workspace/right",
+            "workspace": None,
         },
     }
 
@@ -1103,7 +1141,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
                 "create_mode": "existing",
                 "provider_config": "daytona_selfhost",
                 "sandbox_template_id": None,
-                "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
+                "existing_sandbox_id": "sandbox-1",
                 "model": "gpt-5.4-mini",
                 "workspace": "/workspace/reused",
             },
