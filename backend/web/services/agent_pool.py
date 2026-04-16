@@ -88,7 +88,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         if pool_key in pool:
             return pool[pool_key]
 
-        # For local sandbox, check if thread has custom cwd (live map → persisted thread config).
+        # For local sandbox, check if thread has custom cwd (live map → persisted thread row).
         workspace_root = None
         thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
         if sandbox_type == "local":
@@ -132,7 +132,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             if get_models_config is not None:
                 models_config_override = get_models_config(owner_user_id)
 
-        # @@@agent-vs-agent-user - thread_config.agent stores an agent user id (e.g. "__leon__") for display,
+        # @@@agent-vs-agent-user - thread row agent_user_id resolves an agent user for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None → default Leon agent
         bundle_dir = None

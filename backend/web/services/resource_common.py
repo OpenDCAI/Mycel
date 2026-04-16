@@ -243,7 +243,7 @@ def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any
         if not agent_ref:
             owners[thread_id] = {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None}
             continue
-        # @@@agent-name-resolution - thread_config.agent may be agent user id or direct display name.
+        # @@@agent-name-resolution - current thread agent ref may resolve to an agent user id or direct display name.
         meta = agent_user_meta.get(agent_ref, {})
         owners[thread_id] = {
             "agent_user_id": agent_ref,
