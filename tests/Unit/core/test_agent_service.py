@@ -172,20 +172,19 @@ async def test_agent_registry_defaults_to_process_local_in_memory_repo() -> None
 
     await registry.register(entry)
 
-    assert await registry.get_by_id("agent-1") == entry
     assert await registry.list_running_by_name("general") == [entry]
 
-    await registry.update_status("agent-1", "completed")
+    await registry.remove("agent-1")
 
-    updated = await registry.get_by_id("agent-1")
-    assert updated is not None
-    assert updated.status == "completed"
+    assert await registry.list_running_by_name("general") == []
 
 
 def test_agent_registry_no_longer_exposes_child_continuity_lookup() -> None:
     registry = AgentRegistry()
 
     assert hasattr(registry, "get_latest_by_name_and_parent") is False
+    assert hasattr(registry, "get_by_id") is False
+    assert hasattr(registry, "list_running") is False
 
 
 class _FakeChildAgent:
@@ -1569,7 +1568,7 @@ async def test_handle_agent_blocking_path_does_not_duplicate_completed_status(mo
 
     assert raw.content == "(Agent completed with no text output)"
     assert registry.status_updates == []
-    assert await registry.get_by_id(registry.entry.agent_id) is None
+    assert await registry.list_running_by_name("worker-1") == []
 
 
 @pytest.mark.asyncio
@@ -1586,7 +1585,7 @@ async def test_handle_agent_blocking_path_removes_registry_entry_on_finish(monke
     )
 
     assert raw.content == "(Agent completed with no text output)"
-    assert await registry.get_by_id(registry.entry.agent_id) is None
+    assert await registry.list_running_by_name("worker-1") == []
     assert await registry.list_running_by_name("worker-1") == []
 
 
@@ -1615,7 +1614,7 @@ async def test_handle_agent_blocking_path_does_not_duplicate_error_status(monkey
 
     assert "Agent failed: boom" in raw.content
     assert registry.status_updates == []
-    assert await registry.get_by_id(registry.entry.agent_id) is None
+    assert await registry.list_running_by_name("worker-1") == []
 
 
 @pytest.mark.asyncio
