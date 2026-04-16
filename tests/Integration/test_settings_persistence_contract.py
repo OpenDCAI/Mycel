@@ -364,6 +364,42 @@ def test_get_available_models_route_prefers_repo_backed_model_pool(monkeypatch):
     assert "fs-custom" not in model_ids
 
 
+def test_get_available_models_route_filters_openai_pool_to_gpt_5_4_family(monkeypatch):
+    repo = _FakeSettingsRepo()
+    monkeypatch.setattr(
+        settings_router.json,
+        "load",
+        lambda _f: {
+            "data": [
+                {"id": "openai/gpt-5.4", "name": "GPT-5.4", "context_length": 400000},
+                {"id": "openai/gpt-5.4-pro", "name": "GPT-5.4 Pro", "context_length": 400000},
+                {"id": "openai/gpt-5.1", "name": "GPT-5.1", "context_length": 400000},
+                {"id": "openai/gpt-4o", "name": "GPT-4o", "context_length": 128000},
+                {"id": "anthropic/claude-sonnet-4.5", "name": "Claude Sonnet", "context_length": 200000},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        settings_router,
+        "_load_merged_models_for_storage",
+        lambda _repo, _user_id: SimpleNamespace(
+            pool=SimpleNamespace(enabled=[], custom=[]),
+            virtual_models=[],
+        ),
+    )
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.get("/api/settings/available-models")
+
+    assert response.status_code == 200
+    model_ids = [item["id"] for item in response.json()["models"]]
+    assert "gpt-5.4" in model_ids
+    assert "gpt-5.4-pro" in model_ids
+    assert "claude-sonnet-4.5" in model_ids
+    assert "gpt-5.1" not in model_ids
+    assert "gpt-4o" not in model_ids
+
+
 def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
     repo = _FakeSettingsRepo()
     repo.models_config = {

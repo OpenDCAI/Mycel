@@ -104,6 +104,12 @@ def _build_model_http_client_kwargs(
     }, (async_client, sync_client)
 
 
+def _is_visible_settings_pool_model(provider_name: str, model_id: str) -> bool:
+    if provider_name != "openai":
+        return True
+    return model_id.startswith("gpt-5.4")
+
+
 def _validate_openai_settings_probe_or_400(resolved_model: str, provider_name: str | None) -> None:
     if provider_name != "openai":
         return
@@ -344,6 +350,8 @@ async def get_available_models(req: Request, user_id: CurrentUserId) -> dict[str
             if "/" not in model_id:
                 continue
             provider, short_name = model_id.split("/", 1)
+            if not _is_visible_settings_pool_model(provider, short_name):
+                continue
             if short_name in seen:
                 continue
             seen.add(short_name)
