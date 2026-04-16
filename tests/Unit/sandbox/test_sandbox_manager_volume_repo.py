@@ -660,6 +660,55 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_and_volume_row(
     assert all_terminals == []
 
 
+def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized_daytona_source(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_sessions: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+    repo = _FakeVolumeRepo(HostVolume(tmp_path / "staging").serialize())
+    manager._sandbox_volume_repo = lambda: repo
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+        volume_id = "volume-1"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-volume-1"]
+    assert repo.deleted == ["volume-1"]
+    assert deleted_leases == ["lease-1"]
+
+
 def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")

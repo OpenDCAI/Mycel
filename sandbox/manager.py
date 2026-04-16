@@ -375,8 +375,9 @@ class SandboxManager:
             source = deserialize_volume_source(json.loads(entry["source"]))
             # @@@managed-volume-destroy-seam - provider-managed volumes must be reclaimed
             # through the manager-owned lease destroy path or Daytona quotas will leak.
-            if isinstance(source, DaytonaVolume):
-                self.provider.delete_managed_volume(source.volume_name)
+            if self.provider_capability.runtime_kind == "daytona_pty":
+                volume_name = source.volume_name if isinstance(source, DaytonaVolume) else f"leon-volume-{volume_id}"
+                self.provider.delete_managed_volume(volume_name)
             source.cleanup()
             if not repo.delete(volume_id):
                 raise RuntimeError(f"Failed to delete volume metadata: {volume_id}")
