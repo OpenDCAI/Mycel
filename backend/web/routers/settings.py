@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.services import account_resource_service
+from backend.web.utils.serializers import extract_text_content
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
 
@@ -101,6 +102,28 @@ def _build_model_http_client_kwargs(
         "http_client": sync_client,
         "http_async_client": async_client,
     }, (async_client, sync_client)
+
+
+def _is_visible_settings_pool_model(provider_name: str, model_id: str) -> bool:
+    if provider_name != "openai":
+        return True
+    return model_id.startswith("gpt-5.4")
+
+
+def _validate_openai_settings_probe_or_400(resolved_model: str, provider_name: str | None) -> None:
+    if provider_name != "openai":
+        return
+    if resolved_model.startswith("gpt-5.4"):
+        return
+    raise RuntimeError("settings model probe only supports openai gpt-5.4 streaming path; choose gpt-5.4")
+
+
+async def _run_streaming_model_probe(model: Any) -> str:
+    async for chunk in model.astream("hi"):
+        content = extract_text_content(getattr(chunk, "content", ""))
+        if content:
+            return content[:100]
+    raise RuntimeError("settings model probe produced no streaming content")
 
 
 # ============================================================================
@@ -327,6 +350,8 @@ async def get_available_models(req: Request, user_id: CurrentUserId) -> dict[str
             if "/" not in model_id:
                 continue
             provider, short_name = model_id.split("/", 1)
+            if not _is_visible_settings_pool_model(provider, short_name):
+                continue
             if short_name in seen:
                 continue
             seen.add(short_name)
@@ -516,11 +541,10 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
         kwargs.update(client_kwargs)
 
         kwargs = normalize_model_kwargs(resolved, kwargs)
+        _validate_openai_settings_probe_or_400(resolved, provider_name)
         model = init_chat_model(resolved, **kwargs)
-
-        response = await asyncio.wait_for(model.ainvoke("hi"), timeout=15)
-        content = response.content if hasattr(response, "content") else str(response)
-        return {"success": True, "model": resolved, "response": content[:100]}
+        content = await asyncio.wait_for(_run_streaming_model_probe(model), timeout=15)
+        return {"success": True, "model": resolved, "response": content}
     except TimeoutError:
         return {"success": False, "error": "Request timed out (15s)"}
     except Exception as e:

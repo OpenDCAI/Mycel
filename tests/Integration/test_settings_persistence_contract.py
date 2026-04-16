@@ -60,6 +60,25 @@ def _patch_chat_model(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     return captured
 
 
+def _patch_streaming_chat_model(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    captured: dict[str, object] = {}
+
+    class _FakeStreamingModel:
+        async def astream(self, _prompt):
+            yield SimpleNamespace(content="Hi")
+
+        async def ainvoke(self, _prompt):
+            raise AssertionError("streaming probe should not call ainvoke")
+
+    def _fake_init_chat_model(model_name: str, **kwargs):
+        captured["model"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeStreamingModel()
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", _fake_init_chat_model)
+    return captured
+
+
 def test_get_settings_route_prefers_repo_backed_workspace_and_models(monkeypatch):
     repo = _FakeSettingsRepo()
     monkeypatch.setattr(
@@ -345,6 +364,42 @@ def test_get_available_models_route_prefers_repo_backed_model_pool(monkeypatch):
     assert "fs-custom" not in model_ids
 
 
+def test_get_available_models_route_filters_openai_pool_to_gpt_5_4_family(monkeypatch):
+    repo = _FakeSettingsRepo()
+    monkeypatch.setattr(
+        settings_router.json,
+        "load",
+        lambda _f: {
+            "data": [
+                {"id": "openai/gpt-5.4", "name": "GPT-5.4", "context_length": 400000},
+                {"id": "openai/gpt-5.4-pro", "name": "GPT-5.4 Pro", "context_length": 400000},
+                {"id": "openai/gpt-5.1", "name": "GPT-5.1", "context_length": 400000},
+                {"id": "openai/gpt-4o", "name": "GPT-4o", "context_length": 128000},
+                {"id": "anthropic/claude-sonnet-4.5", "name": "Claude Sonnet", "context_length": 200000},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        settings_router,
+        "_load_merged_models_for_storage",
+        lambda _repo, _user_id: SimpleNamespace(
+            pool=SimpleNamespace(enabled=[], custom=[]),
+            virtual_models=[],
+        ),
+    )
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.get("/api/settings/available-models")
+
+    assert response.status_code == 200
+    model_ids = [item["id"] for item in response.json()["models"]]
+    assert "gpt-5.4" in model_ids
+    assert "gpt-5.4-pro" in model_ids
+    assert "claude-sonnet-4.5" in model_ids
+    assert "gpt-5.1" not in model_ids
+    assert "gpt-4o" not in model_ids
+
+
 def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
     repo = _FakeSettingsRepo()
     repo.models_config = {
@@ -356,7 +411,7 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
         "_load_merged_models_for_storage",
         lambda _repo, _user_id: SimpleNamespace(
             active=SimpleNamespace(provider=None),
-            resolve_model=lambda _model_id: ("repo-custom", {}),
+            resolve_model=lambda _model_id: ("gpt-5.4", {}),
             get_provider=lambda _provider_name: SimpleNamespace(api_key="repo-key", base_url="https://repo.example"),
             resolve_api_key=lambda _provider_name: "repo-key",
             resolve_base_url=lambda _provider_name: "https://repo.example",
@@ -364,14 +419,14 @@ def test_test_model_route_prefers_repo_backed_provider_config(monkeypatch):
     )
     monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
 
-    captured = _patch_chat_model(monkeypatch)
+    captured = _patch_streaming_chat_model(monkeypatch)
 
     with TestClient(_settings_test_app(repo)) as client:
         response = client.post("/api/settings/models/test", json={"model_id": "repo-custom"})
 
     assert response.status_code == 200
     assert response.json()["success"] is True
-    assert captured["model"] == "repo-custom"
+    assert captured["model"] == "gpt-5.4"
     assert captured["kwargs"] == {
         "model_provider": "openai",
         "api_key": "repo-key",
@@ -390,14 +445,14 @@ def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monke
     monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://platform.example")
 
-    captured = _patch_chat_model(monkeypatch)
+    captured = _patch_streaming_chat_model(monkeypatch)
 
     with TestClient(_settings_test_app(repo)) as client:
-        response = client.post("/api/settings/models/test", json={"model_id": "openai:gpt-4o"})
+        response = client.post("/api/settings/models/test", json={"model_id": "openai:gpt-5.4"})
 
     assert response.status_code == 200
     assert response.json()["success"] is True
-    assert captured["model"] == "gpt-4o"
+    assert captured["model"] == "gpt-5.4"
     assert captured["kwargs"] == {
         "model_provider": "openai",
         "api_key": "platform-key",
@@ -407,3 +462,42 @@ def test_test_model_route_uses_platform_base_url_when_provider_row_missing(monke
     }
     assert captured["kwargs"]["http_client"]._trust_env is False
     assert captured["kwargs"]["http_async_client"]._trust_env is False
+
+
+def test_test_model_route_uses_streaming_probe_for_openai_gpt_5_4(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {}
+    monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://platform.example")
+    monkeypatch.setattr("core.model_params.normalize_model_kwargs", lambda _resolved, kwargs: kwargs)
+
+    captured = _patch_streaming_chat_model(monkeypatch)
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post("/api/settings/models/test", json={"model_id": "openai:gpt-5.4"})
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True, "model": "gpt-5.4", "response": "Hi"}
+    assert captured["model"] == "gpt-5.4"
+    assert captured["kwargs"]["model_provider"] == "openai"
+
+
+def test_test_model_route_fails_loudly_for_non_gpt_5_4_openai_models(monkeypatch):
+    repo = _FakeSettingsRepo()
+    repo.models_config = {}
+    monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://platform.example")
+
+    def _unexpected_init_chat_model(*_args, **_kwargs):
+        raise AssertionError("unsupported openai models should fail before model init")
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", _unexpected_init_chat_model)
+
+    with TestClient(_settings_test_app(repo)) as client:
+        response = client.post("/api/settings/models/test", json={"model_id": "openai:gpt-4o"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": False,
+        "error": "settings model probe only supports openai gpt-5.4 streaming path; choose gpt-5.4",
+    }
