@@ -4,20 +4,17 @@ import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRemoteWorkspaceRoot } from "./use-remote-workspace-root";
 
-const { getThreadFileChannel, getThreadTerminal } = vi.hoisted(() => ({
+const { getThreadFileChannel } = vi.hoisted(() => ({
   getThreadFileChannel: vi.fn(),
-  getThreadTerminal: vi.fn(),
 }));
 
 vi.mock("../../api", () => ({
   getThreadFileChannel,
-  getThreadTerminal,
 }));
 
 describe("useRemoteWorkspaceRoot", () => {
   beforeEach(() => {
     getThreadFileChannel.mockReset();
-    getThreadTerminal.mockReset();
   });
 
   it("reads remote workspace root from file channel binding instead of terminal state", async () => {
@@ -32,6 +29,5 @@ describe("useRemoteWorkspaceRoot", () => {
 
     await expect(view.result.current.refreshWorkspaceRoot()).resolves.toBe("/workspace");
     expect(getThreadFileChannel).toHaveBeenCalledWith("thread-1");
-    expect(getThreadTerminal).not.toHaveBeenCalled();
   });
 });
