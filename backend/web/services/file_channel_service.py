@@ -64,7 +64,7 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
 
 
 # ---------------------------------------------------------------------------
-# File CRUD — delegates to VolumeSource
+# File CRUD -- delegates to the local file-channel source
 # ---------------------------------------------------------------------------
 
 
