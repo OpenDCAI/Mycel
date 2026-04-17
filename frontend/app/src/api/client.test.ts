@@ -341,7 +341,7 @@ describe("thread api client contract", () => {
     await expect(api.readSandboxFile("thread-1", "/workspace/app.py")).rejects.toThrow("Malformed sandbox file read");
   });
 
-  it("uploadSandboxFile rejects malformed upload results", async () => {
+  it("uploadThreadFile rejects malformed upload results", async () => {
     authFetch.mockResolvedValue(okJson({
       thread_id: "thread-1",
       relative_path: "avatar.png",
@@ -350,8 +350,8 @@ describe("thread api client contract", () => {
       sha256: "abc",
     }));
 
-    await expect(api.uploadSandboxFile("thread-1", { file: new File(["png"], "avatar.png") })).rejects.toThrow(
-      "Malformed sandbox upload result",
+    await expect(api.uploadThreadFile("thread-1", { file: new File(["png"], "avatar.png") })).rejects.toThrow(
+      "Malformed thread file upload result",
     );
   });
 
