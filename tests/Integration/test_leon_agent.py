@@ -651,6 +651,32 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell
         agent.close()
 
 
+@_patch_env_api_key()
+def test_leon_agent_agent_config_id_missing_config_does_not_fallback_to_bundle_dir(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    bundle_dir = tmp_path / "agent-bundles" / "stale"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "agent.md").write_text(
+        "---\nname: Stale Bundle\ndescription: must not load\n---\nYou are stale.\n",
+        encoding="utf-8",
+    )
+
+    class _Repo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-missing"
+            return None
+
+    with pytest.raises(RuntimeError, match="Agent config bundle not found: cfg-missing"):
+        LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-missing",
+            agent_config_repo=_Repo(),
+            bundle_dir=str(bundle_dir),
+            api_key="sk-test-integration",
+        )
+
+
 @pytest.mark.asyncio
 @_patch_env_api_key()
 async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_on_change(tmp_path):
