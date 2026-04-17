@@ -14,12 +14,6 @@ import { HUB_AGENT_USER_ITEM_TYPE } from "@/lib/marketplace-types";
 type Tab = "explore" | "installed";
 type InstalledSubTab = "agent-user" | "skill" | "agent" | "sandbox-template";
 type TypeFilter = "all" | typeof HUB_AGENT_USER_ITEM_TYPE | "agent" | "skill" | "env";
-type InstalledAgentUser = Agent & {
-  source?: {
-    marketplace_item_id?: string;
-    installed_version?: string;
-  };
-};
 
 function isTab(value: string | null): value is Tab {
   return value === "explore" || value === "installed";
@@ -113,7 +107,7 @@ export default function MarketplacePage() {
   };
 
   // Installed agent users with marketplace source info
-  const installedAgentUsers: InstalledAgentUser[] = agentList.filter((agent) => !agent.builtin);
+  const installedAgentUsers: Agent[] = agentList.filter((agent) => !agent.builtin);
   const updateCheckableAgentUsers = installedAgentUsers.filter((agent) => agent.source?.marketplace_item_id);
   const filteredAgentUsers = installedAgentUsers.filter((agent) =>
     !installedSearch || agent.name.toLowerCase().includes(installedSearch.toLowerCase())
@@ -147,7 +141,7 @@ export default function MarketplacePage() {
 
   const handleCheckUpdates = async () => {
     if (updateCheckableAgentUsers.length === 0) return;
-    // source field comes from meta.json; agent users without it cannot be checked
+    // source is projected from agent_configs.meta; agent users without marketplace lineage cannot be checked.
     const payload = updateCheckableAgentUsers.flatMap((agent) => {
       const source = agent.source;
       if (!source?.marketplace_item_id) return [];

@@ -67,6 +67,7 @@ async def test_panel_agents_uses_injected_user_repo_for_owner_scope(monkeypatch:
             "version": "0.1.0",
             "runtime": {},
             "mcp": {},
+            "meta": {"source": {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}},
             "created_at": 1,
             "updated_at": 2,
         },
@@ -83,6 +84,7 @@ async def test_panel_agents_uses_injected_user_repo_for_owner_scope(monkeypatch:
     assert seen == ["user-1"]
     assert result["items"][0]["id"] == "agent-1"
     assert result["items"][0]["name"] == "Toad"
+    assert result["items"][0]["source"] == {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}
     assert "config" not in result["items"][0]
 
 

@@ -140,13 +140,21 @@ def _compact_from_repo(config: dict[str, Any]) -> dict[str, Any]:
     return {"trigger_tokens": compact.get("trigger_tokens")}
 
 
+def _source_from_repo(config: dict[str, Any]) -> dict[str, Any] | None:
+    meta = config.get("meta") if isinstance(config.get("meta"), dict) else {}
+    source = meta.get("source") if isinstance(meta.get("source"), dict) else None
+    if not source:
+        return None
+    return dict(source)
+
+
 def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
     config = agent_config_repo.get_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {user.id}")
-    return {
+    item = {
         "id": user.id,
         "name": config.get("name") or user.display_name,
         "description": config.get("description", ""),
@@ -166,6 +174,10 @@ def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
         "created_at": config.get("created_at", 0),
         "updated_at": config.get("updated_at", 0),
     }
+    source = _source_from_repo(config)
+    if source is not None:
+        item["source"] = source
+    return item
 
 
 def _agent_user_summary_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
@@ -174,7 +186,7 @@ def _agent_user_summary_from_repos(user: Any, agent_config_repo: Any) -> dict[st
     config = agent_config_repo.get_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {user.id}")
-    return {
+    item = {
         "id": user.id,
         "name": config.get("name") or user.display_name,
         "description": config.get("description", ""),
@@ -185,6 +197,10 @@ def _agent_user_summary_from_repos(user: Any, agent_config_repo: Any) -> dict[st
         "created_at": config.get("created_at", 0),
         "updated_at": config.get("updated_at", 0),
     }
+    source = _source_from_repo(config)
+    if source is not None:
+        item["source"] = source
+    return item
 
 
 # ── Leon builtin ──

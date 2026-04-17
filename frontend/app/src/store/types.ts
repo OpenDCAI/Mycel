@@ -47,6 +47,10 @@ export interface Agent {
   description: string;
   status: AgentStatus;
   version: string;
+  source?: {
+    marketplace_item_id?: string;
+    installed_version?: string;
+  };
   avatar_url?: string;
   config: AgentConfig;
   config_loaded?: boolean;
