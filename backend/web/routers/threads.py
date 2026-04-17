@@ -54,7 +54,7 @@ from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_sandbox, resolve_existing_sandbox_lease
 from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
-from storage.contracts import SandboxRow, WorkspaceRow
+from storage.contracts import WorkspaceRow
 
 logger = logging.getLogger(__name__)
 
@@ -536,7 +536,6 @@ def _create_thread_sandbox_resources(
     cwd: str | None = None,
     *,
     workspace_repo: Any,
-    sandbox_repo: Any,
     owner_user_id: str,
 ) -> str:
     """Create lease and terminal resources without pre-provisioning file-channel storage."""
@@ -547,7 +546,7 @@ def _create_thread_sandbox_resources(
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
         normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
-        lease_repo.create(
+        created_lease = lease_repo.create(
             lease_id,
             sandbox_type,
             recipe_id=normalized_recipe["id"],
@@ -557,20 +556,9 @@ def _create_thread_sandbox_resources(
     finally:
         lease_repo.close()
 
-    sandbox_id = _materialize_sandbox_for_lease(
-        sandbox_repo,
-        lease={
-            "lease_id": lease_id,
-            "provider_name": sandbox_type,
-            "provider_env_id": None,
-            "recipe": normalized_recipe,
-            "desired_state": "running",
-            "observed_state": "running",
-            "status": "ready",
-            "last_error": None,
-        },
-        owner_user_id=owner_user_id,
-    )
+    sandbox_id = str((created_lease or {}).get("sandbox_id") or "").strip()
+    if not sandbox_id:
+        raise RuntimeError("lease_repo.create must return sandbox_id for thread sandbox resources")
 
     terminal_repo = make_terminal_repo()
     try:
@@ -600,59 +588,6 @@ def _create_thread_sandbox_resources(
         owner_user_id=owner_user_id,
         workspace_path=initial_cwd,
     )
-
-
-def _materialize_sandbox_for_lease(
-    sandbox_repo: Any,
-    *,
-    lease: dict[str, Any],
-    owner_user_id: str,
-) -> str:
-    lease_id = str(lease.get("lease_id") or "").strip()
-    if not lease_id:
-        raise RuntimeError("lease.lease_id is required")
-    provider_name = str(lease.get("provider_name") or "").strip()
-    if not provider_name:
-        raise RuntimeError("lease.provider_name is required")
-
-    sandbox_id = f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-lease-bridge:{lease_id}').hex}"
-    get_by_id = getattr(sandbox_repo, "get_by_id", None)
-    if callable(get_by_id):
-        existing = get_by_id(sandbox_id)
-        if existing is not None:
-            if str(getattr(existing, "owner_user_id", "")).strip() != owner_user_id:
-                raise RuntimeError(f"sandbox owner mismatch for lease bridge {lease_id}")
-            return sandbox_id
-
-    recipe = lease.get("recipe")
-    sandbox_template_id = None
-    if isinstance(recipe, dict):
-        sandbox_template_id = str(recipe.get("id") or "").strip() or None
-    if sandbox_template_id is None:
-        sandbox_template_id = str(lease.get("recipe_id") or "").strip() or None
-
-    now = time.time()
-    # @@@sandbox-bridge-write - Phase 5 lands real sandbox rows but keeps the
-    # legacy lease pointer explicit in sandbox.config so read-side cutover can
-    # be truthful without guessing which live lease backs the sandbox row.
-    sandbox_repo.create(
-        SandboxRow(
-            id=sandbox_id,
-            owner_user_id=owner_user_id,
-            provider_name=provider_name,
-            provider_env_id=str(lease.get("provider_env_id") or lease.get("current_instance_id") or "").strip() or None,
-            sandbox_template_id=sandbox_template_id,
-            desired_state=str(lease.get("desired_state") or lease.get("status") or "running"),
-            observed_state=str(lease.get("observed_state") or lease.get("status") or "unknown"),
-            status=str(lease.get("status") or "unknown"),
-            observed_at=now,
-            last_error=str(lease.get("last_error") or "").strip() or None,
-            config={"legacy_lease_id": lease_id},
-            created_at=now,
-            updated_at=now,
-        )
-    )
-    return sandbox_id
 
 
 def _materialize_workspace_for_sandbox(
@@ -809,7 +744,6 @@ def _create_owned_thread(
             selected_recipe,
             payload.cwd,
             workspace_repo=app.state.workspace_repo,
-            sandbox_repo=app.state.sandbox_repo,
             owner_user_id=owner_user_id,
         )
         bound_cwd = None

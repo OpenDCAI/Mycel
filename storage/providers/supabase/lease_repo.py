@@ -84,6 +84,7 @@ def _instance_from_lease(row: dict[str, Any]) -> dict[str, Any] | None:
 def _lease_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
     compat = _compat(row)
     result = {
+        "sandbox_id": row.get("id"),
         "lease_id": _lease_id(row),
         "provider_name": row.get("provider_name"),
         "recipe_id": compat.get("recipe_id") or row.get("sandbox_template_id"),

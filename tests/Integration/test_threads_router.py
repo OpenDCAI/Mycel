@@ -786,7 +786,6 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
         default_recipe_snapshot("local"),
         "/tmp/fresh-local-thread",
         workspace_repo=workspace_repo,
-        sandbox_repo=app.state.sandbox_repo,
         owner_user_id="owner-1",
     )
 
@@ -817,7 +816,6 @@ async def test_create_thread_route_persists_current_workspace_id_for_new_sandbox
         default_recipe_snapshot("local"),
         "/tmp/fresh-local-thread",
         workspace_repo=workspace_repo,
-        sandbox_repo=app.state.sandbox_repo,
         owner_user_id="owner-1",
     )
     row = app.state.thread_repo.rows[created["thread_id"]]

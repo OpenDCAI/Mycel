@@ -63,6 +63,7 @@ def test_supabase_lease_repo_get_reads_container_sandboxes_lease_bridge():
     lease = repo.get("lease-1")
 
     assert lease is not None
+    assert lease["sandbox_id"] == "sandbox-1"
     assert lease["lease_id"] == "lease-1"
     assert lease["provider_name"] == "local"
     assert lease["recipe_id"] == "local:default"
@@ -116,6 +117,7 @@ def test_supabase_lease_repo_create_writes_container_sandbox_bridge():
     )
 
     row = tables["container.sandboxes"][0]
+    assert created["sandbox_id"] == row["id"]
     assert created["lease_id"] == "lease-1"
     assert row["owner_user_id"] == "owner-1"
     assert row["provider_name"] == "local"

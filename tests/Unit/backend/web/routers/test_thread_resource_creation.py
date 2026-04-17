@@ -11,8 +11,9 @@ class _LeaseRepo:
         self.created: list[dict[str, str]] = []
         self.closed = False
 
-    def create(self, lease_id: str, provider_name: str, **kwargs) -> None:
+    def create(self, lease_id: str, provider_name: str, **kwargs) -> dict[str, str]:
         self.created.append({"lease_id": lease_id, "provider_name": provider_name, **kwargs})
+        return {"lease_id": lease_id, "sandbox_id": "sandbox-from-lease-create"}
 
     def close(self) -> None:
         self.closed = True
@@ -30,18 +31,9 @@ class _TerminalRepo:
         self.closed = True
 
 
-class _SandboxRepo:
-    def __init__(self) -> None:
-        self.created: list[object] = []
-
-    def create(self, row) -> None:
-        self.created.append(row)
-
-
 def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(monkeypatch, tmp_path):
     lease_repo = _LeaseRepo()
     terminal_repo = _TerminalRepo()
-    sandbox_repo = _SandboxRepo()
     workspace_repo = object()
     materialize_calls: list[dict[str, object]] = []
 
@@ -60,21 +52,18 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
         {"id": "local:default", "provider_name": "local", "provider_type": "local"},
         cwd="/tmp/workspace",
         workspace_repo=workspace_repo,
-        sandbox_repo=sandbox_repo,
         owner_user_id="owner-1",
     )
 
     assert workspace_id == "workspace-1"
     assert len(lease_repo.created) == 1
-    assert len(sandbox_repo.created) == 1
     assert lease_repo.created[0]["provider_name"] == "local"
     assert "volume_id" not in lease_repo.created[0]
     assert len(terminal_repo.created) == 1
     assert terminal_repo.created[0]["thread_id"] == "thread-1"
     assert terminal_repo.created[0]["lease_id"] == lease_repo.created[0]["lease_id"]
     assert terminal_repo.created[0]["initial_cwd"] == "/tmp/workspace"
-    assert sandbox_repo.created[0].config["legacy_lease_id"] == lease_repo.created[0]["lease_id"]
-    assert materialize_calls[0]["sandbox_id"] == sandbox_repo.created[0].id
+    assert materialize_calls[0]["sandbox_id"] == "sandbox-from-lease-create"
     assert lease_repo.closed
     assert terminal_repo.closed
 
@@ -82,7 +71,6 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
 def test_create_thread_sandbox_resources_returns_workspace_id(monkeypatch, tmp_path):
     lease_repo = _LeaseRepo()
     terminal_repo = _TerminalRepo()
-    sandbox_repo = _SandboxRepo()
     workspace_repo = object()
 
     monkeypatch.setattr(helpers, "_get_container", lambda: _Container())
@@ -96,7 +84,6 @@ def test_create_thread_sandbox_resources_returns_workspace_id(monkeypatch, tmp_p
         {"id": "local:default", "provider_name": "local", "provider_type": "local"},
         cwd="/tmp/workspace",
         workspace_repo=workspace_repo,
-        sandbox_repo=sandbox_repo,
         owner_user_id="owner-1",
     )
 

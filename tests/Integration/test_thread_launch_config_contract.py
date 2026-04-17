@@ -878,7 +878,6 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_without_laun
         normalized_recipe,
         None,
         workspace_repo=app.state.workspace_repo,
-        sandbox_repo=app.state.sandbox_repo,
         owner_user_id="owner-1",
     )
 
