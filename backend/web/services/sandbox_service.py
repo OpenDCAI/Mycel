@@ -165,6 +165,20 @@ def list_user_leases(
         monitor_repo.close()
 
 
+def _sandbox_summary(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in row.items() if key != "lease_id"}
+
+
+def list_user_sandboxes(
+    user_id: str,
+    *,
+    thread_repo: Any = None,
+    user_repo: Any = None,
+) -> list[dict[str, Any]]:
+    lease_rows = list_user_leases(user_id, thread_repo=thread_repo, user_repo=user_repo)
+    return [_sandbox_summary(row) for row in lease_rows]
+
+
 def count_user_visible_leases_by_provider(
     user_id: str,
     *,
