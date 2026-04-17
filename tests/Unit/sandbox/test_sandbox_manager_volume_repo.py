@@ -313,7 +313,6 @@ def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monke
     lease = SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
-    monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
 
     result = manager._setup_mounts("thread-1")
 
@@ -331,7 +330,6 @@ def test_setup_mounts_daytona_uses_lease_id_for_managed_volume(monkeypatch, tmp_
     lease = SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
-    monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
 
     result = manager._setup_mounts("thread-1")
 
