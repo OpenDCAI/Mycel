@@ -1,4 +1,4 @@
-"""Monitor service: lease observation + health diagnostics."""
+"""Monitor service: sandbox observation + health diagnostics."""
 
 from __future__ import annotations
 
@@ -159,14 +159,14 @@ def _live_thread_ids(thread_ids: list[str]) -> set[str]:
     return {thread_id for thread_id in unique if (owners.get(thread_id) or {}).get("agent_user_id")}
 
 
-LEASE_SEMANTIC_ORDER = [
+SANDBOX_SEMANTIC_ORDER = [
     "orphan_diverged",
     "diverged",
     "orphan",
     "healthy",
 ]
 
-LEASE_SEMANTIC_META = {
+SANDBOX_SEMANTIC_META = {
     "orphan_diverged": {
         "title": "Orphaned + Diverged",
         "description": "Sandbox lost thread binding while desired and observed state still disagree.",
@@ -186,14 +186,14 @@ LEASE_SEMANTIC_META = {
 }
 
 
-LEASE_TRIAGE_ORDER = [
+SANDBOX_TRIAGE_ORDER = [
     "active_drift",
     "detached_residue",
     "orphan_cleanup",
     "healthy_capacity",
 ]
 
-LEASE_TRIAGE_META = {
+SANDBOX_TRIAGE_META = {
     "active_drift": {
         "title": "Active Drift",
         "description": "Sandboxes whose desired and observed state still disagree recently enough to warrant attention.",
@@ -222,7 +222,7 @@ LEASE_TRIAGE_META = {
 DETACHED_RESIDUE_THRESHOLD_HOURS = 4.0
 
 
-def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -> dict[str, str]:
+def _classify_sandbox_semantics(*, thread_id: str | None, badge: dict[str, Any]) -> dict[str, str]:
     is_orphan = not bool(thread_id)
     is_converged = bool(badge.get("converged"))
     if is_orphan and not is_converged:
@@ -233,7 +233,7 @@ def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -
         category = "orphan"
     else:
         category = "healthy"
-    meta = LEASE_SEMANTIC_META[category]
+    meta = SANDBOX_SEMANTIC_META[category]
     return {
         "category": category,
         "title": meta["title"],
@@ -264,7 +264,7 @@ def _hours_since(iso_timestamp: str | None) -> float | None:
     return delta.total_seconds() / 3600
 
 
-def _classify_lease_triage(
+def _classify_sandbox_triage(
     *,
     thread_id: str | None,
     badge: dict[str, Any],
@@ -287,7 +287,7 @@ def _classify_lease_triage(
     else:
         key = "active_drift"
 
-    meta = LEASE_TRIAGE_META[key]
+    meta = SANDBOX_TRIAGE_META[key]
     return {
         "category": key,
         "title": meta["title"],
@@ -297,7 +297,7 @@ def _classify_lease_triage(
     }
 
 
-def _lease_groups(
+def _sandbox_groups(
     *,
     items: list[dict[str, Any]],
     order: list[str],
@@ -523,7 +523,7 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[st
         if thread_id not in live_threads:
             thread_id = None
         badge = _make_badge(row["desired_state"], row["observed_state"])
-        triage = _classify_lease_triage(
+        triage = _classify_sandbox_triage(
             thread_id=thread_id,
             badge=badge,
             observed_state=row["observed_state"],
@@ -536,7 +536,7 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[st
             "instance_id": row["current_instance_id"],
             "thread": _thread_ref(thread_id),
             "state_badge": badge,
-            "semantics": _classify_lease_semantics(thread_id=thread_id, badge=badge),
+            "semantics": _classify_sandbox_semantics(thread_id=thread_id, badge=badge),
             "triage": triage,
             "error": row["last_error"],
             "updated_at": row["updated_at"],
@@ -544,16 +544,16 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[st
         }
         items.append(item)
 
-    summary, groups = _lease_groups(
+    summary, groups = _sandbox_groups(
         items=items,
-        order=LEASE_SEMANTIC_ORDER,
-        meta_by_key=LEASE_SEMANTIC_META,
+        order=SANDBOX_SEMANTIC_ORDER,
+        meta_by_key=SANDBOX_SEMANTIC_META,
         field="semantics",
     )
-    triage_summary, triage_groups = _lease_groups(
+    triage_summary, triage_groups = _sandbox_groups(
         items=items,
-        order=LEASE_TRIAGE_ORDER,
-        meta_by_key=LEASE_TRIAGE_META,
+        order=SANDBOX_TRIAGE_ORDER,
+        meta_by_key=SANDBOX_TRIAGE_META,
         field="triage",
     )
 
@@ -607,7 +607,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
     raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
     live_thread_refs = _canonical_live_thread_refs(raw_thread_ids)
     badge = _make_badge(sandbox.get("desired_state"), sandbox.get("observed_state"))
-    triage = _classify_lease_triage(
+    triage = _classify_sandbox_triage(
         thread_id=live_thread_refs[0]["thread_id"] if live_thread_refs else None,
         badge=badge,
         observed_state=sandbox.get("observed_state"),
