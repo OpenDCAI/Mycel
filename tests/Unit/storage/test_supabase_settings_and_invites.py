@@ -26,7 +26,7 @@ class _RecordingSupabaseClient(FakeSupabaseClient):
 
 def test_user_settings_recent_workspace_parser_does_not_hide_unexpected_json_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     tables = {
-        "user_settings": [
+        "identity.user_settings": [
             {
                 "user_id": "user-1",
                 "recent_workspaces": '["/workspace"]',
@@ -48,7 +48,7 @@ def test_user_settings_reads_account_resource_limits() -> None:
     repo = SupabaseUserSettingsRepo(
         FakeSupabaseClient(
             tables={
-                "user_settings": [
+                "identity.user_settings": [
                     {
                         "user_id": "user-1",
                         "account_resource_limits": {"sandbox": {"daytona_selfhost": 5}},
@@ -59,6 +59,20 @@ def test_user_settings_reads_account_resource_limits() -> None:
     )
 
     assert repo.get_account_resource_limits("user-1") == {"sandbox": {"daytona_selfhost": 5}}
+
+
+def test_user_settings_repo_uses_identity_schema_for_reads_and_writes() -> None:
+    tables = {"identity.user_settings": [{"user_id": "user-1", "default_model": "leon:large"}]}
+    client = _RecordingSupabaseClient(tables)
+    repo = SupabaseUserSettingsRepo(client)
+
+    assert repo.get("user-1")["default_model"] == "leon:large"
+
+    repo.set_default_model("user-1", "leon:small")
+
+    assert client.table_names == ["identity.user_settings", "identity.user_settings"]
+    assert tables["identity.user_settings"][0]["default_model"] == "leon:small"
+    assert "user_settings" not in tables
 
 
 def test_invite_code_expiry_does_not_hide_non_string_expires_at() -> None:
