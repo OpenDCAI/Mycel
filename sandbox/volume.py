@@ -1,6 +1,6 @@
 """SandboxVolume — provider-agnostic mount/sync engine.
 
-"Mount" is abstract: make a VolumeSource visible inside the sandbox.
+"Mount" is abstract: make a manager-supplied source path visible inside the sandbox.
 Docker uses bind mount, E2B uses tar sync, Daytona uses managed volume.
 SandboxVolume smooths over these differences.
 
@@ -20,7 +20,7 @@ class SandboxVolume:
     """Provider-agnostic volume engine.
 
     Created once per SandboxManager (per provider).
-    VolumeSource is per-thread, passed to operations or resolved from DB.
+    Source paths are resolved by SandboxManager and passed to operations.
     """
 
     def __init__(self, provider, provider_capability):
