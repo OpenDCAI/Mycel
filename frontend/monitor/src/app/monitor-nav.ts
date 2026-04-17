@@ -8,7 +8,7 @@ export type MonitorNavItem = {
 export const monitorNav: readonly MonitorNavItem[] = [
   { to: "/dashboard", label: "Dashboard", eyebrow: "Overview" },
   { to: "/resources", label: "Resources", eyebrow: "Runtime", matchPrefixes: ["/resources", "/providers", "/runtimes"] },
-  { to: "/sandboxes", label: "Sandboxes", eyebrow: "Runtime", matchPrefixes: ["/sandboxes", "/leases", "/operations"] },
+  { to: "/sandboxes", label: "Sandboxes", eyebrow: "Runtime", matchPrefixes: ["/sandboxes", "/operations"] },
   { to: "/sandbox-configs", label: "Sandbox Configs", eyebrow: "Config" },
   { to: "/threads", label: "Threads", eyebrow: "Workbench", matchPrefixes: ["/threads"] },
   { to: "/evaluation", label: "Evaluation", eyebrow: "Operators", matchPrefixes: ["/evaluation"] },

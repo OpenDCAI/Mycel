@@ -11,6 +11,7 @@ describe("monitor navigation", () => {
   it("treats sandboxes as the canonical runtime shell", () => {
     expect(monitorNav.some((item) => item.to === "/sandboxes" && item.label === "Sandboxes")).toBe(true);
     expect(resolveMonitorNav("/sandboxes").to).toBe("/sandboxes");
-    expect(resolveMonitorNav("/leases").to).toBe("/sandboxes");
+    expect(resolveMonitorNav("/operations/op-1").to).toBe("/sandboxes");
+    expect(resolveMonitorNav("/leases").to).toBe("/dashboard");
   });
 });

@@ -136,13 +136,25 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
 
 
 @pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("get", "/api/monitor/leases"),
+        ("get", "/api/monitor/leases/lease-1"),
+        ("post", "/api/monitor/leases/lease-1/cleanup"),
+    ],
+)
+def test_monitor_legacy_lease_routes_are_not_exposed(method, path):
+    response = _request(method, path)
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
     ("method", "path", "service_name", "payload"),
     [
-        ("get", "/api/monitor/leases", "list_leases", {"summary": {}, "groups": []}),
         ("get", "/api/monitor/sandboxes", "list_monitor_sandboxes", {"summary": {}, "groups": [], "items": []}),
         ("get", "/api/monitor/provider-sessions", "list_monitor_provider_sessions", {"sessions": [], "count": 0}),
         ("get", "/api/monitor/providers/daytona", "get_monitor_provider_detail", {"provider": {"id": "daytona"}}),
-        ("get", "/api/monitor/leases/lease-1", "get_monitor_lease_detail", {"lease": {"lease_id": "lease-1"}}),
         ("get", "/api/monitor/sandboxes/sandbox-1", "get_monitor_sandbox_detail", {"sandbox": {"sandbox_id": "sandbox-1"}}),
         ("post", "/api/monitor/sandboxes/sandbox-1/cleanup", "request_monitor_sandbox_cleanup", {"accepted": True}),
         (
@@ -175,35 +187,6 @@ def test_monitor_routes_delegate_to_service(monkeypatch, method, path, service_n
     assert response.status_code == 200
     assert response.json() == payload
     assert calls
-
-
-def test_monitor_lease_cleanup_route_bridges_to_canonical_sandbox_cleanup(monkeypatch):
-    class _Repo:
-        def query_sandboxes(self):
-            return [{"sandbox_id": "sandbox-1", "lease_id": "lease-1"}]
-
-        def close(self):
-            return None
-
-    calls: list[str] = []
-
-    monkeypatch.setattr(monitor, "make_sandbox_monitor_repo", lambda: _Repo())
-    monkeypatch.setattr(
-        monitor_service,
-        "request_monitor_sandbox_cleanup",
-        lambda sandbox_id: calls.append(sandbox_id) or {"accepted": True},
-    )
-    monkeypatch.setattr(
-        monitor_service,
-        "request_monitor_lease_cleanup",
-        lambda _lease_id: (_ for _ in ()).throw(AssertionError("lease cleanup route should bridge to canonical sandbox cleanup")),
-    )
-
-    response = _request("post", "/api/monitor/leases/lease-1/cleanup")
-
-    assert response.status_code == 200
-    assert response.json() == {"accepted": True}
-    assert calls == ["sandbox-1"]
 
 
 def test_monitor_threads_routes_use_authenticated_owner(monkeypatch):
@@ -241,7 +224,6 @@ def test_monitor_thread_detail_route_awaits_service(monkeypatch):
     ("path", "service_name", "message"),
     [
         ("/api/monitor/providers/missing", "get_monitor_provider_detail", "Provider not found: missing"),
-        ("/api/monitor/leases/missing", "get_monitor_lease_detail", "Lease not found: missing"),
         ("/api/monitor/sandboxes/missing", "get_monitor_sandbox_detail", "Sandbox not found: missing"),
         ("/api/monitor/operations/missing", "get_monitor_operation_detail", "Operation not found: missing"),
         ("/api/monitor/runtimes/missing", "get_monitor_runtime_detail", "Runtime not found: missing"),

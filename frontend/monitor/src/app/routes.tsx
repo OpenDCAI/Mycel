@@ -5,8 +5,6 @@ import EvaluationBatchDetailPage from "../pages/EvaluationBatchDetailPage";
 import DashboardPage from "../pages/DashboardPage";
 import EvaluationPage from "../pages/EvaluationPage";
 import EvaluationRunDetailPage from "../pages/EvaluationRunDetailPage";
-import LeaseDetailPage from "../pages/LeaseDetailPage";
-import LeasesPage from "../pages/LeasesPage";
 import OperationDetailPage from "../pages/OperationDetailPage";
 import ProviderDetailPage from "../pages/ProviderDetailPage";
 import RuntimeDetailPage from "../pages/RuntimeDetailPage";
@@ -28,8 +26,6 @@ export function MonitorRoutes() {
         <Route path="/providers/:providerId" element={<ProviderDetailPage />} />
         <Route path="/sandboxes" element={<SandboxesPage />} />
         <Route path="/sandboxes/:sandboxId" element={<SandboxDetailPage />} />
-        <Route path="/leases" element={<LeasesPage />} />
-        <Route path="/leases/:leaseId" element={<LeaseDetailPage />} />
         <Route path="/operations/:operationId" element={<OperationDetailPage />} />
         <Route path="/runtimes/:runtimeSessionId" element={<RuntimeDetailPage />} />
         <Route path="/threads" element={<ThreadsPage />} />
