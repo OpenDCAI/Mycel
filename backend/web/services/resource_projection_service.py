@@ -60,7 +60,6 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
             resource_service.build_resource_session_payload(
                 session_identity=session_identity,
                 sandbox_id=sandbox_id,
-                lease_id=None,
                 thread_id=thread_id,
                 runtime_session_id=sandbox.get("runtime_session_id"),
                 owner=owner,
@@ -305,7 +304,6 @@ def list_resource_providers() -> dict[str, Any]:
             observed_state = session.get("observed_state")
             desired_state = session.get("desired_state")
             thread_id = str(session.get("thread_id") or "")
-            lease_id = str(session.get("lease_id") or "")
             sandbox_id = str(session.get("sandbox_id") or "").strip()
             runtime_session_id = runtime_session_ids.get(str(session.get("sandbox_id") or "").strip())
             session_metrics = _to_session_metrics(snapshot_by_sandbox.get(sandbox_id))
@@ -328,7 +326,6 @@ def list_resource_providers() -> dict[str, Any]:
                 resource_service.build_resource_session_payload(
                     session_identity=session_identity,
                     sandbox_id=str(session.get("sandbox_id") or "").strip() or None,
-                    lease_id=lease_id,
                     thread_id=thread_id,
                     runtime_session_id=runtime_session_id,
                     owner=owner,

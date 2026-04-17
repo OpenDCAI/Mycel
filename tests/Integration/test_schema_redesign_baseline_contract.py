@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from types import SimpleNamespace
 
 from backend.web.services import resource_common, resource_projection_service, resource_service, sandbox_service
@@ -136,10 +137,13 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
     assert "memberId" not in session
 
 
-def test_build_resource_session_payload_has_no_member_id_field() -> None:
+def test_build_resource_session_payload_has_no_member_or_lease_id_field() -> None:
+    signature = inspect.signature(resource_service.build_resource_session_payload)
+    assert "lease_id" not in signature.parameters
+
     payload = resource_service.build_resource_session_payload(
-        session_identity="lease-1:thread-1",
-        lease_id="lease-1",
+        session_identity="sandbox-1:thread-1",
+        sandbox_id="sandbox-1",
         thread_id="thread-1",
         runtime_session_id="provider-session-1",
         owner={
@@ -154,8 +158,8 @@ def test_build_resource_session_payload_has_no_member_id_field() -> None:
     )
 
     assert payload == {
-        "id": "lease-1:thread-1",
-        "leaseId": "lease-1",
+        "id": "sandbox-1:thread-1",
+        "sandboxId": "sandbox-1",
         "threadId": "thread-1",
         "runtimeSessionId": "provider-session-1",
         "agentUserId": "agent-1",
@@ -166,3 +170,4 @@ def test_build_resource_session_payload_has_no_member_id_field() -> None:
         "metrics": None,
     }
     assert "memberId" not in payload
+    assert "leaseId" not in payload
