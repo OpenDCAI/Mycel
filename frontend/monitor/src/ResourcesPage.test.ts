@@ -9,7 +9,6 @@ describe("resource session grouping", () => {
       {
         id: "sandbox-1:thread-1",
         sandboxId: "sandbox-1",
-        leaseId: "lease-old",
         threadId: "thread-1",
         agentName: "Toad",
         status: "running",
@@ -18,7 +17,6 @@ describe("resource session grouping", () => {
       {
         id: "sandbox-1:thread-1",
         sandboxId: "sandbox-1",
-        leaseId: "lease-new",
         threadId: "thread-1",
         agentName: "Toad",
         status: "running",

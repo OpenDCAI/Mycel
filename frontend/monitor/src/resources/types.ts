@@ -30,7 +30,6 @@ export interface SessionMetrics {
 export interface ResourceSession {
   id: string;
   sandboxId?: string;
-  leaseId?: string;
   threadId: string;
   runtimeSessionId?: string | null;
   agentUserId?: string | null;

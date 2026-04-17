@@ -79,7 +79,6 @@ const SANDBOX_FILTER_STATUSES: ResourceSession["status"][] = ["running", "paused
 
 interface SandboxGroup {
   sandboxId: string;
-  leaseId: string;
   displayId: string;
   status: ResourceSession["status"];
   sessions: ResourceSession[];
@@ -87,7 +86,7 @@ interface SandboxGroup {
   metrics: SessionMetrics | null;
 }
 
-export function buildSandboxGroupDetailLink(group: { sandboxId?: string | null; leaseId?: string | null }) {
+export function buildSandboxGroupDetailLink(group: { sandboxId?: string | null }) {
   const sandboxId = String(group.sandboxId || "").trim();
   if (!sandboxId) {
     return null;
@@ -232,7 +231,7 @@ const PROVIDER_TYPE_GLYPH = {
 export function groupResourceSessions(sessions: ResourceSession[]): SandboxGroup[] {
   const map = new Map<string, ResourceSession[]>();
   for (const session of sessions) {
-    const key = session.sandboxId || session.leaseId || session.id;
+    const key = session.sandboxId || session.id;
     const rows = map.get(key) ?? [];
     rows.push(session);
     map.set(key, rows);
@@ -250,8 +249,7 @@ export function groupResourceSessions(sessions: ResourceSession[]): SandboxGroup
       );
       return {
         sandboxId: group[0].sandboxId ?? "",
-        leaseId: group[0].leaseId ?? "",
-        displayId: group[0].sandboxId ?? group[0].leaseId ?? "local",
+        displayId: group[0].sandboxId ?? "local",
         status: best.status,
         sessions: sorted,
         startedAt: earliest,
@@ -792,7 +790,7 @@ function ProviderDetail({
                 <div className="sandbox-grid">
                   {filteredGroups.map((group) => (
                     <SandboxCard
-                      key={group.sandboxId || group.leaseId || group.sessions.map((session) => session.id).join("|")}
+                      key={group.sandboxId || group.sessions.map((session) => session.id).join("|")}
                       group={group}
                       providerType={provider.type}
                       onOpen={() => setSelectedGroup(group)}
@@ -939,7 +937,7 @@ function SandboxCard({
   const showRuntimeBindingWarning =
     providerType !== "local" &&
     group.status === "running" &&
-    Boolean(group.sandboxId || group.leaseId) &&
+    Boolean(group.sandboxId) &&
     !group.sessions.some((session) => Boolean(session.runtimeSessionId));
   const showQuotaOnlyDiskState =
     metrics != null &&
@@ -1034,7 +1032,7 @@ function SandboxInspector({
     group.status === "paused"
       ? "沙盒已暂停，恢复运行后才能浏览文件。"
       : providerType !== "local" &&
-          (group.sandboxId || group.leaseId) &&
+          group.sandboxId &&
           !group.sessions.some((session) => Boolean(session.runtimeSessionId))
         ? "当前沙盒没有 active runtime session，无法浏览文件。"
         : null;

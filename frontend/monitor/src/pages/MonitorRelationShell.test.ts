@@ -61,7 +61,7 @@ describe("monitor relation shell", () => {
   });
 
   it("uses sandbox detail link for resource group relation shell", () => {
-    expect(buildSandboxGroupDetailLink({ sandboxId: "sandbox-1", leaseId: "lease-1" })).toEqual({
+    expect(buildSandboxGroupDetailLink({ sandboxId: "sandbox-1" })).toEqual({
       href: "/sandboxes/sandbox-1",
       label: "sandbox-1",
     });
