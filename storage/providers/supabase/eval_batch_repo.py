@@ -22,7 +22,7 @@ class SupabaseEvaluationBatchRepo:
 
     def create_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
         rows = q.rows(
-            self._client.table(_BATCH_TABLE).insert(batch).execute(),
+            self._t(_BATCH_TABLE).insert(batch).execute(),
             _REPO,
             "create_batch",
         )
@@ -32,7 +32,7 @@ class SupabaseEvaluationBatchRepo:
 
     def get_batch(self, batch_id: str) -> dict | None:
         rows = q.rows(
-            self._client.table(_BATCH_TABLE).select("*").eq("batch_id", batch_id).execute(),
+            self._t(_BATCH_TABLE).select("*").eq("batch_id", batch_id).execute(),
             _REPO,
             "get_batch",
         )
@@ -41,7 +41,7 @@ class SupabaseEvaluationBatchRepo:
         return self._map_batch(rows[0])
 
     def list_batches(self, limit: int = 50) -> list[dict[str, Any]]:
-        query = self._client.table(_BATCH_TABLE).select("*")
+        query = self._t(_BATCH_TABLE).select("*")
         query = q.order(query, "created_at", desc=True, repo=_REPO, operation="list_batches")
         query = q.limit(query, limit, _REPO, "list_batches")
         return [self._map_batch(row) for row in q.rows(query.execute(), _REPO, "list_batches")]
@@ -58,7 +58,7 @@ class SupabaseEvaluationBatchRepo:
         if not updates:
             return self.get_batch(batch_id)
         rows = q.rows(
-            self._client.table(_BATCH_TABLE).update(updates).eq("batch_id", batch_id).execute(),
+            self._t(_BATCH_TABLE).update(updates).eq("batch_id", batch_id).execute(),
             _REPO,
             "update_batch",
         )
@@ -68,7 +68,7 @@ class SupabaseEvaluationBatchRepo:
 
     def create_batch_run(self, batch_run: dict[str, Any]) -> dict[str, Any]:
         rows = q.rows(
-            self._client.table(_BATCH_RUN_TABLE).insert(batch_run).execute(),
+            self._t(_BATCH_RUN_TABLE).insert(batch_run).execute(),
             _REPO,
             "create_batch_run",
         )
@@ -77,13 +77,13 @@ class SupabaseEvaluationBatchRepo:
         return self._map_batch_run(rows[0])
 
     def list_batch_runs(self, batch_id: str) -> list[dict[str, Any]]:
-        query = self._client.table(_BATCH_RUN_TABLE).select("*").eq("batch_id", batch_id)
+        query = self._t(_BATCH_RUN_TABLE).select("*").eq("batch_id", batch_id)
         query = q.order(query, "item_key", desc=False, repo=_REPO, operation="list_batch_runs")
         return [self._map_batch_run(row) for row in q.rows(query.execute(), _REPO, "list_batch_runs")]
 
     def get_batch_run_by_eval_run_id(self, eval_run_id: str) -> dict[str, Any] | None:
         rows = q.rows(
-            self._client.table(_BATCH_RUN_TABLE).select("*").eq("eval_run_id", eval_run_id).execute(),
+            self._t(_BATCH_RUN_TABLE).select("*").eq("eval_run_id", eval_run_id).execute(),
             _REPO,
             "get_batch_run_by_eval_run_id",
         )
@@ -92,7 +92,7 @@ class SupabaseEvaluationBatchRepo:
         return self._map_batch_run(rows[0])
 
     def list_batch_runs_by_thread_id(self, thread_id: str) -> list[dict[str, Any]]:
-        query = self._client.table(_BATCH_RUN_TABLE).select("*").eq("thread_id", thread_id)
+        query = self._t(_BATCH_RUN_TABLE).select("*").eq("thread_id", thread_id)
         query = q.order(query, "started_at", desc=True, repo=_REPO, operation="list_batch_runs_by_thread_id")
         return [self._map_batch_run(row) for row in q.rows(query.execute(), _REPO, "list_batch_runs_by_thread_id")]
 
@@ -119,13 +119,13 @@ class SupabaseEvaluationBatchRepo:
         )
         if not updates:
             rows = q.rows(
-                self._client.table(_BATCH_RUN_TABLE).select("*").eq("batch_run_id", batch_run_id).execute(),
+                self._t(_BATCH_RUN_TABLE).select("*").eq("batch_run_id", batch_run_id).execute(),
                 _REPO,
                 "update_batch_run get",
             )
             return self._map_batch_run(rows[0]) if rows else None
         rows = q.rows(
-            self._client.table(_BATCH_RUN_TABLE).update(updates).eq("batch_run_id", batch_run_id).execute(),
+            self._t(_BATCH_RUN_TABLE).update(updates).eq("batch_run_id", batch_run_id).execute(),
             _REPO,
             "update_batch_run",
         )
@@ -145,6 +145,9 @@ class SupabaseEvaluationBatchRepo:
             "updated_at": row.get("updated_at"),
             "summary_json": row.get("summary_json") or {},
         }
+
+    def _t(self, table_name: str) -> Any:
+        return q.schema_table(self._client, "observability", table_name, _REPO)
 
     def _map_batch_run(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
