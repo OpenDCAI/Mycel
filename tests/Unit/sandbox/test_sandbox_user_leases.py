@@ -306,6 +306,44 @@ def test_list_user_leases_no_longer_roundtrips_through_lease_summary_shell(monke
     assert [lease["lease_id"] for lease in leases] == ["lease-1"]
 
 
+def test_list_user_sandboxes_no_longer_calls_public_lease_compat_reader(monkeypatch):
+    rows = [_lease_row("lease-1", "thread-a", sandbox_id="sandbox-1")]
+    thread_repo, user_repo = _single_agent_repos("thread-a")
+    monitor_repo = _FakeMonitorRepo(rows)
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+    monkeypatch.setattr(
+        sandbox_service,
+        "list_user_leases",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("canonical sandbox reader must not call lease compat reader")),
+    )
+
+    sandboxes = sandbox_service.list_user_sandboxes(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert len(sandboxes) == 1
+    sandbox = sandboxes[0]
+    assert "lease_id" not in sandbox
+    assert sandbox["sandbox_id"] == "sandbox-1"
+    assert sandbox["provider_name"] == "local"
+    assert sandbox["recipe_id"] == "local:default"
+    assert sandbox["recipe_name"] == "Local Default"
+    assert sandbox["observed_state"] == "running"
+    assert sandbox["desired_state"] == "running"
+    assert sandbox["thread_ids"] == ["thread-a"]
+    assert sandbox["agents"] == [
+        {
+            "thread_id": "thread-a",
+            "agent_user_id": "agent-1",
+            "agent_name": "Morel",
+            "avatar_url": "/api/users/agent-1/avatar",
+        }
+    ]
+
+
 def test_count_user_visible_leases_by_provider_no_longer_roundtrips_through_lease_summary_shell(monkeypatch):
     rows = [_lease_row("lease-1", "thread-a")]
     thread_repo = _FakeThreadRepo(

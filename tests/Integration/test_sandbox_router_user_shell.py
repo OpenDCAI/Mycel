@@ -50,18 +50,41 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
 
 
 def test_list_user_sandboxes_projects_internal_lease_rows(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_list_user_leases(user_id: str, *, thread_repo=None, user_repo=None) -> list[dict[str, object]]:
-        assert user_id == "owner-1"
-        assert thread_repo is not None
-        assert user_repo is not None
-        return [{"lease_id": "lease-1", "sandbox_id": "sandbox-1", "provider_name": "local"}]
+    class _MonitorRepo:
+        def query_sandboxes(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "lease_id": "lease-1",
+                    "sandbox_id": "sandbox-1",
+                    "provider_name": "local",
+                    "recipe_id": "local:default",
+                    "thread_id": "thread-1",
+                    "observed_state": "running",
+                    "desired_state": "running",
+                }
+            ]
 
-    monkeypatch.setattr(sandbox_service, "list_user_leases", fake_list_user_leases)
+        def close(self) -> None:
+            return None
+
+    thread_repo = SimpleNamespace(
+        list_by_owner_user_id=lambda user_id: [{"id": "thread-1", "agent_user_id": "agent-1"}] if user_id == "owner-1" else []
+    )
+    user_repo = SimpleNamespace(
+        list_by_owner_user_id=lambda user_id: (
+            [SimpleNamespace(id="agent-1", display_name="Morel", avatar=None)] if user_id == "owner-1" else []
+        )
+    )
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _MonitorRepo())
 
     result = sandbox_service.list_user_sandboxes(
         "owner-1",
-        thread_repo=SimpleNamespace(),
-        user_repo=SimpleNamespace(),
+        thread_repo=thread_repo,
+        user_repo=user_repo,
     )
 
-    assert result == [{"sandbox_id": "sandbox-1", "provider_name": "local"}]
+    assert len(result) == 1
+    assert "lease_id" not in result[0]
+    assert result[0]["sandbox_id"] == "sandbox-1"
+    assert result[0]["provider_name"] == "local"
+    assert result[0]["thread_ids"] == ["thread-1"]

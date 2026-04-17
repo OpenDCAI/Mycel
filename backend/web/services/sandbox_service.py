@@ -74,7 +74,7 @@ def list_default_recipes() -> list[dict[str, Any]]:
     return list_builtin_recipes(available_sandbox_types())
 
 
-def list_user_leases(
+def _list_user_runtime_rows(
     user_id: str,
     *,
     thread_repo: Any = None,
@@ -83,7 +83,7 @@ def list_user_leases(
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
     if thread_repo is None or user_repo is None:
-        raise RuntimeError("thread_repo and user_repo are required for list_user_leases")
+        raise RuntimeError("thread_repo and user_repo are required for user sandbox runtime rows")
     try:
         threads_by_id = {str(thread.get("id") or ""): thread for thread in thread_repo.list_by_owner_user_id(user_id) if thread.get("id")}
         users_by_id = {str(user.id): user for user in user_repo.list_by_owner_user_id(user_id)}
@@ -165,6 +165,21 @@ def list_user_leases(
         monitor_repo.close()
 
 
+def list_user_leases(
+    user_id: str,
+    *,
+    thread_repo: Any = None,
+    user_repo: Any = None,
+    include_runtime_session_id: bool = False,
+) -> list[dict[str, Any]]:
+    return _list_user_runtime_rows(
+        user_id,
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+        include_runtime_session_id=include_runtime_session_id,
+    )
+
+
 def _sandbox_summary(row: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in row.items() if key != "lease_id"}
 
@@ -175,8 +190,8 @@ def list_user_sandboxes(
     thread_repo: Any = None,
     user_repo: Any = None,
 ) -> list[dict[str, Any]]:
-    lease_rows = list_user_leases(user_id, thread_repo=thread_repo, user_repo=user_repo)
-    return [_sandbox_summary(row) for row in lease_rows]
+    rows = _list_user_runtime_rows(user_id, thread_repo=thread_repo, user_repo=user_repo)
+    return [_sandbox_summary(row) for row in rows]
 
 
 def count_user_visible_leases_by_provider(
