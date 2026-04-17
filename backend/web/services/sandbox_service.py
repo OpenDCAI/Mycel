@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import threading
-import uuid
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -551,7 +550,6 @@ def mutate_sandbox_session(
 
     ok = False
     mode = "lease_enforced"
-    adopted_provider_orphan = False
 
     if thread_id and not is_virtual_thread_id(thread_id):
         mode = "manager_thread"
@@ -566,32 +564,26 @@ def mutate_sandbox_session(
     else:
         lease = manager.get_lease(lease_id) if lease_id else None
         if not lease:
-            adopted_provider_orphan = True
-            adopt_lease_id = str(lease_id or f"lease-adopt-{uuid.uuid4().hex[:12]}")
-            adopt_status = str(session.get("status") or "unknown")
-            from sandbox.lease import lease_from_row
-
-            adopt_row = manager.lease_store.adopt_instance(
-                lease_id=adopt_lease_id,
-                provider_name=provider_name,
-                instance_id=target_session_id,
-                status=adopt_status,
-            )
-            lease = lease_from_row(adopt_row, manager.db_path)
-            lease_id = lease.lease_id
-
-        mode = "manager_lease"
-        if action == "pause":
-            ok = lease.pause_instance(manager.provider, source="api")
-        elif action == "resume":
-            ok = lease.resume_instance(manager.provider, source="api")
-        elif action == "destroy":
-            lease.destroy_instance(manager.provider, source="api")
-            ok = True
-            if adopted_provider_orphan and lease_id:
-                manager.lease_store.delete(lease_id)
+            mode = "provider_orphan_direct"
+            if action == "pause":
+                ok = manager.provider.pause_session(target_session_id)
+            elif action == "resume":
+                ok = manager.provider.resume_session(target_session_id)
+            elif action == "destroy":
+                ok = manager.provider.destroy_session(target_session_id)
+            else:
+                raise RuntimeError(f"Unknown action: {action}")
         else:
-            raise RuntimeError(f"Unknown action: {action}")
+            mode = "manager_lease"
+            if action == "pause":
+                ok = lease.pause_instance(manager.provider, source="api")
+            elif action == "resume":
+                ok = lease.resume_instance(manager.provider, source="api")
+            elif action == "destroy":
+                lease.destroy_instance(manager.provider, source="api")
+                ok = True
+            else:
+                raise RuntimeError(f"Unknown action: {action}")
 
     if not ok:
         raise RuntimeError(f"Failed to {action} session {target_session_id}")
