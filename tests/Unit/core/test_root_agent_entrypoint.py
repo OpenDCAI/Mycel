@@ -1,14 +1,12 @@
-import importlib
 import re
 from pathlib import Path
 
 
-def test_root_agent_shim_aliases_canonical_runtime_entrypoint():
-    root_agent = importlib.import_module("agent")
-    runtime_agent = importlib.import_module("core.runtime.agent")
+def test_root_agent_compatibility_shim_is_removed():
+    repo_root = Path(__file__).resolve().parents[3]
 
-    assert root_agent.LeonAgent is runtime_agent.LeonAgent
-    assert root_agent.create_leon_agent is runtime_agent.create_leon_agent
+    assert not (repo_root / "agent.py").exists()
+    assert 'py-modules = ["agent"]' not in (repo_root / "pyproject.toml").read_text(encoding="utf-8")
 
 
 def test_internal_entrypoints_import_canonical_runtime_agent():

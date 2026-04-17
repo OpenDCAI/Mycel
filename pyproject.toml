@@ -114,7 +114,6 @@ packages = [
     "eval",
     "eval.harness",
 ]
-py-modules = ["agent"]
 
 [tool.setuptools.package-data]
 "config.defaults.agents" = ["*.md"]
