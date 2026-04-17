@@ -10,11 +10,11 @@ class _FailingManager:
         self.provider_capability = SimpleNamespace(inspect_visible=True)
 
     def list_sessions(self):
-        raise AssertionError("provider orphan endpoint must not refresh all lease sessions")
+        raise AssertionError("provider orphan runtime endpoint must not refresh all lease sessions")
 
 
-def _provider_session(session_id: str, status: str = "paused"):
-    return SimpleNamespace(session_id=session_id, status=status)
+def _provider_runtime(runtime_id: str, status: str = "paused"):
+    return SimpleNamespace(session_id=runtime_id, status=status)
 
 
 def test_monitor_provider_orphan_runtimes_do_not_refresh_all_lease_sessions(monkeypatch):
@@ -25,15 +25,15 @@ def test_monitor_provider_orphan_runtimes_do_not_refresh_all_lease_sessions(monk
     assert monitor_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
 
 
-def test_load_provider_orphan_sessions_excludes_lease_backed_provider_sessions():
+def test_load_provider_orphan_sessions_excludes_lease_backed_provider_runtimes():
     manager = SimpleNamespace(
         provider=SimpleNamespace(
             name="daytona",
             list_provider_sessions=lambda: [
-                _provider_session("lease-backed"),
-                _provider_session("orphan-paused", "paused"),
-                _provider_session("orphan-running", "running"),
-                _provider_session("deleted-one", "deleted"),
+                _provider_runtime("lease-backed"),
+                _provider_runtime("orphan-paused", "paused"),
+                _provider_runtime("orphan-running", "running"),
+                _provider_runtime("deleted-one", "deleted"),
             ],
         ),
         lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: [{"current_instance_id": "lease-backed"}]),
