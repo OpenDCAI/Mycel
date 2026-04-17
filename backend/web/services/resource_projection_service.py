@@ -250,7 +250,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
             projected.extend(visible_rows)
             continue
 
-        # @@@resource-visible-thread-fallback - visible resource cards are now
+        # @@@resource-visible-parent-projection - visible resource cards are now
         # sandbox-first. If the raw monitor row lands on a hidden/subagent
         # thread, only sandbox truth can authorize a visible-parent projection.
         # Rows without sandbox truth are no longer eligible for

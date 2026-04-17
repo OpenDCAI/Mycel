@@ -128,6 +128,13 @@ def test_resource_projection_unbound_identity_is_not_named_as_fallback() -> None
     assert "unbound-runtime fallback" not in source
 
 
+def test_resource_projection_visible_parent_path_is_not_named_as_fallback() -> None:
+    source = Path(resource_projection_service.__file__).read_text(encoding="utf-8")
+
+    assert "resource-visible-thread-fallback" not in source
+    assert "visible-thread fallback" not in source
+
+
 def test_list_resource_providers_no_longer_uses_lease_shaped_row_source_shell(monkeypatch) -> None:
     class _Repo(_FakeRepo):
         def list_sessions_with_leases(self):
@@ -477,7 +484,7 @@ def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monke
     ]
 
 
-def test_list_resource_providers_uses_canonical_sandbox_thread_fallback(monkeypatch):
+def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projection(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -493,7 +500,7 @@ def test_list_resource_providers_uses_canonical_sandbox_thread_fallback(monkeypa
 
     class _SandboxThreadOnlyRepo(_FakeRepo):
         def query_lease_threads(self, lease_id: str):
-            raise AssertionError(f"unexpected lease-shaped visible-thread fallback: {lease_id}")
+            raise AssertionError(f"unexpected lease-shaped visible-parent projection: {lease_id}")
 
     monkeypatch.setattr(
         resource_projection_service,
@@ -537,7 +544,7 @@ def test_list_resource_providers_uses_canonical_sandbox_thread_fallback(monkeypa
     ]
 
 
-def test_list_resource_providers_no_longer_uses_lease_shaped_visible_thread_fallback_without_sandbox_id(monkeypatch):
+def test_list_resource_providers_no_longer_uses_lease_shaped_visible_parent_projection_without_sandbox_id(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -553,7 +560,7 @@ def test_list_resource_providers_no_longer_uses_lease_shaped_visible_thread_fall
 
     class _NoLeaseFallbackRepo(_FakeRepo):
         def query_lease_threads(self, lease_id: str):
-            raise AssertionError(f"lease-shaped visible-thread fallback should be gone: {lease_id}")
+            raise AssertionError(f"lease-shaped visible-parent projection should be gone: {lease_id}")
 
     monkeypatch.setattr(
         resource_projection_service,
