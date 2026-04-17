@@ -130,7 +130,6 @@ def _load_visible_resource_runtime() -> tuple[
     list[dict[str, Any]],
     dict[str, str | None],
     dict[str, dict[str, Any]],
-    dict[str, dict[str, Any]],
 ]:
     repo = make_sandbox_monitor_repo()
     try:
@@ -140,8 +139,7 @@ def _load_visible_resource_runtime() -> tuple[
         repo.close()
 
     snapshot_by_sandbox = list_resource_snapshots_by_sandbox(sessions)
-    snapshot_by_lease: dict[str, dict[str, Any]] = {}
-    return sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox
+    return sessions, runtime_session_ids, snapshot_by_sandbox
 
 
 def _backfill_runtime_session_ids(sandboxes: list[dict[str, Any]]) -> None:
@@ -285,7 +283,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
 
 
 def list_resource_providers() -> dict[str, Any]:
-    sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox = _load_visible_resource_runtime()
+    sessions, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for session in sessions:
@@ -402,7 +400,7 @@ def list_resource_providers() -> dict[str, Any]:
 
 
 def visible_resource_session_stats() -> dict[str, dict[str, int]]:
-    sessions, runtime_session_ids, _snapshot_by_lease, snapshot_by_sandbox = _load_visible_resource_runtime()
+    sessions, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_session_ids: set[str] = set()
     seen_running_sandboxes: set[tuple[str, str]] = set()
