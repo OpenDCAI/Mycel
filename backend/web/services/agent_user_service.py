@@ -326,7 +326,7 @@ def create_agent_user(
         user_repo.create(row)
 
     # @@@agent-user-before-config - new schema roots agent_configs on agent_user_id.
-    # The user row must exist before the config write, otherwise live staging
+    # The user row must exist before the config write, otherwise the live DB
     # rejects the insert on the forward reference.
     if agent_config_repo:
         if owner_user_id is None:
