@@ -23,7 +23,7 @@ export type DashboardPayload = {
 
 export function buildDashboardSurfaces(data: DashboardPayload) {
   return [
-    { label: "Running Sessions", value: data.workload.running_sessions, to: "/resources" },
+    { label: "Running Sandboxes", value: data.workload.running_sessions, to: "/resources" },
     { label: "Evaluations Running", value: data.workload.evaluations_running, to: "/evaluation" },
     { label: "Tracked Sandboxes", value: data.infra.sandboxes_total, to: "/sandboxes" },
   ];

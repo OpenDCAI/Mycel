@@ -23,6 +23,12 @@ const payload: DashboardPayload = {
 describe("dashboard summary shell", () => {
   it("uses sandbox-shaped labels and canonical sandbox links", () => {
     expect(buildDashboardSurfaces(payload)).toContainEqual({
+      label: "Running Sandboxes",
+      value: 4,
+      to: "/resources",
+    });
+    expect(buildDashboardSurfaces(payload).map((surface) => surface.label)).not.toContain("Running Sessions");
+    expect(buildDashboardSurfaces(payload)).toContainEqual({
       label: "Tracked Sandboxes",
       value: 3,
       to: "/sandboxes",
