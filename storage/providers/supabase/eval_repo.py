@@ -227,4 +227,4 @@ class SupabaseEvalRepo:
         ]
 
     def _t(self, table_name: str) -> Any:
-        return self._client.table(table_name)
+        return q.schema_table(self._client, "observability", table_name, _REPO)

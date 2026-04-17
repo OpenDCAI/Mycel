@@ -68,7 +68,7 @@ class _FakeTable:
 class _FakeClient:
     def __init__(self):
         self.tables = {
-            "evaluation_batches": _FakeTable(
+            "observability.evaluation_batches": _FakeTable(
                 [
                     {
                         "batch_id": "batch-1",
@@ -83,11 +83,19 @@ class _FakeClient:
                     }
                 ]
             ),
-            "evaluation_batch_runs": _FakeTable([]),
+            "observability.evaluation_batch_runs": _FakeTable([]),
         }
+        self._schema_name = None
 
     def table(self, _name):
-        return self.tables[_name]
+        resolved = f"{self._schema_name}.{_name}" if self._schema_name else _name
+        return self.tables[resolved]
+
+    def schema(self, schema_name):
+        scoped = _FakeClient()
+        scoped.tables = self.tables
+        scoped._schema_name = schema_name
+        return scoped
 
 
 def test_supabase_eval_batch_repo_maps_batch_rows():
@@ -216,3 +224,25 @@ def test_supabase_eval_batch_repo_lists_batch_runs_by_thread_id():
 
     assert repo.list_batch_runs_by_thread_id("thread-1") == [first]
     assert repo.list_batch_runs_by_thread_id("missing-thread") == []
+
+
+def test_supabase_eval_batch_repo_uses_observability_schema_tables():
+    client = _FakeClient()
+    repo = SupabaseEvaluationBatchRepo(client)
+
+    repo.create_batch(
+        {
+            "batch_id": "batch-2",
+            "kind": "scenario_batch",
+            "submitted_by_user_id": "user-1",
+            "agent_user_id": "agent-1",
+            "config_json": {},
+            "status": "pending",
+            "created_at": None,
+            "updated_at": None,
+            "summary_json": {},
+        }
+    )
+
+    assert any(row["batch_id"] == "batch-2" for row in client.tables["observability.evaluation_batches"].rows)
+    assert "evaluation_batches" not in client.tables
