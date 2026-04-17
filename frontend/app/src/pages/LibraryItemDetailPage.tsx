@@ -11,6 +11,12 @@ function detailLibraryType(value: string | undefined): DetailLibraryType | null 
   return value === "skill" || value === "agent" || value === "sandbox-template" ? value : null;
 }
 
+function installedDetailReturnTarget(type: DetailLibraryType | null): string {
+  if (type === "skill") return "/marketplace?tab=installed&sub=skill";
+  if (type === "agent") return "/marketplace?tab=installed&sub=agent";
+  return "/marketplace?tab=installed&sub=sandbox-template";
+}
+
 export default function LibraryItemDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>();
   const navigate = useNavigate();
@@ -94,7 +100,7 @@ export default function LibraryItemDetailPage() {
       <div className="max-w-3xl mx-auto py-6 px-4 md:px-6">
         {/* Back */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(installedDetailReturnTarget(libraryType))}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast mb-6"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
