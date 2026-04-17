@@ -934,5 +934,5 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   );
 }
   function leaseSandboxId(lease: UserLeaseSummary): string {
-    return String(lease.sandbox_id || "").trim() || lease.lease_id;
+    return lease.sandbox_id;
   }
