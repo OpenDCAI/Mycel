@@ -267,6 +267,7 @@ class AuthService:
                 agent_config_id,
                 {
                     "agent_user_id": agent_id,
+                    "owner_user_id": owner_user_id,
                     "name": agent_def["name"],
                     "description": agent_def["description"],
                     "status": "active",

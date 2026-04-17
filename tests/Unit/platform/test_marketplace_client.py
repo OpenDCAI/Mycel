@@ -277,7 +277,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     saved: dict[str, object] = {}
     captured: dict[str, object] = {}
 
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1"))
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
 
     class _AgentConfigRepo:
         def get_config(self, agent_config_id: str):
@@ -348,6 +348,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     assert payload["snapshot"]["rules"] == [{"name": "default", "content": "Rule content"}]
     assert payload["snapshot"]["skills"][0]["meta"] == {"name": "Search", "desc": "Repo Search"}
     assert saved["agent_config_id"] == "cfg-1"
+    assert saved["data"]["owner_user_id"] == "owner-1"
     assert saved["data"]["version"] == "0.1.1"
     assert saved["data"]["status"] == "active"
     assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
@@ -371,7 +372,7 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
     }
     (member_dir / "meta.json").write_text(json.dumps(stale_meta, indent=2), encoding="utf-8")
 
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1"))
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
 
     class _AgentConfigRepo:
         def get_config(self, agent_config_id: str):
@@ -435,6 +436,7 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
     assert payload["parent_version"] == "0.1.0"
     assert payload["snapshot"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}
     assert saved["agent_config_id"] == "cfg-1"
+    assert saved["data"]["owner_user_id"] == "owner-1"
     assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
     assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
     assert json.loads((member_dir / "meta.json").read_text(encoding="utf-8")) == stale_meta

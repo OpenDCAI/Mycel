@@ -313,10 +313,13 @@ def create_agent_user(
     # The user row must exist before the config write, otherwise live staging
     # rejects the insert on the forward reference.
     if agent_config_repo:
+        if owner_user_id is None:
+            raise RuntimeError("owner_user_id is required when creating repo-backed agent configs")
         _save_config_to_repo(
             agent_config_repo,
             agent_config_id,
             agent_user_id=agent_user_id,
+            owner_user_id=owner_user_id,
             name=name,
             description=description,
             status="draft",
@@ -390,6 +393,7 @@ def _save_config_to_repo(
     agent_config_id: str,
     *,
     agent_user_id: str,
+    owner_user_id: str,
     name: str,
     description: str = "",
     model: str | None = None,
@@ -407,6 +411,7 @@ def _save_config_to_repo(
         agent_config_id,
         {
             "agent_user_id": agent_user_id,
+            "owner_user_id": owner_user_id,
             "name": name,
             "description": description,
             "model": model,
@@ -708,6 +713,7 @@ def install_from_snapshot(
         agent_config_repo,
         agent_config_id,
         agent_user_id=user_id,
+        owner_user_id=owner_user_id,
         name=agent_name,
         description=agent_description,
         model=agent_model,

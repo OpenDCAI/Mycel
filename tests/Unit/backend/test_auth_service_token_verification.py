@@ -361,6 +361,7 @@ def test_create_initial_agents_keeps_avatar_column_null_under_file_backed_avatar
     assert [row.id for row in created_users] == ["agent-toad", "agent-morel"]
     assert [row.display_name for row in created_users] == ["Toad", "Morel"]
     assert [item[0] for item in saved_configs] == ["cfg-toad", "cfg-morel"]
+    assert [item[1]["owner_user_id"] for item in saved_configs] == ["owner-1", "owner-1"]
     assert updates == []
     assert [(row.source_user_id, row.target_user_id, row.kind, row.state) for row in contact_edges] == [
         ("owner-1", "agent-toad", "normal", "active"),
