@@ -151,9 +151,13 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
                     legacy_lease_id="lease-1",
                 )
             ],
-            "chat_sessions": [
-                _session("sess-1", "thread-1", "lease-1", last_active_at="2026-04-05T10:01:00"),
-                _session("sess-2", "thread-2", "lease-1", last_active_at="2026-04-05T10:06:00"),
+            "container.workspaces": [
+                _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-2", "sandbox-1", updated_at="2026-04-05T10:06:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-2", "workspace-2", updated_at="2026-04-05T10:06:00"),
             ],
         }
     )
@@ -161,7 +165,7 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
     assert repo.query_threads(thread_id="thread-2") == [
         {
             "thread_id": "thread-2",
-            "session_count": 1,
+            "session_count": 0,
             "sandbox_id": "sandbox-1",
             "last_active": "2026-04-05T10:06:00",
             "lease_id": "lease-1",
@@ -183,8 +187,11 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypa
                     legacy_lease_id="lease-1",
                 )
             ],
-            "chat_sessions": [
-                _session("sess-1", "thread-1", "lease-1", last_active_at="2026-04-05T10:01:00"),
+            "container.workspaces": [
+                _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:01:00"),
             ],
         }
     )
@@ -198,7 +205,7 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypa
     assert repo.query_threads() == [
         {
             "thread_id": "thread-1",
-            "session_count": 1,
+            "session_count": 0,
             "sandbox_id": "sandbox-1",
             "last_active": "2026-04-05T10:01:00",
             "lease_id": "lease-1",
@@ -211,18 +218,23 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypa
 
 
 def test_query_threads_chunks_lease_lookup() -> None:
-    sessions = [
-        _session(f"sess-{index}", f"thread-{index}", f"lease-{index}", last_active_at=f"2026-04-05T10:{index % 60:02d}:00")
-        for index in range(175)
-    ]
     sandboxes = [
         _sandbox(f"sandbox-{index}", provider_env_id=f"instance-{index}", legacy_lease_id=f"lease-{index}") for index in range(175)
+    ]
+    workspaces = [
+        _workspace(f"workspace-{index}", f"sandbox-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00")
+        for index in range(175)
+    ]
+    threads = [
+        _thread(f"thread-{index}", f"workspace-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00")
+        for index in range(175)
     ]
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {
-                "chat_sessions": sessions,
                 "container.sandboxes": sandboxes,
+                "container.workspaces": workspaces,
+                "agent.threads": threads,
             }
         )
     )
