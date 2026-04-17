@@ -557,7 +557,7 @@ def _create_thread_sandbox_resources(
     sandbox_repo: Any,
     owner_user_id: str,
 ) -> str:
-    """Create lease and terminal resources without pre-provisioning volume metadata."""
+    """Create lease and terminal resources without pre-provisioning file-channel storage."""
     from storage.runtime import build_lease_repo as make_lease_repo
     from storage.runtime import build_terminal_repo as make_terminal_repo
 

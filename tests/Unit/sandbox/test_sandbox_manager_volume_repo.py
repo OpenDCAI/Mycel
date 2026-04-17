@@ -285,6 +285,17 @@ def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_pat
     assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
 
+def test_setup_mounts_reports_missing_lease_not_missing_volume():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_lease = lambda _lease_id: None
+
+    with pytest.raises(ValueError, match="No lease for thread thread-1"):
+        manager._setup_mounts("thread-1")
+
+
 def test_manager_no_longer_exposes_generic_volume_source_helper():
     manager = _new_test_manager()
 

@@ -302,23 +302,23 @@ class SandboxManager:
 
     def _requires_volume_bootstrap(self) -> bool:
         # @@@local-shell-no-volume-gate - local runtimes execute directly on the host
-        # and should not fail to start a shell just because file-channel volume
-        # metadata is absent or stored in a different backend.
+        # and should not fail to start a shell just because remote file-channel
+        # bootstrap is irrelevant for that runtime kind.
         return self.provider_capability.runtime_kind != "local"
 
     def _destroy_daytona_managed_volume(self, lease_id: str) -> None:
         # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
-        # ref from lease identity directly, so cleanup no longer depends on lease volume metadata.
+        # ref from lease identity directly, so cleanup no longer depends on dropped volume rows.
         self.provider.delete_managed_volume(f"leon-volume-{lease_id}")
 
     def _setup_mounts(self, thread_id: str) -> dict:
-        """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
+        """Mount the workspace file channel into the sandbox."""
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
         lease = self._get_lease(terminal.lease_id)
         if not lease:
-            raise ValueError(f"No volume for thread {thread_id}")
+            raise ValueError(f"No lease for thread {thread_id}")
         remote_path = self.volume.resolve_mount_path()
         source_path = self._resolve_sync_source_path(thread_id)
 
@@ -404,7 +404,7 @@ class SandboxManager:
         return bool(lease and lease.provider_name == self.provider.name)
 
     def _resolve_sync_source_path(self, thread_id: str) -> Path:
-        # @@@sync-source-truth - sync no longer needs volume metadata truth; it only needs
+        # @@@sync-source-truth - sync no longer needs dropped volume-row truth; it only needs
         # the workspace-owned local staging root that backs the current file channel.
         container = build_storage_container()
         thread_repo = container.thread_repo()
