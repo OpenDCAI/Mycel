@@ -54,13 +54,13 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         if status == "running":
             running_count += 1
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip() or None
-        fallback_identity = str(sandbox.get("lease_id") or sandbox.get("runtime_session_id") or "sandbox").strip()
+        fallback_identity = str(sandbox.get("runtime_session_id") or "sandbox").strip()
         session_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{fallback_identity}:{thread_id}"
         sessions.append(
             resource_service.build_resource_session_payload(
                 session_identity=session_identity,
                 sandbox_id=sandbox_id,
-                lease_id=str(sandbox.get("lease_id") or "").strip() or None,
+                lease_id=None,
                 thread_id=thread_id,
                 runtime_session_id=sandbox.get("runtime_session_id"),
                 owner=owner,

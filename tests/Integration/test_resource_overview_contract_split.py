@@ -201,7 +201,7 @@ def test_user_resource_projection_does_not_call_lease_summary_service(monkeypatc
         resource_projection_service.sandbox_service,
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
-            _sandbox(
+            _lease(
                 "lease-1",
                 sandbox_id="sandbox-1",
                 thread_id="thread-1",
@@ -230,6 +230,7 @@ def test_user_resource_projection_does_not_call_lease_summary_service(monkeypatc
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     assert payload["summary"]["total_providers"] == 1
+    assert "leaseId" not in payload["providers"][0]["sessions"][0]
 
 
 def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
