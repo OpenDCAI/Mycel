@@ -41,7 +41,7 @@ def _thread(**overrides):
         "agent_user_id": "agent-1",
         "current_workspace_id": "workspace-1",
         "model": "large",
-        "cwd": "/legacy-cwd",
+        "cwd": "/stored-cwd",
         **overrides,
     }
 
@@ -102,7 +102,7 @@ def test_resolves_thread_workspace_sandbox_binding_without_legacy_runtime_ids() 
     assert binding.sandbox_template_id == "template-1"
     assert binding.sandbox_config == {"sdk": "preinstalled"}
     assert binding.model == "large"
-    assert binding.legacy_cwd == "/legacy-cwd"
+    assert binding.stored_cwd == "/stored-cwd"
 
     payload = asdict(binding)
     assert "terminal_id" not in payload
@@ -168,6 +168,7 @@ def test_service_does_not_import_legacy_runtime_glue() -> None:
     assert "chat_session" not in source
     assert "sandbox_volume" not in source
     assert "sync_file" not in source
+    assert "legacy_cwd" not in source
 
 
 def test_resolves_binding_with_thin_workspace_shape() -> None:

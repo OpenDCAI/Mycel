@@ -30,7 +30,7 @@ class ThreadRuntimeBinding:
     sandbox_template_id: str | None
     sandbox_config: dict[str, Any] = field(default_factory=dict)
     model: str | None = None
-    legacy_cwd: str | None = None
+    stored_cwd: str | None = None
 
 
 def resolve_thread_runtime_binding(
@@ -73,7 +73,7 @@ def resolve_thread_runtime_binding(
         sandbox_template_id=_optional_text(sandbox, "sandbox_template_id"),
         sandbox_config=_config_dict(sandbox),
         model=_optional_text(thread, "model"),
-        legacy_cwd=_optional_text(thread, "cwd"),
+        stored_cwd=_optional_text(thread, "cwd"),
     )
 
 
