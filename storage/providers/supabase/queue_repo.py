@@ -13,7 +13,7 @@ _SENDER_USER_ID = "sender_user_id"
 
 
 class SupabaseQueueRepo:
-    """Message queue backed by Supabase (table: message_queue, BIGSERIAL id)."""
+    """Message queue backed by Supabase (table: agent.message_queue, BIGSERIAL id)."""
 
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
@@ -22,7 +22,7 @@ class SupabaseQueueRepo:
         return None
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "agent", _TABLE, _REPO)
 
     def _hydrate_item(self, row: dict[str, Any]) -> QueueItem:
         return QueueItem(
