@@ -682,7 +682,7 @@ def _sandbox_detail_cleanup_truth(
         return {
             "allowed": False,
             "recommended_action": None,
-            "reason": "Sandbox has no lease bridge and cannot enter managed cleanup.",
+            "reason": "Sandbox cleanup requires a managed runtime bridge.",
             "operation": None,
             "recent_operations": [],
         }
@@ -850,7 +850,7 @@ def _sandbox_cleanup_lease_id(sandbox_id: str) -> str:
 
     lease_id = str(sandbox.get("lease_id") or "").strip()
     if not lease_id:
-        raise RuntimeError("monitor sandbox cleanup target missing lease bridge")
+        raise RuntimeError("monitor sandbox cleanup target missing managed runtime bridge")
     return lease_id
 
 

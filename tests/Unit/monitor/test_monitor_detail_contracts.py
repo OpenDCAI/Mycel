@@ -133,6 +133,7 @@ def test_monitor_sandbox_read_surface_uses_sandbox_internal_names() -> None:
         "_classify_lease_semantics",
         "_classify_lease_triage",
         "_lease_groups",
+        "Sandbox has no lease bridge",
     ]
     for token in forbidden_tokens:
         assert token not in text
@@ -540,7 +541,7 @@ def test_get_monitor_sandbox_detail_allows_missing_lease_bridge_for_readonly_det
     assert payload["cleanup"] == {
         "allowed": False,
         "recommended_action": None,
-        "reason": "Sandbox has no lease bridge and cannot enter managed cleanup.",
+        "reason": "Sandbox cleanup requires a managed runtime bridge.",
         "operation": None,
         "recent_operations": [],
     }
