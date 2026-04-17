@@ -782,14 +782,12 @@ def test_list_probe_targets_use_sandbox_provider_env_id() -> None:
     assert repo.list_probe_targets() == [
         {
             "sandbox_id": "sandbox-paused",
-            "legacy_lease_id": "lease-paused",
             "provider_name": "local",
             "instance_id": "instance-local",
             "observed_state": "paused",
         },
         {
             "sandbox_id": "sandbox-running",
-            "legacy_lease_id": "lease-running",
             "provider_name": "daytona_selfhost",
             "instance_id": "instance-sandbox",
             "observed_state": "detached",
@@ -797,7 +795,7 @@ def test_list_probe_targets_use_sandbox_provider_env_id() -> None:
     ]
 
 
-def test_list_probe_targets_skips_sandbox_without_legacy_lease_bridge() -> None:
+def test_list_probe_targets_skips_sandbox_without_provider_env_id() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -847,14 +845,12 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge()
     assert repo.list_probe_targets() == [
         {
             "sandbox_id": "sandbox-paused",
-            "legacy_lease_id": "lease-paused",
             "provider_name": "local",
             "instance_id": "instance-local",
             "observed_state": "paused",
         },
         {
             "sandbox_id": "sandbox-running",
-            "legacy_lease_id": "lease-running",
             "provider_name": "daytona_selfhost",
             "instance_id": "instance-sandbox",
             "observed_state": "detached",
@@ -891,7 +887,6 @@ def test_instance_lookup_does_not_read_removed_instances_table(include_updated_a
         assert result == [
             {
                 "sandbox_id": "sandbox-1",
-                "legacy_lease_id": "lease-1",
                 "provider_name": "daytona_selfhost",
                 "instance_id": "instance-lease",
                 "observed_state": "detached",

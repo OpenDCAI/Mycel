@@ -129,7 +129,6 @@ def test_probe_and_upsert_for_instance_accepts_sandbox_shaped_repo() -> None:
 
     result = resource_snapshot.probe_and_upsert_for_instance(
         sandbox_id="sandbox-1",
-        lease_id="lease-1",
         provider_name="p1",
         observed_state="detached",
         probe_mode="running_runtime",
@@ -168,7 +167,6 @@ def test_probe_and_upsert_for_instance_without_repo_prefers_sandbox_shaped_helpe
 
     result = resource_snapshot.probe_and_upsert_for_instance(
         sandbox_id="sandbox-1",
-        lease_id="lease-1",
         provider_name="p1",
         observed_state="detached",
         probe_mode="running_runtime",
@@ -199,7 +197,6 @@ def test_probe_and_upsert_for_instance_without_repo_prefers_sandbox_shaped_helpe
 
 def test_probe_and_upsert_for_instance_requires_sandbox_id() -> None:
     result = resource_snapshot.probe_and_upsert_for_instance(
-        lease_id="lease-1",
         provider_name="p1",
         observed_state="detached",
         probe_mode="running_runtime",
@@ -297,7 +294,7 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
     assert result["errors"] == 0
     assert result["running_targets"] == 1
     assert result["non_running_targets"] == 0
-    assert {call["lease_id"] for call in calls} == {"l-1"}
+    assert all("lease_id" not in call for call in calls)
     assert {call["sandbox_id"] for call in calls} == {"sandbox-1"}
     assert {call["probe_mode"] for call in calls} == {"running_runtime"}
 

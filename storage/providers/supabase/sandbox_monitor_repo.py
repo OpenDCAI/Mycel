@@ -171,29 +171,21 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def list_probe_targets(self) -> list[dict]:
-        leases = [
-            lease
-            for lease in (self._lease_row_from_sandbox(sandbox) for sandbox in self._ordered_sandboxes("list_probe_targets"))
-            if lease.get("observed_state") in {"running", "detached", "paused"}
-        ]
-
-        instance_map = self.query_sandbox_instance_ids(
-            [sandbox_id for sandbox_id in (lease.get("sandbox_id") for lease in leases) if sandbox_id]
-        )
-
         targets = []
-        for lease in leases:
-            lid = lease["lease_id"]
-            sandbox_id = str(lease.get("sandbox_id") or "").strip()
-            instance_id = instance_map.get(sandbox_id) or lease.get("current_instance_id") or ""
-            if lid and lease.get("provider_name") and instance_id:
+        for sandbox in self._ordered_sandboxes("list_probe_targets"):
+            observed_state = str(sandbox.get("observed_state") or "unknown").strip()
+            if observed_state not in {"running", "detached", "paused"}:
+                continue
+            sandbox_id = str(sandbox.get("id") or "").strip()
+            provider_name = str(sandbox.get("provider_name") or "local").strip()
+            instance_id = str(sandbox.get("provider_env_id") or "").strip()
+            if sandbox_id and provider_name and instance_id:
                 targets.append(
                     {
-                        "sandbox_id": lease["sandbox_id"],
-                        "legacy_lease_id": lid,
-                        "provider_name": lease["provider_name"],
+                        "sandbox_id": sandbox_id,
+                        "provider_name": provider_name,
                         "instance_id": instance_id,
-                        "observed_state": lease.get("observed_state", "unknown"),
+                        "observed_state": observed_state,
                     }
                 )
         return targets

@@ -1,4 +1,4 @@
-"""Lease resource probing helpers."""
+"""Sandbox resource probing helpers."""
 
 from __future__ import annotations
 
@@ -69,7 +69,6 @@ def _metric_float(metrics: Any, field: str) -> float | None:
 def probe_and_upsert_for_instance(
     *,
     sandbox_id: str | None = None,
-    lease_id: str,
     provider_name: str,
     observed_state: str,
     probe_mode: str,
