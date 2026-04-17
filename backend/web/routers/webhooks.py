@@ -77,7 +77,6 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
         "instance_id": instance_id,
         "event_type": event_type,
         "matched": True,
-        "lease_id": lease.lease_id,
     }
 
 
