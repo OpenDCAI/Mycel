@@ -1,3 +1,4 @@
+import inspect
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -5,6 +6,7 @@ from typing import Any, cast
 import pytest
 
 import sandbox.manager as sandbox_manager_module
+import sandbox.volume_source as volume_source_module
 from config.user_paths import user_home_path
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
@@ -321,6 +323,12 @@ def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_pat
 
     assert isinstance(source, HostVolume)
     assert source.host_path == (tmp_path / "staging").resolve()
+
+
+def test_volume_source_doc_names_historical_daytona_staging_without_compatibility_label():
+    source = inspect.getsource(volume_source_module)
+
+    assert "cleanup compatibility" not in source
 
 
 def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monkeypatch, tmp_path):

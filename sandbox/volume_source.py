@@ -1,7 +1,7 @@
 """Volume source abstraction — where files physically live.
 
 Current runtime truth only needs host-backed staging paths.
-Historical Daytona rows still deserialize through this module for cleanup compatibility.
+Historical Daytona staging rows still deserialize here so cleanup can remove their host paths.
 """
 
 from __future__ import annotations
