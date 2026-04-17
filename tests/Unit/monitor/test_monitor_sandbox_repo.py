@@ -86,6 +86,24 @@ def _terminal(terminal_id: str, lease_id: str, thread_id: str, created_at: str) 
     }
 
 
+def _workspace(workspace_id: str, sandbox_id: str, *, updated_at: str = "2026-04-05T10:00:00") -> dict:
+    return {
+        "id": workspace_id,
+        "sandbox_id": sandbox_id,
+        "owner_user_id": "owner-1",
+        "workspace_path": "/workspace",
+        "updated_at": updated_at,
+    }
+
+
+def _thread(thread_id: str, workspace_id: str, *, updated_at: str = "2026-04-05T10:00:00") -> dict:
+    return {
+        "id": thread_id,
+        "current_workspace_id": workspace_id,
+        "updated_at": updated_at,
+    }
+
+
 def _sandbox(
     sandbox_id: str,
     *,
@@ -440,7 +458,7 @@ def test_query_thread_sessions_no_longer_roundtrips_through_lease_summary_shell(
     ]
 
 
-def test_query_sandboxes_uses_latest_terminal_binding() -> None:
+def test_query_sandboxes_uses_latest_workspace_thread_binding() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -454,9 +472,13 @@ def test_query_sandboxes_uses_latest_terminal_binding() -> None:
                     legacy_lease_id="lease-1",
                 )
             ],
-            "abstract_terminals": [
-                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
-                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
+            "container.workspaces": [
+                _workspace("workspace-old", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-new", "sandbox-1", updated_at="2026-04-05T10:02:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-old", "workspace-old", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-new", "workspace-new", updated_at="2026-04-05T10:02:00"),
             ],
         }
     )
@@ -478,7 +500,7 @@ def test_query_sandboxes_uses_latest_terminal_binding() -> None:
     ]
 
 
-def test_query_sandboxes_reads_container_sandboxes_with_terminal_binding() -> None:
+def test_query_sandboxes_reads_container_sandboxes_with_workspace_binding() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -492,9 +514,13 @@ def test_query_sandboxes_reads_container_sandboxes_with_terminal_binding() -> No
                     legacy_lease_id="lease-1",
                 )
             ],
-            "abstract_terminals": [
-                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
-                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
+            "container.workspaces": [
+                _workspace("workspace-old", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-new", "sandbox-1", updated_at="2026-04-05T10:02:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-old", "workspace-old", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-new", "workspace-new", updated_at="2026-04-05T10:02:00"),
             ],
         }
     )
@@ -516,7 +542,7 @@ def test_query_sandboxes_reads_container_sandboxes_with_terminal_binding() -> No
     ]
 
 
-def test_query_sandboxes_chunks_terminal_binding_lookup() -> None:
+def test_query_sandboxes_chunks_workspace_thread_binding_lookup() -> None:
     sandboxes = [
         _sandbox(
             f"sandbox-{index}",
@@ -530,7 +556,8 @@ def test_query_sandboxes_chunks_terminal_binding_lookup() -> None:
         _MaxInFilterClient(
             {
                 "container.sandboxes": sandboxes,
-                "abstract_terminals": [_terminal("term-174", "lease-174", "thread-174", "2026-04-05T10:02:00")],
+                "container.workspaces": [_workspace("workspace-174", "sandbox-174", updated_at="2026-04-05T10:02:00")],
+                "agent.threads": [_thread("thread-174", "workspace-174", updated_at="2026-04-05T10:02:00")],
             }
         )
     )
