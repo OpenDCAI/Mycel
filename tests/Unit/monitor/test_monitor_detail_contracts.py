@@ -44,7 +44,7 @@ def _clear_monitor_cleanup_operations():
     monitor_service.monitor_operation_service._TARGET_INDEX.clear()
 
 
-def _lease_row(**overrides):
+def _sandbox_row(**overrides):
     row = {
         "sandbox_id": "sandbox-1",
         "lease_id": "lease-1",
@@ -62,28 +62,28 @@ def _lease_row(**overrides):
 _MISSING = object()
 
 
-class FakeLeaseRepo:
-    def __init__(self, *, lease=None, threads=None, sessions=None, runtime_session_id="runtime-1", leases=None):
-        self.lease = lease
+class FakeSandboxMonitorRepo:
+    def __init__(self, *, sandbox=None, threads=None, sessions=None, runtime_session_id="runtime-1", sandboxes=None):
+        self.sandbox = sandbox
         self.threads = threads or []
         self.sessions = sessions or []
         self.runtime_session_id = runtime_session_id
-        self.leases = leases or []
+        self.sandboxes = sandboxes or []
 
     def query_sandbox(self, sandbox_id):
-        lease = self.lease if self.lease is not None else _lease_row(sandbox_id=sandbox_id)
-        if lease is _MISSING:
+        sandbox = self.sandbox if self.sandbox is not None else _sandbox_row(sandbox_id=sandbox_id)
+        if sandbox is _MISSING:
             return None
-        return {**lease, "sandbox_id": lease.get("sandbox_id") or sandbox_id}
+        return {**sandbox, "sandbox_id": sandbox.get("sandbox_id") or sandbox_id}
 
     def query_sandboxes(self):
-        if self.leases:
-            return self.leases
-        if self.lease is _MISSING:
+        if self.sandboxes:
+            return self.sandboxes
+        if self.sandbox is _MISSING:
             return []
-        if self.lease is not None:
-            return [self.lease]
-        return [_lease_row()]
+        if self.sandbox is not None:
+            return [self.sandbox]
+        return [_sandbox_row()]
 
     def query_sandbox_threads(self, _sandbox_id):
         return self.threads
@@ -99,13 +99,13 @@ class FakeLeaseRepo:
 
 
 def test_fake_lease_repo_no_longer_exposes_lease_instance_shell() -> None:
-    repo = FakeLeaseRepo()
+    repo = FakeSandboxMonitorRepo()
 
     assert not hasattr(repo, "query_lease_instance_id")
 
 
 def test_fake_lease_repo_no_longer_exposes_broader_lease_protocol_shell() -> None:
-    repo = FakeLeaseRepo()
+    repo = FakeSandboxMonitorRepo()
 
     assert not hasattr(repo, "query_lease")
     assert not hasattr(repo, "query_lease_threads")
@@ -122,8 +122,8 @@ def _use_monitor_repo(monkeypatch, repo):
     monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: repo)
 
 
-def _detached_lease(**overrides):
-    return _lease_row(desired_state="running", observed_state="detached", **overrides)
+def _detached_sandbox(**overrides):
+    return _sandbox_row(desired_state="running", observed_state="detached", **overrides)
 
 
 def _cleanup_state(reason: str):
@@ -407,7 +407,7 @@ def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypa
 def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
+        FakeSandboxMonitorRepo(
             threads=[{"thread_id": "thread-1"}],
             sessions=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
         ),
@@ -426,7 +426,7 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
 def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_thread(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
+        FakeSandboxMonitorRepo(
             threads=[{"thread_id": "thread-child"}, {"thread_id": "thread-main"}],
             sessions=[{"chat_session_id": "session-1", "thread_id": "thread-main", "status": "active"}],
         ),
@@ -453,9 +453,9 @@ def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_
 def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
-            leases=[
-                _lease_row(
+        FakeSandboxMonitorRepo(
+            sandboxes=[
+                _sandbox_row(
                     sandbox_id="sandbox-1",
                     lease_id="lease-1",
                     desired_state="paused",
@@ -477,8 +477,8 @@ def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
 def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
-            lease=_lease_row(),
+        FakeSandboxMonitorRepo(
+            sandbox=_sandbox_row(),
             threads=[{"thread_id": "thread-1"}],
             sessions=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
         ),
@@ -494,7 +494,7 @@ def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
 
 
 def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
-    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
+    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox()))
 
     payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
 
@@ -505,8 +505,8 @@ def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
 def test_get_monitor_sandbox_detail_allows_missing_lease_bridge_for_readonly_detail(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
-            lease=_lease_row(lease_id=None, provider_name="local", observed_state="running", desired_state="running"),
+        FakeSandboxMonitorRepo(
+            sandbox=_sandbox_row(lease_id=None, provider_name="local", observed_state="running", desired_state="running"),
             threads=[],
             sessions=[],
             runtime_session_id="runtime-1",
@@ -530,8 +530,8 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
     calls: list[tuple[str, str, bool]] = []
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
-            lease=_detached_lease(),
+        FakeSandboxMonitorRepo(
+            sandbox=_detached_sandbox(),
             threads=[{"thread_id": "thread-historical"}],
             runtime_session_id="runtime-1",
         ),
@@ -556,11 +556,11 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
 
 
 def test_get_monitor_operation_detail_uses_canonical_sandbox_source(monkeypatch):
-    class CanonicalOnlyRepo(FakeLeaseRepo):
+    class CanonicalOnlyRepo(FakeSandboxMonitorRepo):
         def query_lease(self, _lease_id):
             raise AssertionError("legacy lease operation wrapper should not keep query_lease as single source")
 
-    _use_monitor_repo(monkeypatch, CanonicalOnlyRepo(lease=_lease_row()))
+    _use_monitor_repo(monkeypatch, CanonicalOnlyRepo(sandbox=_sandbox_row()))
     monkeypatch.setattr(
         monitor_service.monitor_operation_service,
         "get_operation_detail",
@@ -686,8 +686,8 @@ def test_list_monitor_provider_sessions_returns_provider_orphans(monkeypatch):
 def test_list_monitor_sandboxes_ignores_stale_thread_refs_when_classifying_triage(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
-            leases=[_lease_row(sandbox_id="sandbox-1", desired_state="paused", observed_state="paused", thread_id="thread-gone")]
+        FakeSandboxMonitorRepo(
+            sandboxes=[_sandbox_row(sandbox_id="sandbox-1", desired_state="paused", observed_state="paused", thread_id="thread-gone")]
         ),
     )
     monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
@@ -801,7 +801,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
 
 
 def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch):
-    _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_lease_row(sandbox_id="sandbox-1", lease_id="lease-1")))
+    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_sandbox_row(sandbox_id="sandbox-1", lease_id="lease-1")))
     monkeypatch.setattr(
         monitor_service.monitor_operation_service,
         "get_operation_detail",
@@ -832,8 +832,8 @@ def test_request_monitor_sandbox_cleanup_no_longer_records_thread_list_residue(m
     calls: list[tuple[str, str, bool]] = []
     _use_monitor_repo(
         monkeypatch,
-        FakeLeaseRepo(
-            lease=_detached_lease(),
+        FakeSandboxMonitorRepo(
+            sandbox=_detached_sandbox(),
             threads=[{"thread_id": "thread-historical"}],
             runtime_session_id="runtime-1",
         ),
