@@ -377,20 +377,16 @@ function parseSandboxTypes(value: unknown): SandboxType[] {
   });
 }
 
-export async function listMyLeases(signal?: AbortSignal): Promise<UserSandboxSummary[]> {
-  return parseUserSandboxSummaries(await request("/api/sandbox/leases/mine", { signal }), "leases", "Malformed user leases");
-}
-
 export async function listMySandboxes(signal?: AbortSignal): Promise<UserSandboxSummary[]> {
-  return parseUserSandboxSummaries(await request("/api/sandbox/sandboxes/mine", { signal }), "sandboxes", "Malformed user sandboxes");
+  return parseUserSandboxSummaries(await request("/api/sandbox/sandboxes/mine", { signal }));
 }
 
-function parseUserSandboxSummaries(value: unknown, envelopeKey: "leases" | "sandboxes", errorMessage: string): UserSandboxSummary[] {
+function parseUserSandboxSummaries(value: unknown): UserSandboxSummary[] {
   const payload = asRecord(value);
-  const sandboxes = payload?.[envelopeKey];
-  if (!Array.isArray(sandboxes)) throw new Error(errorMessage);
-  return sandboxes.map((lease) => {
-    const data = asRecord(lease);
+  const sandboxes = payload?.sandboxes;
+  if (!Array.isArray(sandboxes)) throw new Error("Malformed user sandboxes");
+  return sandboxes.map((sandbox) => {
+    const data = asRecord(sandbox);
     const lease_id = data ? recordString(data, "lease_id") : undefined;
     const sandbox_id = data ? recordString(data, "sandbox_id") : undefined;
     const provider_name = data ? recordString(data, "provider_name") : undefined;
@@ -409,13 +405,13 @@ function parseUserSandboxSummaries(value: unknown, envelopeKey: "leases" | "sand
       !thread_ids.every((id) => typeof id === "string") ||
       !Array.isArray(agents)
     ) {
-      throw new Error(errorMessage);
+      throw new Error("Malformed user sandboxes");
     }
     const admittedAgents = agents.map((agent) => {
       const agentData = asRecord(agent);
       const thread_id = agentData ? recordString(agentData, "thread_id") : undefined;
       const agent_name = agentData ? recordString(agentData, "agent_name") : undefined;
-      if (!agentData || !thread_id || !agent_name) throw new Error(errorMessage);
+      if (!agentData || !thread_id || !agent_name) throw new Error("Malformed user sandboxes");
       return { ...agentData, thread_id, agent_name };
     });
     return { ...data, lease_id, sandbox_id, provider_name, recipe_id, recipe_name, thread_ids, agents: admittedAgents } as UserSandboxSummary;
