@@ -414,9 +414,7 @@ async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
                 }
             ),
             terminal_repo=SimpleNamespace(
-                get_active=lambda _thread_id: (_ for _ in ()).throw(
-                    AssertionError("lease status should not read terminal rows")
-                )
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("lease status should not read terminal rows"))
             ),
             lease_repo=SimpleNamespace(),
         )
@@ -456,9 +454,7 @@ async def test_get_thread_lease_status_reads_repos_without_agent_bootstrap():
                 }
             ),
             terminal_repo=SimpleNamespace(
-                get_active=lambda _thread_id: (_ for _ in ()).throw(
-                    AssertionError("lease status should not read terminal rows")
-                )
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("lease status should not read terminal rows"))
             ),
             lease_repo=SimpleNamespace(
                 get=lambda lease_id: {

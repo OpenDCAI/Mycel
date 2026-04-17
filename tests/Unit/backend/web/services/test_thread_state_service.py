@@ -40,9 +40,7 @@ def test_sandbox_info_does_not_expose_terminal_or_session_identity() -> None:
                 }
             ),
             terminal_repo=SimpleNamespace(
-                get_active=lambda _thread_id: (_ for _ in ()).throw(
-                    AssertionError("sandbox info should not read terminal rows")
-                )
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("sandbox info should not read terminal rows"))
             ),
         )
     )

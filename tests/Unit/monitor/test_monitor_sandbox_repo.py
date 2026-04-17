@@ -222,13 +222,9 @@ def test_query_threads_chunks_lease_lookup() -> None:
         _sandbox(f"sandbox-{index}", provider_env_id=f"instance-{index}", legacy_lease_id=f"lease-{index}") for index in range(175)
     ]
     workspaces = [
-        _workspace(f"workspace-{index}", f"sandbox-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00")
-        for index in range(175)
+        _workspace(f"workspace-{index}", f"sandbox-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00") for index in range(175)
     ]
-    threads = [
-        _thread(f"thread-{index}", f"workspace-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00")
-        for index in range(175)
-    ]
+    threads = [_thread(f"thread-{index}", f"workspace-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00") for index in range(175)]
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {

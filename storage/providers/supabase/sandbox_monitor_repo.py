@@ -40,9 +40,7 @@ class SupabaseSandboxMonitorRepo:
             return []
 
         workspace_ids = [
-            str(row.get("current_workspace_id") or "").strip()
-            for row in threads
-            if str(row.get("current_workspace_id") or "").strip()
+            str(row.get("current_workspace_id") or "").strip() for row in threads if str(row.get("current_workspace_id") or "").strip()
         ]
         workspace_by_id = self._workspace_rows_by_id(workspace_ids)
         sandbox_ids = [
@@ -362,9 +360,7 @@ class SupabaseSandboxMonitorRepo:
         if not ordered_ids:
             return {}
         return {
-            str(sandbox["id"]): sandbox
-            for sandbox in self._ordered_sandboxes(operation)
-            if str(sandbox.get("id") or "") in ordered_ids
+            str(sandbox["id"]): sandbox for sandbox in self._ordered_sandboxes(operation) if str(sandbox.get("id") or "") in ordered_ids
         }
 
     def _thread_id_by_sandbox_id(self, sandbox_ids: list[str]) -> dict[str, str]:
