@@ -52,10 +52,10 @@ async def lifespan(app: FastAPI):
     )
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore
+    from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore, agent_checkpoint_conn_string
 
     pg_url = os.environ["LEON_POSTGRES_URL"]
-    app.state._thread_checkpoint_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
+    app.state._thread_checkpoint_saver_ctx = AsyncPostgresSaver.from_conn_string(agent_checkpoint_conn_string(pg_url))
     app.state._thread_checkpoint_saver = await app.state._thread_checkpoint_saver_ctx.__aenter__()
     await app.state._thread_checkpoint_saver.setup()
     app.state.thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)

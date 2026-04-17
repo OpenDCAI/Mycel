@@ -2,8 +2,30 @@ from __future__ import annotations
 
 import inspect
 from typing import Any, cast
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from .checkpoint_store import ThreadCheckpointState
+
+
+def agent_checkpoint_conn_string(conn_string: str) -> str:
+    parts = urlsplit(conn_string)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    merged_query: list[tuple[str, str]] = []
+    saw_options = False
+    for key, value in query:
+        if key != "options":
+            merged_query.append((key, value))
+            continue
+        saw_options = True
+        if "search_path" in value:
+            if "search_path=agent" not in value:
+                raise RuntimeError("LEON_POSTGRES_URL must not set checkpointer search_path outside Mycel runtime")
+            merged_query.append((key, value))
+        else:
+            merged_query.append((key, f"{value} -csearch_path=agent"))
+    if not saw_options:
+        merged_query.append(("options", "-csearch_path=agent"))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(merged_query, quote_via=quote), parts.fragment))
 
 
 class LangGraphCheckpointStore:

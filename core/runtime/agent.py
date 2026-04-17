@@ -1344,9 +1344,11 @@ class LeonAgent:
 
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
+        from core.runtime.langgraph_checkpoint_store import agent_checkpoint_conn_string
+
         # from_conn_string is an async context manager; enter it and keep
         # the reference so the connection pool stays open for the agent's lifetime.
-        self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
+        self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(agent_checkpoint_conn_string(pg_url))
         self.checkpointer = await self._pg_saver_ctx.__aenter__()
         await self.checkpointer.setup()
 
