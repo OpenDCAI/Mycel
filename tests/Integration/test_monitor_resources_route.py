@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -43,6 +45,13 @@ def _resource_snapshot() -> dict:
             "groups": [],
         },
     }
+
+
+def test_monitor_deleted_route_guard_uses_deleted_route_language() -> None:
+    source = Path(__file__).read_text()
+
+    old_name = "def test_monitor_" + "legacy_monitor_routes_are_not_exposed"
+    assert old_name not in source
 
 
 def _stub_dashboard_dependencies(monkeypatch):
@@ -140,7 +149,7 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
         ("post", "/api/monitor/provider-sessions/daytona_selfhost/session-1/cleanup"),
     ],
 )
-def test_monitor_legacy_monitor_routes_are_not_exposed(method, path):
+def test_monitor_deleted_lease_and_provider_session_routes_are_not_exposed(method, path):
     response = _request(method, path)
 
     assert response.status_code == 404
