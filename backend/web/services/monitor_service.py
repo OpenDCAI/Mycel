@@ -647,6 +647,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
             for item in sessions
         ],
         "cleanup": _sandbox_detail_cleanup_truth(
+            sandbox_id=str(sandbox.get("sandbox_id") or "").strip(),
             lease_id=lease_id,
             triage=triage,
             provider_name=provider_name,
@@ -669,6 +670,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
 
 def _sandbox_detail_cleanup_truth(
     *,
+    sandbox_id: str,
     lease_id: str,
     triage: dict[str, Any],
     provider_name: str,
@@ -686,6 +688,7 @@ def _sandbox_detail_cleanup_truth(
         }
     return monitor_operation_service.build_lease_cleanup_truth(
         lease_id=lease_id,
+        sandbox_id=sandbox_id,
         triage=triage,
         provider_name=provider_name,
         runtime_session_id=runtime_session_id,
@@ -816,6 +819,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
         "sessions": payload.get("sessions") or [],
         "cleanup": monitor_operation_service.build_lease_cleanup_truth(
             lease_id=lease_id,
+            sandbox_id=sandbox_id,
             triage=payload.get("triage"),
             provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
             runtime_session_id=str(runtime.get("runtime_session_id") or ""),

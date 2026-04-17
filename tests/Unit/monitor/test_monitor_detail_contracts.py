@@ -555,6 +555,29 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
     assert calls == [("lease-1", "daytona", True)]
 
 
+def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monkeypatch):
+    calls: list[tuple[str, str, bool]] = []
+    repo = FakeSandboxMonitorRepo(
+        sandbox=_detached_sandbox(),
+        threads=[{"thread_id": "thread-historical"}],
+        runtime_session_id="runtime-1",
+    )
+    _use_monitor_repo(monkeypatch, repo)
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        _record_destroy(calls),
+        raising=False,
+    )
+
+    created = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
+    detail = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+
+    assert detail["cleanup"]["operation"]["operation_id"] == created["operation"]["operation_id"]
+    assert detail["cleanup"]["operation"]["target_type"] == "sandbox"
+    assert detail["cleanup"]["recent_operations"][0]["target_type"] == "sandbox"
+    assert calls == [("lease-1", "daytona", True)]
+
+
 def test_get_monitor_operation_detail_uses_canonical_sandbox_source(monkeypatch):
     class CanonicalOnlyRepo(FakeSandboxMonitorRepo):
         def query_lease(self, _lease_id):
