@@ -96,6 +96,12 @@ def _lease(
     return payload
 
 
+def _sandbox(*args, **kwargs) -> dict:
+    payload = _lease(*args, **kwargs)
+    payload.pop("lease_id", None)
+    return payload
+
+
 def test_resources_overview_maps_runtime_error_to_500(monkeypatch) -> None:
     monkeypatch.setattr(
         resource_projection_service,
@@ -137,12 +143,12 @@ def test_monitor_resources_route_stays_global(monkeypatch) -> None:
     assert response.json()["providers"][0]["id"] == "global-daytona"
 
 
-def test_user_resource_projection_groups_visible_leases_into_provider_cards(monkeypatch) -> None:
+def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(monkeypatch) -> None:
     monkeypatch.setattr(
         resource_projection_service.sandbox_service,
-        "list_user_leases",
+        "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
-            _lease(
+            _sandbox(
                 "lease-1",
                 sandbox_id="sandbox-1",
                 thread_id="thread-1",
@@ -154,6 +160,11 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
                 recipe={"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
             )
         ],
+    )
+    monkeypatch.setattr(
+        resource_projection_service.sandbox_service,
+        "list_user_leases",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("user resource overview must not read lease summaries")),
     )
     _patch_provider_contracts(
         monkeypatch,
@@ -172,7 +183,7 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["providers"][0]["vendor"] == "Daytona"
     assert payload["providers"][0]["type"] == "cloud"
     assert payload["providers"][0]["consoleUrl"] == "https://example.com/daytona"
-    assert payload["providers"][0]["sessions"][0]["leaseId"] == "lease-1"
+    assert "leaseId" not in payload["providers"][0]["sessions"][0]
     assert payload["providers"][0]["sessions"][0]["sandboxId"] == "sandbox-1"
     assert payload["providers"][0]["sessions"][0]["id"] == "sandbox-1:thread-1"
     assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
@@ -185,12 +196,48 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert "memberName" not in payload["providers"][0]["sessions"][0]
 
 
-def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
+def test_user_resource_projection_does_not_call_lease_summary_service(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_projection_service.sandbox_service,
+        "list_user_sandboxes",
+        lambda owner_user_id, **_kwargs: [
+            _sandbox(
+                "lease-1",
+                sandbox_id="sandbox-1",
+                thread_id="thread-1",
+                agent_user_id="agent-1",
+                agent_name="Morel",
+                avatar_url="/api/users/agent-1/avatar",
+                runtime_session_id="provider-session-1",
+                cwd="/home/daytona/app",
+                recipe={"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
+            )
+        ],
+    )
     monkeypatch.setattr(
         resource_projection_service.sandbox_service,
         "list_user_leases",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("user resource overview must not call list_user_leases")),
+    )
+    _patch_provider_contracts(
+        monkeypatch,
+        description="Daytona",
+        vendor="Daytona",
+        type_="cloud",
+        console_url="https://example.com/daytona",
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    assert payload["summary"]["total_providers"] == 1
+
+
+def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_projection_service.sandbox_service,
+        "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
-            _lease(
+            _sandbox(
                 "lease-1",
                 thread_id="thread-1",
                 agent_user_id="agent-1",
@@ -303,11 +350,10 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
 def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases, runtime_session_ids, assertions) -> None:
     monitor_repo = _FakeMonitorRepo(runtime_session_ids)
 
-    def _fake_list_user_leases(owner_user_id: str, **kwargs):
-        assert kwargs.get("include_runtime_session_id") in {None, False}
+    def _fake_list_user_sandboxes(owner_user_id: str, **kwargs):
         return leases
 
-    monkeypatch.setattr(resource_projection_service.sandbox_service, "list_user_leases", _fake_list_user_leases)
+    monkeypatch.setattr(resource_projection_service.sandbox_service, "list_user_sandboxes", _fake_list_user_sandboxes)
     monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
     _patch_provider_contracts(
         monkeypatch,
@@ -335,9 +381,9 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
 
     monkeypatch.setattr(
         resource_projection_service.sandbox_service,
-        "list_user_leases",
+        "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
-            _lease(
+            _sandbox(
                 "lease-1",
                 thread_id="thread-1",
                 agent_user_id="agent-1",

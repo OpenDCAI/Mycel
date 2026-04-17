@@ -40,31 +40,32 @@ def _empty_metric(unit: str) -> dict[str, Any]:
     }
 
 
-def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> dict[str, Any]:
     display = resource_service.get_provider_display_contract(config_name)
     capabilities, capability_error = resource_service.get_provider_capability_contract(config_name)
     provider_type = str(display["type"])
 
     sessions: list[dict[str, Any]] = []
     running_count = 0
-    for lease in leases:
-        thread_id = str((lease.get("thread_ids") or [None])[0] or "")
-        owner = (lease.get("agents") or [{}])[0]
-        status = map_lease_to_session_status(lease.get("observed_state"), lease.get("desired_state"))
+    for sandbox in sandboxes:
+        thread_id = str((sandbox.get("thread_ids") or [None])[0] or "")
+        owner = (sandbox.get("agents") or [{}])[0]
+        status = map_lease_to_session_status(sandbox.get("observed_state"), sandbox.get("desired_state"))
         if status == "running":
             running_count += 1
-        sandbox_id = str(lease.get("sandbox_id") or "").strip() or None
-        session_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{lease['lease_id']}:{thread_id}"
+        sandbox_id = str(sandbox.get("sandbox_id") or "").strip() or None
+        fallback_identity = str(sandbox.get("lease_id") or sandbox.get("runtime_session_id") or "sandbox").strip()
+        session_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{fallback_identity}:{thread_id}"
         sessions.append(
             resource_service.build_resource_session_payload(
                 session_identity=session_identity,
                 sandbox_id=sandbox_id,
-                lease_id=str(lease["lease_id"]),
+                lease_id=str(sandbox.get("lease_id") or "").strip() or None,
                 thread_id=thread_id,
-                runtime_session_id=lease.get("runtime_session_id"),
+                runtime_session_id=sandbox.get("runtime_session_id"),
                 owner=owner,
                 status=status,
-                started_at=str(lease.get("created_at") or ""),
+                started_at=str(sandbox.get("created_at") or ""),
                 metrics=None,
             )
         )
@@ -143,17 +144,17 @@ def _load_visible_resource_runtime() -> tuple[
     return sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox
 
 
-def _backfill_runtime_session_ids(leases: list[dict[str, Any]]) -> None:
-    pending_leases = [lease for lease in leases if not str(lease.get("runtime_session_id") or "").strip()]
-    if not pending_leases:
+def _backfill_runtime_session_ids(sandboxes: list[dict[str, Any]]) -> None:
+    pending_sandboxes = [sandbox for sandbox in sandboxes if not str(sandbox.get("runtime_session_id") or "").strip()]
+    if not pending_sandboxes:
         return
 
-    runtime_session_ids = _load_runtime_session_ids([str(lease.get("sandbox_id") or "") for lease in pending_leases])
-    for lease in pending_leases:
-        sandbox_id = str(lease.get("sandbox_id") or "").strip()
+    runtime_session_ids = _load_runtime_session_ids([str(sandbox.get("sandbox_id") or "") for sandbox in pending_sandboxes])
+    for sandbox in pending_sandboxes:
+        sandbox_id = str(sandbox.get("sandbox_id") or "").strip()
         runtime_session_id = runtime_session_ids.get(sandbox_id)
         if runtime_session_id:
-            lease["runtime_session_id"] = runtime_session_id
+            sandbox["runtime_session_id"] = runtime_session_id
 
 
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
@@ -162,19 +163,21 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
     if thread_repo is None or user_repo is None:
         raise RuntimeError("thread_repo and user_repo are required")
 
-    leases = sandbox_service.list_user_leases(
+    sandboxes = sandbox_service.list_user_sandboxes(
         owner_user_id,
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
-    _backfill_runtime_session_ids(leases)
+    _backfill_runtime_session_ids(sandboxes)
 
-    leases_by_provider: dict[str, list[dict[str, Any]]] = {}
-    for lease in leases:
-        config_name = str(lease.get("provider_name") or "local")
-        leases_by_provider.setdefault(config_name, []).append(lease)
+    sandboxes_by_provider: dict[str, list[dict[str, Any]]] = {}
+    for sandbox in sandboxes:
+        config_name = str(sandbox.get("provider_name") or "local")
+        sandboxes_by_provider.setdefault(config_name, []).append(sandbox)
 
-    providers = [_build_provider_card(config_name, provider_leases) for config_name, provider_leases in sorted(leases_by_provider.items())]
+    providers = [
+        _build_provider_card(config_name, provider_sandboxes) for config_name, provider_sandboxes in sorted(sandboxes_by_provider.items())
+    ]
 
     return {
         "summary": {
@@ -184,7 +187,7 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
             "unavailable_providers": len([item for item in providers if item["status"] == "unavailable"]),
             "running_sessions": sum(int(item["telemetry"]["running"]["used"] or 0) for item in providers),
             "scope": "user",
-            "lease_count": len(leases),
+            "sandbox_count": len(sandboxes),
         },
         "providers": providers,
     }

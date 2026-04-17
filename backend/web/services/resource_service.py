@@ -58,7 +58,7 @@ def build_resource_session_payload(
     *,
     session_identity: str,
     sandbox_id: str | None = None,
-    lease_id: str,
+    lease_id: str | None,
     thread_id: str,
     runtime_session_id: str | None,
     owner: dict[str, Any],
@@ -68,7 +68,6 @@ def build_resource_session_payload(
 ) -> dict[str, Any]:
     payload = {
         "id": session_identity,
-        "leaseId": lease_id,
         "threadId": thread_id,
         "agentUserId": owner.get("agent_user_id"),
         "agentName": str(owner.get("agent_name") or "未绑定Agent"),
@@ -77,6 +76,8 @@ def build_resource_session_payload(
         "startedAt": started_at,
         "metrics": metrics,
     }
+    if lease_id:
+        payload["leaseId"] = lease_id
     if sandbox_id:
         payload["sandboxId"] = sandbox_id
     if runtime_session_id:
