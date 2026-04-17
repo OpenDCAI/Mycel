@@ -41,7 +41,7 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
     }
 
 
-def _lease_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) -> dict[str, Any]:
+def _sandbox_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) -> dict[str, Any]:
     return {
         "thread_id": thread_id,
         "agent_user_id": agent_user_id,
@@ -50,16 +50,16 @@ def _lease_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) ->
     }
 
 
-def _apply_lease_recipe(lease: dict[str, Any], provider_name: str, raw_recipe: Any) -> None:
+def _apply_sandbox_recipe(sandbox_row: dict[str, Any], provider_name: str, raw_recipe: Any) -> None:
     provider_type = provider_type_from_name(provider_name)
     recipe_snapshot = (
         normalize_recipe_snapshot(provider_type, json.loads(str(raw_recipe)), provider_name=provider_name)
         if raw_recipe
         else normalize_recipe_snapshot(provider_type, provider_name=provider_name)
     )
-    lease["recipe_id"] = recipe_snapshot["id"] or lease.get("recipe_id") or default_recipe_id(provider_name)
-    lease["recipe"] = recipe_snapshot
-    lease["recipe_name"] = recipe_snapshot["name"]
+    sandbox_row["recipe_id"] = recipe_snapshot["id"] or sandbox_row.get("recipe_id") or default_recipe_id(provider_name)
+    sandbox_row["recipe"] = recipe_snapshot
+    sandbox_row["recipe_name"] = recipe_snapshot["name"]
 
 
 def _configured_api_key(name: str, configured: str | None, env_name: str) -> str | None:
@@ -121,7 +121,7 @@ def _list_user_runtime_rows(
             if not group.get("sandbox_id"):
                 group["sandbox_id"] = str(row.get("sandbox_id") or "").strip() or None
             thread_id = str(row.get("thread_id") or "").strip()
-            if not _is_user_visible_lease_thread(thread_id):
+            if not _is_user_visible_sandbox_thread(thread_id):
                 continue
             thread = threads_by_id.get(thread_id)
             if thread is None:
@@ -136,12 +136,12 @@ def _list_user_runtime_rows(
             if not group["cwd"] and row.get("cwd"):
                 group["cwd"] = row.get("cwd")
 
-        leases: list[dict[str, Any]] = []
-        for lease in grouped.values():
-            visible_threads = canonical_owner_threads(lease.pop("_visible_threads"))
+        sandbox_rows: list[dict[str, Any]] = []
+        for sandbox_row in grouped.values():
+            visible_threads = canonical_owner_threads(sandbox_row.pop("_visible_threads"))
             if not visible_threads:
                 continue
-            if not _is_user_visible_lease_state(lease):
+            if not _is_user_visible_sandbox_state(sandbox_row):
                 continue
             thread_ids: list[str] = []
             agents: list[dict[str, Any]] = []
@@ -152,15 +152,15 @@ def _list_user_runtime_rows(
                 if not thread_id or not agent_user_id or agent_user is None:
                     continue
                 thread_ids.append(thread_id)
-                agents.append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
+                agents.append(_sandbox_agent_payload(thread_id, agent_user_id, agent_user))
             if not thread_ids:
                 continue
-            lease["thread_ids"] = thread_ids
-            lease["agents"] = agents
-            provider_name = lease["provider_name"]
-            _apply_lease_recipe(lease, provider_name, lease["recipe"])
-            leases.append(lease)
-        return leases
+            sandbox_row["thread_ids"] = thread_ids
+            sandbox_row["agents"] = agents
+            provider_name = sandbox_row["provider_name"]
+            _apply_sandbox_recipe(sandbox_row, provider_name, sandbox_row["recipe"])
+            sandbox_rows.append(sandbox_row)
+        return sandbox_rows
     finally:
         monitor_repo.close()
 
@@ -204,9 +204,9 @@ def count_user_visible_sandboxes_by_provider(
             if not sandbox_key or sandbox_key in counted_sandbox_keys:
                 continue
             thread_id = str(row.get("thread_id") or "").strip()
-            if not _is_user_visible_lease_thread(thread_id) or thread_id not in owned_thread_ids:
+            if not _is_user_visible_sandbox_thread(thread_id) or thread_id not in owned_thread_ids:
                 continue
-            if not _is_user_visible_lease_state(row):
+            if not _is_user_visible_sandbox_state(row):
                 continue
             counts[str(row.get("provider_name") or "local")] += 1
             counted_sandbox_keys.add(sandbox_key)
@@ -239,7 +239,7 @@ def resolve_owned_lease(
         lease = _query_sandbox_summary_for_lease(monitor_repo, lease_id)
         if lease is None:
             return None
-        if not _is_user_visible_lease_state(lease):
+        if not _is_user_visible_sandbox_state(lease):
             return None
         sandbox_id = str(lease.get("sandbox_id") or "").strip()
         if not sandbox_id:
@@ -248,7 +248,7 @@ def resolve_owned_lease(
         visible_threads: list[dict[str, Any]] = []
         for row in monitor_repo.query_sandbox_threads(sandbox_id):
             thread_id = str(row.get("thread_id") or "").strip()
-            if not _is_user_visible_lease_thread(thread_id):
+            if not _is_user_visible_sandbox_thread(thread_id):
                 continue
             thread = thread_repo.get_by_id(thread_id)
             if thread is None:
@@ -270,7 +270,7 @@ def resolve_owned_lease(
             if agent_user is None or agent_user.owner_user_id != user_id:
                 continue
             thread_ids.append(thread_id)
-            agents.append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
+            agents.append(_sandbox_agent_payload(thread_id, agent_user_id, agent_user))
         if not thread_ids:
             return None
 
@@ -281,7 +281,7 @@ def resolve_owned_lease(
         result["provider_name"] = provider_name
         result["thread_ids"] = thread_ids
         result["agents"] = agents
-        _apply_lease_recipe(result, provider_name, lease.get("recipe_json"))
+        _apply_sandbox_recipe(result, provider_name, lease.get("recipe_json"))
         runtime_session_id = monitor_repo.query_sandbox_instance_id(sandbox_id)
         if runtime_session_id:
             result["runtime_session_id"] = runtime_session_id
@@ -290,16 +290,16 @@ def resolve_owned_lease(
         monitor_repo.close()
 
 
-def _is_user_visible_lease_thread(thread_id: str | None) -> bool:
+def _is_user_visible_sandbox_thread(thread_id: str | None) -> bool:
     raw = str(thread_id or "").strip()
     return bool(raw) and not raw.startswith("subagent-") and not is_virtual_thread_id(raw)
 
 
-def _is_user_visible_lease_state(lease: dict[str, Any]) -> bool:
+def _is_user_visible_sandbox_state(sandbox_row: dict[str, Any]) -> bool:
     # @@@user-visible-lease-scope - product-facing lease surfaces should only
     # expose leases the user can still act on, not historical stopped/destroying
     # residue from monitor storage.
-    status = map_lease_to_session_status(lease.get("observed_state"), lease.get("desired_state"))
+    status = map_lease_to_session_status(sandbox_row.get("observed_state"), sandbox_row.get("desired_state"))
     return status in {"running", "paused"}
 
 

@@ -108,6 +108,16 @@ def test_sandbox_service_no_longer_exposes_user_visible_lease_summary_shell() ->
     assert not hasattr(sandbox_service, "count_user_visible_leases_by_provider")
 
 
+def test_user_visible_sandbox_helpers_use_sandbox_runtime_language() -> None:
+    source = sandbox_service.__loader__.get_source(sandbox_service.__name__)
+
+    assert source is not None
+    assert "_lease_agent_payload" not in source
+    assert "_apply_lease_recipe" not in source
+    assert "_is_user_visible_lease_thread" not in source
+    assert "_is_user_visible_lease_state" not in source
+
+
 class _FakeThreadRepo:
     def __init__(self, rows):
         self._rows = rows
