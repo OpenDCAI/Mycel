@@ -16,7 +16,7 @@ NotificationType = Literal["steer", "command", "agent", "chat"]
 
 
 class LeaseRepo(Protocol):
-    """Sandbox lease CRUD. Returns raw dicts — domain object construction is the consumer's job."""
+    """Lower sandbox runtime bridge. Returns raw dicts — domain object construction is the consumer's job."""
 
     def close(self) -> None: ...
     def get(self, lease_id: str) -> dict[str, Any] | None: ...
