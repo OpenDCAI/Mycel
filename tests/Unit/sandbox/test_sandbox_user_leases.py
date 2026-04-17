@@ -105,6 +105,7 @@ def test_user_visible_sandbox_helpers_use_sandbox_runtime_language() -> None:
     assert "_apply_lease_recipe" not in source
     assert "_is_user_visible_lease_thread" not in source
     assert "_is_user_visible_lease_state" not in source
+    assert "user-visible-lease-scope" not in source
 
 
 class _FakeThreadRepo:
