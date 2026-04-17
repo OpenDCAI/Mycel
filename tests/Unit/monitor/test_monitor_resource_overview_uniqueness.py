@@ -407,6 +407,51 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
     ]
 
 
+def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-a",
+            "sandbox_id": "sandbox-a",
+            "lease_id": "shared-legacy-lease",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-b",
+            "sandbox_id": "sandbox-b",
+            "lease_id": "shared-legacy-lease",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+    repo = _FakeRepo(
+        rows,
+        sandbox_threads={
+            "sandbox-a": ["subagent-a", "thread-parent-a"],
+            "sandbox-b": ["subagent-b", "thread-parent-b"],
+        },
+    )
+    _patch_daytona_projection(
+        monkeypatch,
+        repo,
+        lambda thread_ids: {tid: {"agent_user_id": tid, "agent_name": tid, "avatar_url": None} for tid in thread_ids},
+    )
+
+    payload = resource_projection_service.list_resource_providers()
+    sessions = payload["providers"][0]["sessions"]
+
+    assert [(session["sandboxId"], session["threadId"]) for session in sessions] == [
+        ("sandbox-a", "thread-parent-a"),
+        ("sandbox-b", "thread-parent-b"),
+    ]
+
+
 def test_list_resource_providers_uses_canonical_sandbox_thread_fallback(monkeypatch):
     rows = [
         {
