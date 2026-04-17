@@ -576,7 +576,7 @@ def _detach_lease_terminals(manager: Any, lease_id: str) -> None:
         if not terminal_id:
             raise RuntimeError(f"Lease {lease_id} has terminal row without terminal_id")
         if thread_id:
-            manager.session_manager.delete_thread(thread_id, reason="detached_lease_cleanup")
+            manager.session_manager.delete_thread(thread_id, reason="detached_sandbox_cleanup")
         manager.terminal_store.delete(terminal_id)
 
 
