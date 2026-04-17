@@ -889,9 +889,13 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
                     legacy_lease_id="lease-recent",
                 ),
             ],
-            "abstract_terminals": [
-                _terminal("term-parent", "lease-terminal", "thread-parent", "2026-04-05T11:05:00"),
-                _terminal("term-subagent", "lease-terminal", "subagent-deadbeef", "2026-04-05T11:06:00"),
+            "container.workspaces": [
+                _workspace("workspace-parent", "sandbox-terminal", updated_at="2026-04-05T11:05:00"),
+                _workspace("workspace-subagent", "sandbox-terminal", updated_at="2026-04-05T11:06:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-parent", "workspace-parent", updated_at="2026-04-05T11:05:00"),
+                _thread("subagent-deadbeef", "workspace-subagent", updated_at="2026-04-05T11:06:00"),
             ],
             "chat_sessions": [
                 _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
@@ -915,7 +919,7 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
         {
             "provider": "daytona_selfhost",
             "session_id": None,
-            "thread_id": "thread-parent",
+            "thread_id": "subagent-deadbeef",
             "sandbox_id": "sandbox-terminal",
             "lease_id": "lease-terminal",
             "observed_state": "paused",
@@ -925,7 +929,7 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
         {
             "provider": "daytona_selfhost",
             "session_id": None,
-            "thread_id": "subagent-deadbeef",
+            "thread_id": "thread-parent",
             "sandbox_id": "sandbox-terminal",
             "lease_id": "lease-terminal",
             "observed_state": "paused",
@@ -959,8 +963,11 @@ def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -
                     legacy_lease_id="lease-terminal",
                 ),
             ],
-            "abstract_terminals": [
-                _terminal("term-parent", "lease-terminal", "thread-parent", "2026-04-05T11:05:00"),
+            "container.workspaces": [
+                _workspace("workspace-parent", "sandbox-terminal", updated_at="2026-04-05T11:05:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-parent", "workspace-parent", updated_at="2026-04-05T11:05:00"),
             ],
             "chat_sessions": [
                 _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
