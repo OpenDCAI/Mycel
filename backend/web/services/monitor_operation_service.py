@@ -123,10 +123,7 @@ def build_sandbox_cleanup_truth(
         reason = "Sandbox is not in a managed cleanup state."
 
     sandbox_key = str(sandbox_id or "").strip()
-    if sandbox_key:
-        operations = _operations_for_target("sandbox", sandbox_key)
-    else:
-        operations = _operations_for_target("lease", lease_id)
+    operations = _operations_for_target("sandbox", sandbox_key) if sandbox_key else []
     latest = operations[0] if operations else None
 
     return {

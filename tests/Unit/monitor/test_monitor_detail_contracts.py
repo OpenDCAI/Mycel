@@ -604,12 +604,8 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
     assert calls == [("lease-1", "daytona", True)]
 
 
-def test_get_monitor_operation_detail_uses_canonical_sandbox_source(monkeypatch):
-    class CanonicalOnlyRepo(FakeSandboxMonitorRepo):
-        def query_lease(self, _lease_id):
-            raise AssertionError("legacy lease operation wrapper should not keep query_lease as single source")
-
-    _use_monitor_repo(monkeypatch, CanonicalOnlyRepo(sandbox=_sandbox_row()))
+def test_get_monitor_operation_detail_does_not_adapt_legacy_lease_targets(monkeypatch):
+    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_sandbox_row()))
     monkeypatch.setattr(
         monitor_service.monitor_operation_service,
         "get_operation_detail",
@@ -621,7 +617,47 @@ def test_get_monitor_operation_detail_uses_canonical_sandbox_source(monkeypatch)
 
     payload = monitor_service.get_monitor_operation_detail("op-1")
 
-    assert payload["sandbox_id"] == "sandbox-1"
+    assert "sandbox_id" not in payload
+    assert payload["target"] == {"target_type": "lease", "target_id": "lease-1"}
+
+
+def test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_legacy_lease_history(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def _record_operations_for_target(target_type: str, target_id: str):
+        calls.append((target_type, target_id))
+        if target_type == "lease":
+            return [
+                {
+                    "operation_id": "op-legacy",
+                    "kind": "sandbox_cleanup",
+                    "target_type": "lease",
+                    "target_id": "lease-1",
+                    "status": "succeeded",
+                    "requested_at": "2026-04-18T00:00:00Z",
+                    "updated_at": "2026-04-18T00:00:01Z",
+                    "summary": "Legacy cleanup completed.",
+                    "reason": "legacy",
+                    "result_truth": {},
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(monitor_service.monitor_operation_service, "_operations_for_target", _record_operations_for_target)
+
+    payload = monitor_service.monitor_operation_service.build_sandbox_cleanup_truth(
+        lease_id="lease-1",
+        sandbox_id=None,
+        triage={"category": "orphan_cleanup"},
+        provider_name="daytona",
+        runtime_session_id="runtime-1",
+        sessions=[],
+        threads=[],
+    )
+
+    assert calls == []
+    assert payload["operation"] is None
+    assert payload["recent_operations"] == []
 
 
 def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(monkeypatch):
@@ -859,7 +895,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
     }
 
 
-def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch):
+def test_get_monitor_operation_detail_ignores_legacy_lease_relation_shell(monkeypatch):
     _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_sandbox_row(sandbox_id="sandbox-1", lease_id="lease-1")))
     monkeypatch.setattr(
         monitor_service.monitor_operation_service,
@@ -882,7 +918,7 @@ def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch
 
     payload = monitor_service.get_monitor_operation_detail("op-1")
 
-    assert payload["sandbox_id"] == "sandbox-1"
+    assert "sandbox_id" not in payload
     assert payload["target"]["target_type"] == "lease"
     assert payload["target"]["target_id"] == "lease-1"
 

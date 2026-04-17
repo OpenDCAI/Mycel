@@ -708,20 +708,6 @@ def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
         repo.close()
 
 
-def _sandbox_id_for_legacy_operation_target(repo: Any, lease_id: str) -> str:
-    lease_key = str(lease_id or "").strip()
-    if not lease_key:
-        raise KeyError(f"Lease not found: {lease_id}")
-    for sandbox in repo.query_sandboxes():
-        if str(sandbox.get("lease_id") or "").strip() != lease_key:
-            continue
-        sandbox_id = str(sandbox.get("sandbox_id") or "").strip()
-        if not sandbox_id:
-            raise RuntimeError("monitor operation lease target missing sandbox bridge")
-        return sandbox_id
-    raise KeyError(f"Lease not found: {lease_id}")
-
-
 def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
     snapshot = get_resource_overview_snapshot()
     providers = snapshot.get("providers") or []
@@ -850,19 +836,7 @@ def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
             raise RuntimeError("monitor operation sandbox target is missing")
         return {**payload, "sandbox_id": sandbox_id}
 
-    if target_type != "lease":
-        return payload
-
-    lease_id = str(target.get("target_id") or "").strip()
-    if not lease_id:
-        raise RuntimeError("monitor operation lease target is missing")
-
-    repo = make_sandbox_monitor_repo()
-    try:
-        sandbox_id = _sandbox_id_for_legacy_operation_target(repo, lease_id)
-    finally:
-        repo.close()
-    return {**payload, "sandbox_id": sandbox_id}
+    return payload
 
 
 def _sandbox_cleanup_lease_id(sandbox_id: str) -> str:
