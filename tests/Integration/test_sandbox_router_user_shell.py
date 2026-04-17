@@ -36,7 +36,7 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
 
     result = await sandbox_router.list_my_sandboxes(user_id="owner-1", request=request)
 
-    assert result == {"sandboxes": [{"lease_id": "lease-1", "sandbox_id": "sandbox-1"}]}
+    assert result == {"sandboxes": [{"sandbox_id": "sandbox-1"}]}
     assert seen == {
         "user_id": "owner-1",
         "thread_repo": thread_repo,

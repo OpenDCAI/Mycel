@@ -17,6 +17,10 @@ def _runtime_http_error(exc: RuntimeError) -> HTTPException:
     return HTTPException(status, message)
 
 
+def _sandbox_summary(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in row.items() if key != "lease_id"}
+
+
 async def _mutate_session_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(
@@ -57,7 +61,7 @@ async def list_my_sandboxes(
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
-    return {"sandboxes": sandboxes}
+    return {"sandboxes": [_sandbox_summary(sandbox) for sandbox in sandboxes]}
 
 
 @router.get("/sessions/{session_id}/metrics")
