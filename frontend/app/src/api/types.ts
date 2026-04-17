@@ -179,8 +179,6 @@ export interface UserLeaseSummary {
 export interface SandboxInfo {
   type: string;
   status: string | null;
-  session_id: string | null;
-  terminal_id?: string | null;
 }
 
 export interface ToolStep {

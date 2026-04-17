@@ -32,9 +32,9 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
     """Get sandbox session info for a thread.
 
     Returns:
-        Dict with type, status, session_id, terminal_id, error (if any)
+        Dict with type, status, error (if any)
     """
-    sandbox_info: dict[str, Any] = {"type": sandbox_type, "status": None, "session_id": None}
+    sandbox_info: dict[str, Any] = {"type": sandbox_type, "status": None}
     if not hasattr(agent, "_sandbox"):
         return sandbox_info
 
@@ -42,18 +42,13 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
         mgr = agent._sandbox.manager
         terminal = mgr.get_terminal(thread_id)
         if terminal:
-            session = mgr.session_manager.get(thread_id, terminal.terminal_id)
-            if session:
-                sandbox_info["session_id"] = session.session_id
             lease = mgr.get_lease(terminal.lease_id)
             if lease:
                 instance = _resolve_thread_sandbox_instance(mgr, lease)
                 if instance:
                     sandbox_info["status"] = _display_sandbox_status(lease, instance)
-                    sandbox_info["session_id"] = sandbox_info["session_id"] or instance.instance_id
                 else:
                     sandbox_info["status"] = "detached"
-            sandbox_info["terminal_id"] = terminal.terminal_id
     except Exception as exc:
         sandbox_info["status"] = "error"
         sandbox_info["error"] = str(exc)
