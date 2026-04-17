@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any, cast
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg import AsyncConnection
+from psycopg.rows import dict_row
 
 from .checkpoint_store import ThreadCheckpointState
 
@@ -26,6 +32,21 @@ def agent_checkpoint_conn_string(conn_string: str) -> str:
     if not saw_options:
         merged_query.append(("options", "-csearch_path=agent"))
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(merged_query, quote_via=quote), parts.fragment))
+
+
+@asynccontextmanager
+async def agent_checkpoint_saver_from_conn_string(conn_string: str) -> AsyncIterator[AsyncPostgresSaver]:
+    shaped_conn_string = agent_checkpoint_conn_string(conn_string)
+    async with await AsyncConnection.connect(
+        shaped_conn_string,
+        autocommit=True,
+        prepare_threshold=0,
+        row_factory=dict_row,
+    ) as conn:
+        # @@@checkpoint-search-path - Supavisor may ignore libpq options, so pin
+        # the live connection before LangGraph setup creates unqualified tables.
+        await conn.execute("SET search_path TO agent")
+        yield AsyncPostgresSaver(conn=conn)
 
 
 class LangGraphCheckpointStore:
