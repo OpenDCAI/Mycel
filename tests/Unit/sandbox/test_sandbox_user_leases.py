@@ -15,10 +15,12 @@ def _lease_row(
     desired_state: str = "running",
     created_at: str = "2026-04-07T10:00:00Z",
     cwd: str = "/tmp/app",
+    sandbox_id: str | None = None,
     **extra,
 ):
     return {
         "lease_id": lease_id,
+        "sandbox_id": sandbox_id or lease_id.replace("lease", "sandbox", 1),
         "provider_name": provider_name,
         "recipe_id": recipe_id or f"{provider_name}:default",
         "recipe_json": None,
@@ -196,6 +198,7 @@ def test_list_user_leases_visible_thread_contract(
     assert len(leases) == 1
     lease = leases[0]
     assert lease["lease_id"] == "lease-1"
+    assert lease["sandbox_id"] == "sandbox-1"
     assert lease["thread_ids"] == expected_thread_ids
     assert lease["agents"] == expected_agents
     assert lease["recipe_id"] == expected_recipe_id
