@@ -269,11 +269,13 @@ class SupabaseSandboxMonitorRepo:
         ordered_ids = [str(sandbox_id or "").strip() for sandbox_id in sandbox_ids if str(sandbox_id or "").strip()]
         if not ordered_ids:
             return {}
+        sandbox_id_set = set(ordered_ids)
 
-        workspaces = q.rows_in_chunks(
-            lambda: q.schema_table(self._client, "container", "workspaces", _REPO).select("id,sandbox_id,updated_at,created_at"),
-            "sandbox_id",
-            ordered_ids,
+        # @@@monitor-binding-query - remote PostgREST can 502 on large sandbox_id IN
+        # filters here; monitor already loaded all sandboxes, so filter the small
+        # workspace/thread projections locally instead of making this endpoint fragile.
+        workspaces = q.rows(
+            q.schema_table(self._client, "container", "workspaces", _REPO).select("id,sandbox_id,updated_at,created_at").execute(),
             _REPO,
             "query_sandboxes workspaces",
         )
@@ -281,15 +283,14 @@ class SupabaseSandboxMonitorRepo:
         for row in sorted(workspaces, key=lambda x: x.get("updated_at") or x.get("created_at") or ""):
             workspace_id = str(row.get("id") or "").strip()
             sandbox_id = str(row.get("sandbox_id") or "").strip()
-            if workspace_id and sandbox_id:
+            if workspace_id and sandbox_id in sandbox_id_set:
                 workspace_to_sandbox[workspace_id] = sandbox_id
         if not workspace_to_sandbox:
             return {}
+        workspace_id_set = set(workspace_to_sandbox)
 
-        threads = q.rows_in_chunks(
-            lambda: q.schema_table(self._client, "agent", "threads", _REPO).select("id,current_workspace_id,updated_at,created_at"),
-            "current_workspace_id",
-            list(workspace_to_sandbox),
+        threads = q.rows(
+            q.schema_table(self._client, "agent", "threads", _REPO).select("id,current_workspace_id,updated_at,created_at").execute(),
             _REPO,
             "query_sandboxes threads",
         )
@@ -298,7 +299,7 @@ class SupabaseSandboxMonitorRepo:
             thread_id = str(row.get("id") or "").strip()
             workspace_id = str(row.get("current_workspace_id") or "").strip()
             sandbox_id = workspace_to_sandbox.get(workspace_id)
-            if thread_id and sandbox_id:
+            if thread_id and workspace_id in workspace_id_set and sandbox_id:
                 result[sandbox_id] = thread_id
         return result
 
