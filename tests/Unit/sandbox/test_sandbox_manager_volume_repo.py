@@ -113,7 +113,16 @@ class _FakeLeaseRepo:
 
     def find_by_instance(self, *, provider_name: str, instance_id: str):
         self.instance_queries.append((provider_name, instance_id))
-        return None
+        if self._row is None:
+            return None
+        row_provider = str(self._row.get("provider_name") or "").strip()
+        row_instance = str(
+            self._row.get("provider_env_id")
+            or self._row.get("current_instance_id")
+            or (self._row.get("_instance") or {}).get("instance_id")
+            or ""
+        ).strip()
+        return self._row if row_provider == provider_name and row_instance == instance_id else None
 
     def close(self) -> None:
         self.closed = True
@@ -158,7 +167,7 @@ def _new_test_manager() -> Any:
 
 
 def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
 
     def build_provider(name: str):
         return SimpleNamespace(default_cwd=f"/providers/{name}") if name == "local" else None
@@ -181,7 +190,7 @@ def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_t
 
 
 def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_provider_default(monkeypatch):
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
     monkeypatch.setattr(
         sandbox_manager_module,
         "_build_provider_from_name",
@@ -218,7 +227,7 @@ def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavaila
 
 def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider_default_exists(monkeypatch):
     terminal_repo = _FakeBindTerminalRepo(latest_by_lease={"cwd": "/terminal/latest"})
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
 
     monkeypatch.setattr(
         sandbox_manager_module,
@@ -233,7 +242,6 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
             "provider_env_id": "env-1",
             "config": {"legacy_lease_id": "legacy-lease"},
         },
-        resolve_lease=lambda _lease_id: {"lease_id": "lease-1"},
         db_path=Path("/tmp/fake-sandbox.db"),
         terminal_repo=terminal_repo,
         lease_repo=lease_repo,
@@ -1012,7 +1020,6 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
             "provider_env_id": "sandbox-env-1",
             "config": {"legacy_lease_id": "lease-legacy"},
         },
-        resolve_lease=lambda _lease_id: (_ for _ in ()).throw(AssertionError("legacy fallback should stay unused")),
         lease_repo=lease_repo,
     )
 
@@ -1023,22 +1030,18 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
     }
 
 
-def test_resolve_existing_sandbox_lease_falls_back_to_legacy_lease_id_when_instance_lookup_misses() -> None:
+def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> None:
     lease_repo = SimpleNamespace(
         find_by_instance=lambda **_kwargs: None,
         close=lambda: None,
     )
-    seen_lease_ids: list[str] = []
 
-    lease = sandbox_manager_module.resolve_existing_sandbox_lease(
-        {
-            "provider_name": "daytona",
-            "provider_env_id": "sandbox-env-1",
-            "config": {"legacy_lease_id": "lease-legacy"},
-        },
-        resolve_lease=lambda lease_id: seen_lease_ids.append(lease_id) or {"lease_id": lease_id},
-        lease_repo=lease_repo,
-    )
-
-    assert seen_lease_ids == ["lease-legacy"]
-    assert lease == {"lease_id": "lease-legacy"}
+    with pytest.raises(RuntimeError, match="sandbox provider_env_id did not resolve to a lease"):
+        sandbox_manager_module.resolve_existing_sandbox_lease(
+            {
+                "provider_name": "daytona",
+                "provider_env_id": "sandbox-env-1",
+                "config": {"legacy_lease_id": "lease-legacy"},
+            },
+            lease_repo=lease_repo,
+        )

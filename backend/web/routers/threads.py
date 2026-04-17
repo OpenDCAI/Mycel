@@ -354,12 +354,7 @@ def _resolve_owned_existing_sandbox_request_lease(
         raise HTTPException(403, "Not authorized")
     return resolve_existing_sandbox_lease(
         sandbox,
-        resolve_lease=lambda lease_id: sandbox_service.resolve_owned_lease(
-            owner_user_id,
-            lease_id,
-            thread_repo=app.state.thread_repo,
-            user_repo=app.state.user_repo,
-        ),
+        lease_repo=getattr(app.state, "lease_repo", None),
     )
 
 
@@ -798,13 +793,8 @@ def _create_owned_thread(
         bound_cwd, owned_lease = bind_thread_to_existing_sandbox(
             new_thread_id,
             sandbox,
-            resolve_lease=lambda lease_id: sandbox_service.resolve_owned_lease(
-                owner_user_id,
-                lease_id,
-                thread_repo=app.state.thread_repo,
-                user_repo=app.state.user_repo,
-            ),
             cwd=bind_cwd,
+            lease_repo=getattr(app.state, "lease_repo", None),
         )
         selected_lease_id = _request_bridge_text(owned_lease, "lease_id", label="lease")
         if owned_lease is None:

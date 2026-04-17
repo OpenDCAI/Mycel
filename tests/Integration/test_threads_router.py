@@ -95,6 +95,56 @@ class _FakeSandboxRepo:
         self.by_id[row.id] = row
 
 
+class _FakeLeaseRepo:
+    def __init__(self, row: dict[str, Any] | None = None) -> None:
+        self._row = row
+        self.instance_queries: list[tuple[str, str]] = []
+
+    def find_by_instance(self, *, provider_name: str, instance_id: str):
+        self.instance_queries.append((provider_name, instance_id))
+        if self._row is None:
+            return None
+        row_provider = str(self._row.get("provider_name") or "").strip()
+        row_instance = str(self._row.get("provider_env_id") or self._row.get("current_instance_id") or "").strip()
+        return self._row if row_provider == provider_name and row_instance == instance_id else None
+
+
+def _existing_sandbox_row(
+    *,
+    provider_name: str = "local",
+    provider_env_id: str = "instance-1",
+    legacy_lease_id: str = "lease-1",
+) -> dict[str, Any]:
+    return {
+        "id": "sandbox-1",
+        "owner_user_id": "owner-1",
+        "provider_name": provider_name,
+        "provider_env_id": provider_env_id,
+        "config": {"legacy_lease_id": legacy_lease_id},
+    }
+
+
+def _existing_sandbox_lease_repo(
+    *,
+    lease_id: str = "lease-1",
+    sandbox_id: str = "sandbox-1",
+    provider_name: str = "local",
+    provider_env_id: str = "instance-1",
+    cwd: str = "/workspace/reused",
+    recipe: dict[str, Any] | None = None,
+) -> _FakeLeaseRepo:
+    return _FakeLeaseRepo(
+        {
+            "lease_id": lease_id,
+            "sandbox_id": sandbox_id,
+            "provider_name": provider_name,
+            "provider_env_id": provider_env_id,
+            "cwd": cwd,
+            "recipe": recipe,
+        }
+    )
+
+
 class _FakeAuthService:
     def __init__(self) -> None:
         self.tokens: list[str] = []
@@ -366,6 +416,7 @@ def _make_threads_app(
             recipe_repo=state_overrides.pop("recipe_repo", _FakeRecipeRepo()),
             workspace_repo=state_overrides.pop("workspace_repo", _FakeWorkspaceRepo()),
             sandbox_repo=state_overrides.pop("sandbox_repo", _FakeSandboxRepo()),
+            lease_repo=state_overrides.pop("lease_repo", _FakeLeaseRepo()),
             **state_overrides,
         )
     )
@@ -599,12 +650,14 @@ async def test_create_thread_route_rejects_lease_shaped_existing_identity():
 async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() -> None:
     workspace_repo = _FakeWorkspaceRepo()
     sandbox_repo = _FakeSandboxRepo()
-    sandbox_repo.by_id["sandbox-1"] = {
-        "id": "sandbox-1",
-        "owner_user_id": "owner-1",
-        "config": {"legacy_lease_id": "lease-1"},
-    }
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
+    sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row()
+    app = _make_threads_app(
+        thread_sandbox={},
+        thread_cwd={},
+        workspace_repo=workspace_repo,
+        sandbox_repo=sandbox_repo,
+        lease_repo=_existing_sandbox_lease_repo(recipe=None),
+    )
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
@@ -654,11 +707,7 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
 async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_path_for_bind_cwd() -> None:
     workspace_repo = _FakeWorkspaceRepo()
     sandbox_repo = _FakeSandboxRepo()
-    sandbox_repo.by_id["sandbox-1"] = {
-        "id": "sandbox-1",
-        "owner_user_id": "owner-1",
-        "config": {"legacy_lease_id": "lease-1"},
-    }
+    sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row()
     existing_workspace = SimpleNamespace(
         id="workspace-existing",
         sandbox_id="sandbox-1",
@@ -666,7 +715,13 @@ async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_p
         workspace_path="/workspace/existing",
     )
     workspace_repo.by_sandbox_id["sandbox-1"] = [existing_workspace]
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
+    app = _make_threads_app(
+        thread_sandbox={},
+        thread_cwd={},
+        workspace_repo=workspace_repo,
+        sandbox_repo=sandbox_repo,
+        lease_repo=_existing_sandbox_lease_repo(recipe=None),
+    )
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
@@ -770,12 +825,14 @@ async def test_create_thread_route_persists_current_workspace_id_for_new_sandbox
 async def test_create_thread_route_existing_sandbox_binds_without_launch_config_save() -> None:
     workspace_repo = _FakeWorkspaceRepo()
     sandbox_repo = _FakeSandboxRepo()
-    sandbox_repo.by_id["sandbox-1"] = {
-        "id": "sandbox-1",
-        "owner_user_id": "owner-1",
-        "config": {"legacy_lease_id": "lease-1"},
-    }
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
+    sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row()
+    app = _make_threads_app(
+        thread_sandbox={},
+        thread_cwd={},
+        workspace_repo=workspace_repo,
+        sandbox_repo=sandbox_repo,
+        lease_repo=_existing_sandbox_lease_repo(recipe={"id": "local:default"}),
+    )
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
@@ -820,12 +877,14 @@ async def test_create_thread_route_existing_sandbox_binds_without_launch_config_
 async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() -> None:
     workspace_repo = _FakeWorkspaceRepo()
     sandbox_repo = _FakeSandboxRepo()
-    sandbox_repo.by_id["sandbox-1"] = {
-        "id": "sandbox-1",
-        "owner_user_id": "owner-1",
-        "config": {"legacy_lease_id": "lease-1"},
-    }
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
+    sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row()
+    app = _make_threads_app(
+        thread_sandbox={},
+        thread_cwd={},
+        workspace_repo=workspace_repo,
+        sandbox_repo=sandbox_repo,
+        lease_repo=_existing_sandbox_lease_repo(recipe={"id": "local:default"}),
+    )
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
@@ -1196,11 +1255,8 @@ async def test_create_thread_route_rejects_unavailable_provider():
 @pytest.mark.asyncio
 async def test_create_thread_route_rejects_unavailable_provider_for_existing_lease():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
-    app.state.sandbox_repo.by_id["sandbox-1"] = {
-        "id": "sandbox-1",
-        "owner_user_id": "owner-1",
-        "config": {"legacy_lease_id": "lease-1"},
-    }
+    app.state.sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row(provider_name="daytona")
+    app.state.lease_repo = _existing_sandbox_lease_repo(provider_name="daytona", recipe=None)
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
