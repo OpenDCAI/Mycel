@@ -16,6 +16,7 @@ type OperationDetailPayload = {
     target_id?: string | null;
     provider_id?: string | null;
     runtime_session_id?: string | null;
+    runtime_id?: string | null;
   } | null;
   sandbox_id?: string | null;
   result_truth?: {
@@ -40,10 +41,13 @@ const OPERATION_STATUS_CLASS_BY_STATUS: Record<string, string> = {
 
 export function buildOperationDetailShell(data: OperationDetailPayload) {
   const sandboxId = data.sandbox_id ?? null;
+  const runtimeId = data.target?.runtime_session_id ?? data.target?.runtime_id ?? null;
   return {
     surfaceHref: "/sandboxes",
     targetLabel: "Sandbox",
     targetHref: sandboxId ? `/sandboxes/${sandboxId}` : null,
+    runtimeHref: runtimeId ? `/runtimes/${runtimeId}` : null,
+    runtimeLabel: runtimeId,
     beforeLabel: "Sandbox Before",
     afterLabel: "Sandbox After",
     runtimeBody: "Runtime session linked to the target sandbox.",
@@ -70,6 +74,8 @@ export default function OperationDetailPage() {
   const latestEventMessage = events[events.length - 1]?.message ?? null;
   const operationSummary =
     operation.summary && operation.summary !== latestEventMessage ? operation.summary : "Status is tracked in the timeline below.";
+  const runtimeHref = shell.runtimeHref;
+  const runtimeLabel = shell.runtimeLabel;
 
   return (
     <div className="page">
@@ -116,11 +122,7 @@ export default function OperationDetailPage() {
           <article className="surface-card">
             <p className="surface-card__eyebrow">Runtime</p>
             <p className="surface-card__value surface-card__value--compact">
-              {target.runtime_session_id ? (
-                <Link to={`/runtimes/${target.runtime_session_id}`}>{target.runtime_session_id}</Link>
-              ) : (
-                "-"
-              )}
+              {runtimeHref && runtimeLabel ? <Link to={runtimeHref}>{runtimeLabel}</Link> : "-"}
             </p>
             <p className="surface-card__body">{shell.runtimeBody}</p>
           </article>

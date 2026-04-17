@@ -59,6 +59,18 @@ describe("monitor relation shell", () => {
     expect(shell.providerBody).toBe("Provider surface responsible for the target sandbox runtime.");
   });
 
+  it("uses provider orphan runtime target ids for operation runtime links", () => {
+    const shell = buildOperationDetailShell({
+      operation: { operation_id: "op-1", status: "succeeded" },
+      target: { target_type: "provider_orphan_runtime", provider_id: "daytona", runtime_id: "runtime-1" },
+      result_truth: {},
+      events: [],
+    });
+
+    expect(shell.runtimeHref).toBe("/runtimes/runtime-1");
+    expect(shell.runtimeLabel).toBe("runtime-1");
+  });
+
   it("uses sandbox detail link for resource group relation shell", () => {
     expect(buildSandboxGroupDetailLink({ sandboxId: "sandbox-1" })).toEqual({
       href: "/sandboxes/sandbox-1",

@@ -656,11 +656,19 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
     payload = monitor_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
 
     assert payload["accepted"] is True
-    assert payload["message"] == "Provider session cleanup completed."
+    assert payload["message"] == "Provider orphan runtime cleanup completed."
+    assert payload["operation"]["kind"] == "provider_orphan_runtime_cleanup"
     assert payload["operation"]["status"] == "succeeded"
+    assert payload["operation"]["target_type"] == "provider_orphan_runtime"
+    detail = monitor_service.get_monitor_operation_detail(payload["operation"]["operation_id"])
+    assert detail["target"] == {
+        "target_type": "provider_orphan_runtime",
+        "provider_id": "daytona_selfhost",
+        "runtime_id": "sandbox-1",
+    }
     assert payload["current_truth"] == {
         "provider_id": "daytona_selfhost",
-        "session_id": "sandbox-1",
+        "runtime_id": "sandbox-1",
     }
     assert calls == [("sandbox-1", "destroy", "daytona_selfhost", "daytona_selfhost")]
 
@@ -698,6 +706,8 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
     assert payload["accepted"] is False
     assert payload["operation"] is None
     assert "paused" in payload["message"]
+    assert payload["current_truth"]["runtime_id"] == "sandbox-1"
+    assert "session_id" not in payload["current_truth"]
     assert calls == []
 
 

@@ -231,38 +231,38 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def request_provider_session_cleanup(provider_name: str, session_id: str, session_truth: dict[str, Any]) -> dict[str, Any]:
+def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str, runtime_truth: dict[str, Any]) -> dict[str, Any]:
     provider = str(provider_name or "").strip()
-    session = str(session_id or "").strip()
+    runtime = str(runtime_id or "").strip()
     if not provider:
         raise ValueError("provider_name is required")
-    if not session:
-        raise ValueError("session_id is required")
-    status = str(session_truth.get("status") or "").strip().lower()
-    source = str(session_truth.get("source") or "").strip()
+    if not runtime:
+        raise ValueError("runtime_id is required")
+    status = str(runtime_truth.get("status") or "").strip().lower()
+    source = str(runtime_truth.get("source") or "").strip()
     if source != "provider_orphan" or status != "paused":
         return {
             "accepted": False,
-            "message": "Provider session cleanup requires a paused provider-orphan session.",
+            "message": "Provider orphan runtime cleanup requires a paused provider-orphan runtime.",
             "operation": None,
             "current_truth": {
                 "provider_id": provider,
-                "session_id": session,
+                "runtime_id": runtime,
                 "status": status or None,
                 "source": source or None,
             },
         }
 
-    target_id = f"{provider}:{session}"
+    target_id = f"{provider}:{runtime}"
     operation = _new_operation(
-        kind="provider_session_cleanup",
-        target_type="provider_session",
+        kind="provider_orphan_runtime_cleanup",
+        target_type="provider_orphan_runtime",
         target_id=target_id,
-        reason="Provider session is not sandbox-backed and can enter managed cleanup.",
+        reason="Provider orphan runtime is not sandbox-backed and can enter managed cleanup.",
         target={
-            "target_type": "provider_session",
+            "target_type": "provider_orphan_runtime",
             "provider_id": provider,
-            "session_id": session,
+            "runtime_id": runtime,
         },
     )
     _append_event(operation, status="running", message="Destroy flow started")
@@ -271,14 +271,14 @@ def request_provider_session_cleanup(provider_name: str, session_id: str, sessio
 
     try:
         result = mutate_sandbox_session(
-            session_id=session,
+            session_id=runtime,
             action="destroy",
             provider_hint=provider,
         )
     except Exception as exc:
         operation["result_truth"] = {
             "provider_id": provider,
-            "session_id": session,
+            "runtime_id": runtime,
         }
         _append_event(operation, status="failed", message=str(exc))
         return {
@@ -287,19 +287,19 @@ def request_provider_session_cleanup(provider_name: str, session_id: str, sessio
             "operation": _operation_view(operation),
             "current_truth": {
                 "provider_id": provider,
-                "session_id": session,
+                "runtime_id": runtime,
             },
         }
 
     operation["result_truth"] = {"destroy_result": result}
-    _append_event(operation, status="succeeded", message="Provider session cleanup completed.")
+    _append_event(operation, status="succeeded", message="Provider orphan runtime cleanup completed.")
     return {
         "accepted": True,
-        "message": "Provider session cleanup completed.",
+        "message": "Provider orphan runtime cleanup completed.",
         "operation": _operation_view(operation),
         "current_truth": {
             "provider_id": provider,
-            "session_id": session,
+            "runtime_id": runtime,
         },
     }
 

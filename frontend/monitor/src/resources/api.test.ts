@@ -49,7 +49,7 @@ describe("monitor resource API", () => {
       ok: true,
       json: async () => ({
         accepted: true,
-        message: "Provider session cleanup completed.",
+        message: "Provider orphan runtime cleanup completed.",
         operation: { operation_id: "op-1", status: "succeeded" },
       }),
     });
