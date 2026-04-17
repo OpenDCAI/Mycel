@@ -50,7 +50,7 @@ export default function ThreadsPage() {
         </div>
       </section>
       <section className="surface-section">
-        <div className="leases-workbench-header">
+        <div className="threads-workbench-header">
           <div>
             <h2>Thread Workbench</h2>
             <p className="description">Pick a thread to inspect its trajectory and runtime links.</p>
