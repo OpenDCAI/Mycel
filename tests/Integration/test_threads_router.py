@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import threading
 from contextlib import contextmanager
@@ -641,6 +642,13 @@ async def test_create_thread_route_rejects_lease_shaped_existing_identity():
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Sandbox not authorized"
     bind_helper.assert_not_called()
+
+
+def test_existing_sandbox_request_comment_names_lower_runtime_bridge() -> None:
+    source = inspect.getsource(threads_router._resolve_owned_existing_sandbox_request_lease)
+
+    assert "lower runtime bridge identity" in source
+    assert "legacy lease identity" not in source
 
 
 @pytest.mark.asyncio

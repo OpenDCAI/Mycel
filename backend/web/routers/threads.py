@@ -335,8 +335,8 @@ def _resolve_owned_existing_sandbox_request_lease(
     if sandbox is None:
         return None
 
-    # @@@existing-sandbox-request-cutover - incoming existing_sandbox_id is
-    # sandbox-shaped; legacy lease identity is resolved only behind the row.
+    # @@@existing-sandbox-request-cutover - incoming existing_sandbox_id is sandbox-shaped;
+    # lower runtime bridge identity is resolved only behind the row.
     sandbox_owner_user_id = _request_bridge_text(sandbox, "owner_user_id", label="sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
