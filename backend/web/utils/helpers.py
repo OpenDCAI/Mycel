@@ -12,9 +12,6 @@ from storage.runtime import (
     build_chat_session_repo as make_chat_session_repo,
 )
 from storage.runtime import (
-    build_lease_repo as make_lease_repo,
-)
-from storage.runtime import (
     build_storage_container,
     build_thread_repo,
     uses_supabase_runtime_defaults,
@@ -41,21 +38,6 @@ def get_terminal_timestamps(terminal_id: str) -> tuple[str | None, str | None]:
         return repo.get_timestamps(terminal_id)
     finally:
         repo.close()
-
-
-def get_lease_timestamps(lease_id: str) -> tuple[str | None, str | None]:
-    """Get created_at and updated_at timestamps for a lease."""
-    sandbox_db = resolve_sandbox_db_path()
-    if not sandbox_db.exists():
-        return None, None
-    repo = make_lease_repo()
-    try:
-        row = repo.get(lease_id)
-    finally:
-        repo.close()
-    if row is None:
-        return None, None
-    return str(row.get("created_at") or "") or None, str(row.get("updated_at") or "") or None
 
 
 def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:

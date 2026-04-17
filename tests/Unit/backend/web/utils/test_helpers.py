@@ -118,16 +118,8 @@ def test_get_terminal_timestamps_uses_runtime_repo_factory_without_db_path(monke
     assert terminal_repo.closed
 
 
-def test_get_lease_timestamps_uses_runtime_repo_factory_without_db_path(monkeypatch, tmp_path):
-    sandbox_db = tmp_path / "sandbox.db"
-    sandbox_db.touch()
-    lease_repo = _ThreadRepo()
-
-    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
-    monkeypatch.setattr(helpers, "make_lease_repo", lambda: lease_repo)
-
-    assert helpers.get_lease_timestamps("lease-1") == ("lease-created", "lease-updated")
-    assert lease_repo.closed
+def test_helpers_no_longer_expose_lease_timestamp_helper() -> None:
+    assert not hasattr(helpers, "get_lease_timestamps")
 
 
 def test_load_thread_row_returns_current_thread_row(monkeypatch) -> None:
