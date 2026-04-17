@@ -76,25 +76,9 @@ class SupabaseSandboxMonitorRepo:
         return results[0] if results else None
 
     def query_thread_sessions(self, thread_id: str) -> list[dict]:
-        sessions = q.rows(
-            q.order(
-                self._client.table("chat_sessions")
-                .select("chat_session_id,status,started_at,ended_at,close_reason,lease_id")
-                .eq("thread_id", thread_id),
-                "started_at",
-                desc=True,
-                repo=_REPO,
-                operation="query_thread_sessions",
-            ).execute(),
-            _REPO,
-            "query_thread_sessions",
-        )
-        if not sessions:
-            return []
-
-        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_thread_sessions")
-        lease_map = {lease_id: self._lease_row_from_sandbox(sandbox) for lease_id, sandbox in sandbox_rows.items()}
-        return [self._session_with_lease(s, lease_map.get(s.get("lease_id") or "")) for s in sessions]
+        # @@@monitor-session-demotion - Supabase no longer owns runtime-local chat
+        # session history; remote monitor session detail must not read staging.chat_sessions.
+        return []
 
     def query_sandboxes(self) -> list[dict]:
         sandboxes = self._ordered_sandboxes("query_sandboxes")
@@ -121,26 +105,9 @@ class SupabaseSandboxMonitorRepo:
         return None
 
     def query_sandbox_sessions(self, sandbox_id: str) -> list[dict]:
-        sandbox = self.query_sandbox(sandbox_id)
-        if sandbox is None:
-            return []
-        lease_id = str(sandbox.get("lease_id") or "").strip()
-        if not lease_id:
-            return []
-        sessions = q.rows(
-            q.order(
-                self._client.table("chat_sessions")
-                .select("chat_session_id,thread_id,status,started_at,ended_at,close_reason,lease_id")
-                .eq("lease_id", lease_id),
-                "started_at",
-                desc=True,
-                repo=_REPO,
-                operation="query_sandbox_sessions",
-            ).execute(),
-            _REPO,
-            "query_sandbox_sessions",
-        )
-        return [self._session_with_lease(session, sandbox, include_thread=True) for session in sessions]
+        # @@@monitor-session-demotion - sandbox detail still has sandbox/thread
+        # facts, but Supabase session rows are no longer admitted remote truth.
+        return []
 
     def query_sandbox_threads(self, sandbox_id: str) -> list[dict]:
         sandbox = self.query_sandbox(sandbox_id)
@@ -176,43 +143,10 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def query_resource_sessions(self) -> list[dict]:
-        active_sessions = q.rows(
-            self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,started_at").neq("status", "closed").execute(),
-            _REPO,
-            "query_resource_sessions active",
-        )
-
-        # @@@sandbox-monitor-session-base - session aggregation surfaces now use
-        # container.sandboxes as the object base and only keep lease ids as the
-        # residue join key for chat_sessions.
         sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_resource_sessions")
-
-        all_sessions = q.rows(
-            self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,status,started_at").execute(),
-            _REPO,
-            "query_resource_sessions all_sessions",
-        )
-        latest_session_thread_by_lease: dict[str, str] = {}
-        for row in sorted(all_sessions, key=lambda x: x.get("started_at") or ""):
-            lease_id = str(row.get("lease_id") or "")
-            thread_id = str(row.get("thread_id") or "")
-            if lease_id and thread_id:
-                latest_session_thread_by_lease[lease_id] = thread_id
-
         result = []
-        seen_leases: set[str] = set()
 
-        for s in active_sessions:
-            lease_id = str(s.get("lease_id") or "")
-            sandbox = sandbox_rows.get(lease_id)
-            if not sandbox:
-                continue
-            seen_leases.add(lease_id)
-            result.append(self._resource_session_row_from_sandbox(sandbox, session_id=s["chat_session_id"], thread_id=s["thread_id"]))
-
-        for lid, sandbox in sandbox_rows.items():
-            if lid in seen_leases:
-                continue
+        for sandbox in sandbox_rows.values():
             thread_ids = self._thread_ids_for_sandbox_id(str(sandbox.get("id") or ""))
             if thread_ids:
                 for thread_id in thread_ids:
@@ -229,7 +163,7 @@ class SupabaseSandboxMonitorRepo:
                 self._resource_session_row_from_sandbox(
                     sandbox,
                     session_id=None,
-                    thread_id=latest_session_thread_by_lease.get(lid),
+                    thread_id=None,
                 )
             )
 
