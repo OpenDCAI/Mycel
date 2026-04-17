@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -161,24 +160,8 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
     }
 
 
-def test_build_existing_launch_config_uses_canonical_shape() -> None:
-    config = thread_launch_config_service.build_existing_launch_config(
-        lease={
-            "lease_id": "lease-1",
-            "provider_name": "daytona_selfhost",
-        },
-        model="gpt-5.4",
-        workspace="/workspace/reused",
-    )
-
-    assert config == {
-        "create_mode": "existing",
-        "provider_config": "daytona_selfhost",
-        "sandbox_template_id": None,
-        "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
-        "model": "gpt-5.4",
-        "workspace": "/workspace/reused",
-    }
+def test_launch_config_service_does_not_expose_lease_shell_builder() -> None:
+    assert not hasattr(thread_launch_config_service, "build_existing_launch_config")
 
 
 def test_build_new_launch_config_uses_sandbox_template_id() -> None:

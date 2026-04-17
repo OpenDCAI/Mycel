@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from backend.web.services import sandbox_service
@@ -23,34 +22,6 @@ def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "model": str(payload.get("model") or "").strip() or None,
         "workspace": str(payload.get("workspace") or "").strip() or None,
     }
-
-
-def _existing_sandbox_shell_id(lease_id: str) -> str:
-    normalized_lease_id = str(lease_id or "").strip()
-    if not normalized_lease_id:
-        raise RuntimeError("lease.lease_id is required")
-    # @@@existing-sandbox-shell-id - Phase B only cuts outward emit identity.
-    # Keep the bridge deterministic so old lease-backed reads can emit the same
-    # sandbox-shaped shell as workspace-backed paths without inventing aliases.
-    return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-lease-bridge:{normalized_lease_id}').hex}"
-
-
-def build_existing_launch_config(
-    *,
-    lease: dict[str, Any],
-    model: str | None,
-    workspace: str | None,
-    existing_sandbox_id: str | None = None,
-) -> dict[str, Any]:
-    return normalize_launch_config_payload(
-        {
-            "create_mode": "existing",
-            "provider_config": lease.get("provider_name"),
-            "existing_sandbox_id": existing_sandbox_id or _existing_sandbox_shell_id(str(lease.get("lease_id") or "")),
-            "model": model,
-            "workspace": workspace,
-        }
-    )
 
 
 def build_new_launch_config(
@@ -95,17 +66,6 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
     }
 
 
-def _existing_config_from_lease(lease: dict[str, Any], *, model: str | None, workspace: str | None) -> dict[str, Any]:
-    return {
-        "create_mode": "existing",
-        "provider_config": lease.get("provider_name"),
-        "sandbox_template": lease.get("recipe"),
-        "existing_sandbox_id": _existing_sandbox_shell_id(str(lease.get("lease_id") or "")),
-        "model": model,
-        "workspace": workspace,
-    }
-
-
 def _derive_default_config(
     *,
     app: Any,
@@ -116,9 +76,8 @@ def _derive_default_config(
     sandbox_templates: list[dict[str, Any]],
 ) -> dict[str, Any]:
     for thread in _iter_default_bridge_threads(agent_threads):
-        # @@@workspace-bridge-read-precedence - launch-config now resolves workspace-backed existing-mode
-        # defaults first, but only narrows field sources. `existing_sandbox_id` and `sandbox_template`
-        # still stay lease-shaped until their own cutover slice lands.
+        # @@@workspace-bridge-read-precedence - launch-config resolves workspace-backed
+        # existing-mode defaults from workspace+sandbox truth before considering new defaults.
         config = _resolve_workspace_backed_existing_config(
             app=app,
             current_workspace_id=thread["current_workspace_id"],
