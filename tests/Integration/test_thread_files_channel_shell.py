@@ -32,6 +32,14 @@ def test_helpers_no_longer_import_storage_factory() -> None:
     assert "sandbox.control_plane_repos" in helpers_source
 
 
+def test_thread_file_delete_handler_uses_file_channel_language() -> None:
+    router_source = Path("backend/web/routers/thread_files.py").read_text(encoding="utf-8")
+
+    assert "delete_workspace_file" not in router_source
+    assert "Delete a file from workspace." not in router_source
+    assert "delete_channel_file" in router_source
+
+
 @pytest.mark.asyncio
 async def test_call_channel_file_service_maps_value_error_to_400():
     def fake_method(*_args: object, **_kwargs: object):
@@ -78,13 +86,13 @@ async def test_download_file_returns_file_response(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_delete_workspace_file_returns_ok_payload(monkeypatch: pytest.MonkeyPatch):
+async def test_delete_channel_file_returns_ok_payload(monkeypatch: pytest.MonkeyPatch):
     async def fake_call(method, *args: object, **kwargs: object):
         return None
 
     monkeypatch.setattr(thread_files_router, "_call_channel_file_service", fake_call)
 
-    result = await thread_files_router.delete_workspace_file("thread-1", path="notes.txt")
+    result = await thread_files_router.delete_channel_file("thread-1", path="notes.txt")
 
     assert result == {"ok": True, "path": "notes.txt"}
 

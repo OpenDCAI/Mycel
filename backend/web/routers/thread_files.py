@@ -226,11 +226,11 @@ async def download_file(
 
 
 @router.delete("/files")
-async def delete_workspace_file(
+async def delete_channel_file(
     thread_id: str,
     path: str = Query(...),
 ) -> dict[str, Any]:
-    """Delete a file from workspace."""
+    """Delete a file from the thread file channel."""
     await _call_channel_file_service(
         file_channel_service.delete_channel_file,
         thread_id=thread_id,
