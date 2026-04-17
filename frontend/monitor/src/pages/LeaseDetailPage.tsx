@@ -5,6 +5,7 @@ import { useMonitorData } from "../app/fetch";
 import ErrorState from "../components/ErrorState";
 
 type LeaseDetailPayload = {
+  source: string;
   lease: {
     lease_id: string;
     sandbox_id?: string | null;
@@ -21,10 +22,11 @@ type LeaseDetailPayload = {
   } | null;
 };
 
-export function buildLeaseDetailShell(data: Pick<LeaseDetailPayload, "lease" | "triage" | "cleanup">) {
+export function buildLeaseDetailShell(data: Pick<LeaseDetailPayload, "source" | "lease" | "triage" | "cleanup">) {
   const sandboxId = String(data.lease.sandbox_id ?? "").trim();
   return {
     title: "Lease compatibility redirect",
+    sourceLabel: `Source: ${data.source}`,
     description: "Legacy lease-shaped detail route now redirects to canonical sandbox detail.",
     reason: data.cleanup?.reason ?? data.triage?.description ?? "Canonical sandbox detail is now the source of truth.",
     canonicalHref: sandboxId ? `/sandboxes/${sandboxId}` : null,
@@ -53,6 +55,7 @@ export default function LeaseDetailPage() {
     <div className="page">
       <h1>{shell.title}</h1>
       <p className="description">{shell.description}</p>
+      <p className="count">{shell.sourceLabel}</p>
       <section className="surface-section">
         <h2>Compatibility Route</h2>
         <p className="description">{shell.reason}</p>

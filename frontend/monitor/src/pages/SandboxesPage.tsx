@@ -8,6 +8,7 @@ import { useMonitorData } from "../app/fetch";
 export type SandboxesPayload = {
   title: string;
   count: number;
+  source: string;
   triage?: {
     summary?: {
       active_drift?: number;
@@ -48,6 +49,7 @@ export function buildSandboxWorkbenchShell(data: SandboxesPayload) {
   return {
     triageTitle: "Sandbox Triage",
     workbenchTitle: "Sandbox Workbench",
+    sourceLabel: `Source: ${data.source}`,
     triageCards,
     rows: data.items.map((item) => ({
       ...item,
@@ -73,7 +75,9 @@ export default function SandboxesPage() {
   return (
     <div className="page">
       <h1>{data.title}</h1>
-      <p className="count">Total: {data.count}</p>
+      <p className="count">
+        Total: {data.count} · {shell.sourceLabel}
+      </p>
       <section className="surface-section">
         <h2>{shell.triageTitle}</h2>
         <div className="surface-grid">

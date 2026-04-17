@@ -7,6 +7,7 @@ describe("sandboxes page shell", () => {
     const shell = buildSandboxWorkbenchShell({
       title: "All Sandboxes",
       count: 2,
+      source: "sandbox_canonical",
       triage: {
         summary: {
           active_drift: 1,
@@ -31,6 +32,7 @@ describe("sandboxes page shell", () => {
 
     expect(shell.triageTitle).toBe("Sandbox Triage");
     expect(shell.workbenchTitle).toBe("Sandbox Workbench");
+    expect(shell.sourceLabel).toBe("Source: sandbox_canonical");
     expect(shell.rows[0].href).toBe("/sandboxes/sandbox-1");
   });
 });
