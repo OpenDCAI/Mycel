@@ -125,6 +125,7 @@ describe("NewChatPage", () => {
   });
 
   beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
     handleGetDefaultThread.mockReset();
     handleGetDefaultThread.mockResolvedValue(null);
     handleCreateThread.mockReset();
@@ -615,6 +616,96 @@ describe("NewChatPage", () => {
           create_mode: "existing",
           existing_sandbox_id: "sandbox-2",
           workspace: "/workspace/reused-2",
+        }),
+      );
+    });
+  });
+
+  it("keeps provider-switch defaults sandbox-shaped when reselecting an existing lease", async () => {
+    sandboxTypesForTest = [
+      { name: "daytona_selfhost", provider: "daytona", available: true },
+      { name: "local", provider: "local", available: true },
+    ];
+    clientMocks.fetchAccountResourceLimits.mockResolvedValue([
+      {
+        resource: "sandbox",
+        provider_name: "daytona_selfhost",
+        label: "Daytona",
+        limit: 2,
+        used: 1,
+        remaining: 1,
+        can_create: true,
+      },
+      {
+        resource: "sandbox",
+        provider_name: "local",
+        label: "Local",
+        limit: 2,
+        used: 1,
+        remaining: 1,
+        can_create: true,
+      },
+    ]);
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "existing",
+        provider_config: "daytona_selfhost",
+        existing_sandbox_id: "sandbox-daytona",
+        model: "leon:large",
+        workspace: "/workspace/daytona",
+      },
+    });
+    clientMocks.listMyLeases.mockResolvedValue([
+      {
+        lease_id: "lease-daytona",
+        sandbox_id: "sandbox-daytona",
+        provider_name: "daytona_selfhost",
+        recipe_id: "recipe-daytona",
+        recipe_name: "Daytona Existing",
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/daytona",
+        thread_ids: [],
+        agents: [],
+      } as UserLeaseSummary,
+      {
+        lease_id: "lease-local",
+        sandbox_id: "sandbox-local",
+        provider_name: "local",
+        recipe_id: "recipe-local",
+        recipe_name: "Local Existing",
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/local",
+        thread_ids: [],
+        agents: [],
+      } as UserLeaseSummary,
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Local" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+
+    await waitFor(() => {
+      expect(clientMocks.saveDefaultThreadConfig).toHaveBeenCalledWith(
+        "m_xVuNpKJNxblZ",
+        expect.objectContaining({
+          create_mode: "existing",
+          existing_sandbox_id: "sandbox-local",
+          workspace: "/workspace/local",
         }),
       );
     });
