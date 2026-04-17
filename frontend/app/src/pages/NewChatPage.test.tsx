@@ -502,7 +502,6 @@ describe("NewChatPage", () => {
     });
     clientMocks.listMySandboxes.mockResolvedValue([
       {
-        lease_id: "lease-1",
         sandbox_id: "sandbox-1",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-1",
@@ -514,7 +513,6 @@ describe("NewChatPage", () => {
         agents: [],
       },
       {
-        lease_id: "lease-2",
         sandbox_id: "sandbox-2",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-2",
@@ -565,7 +563,6 @@ describe("NewChatPage", () => {
     });
     clientMocks.listMySandboxes.mockResolvedValue([
       {
-        lease_id: "lease-1",
         sandbox_id: "sandbox-1",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-1",
@@ -577,7 +574,6 @@ describe("NewChatPage", () => {
         agents: [],
       } as UserSandboxSummary,
       {
-        lease_id: "lease-2",
         sandbox_id: "sandbox-2",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-2",
@@ -623,7 +619,6 @@ describe("NewChatPage", () => {
     });
     clientMocks.listMySandboxes.mockResolvedValue([
       {
-        lease_id: "lease-1",
         sandbox_id: "sandbox-1",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-1",
@@ -689,7 +684,6 @@ describe("NewChatPage", () => {
     });
     clientMocks.listMySandboxes.mockResolvedValue([
       {
-        lease_id: "lease-daytona",
         sandbox_id: "sandbox-daytona",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-daytona",
@@ -701,7 +695,6 @@ describe("NewChatPage", () => {
         agents: [],
       } as UserSandboxSummary,
       {
-        lease_id: "lease-local",
         sandbox_id: "sandbox-local",
         provider_name: "local",
         recipe_id: "recipe-local",
@@ -748,7 +741,6 @@ describe("NewChatPage", () => {
     });
     clientMocks.listMySandboxes.mockResolvedValue([
       {
-        lease_id: "lease-1",
         sandbox_id: "sandbox-1",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-1",
