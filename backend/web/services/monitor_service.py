@@ -111,12 +111,24 @@ def _derive_thread_summary_from_sessions(sessions: list[dict[str, Any]]) -> dict
     summary = {
         "sandbox_id": latest.get("sandbox_id"),
         "provider_name": latest.get("provider_name"),
-        "lease_id": latest.get("lease_id"),
         "current_instance_id": latest.get("current_instance_id"),
         "desired_state": latest.get("desired_state"),
         "observed_state": latest.get("observed_state"),
     }
     return summary if any(value is not None for value in summary.values()) else None
+
+
+def _normalize_thread_summary(summary: dict[str, Any] | None) -> dict[str, Any] | None:
+    if summary is None:
+        return None
+    payload = {
+        "sandbox_id": summary.get("sandbox_id"),
+        "provider_name": summary.get("provider_name"),
+        "current_instance_id": summary.get("current_instance_id"),
+        "desired_state": summary.get("desired_state"),
+        "observed_state": summary.get("observed_state"),
+    }
+    return payload if any(value is not None for value in payload.values()) else None
 
 
 def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -767,6 +779,7 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
 
     if summary is None:
         summary = _derive_thread_summary_from_sessions(sessions)
+    summary = _normalize_thread_summary(summary)
 
     owners = _thread_owners(
         [thread_id],
