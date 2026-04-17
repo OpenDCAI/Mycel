@@ -44,11 +44,6 @@ def build_new_launch_config(
 
 
 def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
-    leases = sandbox_service.list_user_leases(
-        owner_user_id,
-        thread_repo=app.state.thread_repo,
-        user_repo=app.state.user_repo,
-    )
     providers = [item for item in sandbox_service.available_sandbox_types() if item.get("available")]
     sandbox_templates = list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
     agent_threads = app.state.thread_repo.list_by_agent_user(agent_user_id)
@@ -59,7 +54,6 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
             app=app,
             owner_user_id=owner_user_id,
             agent_threads=agent_threads,
-            leases=leases,
             providers=providers,
             sandbox_templates=sandbox_templates,
         ),
@@ -71,7 +65,6 @@ def _derive_default_config(
     app: Any,
     owner_user_id: str,
     agent_threads: list[dict[str, Any]],
-    leases: list[dict[str, Any]],
     providers: list[dict[str, Any]],
     sandbox_templates: list[dict[str, Any]],
 ) -> dict[str, Any]:

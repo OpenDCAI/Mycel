@@ -160,6 +160,10 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
     }
 
 
+def _fail_list_user_leases(*_args, **_kwargs):
+    raise AssertionError("default thread launch config must not read lease summaries")
+
+
 def test_launch_config_service_does_not_expose_lease_shell_builder() -> None:
     assert not hasattr(thread_launch_config_service, "build_existing_launch_config")
 
@@ -232,15 +236,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
         patch.object(
             thread_launch_config_service.sandbox_service,
             "list_user_leases",
-            return_value=[
-                {
-                    "lease_id": "lease-1",
-                    "provider_name": "local",
-                    "recipe": default_recipe_snapshot("local"),
-                    "cwd": "/workspace/wrong",
-                    "thread_ids": [],
-                },
-            ],
+            side_effect=_fail_list_user_leases,
         ),
         patch.object(
             thread_launch_config_service.sandbox_service,
@@ -343,7 +339,7 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
         patch.object(
             thread_launch_config_service.sandbox_service,
             "list_user_leases",
-            return_value=[],
+            side_effect=_fail_list_user_leases,
         ),
         patch.object(
             thread_launch_config_service.sandbox_service,
@@ -429,15 +425,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
         patch.object(
             thread_launch_config_service.sandbox_service,
             "list_user_leases",
-            return_value=[
-                {
-                    "lease_id": "lease-4",
-                    "provider_name": "daytona_selfhost",
-                    "recipe": default_recipe_snapshot("daytona"),
-                    "cwd": "/workspace/from-lease",
-                    "thread_ids": [],
-                }
-            ],
+            side_effect=_fail_list_user_leases,
         ),
         patch.object(
             thread_launch_config_service.sandbox_service,
@@ -482,22 +470,7 @@ def test_resolve_default_config_derives_existing_from_legacy_lease_backed_curren
         patch.object(
             thread_launch_config_service.sandbox_service,
             "list_user_leases",
-            return_value=[
-                {
-                    "lease_id": "lease-1",
-                    "provider_name": "local",
-                    "recipe": default_recipe_snapshot("local"),
-                    "cwd": "/workspace/wrong",
-                    "thread_ids": ["agent-user-1-1"],
-                },
-                {
-                    "lease_id": "lease-2",
-                    "provider_name": "daytona_selfhost",
-                    "recipe": default_recipe_snapshot("daytona"),
-                    "cwd": "/workspace/right",
-                    "thread_ids": [],
-                },
-            ],
+            side_effect=_fail_list_user_leases,
         ),
         patch.object(
             thread_launch_config_service.sandbox_service,
@@ -563,7 +536,7 @@ def test_resolve_default_config_fails_loudly_for_malformed_workspace_bridge() ->
     )
 
     with (
-        patch.object(thread_launch_config_service.sandbox_service, "list_user_leases", return_value=[]),
+        patch.object(thread_launch_config_service.sandbox_service, "list_user_leases", side_effect=_fail_list_user_leases),
         patch.object(thread_launch_config_service.sandbox_service, "available_sandbox_types", return_value=[]),
         patch.object(thread_launch_config_service, "list_library", return_value=[]),
         pytest.raises(RuntimeError, match="workspace.sandbox_id is required"),
@@ -597,15 +570,7 @@ def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_
         patch.object(
             thread_launch_config_service.sandbox_service,
             "list_user_leases",
-            return_value=[
-                {
-                    "lease_id": "lease-1",
-                    "provider_name": "daytona_selfhost",
-                    "recipe": default_recipe_snapshot("daytona"),
-                    "cwd": "/workspace/wrong",
-                    "thread_ids": ["agent-user-1-1"],
-                }
-            ],
+            side_effect=_fail_list_user_leases,
         ),
         patch.object(
             thread_launch_config_service.sandbox_service,
