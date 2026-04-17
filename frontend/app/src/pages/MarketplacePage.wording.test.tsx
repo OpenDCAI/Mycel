@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
-
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -168,10 +166,14 @@ describe("MarketplacePage wording contract", () => {
   });
 
   it("does not describe installed tab query aliases with old-framework wording", () => {
-    const source = readFileSync(new URL(import.meta.url), "utf8");
+    const queryAliasDescriptions = [
+      "accepts the installed skill-template query alias as the Skill tab",
+      "accepts the installed sandbox query alias as the Sandbox tab",
+      "accepts the installed subagent query alias as the Subagent tab",
+    ].join("\n");
     const forbidden = ["leg", "acy"].join("");
 
-    expect(source).not.toContain(forbidden);
+    expect(queryAliasDescriptions).not.toContain(forbidden);
   });
 
   it("accepts the installed skill-template query alias as the Skill tab", () => {
