@@ -788,7 +788,7 @@ section li {
 .sandbox-card__duration,
 .sandbox-modal__eyebrow,
 .sandbox-card__thread,
-.sandbox-card__lease {
+.sandbox-card__identity {
   color: #776a5b;
   font-size: 0.78rem;
 }
@@ -1329,7 +1329,7 @@ section li {
   border-top: 1px dashed rgba(81, 59, 29, 0.12);
 }
 
-.sandbox-card__lease {
+.sandbox-card__identity {
   margin-top: 0.8rem;
   font-family: "SF Mono", Monaco, monospace;
 }

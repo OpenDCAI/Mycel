@@ -171,7 +171,6 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
         {
             "id": "sandbox-1:thread-1",
             "sandboxId": "sandbox-1",
-            "leaseId": "lease-1",
             "threadId": "thread-1",
             "agentUserId": "agent-1",
             "agentName": "Toad",
@@ -278,7 +277,6 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
         {
             "id": "sandbox-1:thread-supabase",
             "sandboxId": "sandbox-1",
-            "leaseId": "lease-1",
             "threadId": "thread-supabase",
             "agentUserId": "agent-1",
             "agentName": "Toad",
@@ -384,7 +382,6 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
         {
             "id": "sandbox-1:thread-parent",
             "sandboxId": "sandbox-1",
-            "leaseId": "lease-1",
             "threadId": "thread-parent",
             "agentUserId": "agent-1",
             "agentName": "Morel",
@@ -445,7 +442,6 @@ def test_list_resource_providers_uses_canonical_sandbox_thread_fallback(monkeypa
         {
             "id": "sandbox-1:thread-parent",
             "sandboxId": "sandbox-1",
-            "leaseId": "lease-1",
             "threadId": "thread-parent",
             "agentUserId": "agent-1",
             "agentName": "Morel",
@@ -538,7 +534,6 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
         {
             "id": "sandbox-1:thread-parent",
             "sandboxId": "sandbox-1",
-            "leaseId": "lease-1",
             "threadId": "thread-parent",
             "agentUserId": "agent-1",
             "agentName": "Toad",

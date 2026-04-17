@@ -77,9 +77,10 @@ const SESSION_STATUS_ORDER: Record<ResourceSession["status"], number> = {
 };
 const SANDBOX_FILTER_STATUSES: ResourceSession["status"][] = ["running", "paused", "stopped", "destroying"];
 
-interface LeaseGroup {
+interface SandboxGroup {
   sandboxId: string;
   leaseId: string;
+  displayId: string;
   status: ResourceSession["status"];
   sessions: ResourceSession[];
   startedAt: string;
@@ -228,10 +229,10 @@ const PROVIDER_TYPE_GLYPH = {
   container: "▣",
 } as const;
 
-function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
+export function groupResourceSessions(sessions: ResourceSession[]): SandboxGroup[] {
   const map = new Map<string, ResourceSession[]>();
   for (const session of sessions) {
-    const key = session.leaseId || session.id;
+    const key = session.sandboxId || session.leaseId || session.id;
     const rows = map.get(key) ?? [];
     rows.push(session);
     map.set(key, rows);
@@ -250,16 +251,17 @@ function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
       return {
         sandboxId: group[0].sandboxId ?? "",
         leaseId: group[0].leaseId ?? "",
+        displayId: group[0].sandboxId ?? group[0].leaseId ?? "local",
         status: best.status,
         sessions: sorted,
         startedAt: earliest,
         metrics: best.metrics ?? null,
-      } satisfies LeaseGroup;
+      } satisfies SandboxGroup;
     })
     .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4));
 }
 
-function defaultProviderStatusFilter(groups: LeaseGroup[]): LeaseGroup["status"] | "all" {
+function defaultProviderStatusFilter(groups: SandboxGroup[]): SandboxGroup["status"] | "all" {
   if (groups.some((group) => group.status === "running")) {
     return "running";
   }
@@ -444,7 +446,7 @@ export default function ResourcesPage() {
   const runningSessionCount = countProviderSessions(providers, "running");
   const pausedSessionCount = countProviderSessions(providers, "paused");
   const stoppedSessionCount = countProviderSessions(providers, "stopped");
-  const leaseGroupCount = providers.reduce((total, provider) => total + groupByLease(provider.sessions).length, 0);
+  const sandboxGroupCount = providers.reduce((total, provider) => total + groupResourceSessions(provider.sessions).length, 0);
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -488,7 +490,7 @@ export default function ResourcesPage() {
             <span className="resources-summary-dot resources-summary-dot--ok" />
             {summary?.active_providers ?? 0} 活跃 provider
           </div>
-          <div className="resources-summary-pill">{leaseGroupCount} 沙盒</div>
+          <div className="resources-summary-pill">{sandboxGroupCount} 沙盒</div>
           <div className="resources-summary-pill">{runningSessionCount} 运行中</div>
           {pausedSessionCount > 0 && <div className="resources-summary-pill">{pausedSessionCount} 已暂停</div>}
           {stoppedSessionCount > 0 && <div className="resources-summary-pill">{stoppedSessionCount} 已结束</div>}
@@ -651,9 +653,9 @@ function ProviderDetail({
   providerCleanupMessage: string | null;
   onCleanupProviderOrphan: (session: ProviderOrphanSession) => Promise<void>;
 }) {
-  const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
-  const [statusFilter, setStatusFilter] = React.useState<LeaseGroup["status"] | "all">("all");
-  const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
+  const [selectedGroup, setSelectedGroup] = React.useState<SandboxGroup | null>(null);
+  const [statusFilter, setStatusFilter] = React.useState<SandboxGroup["status"] | "all">("all");
+  const groups = React.useMemo(() => groupResourceSessions(provider.sessions), [provider.sessions]);
   const filteredGroups = React.useMemo(
     () => (statusFilter === "all" ? groups : groups.filter((group) => group.status === statusFilter)),
     [groups, statusFilter],
@@ -670,7 +672,7 @@ function ProviderDetail({
           paused: 0,
           stopped: 0,
           destroying: 0,
-        } satisfies Record<LeaseGroup["status"], number>,
+        } satisfies Record<SandboxGroup["status"], number>,
       ),
     [groups],
   );
@@ -725,7 +727,7 @@ function ProviderDetail({
           <>
             {showUnavailableBanner && (
               // @@@unavailable-with-sessions - monitor state differs from the app resource tab:
-              // an unavailable provider can still carry historical/live lease rows, so keep the detail
+              // an unavailable provider can still carry historical/live sandbox rows, so keep the detail
               // surface inspectable instead of hard-disabling the whole card.
               <div className="provider-warning-banner">
                 {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条关联 session，可继续检查。
@@ -790,7 +792,7 @@ function ProviderDetail({
                 <div className="sandbox-grid">
                   {filteredGroups.map((group) => (
                     <SandboxCard
-                      key={group.leaseId || group.sessions.map((session) => session.id).join("|")}
+                      key={group.sandboxId || group.leaseId || group.sessions.map((session) => session.id).join("|")}
                       group={group}
                       providerType={provider.type}
                       onOpen={() => setSelectedGroup(group)}
@@ -838,7 +840,7 @@ function ProviderOrphanSection({
         <span>{sessions.length} 个</span>
       </div>
       <p className="provider-orphan-note">
-        这些运行时存在于 provider，但没有 lease/thread 绑定。暂停态可以直接走 Monitor 清理；运行中或未知状态先保留。
+        这些运行时存在于 provider，但没有 sandbox/thread 绑定。暂停态可以直接走 Monitor 清理；运行中或未知状态先保留。
       </p>
       {loading && <p className="provider-empty-state">正在检查 provider 运行时...</p>}
       {error && <p className="provider-orphan-error">{error}</p>}
@@ -920,7 +922,7 @@ function SandboxCard({
   providerType,
   onOpen,
 }: {
-  group: LeaseGroup;
+  group: SandboxGroup;
   providerType: ProviderInfo["type"];
   onOpen: () => void;
 }) {
@@ -937,7 +939,7 @@ function SandboxCard({
   const showRuntimeBindingWarning =
     providerType !== "local" &&
     group.status === "running" &&
-    Boolean(group.leaseId) &&
+    Boolean(group.sandboxId || group.leaseId) &&
     !group.sessions.some((session) => Boolean(session.runtimeSessionId));
   const showQuotaOnlyDiskState =
     metrics != null &&
@@ -979,7 +981,7 @@ function SandboxCard({
           <div className="sandbox-card__names">{names}</div>
         </div>
         {showRuntimeBindingWarning && (
-          // @@@running-card-without-runtime - a persisted lease row can still say `running`
+          // @@@running-card-without-runtime - a persisted sandbox row can still say `running`
           // after the live runtime session disappears; the card has to surface that drift
           // before opening a guaranteed-failing file browser.
           <div className="sandbox-card__warning">未连上运行时</div>
@@ -1002,7 +1004,7 @@ function SandboxCard({
           <span>Disk {formatSessionMetricRange(metrics?.disk, metrics?.diskLimit, "GB")}</span>
         </div>
       )}
-      <div className="sandbox-card__lease">{group.leaseId || "local"}</div>
+      <div className="sandbox-card__identity">{group.displayId}</div>
     </button>
   );
 }
@@ -1012,7 +1014,7 @@ function SandboxInspector({
   providerType,
   onClose,
 }: {
-  group: LeaseGroup | null;
+  group: SandboxGroup | null;
   providerType: ProviderInfo["type"];
   onClose: () => void;
 }) {
@@ -1031,8 +1033,10 @@ function SandboxInspector({
   const browserUnavailableReason =
     group.status === "paused"
       ? "沙盒已暂停，恢复运行后才能浏览文件。"
-      : providerType !== "local" && group.leaseId && !group.sessions.some((session) => Boolean(session.runtimeSessionId))
-        ? "当前 lease 没有 active runtime session，无法浏览文件。"
+      : providerType !== "local" &&
+          (group.sandboxId || group.leaseId) &&
+          !group.sessions.some((session) => Boolean(session.runtimeSessionId))
+        ? "当前沙盒没有 active runtime session，无法浏览文件。"
         : null;
   const detailLink = buildSandboxGroupDetailLink(group);
 
@@ -1044,7 +1048,7 @@ function SandboxInspector({
             <p className="sandbox-modal__eyebrow">
               {STATUS_LABEL[group.status]} · {formatStartedAtDuration(group.startedAt)}
             </p>
-            <h3>{group.leaseId || "local"}</h3>
+            <h3>{group.displayId}</h3>
           </div>
           <button type="button" className="sandbox-modal__close" onClick={onClose}>
             关闭

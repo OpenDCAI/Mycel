@@ -76,7 +76,7 @@ def build_resource_session_payload(
         "startedAt": started_at,
         "metrics": metrics,
     }
-    if lease_id:
+    if lease_id and not sandbox_id:
         payload["leaseId"] = lease_id
     if sandbox_id:
         payload["sandboxId"] = sandbox_id
