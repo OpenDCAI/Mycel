@@ -123,7 +123,7 @@ export default function LibraryItemDetailPage() {
         )}
 
         {isSandboxTemplate && item ? (
-          <SandboxTemplateEditor item={item} onDeleted={() => navigate("/marketplace?tab=installed&sub=sandbox")} />
+          <SandboxTemplateEditor item={item} onDeleted={() => navigate("/marketplace?tab=installed&sub=sandbox-template")} />
         ) : (
           <div className="surface-card p-4">
           <div className="flex items-center gap-2 mb-3">
