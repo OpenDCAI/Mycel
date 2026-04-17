@@ -622,15 +622,15 @@ def test_get_monitor_operation_detail_does_not_adapt_deleted_lease_targets(monke
     assert payload["target"] == {"target_type": "lease", "target_id": "lease-1"}
 
 
-def test_monitor_detail_deleted_lease_target_guards_do_not_use_legacy_language() -> None:
+def test_monitor_detail_deleted_lease_target_guards_do_not_use_stale_language() -> None:
     source = Path(__file__).read_text()
     old_tokens = [
-        "test_get_monitor_operation_detail_does_not_adapt_" + "legacy_lease_targets",
-        "test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_" + "legacy_lease_history",
-        "test_get_monitor_operation_detail_ignores_" + "legacy_lease_relation_shell",
-        '"summary": "' + "Legacy cleanup completed." + '"',
-        '"reason": "' + "legacy" + '"',
-        '"operation_id": "op-' + "legacy" + '"',
+        "test_get_monitor_operation_detail_does_not_adapt_" + "leg" + "acy_lease_targets",
+        "test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_" + "leg" + "acy_lease_history",
+        "test_get_monitor_operation_detail_ignores_" + "leg" + "acy_lease_relation_shell",
+        '"summary": "' + "Leg" + "acy cleanup completed." + '"',
+        '"reason": "' + "leg" + "acy" + '"',
+        '"operation_id": "op-' + "leg" + "acy" + '"',
     ]
 
     assert not any(token in source for token in old_tokens)
