@@ -198,28 +198,21 @@ def _is_resource_visible_thread(thread_id: str | None) -> bool:
 
 def _resource_session_identity(session: dict[str, Any]) -> str:
     sandbox_id = str(session.get("sandbox_id") or "")
-    lease_id = str(session.get("lease_id") or "")
     thread_id = str(session.get("thread_id") or "")
     # @@@resource-session-shell - resource session shell is now sandbox-first.
     # lease ids remain compatibility residue for enrichment joins, not the
     # primary user-visible session identity.
     if sandbox_id and thread_id:
         return f"{sandbox_id}:{thread_id}"
-    if lease_id and thread_id:
-        # @@@resource-session-contract - resource cards are lease/thread scoped, not chat-session scoped.
-        # Terminal-derived rows can carry distinct session ids for the same visible lease+thread binding.
-        return f"{lease_id}:{thread_id}"
     session_id = str(session.get("session_id") or "")
     if session_id:
         return session_id
-    return f"{lease_id}:{thread_id or 'unbound'}"
+    return thread_id or "unbound"
 
 
 def _resource_running_identity(session: dict[str, Any]) -> str:
     sandbox_id = str(session.get("sandbox_id") or "").strip()
-    if sandbox_id:
-        return sandbox_id
-    return str(session.get("lease_id") or "").strip()
+    return sandbox_id
 
 
 def _resource_display_status(

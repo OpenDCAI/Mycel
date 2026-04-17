@@ -91,6 +91,18 @@ def test_storage_runtime_no_longer_exposes_lease_shaped_snapshot_read_shell() ->
     assert not hasattr(storage_runtime, "list_resource_snapshots")
 
 
+def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None:
+    session = {
+        "session_id": "provider-session-1",
+        "thread_id": "thread-1",
+        "sandbox_id": None,
+        "lease_id": "lease-1",
+    }
+
+    assert resource_projection_service._resource_session_identity(session) == "provider-session-1"
+    assert resource_projection_service._resource_running_identity(session) == ""
+
+
 def test_list_resource_providers_no_longer_uses_lease_shaped_row_source_shell(monkeypatch) -> None:
     class _Repo(_FakeRepo):
         def list_sessions_with_leases(self):
