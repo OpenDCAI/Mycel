@@ -7,6 +7,23 @@ from storage.providers.supabase.user_settings_repo import SupabaseUserSettingsRe
 from tests.fakes.supabase import FakeSupabaseClient
 
 
+class _RecordingSupabaseClient(FakeSupabaseClient):
+    def __init__(self, tables: dict):
+        super().__init__(tables=tables)
+        self.table_names: list[str] = []
+
+    def table(self, table_name: str):
+        resolved_table = f"{self._schema_name}.{table_name}" if self._schema_name else table_name
+        self.table_names.append(resolved_table)
+        return super().table(table_name)
+
+    def schema(self, schema_name: str):
+        scoped = _RecordingSupabaseClient(self._tables)
+        scoped._schema_name = schema_name
+        scoped.table_names = self.table_names
+        return scoped
+
+
 def test_user_settings_recent_workspace_parser_does_not_hide_unexpected_json_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     tables = {
         "user_settings": [
@@ -48,7 +65,7 @@ def test_invite_code_expiry_does_not_hide_non_string_expires_at() -> None:
     repo = SupabaseInviteCodeRepo(
         FakeSupabaseClient(
             tables={
-                "invite_codes": [
+                "identity.invite_codes": [
                     {
                         "code": "BAD-DATE",
                         "used_by": None,
@@ -61,3 +78,20 @@ def test_invite_code_expiry_does_not_hide_non_string_expires_at() -> None:
 
     with pytest.raises(AttributeError):
         repo.is_valid("BAD-DATE")
+
+
+def test_invite_code_repo_uses_identity_schema_for_reads_and_writes() -> None:
+    tables = {"identity.invite_codes": []}
+    client = _RecordingSupabaseClient(tables)
+    repo = SupabaseInviteCodeRepo(client)
+
+    repo.generate(created_by="user-1", expires_days=None)
+    repo.list_all()
+
+    assert client.table_names == [
+        "identity.invite_codes",
+        "identity.invite_codes",
+        "identity.invite_codes",
+    ]
+    assert tables["identity.invite_codes"][0]["created_by"] == "user-1"
+    assert "invite_codes" not in tables

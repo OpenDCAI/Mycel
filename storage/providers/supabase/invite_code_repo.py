@@ -37,7 +37,7 @@ class SupabaseInviteCodeRepo:
         return None
 
     def _table(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "identity", _TABLE, _REPO)
 
     def generate(
         self,
