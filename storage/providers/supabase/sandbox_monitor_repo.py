@@ -198,19 +198,6 @@ class SupabaseSandboxMonitorRepo:
                 )
         return targets
 
-    def _leases_by_id(self, lease_ids: list[str], select: str, operation: str) -> dict[str, dict]:
-        ordered_ids = sorted({str(lease_id or "").strip() for lease_id in lease_ids if str(lease_id or "").strip()})
-        if not ordered_ids:
-            return {}
-        rows = q.rows_in_chunks(
-            lambda: self._client.table("sandbox_leases").select(select),
-            "lease_id",
-            ordered_ids,
-            _REPO,
-            operation,
-        )
-        return {row["lease_id"]: row for row in rows}
-
     def _ordered_sandboxes(self, operation: str) -> list[dict[str, Any]]:
         query = q.order(
             q.schema_table(self._client, "container", "sandboxes", _REPO).select(_SANDBOX_SELECT),
@@ -220,13 +207,6 @@ class SupabaseSandboxMonitorRepo:
             operation=operation,
         )
         return q.rows(query.execute(), _REPO, operation)
-
-    def _sandboxes_by_legacy_lease_id(self, operation: str) -> dict[str, dict[str, Any]]:
-        result: dict[str, dict[str, Any]] = {}
-        for lease_id, sandbox in self._sandbox_rows_by_legacy_lease_id(operation).items():
-            lease = self._lease_row_from_sandbox(sandbox)
-            result[lease_id] = lease
-        return result
 
     def _legacy_lease_id(self, sandbox: dict[str, Any]) -> str | None:
         config = sandbox.get("config")
@@ -345,16 +325,6 @@ class SupabaseSandboxMonitorRepo:
                 result.append(thread_id)
         return result
 
-    def _require_sandbox_rows_by_legacy_lease_ids(self, lease_ids: list[str], operation: str) -> dict[str, dict[str, Any]]:
-        # @@@sandbox-monitor-residue-bridge - residue-keyed monitor surfaces still
-        # accept legacy lease ids, but they must resolve through container.sandboxes
-        # first; missing bridge state is data corruption, not a soft miss.
-        sandbox_rows = self._sandbox_rows_by_legacy_lease_id(operation)
-        missing = [lease_id for lease_id in lease_ids if lease_id not in sandbox_rows]
-        if missing:
-            raise RuntimeError("sandbox legacy bridge is required")
-        return {lease_id: sandbox_rows[lease_id] for lease_id in lease_ids}
-
     def _lease_row_from_sandbox(self, sandbox: dict[str, Any]) -> dict[str, Any]:
         # @@@sandbox-monitor-bridge - summary surfaces now use container.sandboxes as the
         # object truth, but still expose legacy lease_id while monitor/runtime residue
@@ -371,37 +341,6 @@ class SupabaseSandboxMonitorRepo:
             "current_instance_id": sandbox.get("provider_env_id"),
             "last_error": sandbox.get("last_error"),
             "updated_at": sandbox.get("updated_at"),
-        }
-
-    def _session_with_lease(self, session: dict, lease: dict | None, *, include_thread: bool = False) -> dict:
-        row = {
-            "chat_session_id": session.get("chat_session_id"),
-            "status": session.get("status"),
-            "started_at": session.get("started_at"),
-            "ended_at": session.get("ended_at"),
-            "close_reason": session.get("close_reason"),
-            "sandbox_id": lease.get("sandbox_id") if lease else None,
-            "lease_id": session.get("lease_id"),
-            "provider_name": lease.get("provider_name") if lease else None,
-            "desired_state": lease.get("desired_state") if lease else None,
-            "observed_state": lease.get("observed_state") if lease else None,
-            "current_instance_id": lease.get("current_instance_id") if lease else None,
-            "last_error": lease.get("last_error") if lease else None,
-        }
-        if include_thread:
-            row["thread_id"] = session.get("thread_id")
-        return row
-
-    def _resource_session_row(self, lease: dict, *, session_id: str | None, thread_id: str | None) -> dict:
-        return {
-            "provider": lease.get("provider_name") or "local",
-            "session_id": session_id,
-            "thread_id": thread_id,
-            "sandbox_id": lease.get("sandbox_id"),
-            "lease_id": lease["lease_id"],
-            "observed_state": lease.get("observed_state"),
-            "desired_state": lease.get("desired_state"),
-            "created_at": lease.get("created_at"),
         }
 
     def _resource_session_row_from_sandbox(
