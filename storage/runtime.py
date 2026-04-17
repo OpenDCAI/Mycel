@@ -91,7 +91,7 @@ def build_chat_session_repo(*, supabase_client: Any | None = None, supabase_clie
         from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 
         return SQLiteChatSessionRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-    return _build_storage_repo("chat_session_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
+    _raise_removed_supabase_terminal_session_repo()
 
 
 def build_terminal_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
@@ -99,7 +99,11 @@ def build_terminal_repo(*, supabase_client: Any | None = None, supabase_client_f
         from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
         return SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-    return _build_storage_repo("terminal_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
+    _raise_removed_supabase_terminal_session_repo()
+
+
+def _raise_removed_supabase_terminal_session_repo() -> None:
+    raise RuntimeError("Supabase terminal/session runtime repos have been removed; use the local sandbox SQLite runtime store.")
 
 
 def build_resource_snapshot_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):

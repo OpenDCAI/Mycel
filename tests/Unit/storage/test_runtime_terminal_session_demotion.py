@@ -1,3 +1,5 @@
+import pytest
+
 from sandbox import control_plane_repos
 from storage import runtime
 from storage.container import _REPO_REGISTRY, StorageContainer
@@ -43,3 +45,14 @@ def test_storage_container_does_not_register_terminal_session_supabase_defaults(
     assert "chat_session_repo" not in _REPO_REGISTRY
     assert not hasattr(StorageContainer, "terminal_repo")
     assert not hasattr(StorageContainer, "chat_session_repo")
+
+
+def test_explicit_supabase_terminal_session_builders_fail_loudly():
+    class _Client:
+        pass
+
+    with pytest.raises(RuntimeError, match="Supabase terminal/session runtime repos have been removed"):
+        runtime.build_terminal_repo(supabase_client=_Client())
+
+    with pytest.raises(RuntimeError, match="Supabase terminal/session runtime repos have been removed"):
+        runtime.build_chat_session_repo(supabase_client=_Client())
