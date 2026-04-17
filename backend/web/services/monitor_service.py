@@ -548,6 +548,7 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str, include_le
     )
 
     return {
+        "source": "lease_compatibility" if include_lease_id else "sandbox_canonical",
         "title": title,
         "count": len(items),
         "summary": summary,
@@ -694,7 +695,10 @@ def _sandbox_detail_cleanup_truth(
 def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
-        return _build_monitor_sandbox_detail(repo, sandbox_id)
+        return {
+            "source": "sandbox_canonical",
+            **_build_monitor_sandbox_detail(repo, sandbox_id),
+        }
     finally:
         repo.close()
 
@@ -724,6 +728,7 @@ def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
     lease_payload = {**sandbox_payload, "lease_id": lease_id}
 
     return {
+        "source": "lease_compatibility",
         "lease": lease_payload,
         "triage": payload["triage"],
         "cleanup": monitor_operation_service.build_lease_cleanup_truth(

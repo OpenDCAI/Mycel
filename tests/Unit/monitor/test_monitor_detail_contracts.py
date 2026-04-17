@@ -416,7 +416,7 @@ def test_get_monitor_lease_detail_merges_monitor_repo_state(monkeypatch):
     assert payload["lease"]["lease_id"] == "lease-1"
     assert payload["triage"]["category"] == "healthy_capacity"
     assert payload["cleanup"]["allowed"] is False
-    assert sorted(payload.keys()) == ["cleanup", "lease", "triage"]
+    assert sorted(payload.keys()) == ["cleanup", "lease", "source", "triage"]
 
 
 def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
@@ -486,6 +486,7 @@ def test_list_leases_uses_canonical_sandbox_source(monkeypatch):
 
     payload = monitor_service.list_leases()
 
+    assert payload["source"] == "lease_compatibility"
     assert payload["items"][0]["sandbox_id"] == "sandbox-1"
     assert payload["items"][0]["lease_id"] == "lease-1"
 
@@ -509,6 +510,7 @@ def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
 
     payload = monitor_service.list_monitor_sandboxes()
 
+    assert payload["source"] == "sandbox_canonical"
     assert payload["items"][0]["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in payload["items"][0]
 
@@ -537,6 +539,7 @@ def test_get_monitor_lease_detail_uses_canonical_sandbox_source(monkeypatch):
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
+    assert payload["source"] == "lease_compatibility"
     assert payload["lease"]["sandbox_id"] == "sandbox-1"
     assert payload["lease"]["lease_id"] == "lease-1"
     assert "sandbox" not in payload
@@ -557,7 +560,7 @@ def test_get_monitor_lease_detail_exposes_only_redirect_payload(monkeypatch):
 
     payload = monitor_service.get_monitor_lease_detail("lease-1")
 
-    assert sorted(payload.keys()) == ["cleanup", "lease", "triage"]
+    assert sorted(payload.keys()) == ["cleanup", "lease", "source", "triage"]
 
 
 def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
@@ -572,6 +575,7 @@ def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
 
     payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
 
+    assert payload["source"] == "sandbox_canonical"
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in payload["sandbox"]
     assert payload["cleanup"]["allowed"] is False
