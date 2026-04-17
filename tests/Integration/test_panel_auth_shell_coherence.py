@@ -773,6 +773,88 @@ def test_install_from_snapshot_persists_skill_desc_from_snapshot_meta_into_repo_
     ]
 
 
+def test_install_from_snapshot_copies_rules_skills_and_sub_agents_to_new_config():
+    saved_configs: list[tuple[str, dict[str, object]]] = []
+    saved_rules: list[tuple[str, str, str]] = []
+    saved_skills: list[tuple[str, str, str, dict[str, object] | None]] = []
+    saved_sub_agents: list[tuple[str, str, dict[str, object]]] = []
+
+    class _UserRepo:
+        def create(self, row: UserRow) -> None:
+            assert row.agent_config_id is not None
+
+    class _AgentConfigRepo:
+        def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
+            saved_configs.append((agent_config_id, data))
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def delete_rule(self, _row_id: str) -> None:
+            return None
+
+        def save_rule(self, agent_config_id: str, filename: str, content: str) -> None:
+            saved_rules.append((agent_config_id, filename, content))
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def delete_skill(self, _row_id: str) -> None:
+            return None
+
+        def save_skill(self, agent_config_id: str, name: str, content: str, meta: dict[str, object] | None = None) -> None:
+            saved_skills.append((agent_config_id, name, content, meta))
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+        def delete_sub_agent(self, _row_id: str) -> None:
+            return None
+
+        def save_sub_agent(self, agent_config_id: str, name: str, **kwargs: object) -> None:
+            saved_sub_agents.append((agent_config_id, name, kwargs))
+
+    agent_user_service.install_from_snapshot(
+        snapshot={
+            "agent_md": "---\nname: Repo Agent\ndescription: Repo desc\nmodel: leon:large\ntools: [Read]\n---\nmain prompt\n",
+            "rules": [{"name": "Rule/Unsafe", "content": "rule body"}],
+            "skills": [{"name": "Search", "content": "skill body", "meta": {"desc": "skill desc"}}],
+            "agents": [
+                {
+                    "name": "Scout",
+                    "content": "---\nname: Scout\ndescription: scout desc\nmodel: leon:small\ntools: [Read, Write]\n---\nscout prompt\n",
+                }
+            ],
+        },
+        name="Repo Agent",
+        description="probe",
+        marketplace_item_id="item-1",
+        installed_version="1.0.0",
+        owner_user_id="user-1",
+        user_repo=_UserRepo(),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert len(saved_configs) == 1
+    agent_config_id = saved_configs[0][0]
+    assert saved_configs[0][1]["name"] == "Repo Agent"
+    assert saved_configs[0][1]["system_prompt"] == "main prompt"
+    assert saved_rules == [(agent_config_id, "Rule_Unsafe.md", "rule body")]
+    assert saved_skills == [(agent_config_id, "Search", "skill body", {"desc": "skill desc"})]
+    assert saved_sub_agents == [
+        (
+            agent_config_id,
+            "Scout",
+            {
+                "description": "scout desc",
+                "model": "leon:small",
+                "tools": ["Read", "Write"],
+                "system_prompt": "scout prompt",
+            },
+        )
+    ]
+
+
 def _agent_delete_runner(*, contact_error: str | None = None):
     agent = UserRow(
         id="agent-1",
