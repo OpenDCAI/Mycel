@@ -951,12 +951,10 @@ class SandboxManager:
         list_provider_sessions = getattr(self.provider, "list_provider_sessions", None)
         provider_sessions = []
         if callable(list_provider_sessions):
-            try:
-                raw_provider_sessions = list_provider_sessions()
-                provider_sessions = raw_provider_sessions if isinstance(raw_provider_sessions, list) else []
-            except Exception:
-                logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
-                provider_sessions = []
+            raw_provider_sessions = list_provider_sessions()
+            if not isinstance(raw_provider_sessions, list):
+                raise TypeError(f"{self.provider.name}.list_provider_sessions must return list")
+            provider_sessions = raw_provider_sessions
 
         for ps in provider_sessions:
             instance_id = getattr(ps, "session_id", None)

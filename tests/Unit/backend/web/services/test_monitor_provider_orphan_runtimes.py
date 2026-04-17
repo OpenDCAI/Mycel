@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from backend.web.services import monitor_service, sandbox_service
 
 
@@ -68,3 +70,14 @@ def test_load_provider_orphan_sessions_excludes_lease_backed_provider_runtimes()
             "inspect_visible": False,
         },
     ]
+
+
+def test_load_provider_orphan_sessions_rejects_non_list_provider_result():
+    manager = SimpleNamespace(
+        provider=SimpleNamespace(name="daytona", list_provider_sessions=lambda: (_provider_runtime("orphan"),)),
+        lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: []),
+        provider_capability=SimpleNamespace(inspect_visible=False),
+    )
+
+    with pytest.raises(TypeError, match="daytona.list_provider_sessions must return list"):
+        sandbox_service.load_provider_orphan_sessions({"daytona": manager})
