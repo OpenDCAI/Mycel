@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -165,7 +167,14 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
   });
 
-  it("treats legacy installed skill-template query key as the Skill tab", () => {
+  it("does not describe installed tab query aliases with old-framework wording", () => {
+    const source = readFileSync(new URL(import.meta.url), "utf8");
+    const forbidden = ["leg", "acy"].join("");
+
+    expect(source).not.toContain(forbidden);
+  });
+
+  it("accepts the installed skill-template query alias as the Skill tab", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=skill-template"]}>
         <Routes>
@@ -178,7 +187,7 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByText("暂无已安装的 Skill")).toBeTruthy();
   });
 
-  it("treats legacy installed sandbox query key as the Sandbox tab", () => {
+  it("accepts the installed sandbox query alias as the Sandbox tab", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox"]}>
         <Routes>
@@ -230,7 +239,7 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByText("暂无已安装的 Subagent")).toBeTruthy();
   });
 
-  it("treats legacy installed subagent query key as the Subagent tab", () => {
+  it("accepts the installed subagent query alias as the Subagent tab", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=subagent"]}>
         <Routes>
