@@ -1,3 +1,5 @@
+import inspect
+
 import pytest
 
 from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
@@ -13,6 +15,13 @@ class _RejectBareSandboxLeasesClient(FakeSupabaseClient):
 
 def _client(tables: dict[str, list[dict]] | None = None) -> _RejectBareSandboxLeasesClient:
     return _RejectBareSandboxLeasesClient(tables={} if tables is None else tables)
+
+
+def test_supabase_lease_repo_names_container_bridge_without_adapter_label():
+    source = inspect.getsource(SupabaseLeaseRepo)
+
+    assert "Lease-compatible adapter" not in source
+    assert "Container-backed LeaseRepo bridge" in source
 
 
 def _sandbox_row(

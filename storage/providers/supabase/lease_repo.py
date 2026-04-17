@@ -117,7 +117,7 @@ def _patched_config(row: dict[str, Any], updates: dict[str, Any]) -> dict[str, A
 
 
 class SupabaseLeaseRepo:
-    """Lease-compatible adapter backed by container.sandboxes."""
+    """Container-backed LeaseRepo bridge for lower sandbox runtime contracts."""
 
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
