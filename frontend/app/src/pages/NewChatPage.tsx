@@ -596,7 +596,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localSandboxTemplateSelected ? "下一步" : "确认")),
             applyDisabled: (configStep === 1 && (newSandboxQuotaBlocked || newSandboxProviderUnavailable))
-              || (configStep === 2 && createMode === "existing" && !selectedExistingSandboxId),
+              || (configStep === 2 && createMode === "existing" && !selectedLease),
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
