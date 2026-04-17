@@ -8,9 +8,9 @@ import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
 import ActorAvatar from "../components/ActorAvatar";
 import FilesystemBrowser from "../components/FilesystemBrowser";
-import { getDefaultThreadConfig, listMyLeases } from "../api/client";
+import { getDefaultThreadConfig, listMySandboxes } from "../api/client";
 import { fetchAccountResourceLimits } from "../api/settings";
-import type { AccountResourceLimit, RecipeFeatureOption, SandboxTemplateSnapshot, ThreadLaunchConfig, UserLeaseSummary } from "../api/types";
+import type { AccountResourceLimit, RecipeFeatureOption, SandboxTemplateSnapshot, ThreadLaunchConfig, UserSandboxSummary } from "../api/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 import { cn } from "../lib/utils";
@@ -87,7 +87,7 @@ function providerTypeFromName(name: string): string {
   return "local";
 }
 
-function leaseStateMeta(state?: string | null): { dot: string; label: string } {
+function sandboxStateMeta(state?: string | null): { dot: string; label: string } {
   switch (state) {
     case "running":
     case "started":
@@ -127,9 +127,9 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     shouldResolveDefaultThread ? "resolving" : "ready",
   );
   const [createMode, setCreateMode] = useState<"new" | "existing">("new");
-  const [leaseOptions, setLeaseOptions] = useState<UserLeaseSummary[]>([]);
-  const [leaseError, setLeaseError] = useState<string | null>(null);
-  const [leaseLoading, setLeaseLoading] = useState(true);
+  const [sandboxOptions, setSandboxOptions] = useState<UserSandboxSummary[]>([]);
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const [sandboxLoading, setSandboxLoading] = useState(true);
   const [selectedExistingSandboxId, setSelectedExistingSandboxId] = useState<string>("");
   const [selectedSandboxTemplateId, setSelectedSandboxTemplateId] = useState<string>("");
   const [selectedSandboxTemplateFeatures, setSelectedSandboxTemplateFeatures] = useState<Record<string, boolean>>({});
@@ -226,24 +226,24 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     let cancelled = false;
     const ac = new AbortController();
 
-    async function loadLeases() {
-      setLeaseLoading(true);
-      setLeaseError(null);
+    async function loadSandboxes() {
+      setSandboxLoading(true);
+      setSandboxError(null);
       try {
-        const leases = await listMyLeases(ac.signal);
+        const sandboxes = await listMySandboxes(ac.signal);
         if (cancelled) return;
-        setLeaseOptions(leases);
-        setSelectedExistingSandboxId((current) => current || (leases[0] ? leaseSandboxId(leases[0]) : ""));
+        setSandboxOptions(sandboxes);
+        setSelectedExistingSandboxId((current) => current || (sandboxes[0] ? sandboxOptionId(sandboxes[0]) : ""));
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setLeaseError(err instanceof Error ? err.message : "Failed to load leases");
+        setSandboxError(err instanceof Error ? err.message : "Failed to load sandboxes");
       } finally {
-        if (!cancelled && !ac.signal.aborted) setLeaseLoading(false);
+        if (!cancelled && !ac.signal.aborted) setSandboxLoading(false);
       }
     }
 
-    void loadLeases();
+    void loadSandboxes();
     return () => {
       cancelled = true;
       ac.abort();
@@ -268,7 +268,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         } satisfies SandboxTemplateSnapshot,
       }))
   ), [librarySandboxTemplates]);
-  const selectedLease = leaseOptions.find((lease) => leaseSandboxId(lease) === selectedExistingSandboxId) ?? null;
+  const selectedSandboxOption = sandboxOptions.find((sandbox) => sandboxOptionId(sandbox) === selectedExistingSandboxId) ?? null;
   const sandboxResourceByProvider = useMemo(() => {
     const map = new Map<string, AccountResourceLimit>();
     for (const item of accountResources) {
@@ -296,23 +296,23 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   }, [sandboxTemplateOptions, selectedSandboxTemplateId]);
 
   useEffect(() => {
-    if (!selectedExistingSandboxId && leaseOptions[0]) {
-      setSelectedExistingSandboxId(leaseSandboxId(leaseOptions[0]));
+    if (!selectedExistingSandboxId && sandboxOptions[0]) {
+      setSelectedExistingSandboxId(sandboxOptionId(sandboxOptions[0]));
     }
-  }, [leaseOptions, selectedExistingSandboxId]);
+  }, [sandboxOptions, selectedExistingSandboxId]);
 
   useEffect(() => {
-    if (createModeInitialized || leaseLoading) return;
-    setCreateMode(leaseOptions.length > 0 ? "existing" : "new");
+    if (createModeInitialized || sandboxLoading) return;
+    setCreateMode(sandboxOptions.length > 0 ? "existing" : "new");
     setCreateModeInitialized(true);
-  }, [createModeInitialized, leaseLoading, leaseOptions.length]);
+  }, [createModeInitialized, sandboxLoading, sandboxOptions.length]);
 
   useEffect(() => {
-    if (leaseLoading || configDefaultsLoading) return;
+    if (sandboxLoading || configDefaultsLoading) return;
     if (selectedProviderConfig) return;
-    const nextConfig = leaseOptions[0]?.provider_name || providerConfigOptions[0]?.value || selectedSandbox || "local";
+    const nextConfig = sandboxOptions[0]?.provider_name || providerConfigOptions[0]?.value || selectedSandbox || "local";
     if (nextConfig) setSelectedProviderConfig(nextConfig);
-  }, [configDefaultsLoading, leaseLoading, leaseOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
+  }, [configDefaultsLoading, sandboxLoading, sandboxOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
 
   useEffect(() => {
     if (!selectedWorkspace && settings?.default_workspace) {
@@ -383,15 +383,15 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
 
     let threadId: string;
     if (createMode === "existing") {
-      if (!selectedLease) {
+      if (!selectedSandboxOption) {
         throw new Error("Choose an existing sandbox first");
       }
       threadId = await handleCreateThread(
-        selectedLease.provider_name,
+        selectedSandboxOption.provider_name,
         undefined,
         decodedAgentId,
         model,
-        leaseSandboxId(selectedLease),
+        sandboxOptionId(selectedSandboxOption),
       );
     } else {
       if (!selectedSandboxTemplateSnapshot) {
@@ -427,8 +427,8 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
 
   function summarizeEnvironment() {
     if (createMode === "existing") {
-      if (!selectedLease) return "复用旧沙盒";
-      return `${selectedLease.provider_name} · ${selectedLease.recipe_name}`;
+      if (!selectedSandboxOption) return "复用旧沙盒";
+      return `${selectedSandboxOption.provider_name} · ${selectedSandboxOption.recipe_name}`;
     }
     const sandboxTemplate = selectedSandboxTemplateSnapshot;
     if (!sandboxTemplate) return "选择沙盒模板";
@@ -442,7 +442,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   function buildConfigSnapshot(): ConfigSnapshot {
     return {
       createMode,
-      selectedExistingSandboxId: selectedExistingSandboxId || (leaseOptions[0] ? leaseSandboxId(leaseOptions[0]) : ""),
+      selectedExistingSandboxId: selectedExistingSandboxId || (sandboxOptions[0] ? sandboxOptionId(sandboxOptions[0]) : ""),
       selectedSandboxTemplateId,
       selectedSandboxTemplateFeatures: { ...selectedSandboxTemplateFeatures },
       selectedWorkspace: activeWorkspace,
@@ -581,7 +581,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localSandboxTemplateSelected ? "下一步" : "确认")),
             applyDisabled: (configStep === 1 && (newSandboxQuotaBlocked || newSandboxProviderUnavailable))
-              || (configStep === 2 && createMode === "existing" && !selectedLease),
+              || (configStep === 2 && createMode === "existing" && !selectedSandboxOption),
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
@@ -594,12 +594,12 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
               const filteredSandboxTemplateOptions = selectedProviderType
                 ? sandboxTemplateOptions.filter((item) => item.sandboxTemplate.provider_type === selectedProviderType)
                 : sandboxTemplateOptions;
-              const filteredLeaseOptions = selectedProviderConfig
-                ? leaseOptions.filter((lease) => lease.provider_name === selectedProviderConfig)
-                : leaseOptions;
+              const filteredSandboxOptions = selectedProviderConfig
+                ? sandboxOptions.filter((sandbox) => sandbox.provider_name === selectedProviderConfig)
+                : sandboxOptions;
               const configurableFeatureOptions = (activeSandboxTemplate?.feature_options ?? [])
                 .filter((item) => activeSandboxTemplate?.configurable_features?.[item.key]);
-              const existingCount = filteredLeaseOptions.length;
+              const existingCount = filteredSandboxOptions.length;
               const totalSteps = localSandboxTemplateSelected ? 3 : 2;
               const renderModelChoices = (compact = false) => (
                 <div className={cn("flex flex-wrap items-center", compact ? "gap-1.5" : "gap-2")}>
@@ -675,7 +675,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                             <div className="text-sm font-medium text-foreground">Existing sandbox</div>
                             <span className="rounded-full bg-card px-2 py-0.5 text-[11px] text-muted-foreground">{existingCount}</span>
                           </div>
-                          <div className="mt-1 text-xs text-muted-foreground">复用你已经拥有的 sandbox lease。</div>
+                          <div className="mt-1 text-xs text-muted-foreground">复用你已经拥有的 sandbox。</div>
                         </button>
                       </div>
 
@@ -692,9 +692,9 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                             if (nextSandboxTemplates.length > 0 && !nextSandboxTemplates.some((item) => item.value === selectedSandboxTemplateId)) {
                               setSelectedSandboxTemplateId(nextSandboxTemplates[0].value);
                             }
-                            const nextLease = leaseOptions.find((lease) => lease.provider_name === nextProviderConfig);
+                            const nextSandbox = sandboxOptions.find((sandbox) => sandbox.provider_name === nextProviderConfig);
                             if (createMode === "existing") {
-                              setSelectedExistingSandboxId(nextLease ? leaseSandboxId(nextLease) : "");
+                              setSelectedExistingSandboxId(nextSandbox ? sandboxOptionId(nextSandbox) : "");
                             }
                           }}
                         >
@@ -830,15 +830,15 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                             <div className="text-xs text-muted-foreground">{existingCount} available</div>
                           </div>
                           <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
-                            {filteredLeaseOptions.map((lease) => {
-                              const leaseSandboxKey = leaseSandboxId(lease);
-                              const isActive = selectedExistingSandboxId === leaseSandboxKey;
-                              const stateMeta = leaseStateMeta(lease.observed_state);
+                            {filteredSandboxOptions.map((sandbox) => {
+                              const sandboxKey = sandboxOptionId(sandbox);
+                              const isActive = selectedExistingSandboxId === sandboxKey;
+                              const stateMeta = sandboxStateMeta(sandbox.observed_state);
                               return (
                                 <button
-                                  key={lease.lease_id}
+                                  key={sandbox.sandbox_id}
                                   type="button"
-                                  onClick={() => setSelectedExistingSandboxId(leaseSandboxKey)}
+                                  onClick={() => setSelectedExistingSandboxId(sandboxKey)}
                                   className={cn(
                                     "w-full rounded-2xl border p-3 text-left transition-colors",
                                     isActive ? "border-primary/40 bg-primary/5" : "border-border bg-background hover:bg-accent/40",
@@ -849,15 +849,15 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                                       <div className="flex items-center gap-2">
                                         <span className={cn("h-2 w-2 rounded-full", stateMeta.dot)} />
                                         <div className="text-sm font-medium text-foreground">
-                                          {PROVIDER_TYPE_LABELS[providerTypeFromName(lease.provider_name)] ?? lease.provider_name} · {lease.recipe_name}
+                                          {PROVIDER_TYPE_LABELS[providerTypeFromName(sandbox.provider_name)] ?? sandbox.provider_name} · {sandbox.recipe_name}
                                         </div>
                                       </div>
                                       <div className="mt-1 text-xs text-muted-foreground">
-                                        {stateMeta.label} · {lease.cwd || "No working directory"}
+                                        {stateMeta.label} · {sandbox.cwd || "No working directory"}
                                       </div>
                                     </div>
                                     <div className="flex -space-x-2">
-                                      {lease.agents.slice(0, 4).map((agent) => (
+                                      {sandbox.agents.slice(0, 4).map((agent) => (
                                         <ActorAvatar
                                           key={agent.thread_id}
                                           name={agent.agent_name}
@@ -872,13 +872,13 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                                 </button>
                               );
                             })}
-                            {!leaseLoading && filteredLeaseOptions.length === 0 && (
+                            {!sandboxLoading && filteredSandboxOptions.length === 0 && (
                               <div className="rounded-2xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
                                 你还没有可复用的 sandbox。
                               </div>
                             )}
                           </div>
-                          {leaseError && <p className="mt-2 text-xs text-destructive">{leaseError}</p>}
+                          {sandboxError && <p className="mt-2 text-xs text-destructive">{sandboxError}</p>}
                         </div>
                       )}
                     </div>
@@ -918,6 +918,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     </div>
   );
 }
-  function leaseSandboxId(lease: UserLeaseSummary): string {
-    return lease.sandbox_id;
+  function sandboxOptionId(sandbox: UserSandboxSummary): string {
+    return sandbox.sandbox_id;
   }

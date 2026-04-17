@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NewChatPage from "./NewChatPage";
 import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
-import type { AccountResourceLimit, SandboxType, UserLeaseSummary } from "../api/types";
+import type { AccountResourceLimit, SandboxType, UserSandboxSummary } from "../api/types";
 
 const handleGetDefaultThread = vi.fn();
 const handleCreateThread = vi.fn();
 const clientMocks = vi.hoisted(() => ({
   getDefaultThreadConfig: vi.fn(() => new Promise(() => {})),
-  listMyLeases: vi.fn<() => Promise<UserLeaseSummary[]>>(async () => []),
+  listMySandboxes: vi.fn<() => Promise<UserSandboxSummary[]>>(async () => []),
   fetchAccountResourceLimits: vi.fn<() => Promise<AccountResourceLimit[]>>(async () => []),
 }));
 
@@ -85,7 +85,7 @@ vi.mock("../api", () => ({
 
 vi.mock("../api/client", () => ({
   getDefaultThreadConfig: clientMocks.getDefaultThreadConfig,
-  listMyLeases: clientMocks.listMyLeases,
+  listMySandboxes: clientMocks.listMySandboxes,
 }));
 
 vi.mock("../api/settings", () => ({
@@ -130,8 +130,8 @@ describe("NewChatPage", () => {
     handleCreateThread.mockResolvedValue("thread-from-test");
     clientMocks.getDefaultThreadConfig.mockReset();
     clientMocks.getDefaultThreadConfig.mockImplementation(() => new Promise(() => {}));
-    clientMocks.listMyLeases.mockReset();
-    clientMocks.listMyLeases.mockResolvedValue([]);
+    clientMocks.listMySandboxes.mockReset();
+    clientMocks.listMySandboxes.mockResolvedValue([]);
     clientMocks.fetchAccountResourceLimits.mockReset();
     clientMocks.fetchAccountResourceLimits.mockResolvedValue([]);
     sandboxTypesForTest = [{ name: "local", available: true }];
@@ -489,7 +489,7 @@ describe("NewChatPage", () => {
     });
   });
 
-  it("reuses the configured existing sandbox from existing_sandbox_id instead of falling back to the first lease", async () => {
+  it("reuses the configured existing sandbox from existing_sandbox_id instead of falling back to the first sandbox", async () => {
     clientMocks.getDefaultThreadConfig.mockResolvedValue({
       source: "last_successful",
       config: {
@@ -500,7 +500,7 @@ describe("NewChatPage", () => {
         workspace: "/workspace/reused-2",
       },
     });
-    clientMocks.listMyLeases.mockResolvedValue([
+    clientMocks.listMySandboxes.mockResolvedValue([
       {
         lease_id: "lease-1",
         sandbox_id: "sandbox-1",
@@ -552,7 +552,7 @@ describe("NewChatPage", () => {
     });
   });
 
-  it("persists existing-sandbox defaults with the selected sandbox-shaped id instead of the lease id", async () => {
+  it("persists existing-sandbox defaults with the selected sandbox identity", async () => {
     clientMocks.getDefaultThreadConfig.mockResolvedValue({
       source: "derived",
       config: {
@@ -563,7 +563,7 @@ describe("NewChatPage", () => {
         workspace: "/workspace/reused-1",
       },
     });
-    clientMocks.listMyLeases.mockResolvedValue([
+    clientMocks.listMySandboxes.mockResolvedValue([
       {
         lease_id: "lease-1",
         sandbox_id: "sandbox-1",
@@ -575,7 +575,7 @@ describe("NewChatPage", () => {
         cwd: "/workspace/reused-1",
         thread_ids: [],
         agents: [],
-      } as UserLeaseSummary,
+      } as UserSandboxSummary,
       {
         lease_id: "lease-2",
         sandbox_id: "sandbox-2",
@@ -587,7 +587,7 @@ describe("NewChatPage", () => {
         cwd: "/workspace/reused-2",
         thread_ids: [],
         agents: [],
-      } as UserLeaseSummary,
+      } as UserSandboxSummary,
     ]);
 
     render(
@@ -610,7 +610,7 @@ describe("NewChatPage", () => {
     });
   });
 
-  it("labels the existing runtime picker as sandboxes instead of leases", async () => {
+  it("labels the existing runtime picker as sandboxes", async () => {
     clientMocks.getDefaultThreadConfig.mockResolvedValue({
       source: "derived",
       config: {
@@ -621,7 +621,7 @@ describe("NewChatPage", () => {
         workspace: "/workspace/reused-1",
       },
     });
-    clientMocks.listMyLeases.mockResolvedValue([
+    clientMocks.listMySandboxes.mockResolvedValue([
       {
         lease_id: "lease-1",
         sandbox_id: "sandbox-1",
@@ -633,7 +633,7 @@ describe("NewChatPage", () => {
         cwd: "/workspace/reused-1",
         thread_ids: [],
         agents: [],
-      } as UserLeaseSummary,
+      } as UserSandboxSummary,
     ]);
 
     render(
@@ -650,10 +650,9 @@ describe("NewChatPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
 
     expect(screen.queryByText("My Sandboxes")).not.toBeNull();
-    expect(screen.queryByText("My Leases")).toBeNull();
   });
 
-  it("keeps provider-switch defaults sandbox-shaped when reselecting an existing lease", async () => {
+  it("keeps provider-switch defaults sandbox-shaped when reselecting an existing sandbox", async () => {
     sandboxTypesForTest = [
       { name: "daytona_selfhost", provider: "daytona", available: true },
       { name: "local", provider: "local", available: true },
@@ -688,7 +687,7 @@ describe("NewChatPage", () => {
         workspace: "/workspace/daytona",
       },
     });
-    clientMocks.listMyLeases.mockResolvedValue([
+    clientMocks.listMySandboxes.mockResolvedValue([
       {
         lease_id: "lease-daytona",
         sandbox_id: "sandbox-daytona",
@@ -700,7 +699,7 @@ describe("NewChatPage", () => {
         cwd: "/workspace/daytona",
         thread_ids: [],
         agents: [],
-      } as UserLeaseSummary,
+      } as UserSandboxSummary,
       {
         lease_id: "lease-local",
         sandbox_id: "sandbox-local",
@@ -712,7 +711,7 @@ describe("NewChatPage", () => {
         cwd: "/workspace/local",
         thread_ids: [],
         agents: [],
-      } as UserLeaseSummary,
+      } as UserSandboxSummary,
     ]);
 
     render(
@@ -736,7 +735,7 @@ describe("NewChatPage", () => {
     });
   });
 
-  it("blocks applying an existing-sandbox default when the configured sandbox id is not in my leases", async () => {
+  it("blocks applying an existing-sandbox default when the configured sandbox id is unavailable", async () => {
     clientMocks.getDefaultThreadConfig.mockResolvedValue({
       source: "last_successful",
       config: {
@@ -747,7 +746,7 @@ describe("NewChatPage", () => {
         workspace: "/workspace/missing",
       },
     });
-    clientMocks.listMyLeases.mockResolvedValue([
+    clientMocks.listMySandboxes.mockResolvedValue([
       {
         lease_id: "lease-1",
         sandbox_id: "sandbox-1",
@@ -759,7 +758,7 @@ describe("NewChatPage", () => {
         cwd: "/workspace/reused-1",
         thread_ids: [],
         agents: [],
-      } as UserLeaseSummary,
+      } as UserSandboxSummary,
     ]);
 
     render(

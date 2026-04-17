@@ -60,6 +60,22 @@ async def list_my_leases(
     return {"leases": leases}
 
 
+@router.get("/sandboxes/mine")
+async def list_my_sandboxes(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
+) -> dict[str, Any]:
+    thread_repo = getattr(request.app.state, "thread_repo", None)
+    user_repo = getattr(request.app.state, "user_repo", None)
+    sandboxes = await asyncio.to_thread(
+        sandbox_service.list_user_leases,
+        user_id,
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+    return {"sandboxes": sandboxes}
+
+
 @router.get("/sessions/{session_id}/metrics")
 async def get_session_metrics(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Get metrics for a specific sandbox session."""

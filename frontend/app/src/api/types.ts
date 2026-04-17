@@ -156,7 +156,7 @@ export interface AccountResourceLimit {
   unit?: string;
 }
 
-export interface UserLeaseSummary {
+export interface UserSandboxSummary {
   lease_id: string;
   sandbox_id: string;
   provider_name: string;
