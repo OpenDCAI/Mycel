@@ -33,9 +33,8 @@ describe("monitor relation shell", () => {
   it("uses sandbox detail link for runtime relations", () => {
     const shell = buildRuntimeRelationShell({
       provider: { id: "daytona" },
-      runtime: { runtimeSessionId: "runtime-1", leaseId: "lease-1" },
+      runtime: { runtimeSessionId: "runtime-1" },
       sandbox_id: "sandbox-1",
-      lease_id: "lease-1",
       thread_id: "thread-1",
     });
 

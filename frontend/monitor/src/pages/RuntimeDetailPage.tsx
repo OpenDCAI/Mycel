@@ -14,12 +14,10 @@ type RuntimeDetailPayload = {
     runtimeSessionId?: string | null;
     status?: string | null;
     threadId?: string | null;
-    leaseId?: string | null;
     agentName?: string | null;
     webUrl?: string | null;
   } | null;
   sandbox_id?: string | null;
-  lease_id?: string | null;
   thread_id?: string | null;
 };
 

@@ -742,7 +742,6 @@ def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
                 },
                 "runtime": session,
                 "sandbox_id": session.get("sandboxId"),
-                "lease_id": session.get("leaseId"),
                 "thread_id": session.get("threadId"),
             }
     raise KeyError(f"Runtime not found: {runtime_session_id}")

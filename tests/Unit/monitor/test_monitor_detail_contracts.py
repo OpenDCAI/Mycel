@@ -253,7 +253,7 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
     payload = monitor_service.get_monitor_runtime_detail("runtime-1")
 
     assert payload["sandbox_id"] == "sandbox-1"
-    assert payload["lease_id"] == "lease-1"
+    assert "lease_id" not in payload
     assert payload["thread_id"] == "thread-1"
 
 
