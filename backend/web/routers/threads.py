@@ -51,7 +51,6 @@ from backend.web.services.thread_runtime_convergence import converge_owner_threa
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
-    get_session_status,
     get_terminal_status,
 )
 from backend.web.services.thread_visibility import canonical_owner_threads
@@ -1395,18 +1394,6 @@ async def get_thread_runtime(
 
 
 # Session/terminal/lease status endpoints
-@router.get("/{thread_id}/session")
-async def get_thread_session_status(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Get ChatSession status for a thread."""
-    try:
-        return await get_session_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
-
-
 @router.get("/{thread_id}/terminal")
 async def get_thread_terminal_status(
     thread_id: str,

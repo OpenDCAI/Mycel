@@ -1,7 +1,6 @@
 """Thread state query service for session/terminal/lease status."""
 
 import asyncio
-from datetime import timedelta
 from typing import Any
 
 from backend.web.utils.helpers import get_lease_timestamps, get_terminal_timestamps
@@ -62,42 +61,6 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
         sandbox_info["error"] = str(exc)
 
     return sandbox_info
-
-
-async def get_session_status(agent: Any, thread_id: str) -> dict[str, Any]:
-    """Get ChatSession status for a thread.
-
-    Returns:
-        Dict with session_id, terminal_id, status, timestamps
-
-    Raises:
-        ValueError: If no session found for thread
-    """
-
-    def _get_session():
-        mgr = agent._sandbox.manager
-        terminal = mgr.get_terminal(thread_id)
-        if not terminal:
-            return None
-        return mgr.session_manager.get(thread_id, terminal.terminal_id)
-
-    session = await asyncio.to_thread(_get_session)
-    if not session:
-        raise ValueError(f"No session found for thread {thread_id}")
-
-    expires_by_idle = session.last_active_at + timedelta(seconds=session.policy.idle_ttl_sec)
-    expires_by_duration = session.started_at + timedelta(seconds=session.policy.max_duration_sec)
-    expires_at = min(expires_by_idle, expires_by_duration)
-
-    return {
-        "thread_id": thread_id,
-        "session_id": session.session_id,
-        "terminal_id": session.terminal.terminal_id,
-        "status": session.status,
-        "started_at": session.started_at.isoformat(),
-        "last_active_at": session.last_active_at.isoformat(),
-        "expires_at": expires_at.isoformat(),
-    }
 
 
 async def get_terminal_status(agent: Any, thread_id: str) -> dict[str, Any]:

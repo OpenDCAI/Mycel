@@ -394,6 +394,12 @@ async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
     assert result is None
 
 
+def test_threads_router_no_longer_exposes_session_status_route():
+    paths = {getattr(route, "path", "") for route in threads_router.router.routes}
+
+    assert "/api/threads/{thread_id}/session" not in paths
+
+
 @pytest.mark.asyncio
 async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadata():
     thread_repo = _FakeThreadRepo()
