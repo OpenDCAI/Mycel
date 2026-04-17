@@ -1,3 +1,4 @@
+import inspect
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -114,10 +115,18 @@ def test_upsert_resource_snapshot_for_sandbox_no_longer_requires_legacy_lease_br
     ]
 
 
-def test_resource_snapshot_adapter_no_longer_exposes_lease_shaped_write_shell() -> None:
-    adapter = resource_service._SandboxSnapshotRepoAdapter(sandbox_id="sandbox-1")
+def test_resource_snapshot_bridge_no_longer_exposes_lease_shaped_write_shell() -> None:
+    bridge = resource_service._SandboxSnapshotRepoBridge(sandbox_id="sandbox-1")
 
-    assert not hasattr(adapter, "upsert_lease_resource_snapshot")
+    assert not hasattr(bridge, "upsert_lease_resource_snapshot")
+
+
+def test_resource_snapshot_write_bridge_is_not_named_as_adapter() -> None:
+    source = inspect.getsource(resource_service)
+
+    assert "_SandboxSnapshotRepoAdapter" not in source
+    assert "storage compatibility inside this adapter" not in source
+    assert "_SandboxSnapshotRepoBridge" in source
 
 
 def test_resource_snapshot_module_no_longer_exposes_lease_shaped_write_helper() -> None:

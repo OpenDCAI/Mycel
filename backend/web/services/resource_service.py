@@ -18,12 +18,12 @@ from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_r
 from storage.runtime import upsert_resource_snapshot_for_sandbox
 
 
-class _SandboxSnapshotRepoAdapter:
+class _SandboxSnapshotRepoBridge:
     def __init__(self, *, sandbox_id: str) -> None:
         self._sandbox_id = sandbox_id
 
     # @@@snapshot-write-bridge - resource probe callers are sandbox-shaped now.
-    # Keep storage compatibility inside this adapter so service callers keep
+    # Keep the storage write seam behind this bridge so service callers keep
     # treating sandbox_id as the outward write subject.
     def upsert_resource_snapshot_for_sandbox(self, **kwargs) -> None:
         kwargs.pop("sandbox_id", None)
@@ -210,7 +210,7 @@ def refresh_resource_snapshots() -> dict[str, Any]:
             probe_mode=probe_mode,
             provider=provider,
             instance_id=instance_id,
-            repo=_SandboxSnapshotRepoAdapter(sandbox_id=sandbox_id),
+            repo=_SandboxSnapshotRepoBridge(sandbox_id=sandbox_id),
         )
         probed += 1
         if not result["ok"]:
