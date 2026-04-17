@@ -1,4 +1,4 @@
-"""Thread state query service for sandbox and lease status."""
+"""Thread state query service for sandbox status."""
 
 import asyncio
 from typing import Any
@@ -54,14 +54,14 @@ def _required_text(row: dict[str, Any], key: str, label: str) -> str:
     return value
 
 
-async def get_lease_status_from_repos(
+async def get_sandbox_status_from_repos(
     thread_repo: Any,
     workspace_repo: Any,
     sandbox_repo: Any,
     lease_repo: Any,
     thread_id: str,
 ) -> dict[str, Any] | None:
-    """Get SandboxLease status from storage repos without bootstrapping an agent."""
+    """Get thread sandbox status from storage repos without bootstrapping an agent."""
     binding = await asyncio.to_thread(
         resolve_thread_runtime_binding,
         thread_repo=thread_repo,
@@ -79,7 +79,6 @@ async def get_lease_status_from_repos(
     instance = lease.get("_instance")
     return {
         "thread_id": thread_id,
-        "lease_id": _required_text(lease, "lease_id", "lease"),
         "provider_name": _required_text(lease, "provider_name", "lease"),
         "desired_state": lease.get("desired_state"),
         "observed_state": lease.get("observed_state"),

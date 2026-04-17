@@ -385,7 +385,7 @@ def _patch_create_thread_noop_guards():
 
 
 @pytest.mark.asyncio
-async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
+async def test_get_thread_sandbox_status_returns_null_when_thread_has_no_runtime_bridge():
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
@@ -413,19 +413,19 @@ async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
                 }
             ),
             terminal_repo=SimpleNamespace(
-                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("lease status should not read terminal rows"))
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read terminal rows"))
             ),
             lease_repo=SimpleNamespace(),
         )
     )
 
-    result = await threads_router.get_thread_lease_status("thread-1", app=app)
+    result = await threads_router.get_thread_sandbox_status("thread-1", app=app)
 
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_get_thread_lease_status_reads_repos_without_agent_bootstrap():
+async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
@@ -453,7 +453,7 @@ async def test_get_thread_lease_status_reads_repos_without_agent_bootstrap():
                 }
             ),
             terminal_repo=SimpleNamespace(
-                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("lease status should not read terminal rows"))
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read terminal rows"))
             ),
             lease_repo=SimpleNamespace(
                 get=lambda lease_id: {
@@ -475,11 +475,10 @@ async def test_get_thread_lease_status_reads_repos_without_agent_bootstrap():
         )
     )
 
-    result = await threads_router.get_thread_lease_status("thread-1", app=app)
+    result = await threads_router.get_thread_sandbox_status("thread-1", app=app)
 
     assert result == {
         "thread_id": "thread-1",
-        "lease_id": "lease-1",
         "provider_name": "daytona",
         "desired_state": "running",
         "observed_state": "running",

@@ -182,17 +182,17 @@ describe("thread api client contract", () => {
     await expect(api.getThreadRuntime("thread-1")).rejects.toThrow("Malformed runtime status");
   });
 
-  it("getThreadLease rejects malformed lease identities", async () => {
+  it("getThreadSandbox rejects malformed sandbox status identities", async () => {
     authFetch.mockResolvedValue(okJson({
-      thread_id: "thread-1",
-      lease_id: { value: "lease-1" },
+      thread_id: { value: "thread-1" },
       provider_name: "local",
       instance: null,
       created_at: "2026-04-12T00:00:00Z",
       updated_at: "2026-04-12T00:00:00Z",
     }));
 
-    await expect(api.getThreadLease("thread-1")).rejects.toThrow("Malformed lease status");
+    await expect(api.getThreadSandbox("thread-1")).rejects.toThrow("Malformed sandbox status");
+    expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1/sandbox");
   });
 
   it("no longer exposes terminal status client", async () => {

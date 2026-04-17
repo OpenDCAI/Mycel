@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import {
-  getThreadLease,
+  getThreadSandbox,
   type SandboxInfo,
 } from "../api";
 
@@ -22,12 +22,12 @@ export function useSandboxManager(deps: SandboxManagerDeps): void {
 
     const refreshSandboxStatus = async () => {
       try {
-        const lease = await getThreadLease(threadId);
+        const sandbox = await getThreadSandbox(threadId);
         if (cancelled) return;
-        if (!lease) {
+        if (!sandbox) {
           return;
         }
-        const status = lease.instance?.state ?? null;
+        const status = sandbox.instance?.state ?? null;
         setActiveSandbox((prev) => {
           if (!prev) return prev;
           if (prev.type === "local") return prev;

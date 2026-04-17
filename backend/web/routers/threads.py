@@ -42,8 +42,8 @@ from backend.web.services.thread_launch_config_service import resolve_default_co
 from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
-    get_lease_status_from_repos,
     get_sandbox_info,
+    get_sandbox_status_from_repos,
 )
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import delete_thread_in_db
@@ -1340,15 +1340,15 @@ async def get_thread_runtime(
     return status
 
 
-# Lease status endpoint
-@router.get("/{thread_id}/lease")
-async def get_thread_lease_status(
+# Sandbox status endpoint
+@router.get("/{thread_id}/sandbox")
+async def get_thread_sandbox_status(
     thread_id: str,
     user_id: Annotated[str | None, Depends(verify_thread_row_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any] | None:
-    """Get SandboxLease status for a thread."""
-    return await get_lease_status_from_repos(
+    """Get sandbox status for a thread."""
+    return await get_sandbox_status_from_repos(
         app.state.thread_repo,
         app.state.workspace_repo,
         app.state.sandbox_repo,

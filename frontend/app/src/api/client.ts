@@ -4,7 +4,7 @@ import type {
   ThreadLaunchConfig,
   ThreadLaunchConfigResponse,
   StreamStatus,
-  LeaseStatus,
+  ThreadSandboxStatus,
   ThreadDetail,
   ThreadSummary,
   ThreadPermissions,
@@ -427,10 +427,10 @@ function parseUserSandboxSummaries(value: unknown): UserSandboxSummary[] {
   });
 }
 
-// --- Lease API ---
+// --- Thread Sandbox API ---
 
-export async function getThreadLease(threadId: string): Promise<LeaseStatus | null> {
-  const response = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/lease`);
+export async function getThreadSandbox(threadId: string): Promise<ThreadSandboxStatus | null> {
+  const response = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/sandbox`);
   if (response.status === 404) {
     return null;
   }
@@ -438,20 +438,19 @@ export async function getThreadLease(threadId: string): Promise<LeaseStatus | nu
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
   }
-  return parseLeaseStatus(await response.json());
+  return parseThreadSandboxStatus(await response.json());
 }
 
-function parseLeaseStatus(value: unknown): LeaseStatus {
+function parseThreadSandboxStatus(value: unknown): ThreadSandboxStatus {
   const payload = asRecord(value);
   const thread_id = payload ? recordString(payload, "thread_id") : undefined;
-  const lease_id = payload ? recordString(payload, "lease_id") : undefined;
   const provider_name = payload ? recordString(payload, "provider_name") : undefined;
   const created_at = payload ? recordString(payload, "created_at") : undefined;
   const updated_at = payload ? recordString(payload, "updated_at") : undefined;
-  if (!payload || !thread_id || !lease_id || !provider_name || !created_at || !updated_at) {
-    throw new Error("Malformed lease status");
+  if (!payload || !thread_id || !provider_name || !created_at || !updated_at) {
+    throw new Error("Malformed sandbox status");
   }
-  return { ...payload, thread_id, lease_id, provider_name, created_at, updated_at } as LeaseStatus;
+  return { ...payload, thread_id, provider_name, created_at, updated_at } as ThreadSandboxStatus;
 }
 
 // --- Sandbox Files API ---

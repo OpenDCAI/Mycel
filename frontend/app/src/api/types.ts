@@ -295,9 +295,8 @@ export interface StreamStatus {
   run_start_seq?: number;
 }
 
-export interface LeaseStatus {
+export interface ThreadSandboxStatus {
   thread_id: string;
-  lease_id: string;
   provider_name: string;
   instance: {
     instance_id: string | null;
