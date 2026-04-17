@@ -143,7 +143,7 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def query_resource_sessions(self) -> list[dict]:
-        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_resource_sessions")
+        sandbox_rows = self._sandbox_rows_by_runtime_bridge_lease_id("query_resource_sessions")
         result = []
 
         for sandbox in sandbox_rows.values():
@@ -200,20 +200,20 @@ class SupabaseSandboxMonitorRepo:
         )
         return q.rows(query.execute(), _REPO, operation)
 
-    def _legacy_lease_id(self, sandbox: dict[str, Any]) -> str | None:
+    def _runtime_bridge_lease_id(self, sandbox: dict[str, Any]) -> str | None:
         config = sandbox.get("config")
         if not isinstance(config, dict):
             raise RuntimeError("sandbox.config must be an object")
-        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
-        return legacy_lease_id or None
+        bridge_lease_id = str(config.get("legacy_lease_id") or "").strip()
+        return bridge_lease_id or None
 
-    def _sandbox_rows_by_legacy_lease_id(self, operation: str) -> dict[str, dict[str, Any]]:
+    def _sandbox_rows_by_runtime_bridge_lease_id(self, operation: str) -> dict[str, dict[str, Any]]:
         result: dict[str, dict[str, Any]] = {}
         for sandbox in self._ordered_sandboxes(operation):
-            legacy_lease_id = self._legacy_lease_id(sandbox)
-            if not legacy_lease_id:
+            bridge_lease_id = self._runtime_bridge_lease_id(sandbox)
+            if not bridge_lease_id:
                 continue
-            result[legacy_lease_id] = sandbox
+            result[bridge_lease_id] = sandbox
         return result
 
     def _workspace_rows_by_id(self, workspace_ids: list[str]) -> dict[str, dict[str, Any]]:
@@ -319,12 +319,12 @@ class SupabaseSandboxMonitorRepo:
 
     def _lease_row_from_sandbox(self, sandbox: dict[str, Any]) -> dict[str, Any]:
         # @@@sandbox-monitor-bridge - summary surfaces now use container.sandboxes as the
-        # object truth, but still expose legacy lease_id while monitor/runtime residue
-        # remains lease-keyed.
-        legacy_lease_id = self._legacy_lease_id(sandbox)
+        # object truth, but still expose the lower runtime bridge while cleanup/runtime
+        # residue remains lease-keyed.
+        bridge_lease_id = self._runtime_bridge_lease_id(sandbox)
         return {
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
-            "lease_id": legacy_lease_id,
+            "lease_id": bridge_lease_id,
             "provider_name": sandbox.get("provider_name"),
             "recipe_id": sandbox.get("sandbox_template_id"),
             "recipe_json": None,
@@ -342,13 +342,13 @@ class SupabaseSandboxMonitorRepo:
         session_id: str | None,
         thread_id: str | None,
     ) -> dict:
-        legacy_lease_id = self._legacy_lease_id(sandbox)
+        bridge_lease_id = self._runtime_bridge_lease_id(sandbox)
         return {
             "provider": sandbox.get("provider_name") or "local",
             "session_id": session_id,
             "thread_id": thread_id,
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
-            "lease_id": legacy_lease_id,
+            "lease_id": bridge_lease_id,
             "observed_state": sandbox.get("observed_state"),
             "desired_state": sandbox.get("desired_state"),
             "created_at": sandbox.get("created_at"),

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
@@ -53,6 +55,14 @@ class _NoWorkspaceSandboxInClient(FakeSupabaseClient):
 
 def _repo(tables: dict) -> SupabaseSandboxMonitorRepo:
     return SupabaseSandboxMonitorRepo(FakeSupabaseClient(tables))
+
+
+def test_sandbox_monitor_repo_names_runtime_bridge_helpers_without_legacy_label() -> None:
+    source = Path("storage/providers/supabase/sandbox_monitor_repo.py").read_text()
+
+    assert "_legacy_lease_id" not in source
+    assert "_sandbox_rows_by_legacy_lease_id" not in source
+    assert "# object truth, but still expose legacy lease_id" not in source
 
 
 def _lease(
