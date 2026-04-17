@@ -503,7 +503,7 @@ def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
     return make_eval_batch_service().get_batch_detail(batch_id)
 
 
-def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str, include_lease_id: bool) -> dict[str, Any]:
+def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[str, Any]:
     live_threads = _live_thread_ids([str(row.get("thread_id") or "").strip() for row in rows])
     items = []
     for row in rows:
@@ -530,8 +530,6 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str, include_le
             "updated_at": row["updated_at"],
             "updated_ago": _format_time_ago(row["updated_at"]),
         }
-        if include_lease_id:
-            item["lease_id"] = row["lease_id"]
         items.append(item)
 
     summary, groups = _lease_groups(
@@ -548,7 +546,7 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str, include_le
     )
 
     return {
-        "source": "lease_compatibility" if include_lease_id else "sandbox_canonical",
+        "source": "sandbox_canonical",
         "title": title,
         "count": len(items),
         "summary": summary,
@@ -564,15 +562,7 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str, include_le
 def list_monitor_sandboxes() -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
-        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Sandboxes", include_lease_id=False)
-    finally:
-        repo.close()
-
-
-def list_leases() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Leases", include_lease_id=True)
+        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Sandboxes")
     finally:
         repo.close()
 
@@ -703,7 +693,7 @@ def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
         repo.close()
 
 
-def _sandbox_id_for_lease(repo: Any, lease_id: str, *, operation: str) -> str:
+def _sandbox_id_for_legacy_operation_target(repo: Any, lease_id: str) -> str:
     lease_key = str(lease_id or "").strip()
     if not lease_key:
         raise KeyError(f"Lease not found: {lease_id}")
@@ -712,34 +702,9 @@ def _sandbox_id_for_lease(repo: Any, lease_id: str, *, operation: str) -> str:
             continue
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip()
         if not sandbox_id:
-            raise RuntimeError(f"{operation} lease target missing sandbox bridge")
+            raise RuntimeError("monitor operation lease target missing sandbox bridge")
         return sandbox_id
     raise KeyError(f"Lease not found: {lease_id}")
-
-
-def get_monitor_lease_detail(lease_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        payload = _build_monitor_sandbox_detail(repo, _sandbox_id_for_lease(repo, lease_id, operation="get_monitor_lease_detail"))
-    finally:
-        repo.close()
-
-    sandbox_payload = payload["sandbox"]
-    lease_payload = {**sandbox_payload, "lease_id": lease_id}
-
-    return {
-        "source": "lease_compatibility",
-        "lease": lease_payload,
-        "triage": payload["triage"],
-        "cleanup": monitor_operation_service.build_lease_cleanup_truth(
-            lease_id=lease_id,
-            triage=payload["triage"],
-            provider_name=str(sandbox_payload.get("provider_name") or ""),
-            runtime_session_id=payload["runtime"].get("runtime_session_id"),
-            sessions=payload["sessions"],
-            threads=payload["threads"],
-        ),
-    }
 
 
 def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
@@ -819,15 +784,6 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
     }
 
 
-def request_monitor_lease_cleanup(lease_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        sandbox_id = _sandbox_id_for_lease(repo, lease_id, operation="request_monitor_lease_cleanup")
-    finally:
-        repo.close()
-    return request_monitor_sandbox_cleanup(sandbox_id)
-
-
 def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
     payload = get_monitor_sandbox_detail(sandbox_id)
     sandbox = payload["sandbox"]
@@ -886,7 +842,7 @@ def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
 
     repo = make_sandbox_monitor_repo()
     try:
-        sandbox_id = _sandbox_id_for_lease(repo, lease_id, operation="get_monitor_operation_detail")
+        sandbox_id = _sandbox_id_for_legacy_operation_target(repo, lease_id)
     finally:
         repo.close()
     return {**payload, "sandbox_id": sandbox_id}

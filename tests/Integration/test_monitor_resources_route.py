@@ -108,11 +108,6 @@ def test_monitor_and_product_resource_routes_coexist(monkeypatch):
 
 def test_monitor_dashboard_uses_service_summaries(monkeypatch):
     _stub_dashboard_dependencies(monkeypatch)
-    monkeypatch.setattr(
-        monitor.monitor_service,
-        "list_leases",
-        lambda: (_ for _ in ()).throw(AssertionError("dashboard should not use legacy lease shell")),
-    )
 
     response = _request("get", "/api/monitor/dashboard")
 
