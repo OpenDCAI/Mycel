@@ -52,5 +52,9 @@ describe("sandbox detail page shell", () => {
     expect(shell.cleanupHint).toBe("Canonical sandbox cleanup lane for current operation and recent cleanup history.");
     expect(shell.cleanupButtonLabel).toBe("Start sandbox cleanup");
     expect(shell.cleanupLedgerTitle).toBe("Recent Operations");
+    expect(shell.threadActivityTitle).toBe("Thread Activity");
+    expect(shell.noThreadActivityLabel).toBe("No recorded thread activity");
+    expect(shell.threadActivityBody).toBe("Most recent thread activity observed for this sandbox.");
+    expect(shell.threadActivityStatusLabel).toBe("Thread activity status");
   });
 });
