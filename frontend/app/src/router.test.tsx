@@ -4,6 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { router } from "./router";
 
+const sourceModules = import.meta.glob("./router.tsx", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
 interface RouteNode {
   path?: string;
   children?: readonly RouteNode[];
@@ -37,5 +43,11 @@ describe("router removed route contract", () => {
     expect(routePaths.has("hire/:agentId")).toBe(true);
     expect(routePaths.has("contacts")).toBe(true);
     expect(routePaths.has("agents")).toBe(true);
+  });
+
+  it("does not label current chat and contact route screens as legacy pages", () => {
+    const source = sourceModules["./router.tsx"];
+
+    expect(source).not.toContain("Legacy pages reused in new routes");
   });
 });

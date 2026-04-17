@@ -9,7 +9,7 @@ import LibraryItemDetailPage from './pages/LibraryItemDetailPage';
 import ChatLayout from './pages/chat/ChatLayout';
 import ContactsLayout from './pages/contacts/ContactsLayout';
 
-// Legacy pages reused in new routes
+// Route screens mounted under the chat and contacts layouts
 import ChatPage from './pages/ChatPage';
 import NewChatPage from './pages/NewChatPage';
 import ChatConversationPage from './pages/ChatConversationPage';
