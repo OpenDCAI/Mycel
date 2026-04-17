@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -177,6 +178,12 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
 
 def test_launch_config_service_does_not_expose_lease_shell_builder() -> None:
     assert not hasattr(thread_launch_config_service, "build_existing_launch_config")
+
+
+def test_launch_config_service_comments_do_not_describe_workspace_bridge_as_lease_lookup() -> None:
+    source = inspect.getsource(thread_launch_config_service)
+
+    assert "live lease lookup" not in source
 
 
 def test_build_new_launch_config_uses_sandbox_template_id() -> None:

@@ -114,7 +114,7 @@ def _iter_default_bridge_threads(agent_threads: list[dict[str, Any]]) -> list[di
 
     # @@@launch-config-thread-bridge-authority - replay-15 makes thread-owned
     # current_workspace_id the discovery authority for derived existing-mode
-    # defaults; live lease lookup only materializes that bridge.
+    # defaults; workspace/sandbox lookup only materializes that bridge.
     if threads_with_bridge and all(item.get("created_at") is not None for item in threads_with_bridge):
         return sorted(threads_with_bridge, key=lambda item: item["created_at"], reverse=True)
     return threads_with_bridge
