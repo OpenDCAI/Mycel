@@ -311,11 +311,27 @@ describe("thread api client contract", () => {
     authFetch.mockResolvedValue(okJson({
       leases: [{
         lease_id: "lease-1",
+        sandbox_id: "sandbox-1",
         provider_name: "local",
         recipe_id: "recipe-1",
         recipe_name: "Local",
         thread_ids: ["thread-1"],
         agents: [{ thread_id: { value: "thread-1" }, agent_name: "Toad" }],
+      }],
+    }));
+
+    await expect(api.listMyLeases()).rejects.toThrow("Malformed user leases");
+  });
+
+  it("listMyLeases rejects lease summaries without sandbox identities", async () => {
+    authFetch.mockResolvedValue(okJson({
+      leases: [{
+        lease_id: "lease-1",
+        provider_name: "local",
+        recipe_id: "recipe-1",
+        recipe_name: "Local",
+        thread_ids: ["thread-1"],
+        agents: [{ thread_id: "thread-1", agent_name: "Toad" }],
       }],
     }));
 

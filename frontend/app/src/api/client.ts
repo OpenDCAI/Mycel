@@ -398,7 +398,7 @@ function parseUserLeases(value: unknown): UserLeaseSummary[] {
   return leases.map((lease) => {
     const data = asRecord(lease);
     const lease_id = data ? recordString(data, "lease_id") : undefined;
-    const sandbox_id = data?.sandbox_id;
+    const sandbox_id = data ? recordString(data, "sandbox_id") : undefined;
     const provider_name = data ? recordString(data, "provider_name") : undefined;
     const recipe_id = data ? recordString(data, "recipe_id") : undefined;
     const recipe_name = data ? recordString(data, "recipe_name") : undefined;
@@ -407,7 +407,7 @@ function parseUserLeases(value: unknown): UserLeaseSummary[] {
     if (
       !data ||
       !lease_id ||
-      !isStringOrNullish(sandbox_id) ||
+      !sandbox_id ||
       !provider_name ||
       !recipe_id ||
       !recipe_name ||

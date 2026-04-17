@@ -158,7 +158,7 @@ export interface AccountResourceLimit {
 
 export interface UserLeaseSummary {
   lease_id: string;
-  sandbox_id?: string | null;
+  sandbox_id: string;
   provider_name: string;
   recipe_id: string;
   recipe_name: string;
