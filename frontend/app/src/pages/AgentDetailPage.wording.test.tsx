@@ -14,6 +14,18 @@ const { getAgentById, fetchAgent, updateAgent, updateAgentConfig } = vi.hoisted(
   updateAgentConfig: vi.fn(),
 }));
 
+const { navigateMock } = vi.hoisted(() => ({
+  navigateMock: vi.fn(),
+}));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
+
 const agentFixture = {
   id: "agent-1",
   name: "Agent One",
@@ -65,6 +77,22 @@ describe("AgentDetailPage wording contract", () => {
   beforeEach(() => {
     getAgentById.mockReturnValue(agentFixture);
     fetchAgent.mockResolvedValue(agentFixture);
+    navigateMock.mockReset();
+  });
+
+  it("uses the contacts page as the back target for direct-open agent detail", async () => {
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Agent One")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button")[0]);
+
+    expect(navigateMock).toHaveBeenCalledWith("/contacts");
   });
 
   it("uses Agent wording for the subagent module label", () => {
