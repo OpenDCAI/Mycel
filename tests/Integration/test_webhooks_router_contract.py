@@ -85,15 +85,21 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
             return None
 
     class _EventRepo:
-        def record(self, **_kwargs):
-            return None
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def record(self, **kwargs):
+            self.calls.append(kwargs)
 
         def close(self) -> None:
             return None
 
     class _Container:
+        def __init__(self, event_repo: _EventRepo) -> None:
+            self._event_repo = event_repo
+
         def provider_event_repo(self) -> _EventRepo:
-            return _EventRepo()
+            return self._event_repo
 
     class _Lease:
         lease_id = "lease-1"
@@ -116,11 +122,12 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
             self.provider = object()
 
     expected_db_path = tmp_path / "sandbox.db"
+    event_repo = _EventRepo()
     lease = _Lease()
 
     monkeypatch.setattr(webhooks, "resolve_sandbox_db_path", lambda: expected_db_path, raising=False)
     monkeypatch.setattr(webhooks, "make_lease_repo", lambda: _LeaseRepo())
-    monkeypatch.setattr(webhooks, "_get_container", lambda: _Container())
+    monkeypatch.setattr(webhooks, "_get_container", lambda: _Container(event_repo))
     monkeypatch.setattr(webhooks, "init_providers_and_managers", lambda: ({}, {"local": _Manager()}))
 
     def _fake_lease_from_row(row, db_path):
@@ -136,7 +143,16 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
     )
 
     assert payload["matched"] is True
-    assert payload["lease_id"] == "lease-1"
+    assert "lease_id" not in payload
+    assert event_repo.calls == [
+        {
+            "provider_name": "local",
+            "instance_id": "inst-2",
+            "event_type": "provider.running",
+            "payload": {"instance_id": "inst-2", "event": "provider.running"},
+            "matched_lease_id": "lease-1",
+        }
+    ]
     assert lease.applied == [
         {
             "provider": lease.applied[0]["provider"],
