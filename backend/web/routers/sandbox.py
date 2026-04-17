@@ -17,10 +17,6 @@ def _runtime_http_error(exc: RuntimeError) -> HTTPException:
     return HTTPException(status, message)
 
 
-def _canonical_sandbox_summary(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in row.items() if key != "lease_id"}
-
-
 async def _mutate_session_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(
@@ -55,13 +51,12 @@ async def list_my_sandboxes(
 ) -> dict[str, Any]:
     thread_repo = getattr(request.app.state, "thread_repo", None)
     user_repo = getattr(request.app.state, "user_repo", None)
-    lease_rows = await asyncio.to_thread(
-        sandbox_service.list_user_leases,
+    sandboxes = await asyncio.to_thread(
+        sandbox_service.list_user_sandboxes,
         user_id,
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
-    sandboxes = [_canonical_sandbox_summary(row) for row in lease_rows]
     return {"sandboxes": sandboxes}
 
 
