@@ -605,7 +605,7 @@ def _materialize_workspace_for_sandbox(
     workspace_id = f"workspace-{uuid.uuid4().hex}"
     now = time.time()
     # @@@workspace-bridge-write - Phase 2 only cuts thread create writes to a real
-    # workspace row; sandbox identity can stay lease-backed until container.sandboxes lands.
+    # workspace row; lower lease_id remains a terminal/runtime bridge, not the workspace authority.
     workspace_repo.create(
         WorkspaceRow(
             id=workspace_id,
