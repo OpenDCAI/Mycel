@@ -167,7 +167,7 @@ export interface UserSandboxSummary {
   cwd?: string | null;
   thread_ids: string[];
   agents: Array<{
-    /** Runtime actor identity for this visible lease participant. */
+    /** Runtime actor identity for this visible sandbox participant. */
     thread_id: string;
     /** Display label resolved from the actor's backing agent user. */
     agent_name: string;
