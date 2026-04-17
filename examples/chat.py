@@ -25,7 +25,7 @@ if env_file.exists():
             key, value = line.split("=", 1)
             os.environ[key] = value
 
-from agent import create_leon_agent
+from core.runtime.agent import create_leon_agent
 
 
 class Colors:
