@@ -18,6 +18,16 @@ def _display_repo_sandbox_status(lease: dict[str, Any], instance: dict[str, Any]
     return observed
 
 
+def _lease_from_runtime_binding(lease_repo: Any, binding: Any) -> dict[str, Any] | None:
+    provider_env_id = str(binding.provider_env_id or "").strip()
+    if not provider_env_id:
+        return None
+    find_by_instance = getattr(lease_repo, "find_by_instance", None)
+    if not callable(find_by_instance):
+        raise RuntimeError("lease_repo.find_by_instance is required for thread sandbox status")
+    return find_by_instance(provider_name=binding.provider_name, instance_id=provider_env_id)
+
+
 def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
     """Get sandbox info for a thread from the target runtime binding."""
     sandbox_info: dict[str, Any] = {"type": sandbox_type, "status": None}
@@ -29,10 +39,7 @@ def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, A
             sandbox_repo=app.state.sandbox_repo,
             thread_id=thread_id,
         )
-        lease_id = str(binding.sandbox_config.get("legacy_lease_id") or "").strip()
-        if not lease_id:
-            return sandbox_info
-        lease = app.state.lease_repo.get(lease_id)
+        lease = _lease_from_runtime_binding(app.state.lease_repo, binding)
         if not lease:
             return sandbox_info
         instance = lease.get("_instance")
@@ -69,10 +76,7 @@ async def get_sandbox_status_from_repos(
         sandbox_repo=sandbox_repo,
         thread_id=thread_id,
     )
-    lease_id = str(binding.sandbox_config.get("legacy_lease_id") or "").strip()
-    if not lease_id:
-        return None
-    lease = await asyncio.to_thread(lease_repo.get, lease_id)
+    lease = await asyncio.to_thread(_lease_from_runtime_binding, lease_repo, binding)
     if not lease:
         return None
 

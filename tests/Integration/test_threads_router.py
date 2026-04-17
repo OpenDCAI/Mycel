@@ -499,16 +499,19 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
                     "id": sandbox_id,
                     "owner_user_id": "owner-1",
                     "provider_name": "daytona",
-                    "config": {"legacy_lease_id": "lease-1"},
+                    "provider_env_id": "instance-1",
+                    "config": {},
                 }
             ),
             terminal_repo=SimpleNamespace(
                 get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read terminal rows"))
             ),
             lease_repo=SimpleNamespace(
-                get=lambda lease_id: {
-                    "lease_id": lease_id,
+                get=lambda _lease_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read legacy lease id")),
+                find_by_instance=lambda *, provider_name, instance_id: {
+                    "lease_id": "lease-1",
                     "provider_name": "daytona",
+                    "current_instance_id": instance_id,
                     "desired_state": "running",
                     "observed_state": "running",
                     "version": 3,
@@ -520,7 +523,7 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
                         "status": "running",
                         "created_at": "2026-04-12T00:00:10Z",
                     },
-                }
+                },
             ),
         )
     )
