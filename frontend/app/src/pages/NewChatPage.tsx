@@ -391,7 +391,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         undefined,
         decodedAgentId,
         model,
-        selectedLease.lease_id,
+        leaseSandboxId(selectedLease),
       );
     } else {
       if (!selectedSandboxTemplateSnapshot) {

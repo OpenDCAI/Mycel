@@ -74,14 +74,14 @@ describe("thread api client contract", () => {
     await api.createThread({
       sandbox: "local",
       agentUserId: "agent-1",
-      existingSandboxId: "lease-1",
+      existingSandboxId: "sandbox-1",
     });
 
     expect(authFetch).toHaveBeenCalledWith(
       "/api/threads",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ sandbox: "local", agent_user_id: "agent-1", existing_sandbox_id: "lease-1" }),
+        body: JSON.stringify({ sandbox: "local", agent_user_id: "agent-1", existing_sandbox_id: "sandbox-1" }),
       }),
     );
   });
@@ -192,7 +192,7 @@ describe("thread api client contract", () => {
     await api.saveDefaultThreadConfig("agent-1", {
       create_mode: "existing",
       provider_config: "daytona_selfhost",
-      existing_sandbox_id: "lease-1",
+      existing_sandbox_id: "sandbox-1",
       model: "gpt-5.4",
       workspace: "/workspace/reused",
     });
@@ -205,7 +205,7 @@ describe("thread api client contract", () => {
           agent_user_id: "agent-1",
           create_mode: "existing",
           provider_config: "daytona_selfhost",
-          existing_sandbox_id: "lease-1",
+          existing_sandbox_id: "sandbox-1",
           model: "gpt-5.4",
           workspace: "/workspace/reused",
         }),

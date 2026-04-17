@@ -1150,7 +1150,7 @@ async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(mon
 
 
 @pytest.mark.asyncio
-async def test_save_default_thread_config_accepts_sandbox_shaped_existing_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_save_default_thread_config_rejects_lease_shaped_existing_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     payload = threads_router.SaveThreadLaunchConfigRequest(
         agent_user_id="agent-user-1",
