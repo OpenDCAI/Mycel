@@ -165,6 +165,19 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
   });
 
+  it("treats legacy installed skill-template query key as the Skill tab", () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=skill-template"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+    expect(screen.getByText("暂无已安装的 Skill")).toBeTruthy();
+  });
+
   it("treats legacy installed sandbox query key as the Sandbox tab", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox"]}>
