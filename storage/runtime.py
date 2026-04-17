@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from storage.container import StorageContainer
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 _WEB_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_supabase_client"
 
@@ -86,10 +87,18 @@ def build_lease_repo(*, supabase_client: Any | None = None, supabase_client_fact
 
 
 def build_chat_session_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
+    if supabase_client is None and supabase_client_factory is None:
+        from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+
+        return SQLiteChatSessionRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
     return _build_storage_repo("chat_session_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
 def build_terminal_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
+    if supabase_client is None and supabase_client_factory is None:
+        from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+
+        return SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
     return _build_storage_repo("terminal_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
