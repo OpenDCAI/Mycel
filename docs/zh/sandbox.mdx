@@ -193,11 +193,11 @@ Agent
 
 中间件负责**策略**（校验、路径规则、安全钩子）。沙箱后端负责**I/O**（操作真正在哪里执行）。切换后端只会改变执行位置，不影响任何中间件逻辑。
 
-会话跟踪存储在 SQLite（`~/.leon/sandbox.db`）：
+沙箱运行态存储在 SQLite（`~/.leon/sandbox.db`）：
 
 | 表 | 用途 |
 |----|------|
-| `sandbox_leases` | 租约生命周期 — 提供商、期望状态/实际状态 |
+| `sandbox_leases` | 内部沙箱生命周期桥 — 提供商、期望状态/实际状态 |
 | `sandbox_instances` | 提供商侧的会话 ID |
-| `abstract_terminals` | 绑定到 Thread + 租约的虚拟终端 |
+| `abstract_terminals` | 绑定到 Thread + 沙箱生命周期桥的虚拟终端 |
 | `sandbox_resource_snapshots` | CPU、内存、磁盘指标 |

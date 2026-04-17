@@ -191,11 +191,11 @@ flowchart TD
 
 Middleware owns **policy**. The sandbox backend owns **I/O**. Swapping the backend changes where operations run without touching any middleware logic.
 
-Sessions are tracked in SQLite (`~/.leon/sandbox.db`):
+Sandbox runtime state is tracked in SQLite (`~/.leon/sandbox.db`):
 
 | Table | Purpose |
 |-------|---------|
-| `sandbox_leases` | Lease lifecycle — provider, desired/observed state |
+| `sandbox_leases` | Internal sandbox lifecycle bridge — provider, desired/observed state |
 | `sandbox_instances` | Provider-side session IDs |
-| `abstract_terminals` | Virtual terminals bound to Thread + lease |
+| `abstract_terminals` | Virtual terminals bound to Thread + sandbox lifecycle bridge |
 | `sandbox_resource_snapshots` | CPU, memory, disk metrics |
