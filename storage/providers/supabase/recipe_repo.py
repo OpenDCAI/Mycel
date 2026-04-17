@@ -9,7 +9,7 @@ from typing import Any
 from storage.providers.supabase import _query as q
 
 _REPO = "recipe repo"
-_TABLE = "library_recipes"
+_TABLE = "sandbox_recipes"
 
 
 class SupabaseRecipeRepo:
@@ -111,4 +111,4 @@ class SupabaseRecipeRepo:
         }
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "container", _TABLE, _REPO)
