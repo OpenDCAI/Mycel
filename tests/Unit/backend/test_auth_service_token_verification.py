@@ -25,6 +25,24 @@ class _FakeSupabaseClient:
         self.auth = _FakeSupabaseAuth(user_id=user_id)
 
 
+class _SchemaRpcSupabaseClient:
+    def __init__(self) -> None:
+        self.rpc_calls: list[tuple[str, dict[str, object]]] = []
+        self.schema_name: str | None = None
+
+    def schema(self, name: str):
+        scoped = _SchemaRpcSupabaseClient()
+        scoped.rpc_calls = self.rpc_calls
+        scoped.schema_name = name
+        return scoped
+
+    def rpc(self, name: str, params: dict[str, object]):
+        if self.schema_name is None:
+            raise AssertionError(f"bare rpc call is not allowed: {name}")
+        self.rpc_calls.append((f"{self.schema_name}.{name}", params))
+        return SimpleNamespace(execute=lambda: SimpleNamespace(data=10001))
+
+
 class _FakeLoginAuth:
     def __init__(self) -> None:
         self.calls: list[dict[str, str]] = []
@@ -319,7 +337,7 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
             (payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}
         ),
     )
-    supabase_client = SimpleNamespace(rpc=lambda _name: SimpleNamespace(execute=lambda: SimpleNamespace(data=10001)))
+    supabase_client = _SchemaRpcSupabaseClient()
     token = jwt.encode({"sub": "owner-1", "email": "fresh@example.com"}, "secret-1", algorithm="HS256")
 
     _service(
@@ -331,6 +349,7 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
         recipe_repo=recipe_repo,
     ).complete_register(token, "invite-1")
 
+    assert supabase_client.rpc_calls == [("identity.next_mycel_id", {})]
     assert sorted(recipe_id for (_owner, recipe_id) in recipe_rows) == ["daytona_selfhost:default", "local:default"]
 
 

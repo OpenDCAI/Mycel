@@ -11,6 +11,7 @@ import jwt
 
 from backend.web.services import library_service
 from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
+from storage.providers.supabase import _query as q
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class AuthService:
         email_from_payload = payload.get("email", "")
         existing = self._users.get_by_id(auth_user_id)
         if existing is None:
-            mycel_id = self._sb.rpc("next_mycel_id").execute().data
+            mycel_id = q.schema_rpc(self._sb, "identity", "next_mycel_id", {}, "auth service").execute().data
             now = time.time()
             display_name = email_from_payload.split("@")[0]
 
