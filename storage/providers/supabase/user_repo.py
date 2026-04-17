@@ -8,6 +8,7 @@ from storage.contracts import UserRow
 from storage.providers.supabase import _query as q
 
 _USER_REPO = "user repo"
+_SCHEMA = "identity"
 _USER_TABLE = "users"
 _COLS = (
     "id",
@@ -99,7 +100,13 @@ class SupabaseUserRepo:
         self._t().update(updates).eq("id", user_id).execute()
 
     def increment_thread_seq(self, user_id: str) -> int:
-        response = self._client.rpc("increment_user_thread_seq", {"p_user_id": user_id}).execute()
+        response = q.schema_rpc(
+            self._client,
+            _SCHEMA,
+            "increment_user_thread_seq",
+            {"p_user_id": user_id},
+            _USER_REPO,
+        ).execute()
         if isinstance(response, dict):
             data = response.get("data")
         else:
@@ -127,4 +134,4 @@ class SupabaseUserRepo:
         return UserRow.model_validate(rows[0])
 
     def _t(self) -> Any:
-        return self._client.table(_USER_TABLE)
+        return q.schema_table(self._client, _SCHEMA, _USER_TABLE, _USER_REPO)

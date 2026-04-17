@@ -399,3 +399,60 @@ def test_supabase_thread_repo_reads_agent_threads_schema_table() -> None:
     assert row["id"] == "thread-1"
     assert row["agent_user_id"] == "agent-1"
     assert row["owner_user_id"] == "owner-1"
+
+
+def test_supabase_thread_repo_list_by_owner_reads_identity_users_for_agent_display() -> None:
+    client = FakeSupabaseClient(
+        tables={
+            "identity.users": [
+                {
+                    "id": "agent-1",
+                    "display_name": "Toad",
+                    "avatar": "avatars/agent-1.png",
+                    "owner_user_id": "owner-1",
+                }
+            ],
+            "agent.threads": [
+                {
+                    "id": "thread-1",
+                    "agent_user_id": "agent-1",
+                    "owner_user_id": "owner-1",
+                    "current_workspace_id": "workspace-1",
+                    "sandbox_type": "local",
+                    "model": "leon:mini",
+                    "cwd": "/workspace",
+                    "status": "active",
+                    "run_status": "idle",
+                    "is_main": True,
+                    "branch_index": 0,
+                    "created_at": "2026-04-14T00:00:00+00:00",
+                    "updated_at": "2026-04-14T00:00:00+00:00",
+                    "last_active_at": None,
+                }
+            ],
+        }
+    )
+    repo = SupabaseThreadRepo(client)
+
+    rows = repo.list_by_owner_user_id("owner-1")
+
+    assert rows == [
+        {
+            "id": "thread-1",
+            "agent_user_id": "agent-1",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-1",
+            "sandbox_type": "local",
+            "model": "leon:mini",
+            "cwd": "/workspace",
+            "status": "active",
+            "run_status": "idle",
+            "is_main": True,
+            "branch_index": 0,
+            "created_at": "2026-04-14T00:00:00+00:00",
+            "updated_at": "2026-04-14T00:00:00+00:00",
+            "last_active_at": None,
+            "agent_name": "Toad",
+            "agent_avatar": "avatars/agent-1.png",
+        }
+    ]

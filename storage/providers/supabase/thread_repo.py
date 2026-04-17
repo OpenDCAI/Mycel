@@ -195,7 +195,12 @@ class SupabaseThreadRepo:
 
     def list_by_owner_user_id(self, owner_user_id: str) -> list[dict[str, Any]]:
         """Return all threads owned by this user via a two-step query (users JOIN threads)."""
-        user_response = self._client.table("users").select("id, display_name, avatar").eq("owner_user_id", owner_user_id).execute()
+        user_response = (
+            q.schema_table(self._client, "identity", "users", _REPO)
+            .select("id, display_name, avatar")
+            .eq("owner_user_id", owner_user_id)
+            .execute()
+        )
         user_rows = q.rows(user_response, _REPO, "list_by_owner_user_id:users")
         if not user_rows:
             return []
