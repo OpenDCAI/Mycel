@@ -137,27 +137,7 @@ class SupabaseSandboxMonitorRepo:
         sandbox = self.query_sandbox(sandbox_id)
         if sandbox is None:
             return []
-        lease_id = str(sandbox.get("lease_id") or "").strip()
-        if not lease_id:
-            return []
-        rows = q.rows(
-            q.order(
-                self._client.table("abstract_terminals").select("thread_id").eq("lease_id", lease_id),
-                "created_at",
-                desc=True,
-                repo=_REPO,
-                operation="query_sandbox_threads",
-            ).execute(),
-            _REPO,
-            "query_sandbox_threads",
-        )
-        seen: set[str] = set()
-        result = []
-        for r in rows:
-            if r["thread_id"] not in seen:
-                seen.add(r["thread_id"])
-                result.append({"thread_id": r["thread_id"]})
-        return result
+        return [{"thread_id": thread_id} for thread_id in self._thread_ids_for_sandbox_id(sandbox_id)]
 
     def query_sandbox_instance_id(self, sandbox_id: str) -> str | None:
         sandbox_key = str(sandbox_id or "").strip()
@@ -397,6 +377,48 @@ class SupabaseSandboxMonitorRepo:
             sandbox_id = workspace_to_sandbox.get(workspace_id)
             if thread_id and sandbox_id:
                 result[sandbox_id] = thread_id
+        return result
+
+    def _thread_ids_for_sandbox_id(self, sandbox_id: str) -> list[str]:
+        sandbox_key = str(sandbox_id or "").strip()
+        if not sandbox_key:
+            return []
+        workspaces = q.rows(
+            q.order(
+                q.schema_table(self._client, "container", "workspaces", _REPO)
+                .select("id,sandbox_id,updated_at,created_at")
+                .eq("sandbox_id", sandbox_key),
+                "updated_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_sandbox_threads workspaces",
+            ).execute(),
+            _REPO,
+            "query_sandbox_threads workspaces",
+        )
+        workspace_ids = [str(row.get("id") or "").strip() for row in workspaces if str(row.get("id") or "").strip()]
+        if not workspace_ids:
+            return []
+        threads = q.rows_in_chunks(
+            lambda: q.order(
+                q.schema_table(self._client, "agent", "threads", _REPO).select("id,current_workspace_id,updated_at,created_at"),
+                "updated_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_sandbox_threads threads",
+            ),
+            "current_workspace_id",
+            workspace_ids,
+            _REPO,
+            "query_sandbox_threads threads",
+        )
+        seen: set[str] = set()
+        result: list[str] = []
+        for row in sorted(threads, key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True):
+            thread_id = str(row.get("id") or "").strip()
+            if thread_id and thread_id not in seen:
+                seen.add(thread_id)
+                result.append(thread_id)
         return result
 
     def _require_sandbox_rows_by_legacy_lease_ids(self, lease_ids: list[str], operation: str) -> dict[str, dict[str, Any]]:

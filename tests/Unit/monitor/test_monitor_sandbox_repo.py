@@ -242,9 +242,13 @@ def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(m
                     legacy_lease_id="lease-1",
                 )
             ],
-            "abstract_terminals": [
-                {"thread_id": "thread-2", "lease_id": "lease-1", "created_at": "2026-04-05T10:02:00"},
-                {"thread_id": "thread-1", "lease_id": "lease-1", "created_at": "2026-04-05T10:01:00"},
+            "container.workspaces": [
+                _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-2", "sandbox-1", updated_at="2026-04-05T10:02:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-2", "workspace-2", updated_at="2026-04-05T10:02:00"),
             ],
         }
     )
