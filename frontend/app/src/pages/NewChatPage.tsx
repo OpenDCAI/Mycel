@@ -391,7 +391,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         undefined,
         decodedAgentId,
         model,
-        selectedLease.lease_id,
+        leaseSandboxId(selectedLease),
       );
     } else {
       if (!selectedSandboxTemplateSnapshot) {
@@ -596,7 +596,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localSandboxTemplateSelected ? "下一步" : "确认")),
             applyDisabled: (configStep === 1 && (newSandboxQuotaBlocked || newSandboxProviderUnavailable))
-              || (configStep === 2 && createMode === "existing" && !selectedExistingSandboxId),
+              || (configStep === 2 && createMode === "existing" && !selectedLease),
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
@@ -703,13 +703,13 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                             const nextProviderType = providerConfigOptions.find((item) => item.value === nextProviderConfig)?.providerType
                               || providerTypeFromName(nextProviderConfig);
                             setSelectedProviderConfig(nextProviderConfig);
-                          const nextSandboxTemplates = sandboxTemplateOptions.filter((item) => item.sandboxTemplate.provider_type === nextProviderType);
-                          if (nextSandboxTemplates.length > 0 && !nextSandboxTemplates.some((item) => item.value === selectedSandboxTemplateId)) {
-                            setSelectedSandboxTemplateId(nextSandboxTemplates[0].value);
-                          }
+                            const nextSandboxTemplates = sandboxTemplateOptions.filter((item) => item.sandboxTemplate.provider_type === nextProviderType);
+                            if (nextSandboxTemplates.length > 0 && !nextSandboxTemplates.some((item) => item.value === selectedSandboxTemplateId)) {
+                              setSelectedSandboxTemplateId(nextSandboxTemplates[0].value);
+                            }
                             const nextLease = leaseOptions.find((lease) => lease.provider_name === nextProviderConfig);
                             if (createMode === "existing") {
-                              setSelectedExistingSandboxId(nextLease?.lease_id || "");
+                              setSelectedExistingSandboxId(nextLease ? leaseSandboxId(nextLease) : "");
                             }
                           }}
                         >
@@ -934,5 +934,5 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
   );
 }
   function leaseSandboxId(lease: UserLeaseSummary): string {
-    return String(lease.sandbox_id || "").trim() || lease.lease_id;
+    return lease.sandbox_id;
   }

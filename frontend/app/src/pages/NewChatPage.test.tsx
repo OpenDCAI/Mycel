@@ -125,6 +125,7 @@ describe("NewChatPage", () => {
   });
 
   beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
     handleGetDefaultThread.mockReset();
     handleGetDefaultThread.mockResolvedValue(null);
     handleCreateThread.mockReset();
@@ -498,7 +499,7 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "existing",
         provider_config: "daytona_selfhost",
-        existing_sandbox_id: "lease-2",
+        existing_sandbox_id: "sandbox-2",
         model: "leon:large",
         workspace: "/workspace/reused-2",
       },
@@ -506,6 +507,7 @@ describe("NewChatPage", () => {
     clientMocks.listMyLeases.mockResolvedValue([
       {
         lease_id: "lease-1",
+        sandbox_id: "sandbox-1",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-1",
         recipe_name: "Existing One",
@@ -517,6 +519,7 @@ describe("NewChatPage", () => {
       },
       {
         lease_id: "lease-2",
+        sandbox_id: "sandbox-2",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-2",
         recipe_name: "Existing Two",
@@ -548,7 +551,7 @@ describe("NewChatPage", () => {
         undefined,
         "m_xVuNpKJNxblZ",
         "leon:large",
-        "lease-2",
+        "sandbox-2",
       );
     });
   });
@@ -616,6 +619,141 @@ describe("NewChatPage", () => {
         }),
       );
     });
+  });
+
+  it("keeps provider-switch defaults sandbox-shaped when reselecting an existing lease", async () => {
+    sandboxTypesForTest = [
+      { name: "daytona_selfhost", provider: "daytona", available: true },
+      { name: "local", provider: "local", available: true },
+    ];
+    clientMocks.fetchAccountResourceLimits.mockResolvedValue([
+      {
+        resource: "sandbox",
+        provider_name: "daytona_selfhost",
+        label: "Daytona",
+        limit: 2,
+        used: 1,
+        remaining: 1,
+        can_create: true,
+      },
+      {
+        resource: "sandbox",
+        provider_name: "local",
+        label: "Local",
+        limit: 2,
+        used: 1,
+        remaining: 1,
+        can_create: true,
+      },
+    ]);
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "derived",
+      config: {
+        create_mode: "existing",
+        provider_config: "daytona_selfhost",
+        existing_sandbox_id: "sandbox-daytona",
+        model: "leon:large",
+        workspace: "/workspace/daytona",
+      },
+    });
+    clientMocks.listMyLeases.mockResolvedValue([
+      {
+        lease_id: "lease-daytona",
+        sandbox_id: "sandbox-daytona",
+        provider_name: "daytona_selfhost",
+        recipe_id: "recipe-daytona",
+        recipe_name: "Daytona Existing",
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/daytona",
+        thread_ids: [],
+        agents: [],
+      } as UserLeaseSummary,
+      {
+        lease_id: "lease-local",
+        sandbox_id: "sandbox-local",
+        provider_name: "local",
+        recipe_id: "recipe-local",
+        recipe_name: "Local Existing",
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/local",
+        thread_ids: [],
+        agents: [],
+      } as UserLeaseSummary,
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Local" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+
+    await waitFor(() => {
+      expect(clientMocks.saveDefaultThreadConfig).toHaveBeenCalledWith(
+        "m_xVuNpKJNxblZ",
+        expect.objectContaining({
+          create_mode: "existing",
+          existing_sandbox_id: "sandbox-local",
+          workspace: "/workspace/local",
+        }),
+      );
+    });
+  });
+
+  it("blocks saving an existing-sandbox default when the configured sandbox id is not in my leases", async () => {
+    clientMocks.getDefaultThreadConfig.mockResolvedValue({
+      source: "last_successful",
+      config: {
+        create_mode: "existing",
+        provider_config: "daytona_selfhost",
+        existing_sandbox_id: "sandbox-missing",
+        model: "leon:large",
+        workspace: "/workspace/missing",
+      },
+    });
+    clientMocks.listMyLeases.mockResolvedValue([
+      {
+        lease_id: "lease-1",
+        sandbox_id: "sandbox-1",
+        provider_name: "daytona_selfhost",
+        recipe_id: "recipe-1",
+        recipe_name: "Existing One",
+        observed_state: "running",
+        desired_state: "running",
+        cwd: "/workspace/reused-1",
+        thread_ids: [],
+        agents: [],
+      } as UserLeaseSummary,
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("centered-input-box");
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+
+    const confirm = screen.getByRole("button", { name: "确认" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.click(confirm);
+    expect(clientMocks.saveDefaultThreadConfig).not.toHaveBeenCalled();
   });
 
   it("blocks advancing a new sandbox selection when backend account resources say the provider is exhausted", async () => {
