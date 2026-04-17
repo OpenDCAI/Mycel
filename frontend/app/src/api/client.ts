@@ -14,8 +14,8 @@ import type {
   SandboxFileEntry,
   SandboxFileResult,
   SandboxFilesListResult,
-  SandboxUploadResult,
   ThreadFileChannelBinding,
+  ThreadFileUploadResult,
 } from "./types";
 
 import { authFetch } from "../store/auth-store";
@@ -525,10 +525,10 @@ function parseSandboxFileRead(value: unknown): SandboxFileResult {
   return { thread_id, path, content, size };
 }
 
-export async function uploadSandboxFile(
+export async function uploadThreadFile(
   threadId: string,
   opts: { file: File; path?: string },
-): Promise<SandboxUploadResult> {
+): Promise<ThreadFileUploadResult> {
   const query = new URLSearchParams();
   if (opts.path) query.set("path", opts.path);
   const form = new FormData();
@@ -542,10 +542,10 @@ export async function uploadSandboxFile(
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
   }
-  return parseSandboxUploadResult(await response.json());
+  return parseThreadFileUploadResult(await response.json());
 }
 
-function parseSandboxUploadResult(value: unknown): SandboxUploadResult {
+function parseThreadFileUploadResult(value: unknown): ThreadFileUploadResult {
   const payload = asRecord(value);
   const thread_id = payload ? recordString(payload, "thread_id") : undefined;
   const relative_path = payload ? recordString(payload, "relative_path") : undefined;
@@ -553,12 +553,12 @@ function parseSandboxUploadResult(value: unknown): SandboxUploadResult {
   const size_bytes = payload?.size_bytes;
   const sha256 = payload ? recordString(payload, "sha256") : undefined;
   if (!payload || !thread_id || !relative_path || !absolute_path || typeof size_bytes !== "number" || !sha256) {
-    throw new Error("Malformed sandbox upload result");
+    throw new Error("Malformed thread file upload result");
   }
   return { thread_id, relative_path, absolute_path, size_bytes, sha256 };
 }
 
-export function getSandboxDownloadUrl(
+export function getThreadFileDownloadUrl(
   threadId: string,
   path: string,
 ): string {

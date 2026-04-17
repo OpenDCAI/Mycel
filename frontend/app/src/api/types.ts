@@ -369,7 +369,7 @@ export interface ChatMessage {
   created_at: number;
 }
 
-export interface SandboxUploadResult {
+export interface ThreadFileUploadResult {
   thread_id: string;
   relative_path: string;
   absolute_path: string;

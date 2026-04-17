@@ -4,7 +4,7 @@ import { Check, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
 import type { AskUserAnswer, AskUserQuestionPrompt, PermissionRequest } from "../api";
-import { isAssistantTurn, uploadSandboxFile } from "../api";
+import { isAssistantTurn, uploadThreadFile } from "../api";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import ComputerPanel from "../components/computer-panel";
@@ -278,7 +278,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       const toastId = toast.loading(`Uploading ${attachedFiles.length} file(s)...`);
       try {
         await Promise.all(attachedFiles.map((file) =>
-          uploadSandboxFile(threadId, { file, path: file.name }),
+          uploadThreadFile(threadId, { file, path: file.name }),
         ));
         toast.success(`Uploaded ${attachedFiles.length} file(s)`, { id: toastId });
         setAttachedFiles([]);
