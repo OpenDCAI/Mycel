@@ -100,7 +100,7 @@ async def verify_thread_owner(
     if runtime_state == "missing":
         raise HTTPException(404, "Thread not found")
     if runtime_state == "incomplete":
-        raise HTTPException(409, "Thread runtime incomplete: missing terminal")
+        raise HTTPException(409, "Thread runtime incomplete: missing workspace/sandbox binding")
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")

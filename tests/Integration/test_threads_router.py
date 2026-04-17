@@ -864,6 +864,8 @@ async def test_list_threads_hides_internal_subagent_threads():
     rows = {
         "main-thread": {
             "id": "main-thread",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-main",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -873,6 +875,8 @@ async def test_list_threads_hides_internal_subagent_threads():
         },
         "subagent-deadbeef": {
             "id": "subagent-deadbeef",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-subagent",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -886,13 +890,21 @@ async def test_list_threads_hides_internal_subagent_threads():
             list_by_owner_user_id=lambda user_id: list(rows.values()),
             get_by_id=lambda thread_id: rows.get(thread_id),
         ),
-        terminal_repo=SimpleNamespace(
-            summarize_threads=lambda thread_ids: {
-                thread_id: {"active_terminal_id": "term-1", "latest_terminal_id": "term-1"} for thread_id in thread_ids
-            },
-            get_active=lambda _thread_id: {"terminal_id": "term-1"},
-            list_by_thread=lambda _thread_id: [{"terminal_id": "term-1"}],
-            set_active=lambda _thread_id, _terminal_id: None,
+        workspace_repo=SimpleNamespace(
+            get_by_id=lambda workspace_id: SimpleNamespace(
+                id=workspace_id,
+                owner_user_id="owner-1",
+                sandbox_id=f"sandbox-{workspace_id}",
+                workspace_path="/workspace",
+            )
+        ),
+        sandbox_repo=SimpleNamespace(
+            get_by_id=lambda sandbox_id: SimpleNamespace(
+                id=sandbox_id,
+                owner_user_id="owner-1",
+                provider_name="local",
+                config={"legacy_lease_id": "lease-1"},
+            )
         ),
         agent_pool={},
         thread_last_active={},
@@ -927,6 +939,8 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
     rows = {
         "main-thread": {
             "id": "main-thread",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-main",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -936,6 +950,8 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
         },
         "extra-thread": {
             "id": "extra-thread",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-extra",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -949,13 +965,21 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
             list_by_owner_user_id=lambda _user_id: list(rows.values()),
             get_by_id=lambda thread_id: rows.get(thread_id),
         ),
-        terminal_repo=SimpleNamespace(
-            summarize_threads=lambda thread_ids: {
-                thread_id: {"active_terminal_id": "term-1", "latest_terminal_id": "term-1"} for thread_id in thread_ids
-            },
-            get_active=lambda _thread_id: {"terminal_id": "term-1"},
-            list_by_thread=lambda _thread_id: [{"terminal_id": "term-1"}],
-            set_active=lambda _thread_id, _terminal_id: None,
+        workspace_repo=SimpleNamespace(
+            get_by_id=lambda workspace_id: SimpleNamespace(
+                id=workspace_id,
+                owner_user_id="owner-1",
+                sandbox_id=f"sandbox-{workspace_id}",
+                workspace_path="/workspace",
+            )
+        ),
+        sandbox_repo=SimpleNamespace(
+            get_by_id=lambda sandbox_id: SimpleNamespace(
+                id=sandbox_id,
+                owner_user_id="owner-1",
+                provider_name="local",
+                config={"legacy_lease_id": "lease-1"},
+            )
         ),
         agent_pool={},
         thread_last_active={},
@@ -968,10 +992,12 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
 
 
 @pytest.mark.asyncio
-async def test_list_threads_prefers_batch_terminal_summary_when_available():
+async def test_list_threads_no_longer_requires_terminal_summary():
     rows = {
         "main-thread": {
             "id": "main-thread",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-main",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -981,6 +1007,8 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
         },
         "child-thread": {
             "id": "child-thread",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-child",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -995,17 +1023,27 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
             list_by_owner_user_id=lambda _user_id: list(rows.values()),
             get_by_id=lambda thread_id: rows.get(thread_id),
         ),
+        workspace_repo=SimpleNamespace(
+            get_by_id=lambda workspace_id: (
+                summarize_calls.append([workspace_id])
+                or SimpleNamespace(
+                    id=workspace_id,
+                    owner_user_id="owner-1",
+                    sandbox_id=f"sandbox-{workspace_id}",
+                    workspace_path="/workspace",
+                )
+            )
+        ),
+        sandbox_repo=SimpleNamespace(
+            get_by_id=lambda sandbox_id: SimpleNamespace(
+                id=sandbox_id,
+                owner_user_id="owner-1",
+                provider_name="local",
+                config={"legacy_lease_id": "lease-1"},
+            )
+        ),
         terminal_repo=SimpleNamespace(
-            summarize_threads=lambda thread_ids: (
-                summarize_calls.append(list(thread_ids))
-                or {
-                    "main-thread": {"active_terminal_id": "term-main", "latest_terminal_id": "term-main"},
-                    "child-thread": {"active_terminal_id": "term-child", "latest_terminal_id": "term-child"},
-                }
-            ),
-            get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("should not use per-thread get_active")),
-            list_by_thread=lambda _thread_id: (_ for _ in ()).throw(AssertionError("should not use per-thread list_by_thread")),
-            set_active=lambda _thread_id, _terminal_id: (_ for _ in ()).throw(AssertionError("should not repair ready threads")),
+            summarize_threads=lambda _thread_ids: (_ for _ in ()).throw(AssertionError("terminal summary should not gate owner list")),
         ),
         agent_pool={},
         thread_last_active={},
@@ -1014,7 +1052,7 @@ async def test_list_threads_prefers_batch_terminal_summary_when_available():
     payload = await threads_router.list_threads("owner-1", app)
 
     assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
-    assert summarize_calls == [["main-thread", "child-thread"]]
+    assert summarize_calls == [["workspace-main"], ["workspace-child"]]
 
 
 @pytest.mark.asyncio
@@ -1024,6 +1062,7 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
     rows = {
         "broken-thread": {
             "id": "broken-thread",
+            "owner_user_id": "owner-1",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -1033,6 +1072,8 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
         },
         "healthy-thread": {
             "id": "healthy-thread",
+            "owner_user_id": "owner-1",
+            "current_workspace_id": "workspace-healthy",
             "sandbox_type": "local",
             "agent_name": "Toad",
             "agent_user_id": "agent-user-1",
@@ -1052,17 +1093,25 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
             get_by_id=lambda thread_id: rows.get(thread_id),
             delete=_delete,
         ),
-        terminal_repo=SimpleNamespace(
-            summarize_threads=lambda thread_ids: {
-                thread_id: {
-                    "active_terminal_id": f"term-{thread_id}" if thread_id == "healthy-thread" else None,
-                    "latest_terminal_id": "term-healthy" if thread_id == "healthy-thread" else None,
-                }
-                for thread_id in thread_ids
-            },
-            get_active=lambda thread_id: {"terminal_id": f"term-{thread_id}"} if thread_id == "healthy-thread" else None,
-            list_by_thread=lambda thread_id: [] if thread_id == "broken-thread" else [{"terminal_id": "term-healthy"}],
-            set_active=lambda _thread_id, _terminal_id: None,
+        workspace_repo=SimpleNamespace(
+            get_by_id=lambda workspace_id: SimpleNamespace(
+                id=workspace_id,
+                owner_user_id="owner-1",
+                sandbox_id="sandbox-healthy",
+                workspace_path="/workspace",
+            )
+            if workspace_id == "workspace-healthy"
+            else None
+        ),
+        sandbox_repo=SimpleNamespace(
+            get_by_id=lambda sandbox_id: SimpleNamespace(
+                id=sandbox_id,
+                owner_user_id="owner-1",
+                provider_name="local",
+                config={"legacy_lease_id": "lease-healthy"},
+            )
+            if sandbox_id == "sandbox-healthy"
+            else None
         ),
         agent_pool={},
         thread_last_active={},
