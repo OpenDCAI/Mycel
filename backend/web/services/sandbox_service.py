@@ -541,7 +541,7 @@ def mutate_sandbox_session(
 
 
 def destroy_sandbox_lease(*, lease_id: str, provider_name: str, detach_thread_bindings: bool = False) -> dict[str, Any]:
-    """Destroy a lease through the manager-owned lease state machine."""
+    """Destroy sandbox runtime bridge resources through the manager state machine."""
     _, managers = init_providers_and_managers()
     manager = managers.get(provider_name)
     if manager is None:
@@ -552,7 +552,7 @@ def destroy_sandbox_lease(*, lease_id: str, provider_name: str, detach_thread_bi
         raise RuntimeError(f"Lease not found: {lease_id}")
 
     # @@@lease-destroy-seam - detached residue may have no visible live session,
-    # so cleanup must target the lease state machine directly rather than session lookup.
+    # so cleanup must target the lower runtime bridge directly rather than session lookup.
     _prune_stale_lease_terminals(manager, lease_id)
     if detach_thread_bindings:
         _detach_lease_terminals(manager, lease_id)
