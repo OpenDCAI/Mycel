@@ -183,6 +183,56 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
     ]
 
 
+def test_list_resource_providers_counts_running_sandboxes_once_when_lease_residue_duplicates(monkeypatch):
+    rows = [
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
+            "lease_id": "lease-old",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
+            "lease_id": "lease-new",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "local", "available": True}],
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+
+    payload = resource_projection_service.list_resource_providers()
+    local = payload["providers"][0]
+
+    assert local["telemetry"]["running"]["used"] == 1
+    assert payload["summary"]["running_sessions"] == 1
+    assert [session["id"] for session in local["sessions"]] == ["sandbox-1:thread-1"]
+
+
 def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(monkeypatch):
     rows = [
         {
@@ -616,6 +666,38 @@ def test_visible_resource_session_stats_uses_sandbox_keyed_runtime_lookup(monkey
             raise AssertionError(f"unexpected lease batch lookup: {lease_ids}")
 
     monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _BatchOnlyRepo())
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+
+    stats = resource_projection_service.visible_resource_session_stats()
+
+    assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
+
+
+def test_visible_resource_session_stats_counts_running_sandbox_once_when_lease_residue_duplicates(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            "lease_id": "lease-old",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            "lease_id": "lease-new",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
     stats = resource_projection_service.visible_resource_session_stats()
