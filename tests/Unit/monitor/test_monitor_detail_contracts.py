@@ -605,7 +605,7 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
     assert calls == [("lease-1", "daytona", True)]
 
 
-def test_get_monitor_operation_detail_does_not_adapt_legacy_lease_targets(monkeypatch):
+def test_get_monitor_operation_detail_does_not_adapt_deleted_lease_targets(monkeypatch):
     _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_sandbox_row()))
     monkeypatch.setattr(
         monitor_service.monitor_operation_service,
@@ -622,7 +622,21 @@ def test_get_monitor_operation_detail_does_not_adapt_legacy_lease_targets(monkey
     assert payload["target"] == {"target_type": "lease", "target_id": "lease-1"}
 
 
-def test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_legacy_lease_history(monkeypatch):
+def test_monitor_detail_deleted_lease_target_guards_do_not_use_legacy_language() -> None:
+    source = Path(__file__).read_text()
+    old_tokens = [
+        "test_get_monitor_operation_detail_does_not_adapt_" + "legacy_lease_targets",
+        "test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_" + "legacy_lease_history",
+        "test_get_monitor_operation_detail_ignores_" + "legacy_lease_relation_shell",
+        '"summary": "' + "Legacy cleanup completed." + '"',
+        '"reason": "' + "legacy" + '"',
+        '"operation_id": "op-' + "legacy" + '"',
+    ]
+
+    assert not any(token in source for token in old_tokens)
+
+
+def test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_deleted_lease_target_history(monkeypatch):
     calls: list[tuple[str, str]] = []
 
     def _record_operations_for_target(target_type: str, target_id: str):
@@ -630,15 +644,15 @@ def test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_legacy_lease_his
         if target_type == "lease":
             return [
                 {
-                    "operation_id": "op-legacy",
+                    "operation_id": "op-deleted-lease-target",
                     "kind": "sandbox_cleanup",
                     "target_type": "lease",
                     "target_id": "lease-1",
                     "status": "succeeded",
                     "requested_at": "2026-04-18T00:00:00Z",
                     "updated_at": "2026-04-18T00:00:01Z",
-                    "summary": "Legacy cleanup completed.",
-                    "reason": "legacy",
+                    "summary": "Deleted lease-target cleanup completed.",
+                    "reason": "deleted_lease_target",
                     "result_truth": {},
                 }
             ]
@@ -896,7 +910,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
     }
 
 
-def test_get_monitor_operation_detail_ignores_legacy_lease_relation_shell(monkeypatch):
+def test_get_monitor_operation_detail_ignores_deleted_lease_relation_shell(monkeypatch):
     _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_sandbox_row(sandbox_id="sandbox-1", lease_id="lease-1")))
     monkeypatch.setattr(
         monitor_service.monitor_operation_service,
