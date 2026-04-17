@@ -294,6 +294,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
             "provider": "daytona",
             "session_id": "sess-parent",
             "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-parent",
             "lease_id": "lease-parent",
             "observed_state": "running",
             "desired_state": "running",
@@ -303,6 +304,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
             "provider": "daytona",
             "session_id": "sess-child",
             "thread_id": "subagent-deadbeef",
+            "sandbox_id": "sandbox-child",
             "lease_id": "lease-child",
             "observed_state": "running",
             "desired_state": "running",
@@ -490,6 +492,32 @@ def test_list_resource_providers_no_longer_uses_lease_shaped_visible_thread_fall
     )
     monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda _thread_ids: {})
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["sessions"] == []
+    assert payload["summary"]["running_sessions"] == 0
+
+
+def test_list_resource_providers_drops_visible_lease_only_rows_without_sandbox_id(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-parent",
+            "sandbox_id": None,
+            "lease_id": "lease-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows),
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
 
     payload = resource_projection_service.list_resource_providers()
 

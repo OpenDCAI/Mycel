@@ -251,21 +251,20 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
 
     projected: list[dict[str, Any]] = []
     for lease_id, group in grouped.items():
-        visible_rows = [row for row in group if _is_resource_visible_thread(row.get("thread_id"))]
+        sandbox_rows = [row for row in group if str(row.get("sandbox_id") or "").strip()]
+        visible_rows = [row for row in sandbox_rows if _is_resource_visible_thread(row.get("thread_id"))]
         if visible_rows:
             projected.extend(visible_rows)
             continue
 
-        if not lease_id:
+        if not lease_id or not sandbox_rows:
             continue
 
-        sandbox_id = str(group[0].get("sandbox_id") or "").strip()
+        sandbox_id = str(sandbox_rows[0].get("sandbox_id") or "").strip()
         # @@@resource-visible-thread-fallback - visible resource cards are now
         # sandbox-first. If the raw monitor row lands on a hidden/subagent
         # thread without sandbox truth, this row is no longer eligible for
         # visible-parent projection on the user-facing resource surface.
-        if not sandbox_id:
-            continue
         thread_rows = repo.query_sandbox_threads(sandbox_id)
         preferred_thread_id = next(
             (str(item.get("thread_id") or "").strip() for item in thread_rows if _is_resource_visible_thread(item.get("thread_id"))),
@@ -274,7 +273,7 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
         if not preferred_thread_id:
             continue
 
-        base = dict(group[0])
+        base = dict(sandbox_rows[0])
         base["thread_id"] = preferred_thread_id
         base["session_id"] = None
         projected.append(base)
