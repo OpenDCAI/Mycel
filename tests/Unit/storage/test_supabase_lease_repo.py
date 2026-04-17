@@ -4,6 +4,13 @@ from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
 from tests.fakes.supabase import FakeSupabaseClient
 
 
+class _RejectSandboxInstancesClient(FakeSupabaseClient):
+    def table(self, table_name: str):
+        if table_name == "sandbox_instances":
+            raise AssertionError("sandbox_instances table should not be accessed")
+        return super().table(table_name)
+
+
 def test_supabase_lease_repo_adopt_instance_fails_loudly_if_bootstrap_reload_missing():
     repo = SupabaseLeaseRepo(client=FakeSupabaseClient(tables={"sandbox_leases": [], "sandbox_instances": []}))
     rows = iter([None, None])
@@ -20,6 +27,45 @@ def test_supabase_lease_repo_adopt_instance_fails_loudly_if_bootstrap_reload_mis
             provider_name="test-provider",
             instance_id="inst-123",
         )
+
+
+def test_supabase_lease_repo_get_synthesizes_instance_from_lease_row_without_instances_table():
+    tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "local",
+                "recipe_id": None,
+                "workspace_key": None,
+                "recipe_json": None,
+                "current_instance_id": "inst-1",
+                "instance_created_at": "2026-04-07T00:00:01+00:00",
+                "desired_state": "running",
+                "observed_state": "running",
+                "version": 0,
+                "observed_at": "2026-04-07T00:00:05+00:00",
+                "last_error": None,
+                "needs_refresh": 0,
+                "refresh_hint_at": None,
+                "status": "active",
+                "created_at": "2026-04-07T00:00:00+00:00",
+                "updated_at": "2026-04-07T00:00:05+00:00",
+            }
+        ]
+    }
+    repo = SupabaseLeaseRepo(client=_RejectSandboxInstancesClient(tables=tables))
+
+    lease = repo.get("lease-1")
+
+    assert lease is not None
+    assert lease["_instance"] == {
+        "instance_id": "inst-1",
+        "lease_id": "lease-1",
+        "provider_session_id": "inst-1",
+        "status": "running",
+        "created_at": "2026-04-07T00:00:01+00:00",
+        "last_seen_at": "2026-04-07T00:00:05+00:00",
+    }
 
 
 class _FakeTable:
@@ -44,7 +90,6 @@ class _FakeTable:
                 "needs_refresh": 0,
                 "refresh_hint_at": None,
                 "status": "active",
-                "volume_id": None,
                 "created_at": "2026-04-07T00:00:00",
                 "updated_at": "2026-04-07T00:00:00",
             }
@@ -139,7 +184,6 @@ def test_supabase_lease_repo_adopt_instance_persists_integer_refresh_flag():
                 "needs_refresh": 0,
                 "refresh_hint_at": None,
                 "status": "active",
-                "volume_id": None,
                 "created_at": "2026-04-07T00:00:00+00:00",
                 "updated_at": "2026-04-07T00:00:00+00:00",
             }
@@ -158,6 +202,45 @@ def test_supabase_lease_repo_adopt_instance_persists_integer_refresh_flag():
     lease_row = tables["sandbox_leases"][0]
     assert lease_row["needs_refresh"] == 1
     assert type(lease_row["needs_refresh"]) is int
+
+
+def test_supabase_lease_repo_adopt_instance_updates_lease_without_instances_table():
+    tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "local",
+                "recipe_id": None,
+                "workspace_key": None,
+                "recipe_json": None,
+                "current_instance_id": None,
+                "instance_created_at": None,
+                "desired_state": "running",
+                "observed_state": "detached",
+                "version": 0,
+                "observed_at": "2026-04-07T00:00:00+00:00",
+                "last_error": None,
+                "needs_refresh": 0,
+                "refresh_hint_at": None,
+                "status": "active",
+                "created_at": "2026-04-07T00:00:00+00:00",
+                "updated_at": "2026-04-07T00:00:00+00:00",
+            }
+        ]
+    }
+    repo = SupabaseLeaseRepo(client=_RejectSandboxInstancesClient(tables=tables))
+
+    updated = repo.adopt_instance(
+        lease_id="lease-1",
+        provider_name="local",
+        instance_id="inst-1",
+        status="running",
+    )
+
+    lease_row = tables["sandbox_leases"][0]
+    assert lease_row["current_instance_id"] == "inst-1"
+    assert lease_row["observed_state"] == "running"
+    assert updated["_instance"]["instance_id"] == "inst-1"
 
 
 def test_supabase_lease_repo_persist_metadata_updates_error_refresh_fields():
@@ -179,7 +262,6 @@ def test_supabase_lease_repo_persist_metadata_updates_error_refresh_fields():
                 "needs_refresh": 0,
                 "refresh_hint_at": None,
                 "status": "active",
-                "volume_id": None,
                 "created_at": "2026-04-07T00:00:00+00:00",
                 "updated_at": "2026-04-07T00:00:00+00:00",
             }
@@ -213,7 +295,7 @@ def test_supabase_lease_repo_persist_metadata_updates_error_refresh_fields():
     assert lease_row["status"] == "recovering"
 
 
-def test_supabase_lease_repo_observe_status_detaches_instance_and_clears_refresh_fields():
+def test_supabase_lease_repo_observe_status_detaches_instance_without_instances_table():
     tables = {
         "sandbox_leases": [
             {
@@ -232,23 +314,12 @@ def test_supabase_lease_repo_observe_status_detaches_instance_and_clears_refresh
                 "needs_refresh": 1,
                 "refresh_hint_at": "2026-04-07T00:00:02+00:00",
                 "status": "active",
-                "volume_id": None,
                 "created_at": "2026-04-07T00:00:00+00:00",
                 "updated_at": "2026-04-07T00:00:00+00:00",
             }
         ],
-        "sandbox_instances": [
-            {
-                "instance_id": "inst-1",
-                "lease_id": "lease-1",
-                "provider_session_id": "inst-1",
-                "status": "running",
-                "created_at": "2026-04-07T00:00:01+00:00",
-                "last_seen_at": "2026-04-07T00:00:01+00:00",
-            }
-        ],
     }
-    repo = SupabaseLeaseRepo(client=FakeSupabaseClient(tables=tables))
+    repo = SupabaseLeaseRepo(client=_RejectSandboxInstancesClient(tables=tables))
 
     updated = repo.observe_status(
         lease_id="lease-1",
@@ -257,7 +328,6 @@ def test_supabase_lease_repo_observe_status_detaches_instance_and_clears_refresh
     )
 
     lease_row = tables["sandbox_leases"][0]
-    instance_row = tables["sandbox_instances"][0]
     assert updated["lease_id"] == "lease-1"
     assert lease_row["current_instance_id"] is None
     assert lease_row["observed_state"] == "detached"
@@ -266,4 +336,20 @@ def test_supabase_lease_repo_observe_status_detaches_instance_and_clears_refresh
     assert lease_row["needs_refresh"] == 0
     assert type(lease_row["needs_refresh"]) is int
     assert lease_row["version"] == 1
-    assert instance_row["status"] == "stopped"
+    assert updated["_instance"] is None
+
+
+def test_supabase_lease_repo_delete_removes_lease_without_instances_table():
+    tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "local",
+            }
+        ]
+    }
+    repo = SupabaseLeaseRepo(client=_RejectSandboxInstancesClient(tables=tables))
+
+    repo.delete("lease-1")
+
+    assert tables["sandbox_leases"] == []

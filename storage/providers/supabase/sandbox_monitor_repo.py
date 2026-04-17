@@ -165,43 +165,11 @@ class SupabaseSandboxMonitorRepo:
             if str(sandbox.get("id") or "").strip() in ordered_ids
         }
 
-        instance_by_lease: dict[str, str | None] = {}
-        lease_ids = []
-        for sandbox_id in ordered_ids:
-            sandbox = sandbox_rows.get(sandbox_id)
-            if sandbox is None:
-                continue
-            lease = self._lease_row_from_sandbox(sandbox)
-            lease_id = str(lease.get("lease_id") or "").strip()
-            if not lease_id:
-                continue
-            lease_ids.append(lease_id)
-            instance_by_lease[lease_id] = None
-
-        if lease_ids:
-            instances = q.rows_in_chunks(
-                lambda: self._client.table("sandbox_instances").select("lease_id,provider_session_id"),
-                "lease_id",
-                lease_ids,
-                _REPO,
-                "query_sandbox_instance_ids instances",
-            )
-            for row in instances:
-                lease_id = str(row.get("lease_id") or "").strip()
-                provider_session_id = str(row.get("provider_session_id") or "").strip()
-                if lease_id and provider_session_id:
-                    instance_by_lease[lease_id] = provider_session_id
-
         result: dict[str, str | None] = {}
         for sandbox_id in ordered_ids:
             sandbox = sandbox_rows.get(sandbox_id)
             if sandbox is None:
                 result[sandbox_id] = None
-                continue
-            lease = self._lease_row_from_sandbox(sandbox)
-            lease_id = str(lease.get("lease_id") or "").strip()
-            result[sandbox_id] = instance_by_lease.get(lease_id)
-            if result[sandbox_id]:
                 continue
             provider_env_id = str(sandbox.get("provider_env_id") or "").strip()
             result[sandbox_id] = provider_env_id or None
