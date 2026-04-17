@@ -701,7 +701,9 @@ def install_from_snapshot(
         if user is None or user.agent_config_id is None:
             raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
         agent_config_id = user.agent_config_id
-        current_config = agent_config_repo.get_config(agent_config_id) or {}
+        current_config = agent_config_repo.get_config(agent_config_id)
+        if current_config is None:
+            raise RuntimeError(f"Agent config {agent_config_id} is missing for {user_id}")
         created_at = int(current_config.get("created_at", now_ms))
         user_repo.update(user_id, display_name=agent_name)
     else:
