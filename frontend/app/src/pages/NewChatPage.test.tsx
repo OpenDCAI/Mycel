@@ -13,7 +13,6 @@ const handleCreateThread = vi.fn();
 const clientMocks = vi.hoisted(() => ({
   getDefaultThreadConfig: vi.fn(() => new Promise(() => {})),
   listMyLeases: vi.fn<() => Promise<UserLeaseSummary[]>>(async () => []),
-  saveDefaultThreadConfig: vi.fn(async () => undefined),
   fetchAccountResourceLimits: vi.fn<() => Promise<AccountResourceLimit[]>>(async () => []),
 }));
 
@@ -87,7 +86,6 @@ vi.mock("../api", () => ({
 vi.mock("../api/client", () => ({
   getDefaultThreadConfig: clientMocks.getDefaultThreadConfig,
   listMyLeases: clientMocks.listMyLeases,
-  saveDefaultThreadConfig: clientMocks.saveDefaultThreadConfig,
 }));
 
 vi.mock("../api/settings", () => ({
@@ -134,8 +132,6 @@ describe("NewChatPage", () => {
     clientMocks.getDefaultThreadConfig.mockImplementation(() => new Promise(() => {}));
     clientMocks.listMyLeases.mockReset();
     clientMocks.listMyLeases.mockResolvedValue([]);
-    clientMocks.saveDefaultThreadConfig.mockReset();
-    clientMocks.saveDefaultThreadConfig.mockResolvedValue(undefined);
     clientMocks.fetchAccountResourceLimits.mockReset();
     clientMocks.fetchAccountResourceLimits.mockResolvedValue([]);
     sandboxTypesForTest = [{ name: "local", available: true }];
@@ -610,14 +606,7 @@ describe("NewChatPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认" }));
 
     await waitFor(() => {
-      expect(clientMocks.saveDefaultThreadConfig).toHaveBeenCalledWith(
-        "m_xVuNpKJNxblZ",
-        expect.objectContaining({
-          create_mode: "existing",
-          existing_sandbox_id: "sandbox-2",
-          workspace: "/workspace/reused-2",
-        }),
-      );
+      expect(screen.getByTestId("environment-summary").textContent).toContain("Existing Two");
     });
   });
 
@@ -700,18 +689,11 @@ describe("NewChatPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认" }));
 
     await waitFor(() => {
-      expect(clientMocks.saveDefaultThreadConfig).toHaveBeenCalledWith(
-        "m_xVuNpKJNxblZ",
-        expect.objectContaining({
-          create_mode: "existing",
-          existing_sandbox_id: "sandbox-local",
-          workspace: "/workspace/local",
-        }),
-      );
+      expect(screen.getByTestId("environment-summary").textContent).toContain("Local Existing");
     });
   });
 
-  it("blocks saving an existing-sandbox default when the configured sandbox id is not in my leases", async () => {
+  it("blocks applying an existing-sandbox default when the configured sandbox id is not in my leases", async () => {
     clientMocks.getDefaultThreadConfig.mockResolvedValue({
       source: "last_successful",
       config: {
@@ -753,7 +735,7 @@ describe("NewChatPage", () => {
     const confirm = screen.getByRole("button", { name: "确认" }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
     fireEvent.click(confirm);
-    expect(clientMocks.saveDefaultThreadConfig).not.toHaveBeenCalled();
+    expect(handleCreateThread).not.toHaveBeenCalled();
   });
 
   it("blocks advancing a new sandbox selection when backend account resources say the provider is exhausted", async () => {

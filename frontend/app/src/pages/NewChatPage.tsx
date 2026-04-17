@@ -8,7 +8,7 @@ import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
 import ActorAvatar from "../components/ActorAvatar";
 import FilesystemBrowser from "../components/FilesystemBrowser";
-import { getDefaultThreadConfig, listMyLeases, saveDefaultThreadConfig } from "../api/client";
+import { getDefaultThreadConfig, listMyLeases } from "../api/client";
 import { fetchAccountResourceLimits } from "../api/settings";
 import type { AccountResourceLimit, RecipeFeatureOption, SandboxTemplateSnapshot, ThreadLaunchConfig, UserLeaseSummary } from "../api/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -471,18 +471,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     resetConfigPanel();
   }
 
-  async function persistDefaultConfig(draftModel: string, workspace: string | null) {
-    if (!decodedAgentId) return;
-    await saveDefaultThreadConfig(decodedAgentId, {
-      create_mode: createMode,
-      provider_config: selectedProviderConfig,
-      sandbox_template_id: selectedSandboxTemplateSnapshot?.id || null,
-      existing_sandbox_id: createMode === "existing" ? selectedExistingSandboxId || null : null,
-      model: draftModel,
-      workspace,
-    });
-  }
-
   async function applyConfigChanges(draftModel: string) {
     if (configStep === 1) {
       setConfigStep(2);
@@ -493,8 +481,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
         setConfigStep(3);
         return false;
       }
-      const workspace = createMode === "existing" ? selectedLease?.cwd || null : activeWorkspace || null;
-      await persistDefaultConfig(draftModel, workspace);
       setSelectedModel(draftModel);
       resetConfigPanel();
       return true;
@@ -503,7 +489,6 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
     if (createMode === "new" && selectedSandboxTemplateSnapshot?.provider_type === "local" && nextWorkspace) {
       await setDefaultWorkspace(nextWorkspace);
     }
-    await persistDefaultConfig(draftModel, nextWorkspace || null);
     setSelectedModel(draftModel);
     resetConfigPanel();
     return true;

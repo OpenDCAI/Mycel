@@ -70,18 +70,6 @@ class _FakeThreadRepo:
         return [{"id": thread_id, **row} for thread_id, row in self.rows.items() if row["agent_user_id"] == agent_user_id]
 
 
-class _FakeThreadLaunchPrefRepo:
-    def __init__(self) -> None:
-        self.confirmed: list[tuple[str, str, dict[str, object]]] = []
-        self.successful: list[tuple[str, str, dict[str, object]]] = []
-
-    def save_confirmed(self, owner_user_id: str, agent_user_id: str, config: dict[str, object]) -> None:
-        self.confirmed.append((owner_user_id, agent_user_id, config))
-
-    def save_successful(self, owner_user_id: str, agent_user_id: str, config: dict[str, object]) -> None:
-        self.successful.append((owner_user_id, agent_user_id, config))
-
-
 class _FakeRecipeRepo:
     def __init__(self) -> None:
         local = default_recipe_snapshot("local")
@@ -140,7 +128,6 @@ def _make_threads_app():
         state=SimpleNamespace(
             user_repo=_FakeUserRepo(),
             thread_repo=_FakeThreadRepo(),
-            thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
             recipe_repo=_FakeRecipeRepo(),
             workspace_repo=_FakeWorkspaceRepo(),
             sandbox_repo=_FakeSandboxRepo(),
@@ -172,72 +159,6 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
         "created_at": 0,
         "updated_at": 0,
     }
-
-
-def test_save_last_confirmed_config_normalizes_payload() -> None:
-    app = _make_threads_app()
-
-    thread_launch_config_service.save_last_confirmed_config(
-        app=app,
-        owner_user_id="owner-1",
-        agent_user_id="agent-user-1",
-        payload={
-            "create_mode": "wat",
-            "provider_config": "  local  ",
-            "sandbox_template_id": "  local:default  ",
-            "existing_sandbox_id": "  ",
-            "model": "  gpt-5.4-mini  ",
-            "workspace": "  /tmp/demo  ",
-        },
-    )
-
-    assert app.state.thread_launch_pref_repo.confirmed == [
-        (
-            "owner-1",
-            "agent-user-1",
-            {
-                "create_mode": "new",
-                "provider_config": "local",
-                "sandbox_template_id": "local:default",
-                "existing_sandbox_id": None,
-                "model": "gpt-5.4-mini",
-                "workspace": "/tmp/demo",
-            },
-        )
-    ]
-
-
-def test_save_last_confirmed_config_drops_stray_lease_id_for_new_mode() -> None:
-    app = _make_threads_app()
-
-    thread_launch_config_service.save_last_confirmed_config(
-        app=app,
-        owner_user_id="owner-1",
-        agent_user_id="agent-user-1",
-        payload={
-            "create_mode": "new",
-            "provider_config": "local",
-            "sandbox_template_id": "local:default",
-            "existing_sandbox_id": "lease-stray",
-            "model": "gpt-5.4-mini",
-            "workspace": "/tmp/demo",
-        },
-    )
-
-    assert app.state.thread_launch_pref_repo.confirmed == [
-        (
-            "owner-1",
-            "agent-user-1",
-            {
-                "create_mode": "new",
-                "provider_config": "local",
-                "sandbox_template_id": "local:default",
-                "existing_sandbox_id": None,
-                "model": "gpt-5.4-mini",
-                "workspace": "/tmp/demo",
-            },
-        )
-    ]
 
 
 def test_build_existing_launch_config_uses_canonical_shape() -> None:
@@ -275,166 +196,6 @@ def test_build_new_launch_config_uses_sandbox_template_id() -> None:
         "existing_sandbox_id": None,
         "model": "gpt-5.4-mini",
         "workspace": "/tmp/custom",
-    }
-
-
-def test_resolve_default_config_prefers_last_successful_over_last_confirmed() -> None:
-    workspace_repo = _FakeWorkspaceRepo()
-    workspace_repo.by_id["ws-successful"] = SimpleNamespace(
-        id="ws-successful",
-        sandbox_id="sandbox-successful",
-        owner_user_id="owner-1",
-        workspace_path="/workspace/reused",
-        name=None,
-        created_at=1.0,
-        updated_at=1.0,
-    )
-    workspace_repo.by_sandbox_id["sandbox-successful"] = [workspace_repo.by_id["ws-successful"]]
-    sandbox_repo = _FakeSandboxRepo()
-    sandbox_repo.by_id["sandbox-successful"] = SimpleNamespace(
-        id="sandbox-successful",
-        owner_user_id="owner-1",
-        provider_name="local",
-        provider_env_id="provider-env-successful",
-        sandbox_template_id="local:default",
-        desired_state="running",
-        observed_state="running",
-        status="ready",
-        observed_at=1.0,
-        last_error=None,
-        config={},
-        created_at=1.0,
-        updated_at=1.0,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(
-                get=lambda _owner_user_id, _agent_user_id: {
-                    "last_successful": {
-                        "create_mode": "existing",
-                        "provider_config": "local",
-                        "sandbox_template": {"id": "stale"},
-                        "existing_sandbox_id": "sandbox-successful",
-                        "model": "gpt-5.4",
-                        "workspace": "/workspace/stale",
-                    },
-                    "last_confirmed": {
-                        "create_mode": "new",
-                        "provider_config": "local",
-                        "sandbox_template_id": "local:default",
-                        "existing_sandbox_id": None,
-                        "model": "gpt-4.1",
-                        "workspace": "/tmp/draft",
-                    },
-                }
-            ),
-            thread_repo=_FakeThreadRepo(),
-            user_repo=SimpleNamespace(),
-            recipe_repo=object(),
-            workspace_repo=workspace_repo,
-            sandbox_repo=sandbox_repo,
-        )
-    )
-
-    with (
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "list_user_leases",
-            return_value=[],
-        ),
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "available_sandbox_types",
-            return_value=[{"name": "local", "available": True}],
-        ),
-        patch.object(
-            thread_launch_config_service,
-            "list_library",
-            return_value=[_recipe_library_entry("local")],
-        ),
-    ):
-        result = thread_launch_config_service.resolve_default_config(
-            app=app,
-            owner_user_id="owner-1",
-            agent_user_id="agent-user-1",
-        )
-
-    assert result == {
-        "source": "last_successful",
-        "config": {
-            "create_mode": "existing",
-            "provider_config": "local",
-            "sandbox_template": default_recipe_snapshot("local"),
-            "existing_sandbox_id": "sandbox-successful",
-            "model": "gpt-5.4",
-            "workspace": "/workspace/reused",
-        },
-    }
-
-
-def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() -> None:
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(
-                get=lambda _owner_user_id, _agent_user_id: {
-                    "last_successful": {
-                        "create_mode": "existing",
-                        "provider_config": "local",
-                        "sandbox_template": None,
-                        "existing_sandbox_id": "missing-lease",
-                        "model": "gpt-5.4",
-                        "workspace": "/workspace/missing",
-                    },
-                    "last_confirmed": {
-                        "create_mode": "new",
-                        "provider_config": "local",
-                        "sandbox_template_id": "local:default",
-                        "existing_sandbox_id": None,
-                        "model": "gpt-4.1",
-                        "workspace": "/tmp/draft",
-                    },
-                }
-            ),
-            thread_repo=_FakeThreadRepo(),
-            user_repo=SimpleNamespace(),
-            recipe_repo=object(),
-        )
-    )
-
-    with (
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "list_user_leases",
-            return_value=[],
-        ),
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "available_sandbox_types",
-            return_value=[{"name": "local", "available": True}],
-        ),
-        patch.object(
-            thread_launch_config_service,
-            "list_library",
-            return_value=[_recipe_library_entry("local")],
-        ),
-    ):
-        result = thread_launch_config_service.resolve_default_config(
-            app=app,
-            owner_user_id="owner-1",
-            agent_user_id="agent-user-1",
-        )
-
-    assert result == {
-        "source": "last_confirmed",
-        "config": {
-            "create_mode": "new",
-            "provider_config": "local",
-            "sandbox_template_id": "local:default",
-            "sandbox_template": default_recipe_snapshot("local"),
-            "existing_sandbox_id": None,
-            "model": "gpt-4.1",
-            "workspace": "/tmp/draft",
-        },
     }
 
 
@@ -476,7 +237,6 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
@@ -588,7 +348,6 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
     }
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=recipe_repo,
@@ -675,7 +434,6 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=_FakeRecipeRepo(),
@@ -729,7 +487,6 @@ def test_resolve_default_config_derives_existing_from_legacy_lease_backed_curren
     }
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
@@ -815,7 +572,6 @@ def test_resolve_default_config_fails_loudly_for_malformed_workspace_bridge() ->
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
@@ -847,7 +603,6 @@ def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_
     }
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_launch_pref_repo=SimpleNamespace(get=lambda _owner_user_id, _agent_user_id: {}),
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
@@ -919,7 +674,7 @@ def test_require_owned_agent_raises_for_foreign_agent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_thread_persists_existing_lease_successful_config() -> None:
+async def test_create_thread_existing_lease_binds_without_launch_config_save() -> None:
     app = _make_threads_app()
     app.state.sandbox_repo.by_id["sandbox-1"] = {
         "id": "sandbox-1",
@@ -960,23 +715,10 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
                 },
             ),
         ),
-        patch.object(threads_router, "save_last_successful_config", return_value=None) as save_successful,
     ):
-        _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
+        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
-    save_successful.assert_called_once_with(
-        app,
-        "owner-1",
-        "agent-user-1",
-        {
-            "create_mode": "existing",
-            "provider_config": "daytona_selfhost",
-            "sandbox_template_id": None,
-            "existing_sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
-            "model": "gpt-5.4",
-            "workspace": "/workspace/reused",
-        },
-    )
+    assert app.state.thread_cwd[result["thread_id"]] == "/workspace/reused"
 
 
 @pytest.mark.asyncio
@@ -1057,138 +799,6 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
     assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "agent-user-1"))]
 
 
-@pytest.mark.asyncio
-async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _make_threads_app()
-    payload = threads_router.SaveThreadLaunchConfigRequest(
-        agent_user_id="agent-user-2",
-        create_mode="new",
-        provider_config="local",
-        existing_sandbox_id=None,
-        model="gpt-5.4-mini",
-        workspace="/tmp/demo",
-    )
-    calls: list[tuple[object, str, str]] = []
-
-    def _fake_require_owned_agent(app_obj, agent_user_id: str, owner_user_id: str):
-        calls.append((app_obj, agent_user_id, owner_user_id))
-        raise threads_router.HTTPException(403, "Not authorized")
-
-    monkeypatch.setattr(threads_router, "_require_owned_agent", _fake_require_owned_agent)
-
-    with pytest.raises(threads_router.HTTPException) as excinfo:
-        await threads_router.save_default_thread_config(payload, "owner-1", app)
-
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Not authorized"
-    assert calls == [(app, "agent-user-2", "owner-1")]
-
-
-@pytest.mark.asyncio
-async def test_save_default_thread_config_runs_sync_repo_work_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _make_threads_app()
-    app.state.sandbox_repo.by_id["sandbox-1"] = {
-        "id": "sandbox-1",
-        "owner_user_id": "owner-1",
-        "config": {"legacy_lease_id": "lease-1"},
-    }
-    payload = threads_router.SaveThreadLaunchConfigRequest(
-        agent_user_id="agent-user-1",
-        create_mode="existing",
-        provider_config="daytona_selfhost",
-        existing_sandbox_id="sandbox-1",
-        model="gpt-5.4-mini",
-        workspace="/workspace/reused",
-    )
-    saved: list[tuple[object, str, str, dict[str, object]]] = []
-    to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
-
-    async def _fake_to_thread(fn, *args):
-        to_thread_calls.append((fn.__name__, args))
-        return fn(*args)
-
-    monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
-    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, agent_user_id, owner_user_id: object())
-    monkeypatch.setattr(
-        threads_router,
-        "save_last_confirmed_config",
-        lambda app_obj, owner_user_id, agent_user_id, config: saved.append((app_obj, owner_user_id, agent_user_id, config)),
-    )
-    monkeypatch.setattr(
-        threads_router.sandbox_service,
-        "resolve_owned_lease",
-        lambda owner_user_id, lease_id, **_: (
-            {
-                "lease_id": "lease-1",
-                "provider_name": "daytona_selfhost",
-            }
-            if owner_user_id == "owner-1" and lease_id == "lease-1"
-            else None
-        ),
-    )
-
-    result = await threads_router.save_default_thread_config(payload, "owner-1", app)
-
-    assert result == {"ok": True}
-    assert to_thread_calls == [("_save_default_config_for_owned_agent", (app, "owner-1", payload))]
-    assert saved == [
-        (
-            app,
-            "owner-1",
-            "agent-user-1",
-            {
-                "agent_user_id": "agent-user-1",
-                "create_mode": "existing",
-                "provider_config": "daytona_selfhost",
-                "sandbox_template_id": None,
-                "existing_sandbox_id": "sandbox-1",
-                "model": "gpt-5.4-mini",
-                "workspace": "/workspace/reused",
-            },
-        )
-    ]
-
-
-@pytest.mark.asyncio
-async def test_save_default_thread_config_rejects_lease_shaped_existing_identity(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _make_threads_app()
-    payload = threads_router.SaveThreadLaunchConfigRequest(
-        agent_user_id="agent-user-1",
-        create_mode="existing",
-        provider_config="daytona_selfhost",
-        existing_sandbox_id="lease-1",
-        model="gpt-5.4-mini",
-        workspace="/workspace/reused",
-    )
-    to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
-
-    async def _fake_to_thread(fn, *args):
-        to_thread_calls.append((fn.__name__, args))
-        return fn(*args)
-
-    monkeypatch.setattr(threads_router.asyncio, "to_thread", _fake_to_thread)
-    monkeypatch.setattr(threads_router, "_require_owned_agent", lambda app_obj, agent_user_id, owner_user_id: object())
-    monkeypatch.setattr(
-        threads_router.sandbox_service,
-        "resolve_owned_lease",
-        lambda owner_user_id, lease_id, **_: (
-            {
-                "lease_id": "lease-1",
-                "provider_name": "daytona_selfhost",
-            }
-            if owner_user_id == "owner-1" and lease_id == "lease-1"
-            else None
-        ),
-    )
-
-    with pytest.raises(threads_router.HTTPException) as excinfo:
-        await threads_router.save_default_thread_config(payload, "owner-1", app)
-
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Lease not authorized"
-    assert to_thread_calls == [("_save_default_config_for_owned_agent", (app, "owner-1", payload))]
-
-
 def test_get_default_thread_config_route_rejects_unowned_agent() -> None:
     app = _make_threads_app()
 
@@ -1225,51 +835,8 @@ def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monk
     assert calls == [(app, "owner-1", "agent-user-1")]
 
 
-def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _make_threads_app()
-    calls: list[tuple[object, str, str, dict[str, object]]] = []
-    monkeypatch.setattr(
-        threads_router,
-        "save_last_confirmed_config",
-        lambda app_obj, owner_user_id, agent_user_id, payload: calls.append((app_obj, owner_user_id, agent_user_id, payload)),
-    )
-
-    with TestClient(_route_test_app(app)) as client:
-        response = client.post(
-            "/api/threads/default-config",
-            json={
-                "agent_user_id": "agent-user-1",
-                "create_mode": "new",
-                "provider_config": "local",
-                "sandbox_template_id": "local:default",
-                "existing_sandbox_id": None,
-                "model": "gpt-5.4-mini",
-                "workspace": "/tmp/demo",
-            },
-        )
-
-    assert response.status_code == 200
-    assert response.json() == {"ok": True}
-    assert calls == [
-        (
-            app,
-            "owner-1",
-            "agent-user-1",
-            {
-                "agent_user_id": "agent-user-1",
-                "create_mode": "new",
-                "provider_config": "local",
-                "sandbox_template_id": "local:default",
-                "existing_sandbox_id": None,
-                "model": "gpt-5.4-mini",
-                "workspace": "/tmp/demo",
-            },
-        )
-    ]
-
-
 @pytest.mark.asyncio
-async def test_create_thread_persists_new_launch_successful_config() -> None:
+async def test_create_thread_persists_cwd_without_launch_config_save() -> None:
     app = _make_threads_app()
     payload = CreateThreadRequest.model_validate(
         {
@@ -1285,28 +852,14 @@ async def test_create_thread_persists_new_launch_successful_config() -> None:
         patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
         patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
-        patch.object(threads_router, "save_last_successful_config", return_value=None) as save_successful,
     ):
         result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
-    save_successful.assert_called_once_with(
-        app,
-        "owner-1",
-        "agent-user-1",
-        {
-            "create_mode": "new",
-            "provider_config": "local",
-            "sandbox_template_id": "local:default",
-            "existing_sandbox_id": None,
-            "model": "gpt-5.4-mini",
-            "workspace": "/tmp/fresh-local-thread",
-        },
-    )
     assert app.state.thread_cwd[result["thread_id"]] == "/tmp/fresh-local-thread"
 
 
 @pytest.mark.asyncio
-async def test_create_thread_carries_recipe_snapshot_into_resources_and_successful_config() -> None:
+async def test_create_thread_carries_recipe_snapshot_into_resources_without_launch_config_save() -> None:
     app = _make_threads_app()
     repo_recipe = {
         "id": "local:custom:lark",
@@ -1343,7 +896,6 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
         patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
-        patch.object(threads_router, "save_last_successful_config", return_value=None) as save_successful,
     ):
         result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
@@ -1355,19 +907,6 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_and_successf
         workspace_repo=app.state.workspace_repo,
         sandbox_repo=app.state.sandbox_repo,
         owner_user_id="owner-1",
-    )
-    save_successful.assert_called_once_with(
-        app,
-        "owner-1",
-        "agent-user-1",
-        {
-            "create_mode": "new",
-            "provider_config": "local",
-            "sandbox_template_id": "local:custom:lark",
-            "existing_sandbox_id": None,
-            "model": "gpt-5.4-mini",
-            "workspace": None,
-        },
     )
 
 

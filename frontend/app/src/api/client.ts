@@ -163,16 +163,6 @@ function parseDefaultThreadConfig(value: unknown): ThreadLaunchConfigResponse {
   return { source, config };
 }
 
-export async function saveDefaultThreadConfig(
-  agentUserId: string,
-  config: ThreadLaunchConfig,
-): Promise<void> {
-  await requestOk("/api/threads/default-config", {
-    method: "POST",
-    body: JSON.stringify({ agent_user_id: agentUserId, ...config }),
-  });
-}
-
 export async function getThread(threadId: string): Promise<ThreadDetail> {
   return parseThreadDetail(await request(`/api/threads/${encodeURIComponent(threadId)}`));
 }

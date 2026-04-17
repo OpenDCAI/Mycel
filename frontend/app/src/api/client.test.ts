@@ -161,58 +161,6 @@ describe("thread api client contract", () => {
     await expect(api.getDefaultThreadConfig("agent-1")).rejects.toThrow("Malformed default thread config");
   });
 
-  it("saveDefaultThreadConfig posts agent_user_id", async () => {
-    authFetch.mockResolvedValue(okJson({ ok: true }));
-
-    await api.saveDefaultThreadConfig("agent-1", {
-      create_mode: "new",
-      provider_config: "local",
-      sandbox_template_id: "local:default",
-      model: "gpt-5.4-mini",
-    });
-
-    expect(authFetch).toHaveBeenCalledWith(
-      "/api/threads/default-config",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          agent_user_id: "agent-1",
-          create_mode: "new",
-          provider_config: "local",
-          sandbox_template_id: "local:default",
-          model: "gpt-5.4-mini",
-        }),
-      }),
-    );
-  });
-
-  it("saveDefaultThreadConfig posts existing_sandbox_id for existing-mode shell config", async () => {
-    authFetch.mockResolvedValue(okJson({ ok: true }));
-
-    await api.saveDefaultThreadConfig("agent-1", {
-      create_mode: "existing",
-      provider_config: "daytona_selfhost",
-      existing_sandbox_id: "sandbox-1",
-      model: "gpt-5.4",
-      workspace: "/workspace/reused",
-    });
-
-    expect(authFetch).toHaveBeenCalledWith(
-      "/api/threads/default-config",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          agent_user_id: "agent-1",
-          create_mode: "existing",
-          provider_config: "daytona_selfhost",
-          existing_sandbox_id: "sandbox-1",
-          model: "gpt-5.4",
-          workspace: "/workspace/reused",
-        }),
-      }),
-    );
-  });
-
   it("sendMessage rejects malformed routing payload identities", async () => {
     authFetch.mockResolvedValue(okJson({
       status: "started",

@@ -24,16 +24,6 @@ class ResolveMainThreadRequest(BaseModel):
     agent_user_id: str
 
 
-class SaveThreadLaunchConfigRequest(BaseModel):
-    agent_user_id: str
-    create_mode: Literal["new", "existing"]
-    provider_config: str
-    sandbox_template_id: str | None = None
-    existing_sandbox_id: str | None = None
-    model: str | None = None
-    workspace: str | None = None
-
-
 class RunRequest(BaseModel):
     message: str
     enable_trajectory: bool = False
