@@ -14,7 +14,6 @@ class _ThreadRepo:
         self.deleted: list[str] = []
         self.closed = False
         self.timestamps = ("created", "updated")
-        self.lease = {"created_at": "lease-created", "updated_at": "lease-updated"}
 
     def delete_by_thread(self, thread_id: str) -> None:
         self.deleted.append(thread_id)
@@ -22,10 +21,6 @@ class _ThreadRepo:
     def get_timestamps(self, terminal_id: str) -> tuple[str, str]:
         assert terminal_id == "terminal-1"
         return self.timestamps
-
-    def get(self, lease_id: str) -> dict[str, str]:
-        assert lease_id == "lease-1"
-        return self.lease
 
     def close(self) -> None:
         self.closed = True
