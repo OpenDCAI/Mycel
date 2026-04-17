@@ -703,13 +703,13 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                             const nextProviderType = providerConfigOptions.find((item) => item.value === nextProviderConfig)?.providerType
                               || providerTypeFromName(nextProviderConfig);
                             setSelectedProviderConfig(nextProviderConfig);
-                          const nextSandboxTemplates = sandboxTemplateOptions.filter((item) => item.sandboxTemplate.provider_type === nextProviderType);
-                          if (nextSandboxTemplates.length > 0 && !nextSandboxTemplates.some((item) => item.value === selectedSandboxTemplateId)) {
-                            setSelectedSandboxTemplateId(nextSandboxTemplates[0].value);
-                          }
+                            const nextSandboxTemplates = sandboxTemplateOptions.filter((item) => item.sandboxTemplate.provider_type === nextProviderType);
+                            if (nextSandboxTemplates.length > 0 && !nextSandboxTemplates.some((item) => item.value === selectedSandboxTemplateId)) {
+                              setSelectedSandboxTemplateId(nextSandboxTemplates[0].value);
+                            }
                             const nextLease = leaseOptions.find((lease) => lease.provider_name === nextProviderConfig);
                             if (createMode === "existing") {
-                              setSelectedExistingSandboxId(nextLease?.lease_id || "");
+                              setSelectedExistingSandboxId(nextLease ? leaseSandboxId(nextLease) : "");
                             }
                           }}
                         >
