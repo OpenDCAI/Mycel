@@ -802,7 +802,7 @@ def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_tele
     assert payload["providers"][0]["telemetry"]["cpu"]["used"] == 11
 
 
-def test_load_visible_resource_runtime_uses_sandbox_snapshot_wrapper(monkeypatch):
+def test_load_visible_resource_runtime_returns_only_sandbox_keyed_snapshots(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -823,9 +823,8 @@ def test_load_visible_resource_runtime_uses_sandbox_snapshot_wrapper(monkeypatch
         lambda sessions: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
 
-    sessions, runtime_session_ids, snapshot_by_lease, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
+    sessions, runtime_session_ids, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
 
     assert [session["sandbox_id"] for session in sessions] == ["sandbox-a"]
     assert runtime_session_ids == {"sandbox-a": None}
-    assert snapshot_by_lease == {}
     assert snapshot_by_sandbox == {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}
