@@ -570,6 +570,7 @@ def _create_thread_sandbox_resources(
             sandbox_type,
             recipe_id=normalized_recipe["id"],
             recipe_json=json.dumps(normalized_recipe, ensure_ascii=False),
+            owner_user_id=owner_user_id,
         )
     finally:
         lease_repo.close()
