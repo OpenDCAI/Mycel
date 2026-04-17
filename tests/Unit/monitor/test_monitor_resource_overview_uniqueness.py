@@ -121,6 +121,13 @@ def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None
     assert resource_projection_service._resource_running_identity(session) == ""
 
 
+def test_resource_projection_unbound_identity_is_not_named_as_fallback() -> None:
+    source = Path(resource_projection_service.__file__).read_text(encoding="utf-8")
+
+    assert "fallback_identity" not in source
+    assert "unbound-runtime fallback" not in source
+
+
 def test_list_resource_providers_no_longer_uses_lease_shaped_row_source_shell(monkeypatch) -> None:
     class _Repo(_FakeRepo):
         def list_sessions_with_leases(self):

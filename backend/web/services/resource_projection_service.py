@@ -54,8 +54,8 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         if status == "running":
             running_count += 1
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip() or None
-        fallback_identity = str(sandbox.get("runtime_session_id") or "sandbox").strip()
-        session_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{fallback_identity}:{thread_id}"
+        secondary_identity = str(sandbox.get("runtime_session_id") or "sandbox").strip()
+        session_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{secondary_identity}:{thread_id}"
         sessions.append(
             resource_service.build_resource_session_payload(
                 session_identity=session_identity,
@@ -199,7 +199,7 @@ def _resource_session_identity(session: dict[str, Any]) -> str:
     sandbox_id = str(session.get("sandbox_id") or "")
     thread_id = str(session.get("thread_id") or "")
     # @@@resource-session-shell - resource session shell is now sandbox-first.
-    # Provider session ids are only an unbound-runtime fallback; bound rows use
+    # Provider session ids are only an unbound-runtime secondary identity; bound rows use
     # sandbox/thread identity on the user-visible Resources surface.
     if sandbox_id and thread_id:
         return f"{sandbox_id}:{thread_id}"
