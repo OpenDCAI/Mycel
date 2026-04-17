@@ -69,6 +69,7 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
             "event_type": "provider.updated",
             "payload": {"instance_id": "inst-1", "event": "provider.updated"},
             "matched_lease_id": None,
+            "matched_sandbox_id": None,
         }
     ]
 
@@ -79,7 +80,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
         def find_by_instance(self, *, provider_name: str, instance_id: str):
             assert provider_name == "local"
             assert instance_id == "inst-2"
-            return {"lease_id": "lease-1"}
+            return {"lease_id": "lease-1", "sandbox_id": "sandbox-1"}
 
         def close(self) -> None:
             return None
@@ -131,7 +132,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
     monkeypatch.setattr(webhooks, "init_providers_and_managers", lambda: ({}, {"local": _Manager()}))
 
     def _fake_lease_from_row(row, db_path):
-        assert row == {"lease_id": "lease-1"}
+        assert row == {"lease_id": "lease-1", "sandbox_id": "sandbox-1"}
         assert db_path == expected_db_path
         return lease
 
@@ -151,6 +152,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
             "event_type": "provider.running",
             "payload": {"instance_id": "inst-2", "event": "provider.running"},
             "matched_lease_id": "lease-1",
+            "matched_sandbox_id": "sandbox-1",
         }
     ]
     assert lease.applied == [

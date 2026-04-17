@@ -32,6 +32,7 @@ class SupabaseProviderEventRepo:
         event_type: str,
         payload: dict[str, Any],
         matched_lease_id: str | None,
+        matched_sandbox_id: str | None,
     ) -> None:
         self._t().insert(
             {
@@ -40,6 +41,7 @@ class SupabaseProviderEventRepo:
                 "event_type": event_type,
                 "payload_json": json.dumps(payload, ensure_ascii=False),
                 "matched_lease_id": matched_lease_id,
+                "matched_sandbox_id": matched_sandbox_id,
                 "created_at": datetime.now().isoformat(),
             }
         ).execute()
@@ -48,7 +50,9 @@ class SupabaseProviderEventRepo:
         raw = q.rows(
             q.limit(
                 q.order(
-                    self._t().select("event_id,provider_name,instance_id,event_type,payload_json,matched_lease_id,created_at"),
+                    self._t().select(
+                        "event_id,provider_name,instance_id,event_type,payload_json,matched_lease_id,matched_sandbox_id,created_at"
+                    ),
                     "created_at",
                     desc=True,
                     repo=_REPO,

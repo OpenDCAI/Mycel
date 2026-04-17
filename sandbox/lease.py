@@ -533,6 +533,7 @@ class SQLiteLease(SandboxLease):
                         event_type="provider.error",
                         payload={"error": self.last_error, "source": source},
                         matched_lease_id=self.lease_id,
+                        matched_sandbox_id=self._sandbox_bridge_id(),
                     )
             finally:
                 event_repo.close()
@@ -559,6 +560,7 @@ class SQLiteLease(SandboxLease):
                     event_type="observe.status",
                     payload={"status": observed, "instance_id": instance_id},
                     matched_lease_id=self.lease_id,
+                    matched_sandbox_id=self._sandbox_bridge_id(),
                 )
         finally:
             event_repo.close()
@@ -618,6 +620,7 @@ class SQLiteLease(SandboxLease):
                     event_type="intent.destroy",
                     payload={"instance_id": instance_id, "source": source},
                     matched_lease_id=self.lease_id,
+                    matched_sandbox_id=self._sandbox_bridge_id(),
                 )
         finally:
             event_repo.close()
@@ -686,6 +689,7 @@ class SQLiteLease(SandboxLease):
                 event_type=event_type,
                 payload={"instance_id": instance_id, "source": source},
                 matched_lease_id=self.lease_id,
+                matched_sandbox_id=self._sandbox_bridge_id(),
             )
         finally:
             event_repo.close()
