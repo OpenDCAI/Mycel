@@ -136,9 +136,11 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
         ("get", "/api/monitor/leases"),
         ("get", "/api/monitor/leases/lease-1"),
         ("post", "/api/monitor/leases/lease-1/cleanup"),
+        ("get", "/api/monitor/provider-sessions"),
+        ("post", "/api/monitor/provider-sessions/daytona_selfhost/session-1/cleanup"),
     ],
 )
-def test_monitor_legacy_lease_routes_are_not_exposed(method, path):
+def test_monitor_legacy_monitor_routes_are_not_exposed(method, path):
     response = _request(method, path)
 
     assert response.status_code == 404
@@ -148,14 +150,14 @@ def test_monitor_legacy_lease_routes_are_not_exposed(method, path):
     ("method", "path", "service_name", "payload"),
     [
         ("get", "/api/monitor/sandboxes", "list_monitor_sandboxes", {"summary": {}, "groups": [], "items": []}),
-        ("get", "/api/monitor/provider-sessions", "list_monitor_provider_sessions", {"sessions": [], "count": 0}),
+        ("get", "/api/monitor/provider-orphan-runtimes", "list_monitor_provider_orphan_runtimes", {"runtimes": [], "count": 0}),
         ("get", "/api/monitor/providers/daytona", "get_monitor_provider_detail", {"provider": {"id": "daytona"}}),
         ("get", "/api/monitor/sandboxes/sandbox-1", "get_monitor_sandbox_detail", {"sandbox": {"sandbox_id": "sandbox-1"}}),
         ("post", "/api/monitor/sandboxes/sandbox-1/cleanup", "request_monitor_sandbox_cleanup", {"accepted": True}),
         (
             "post",
-            "/api/monitor/provider-sessions/daytona_selfhost/session-1/cleanup",
-            "request_monitor_provider_session_cleanup",
+            "/api/monitor/provider-orphan-runtimes/daytona_selfhost/session-1/cleanup",
+            "request_monitor_provider_orphan_runtime_cleanup",
             {"accepted": True},
         ),
         ("get", "/api/monitor/operations/op-1", "get_monitor_operation_detail", {"operation": {"operation_id": "op-1"}}),

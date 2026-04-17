@@ -83,16 +83,16 @@ export interface ResourceOverviewResponse {
   };
 }
 
-export interface ProviderOrphanSession {
-  session_id: string;
+export interface ProviderOrphanRuntime {
+  runtime_id: string;
   provider: string;
   status: string;
   source: "provider_orphan";
 }
 
-export interface ProviderOrphanSessionsResponse {
+export interface ProviderOrphanRuntimesResponse {
   count: number;
-  sessions: ProviderOrphanSession[];
+  runtimes: ProviderOrphanRuntime[];
 }
 
 export interface BrowseItem {

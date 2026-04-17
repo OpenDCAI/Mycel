@@ -17,12 +17,12 @@ def _provider_session(session_id: str, status: str = "paused"):
     return SimpleNamespace(session_id=session_id, status=status)
 
 
-def test_monitor_provider_sessions_does_not_refresh_all_lease_sessions(monkeypatch):
+def test_monitor_provider_orphan_runtimes_do_not_refresh_all_lease_sessions(monkeypatch):
     manager = _FailingManager()
 
     monkeypatch.setattr(sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": manager}))
 
-    assert monitor_service.list_monitor_provider_sessions() == {"count": 0, "sessions": []}
+    assert monitor_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
 
 
 def test_load_provider_orphan_sessions_excludes_lease_backed_provider_sessions():

@@ -13,9 +13,9 @@ import {
 
 import {
   browseMonitorSandbox,
-  cleanupMonitorProviderSession,
+  cleanupMonitorProviderOrphanRuntime,
   fetchJsonOrThrow,
-  fetchMonitorProviderSessions,
+  fetchMonitorProviderOrphanRuntimes,
   fetchMonitorResources,
   readMonitorSandboxFile,
   refreshMonitorResources,
@@ -25,7 +25,7 @@ import type {
   BrowseItem,
   ProviderCapabilities,
   ProviderInfo,
-  ProviderOrphanSession,
+  ProviderOrphanRuntime,
   ResourceOverviewResponse,
   ResourceSession,
   SessionMetrics,
@@ -296,7 +296,7 @@ export default function ResourcesPage() {
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [providerOrphans, setProviderOrphans] = React.useState<ProviderOrphanSession[]>([]);
+  const [providerOrphans, setProviderOrphans] = React.useState<ProviderOrphanRuntime[]>([]);
   const [providerOrphansLoading, setProviderOrphansLoading] = React.useState(false);
   const [providerOrphansError, setProviderOrphansError] = React.useState<string | null>(null);
   const [providerCleanupPendingId, setProviderCleanupPendingId] = React.useState<string | null>(null);
@@ -317,8 +317,8 @@ export default function ResourcesPage() {
     setProviderOrphansLoading(true);
     setProviderOrphansError(null);
     try {
-      const payload = await fetchMonitorProviderSessions();
-      setProviderOrphans(payload.sessions);
+      const payload = await fetchMonitorProviderOrphanRuntimes();
+      setProviderOrphans(payload.runtimes);
     } catch (exc) {
       setProviderOrphansError(exc instanceof Error ? exc.message : "Provider 运行时检查失败");
     } finally {
@@ -386,12 +386,12 @@ export default function ResourcesPage() {
   }, [applyPayload, loadProviderOrphans, providers.length]);
 
   const cleanupProviderOrphan = React.useCallback(
-    async (session: ProviderOrphanSession) => {
-      const pendingId = `${session.provider}:${session.session_id}`;
+    async (runtime: ProviderOrphanRuntime) => {
+      const pendingId = `${runtime.provider}:${runtime.runtime_id}`;
       setProviderCleanupPendingId(pendingId);
       setProviderCleanupMessage(null);
       try {
-        const result = await cleanupMonitorProviderSession(session.provider, session.session_id);
+        const result = await cleanupMonitorProviderOrphanRuntime(runtime.provider, runtime.runtime_id);
         setProviderCleanupMessage(result.message ?? "Provider 运行时清理已完成");
         await loadProviderOrphans();
       } catch (exc) {
@@ -440,7 +440,7 @@ export default function ResourcesPage() {
   }, [loadSnapshot]);
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
-  const selectedProviderOrphans = selected ? providerOrphans.filter((session) => session.provider === selected.id) : [];
+  const selectedProviderOrphans = selected ? providerOrphans.filter((runtime) => runtime.provider === selected.id) : [];
   const runningSessionCount = countProviderSessions(providers, "running");
   const pausedSessionCount = countProviderSessions(providers, "paused");
   const stoppedSessionCount = countProviderSessions(providers, "stopped");
@@ -520,7 +520,7 @@ export default function ResourcesPage() {
             key={provider.id}
             provider={provider}
             selected={provider.id === selectedId}
-            orphanCount={providerOrphans.filter((session) => session.provider === provider.id).length}
+            orphanCount={providerOrphans.filter((runtime) => runtime.provider === provider.id).length}
             onSelect={() => setSelectedId(provider.id)}
           />
         ))}
@@ -644,12 +644,12 @@ function ProviderDetail({
   onCleanupProviderOrphan,
 }: {
   provider: ProviderInfo;
-  providerOrphans: ProviderOrphanSession[];
+  providerOrphans: ProviderOrphanRuntime[];
   providerOrphansLoading: boolean;
   providerOrphansError: string | null;
   providerCleanupPendingId: string | null;
   providerCleanupMessage: string | null;
-  onCleanupProviderOrphan: (session: ProviderOrphanSession) => Promise<void>;
+  onCleanupProviderOrphan: (runtime: ProviderOrphanRuntime) => Promise<void>;
 }) {
   const [selectedGroup, setSelectedGroup] = React.useState<SandboxGroup | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<SandboxGroup["status"] | "all">("all");
@@ -745,7 +745,7 @@ function ProviderDetail({
             </div>
 
             <ProviderOrphanSection
-              sessions={providerOrphans}
+              runtimes={providerOrphans}
               loading={providerOrphansLoading}
               error={providerOrphansError}
               cleanupPendingId={providerCleanupPendingId}
@@ -813,21 +813,21 @@ function ProviderDetail({
 }
 
 function ProviderOrphanSection({
-  sessions,
+  runtimes,
   loading,
   error,
   cleanupPendingId,
   cleanupMessage,
   onCleanup,
 }: {
-  sessions: ProviderOrphanSession[];
+  runtimes: ProviderOrphanRuntime[];
   loading: boolean;
   error: string | null;
   cleanupPendingId: string | null;
   cleanupMessage: string | null;
-  onCleanup: (session: ProviderOrphanSession) => Promise<void>;
+  onCleanup: (runtime: ProviderOrphanRuntime) => Promise<void>;
 }) {
-  if (!loading && !error && sessions.length === 0) {
+  if (!loading && !error && runtimes.length === 0) {
     return null;
   }
 
@@ -835,7 +835,7 @@ function ProviderOrphanSection({
     <div className="provider-section provider-orphan-panel">
       <div className="provider-section__header">
         <h3>未绑定运行时</h3>
-        <span>{sessions.length} 个</span>
+        <span>{runtimes.length} 个</span>
       </div>
       <p className="provider-orphan-note">
         这些运行时存在于 provider，但没有 sandbox/thread 绑定。暂停态可以直接走 Monitor 清理；运行中或未知状态先保留。
@@ -843,18 +843,18 @@ function ProviderOrphanSection({
       {loading && <p className="provider-empty-state">正在检查 provider 运行时...</p>}
       {error && <p className="provider-orphan-error">{error}</p>}
       {cleanupMessage && <p className="provider-orphan-message">{cleanupMessage}</p>}
-      {sessions.length > 0 && (
+      {runtimes.length > 0 && (
         <div className="provider-orphan-list">
-          {sessions.map((session) => {
-            const pendingId = `${session.provider}:${session.session_id}`;
-            const cleanupAllowed = session.status === "paused";
+          {runtimes.map((runtime) => {
+            const pendingId = `${runtime.provider}:${runtime.runtime_id}`;
+            const cleanupAllowed = runtime.status === "paused";
             return (
               <div key={pendingId} className="provider-orphan-row">
                 <div className="provider-orphan-row__main">
-                  <span className={`provider-status-dot provider-status-dot--${session.status}`} />
+                  <span className={`provider-status-dot provider-status-dot--${runtime.status}`} />
                   <div>
-                    <div className="provider-orphan-row__id">{session.session_id}</div>
-                    <div className="provider-orphan-row__meta">{session.status}</div>
+                    <div className="provider-orphan-row__id">{runtime.runtime_id}</div>
+                    <div className="provider-orphan-row__meta">{runtime.status}</div>
                   </div>
                 </div>
                 <button
@@ -862,7 +862,7 @@ function ProviderOrphanSection({
                   className="provider-orphan-cleanup-button"
                   disabled={!cleanupAllowed || cleanupPendingId === pendingId}
                   title={cleanupAllowed ? "清理暂停态未绑定运行时" : "运行中或未知状态需要先确认归属"}
-                  onClick={() => void onCleanup(session)}
+                  onClick={() => void onCleanup(runtime)}
                 >
                   {cleanupPendingId === pendingId ? "清理中..." : cleanupAllowed ? "清理" : "先保留"}
                 </button>
