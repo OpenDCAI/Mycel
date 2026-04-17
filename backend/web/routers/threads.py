@@ -318,18 +318,6 @@ def _request_bridge_text(row: Any, key: str, *, label: str) -> str:
     return str(value)
 
 
-def _request_bridge_config_text(row: Any, key: str, *, label: str) -> str:
-    config = row.get("config") if isinstance(row, dict) else getattr(row, "config", None)
-    if not isinstance(config, dict):
-        raise RuntimeError(f"{label}.config must be an object")
-    value = config.get(key)
-    if isinstance(value, str):
-        value = value.strip()
-    if value is None or value == "":
-        raise RuntimeError(f"{label}.config.{key} is required")
-    return str(value)
-
-
 def _resolve_owned_existing_sandbox_request_lease(
     app: Any,
     owner_user_id: str,
