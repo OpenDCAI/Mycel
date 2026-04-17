@@ -1,8 +1,16 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from backend.web.services import monitor_service, sandbox_service
+
+
+def test_provider_orphan_runtime_tests_do_not_use_lease_backed_fixture_name() -> None:
+    source = Path(__file__).read_text(encoding="utf-8")
+    forbidden = "lease" + "-backed"
+
+    assert forbidden not in source
 
 
 class _FailingManager:
@@ -27,18 +35,18 @@ def test_monitor_provider_orphan_runtimes_do_not_refresh_all_lease_sessions(monk
     assert monitor_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
 
 
-def test_load_provider_orphan_sessions_excludes_lease_backed_provider_runtimes():
+def test_load_provider_orphan_sessions_excludes_covered_provider_runtimes():
     manager = SimpleNamespace(
         provider=SimpleNamespace(
             name="daytona",
             list_provider_sessions=lambda: [
-                _provider_runtime("lease-backed"),
+                _provider_runtime("covered-runtime"),
                 _provider_runtime("orphan-paused", "paused"),
                 _provider_runtime("orphan-running", "running"),
                 _provider_runtime("deleted-one", "deleted"),
             ],
         ),
-        lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: [{"current_instance_id": "lease-backed"}]),
+        lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: [{"current_instance_id": "covered-runtime"}]),
         provider_capability=SimpleNamespace(inspect_visible=False),
     )
 
