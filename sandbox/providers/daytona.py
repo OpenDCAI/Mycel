@@ -566,7 +566,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
         if cleaned_cwd != state.cwd or cleaned_env != state.env_delta:
             from sandbox.terminal import TerminalState
 
-            # @@@daytona-state-sanitize - Legacy prompt noise can corrupt persisted cwd/env_delta and break PTY creation.
+            # @@@daytona-state-sanitize - stale prompt noise can corrupt persisted cwd/env_delta and break PTY creation.
             # Normalize once here so new abstract terminals inherit only valid state.
             self.update_terminal_state(TerminalState(cwd=cleaned_cwd, env_delta=cleaned_env))
         return cleaned_cwd, cleaned_env

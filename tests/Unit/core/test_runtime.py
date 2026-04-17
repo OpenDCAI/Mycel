@@ -780,6 +780,15 @@ def test_normalize_pty_result_strips_prompt_echo_and_tail_prompt():
     assert cleaned == "api-existing-thread-after-fix"
 
 
+def test_daytona_state_sanitize_comment_names_stale_prompt_noise() -> None:
+    from sandbox.providers.daytona import DaytonaSessionRuntime
+
+    source = inspect.getsource(DaytonaSessionRuntime._sanitize_terminal_snapshot)
+
+    assert "stale prompt noise" in source
+    assert "Legacy prompt noise" not in source
+
+
 @pytest.mark.asyncio
 async def test_daytona_runtime_sanitizes_corrupted_terminal_state_before_create(terminal_store, lease_store):
     pytest.importorskip("daytona_sdk")
