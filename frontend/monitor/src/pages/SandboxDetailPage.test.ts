@@ -5,6 +5,7 @@ import { buildSandboxDetailShell } from "./SandboxDetailPage";
 describe("sandbox detail page shell", () => {
   it("uses sandbox-shaped shell with cleanup parity lane", () => {
     const shell = buildSandboxDetailShell({
+      source: "sandbox_canonical",
       sandbox: {
         sandbox_id: "sandbox-1",
         provider_name: "docker",
@@ -44,6 +45,7 @@ describe("sandbox detail page shell", () => {
     });
 
     expect(shell.title).toBe("Sandbox sandbox-1");
+    expect(shell.sourceLabel).toBe("Source: sandbox_canonical");
     expect(shell.surfaceHref).toBe("/sandboxes");
     expect(shell.cleanupIncluded).toBe(true);
     expect(shell.cleanupTitle).toBe("Cleanup");

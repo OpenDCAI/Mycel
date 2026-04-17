@@ -6,6 +6,7 @@ import ErrorState from "../components/ErrorState";
 import StateBadge from "../components/StateBadge";
 
 export type SandboxDetailPayload = {
+  source: string;
   sandbox: {
     sandbox_id: string;
     provider_name?: string | null;
@@ -70,6 +71,7 @@ const CLEANUP_STATUS_CLASS_BY_STATUS: Record<string, string> = {
 export function buildSandboxDetailShell(data: SandboxDetailPayload) {
   return {
     title: `Sandbox ${data.sandbox.sandbox_id}`,
+    sourceLabel: `Source: ${data.source}`,
     description: data.triage?.description ?? "Sandbox state and current read-only relations.",
     surfaceHref: "/sandboxes",
     cleanupIncluded: true,
@@ -128,6 +130,7 @@ export default function SandboxDetailPage() {
     <div className="page">
       <h1>{shell.title}</h1>
       <p className="description">{shell.description}</p>
+      <p className="count">{shell.sourceLabel}</p>
       <section className="surface-section">
         <h2>State</h2>
         <div className="surface-grid">

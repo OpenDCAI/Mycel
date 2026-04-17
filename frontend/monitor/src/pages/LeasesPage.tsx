@@ -8,6 +8,7 @@ import { useMonitorData } from "../app/fetch";
 type LeasesPayload = {
   title: string;
   count: number;
+  source: string;
   triage?: {
     summary?: {
       active_drift?: number;
@@ -49,6 +50,7 @@ export function buildLeaseWorkbenchShell(data: LeasesPayload) {
   return {
     triageTitle: "Lease Triage",
     workbenchTitle: "Lease Workbench",
+    sourceLabel: `Source: ${data.source}`,
     triageCards,
     rows: data.items.map((item) => ({
       ...item,
@@ -75,7 +77,9 @@ export default function LeasesPage() {
   return (
     <div className="page">
       <h1>{data.title}</h1>
-      <p className="count">Total: {data.count}</p>
+      <p className="count">
+        Total: {data.count} · {shell.sourceLabel}
+      </p>
       <section className="surface-section">
         <h2>{shell.triageTitle}</h2>
         <div className="surface-grid">

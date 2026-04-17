@@ -7,6 +7,7 @@ describe("leases page shell", () => {
     const shell = buildLeaseWorkbenchShell({
       title: "All Leases",
       count: 1,
+      source: "lease_compatibility",
       triage: {
         summary: {
           active_drift: 0,
@@ -32,6 +33,7 @@ describe("leases page shell", () => {
 
     expect(shell.triageTitle).toBe("Lease Triage");
     expect(shell.workbenchTitle).toBe("Lease Workbench");
+    expect(shell.sourceLabel).toBe("Source: lease_compatibility");
     expect(shell.rows[0].href).toBe("/sandboxes/sandbox-1");
     expect(shell.rows[0].compatibilityLeaseId).toBe("lease-1");
   });
