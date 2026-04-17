@@ -780,14 +780,14 @@ def _create_owned_thread(
     if payload.existing_sandbox_id:
         sandbox = app.state.sandbox_repo.get_by_id(payload.existing_sandbox_id)
         if sandbox is None:
-            raise HTTPException(403, "Lease not authorized")
+            raise HTTPException(403, "Sandbox not authorized")
         preview_lease = _resolve_owned_existing_sandbox_request_lease(
             app,
             owner_user_id,
             payload.existing_sandbox_id,
         )
         if preview_lease is None:
-            raise HTTPException(403, "Lease not authorized")
+            raise HTTPException(403, "Sandbox not authorized")
         sandbox_id = str(payload.existing_sandbox_id).strip()
         bind_cwd = _resolve_existing_sandbox_bind_cwd(
             app.state.workspace_repo,
@@ -808,7 +808,7 @@ def _create_owned_thread(
         )
         selected_lease_id = _request_bridge_text(owned_lease, "lease_id", label="lease")
         if owned_lease is None:
-            raise HTTPException(403, "Lease not authorized")
+            raise HTTPException(403, "Sandbox not authorized")
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
     selected_recipe = None
     if not selected_lease_id:

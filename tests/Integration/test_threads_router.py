@@ -591,7 +591,7 @@ async def test_create_thread_route_rejects_lease_shaped_existing_identity():
             await threads_router.create_thread(payload, "owner-1", app)
 
     assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Lease not authorized"
+    assert excinfo.value.detail == "Sandbox not authorized"
     bind_helper.assert_not_called()
 
 
