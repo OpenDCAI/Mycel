@@ -6,22 +6,10 @@ from typing import Any
 from backend.web.services.thread_runtime_binding_service import resolve_thread_runtime_binding
 
 
-def _resolve_thread_sandbox_instance(mgr: Any, lease: Any) -> Any | None:
-    instance = lease.get_instance()
-    if instance is not None:
-        return instance
-    if getattr(mgr.provider_capability, "runtime_kind", None) != "local":
-        return None
-    # @@@local-status-convergence - local leases can have no bound instance until first capability/session
-    # touch. Converge through ensure_active_instance so TaskProgress reflects the actual local runtime
-    # instead of showing a fake detached state.
-    return lease.ensure_active_instance(mgr.provider)
-
-
-def _display_sandbox_status(lease: Any, instance: Any) -> str:
-    observed = getattr(lease, "observed_state", None)
+def _display_repo_sandbox_status(lease: dict[str, Any], instance: dict[str, Any]) -> str:
+    observed = lease.get("observed_state")
     if observed in {None, "", "detached"}:
-        status = getattr(instance, "status", None)
+        status = instance.get("status")
         if not isinstance(status, str) or not status:
             raise RuntimeError("Sandbox instance missing status")
         return status
@@ -30,27 +18,28 @@ def _display_sandbox_status(lease: Any, instance: Any) -> str:
     return observed
 
 
-def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
-    """Get sandbox session info for a thread.
-
-    Returns:
-        Dict with type, status, error (if any)
-    """
+def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
+    """Get sandbox info for a thread from the target runtime binding."""
     sandbox_info: dict[str, Any] = {"type": sandbox_type, "status": None}
-    if not hasattr(agent, "_sandbox"):
-        return sandbox_info
 
     try:
-        mgr = agent._sandbox.manager
-        terminal = mgr.get_terminal(thread_id)
-        if terminal:
-            lease = mgr.get_lease(terminal.lease_id)
-            if lease:
-                instance = _resolve_thread_sandbox_instance(mgr, lease)
-                if instance:
-                    sandbox_info["status"] = _display_sandbox_status(lease, instance)
-                else:
-                    sandbox_info["status"] = "detached"
+        binding = resolve_thread_runtime_binding(
+            thread_repo=app.state.thread_repo,
+            workspace_repo=app.state.workspace_repo,
+            sandbox_repo=app.state.sandbox_repo,
+            thread_id=thread_id,
+        )
+        lease_id = str(binding.sandbox_config.get("legacy_lease_id") or "").strip()
+        if not lease_id:
+            return sandbox_info
+        lease = app.state.lease_repo.get(lease_id)
+        if not lease:
+            return sandbox_info
+        instance = lease.get("_instance")
+        if instance:
+            sandbox_info["status"] = _display_repo_sandbox_status(lease, instance)
+        else:
+            sandbox_info["status"] = "detached"
     except Exception as exc:
         sandbox_info["status"] = "error"
         sandbox_info["error"] = str(exc)

@@ -1084,10 +1084,9 @@ async def get_thread_messages(
     Hot path: return in-memory state.  Cold path: rebuild from checkpoint.
     """
     sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     display_builder = app.state.display_builder
     entries = await _get_thread_display_entries(app, thread_id)
-    sandbox_info = get_sandbox_info(agent, thread_id, sandbox_type)
+    sandbox_info = get_sandbox_info(app, thread_id, sandbox_type)
     return {
         "thread_id": thread_id,
         "entries": entries,
