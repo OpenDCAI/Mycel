@@ -30,7 +30,7 @@ node_modules/
 .next/
 .langgraph_api/
 *.log
- *.bak
+*.bak
 
 # Archives
 *.zip
