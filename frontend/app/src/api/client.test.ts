@@ -272,10 +272,9 @@ describe("thread api client contract", () => {
     await expect(api.listSandboxTypes()).rejects.toThrow("Malformed sandbox types");
   });
 
-  it("listMySandboxes reads the canonical sandbox list endpoint", async () => {
+  it("listMySandboxes reads canonical sandbox summaries without lease identities", async () => {
     authFetch.mockResolvedValue(okJson({
       sandboxes: [{
-        lease_id: "lease-1",
         sandbox_id: "sandbox-1",
         provider_name: "local",
         recipe_id: "recipe-1",
@@ -285,14 +284,16 @@ describe("thread api client contract", () => {
       }],
     }));
 
-    await expect(api.listMySandboxes()).resolves.toMatchObject([{ sandbox_id: "sandbox-1" }]);
+    const result = await api.listMySandboxes();
+
+    expect(result).toMatchObject([{ sandbox_id: "sandbox-1" }]);
+    expect(result[0]).not.toHaveProperty("lease_id");
     expect(authFetch).toHaveBeenCalledWith("/api/sandbox/sandboxes/mine", { signal: undefined });
   });
 
   it("listMySandboxes rejects sandbox summaries without sandbox identities", async () => {
     authFetch.mockResolvedValue(okJson({
       sandboxes: [{
-        lease_id: "lease-1",
         provider_name: "local",
         recipe_id: "recipe-1",
         recipe_name: "Local",
@@ -307,7 +308,6 @@ describe("thread api client contract", () => {
   it("listMySandboxes rejects malformed sandbox participant identities", async () => {
     authFetch.mockResolvedValue(okJson({
       sandboxes: [{
-        lease_id: "lease-1",
         sandbox_id: "sandbox-1",
         provider_name: "local",
         recipe_id: "recipe-1",

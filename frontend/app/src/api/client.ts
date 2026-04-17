@@ -387,7 +387,6 @@ function parseUserSandboxSummaries(value: unknown): UserSandboxSummary[] {
   if (!Array.isArray(sandboxes)) throw new Error("Malformed user sandboxes");
   return sandboxes.map((sandbox) => {
     const data = asRecord(sandbox);
-    const lease_id = data ? recordString(data, "lease_id") : undefined;
     const sandbox_id = data ? recordString(data, "sandbox_id") : undefined;
     const provider_name = data ? recordString(data, "provider_name") : undefined;
     const recipe_id = data ? recordString(data, "recipe_id") : undefined;
@@ -396,7 +395,6 @@ function parseUserSandboxSummaries(value: unknown): UserSandboxSummary[] {
     const agents = data?.agents;
     if (
       !data ||
-      !lease_id ||
       !sandbox_id ||
       !provider_name ||
       !recipe_id ||
@@ -414,7 +412,18 @@ function parseUserSandboxSummaries(value: unknown): UserSandboxSummary[] {
       if (!agentData || !thread_id || !agent_name) throw new Error("Malformed user sandboxes");
       return { ...agentData, thread_id, agent_name };
     });
-    return { ...data, lease_id, sandbox_id, provider_name, recipe_id, recipe_name, thread_ids, agents: admittedAgents } as UserSandboxSummary;
+    return {
+      sandbox_id,
+      provider_name,
+      recipe_id,
+      recipe_name,
+      recipe: data.recipe,
+      observed_state: data.observed_state,
+      desired_state: data.desired_state,
+      cwd: data.cwd,
+      thread_ids,
+      agents: admittedAgents,
+    } as UserSandboxSummary;
   });
 }
 
