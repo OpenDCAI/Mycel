@@ -11,7 +11,6 @@ describe("monitor relation shell", () => {
     const shell = buildThreadRelationShell({
       provider_name: "daytona",
       sandbox_id: "sandbox-1",
-      lease_id: "lease-1",
       current_instance_id: "runtime-1",
     });
 

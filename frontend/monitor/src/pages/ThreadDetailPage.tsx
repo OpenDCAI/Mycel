@@ -19,7 +19,6 @@ type ThreadDetailPayload = {
   summary?: {
     provider_name?: string | null;
     sandbox_id?: string | null;
-    lease_id?: string | null;
     current_instance_id?: string | null;
     desired_state?: string | null;
     observed_state?: string | null;

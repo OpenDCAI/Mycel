@@ -747,6 +747,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
     assert payload["thread"]["thread_id"] == "thread-1"
     assert payload["owner"]["display_name"] == "Ada"
     assert payload["summary"]["sandbox_id"] == "sandbox-1"
+    assert "lease_id" not in payload["summary"]
     assert payload["trajectory"]["run_id"] == "run-1"
     assert payload["trajectory"]["conversation"][0]["role"] == "human"
     assert payload["trajectory"]["events"][0]["event_type"] == "tool_call"
@@ -793,7 +794,6 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
     assert payload["summary"] == {
         "sandbox_id": "sandbox-1",
         "provider_name": "daytona",
-        "lease_id": "lease-1",
         "current_instance_id": "runtime-1",
         "desired_state": "paused",
         "observed_state": "paused",
