@@ -5,7 +5,7 @@ from tests.fakes.supabase import FakeSupabaseClient
 
 
 def test_supabase_summary_repo_save_list_get_and_delete():
-    tables: dict[str, list[dict]] = {"summaries": []}
+    tables: dict[str, list[dict]] = {"agent.summaries": []}
     repo = SupabaseSummaryRepo(client=FakeSupabaseClient(tables=tables))
 
     repo.ensure_tables()
@@ -41,12 +41,13 @@ def test_supabase_summary_repo_save_list_get_and_delete():
     listed = repo.list_summaries("t-1")
     assert [row["summary_id"] for row in listed] == ["s-2", "s-1"]
 
-    active_count = sum(1 for row in tables["summaries"] if row["is_active"])
+    active_count = sum(1 for row in tables["agent.summaries"] if row["is_active"])
     assert active_count == 1
 
     repo.delete_thread_summaries("t-1")
     assert repo.list_summaries("t-1") == []
     assert repo.get_latest_summary_row("t-1") is None
+    assert "summaries" not in tables
 
 
 def test_supabase_summary_repo_requires_compatible_client():
