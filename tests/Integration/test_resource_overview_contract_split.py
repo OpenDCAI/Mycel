@@ -161,11 +161,6 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
             )
         ],
     )
-    monkeypatch.setattr(
-        resource_projection_service.sandbox_service,
-        "list_user_leases",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("user resource overview must not read lease summaries")),
-    )
     _patch_provider_contracts(
         monkeypatch,
         description="Daytona",
@@ -213,11 +208,6 @@ def test_user_resource_projection_does_not_call_lease_summary_service(monkeypatc
                 recipe={"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
             )
         ],
-    )
-    monkeypatch.setattr(
-        resource_projection_service.sandbox_service,
-        "list_user_leases",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("user resource overview must not call list_user_leases")),
     )
     _patch_provider_contracts(
         monkeypatch,

@@ -242,15 +242,15 @@ def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     app.state._supabase_client = object()
     seen: dict[str, object] = {}
 
-    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
+    def _fake_count_user_visible_sandboxes_by_provider(user_id: str, **kwargs):
         seen["user_id"] = user_id
         seen["kwargs"] = kwargs
         return {"local": 1, "daytona_selfhost": 2, "e2b": 1}
 
     monkeypatch.setattr(
         settings_router.account_resource_service.sandbox_service,
-        "count_user_visible_leases_by_provider",
-        _fake_count_user_visible_leases_by_provider,
+        "count_user_visible_sandboxes_by_provider",
+        _fake_count_user_visible_sandboxes_by_provider,
     )
 
     with TestClient(app) as client:
@@ -297,15 +297,15 @@ def test_account_resources_route_applies_user_limit_overrides(monkeypatch):
     app = _settings_test_app(repo)
     app.state.thread_repo = object()
 
-    def _fake_count_user_visible_leases_by_provider(user_id: str, **kwargs):
+    def _fake_count_user_visible_sandboxes_by_provider(user_id: str, **kwargs):
         assert user_id == "user-1"
         assert kwargs == {"thread_repo": app.state.thread_repo}
         return {"daytona_selfhost": 2}
 
     monkeypatch.setattr(
         settings_router.account_resource_service.sandbox_service,
-        "count_user_visible_leases_by_provider",
-        _fake_count_user_visible_leases_by_provider,
+        "count_user_visible_sandboxes_by_provider",
+        _fake_count_user_visible_sandboxes_by_provider,
     )
 
     with TestClient(app) as client:

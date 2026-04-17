@@ -76,7 +76,7 @@ def list_account_resource_limits(app: Any, user_id: str) -> dict[str, list[dict[
     supabase_client = getattr(app.state, "_supabase_client", None)
     if supabase_client is not None:
         count_kwargs["supabase_client"] = supabase_client
-    used_by_provider = sandbox_service.count_user_visible_leases_by_provider(user_id, **count_kwargs)
+    used_by_provider = sandbox_service.count_user_visible_sandboxes_by_provider(user_id, **count_kwargs)
     raw_limits = _settings_repo(app).get_account_resource_limits(user_id)
     limits = {**DEFAULT_SANDBOX_LIMITS, **_normalized_user_sandbox_limits(raw_limits)}
     providers = sorted(

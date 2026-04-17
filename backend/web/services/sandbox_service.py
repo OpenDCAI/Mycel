@@ -165,21 +165,6 @@ def _list_user_runtime_rows(
         monitor_repo.close()
 
 
-def list_user_leases(
-    user_id: str,
-    *,
-    thread_repo: Any = None,
-    user_repo: Any = None,
-    include_runtime_session_id: bool = False,
-) -> list[dict[str, Any]]:
-    return _list_user_runtime_rows(
-        user_id,
-        thread_repo=thread_repo,
-        user_repo=user_repo,
-        include_runtime_session_id=include_runtime_session_id,
-    )
-
-
 def _sandbox_summary(row: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in row.items() if key != "lease_id"}
 
@@ -194,14 +179,14 @@ def list_user_sandboxes(
     return [_sandbox_summary(row) for row in rows]
 
 
-def count_user_visible_leases_by_provider(
+def count_user_visible_sandboxes_by_provider(
     user_id: str,
     *,
     thread_repo: Any = None,
     supabase_client: Any | None = None,
 ) -> dict[str, int]:
     if thread_repo is None:
-        raise RuntimeError("thread_repo is required for count_user_visible_leases_by_provider")
+        raise RuntimeError("thread_repo is required for count_user_visible_sandboxes_by_provider")
     repo_kwargs = {"supabase_client": supabase_client} if supabase_client is not None else {}
     monitor_repo = make_sandbox_monitor_repo(**repo_kwargs)
     try:
@@ -211,10 +196,12 @@ def count_user_visible_leases_by_provider(
             if str(thread.get("id") or "").strip()
         }
         counts: Counter[str] = Counter()
-        counted_lease_ids: set[str] = set()
+        counted_sandbox_keys: set[str] = set()
         for row in monitor_repo.query_sandboxes():
             lease_id = str(row.get("lease_id") or "").strip()
-            if not lease_id or lease_id in counted_lease_ids:
+            sandbox_id = str(row.get("sandbox_id") or "").strip()
+            sandbox_key = sandbox_id or lease_id
+            if not sandbox_key or sandbox_key in counted_sandbox_keys:
                 continue
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_lease_thread(thread_id) or thread_id not in owned_thread_ids:
@@ -222,7 +209,7 @@ def count_user_visible_leases_by_provider(
             if not _is_user_visible_lease_state(row):
                 continue
             counts[str(row.get("provider_name") or "local")] += 1
-            counted_lease_ids.add(lease_id)
+            counted_sandbox_keys.add(sandbox_key)
         return dict(counts)
     finally:
         monitor_repo.close()

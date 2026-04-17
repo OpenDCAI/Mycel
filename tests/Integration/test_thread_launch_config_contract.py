@@ -175,10 +175,6 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
     }
 
 
-def _fail_list_user_leases(*_args, **_kwargs):
-    raise AssertionError("default thread launch config must not read lease summaries")
-
-
 def test_launch_config_service_does_not_expose_lease_shell_builder() -> None:
     assert not hasattr(thread_launch_config_service, "build_existing_launch_config")
 
@@ -248,11 +244,6 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
     )
 
     with (
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "list_user_leases",
-            side_effect=_fail_list_user_leases,
-        ),
         patch.object(
             thread_launch_config_service.sandbox_service,
             "available_sandbox_types",
@@ -353,11 +344,6 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
     with (
         patch.object(
             thread_launch_config_service.sandbox_service,
-            "list_user_leases",
-            side_effect=_fail_list_user_leases,
-        ),
-        patch.object(
-            thread_launch_config_service.sandbox_service,
             "available_sandbox_types",
             return_value=[{"name": "daytona_selfhost", "available": True}],
         ),
@@ -439,11 +425,6 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
     with (
         patch.object(
             thread_launch_config_service.sandbox_service,
-            "list_user_leases",
-            side_effect=_fail_list_user_leases,
-        ),
-        patch.object(
-            thread_launch_config_service.sandbox_service,
             "available_sandbox_types",
             return_value=[{"name": "daytona_selfhost", "available": True}],
         ),
@@ -482,11 +463,6 @@ def test_resolve_default_config_derives_existing_from_legacy_lease_backed_curren
     )
 
     with (
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "list_user_leases",
-            side_effect=_fail_list_user_leases,
-        ),
         patch.object(
             thread_launch_config_service.sandbox_service,
             "available_sandbox_types",
@@ -551,7 +527,6 @@ def test_resolve_default_config_fails_loudly_for_malformed_workspace_bridge() ->
     )
 
     with (
-        patch.object(thread_launch_config_service.sandbox_service, "list_user_leases", side_effect=_fail_list_user_leases),
         patch.object(thread_launch_config_service.sandbox_service, "available_sandbox_types", return_value=[]),
         patch.object(thread_launch_config_service, "list_library", return_value=[]),
         pytest.raises(RuntimeError, match="workspace.sandbox_id is required"),
@@ -582,11 +557,6 @@ def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_
     )
 
     with (
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "list_user_leases",
-            side_effect=_fail_list_user_leases,
-        ),
         patch.object(
             thread_launch_config_service.sandbox_service,
             "available_sandbox_types",

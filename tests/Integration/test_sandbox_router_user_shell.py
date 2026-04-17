@@ -20,9 +20,6 @@ def test_sandbox_router_does_not_expose_local_folder_picker() -> None:
 async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
-    def fail_list_user_leases(*_args, **_kwargs) -> list[dict[str, object]]:
-        raise AssertionError("owner-facing sandbox route must not call list_user_leases")
-
     def fake_list_user_sandboxes(user_id: str, *, thread_repo=None, user_repo=None) -> list[dict[str, object]]:
         seen.update(
             {
@@ -36,7 +33,6 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
     thread_repo = SimpleNamespace()
     user_repo = SimpleNamespace()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(thread_repo=thread_repo, user_repo=user_repo)))
-    monkeypatch.setattr(sandbox_router.sandbox_service, "list_user_leases", fail_list_user_leases)
     monkeypatch.setattr(sandbox_router.sandbox_service, "list_user_sandboxes", fake_list_user_sandboxes, raising=False)
 
     result = await sandbox_router.list_my_sandboxes(user_id="owner-1", request=request)

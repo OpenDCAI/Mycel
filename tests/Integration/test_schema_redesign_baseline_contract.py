@@ -7,7 +7,7 @@ from backend.web.services import resource_common, resource_projection_service, r
 from backend.web.utils.serializers import avatar_url
 
 
-def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> None:
+def test_list_user_sandboxes_exposes_thread_identity_not_member_id(monkeypatch) -> None:
     class _FakeMonitorRepo:
         def query_sandboxes(self) -> list[dict[str, object]]:
             return [
@@ -48,19 +48,19 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
         )
     )
 
-    result = sandbox_service.list_user_leases("owner-1", thread_repo=thread_repo, user_repo=user_repo)
+    result = sandbox_service.list_user_sandboxes("owner-1", thread_repo=thread_repo, user_repo=user_repo)
 
     assert len(result) == 1
-    lease = result[0]
-    assert lease["lease_id"] == "lease-1"
-    assert lease["provider_name"] == "daytona_selfhost"
-    assert lease["thread_ids"] == ["thread-1"]
-    assert lease["recipe_id"] == "daytona_selfhost:default"
-    assert lease["recipe_name"] == "Daytona Selfhost Default"
-    assert lease["recipe"]["id"] == "daytona_selfhost:default"
-    assert lease["recipe"]["provider_name"] == "daytona_selfhost"
-    assert lease["recipe"]["provider_type"] == "daytona"
-    assert lease["agents"] == [
+    sandbox = result[0]
+    assert "lease_id" not in sandbox
+    assert sandbox["provider_name"] == "daytona_selfhost"
+    assert sandbox["thread_ids"] == ["thread-1"]
+    assert sandbox["recipe_id"] == "daytona_selfhost:default"
+    assert sandbox["recipe_name"] == "Daytona Selfhost Default"
+    assert sandbox["recipe"]["id"] == "daytona_selfhost:default"
+    assert sandbox["recipe"]["provider_name"] == "daytona_selfhost"
+    assert sandbox["recipe"]["provider_type"] == "daytona"
+    assert sandbox["agents"] == [
         {
             "thread_id": "thread-1",
             "agent_user_id": "agent-1",
@@ -68,7 +68,7 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
             "avatar_url": avatar_url("agent-1", True),
         }
     ]
-    assert "member_id" not in lease["agents"][0]
+    assert "member_id" not in sandbox["agents"][0]
 
 
 def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> None:

@@ -906,7 +906,6 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
 
     with (
         patch.object(threads_router.sandbox_service, "resolve_owned_lease", side_effect=_resolve_owned_lease),
-        patch.object(threads_router.sandbox_service, "list_user_leases", side_effect=AssertionError("should not list all leases")),
         patch.object(
             threads_router,
             "bind_thread_to_existing_sandbox",
