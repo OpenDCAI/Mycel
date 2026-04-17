@@ -43,6 +43,34 @@ describe("ContactDetailPage", () => {
     navigate.mockReset();
   });
 
+  it("uses the contacts tab as the back target for direct-open contact detail", async () => {
+    authFetch.mockResolvedValueOnce(okJson([
+      {
+        user_id: "human-2",
+        name: "Ada",
+        type: "human",
+        avatar_url: null,
+        owner_name: null,
+        is_owned: false,
+        relationship_state: "visit",
+        can_chat: true,
+      },
+    ]));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/users/human-2"]}>
+        <Routes>
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button")[0]);
+
+    expect(navigate).toHaveBeenCalledWith("/contacts/users");
+  });
+
   it("renders a contact profile from the user candidate surface without leaking agent config panels", async () => {
     authFetch.mockResolvedValueOnce(okJson([
       {
