@@ -83,6 +83,7 @@ def _can_close_stale_active_sessions(*, category: str, sessions: list[dict[str, 
 def build_lease_cleanup_truth(
     *,
     lease_id: str,
+    sandbox_id: str | None = None,
     triage: dict[str, Any] | None,
     provider_name: str | None,
     runtime_session_id: str | None,
@@ -120,7 +121,11 @@ def build_lease_cleanup_truth(
         allowed = False
         reason = "Sandbox is not in a managed cleanup state."
 
-    operations = _operations_for_target("lease", lease_id)
+    sandbox_key = str(sandbox_id or "").strip()
+    if sandbox_key:
+        operations = _operations_for_target("sandbox", sandbox_key)
+    else:
+        operations = _operations_for_target("lease", lease_id)
     latest = operations[0] if operations else None
 
     return {
@@ -139,6 +144,7 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     threads = lease_detail.get("threads") or []
     cleanup = lease_detail.get("cleanup") or build_lease_cleanup_truth(
         lease_id=str(lease.get("lease_id") or ""),
+        sandbox_id=str(lease.get("sandbox_id") or ""),
         triage=lease_detail.get("triage"),
         provider_name=str(provider.get("id") or lease.get("provider_name") or ""),
         runtime_session_id=str(runtime.get("runtime_session_id") or ""),
