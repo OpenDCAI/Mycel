@@ -389,7 +389,35 @@ def _patch_create_thread_noop_guards():
 async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
     app = SimpleNamespace(
         state=SimpleNamespace(
-            terminal_repo=SimpleNamespace(get_active=lambda _thread_id: None),
+            thread_repo=SimpleNamespace(
+                get_by_id=lambda thread_id: {
+                    "id": thread_id,
+                    "owner_user_id": "owner-1",
+                    "agent_user_id": "agent-user-1",
+                    "current_workspace_id": "workspace-1",
+                }
+            ),
+            workspace_repo=SimpleNamespace(
+                get_by_id=lambda workspace_id: {
+                    "id": workspace_id,
+                    "owner_user_id": "owner-1",
+                    "sandbox_id": "sandbox-1",
+                    "workspace_path": "/workspace",
+                }
+            ),
+            sandbox_repo=SimpleNamespace(
+                get_by_id=lambda sandbox_id: {
+                    "id": sandbox_id,
+                    "owner_user_id": "owner-1",
+                    "provider_name": "daytona",
+                    "config": {},
+                }
+            ),
+            terminal_repo=SimpleNamespace(
+                get_active=lambda _thread_id: (_ for _ in ()).throw(
+                    AssertionError("lease status should not read terminal rows")
+                )
+            ),
             lease_repo=SimpleNamespace(),
         )
     )
@@ -403,7 +431,35 @@ async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
 async def test_get_thread_lease_status_reads_repos_without_agent_bootstrap():
     app = SimpleNamespace(
         state=SimpleNamespace(
-            terminal_repo=SimpleNamespace(get_active=lambda thread_id: {"lease_id": "lease-1"} if thread_id == "thread-1" else None),
+            thread_repo=SimpleNamespace(
+                get_by_id=lambda thread_id: {
+                    "id": thread_id,
+                    "owner_user_id": "owner-1",
+                    "agent_user_id": "agent-user-1",
+                    "current_workspace_id": "workspace-1",
+                }
+            ),
+            workspace_repo=SimpleNamespace(
+                get_by_id=lambda workspace_id: {
+                    "id": workspace_id,
+                    "owner_user_id": "owner-1",
+                    "sandbox_id": "sandbox-1",
+                    "workspace_path": "/workspace",
+                }
+            ),
+            sandbox_repo=SimpleNamespace(
+                get_by_id=lambda sandbox_id: {
+                    "id": sandbox_id,
+                    "owner_user_id": "owner-1",
+                    "provider_name": "daytona",
+                    "config": {"legacy_lease_id": "lease-1"},
+                }
+            ),
+            terminal_repo=SimpleNamespace(
+                get_active=lambda _thread_id: (_ for _ in ()).throw(
+                    AssertionError("lease status should not read terminal rows")
+                )
+            ),
             lease_repo=SimpleNamespace(
                 get=lambda lease_id: {
                     "lease_id": lease_id,
@@ -1094,24 +1150,28 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
             delete=_delete,
         ),
         workspace_repo=SimpleNamespace(
-            get_by_id=lambda workspace_id: SimpleNamespace(
-                id=workspace_id,
-                owner_user_id="owner-1",
-                sandbox_id="sandbox-healthy",
-                workspace_path="/workspace",
+            get_by_id=lambda workspace_id: (
+                SimpleNamespace(
+                    id=workspace_id,
+                    owner_user_id="owner-1",
+                    sandbox_id="sandbox-healthy",
+                    workspace_path="/workspace",
+                )
+                if workspace_id == "workspace-healthy"
+                else None
             )
-            if workspace_id == "workspace-healthy"
-            else None
         ),
         sandbox_repo=SimpleNamespace(
-            get_by_id=lambda sandbox_id: SimpleNamespace(
-                id=sandbox_id,
-                owner_user_id="owner-1",
-                provider_name="local",
-                config={"legacy_lease_id": "lease-healthy"},
+            get_by_id=lambda sandbox_id: (
+                SimpleNamespace(
+                    id=sandbox_id,
+                    owner_user_id="owner-1",
+                    provider_name="local",
+                    config={"legacy_lease_id": "lease-healthy"},
+                )
+                if sandbox_id == "sandbox-healthy"
+                else None
             )
-            if sandbox_id == "sandbox-healthy"
-            else None
         ),
         agent_pool={},
         thread_last_active={},

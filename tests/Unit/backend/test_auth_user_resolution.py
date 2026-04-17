@@ -121,7 +121,9 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
                     config={"legacy_lease_id": "lease-1"},
                 )
             ),
-            terminal_repo=SimpleNamespace(get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("terminal_repo should not gate ownership"))),
+            terminal_repo=SimpleNamespace(
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("terminal_repo should not gate ownership"))
+            ),
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
             ),

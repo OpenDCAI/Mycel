@@ -30,10 +30,7 @@ def _default_eval_batch_service(monkeypatch):
 def _default_monitor_thread_repo(monkeypatch):
     class FakeCanonicalThreadRepo:
         def list_by_ids(self, thread_ids: list[str]):
-            return [
-                {"id": thread_id, "agent_user_id": "agent-1", "branch_index": 0, "is_main": True}
-                for thread_id in thread_ids
-            ]
+            return [{"id": thread_id, "agent_user_id": "agent-1", "branch_index": 0, "is_main": True} for thread_id in thread_ids]
 
         def close(self):
             return None
