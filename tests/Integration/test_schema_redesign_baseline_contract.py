@@ -80,10 +80,10 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
 
     monkeypatch.setattr(
         resource_projection_service.sandbox_service,
-        "list_user_leases",
+        "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             {
-                "lease_id": "lease-1",
+                "sandbox_id": "sandbox-1",
                 "provider_name": "daytona_selfhost",
                 "recipe": {"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
                 "cwd": "/workspace",
@@ -122,15 +122,17 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
     monkeypatch.setattr(
         resource_projection_service,
         "make_sandbox_monitor_repo",
-        lambda: SimpleNamespace(query_lease_instance_ids=lambda _lease_ids: {}, close=lambda: None),
+        lambda: SimpleNamespace(query_sandbox_instance_ids=lambda _sandbox_ids: {}, close=lambda: None),
     )
 
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     session = payload["providers"][0]["sessions"][0]
+    assert session["sandboxId"] == "sandbox-1"
     assert session["threadId"] == "thread-1"
     assert session["agentName"] == "Morel"
     assert session["avatarUrl"] == avatar_url("agent-user-1", True)
+    assert "leaseId" not in session
     assert "memberId" not in session
 
 
