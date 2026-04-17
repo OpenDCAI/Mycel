@@ -80,13 +80,15 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
 
     monkeypatch.setattr(
         resource_projection_service.sandbox_service,
-        "list_user_leases",
+        "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             {
+                "sandbox_id": "sandbox-1",
                 "lease_id": "lease-1",
                 "provider_name": "daytona_selfhost",
                 "recipe": {"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
                 "cwd": "/workspace",
+                "runtime_session_id": "provider-session-1",
                 "thread_ids": ["thread-1"],
                 "agents": [
                     {
@@ -100,6 +102,11 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
                 "created_at": "2026-04-08T10:00:00Z",
             }
         ],
+    )
+    monkeypatch.setattr(
+        resource_projection_service.sandbox_service,
+        "list_user_leases",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("resource overview must not read lease wrapper")),
     )
     monkeypatch.setattr(
         resource_projection_service.resource_service,
