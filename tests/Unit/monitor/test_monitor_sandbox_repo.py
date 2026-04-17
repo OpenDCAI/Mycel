@@ -11,6 +11,13 @@ class _BrokenSandboxInstancesClient(FakeSupabaseClient):
         return super().table(table_name)
 
 
+class _BrokenChatSessionsClient(FakeSupabaseClient):
+    def table(self, table_name: str):
+        if table_name == "chat_sessions":
+            raise RuntimeError("chat_sessions exploded")
+        return super().table(table_name)
+
+
 class _MaxInFilterQuery(FakeSupabaseQuery):
     def in_(self, column: str, values: list[object]):
         assert len(values) <= 80
@@ -333,7 +340,7 @@ def test_query_sandbox_allows_missing_legacy_lease_bridge() -> None:
     }
 
 
-def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
+def test_query_thread_sessions_ignores_removed_chat_sessions_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -357,25 +364,43 @@ def test_query_thread_sessions_reads_container_sandbox_rows() -> None:
         }
     )
 
-    assert repo.query_thread_sessions("thread-1") == [
+    assert repo.query_thread_sessions("thread-1") == []
+
+
+def test_session_monitor_surfaces_do_not_read_removed_chat_sessions_table() -> None:
+    repo = SupabaseSandboxMonitorRepo(
+        _BrokenChatSessionsClient(
+            {
+                "container.sandboxes": [
+                    _sandbox("sandbox-1", provider_env_id="instance-1", legacy_lease_id="lease-1"),
+                ],
+                "container.workspaces": [
+                    _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:05:00"),
+                ],
+                "agent.threads": [
+                    _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:05:00"),
+                ],
+            }
+        )
+    )
+
+    assert repo.query_thread_sessions("thread-1") == []
+    assert repo.query_sandbox_sessions("sandbox-1") == []
+    assert repo.query_resource_sessions() == [
         {
-            "chat_session_id": "sess-1",
-            "status": "active",
-            "started_at": "2026-04-05T10:01:00",
-            "ended_at": None,
-            "close_reason": None,
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
             "sandbox_id": "sandbox-1",
             "lease_id": "lease-1",
-            "provider_name": "daytona_selfhost",
-            "desired_state": "paused",
-            "observed_state": "paused",
-            "current_instance_id": "instance-1",
-            "last_error": "last boom",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-05T09:00:00",
         }
     ]
 
 
-def test_query_sandbox_sessions_no_longer_roundtrips_through_lease_session_shell(monkeypatch) -> None:
+def test_query_sandbox_sessions_no_longer_reads_remote_session_shell(monkeypatch) -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -401,26 +426,10 @@ def test_query_sandbox_sessions_no_longer_roundtrips_through_lease_session_shell
 
     assert not hasattr(repo, "query_lease_sessions")
 
-    assert repo.query_sandbox_sessions("sandbox-1") == [
-        {
-            "chat_session_id": "sess-1",
-            "status": "active",
-            "started_at": "2026-04-05T10:01:00",
-            "ended_at": None,
-            "close_reason": None,
-            "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
-            "provider_name": "daytona_selfhost",
-            "desired_state": "paused",
-            "observed_state": "paused",
-            "current_instance_id": "instance-1",
-            "last_error": "last boom",
-            "thread_id": "thread-1",
-        }
-    ]
+    assert repo.query_sandbox_sessions("sandbox-1") == []
 
 
-def test_query_thread_sessions_no_longer_roundtrips_through_lease_summary_shell(monkeypatch) -> None:
+def test_query_thread_sessions_no_longer_reads_lease_or_session_summary_shell(monkeypatch) -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -452,22 +461,7 @@ def test_query_thread_sessions_no_longer_roundtrips_through_lease_summary_shell(
         ),
     )
 
-    assert repo.query_thread_sessions("thread-1") == [
-        {
-            "chat_session_id": "sess-1",
-            "status": "active",
-            "started_at": "2026-04-05T10:01:00",
-            "ended_at": None,
-            "close_reason": None,
-            "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
-            "provider_name": "daytona_selfhost",
-            "desired_state": "paused",
-            "observed_state": "paused",
-            "current_instance_id": "instance-1",
-            "last_error": "last boom",
-        }
-    ]
+    assert repo.query_thread_sessions("thread-1") == []
 
 
 def test_query_sandboxes_uses_latest_workspace_thread_binding() -> None:
@@ -887,7 +881,7 @@ def test_resource_session_row_source_shell_is_removed() -> None:
     assert not hasattr(repo, "list_sessions_with_leases")
 
 
-def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session_rows() -> None:
+def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -929,7 +923,7 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
         {
             "provider": "docker",
             "session_id": None,
-            "thread_id": "thread-new",
+            "thread_id": None,
             "sandbox_id": "sandbox-recent",
             "lease_id": "lease-recent",
             "observed_state": "paused",
@@ -958,8 +952,8 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
         },
         {
             "provider": "local",
-            "session_id": "sess-active",
-            "thread_id": "thread-active",
+            "session_id": None,
+            "thread_id": None,
             "sandbox_id": "sandbox-active",
             "lease_id": "lease-active",
             "observed_state": "running",
@@ -1016,8 +1010,8 @@ def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -
         },
         {
             "provider": "local",
-            "session_id": "sess-active",
-            "thread_id": "thread-active",
+            "session_id": None,
+            "thread_id": None,
             "sandbox_id": "sandbox-active",
             "lease_id": "lease-active",
             "observed_state": "running",
