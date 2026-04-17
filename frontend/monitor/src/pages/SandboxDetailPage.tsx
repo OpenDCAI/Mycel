@@ -79,6 +79,10 @@ export function buildSandboxDetailShell(data: SandboxDetailPayload) {
     cleanupHint: "Canonical sandbox cleanup lane for current operation and recent cleanup history.",
     cleanupButtonLabel: "Start sandbox cleanup",
     cleanupLedgerTitle: "Recent Operations",
+    threadActivityTitle: "Thread Activity",
+    noThreadActivityLabel: "No recorded thread activity",
+    threadActivityBody: "Most recent thread activity observed for this sandbox.",
+    threadActivityStatusLabel: "Thread activity status",
   };
 }
 
@@ -243,9 +247,11 @@ export default function SandboxDetailPage() {
             <p className="surface-card__body">Primary thread currently linked to this sandbox.</p>
           </article>
           <article className="surface-card">
-            <p className="surface-card__eyebrow">Session</p>
-            <p className="surface-card__value surface-card__value--compact">{latestSession?.chat_session_id ?? "No recorded session"}</p>
-            <p className="surface-card__body">Most recent chat session observed for this sandbox.</p>
+            <p className="surface-card__eyebrow">{shell.threadActivityTitle}</p>
+            <p className="surface-card__value surface-card__value--compact">
+              {latestSession?.chat_session_id ?? shell.noThreadActivityLabel}
+            </p>
+            <p className="surface-card__body">{shell.threadActivityBody}</p>
           </article>
         </div>
         <h3>Context</h3>
@@ -265,7 +271,7 @@ export default function SandboxDetailPage() {
             <span>{data.sandbox.last_error ?? "-"}</span>
           </div>
           <div>
-            <strong>Session status</strong>
+            <strong>{shell.threadActivityStatusLabel}</strong>
             <span>{latestSession?.status ?? "-"}</span>
           </div>
         </div>
