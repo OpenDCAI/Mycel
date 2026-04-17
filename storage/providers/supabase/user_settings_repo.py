@@ -10,6 +10,7 @@ from typing import Any
 from storage.providers.supabase import _query as q
 
 _REPO = "user_settings repo"
+_SCHEMA = "identity"
 _TABLE = "user_settings"
 
 
@@ -21,7 +22,7 @@ class SupabaseUserSettingsRepo:
         return None
 
     def _table(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, _SCHEMA, _TABLE, _REPO)
 
     def get(self, user_id: str) -> dict[str, Any]:
         rows = q.rows(
