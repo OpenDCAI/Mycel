@@ -347,9 +347,8 @@ def _resolve_owned_existing_sandbox_request_lease(
     if sandbox is None:
         return None
 
-    # @@@existing-sandbox-request-cutover - Phase C removes lease-shaped request
-    # acceptance. Incoming existing_sandbox_id must already be sandbox-shaped;
-    # legacy lease identity remains an internal bridge only.
+    # @@@existing-sandbox-request-cutover - incoming existing_sandbox_id is
+    # sandbox-shaped; legacy lease identity is resolved only behind the row.
     sandbox_owner_user_id = _request_bridge_text(sandbox, "owner_user_id", label="sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
@@ -789,11 +788,7 @@ def _create_owned_thread(
         )
         if preview_lease is None:
             raise HTTPException(403, "Lease not authorized")
-        sandbox_id = _materialize_sandbox_for_lease(
-            app.state.sandbox_repo,
-            lease=preview_lease,
-            owner_user_id=owner_user_id,
-        )
+        sandbox_id = str(payload.existing_sandbox_id).strip()
         bind_cwd = _resolve_existing_sandbox_bind_cwd(
             app.state.workspace_repo,
             sandbox_id=sandbox_id,

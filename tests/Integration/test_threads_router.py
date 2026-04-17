@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import threading
-import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -645,10 +644,10 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
         created = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
     row = app.state.thread_repo.rows[created["thread_id"]]
-    assert len(sandbox_repo.created) == 1
     assert len(workspace_repo.created) == 1
     assert row["current_workspace_id"] == workspace_repo.created[0].id
-    assert workspace_repo.created[0].sandbox_id == sandbox_repo.created[0].id
+    assert sandbox_repo.created == []
+    assert workspace_repo.created[0].sandbox_id == "sandbox-1"
 
 
 @pytest.mark.asyncio
@@ -660,14 +659,13 @@ async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_p
         "owner_user_id": "owner-1",
         "config": {"legacy_lease_id": "lease-1"},
     }
-    bridge_sandbox_id = f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}"
     existing_workspace = SimpleNamespace(
         id="workspace-existing",
-        sandbox_id=bridge_sandbox_id,
+        sandbox_id="sandbox-1",
         owner_user_id="owner-1",
         workspace_path="/workspace/existing",
     )
-    workspace_repo.by_sandbox_id[bridge_sandbox_id] = [existing_workspace]
+    workspace_repo.by_sandbox_id["sandbox-1"] = [existing_workspace]
     app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo, sandbox_repo=sandbox_repo)
     payload = CreateThreadRequest.model_validate(
         {
