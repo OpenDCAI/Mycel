@@ -855,6 +855,51 @@ def test_install_from_snapshot_copies_rules_skills_and_sub_agents_to_new_config(
     ]
 
 
+def test_install_from_snapshot_existing_user_fails_when_agent_config_missing():
+    agent = SimpleNamespace(id="agent-1", agent_config_id="cfg-missing")
+    calls: list[str] = []
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            assert user_id == "agent-1"
+            return agent
+
+        def update(self, *_args: object, **_kwargs: object) -> None:
+            calls.append("user.update")
+
+    class _AgentConfigRepo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-missing"
+            return None
+
+        def save_config(self, *_args: object, **_kwargs: object) -> None:
+            calls.append("config.save")
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    with pytest.raises(RuntimeError, match="Agent config cfg-missing is missing for agent-1"):
+        agent_user_service.install_from_snapshot(
+            snapshot={"agent_md": "---\nname: Repo Agent\n---\nmain prompt\n"},
+            name="Repo Agent",
+            description="Repo desc",
+            marketplace_item_id="item-1",
+            installed_version="1.0.0",
+            owner_user_id="owner-1",
+            existing_user_id="agent-1",
+            user_repo=_UserRepo(),
+            agent_config_repo=_AgentConfigRepo(),
+        )
+
+    assert calls == []
+
+
 def _agent_delete_runner(*, contact_error: str | None = None):
     agent = UserRow(
         id="agent-1",
