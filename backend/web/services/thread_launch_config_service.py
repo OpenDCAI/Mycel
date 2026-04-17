@@ -72,16 +72,7 @@ def build_new_launch_config(
     )
 
 
-def save_last_confirmed_config(app: Any, owner_user_id: str, agent_user_id: str, payload: dict[str, Any]) -> None:
-    _save_launch_config(app.state.thread_launch_pref_repo.save_confirmed, owner_user_id, agent_user_id, payload)
-
-
-def save_last_successful_config(app: Any, owner_user_id: str, agent_user_id: str, payload: dict[str, Any]) -> None:
-    _save_launch_config(app.state.thread_launch_pref_repo.save_successful, owner_user_id, agent_user_id, payload)
-
-
 def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
-    prefs = app.state.thread_launch_pref_repo.get(owner_user_id, agent_user_id) or {}
     leases = sandbox_service.list_user_leases(
         owner_user_id,
         thread_repo=app.state.thread_repo,
@@ -90,30 +81,6 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
     providers = [item for item in sandbox_service.available_sandbox_types() if item.get("available")]
     sandbox_templates = list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
     agent_threads = app.state.thread_repo.list_by_agent_user(agent_user_id)
-
-    # @@@thread-launch-default-precedence - prefer the last successful thread config, then the last confirmed draft,
-    # and only then derive from current leases/providers. This keeps defaults tied to actual agent usage first.
-    successful = _validate_saved_config(
-        app=app,
-        owner_user_id=owner_user_id,
-        payload=prefs.get("last_successful"),
-        leases=leases,
-        providers=providers,
-        sandbox_templates=sandbox_templates,
-    )
-    if successful is not None:
-        return {"source": "last_successful", "config": successful}
-
-    confirmed = _validate_saved_config(
-        app=app,
-        owner_user_id=owner_user_id,
-        payload=prefs.get("last_confirmed"),
-        leases=leases,
-        providers=providers,
-        sandbox_templates=sandbox_templates,
-    )
-    if confirmed is not None:
-        return {"source": "last_confirmed", "config": confirmed}
 
     return {
         "source": "derived",
@@ -126,73 +93,6 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
             sandbox_templates=sandbox_templates,
         ),
     }
-
-
-def _validate_saved_config(
-    app: Any,
-    owner_user_id: str,
-    payload: dict[str, Any] | None,
-    *,
-    leases: list[dict[str, Any]],
-    providers: list[dict[str, Any]],
-    sandbox_templates: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    if not isinstance(payload, dict):
-        return None
-
-    config = normalize_launch_config_payload(payload)
-    provider_names = {str(item["name"]) for item in providers}
-    sandbox_templates_by_id = {
-        str(item["id"]): item for item in sandbox_templates if item.get("available", True) and item.get("provider_type")
-    }
-
-    if config["create_mode"] == "existing":
-        existing_sandbox_id = config.get("existing_sandbox_id")
-        if not existing_sandbox_id:
-            return None
-        workspace = _resolve_saved_existing_workspace(
-            app=app,
-            owner_user_id=owner_user_id,
-            existing_sandbox_id=existing_sandbox_id,
-            model=config.get("model"),
-            workspace_path=config.get("workspace"),
-        )
-        if workspace is None:
-            return None
-        return workspace
-
-    provider_config = config.get("provider_config")
-    sandbox_template_id = str(config.get("sandbox_template_id") or "").strip()
-    if not provider_config or provider_config not in provider_names or not sandbox_template_id:
-        return None
-    if sandbox_template_id not in sandbox_templates_by_id:
-        return None
-    sandbox_template = sandbox_templates_by_id[sandbox_template_id]
-    if not _sandbox_template_matches_provider(sandbox_template, provider_config):
-        return None
-    sandbox_template_snapshot = normalize_recipe_snapshot(
-        provider_type_from_name(provider_config),
-        sandbox_template,
-        provider_name=provider_config,
-    )
-
-    return {
-        "create_mode": "new",
-        "provider_config": provider_config,
-        "sandbox_template_id": sandbox_template_id,
-        "sandbox_template": sandbox_template_snapshot,
-        "existing_sandbox_id": None,
-        "model": config.get("model"),
-        "workspace": config.get("workspace"),
-    }
-
-
-def _save_launch_config(save_fn: Any, owner_user_id: str, agent_user_id: str, payload: dict[str, Any]) -> None:
-    save_fn(
-        owner_user_id,
-        agent_user_id,
-        normalize_launch_config_payload(payload),
-    )
 
 
 def _existing_config_from_lease(lease: dict[str, Any], *, model: str | None, workspace: str | None) -> dict[str, Any]:
@@ -348,65 +248,6 @@ def _required_bridge_text(row: Any, key: str, label: str) -> str:
         value = value.strip()
     if value is None or value == "":
         raise RuntimeError(f"{label}.{key} is required")
-    return str(value)
-
-
-def _resolve_saved_existing_workspace(
-    *,
-    app: Any,
-    owner_user_id: str,
-    existing_sandbox_id: str,
-    model: str | None,
-    workspace_path: str | None,
-) -> dict[str, Any] | None:
-    sandbox_repo = getattr(app.state, "sandbox_repo", None)
-    sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
-    if not callable(sandbox_get_by_id):
-        return None
-    sandbox = sandbox_get_by_id(existing_sandbox_id)
-    if sandbox is None:
-        return None
-    sandbox_owner_user_id = _required_bridge_text(sandbox, "owner_user_id", "sandbox")
-    if sandbox_owner_user_id != owner_user_id:
-        raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
-    workspace_repo = getattr(app.state, "workspace_repo", None)
-    list_by_sandbox_id = getattr(workspace_repo, "list_by_sandbox_id", None)
-    resolved_workspace_path = ""
-    if callable(list_by_sandbox_id):
-        for workspace in list_by_sandbox_id(_required_bridge_text(sandbox, "id", "sandbox")):
-            workspace_owner_user_id = _required_bridge_text(workspace, "owner_user_id", "workspace")
-            if workspace_owner_user_id != owner_user_id:
-                continue
-            resolved_workspace_path = _required_bridge_text(workspace, "workspace_path", "workspace")
-            break
-    if not resolved_workspace_path:
-        resolved_workspace_path = str(workspace_path or "").strip()
-    if not resolved_workspace_path:
-        return None
-    sandbox_template = _resolve_workspace_backed_sandbox_template(
-        app=app,
-        owner_user_id=owner_user_id,
-        sandbox=sandbox,
-    )
-    return {
-        "create_mode": "existing",
-        "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
-        "sandbox_template": sandbox_template,
-        "existing_sandbox_id": _required_bridge_text(sandbox, "id", "sandbox"),
-        "model": model,
-        "workspace": resolved_workspace_path,
-    }
-
-
-def _required_bridge_config_text(row: Any, key: str, label: str) -> str:
-    config = row.get("config") if isinstance(row, dict) else getattr(row, "config", None)
-    if not isinstance(config, dict):
-        raise RuntimeError(f"{label}.config must be an object")
-    value = config.get(key)
-    if isinstance(value, str):
-        value = value.strip()
-    if value is None or value == "":
-        raise RuntimeError(f"{label}.config.{key} is required")
     return str(value)
 
 

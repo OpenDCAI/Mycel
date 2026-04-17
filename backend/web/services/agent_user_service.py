@@ -616,14 +616,11 @@ def delete_agent_user(
     agent_user_id: str,
     user_repo: Any = None,
     agent_config_repo: Any = None,
-    thread_launch_pref_repo: Any = None,
     contact_repo: Any = None,
 ) -> bool:
     if agent_user_id == "__leon__":
         return False
     _require_repo_backed_agent_ops(user_repo, agent_config_repo)
-    if thread_launch_pref_repo is None:
-        raise RuntimeError("thread_launch_pref_repo is required for agent delete")
     if contact_repo is None:
         raise RuntimeError("contact_repo is required for agent delete")
     user = user_repo.get_by_id(agent_user_id)
@@ -635,7 +632,6 @@ def delete_agent_user(
     # @@@delete-agent-order - clear dependent rows before the config/user roots.
     # If dependency cleanup fails, refusing the delete is safer than leaving an
     # agent user pointing at a removed config.
-    thread_launch_pref_repo.delete_by_agent_user_id(agent_user_id)
     contact_repo.delete_for_user(agent_user_id)
     agent_config_repo.delete_config(user.agent_config_id)
 

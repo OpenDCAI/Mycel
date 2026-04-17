@@ -221,18 +221,17 @@ async def test_delete_agent_route_rejects_agent_with_existing_threads(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_delete_agent_route_passes_thread_launch_pref_repo(monkeypatch: pytest.MonkeyPatch):
+async def test_delete_agent_route_passes_only_current_delete_dependencies(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, object] = {}
 
     def _fake_delete_agent_user(agent_id: str, **kwargs: object) -> bool:
         seen["agent_id"] = agent_id
-        seen["thread_launch_pref_repo"] = kwargs.get("thread_launch_pref_repo")
+        seen["delete_dependency_keys"] = sorted(kwargs)
         seen["contact_repo"] = kwargs.get("contact_repo")
         return True
 
     monkeypatch.setattr(agent_user_service, "delete_agent_user", _fake_delete_agent_user)
 
-    thread_launch_pref_repo = object()
     contact_repo = object()
     result = await panel_router.delete_agent(
         "agent-1",
@@ -242,7 +241,6 @@ async def test_delete_agent_route_passes_thread_launch_pref_repo(monkeypatch: py
                     user_repo=SimpleNamespace(get_by_id=lambda user_id: _agent_user(user_id=user_id) if user_id == "agent-1" else None),
                     thread_repo=SimpleNamespace(list_by_agent_user=lambda _agent_user_id: []),
                     agent_config_repo=SimpleNamespace(),
-                    thread_launch_pref_repo=thread_launch_pref_repo,
                     contact_repo=contact_repo,
                 )
             )
@@ -251,7 +249,11 @@ async def test_delete_agent_route_passes_thread_launch_pref_repo(monkeypatch: py
     )
 
     assert result == {"success": True}
-    assert seen == {"agent_id": "agent-1", "thread_launch_pref_repo": thread_launch_pref_repo, "contact_repo": contact_repo}
+    assert seen == {
+        "agent_id": "agent-1",
+        "delete_dependency_keys": ["agent_config_repo", "contact_repo", "user_repo"],
+        "contact_repo": contact_repo,
+    }
 
 
 @pytest.mark.asyncio
@@ -769,7 +771,7 @@ def test_install_from_snapshot_persists_skill_desc_from_snapshot_meta_into_repo_
     ]
 
 
-def _agent_delete_runner(*, pref_error: str | None = None, contact_error: str | None = None):
+def _agent_delete_runner(*, contact_error: str | None = None):
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,
@@ -791,13 +793,6 @@ def _agent_delete_runner(*, pref_error: str | None = None, contact_error: str | 
         def delete_config(self, agent_config_id: str) -> None:
             calls.append(f"config:{agent_config_id}")
 
-    class _ThreadLaunchPrefRepo:
-        def delete_by_agent_user_id(self, agent_user_id: str) -> int:
-            calls.append(f"pref:{agent_user_id}")
-            if pref_error:
-                raise RuntimeError(pref_error)
-            return 0
-
     class _ContactRepo:
         def delete_for_user(self, user_id: str) -> None:
             calls.append(f"contacts:{user_id}")
@@ -809,7 +804,6 @@ def _agent_delete_runner(*, pref_error: str | None = None, contact_error: str | 
             "agent-1",
             user_repo=_UserRepo(),
             agent_config_repo=_AgentConfigRepo(),
-            thread_launch_pref_repo=_ThreadLaunchPrefRepo(),
             contact_repo=_ContactRepo(),
         )
 
@@ -820,16 +814,35 @@ def test_delete_agent_user_clears_dependent_edges_before_agent_config():
     calls, run = _agent_delete_runner()
 
     assert run() is True
-    assert calls == ["pref:agent-1", "contacts:agent-1", "config:cfg-1", "user:agent-1"]
+    assert calls == ["contacts:agent-1", "config:cfg-1", "user:agent-1"]
 
 
-def test_delete_agent_user_does_not_remove_config_when_launch_pref_cleanup_fails():
-    calls, run = _agent_delete_runner(pref_error="pref cleanup failed")
+def test_delete_agent_user_uses_current_delete_dependency_order_without_legacy_cleanup():
+    agent = _agent_user(user_id="agent-1")
+    calls: list[str] = []
 
-    with pytest.raises(RuntimeError, match="pref cleanup failed"):
-        run()
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return agent if user_id == "agent-1" else None
 
-    assert calls == ["pref:agent-1"]
+        def delete(self, user_id: str) -> None:
+            calls.append(f"user:{user_id}")
+
+    class _AgentConfigRepo:
+        def delete_config(self, agent_config_id: str) -> None:
+            calls.append(f"config:{agent_config_id}")
+
+    class _ContactRepo:
+        def delete_for_user(self, user_id: str) -> None:
+            calls.append(f"contacts:{user_id}")
+
+    assert agent_user_service.delete_agent_user(
+        "agent-1",
+        user_repo=_UserRepo(),
+        agent_config_repo=_AgentConfigRepo(),
+        contact_repo=_ContactRepo(),
+    )
+    assert calls == ["contacts:agent-1", "config:cfg-1", "user:agent-1"]
 
 
 def test_delete_agent_user_does_not_remove_config_when_contact_cleanup_fails():
@@ -838,7 +851,7 @@ def test_delete_agent_user_does_not_remove_config_when_contact_cleanup_fails():
     with pytest.raises(RuntimeError, match="contact cleanup failed"):
         run()
 
-    assert calls == ["pref:agent-1", "contacts:agent-1"]
+    assert calls == ["contacts:agent-1"]
 
 
 @pytest.mark.asyncio
