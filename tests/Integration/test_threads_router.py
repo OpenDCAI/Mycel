@@ -631,11 +631,6 @@ async def test_create_thread_route_rejects_lease_shaped_existing_identity():
 
     with (
         patch.object(
-            threads_router.sandbox_service,
-            "resolve_owned_lease",
-            return_value={"lease_id": "lease-1", "provider_name": "local", "recipe": None},
-        ),
-        patch.object(
             threads_router, "bind_thread_to_existing_sandbox", return_value=("/workspace/reused", {"lease_id": "lease-1"})
         ) as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
@@ -669,17 +664,6 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
     )
 
     with (
-        patch.object(
-            threads_router.sandbox_service,
-            "resolve_owned_lease",
-            return_value={
-                "lease_id": "lease-1",
-                "sandbox_id": "sandbox-1",
-                "provider_name": "local",
-                "cwd": "/workspace/reused",
-                "recipe": None,
-            },
-        ),
         patch.object(
             threads_router,
             "bind_thread_to_existing_sandbox",
@@ -732,16 +716,6 @@ async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_p
     )
 
     with (
-        patch.object(
-            threads_router.sandbox_service,
-            "resolve_owned_lease",
-            return_value={
-                "lease_id": "lease-1",
-                "sandbox_id": "sandbox-1",
-                "provider_name": "local",
-                "recipe": None,
-            },
-        ),
         patch.object(
             threads_router,
             "bind_thread_to_existing_sandbox",
@@ -842,17 +816,6 @@ async def test_create_thread_route_existing_sandbox_binds_without_launch_config_
     )
     with (
         patch.object(
-            threads_router.sandbox_service,
-            "resolve_owned_lease",
-            return_value={
-                "lease_id": "lease-1",
-                "sandbox_id": "sandbox-1",
-                "provider_name": "local",
-                "cwd": "/workspace/reused",
-                "recipe": {"id": "local:default"},
-            },
-        ),
-        patch.object(
             threads_router,
             "bind_thread_to_existing_sandbox",
             return_value=(
@@ -893,19 +856,7 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
         }
     )
 
-    def _resolve_owned_lease(owner_user_id: str, lease_id: str, **_: Any) -> dict[str, Any] | None:
-        if owner_user_id == "owner-1" and lease_id == "lease-1":
-            return {
-                "lease_id": "lease-1",
-                "sandbox_id": "sandbox-1",
-                "provider_name": "local",
-                "cwd": "/workspace/reused",
-                "recipe": {"id": "local:default"},
-            }
-        return None
-
     with (
-        patch.object(threads_router.sandbox_service, "resolve_owned_lease", side_effect=_resolve_owned_lease),
         patch.object(
             threads_router,
             "bind_thread_to_existing_sandbox",
@@ -1264,11 +1215,6 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
     )
 
     with (
-        patch.object(
-            threads_router.sandbox_service,
-            "resolve_owned_lease",
-            return_value={"lease_id": "lease-1", "provider_name": "daytona", "recipe": None},
-        ),
         patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None),
     ):
         result = await threads_router.create_thread(payload, "owner-1", app)
