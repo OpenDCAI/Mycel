@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import CreateAgentDialog from "./CreateAgentDialog";
 import NewChatDialog from "./NewChatDialog";
-import AgentsPage from "../pages/AgentsPage";
 import { useAppStore } from "../store/app-store";
 import { toast } from "sonner";
 
@@ -23,25 +22,11 @@ vi.mock("./ActorAvatar", () => ({
   default: ({ name }: { name: string }) => <div>{name}</div>,
 }));
 
-vi.mock("@/api/client", () => ({
-  uploadUserAvatar: vi.fn(),
-}));
-
-vi.mock("@/hooks/use-mobile", () => ({
-  useIsMobile: () => false,
-}));
-
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
   },
-}));
-
-vi.mock("@/components/ui/tooltip", () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -133,16 +118,4 @@ describe("frontend agent wording contract", () => {
     expect(screen.getByText("暂无 Agent")).toBeTruthy();
   });
 
-  it("AgentsPage presents agent wording", () => {
-    render(
-      <MemoryRouter>
-        <AgentsPage />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByText("Agent")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /创建 Agent/ }).length).toBeGreaterThan(0);
-    expect(screen.getByPlaceholderText("搜索 Agent...")).toBeTruthy();
-    expect(screen.getByText("还没有 AI Agent")).toBeTruthy();
-  });
 });
