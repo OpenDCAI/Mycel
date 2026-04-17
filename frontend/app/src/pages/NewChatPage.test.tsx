@@ -498,7 +498,7 @@ describe("NewChatPage", () => {
       config: {
         create_mode: "existing",
         provider_config: "daytona_selfhost",
-        existing_sandbox_id: "lease-2",
+        existing_sandbox_id: "sandbox-2",
         model: "leon:large",
         workspace: "/workspace/reused-2",
       },
@@ -506,6 +506,7 @@ describe("NewChatPage", () => {
     clientMocks.listMyLeases.mockResolvedValue([
       {
         lease_id: "lease-1",
+        sandbox_id: "sandbox-1",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-1",
         recipe_name: "Existing One",
@@ -517,6 +518,7 @@ describe("NewChatPage", () => {
       },
       {
         lease_id: "lease-2",
+        sandbox_id: "sandbox-2",
         provider_name: "daytona_selfhost",
         recipe_id: "recipe-2",
         recipe_name: "Existing Two",
@@ -548,7 +550,7 @@ describe("NewChatPage", () => {
         undefined,
         "m_xVuNpKJNxblZ",
         "leon:large",
-        "lease-2",
+        "sandbox-2",
       );
     });
   });
