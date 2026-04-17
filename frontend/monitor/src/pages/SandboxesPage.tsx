@@ -83,7 +83,7 @@ export default function SandboxesPage() {
         <div className="surface-grid">
           <button
             type="button"
-            className={`surface-card lease-triage-card ${selectedFilter === "all" ? "lease-triage-card--active" : ""}`}
+            className={`surface-card sandbox-triage-card ${selectedFilter === "all" ? "sandbox-triage-card--active" : ""}`}
             onClick={() => setSelectedFilter("all")}
           >
             <p className="surface-card__eyebrow">All Triage</p>
@@ -92,7 +92,7 @@ export default function SandboxesPage() {
           {shell.triageCards.map((card) => (
             <button
               type="button"
-              className={`surface-card lease-triage-card ${selectedFilter === card.key ? "lease-triage-card--active" : ""}`}
+              className={`surface-card sandbox-triage-card ${selectedFilter === card.key ? "sandbox-triage-card--active" : ""}`}
               key={card.label}
               onClick={() => setSelectedFilter(card.key)}
             >
@@ -102,7 +102,7 @@ export default function SandboxesPage() {
           ))}
         </div>
       </section>
-      <div className="leases-workbench-header">
+      <div className="sandbox-workbench-header">
         <div>
           <h2>{shell.workbenchTitle}</h2>
           <p className="description">
@@ -128,13 +128,13 @@ export default function SandboxesPage() {
                 <Link to={item.href}>{item.sandbox_id}</Link>
               </td>
               <td>
-                <div className="lease-topology">
-                  <div className="lease-topology__row">
-                    <span className="lease-topology__label">provider</span>
+                <div className="sandbox-topology">
+                  <div className="sandbox-topology__row">
+                    <span className="sandbox-topology__label">provider</span>
                     {item.provider ? <Link to={`/providers/${item.provider}`}>{item.provider}</Link> : <span>-</span>}
                   </div>
-                  <div className="lease-topology__row">
-                    <span className="lease-topology__label">runtime</span>
+                  <div className="sandbox-topology__row">
+                    <span className="sandbox-topology__label">runtime</span>
                     {item.instance_id ? (
                       <Link className="mono" to={`/runtimes/${item.instance_id}`}>
                         {item.instance_id.slice(0, 12)}
@@ -143,8 +143,8 @@ export default function SandboxesPage() {
                       <span>-</span>
                     )}
                   </div>
-                  <div className="lease-topology__row">
-                    <span className="lease-topology__label">thread</span>
+                  <div className="sandbox-topology__row">
+                    <span className="sandbox-topology__label">thread</span>
                     {item.thread.thread_id ? (
                       <Link className="mono" to={`/threads/${item.thread.thread_id}`}>
                         {item.thread.thread_id.slice(0, 8)}
@@ -156,7 +156,7 @@ export default function SandboxesPage() {
                 </div>
               </td>
               <td>
-                <span className="lease-triage-chip">{item.triage?.title ?? "-"}</span>
+                <span className="sandbox-triage-chip">{item.triage?.title ?? "-"}</span>
               </td>
               <td>
                 <StateBadge badge={item.state_badge} />

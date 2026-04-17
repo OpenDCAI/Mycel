@@ -232,13 +232,13 @@ h2 {
   box-shadow: 0 8px 18px rgba(82, 59, 27, 0.04);
 }
 
-.lease-triage-card {
+.sandbox-triage-card {
   width: 100%;
   text-align: left;
   cursor: pointer;
 }
 
-.lease-triage-card--active {
+.sandbox-triage-card--active {
   border-color: rgba(143, 93, 47, 0.42);
   background: rgba(255, 247, 230, 0.96);
   box-shadow: 0 14px 32px rgba(82, 59, 27, 0.09);
@@ -274,14 +274,14 @@ h2 {
   margin-bottom: 1rem;
 }
 
-.leases-workbench-header {
+.sandbox-workbench-header {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-end;
 }
 
-.lease-triage-chip {
+.sandbox-triage-chip {
   display: inline-flex;
   align-items: center;
   padding: 0.3rem 0.65rem;
@@ -294,19 +294,19 @@ h2 {
   text-transform: uppercase;
 }
 
-.lease-topology {
+.sandbox-topology {
   display: grid;
   gap: 0.3rem;
   min-width: 210px;
 }
 
-.lease-topology__row {
+.sandbox-topology__row {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
 }
 
-.lease-topology__label {
+.sandbox-topology__label {
   flex: 0 0 3.7rem;
   color: #8a7765;
   font-size: 0.72rem;
