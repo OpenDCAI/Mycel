@@ -2,12 +2,84 @@ from __future__ import annotations
 
 import pytest
 
-from storage.contracts import ChatRow
+from storage.contracts import ChatRow, ContactEdgeRow
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
+from storage.providers.supabase.contact_repo import SupabaseContactRepo
 from storage.providers.supabase.messaging_repo import (
     SupabaseChatMemberRepo,
     SupabaseMessagesRepo,
+    SupabaseRelationshipRepo,
 )
+from tests.fakes.supabase import FakeSupabaseClient
+
+
+def test_supabase_chat_stack_uses_chat_schema_for_root_tables() -> None:
+    tables: dict[str, list[dict]] = {
+        "chat.chats": [{"id": "chat-1", "next_message_seq": 0}],
+        "chat.chat_members": [{"chat_id": "chat-1", "user_id": "user-1", "last_read_seq": 0}],
+        "chat.messages": [],
+    }
+    client = FakeSupabaseClient(tables=tables)
+
+    SupabaseChatRepo(client).create(
+        ChatRow(
+            id="chat-2",
+            type="direct",
+            created_by_user_id="user-1",
+            title=None,
+            status="active",
+            next_message_seq=0,
+            created_at=123.0,
+        )
+    )
+    SupabaseChatMemberRepo(client).add_member("chat-2", "user-2")
+    message = SupabaseMessagesRepo(client).create(
+        {
+            "id": "msg-1",
+            "chat_id": "chat-1",
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "created_at": 123.0,
+        },
+        expected_read_seq=0,
+    )
+
+    assert message["seq"] == 1
+    assert any(row["id"] == "chat-2" for row in tables["chat.chats"])
+    assert any(row["user_id"] == "user-2" for row in tables["chat.chat_members"])
+    assert any(row["id"] == "msg-1" for row in tables["chat.messages"])
+    assert "chats" not in tables
+    assert "chat_members" not in tables
+    assert "messages" not in tables
+
+
+def test_supabase_contact_and_relationship_repos_use_chat_schema() -> None:
+    tables: dict[str, list[dict]] = {"chat.contacts": [], "chat.relationships": []}
+    client = FakeSupabaseClient(tables=tables)
+
+    SupabaseContactRepo(client).upsert(
+        ContactEdgeRow(
+            source_user_id="user-1",
+            target_user_id="user-2",
+            kind="normal",
+            state="active",
+            muted=False,
+            blocked=False,
+            created_at=123.0,
+        )
+    )
+    relationship = SupabaseRelationshipRepo(client).upsert(
+        "user-1",
+        "user-2",
+        state="pending",
+        initiator_user_id="user-1",
+    )
+
+    assert tables["chat.contacts"][0]["source_user_id"] == "user-1"
+    assert relationship["id"] == "hire_visit:user-1:user-2"
+    assert tables["chat.relationships"][0]["initiator_user_id"] == "user-1"
+    assert "contacts" not in tables
+    assert "relationships" not in tables
 
 
 class _FakeResponse:
@@ -89,22 +161,30 @@ class _FakeTable:
 
 
 class _FakeClient:
-    def __init__(self) -> None:
-        self.tables: dict[str, _FakeTable] = {}
-        self.table_calls: list[str] = []
-        self.rpc_calls: list[tuple[str, dict[str, object]]] = []
-        self.rpc_data = [{"increment_chat_message_seq": 7}]
+    def __init__(self, *, schema_name: str | None = None, root: _FakeClient | None = None) -> None:
+        self._schema_name = schema_name
+        self._root = root or self
+        if root is None:
+            self.tables: dict[str, _FakeTable] = {}
+            self.table_calls: list[str] = []
+            self.rpc_calls: list[tuple[str, dict[str, object]]] = []
+            self.rpc_data = [{"increment_chat_message_seq": 7}]
 
     def table(self, name: str):
-        self.table_calls.append(name)
-        table = self.tables.get(name)
+        resolved = f"{self._schema_name}.{name}" if self._schema_name else name
+        self._root.table_calls.append(resolved)
+        table = self._root.tables.get(resolved)
         if table is None:
-            table = _FakeTable(name)
-            self.tables[name] = table
+            table = _FakeTable(resolved)
+            self._root.tables[resolved] = table
         return table
 
+    def schema(self, name: str):
+        return _FakeClient(schema_name=name, root=self._root)
+
     def rpc(self, name: str, params: dict[str, object]):
-        self.rpc_calls.append((name, params))
+        resolved = f"{self._schema_name}.{name}" if self._schema_name else name
+        self._root.rpc_calls.append((resolved, params))
 
         class _Rpc:
             def __init__(self, data):
@@ -113,7 +193,7 @@ class _FakeClient:
             def execute(self):
                 return _FakeResponse(data=self._data)
 
-        return _Rpc(self.rpc_data)
+        return _Rpc(self._root.rpc_data)
 
 
 def test_supabase_chat_repo_create_persists_chat_root_fields() -> None:
@@ -132,7 +212,7 @@ def test_supabase_chat_repo_create_persists_chat_root_fields() -> None:
         )
     )
 
-    payload = client.tables["chats"].insert_payload
+    payload = client.tables["chat.chats"].insert_payload
     assert payload is not None
     assert payload["type"] == "group"
     assert payload["created_by_user_id"] == "user-1"
@@ -141,7 +221,7 @@ def test_supabase_chat_repo_create_persists_chat_root_fields() -> None:
 
 def test_supabase_chat_repo_get_by_id_hydrates_chat_root_fields() -> None:
     client = _FakeClient()
-    client.table("chats").rows = [
+    client.schema("chat").table("chats").rows = [
         {
             "id": "chat-1",
             "type": "direct",
@@ -169,13 +249,13 @@ def test_supabase_chat_repo_delete_removes_child_rows_before_chat_root() -> None
 
     repo.delete("chat-1")
 
-    assert client.table_calls == ["messages", "chat_members", "chats"]
-    assert client.tables["messages"].delete_count == 1
-    assert client.tables["chat_members"].delete_count == 1
-    assert client.tables["chats"].delete_count == 1
-    assert ("chat_id", "chat-1") in client.tables["messages"].eq_calls
-    assert ("chat_id", "chat-1") in client.tables["chat_members"].eq_calls
-    assert ("id", "chat-1") in client.tables["chats"].eq_calls
+    assert client.table_calls == ["chat.messages", "chat.chat_members", "chat.chats"]
+    assert client.tables["chat.messages"].delete_count == 1
+    assert client.tables["chat.chat_members"].delete_count == 1
+    assert client.tables["chat.chats"].delete_count == 1
+    assert ("chat_id", "chat-1") in client.tables["chat.messages"].eq_calls
+    assert ("chat_id", "chat-1") in client.tables["chat.chat_members"].eq_calls
+    assert ("id", "chat-1") in client.tables["chat.chats"].eq_calls
 
 
 def test_supabase_chat_member_repo_updates_last_read_seq() -> None:
@@ -184,7 +264,7 @@ def test_supabase_chat_member_repo_updates_last_read_seq() -> None:
 
     repo.update_last_read("chat-1", "user-1", 7)
 
-    table = client.tables["chat_members"]
+    table = client.tables["chat.chat_members"]
     assert table.update_payload == {"last_read_seq": 7}
     assert ("chat_id", "chat-1") in table.eq_calls
     assert ("user_id", "user-1") in table.eq_calls
@@ -196,17 +276,17 @@ def test_supabase_chat_member_repo_add_member_persists_numeric_joined_at() -> No
 
     repo.add_member("chat-1", "user-1")
 
-    payload = client.tables["chat_members"].upsert_payload
+    payload = client.tables["chat.chat_members"].upsert_payload
     assert payload is not None
     assert payload["chat_id"] == "chat-1"
     assert payload["user_id"] == "user-1"
-    assert client.tables["chat_members"].on_conflict == "chat_id,user_id"
+    assert client.tables["chat.chat_members"].on_conflict == "chat_id,user_id"
     assert isinstance(payload["joined_at"], float)
 
 
 def test_supabase_messages_repo_create_allocates_seq_and_uses_message_root_fields() -> None:
     client = _FakeClient()
-    client.table("messages").rows = [
+    client.schema("chat").table("messages").rows = [
         {
             "id": "msg-1",
             "chat_id": "chat-1",
@@ -230,8 +310,8 @@ def test_supabase_messages_repo_create_allocates_seq_and_uses_message_root_field
         }
     )
 
-    assert client.rpc_calls == [("increment_chat_message_seq", {"p_chat_id": "chat-1"})]
-    payload = client.tables["messages"].insert_payload
+    assert client.rpc_calls == [("chat.increment_chat_message_seq", {"p_chat_id": "chat-1"})]
+    payload = client.tables["chat.messages"].insert_payload
     assert payload is not None
     assert payload["seq"] == 7
     assert payload["sender_user_id"] == "user-1"
@@ -242,7 +322,7 @@ def test_supabase_messages_repo_create_allocates_seq_and_uses_message_root_field
 def test_supabase_messages_repo_create_accepts_scalar_rpc_seq() -> None:
     client = _FakeClient()
     client.rpc_data = 8
-    client.table("messages").rows = [
+    client.schema("chat").table("messages").rows = [
         {
             "id": "msg-2",
             "chat_id": "chat-2",
@@ -266,7 +346,7 @@ def test_supabase_messages_repo_create_accepts_scalar_rpc_seq() -> None:
         }
     )
 
-    payload = client.tables["messages"].insert_payload
+    payload = client.tables["chat.messages"].insert_payload
     assert payload is not None
     assert payload["seq"] == 8
     assert row["seq"] == 8
@@ -274,8 +354,8 @@ def test_supabase_messages_repo_create_accepts_scalar_rpc_seq() -> None:
 
 def test_supabase_messages_repo_create_with_expected_read_seq_uses_chat_cas() -> None:
     client = _FakeClient()
-    client.table("chats").rows = [{"id": "chat-1", "next_message_seq": 6}]
-    client.table("messages").rows = [
+    client.schema("chat").table("chats").rows = [{"id": "chat-1", "next_message_seq": 6}]
+    client.schema("chat").table("messages").rows = [
         {
             "id": "msg-7",
             "chat_id": "chat-1",
@@ -301,11 +381,11 @@ def test_supabase_messages_repo_create_with_expected_read_seq_uses_chat_cas() ->
     )
 
     assert client.rpc_calls == []
-    chats = client.tables["chats"]
+    chats = client.tables["chat.chats"]
     assert chats.update_payload == {"next_message_seq": 7}
     assert ("id", "chat-1") in chats.eq_calls
     assert ("next_message_seq", 6) in chats.eq_calls
-    payload = client.tables["messages"].insert_payload
+    payload = client.tables["chat.messages"].insert_payload
     assert payload is not None
     assert payload["seq"] == 7
     assert row["seq"] == 7
@@ -313,7 +393,7 @@ def test_supabase_messages_repo_create_with_expected_read_seq_uses_chat_cas() ->
 
 def test_supabase_messages_repo_create_with_stale_expected_read_seq_fails_loudly() -> None:
     client = _FakeClient()
-    client.table("chats").rows = []
+    client.schema("chat").table("chats").rows = []
     repo = SupabaseMessagesRepo(client)
 
     with pytest.raises(RuntimeError, match="Chat advanced after your last read. Call read_messages\\(chat_id='chat-1'\\) first\\."):
@@ -332,26 +412,26 @@ def test_supabase_messages_repo_create_with_stale_expected_read_seq_fails_loudly
 
 def test_supabase_messages_repo_list_by_chat_uses_seq_ordering() -> None:
     client = _FakeClient()
-    client.table("messages").rows = [{"id": "msg-6", "seq": 6}, {"id": "msg-7", "seq": 7}]
+    client.schema("chat").table("messages").rows = [{"id": "msg-6", "seq": 6}, {"id": "msg-7", "seq": 7}]
     repo = SupabaseMessagesRepo(client)
 
     repo.list_by_chat("chat-1", limit=20, before="7")
 
-    table = client.tables["messages"]
+    table = client.tables["chat.messages"]
     assert ("seq", 7) in table.lt_calls
     assert table.order_calls == [("seq", True)]
 
 
 def test_supabase_messages_repo_count_unread_uses_last_read_seq_and_sender_user_id() -> None:
     client = _FakeClient()
-    client.table("chat_members").rows = [{"last_read_seq": 5}]
-    client.table("messages").count = 2
+    client.schema("chat").table("chat_members").rows = [{"last_read_seq": 5}]
+    client.schema("chat").table("messages").count = 2
     repo = SupabaseMessagesRepo(client)
 
     count = repo.count_unread("chat-1", "user-1")
 
     assert count == 2
-    assert ("last_read_seq", None) in client.tables["chat_members"].select_calls
-    assert ("seq", 5) in client.tables["messages"].gt_calls
-    assert ("sender_user_id", "user-1") in client.tables["messages"].neq_calls
-    assert ("sender_id", "user-1") not in client.tables["messages"].neq_calls
+    assert ("last_read_seq", None) in client.tables["chat.chat_members"].select_calls
+    assert ("seq", 5) in client.tables["chat.messages"].gt_calls
+    assert ("sender_user_id", "user-1") in client.tables["chat.messages"].neq_calls
+    assert ("sender_id", "user-1") not in client.tables["chat.messages"].neq_calls
