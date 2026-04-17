@@ -416,7 +416,9 @@ def load_provider_orphan_sessions(managers: dict) -> list[dict]:
             if str(row.get("current_instance_id") or "").strip()
         }
         raw_provider_sessions = list_provider_sessions()
-        provider_sessions = raw_provider_sessions if isinstance(raw_provider_sessions, list) else []
+        if not isinstance(raw_provider_sessions, list):
+            raise TypeError(f"{provider_slug}.list_provider_sessions must return list")
+        provider_sessions = raw_provider_sessions
 
         inspect_visible = manager.provider_capability.inspect_visible
         for ps in provider_sessions:
