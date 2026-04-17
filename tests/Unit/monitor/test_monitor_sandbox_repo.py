@@ -603,7 +603,7 @@ def test_lease_instance_protocol_shell_is_removed() -> None:
     assert not hasattr(repo, "query_lease_instance_ids")
 
 
-def test_query_sandbox_instance_id_prefers_provider_session_id() -> None:
+def test_query_sandbox_instance_id_uses_sandbox_provider_env_id() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -616,12 +616,12 @@ def test_query_sandbox_instance_id_prefers_provider_session_id() -> None:
                 )
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-1", "provider_session_id": "provider-session-1"},
+                {"lease_id": "lease-1", "provider_session_id": "instance-lease"},
             ],
         }
     )
 
-    assert repo.query_sandbox_instance_id("sandbox-1") == "provider-session-1"
+    assert repo.query_sandbox_instance_id("sandbox-1") == "instance-sandbox"
 
 
 def test_query_sandbox_instance_id_falls_back_without_legacy_lease_bridge() -> None:
@@ -655,7 +655,7 @@ def test_query_sandbox_instance_ids_chunks_large_lookup() -> None:
                     )
                     for index in range(175)
                 ],
-                "sandbox_instances": [{"lease_id": "lease-174", "provider_session_id": "provider-session-174"}],
+                "sandbox_instances": [{"lease_id": "lease-174", "provider_session_id": "sandbox-instance-sandbox-174"}],
             }
         )
     )
@@ -663,10 +663,10 @@ def test_query_sandbox_instance_ids_chunks_large_lookup() -> None:
     result = repo.query_sandbox_instance_ids(sandbox_ids)
 
     assert result["sandbox-0"] == "sandbox-instance-sandbox-0"
-    assert result["sandbox-174"] == "provider-session-174"
+    assert result["sandbox-174"] == "sandbox-instance-sandbox-174"
 
 
-def test_query_sandbox_instance_ids_uses_legacy_bridge() -> None:
+def test_query_sandbox_instance_ids_use_sandbox_provider_env_id() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -674,14 +674,14 @@ def test_query_sandbox_instance_ids_uses_legacy_bridge() -> None:
                 _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", legacy_lease_id="lease-2"),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-2", "provider_session_id": "provider-session-2"},
+                {"lease_id": "lease-2", "provider_session_id": "stale-instance-2"},
             ],
         }
     )
 
     assert repo.query_sandbox_instance_ids(["sandbox-1", "sandbox-2"]) == {
         "sandbox-1": "sandbox-instance-1",
-        "sandbox-2": "provider-session-2",
+        "sandbox-2": "sandbox-instance-2",
     }
 
 
@@ -693,7 +693,7 @@ def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge() 
                 _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", legacy_lease_id="lease-2"),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-2", "provider_session_id": "provider-session-2"},
+                {"lease_id": "lease-2", "provider_session_id": "stale-instance-2"},
             ],
         }
     )
@@ -702,7 +702,7 @@ def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge() 
 
     assert repo.query_sandbox_instance_ids(["sandbox-1", "sandbox-2"]) == {
         "sandbox-1": "sandbox-instance-1",
-        "sandbox-2": "provider-session-2",
+        "sandbox-2": "sandbox-instance-2",
     }
 
 
@@ -713,24 +713,24 @@ def test_query_sandbox_instance_id_no_longer_roundtrips_through_lease_bridge() -
                 _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", legacy_lease_id="lease-1"),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-1", "provider_session_id": "provider-session-1"},
+                {"lease_id": "lease-1", "provider_session_id": "instance-lease"},
             ],
         }
     )
 
     assert not hasattr(repo, "query_lease_instance_id")
 
-    assert repo.query_sandbox_instance_id("sandbox-1") == "provider-session-1"
+    assert repo.query_sandbox_instance_id("sandbox-1") == "sandbox-instance-1"
 
 
-def test_list_probe_targets_prefers_provider_session_id() -> None:
+def test_list_probe_targets_use_sandbox_provider_env_id() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
                 _sandbox(
                     "sandbox-running",
                     provider_name="daytona_selfhost",
-                    provider_env_id="instance-lease",
+                    provider_env_id="instance-sandbox",
                     observed_state="detached",
                     updated_at="2026-04-05T10:10:00",
                     legacy_lease_id="lease-running",
@@ -754,7 +754,7 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
                 ),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-running", "provider_session_id": "provider-session-1"},
+                {"lease_id": "lease-running", "provider_session_id": "instance-lease"},
             ],
         }
     )
@@ -771,7 +771,7 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
             "sandbox_id": "sandbox-running",
             "legacy_lease_id": "lease-running",
             "provider_name": "daytona_selfhost",
-            "instance_id": "provider-session-1",
+            "instance_id": "instance-sandbox",
             "observed_state": "detached",
         },
     ]
@@ -802,7 +802,7 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge()
                 _sandbox(
                     "sandbox-running",
                     provider_name="daytona_selfhost",
-                    provider_env_id="instance-lease",
+                    provider_env_id="instance-sandbox",
                     observed_state="detached",
                     updated_at="2026-04-05T10:10:00",
                     legacy_lease_id="lease-running",
@@ -817,7 +817,7 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge()
                 ),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-running", "provider_session_id": "provider-session-1"},
+                {"lease_id": "lease-running", "provider_session_id": "instance-lease"},
             ],
         }
     )
@@ -836,7 +836,7 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge()
             "sandbox_id": "sandbox-running",
             "legacy_lease_id": "lease-running",
             "provider_name": "daytona_selfhost",
-            "instance_id": "provider-session-1",
+            "instance_id": "instance-sandbox",
             "observed_state": "detached",
         },
     ]
@@ -850,7 +850,7 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge()
     ],
     ids=["query-sandbox-instance-id", "list-probe-targets"],
 )
-def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
+def test_instance_lookup_does_not_read_removed_instances_table(include_updated_at, caller) -> None:
     tables = {
         "container.sandboxes": [
             _sandbox(
@@ -865,8 +865,20 @@ def test_instance_lookup_failures_are_loud(include_updated_at, caller) -> None:
     }
     repo = SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient(tables))
 
-    with pytest.raises(RuntimeError, match="sandbox_instances exploded"):
-        caller(repo)
+    result = caller(repo)
+
+    if include_updated_at:
+        assert result == [
+            {
+                "sandbox_id": "sandbox-1",
+                "legacy_lease_id": "lease-1",
+                "provider_name": "daytona_selfhost",
+                "instance_id": "instance-lease",
+                "observed_state": "detached",
+            }
+        ]
+    else:
+        assert result == "instance-lease"
 
 
 def test_resource_session_row_source_shell_is_removed() -> None:

@@ -9,11 +9,24 @@ from storage.providers.supabase import _query as q
 
 _REPO = "lease repo"
 _LEASES_TABLE = "sandbox_leases"
-_INSTANCES_TABLE = "sandbox_instances"
 
 
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _instance_from_lease(row: dict[str, Any]) -> dict[str, Any] | None:
+    current_instance_id = row.get("current_instance_id")
+    if not current_instance_id:
+        return None
+    return {
+        "instance_id": current_instance_id,
+        "lease_id": row.get("lease_id"),
+        "provider_session_id": current_instance_id,
+        "status": row.get("observed_state"),
+        "created_at": row.get("instance_created_at"),
+        "last_seen_at": row.get("observed_at"),
+    }
 
 
 class SupabaseLeaseRepo:
@@ -36,9 +49,6 @@ class SupabaseLeaseRepo:
     def _leases(self) -> Any:
         return self._client.table(_LEASES_TABLE)
 
-    def _instances(self) -> Any:
-        return self._client.table(_INSTANCES_TABLE)
-
     def get(self, lease_id: str) -> dict[str, Any] | None:
         rows = q.rows(
             self._leases()
@@ -57,21 +67,7 @@ class SupabaseLeaseRepo:
             return None
         result = dict(rows[0])
 
-        # Attach instance data as _instance key
-        current_instance_id = result.get("current_instance_id")
-        if current_instance_id:
-            inst_rows = q.rows(
-                self._instances()
-                .select("instance_id,lease_id,provider_session_id,status,created_at,last_seen_at")
-                .eq("instance_id", current_instance_id)
-                .execute(),
-                _REPO,
-                "get instance",
-            )
-            result["_instance"] = dict(inst_rows[0]) if inst_rows else None
-        else:
-            result["_instance"] = None
-
+        result["_instance"] = _instance_from_lease(result)
         return result
 
     def create(
@@ -162,18 +158,6 @@ class SupabaseLeaseRepo:
             }
         ).eq("lease_id", lease_id).execute()
 
-        # Upsert instance row
-        self._instances().upsert(
-            {
-                "instance_id": instance_id,
-                "lease_id": lease_id,
-                "provider_session_id": instance_id,
-                "status": normalized,
-                "created_at": now,
-                "last_seen_at": now,
-            }
-        ).execute()
-
         return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="adopt_instance")
 
     def observe_status(
@@ -188,8 +172,6 @@ class SupabaseLeaseRepo:
         existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
         now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or _utc_now_iso())
         normalized = parse_lease_instance_state(status).value
-        current_instance_id = existing.get("current_instance_id")
-
         self._leases().update(
             {
                 "current_instance_id": None if normalized == "detached" else existing.get("current_instance_id"),
@@ -205,14 +187,6 @@ class SupabaseLeaseRepo:
                 "updated_at": _utc_now_iso(),
             }
         ).eq("lease_id", lease_id).execute()
-
-        if current_instance_id:
-            self._instances().update(
-                {
-                    "status": "stopped" if normalized == "detached" else normalized,
-                    "last_seen_at": now,
-                }
-            ).eq("instance_id", current_instance_id).execute()
 
         return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
 
@@ -272,7 +246,6 @@ class SupabaseLeaseRepo:
         return len(updated) > 0
 
     def delete(self, lease_id: str) -> None:
-        self._instances().delete().eq("lease_id", lease_id).execute()
         self._leases().delete().eq("lease_id", lease_id).execute()
 
     def list_all(self) -> list[dict[str, Any]]:
