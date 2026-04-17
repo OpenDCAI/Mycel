@@ -15,7 +15,7 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolv
 
 
 class SQLiteLeaseRepo:
-    """Sandbox lease CRUD backed by SQLite.
+    """Container-backed lower sandbox runtime bridge backed by SQLite.
 
     Thread-safe: all connection access is serialized via a lock.
     Returns raw dicts — domain object construction is the consumer's job.
