@@ -76,6 +76,36 @@ def test_delete_thread_in_db_uses_runtime_repo_factories_without_db_path(monkeyp
     assert type(sync_state.repo).__name__ == "ProcessLocalSyncFileBacking"
 
 
+def test_delete_thread_in_db_cleans_runtime_repos_when_supabase_defaults_without_local_db(monkeypatch, tmp_path):
+    sandbox_db = tmp_path / "missing-sandbox.db"
+    container = _FakeContainer()
+    session_repo = _ThreadRepo()
+    terminal_repo = _ThreadRepo()
+    sync_state_holder: dict[str, _SyncState] = {}
+
+    monkeypatch.setattr(helpers, "_get_container", lambda: container)
+    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
+    monkeypatch.setattr(helpers, "uses_supabase_runtime_defaults", lambda: True)
+    monkeypatch.setattr(helpers, "make_chat_session_repo", lambda: session_repo)
+    monkeypatch.setattr(helpers, "make_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr(
+        helpers,
+        "SyncState",
+        lambda **kwargs: sync_state_holder.setdefault("instance", _SyncState(**kwargs)),
+    )
+
+    helpers.delete_thread_in_db("thread-1")
+
+    sync_state = sync_state_holder["instance"]
+    assert container.purged == ["thread-1"]
+    assert session_repo.deleted == ["thread-1"]
+    assert terminal_repo.deleted == ["thread-1"]
+    assert sync_state.cleared == ["thread-1"]
+    assert session_repo.closed
+    assert terminal_repo.closed
+    assert sync_state.closed
+
+
 def test_get_terminal_timestamps_uses_runtime_repo_factory_without_db_path(monkeypatch, tmp_path):
     sandbox_db = tmp_path / "sandbox.db"
     sandbox_db.touch()
