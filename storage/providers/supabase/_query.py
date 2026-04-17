@@ -63,6 +63,21 @@ def schema_table(client: Any, schema: str, table: str, repo: str) -> Any:
     return table_method(table)
 
 
+def schema_rpc(client: Any, schema: str, function_name: str, params: dict[str, Any], repo: str) -> Any:
+    """Return a schema-qualified RPC query, failing loudly if unsupported."""
+    scoped = _preserve_postgrest_session(client, schema)
+    schema_method = getattr(client, "schema", None)
+    if scoped is None and not callable(schema_method):
+        raise RuntimeError(f"Supabase {repo} requires client.schema({schema!r}) support for {schema}.{function_name}.")
+    if scoped is None:
+        assert callable(schema_method)
+        scoped = schema_method(schema)
+    rpc_method = getattr(scoped, "rpc", None)
+    if not callable(rpc_method):
+        raise RuntimeError(f"Supabase {repo} schema({schema!r}) result must expose rpc(name, params).")
+    return rpc_method(function_name, params)
+
+
 def rows(response: Any, repo: str, operation: str) -> list[dict[str, Any]]:
     """Extract and validate the `.data` list from a supabase-py response."""
     if isinstance(response, dict):

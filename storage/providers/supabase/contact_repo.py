@@ -72,4 +72,4 @@ class SupabaseContactRepo:
         )
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "chat", _TABLE, _REPO)
