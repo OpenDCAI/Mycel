@@ -47,6 +47,10 @@ def _daytona_state_value(sandbox: Any) -> str | None:
     return getattr(state, "value", None)
 
 
+def _is_daytona_not_found_error(exc: Exception) -> bool:
+    return exc.__class__.__name__ == "NotFoundException" or getattr(exc, "status", None) == 404
+
+
 if TYPE_CHECKING:
     from daytona_sdk._sync.sandbox import Sandbox as DaytonaSandbox
 
@@ -158,7 +162,14 @@ class DaytonaProvider(SandboxProvider):
     def delete_managed_volume(self, backend_ref: str) -> None:
         """Delete provider-managed volume. backend_ref is the volume name."""
         logger.info("Deleting managed volume: %s", backend_ref)
-        vol = self.client.volume.get(backend_ref)
+        try:
+            vol = self.client.volume.get(backend_ref)
+        except Exception as exc:
+            # @@@daytona-volume-delete-idempotent - thread cleanup may retry after provider volume was already removed.
+            if _is_daytona_not_found_error(exc):
+                logger.info("Managed volume already absent: %s", backend_ref)
+                return
+            raise
         self.client.volume.delete(vol)
 
     # ==================== Session Lifecycle ====================
