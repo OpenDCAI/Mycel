@@ -64,4 +64,4 @@ class SupabaseFileOperationRepo:
         return len(pre)
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "agent", _TABLE, _REPO)
