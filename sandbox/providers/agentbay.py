@@ -82,7 +82,8 @@ class AgentBayProvider(SandboxProvider):
         self.default_context_path = default_context_path
         self.image_id = image_id
         self._sessions: dict[str, Any] = {}
-        # @@@agentbay-runtime-capability-override - account tier may disable pause/resume; keep provider-type defaults, override per configured instance only.  # noqa: E501
+        # @@@agentbay-runtime-capability-override - account tier may disable pause/resume;
+        # keep provider-type defaults, override per configured instance only.
         can_pause = self.CAPABILITY.can_pause if supports_pause is None else supports_pause
         can_resume = self.CAPABILITY.can_resume if supports_resume is None else supports_resume
         self._capability = replace(self.CAPABILITY, can_pause=can_pause, can_resume=can_resume)
@@ -141,7 +142,8 @@ class AgentBayProvider(SandboxProvider):
 
     def pause_session(self, session_id: str) -> bool:
         session = self._get_session(session_id)
-        # @@@agentbay-benefit-level - Some AgentBay accounts reject pause/resume with BenefitLevel.NotSupport; keep fail-loud and do not fallback.  # noqa: E501
+        # @@@agentbay-benefit-level - Some AgentBay accounts reject pause/resume with
+        # BenefitLevel.NotSupport; keep fail-loud and do not fallback.
         result = session.beta_pause()
         if result.success:
             return True
