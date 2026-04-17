@@ -146,7 +146,6 @@ known-third-party = ["httpx", "supabase", "supabase_auth"]
 "tests/*.py" = ["E402", "E501"]
 "examples/*.py" = ["E402", "N806"]
 # Long lines inside string literals (SQL / markdown rules) that cannot be broken
-"core/runtime/agent.py" = ["E501"]
 "storage/providers/sqlite/terminal_repo.py" = ["E501"]
 # Marketplace skills are third-party code; suppress unfixable lint errors
 ".claude/skills/**/*.py" = ["E402", "E712", "E721", "F821", "F841", "N805", "UP042"]
