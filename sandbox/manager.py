@@ -1,6 +1,6 @@
 """Sandbox session manager.
 
-Orchestrates: Thread → ChatSession → Runtime → Terminal → Lease → Instance
+Orchestrates: Thread → ChatSession → Runtime with lower sandbox bindings.
 """
 
 import logging
@@ -225,8 +225,8 @@ def bind_thread_to_existing_thread_lease(
     if source_terminal is None:
         return None
     # @@@subagent-lease-reuse
-    # Child threads need their own terminal/session state, but must attach
-    # to the parent's existing lease instead of silently provisioning a new one.
+    # Child threads need their own terminal/session state while reusing the
+    # parent's lower sandbox binding instead of silently provisioning a new one.
     return bind_thread_to_existing_lease(
         thread_id,
         str(source_terminal["lease_id"]),

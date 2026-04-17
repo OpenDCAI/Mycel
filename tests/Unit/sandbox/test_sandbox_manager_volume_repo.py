@@ -339,6 +339,17 @@ def test_sandbox_volume_doc_does_not_claim_volume_source_is_db_truth():
     assert "VolumeSource is per-thread, passed to operations or resolved from DB" not in source
 
 
+def test_sandbox_manager_doc_names_current_runtime_binding_shape():
+    source = inspect.getsource(sandbox_manager_module)
+
+    stale_chain = "Terminal \u2192 " + "Lease \u2192 Instance"
+    stale_parent_binding = "parent's existing " + "lease"
+
+    assert stale_chain not in source
+    assert stale_parent_binding not in source
+    assert "Thread \u2192 ChatSession \u2192 Runtime" in source
+
+
 def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
