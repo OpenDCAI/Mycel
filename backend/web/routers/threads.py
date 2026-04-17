@@ -1400,7 +1400,13 @@ async def get_thread_lease_status(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any] | None:
     """Get SandboxLease status for a thread."""
-    return await get_lease_status_from_repos(app.state.terminal_repo, app.state.lease_repo, thread_id)
+    return await get_lease_status_from_repos(
+        app.state.thread_repo,
+        app.state.workspace_repo,
+        app.state.sandbox_repo,
+        app.state.lease_repo,
+        thread_id,
+    )
 
 
 # SSE response headers: disable proxy buffering for real-time streaming

@@ -3,6 +3,8 @@
 import asyncio
 from typing import Any
 
+from backend.web.services.thread_runtime_binding_service import resolve_thread_runtime_binding
+
 
 def _resolve_thread_sandbox_instance(mgr: Any, lease: Any) -> Any | None:
     instance = lease.get_instance()
@@ -63,12 +65,24 @@ def _required_text(row: dict[str, Any], key: str, label: str) -> str:
     return value
 
 
-async def get_lease_status_from_repos(terminal_repo: Any, lease_repo: Any, thread_id: str) -> dict[str, Any] | None:
+async def get_lease_status_from_repos(
+    thread_repo: Any,
+    workspace_repo: Any,
+    sandbox_repo: Any,
+    lease_repo: Any,
+    thread_id: str,
+) -> dict[str, Any] | None:
     """Get SandboxLease status from storage repos without bootstrapping an agent."""
-    terminal = await asyncio.to_thread(terminal_repo.get_active, thread_id)
-    if not terminal:
+    binding = await asyncio.to_thread(
+        resolve_thread_runtime_binding,
+        thread_repo=thread_repo,
+        workspace_repo=workspace_repo,
+        sandbox_repo=sandbox_repo,
+        thread_id=thread_id,
+    )
+    lease_id = str(binding.sandbox_config.get("legacy_lease_id") or "").strip()
+    if not lease_id:
         return None
-    lease_id = _required_text(terminal, "lease_id", "terminal")
     lease = await asyncio.to_thread(lease_repo.get, lease_id)
     if not lease:
         return None
