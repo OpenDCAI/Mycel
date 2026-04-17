@@ -1,3 +1,7 @@
+from pathlib import Path
+
+from backend.web.routers import threads as threads_router
+from backend.web.services import message_routing
 from backend.web.services import resource_cache as cache
 
 
@@ -167,3 +171,13 @@ def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkey
     assert payload["providers"][0]["telemetry"]["running"]["used"] == 1
     assert len(payload["providers"][0]["sessions"]) == 1
     assert payload["triage"]["summary"]["healthy_capacity"] == 1
+
+
+def test_monitor_resource_cache_comments_use_sandbox_topology_language() -> None:
+    cache_source = Path(cache.__file__).read_text(encoding="utf-8")
+    routing_source = Path(message_routing.__file__).read_text(encoding="utf-8")
+    threads_source = Path(threads_router.__file__).read_text(encoding="utf-8")
+
+    assert "visible lease/session" not in cache_source
+    assert "create or resume a lease immediately" not in routing_source
+    assert "thread/lease mutations" not in threads_source

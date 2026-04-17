@@ -22,9 +22,9 @@ class _SandboxSnapshotRepoAdapter:
     def __init__(self, *, sandbox_id: str) -> None:
         self._sandbox_id = sandbox_id
 
-    # @@@snapshot-write-bridge - resource probe callers are sandbox-shaped now,
-    # but the storage contract is still lease-keyed. Keep the bridge inside the
-    # adapter so service callers stop leaking lease as the outward write subject.
+    # @@@snapshot-write-bridge - resource probe callers are sandbox-shaped now.
+    # Keep storage compatibility inside this adapter so service callers keep
+    # treating sandbox_id as the outward write subject.
     def upsert_resource_snapshot_for_sandbox(self, **kwargs) -> None:
         kwargs.pop("sandbox_id", None)
         upsert_resource_snapshot_for_sandbox(sandbox_id=self._sandbox_id, **kwargs)
@@ -160,7 +160,7 @@ def read_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
 
 
 def refresh_resource_snapshots() -> dict[str, Any]:
-    """Probe active lease instances and upsert resource snapshots."""
+    """Probe active sandbox runtimes and upsert resource snapshots."""
     repo = make_sandbox_monitor_repo()
     try:
         probe_targets = repo.list_probe_targets()

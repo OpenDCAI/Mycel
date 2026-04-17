@@ -103,9 +103,9 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
         cached = copy.deepcopy(_snapshot_cache)
     if cached is not None:
         _validate_resource_overview_payload(cached)
-        # @@@resource-cache-live-drift - durable session truth lands in sandbox.db after a run
-        # starts; if the cached Resources snapshot no longer matches visible lease/session
-        # counts, refresh synchronously instead of serving a stale zero-sandbox card.
+        # @@@resource-cache-live-drift - durable runtime truth lands after a run
+        # starts; if the cached Resources snapshot no longer matches visible
+        # sandbox/session counts, refresh instead of serving a stale zero-sandbox card.
         if _snapshot_drifted_from_live_sessions(cached):
             return refresh_resource_overview_sync()
         return cached

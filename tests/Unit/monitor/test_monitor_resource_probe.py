@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -421,3 +422,10 @@ def test_read_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> Non
 def test_resource_service_no_longer_exposes_lease_shaped_browse_read_shell() -> None:
     assert not hasattr(resource_service, "sandbox_browse")
     assert not hasattr(resource_service, "sandbox_read")
+
+
+def test_resource_service_comments_use_sandbox_snapshot_language() -> None:
+    source = Path(resource_service.__file__).read_text(encoding="utf-8")
+
+    assert "Probe active lease instances" not in source
+    assert "storage contract is still lease-keyed" not in source

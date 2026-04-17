@@ -76,7 +76,7 @@ def _sidebar_label(*, is_main: bool, branch_index: int) -> str | None:
 
 
 def _invalidate_resource_overview_cache() -> None:
-    # @@@monitor-resource-overview-invalidation - thread/lease mutations change the monitor topology immediately.
+    # @@@monitor-resource-overview-invalidation - thread/sandbox mutations change the monitor topology immediately.
     # Clear the overview snapshot so the next /api/monitor/resources read reflects the fresh binding/state.
     clear_resource_overview_cache()
 
