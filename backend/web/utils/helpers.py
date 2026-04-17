@@ -8,10 +8,20 @@ from fastapi import HTTPException
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
 from storage.container import StorageContainer
-from storage.runtime import build_chat_session_repo as make_chat_session_repo
-from storage.runtime import build_lease_repo as make_lease_repo
-from storage.runtime import build_storage_container, build_thread_repo
-from storage.runtime import build_terminal_repo as make_terminal_repo
+from storage.runtime import (
+    build_chat_session_repo as make_chat_session_repo,
+)
+from storage.runtime import (
+    build_lease_repo as make_lease_repo,
+)
+from storage.runtime import (
+    build_storage_container,
+    build_thread_repo,
+    uses_supabase_runtime_defaults,
+)
+from storage.runtime import (
+    build_terminal_repo as make_terminal_repo,
+)
 
 _cached_container: StorageContainer | None = None
 
@@ -137,7 +147,7 @@ def delete_thread_in_db(thread_id: str) -> None:
     _get_container().purge_thread(thread_id)
 
     sandbox_db = resolve_sandbox_db_path()
-    if not sandbox_db.exists():
+    if not uses_supabase_runtime_defaults() and not sandbox_db.exists():
         return
 
     session_repo = make_chat_session_repo()
