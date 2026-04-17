@@ -2,7 +2,6 @@
 
 from .agent_config_repo import SupabaseAgentConfigRepo
 from .chat_repo import SupabaseChatRepo
-from .chat_session_repo import SupabaseChatSessionRepo
 from .checkpoint_repo import SupabaseCheckpointRepo
 from .contact_repo import SupabaseContactRepo
 from .eval_repo import SupabaseEvalRepo
@@ -17,7 +16,6 @@ from .run_event_repo import SupabaseRunEventRepo
 from .sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from .schedule_repo import SupabaseScheduleRepo
 from .summary_repo import SupabaseSummaryRepo
-from .terminal_repo import SupabaseTerminalRepo
 from .thread_launch_pref_repo import SupabaseThreadLaunchPrefRepo
 from .thread_repo import SupabaseThreadRepo
 from .tool_task_repo import SupabaseToolTaskRepo
@@ -27,7 +25,6 @@ from .user_settings_repo import SupabaseUserSettingsRepo
 __all__ = [
     "SupabaseAgentConfigRepo",
     "SupabaseChatRepo",
-    "SupabaseChatSessionRepo",
     "SupabaseCheckpointRepo",
     "SupabaseContactRepo",
     "SupabaseEvalRepo",
@@ -42,7 +39,6 @@ __all__ = [
     "SupabaseScheduleRepo",
     "SupabaseSandboxMonitorRepo",
     "SupabaseSummaryRepo",
-    "SupabaseTerminalRepo",
     "SupabaseThreadLaunchPrefRepo",
     "SupabaseThreadRepo",
     "SupabaseToolTaskRepo",
