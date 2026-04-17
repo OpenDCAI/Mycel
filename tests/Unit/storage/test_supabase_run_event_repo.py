@@ -8,8 +8,11 @@ class _RecordingSupabaseClient(FakeSupabaseClient):
     def __init__(self, tables: dict[str, list[dict]], auto_seq_tables: set[str] | None = None):
         super().__init__(tables=tables, auto_seq_tables=auto_seq_tables)
         self.table_names: list[str] = []
+        self.schema_names: list[str] = []
 
     def table(self, table_name: str):
+        if "." in table_name and self._schema_name is None:
+            raise AssertionError(f"schema-qualified table string bypassed client.schema(): {table_name}")
         resolved_table = f"{self._schema_name}.{table_name}" if self._schema_name else table_name
         self.table_names.append(resolved_table)
         return super().table(table_name)
@@ -18,6 +21,8 @@ class _RecordingSupabaseClient(FakeSupabaseClient):
         scoped = _RecordingSupabaseClient(self._tables, auto_seq_tables=self._auto_seq_tables)
         scoped._schema_name = schema_name
         scoped.table_names = self.table_names
+        scoped.schema_names = self.schema_names
+        self.schema_names.append(schema_name)
         return scoped
 
 
@@ -56,6 +61,7 @@ def test_supabase_run_event_repo_uses_agent_schema_table() -> None:
     assert deleted == 1
     assert tables["agent.run_events"] == []
     assert "run_events" not in tables
+    assert client.schema_names == ["agent"] * 8
     assert client.table_names == [
         "agent.run_events",
         "agent.run_events",
