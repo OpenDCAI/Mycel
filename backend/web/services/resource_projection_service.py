@@ -217,6 +217,13 @@ def _resource_session_identity(session: dict[str, Any]) -> str:
     return f"{lease_id}:{thread_id or 'unbound'}"
 
 
+def _resource_running_identity(session: dict[str, Any]) -> str:
+    sandbox_id = str(session.get("sandbox_id") or "").strip()
+    if sandbox_id:
+        return sandbox_id
+    return str(session.get("lease_id") or "").strip()
+
+
 def _resource_display_status(
     *,
     observed_state: str | None,
@@ -303,7 +310,7 @@ def list_resource_providers() -> dict[str, Any]:
         normalized_sessions: list[dict[str, Any]] = []
         seen_session_ids: set[str] = set()
         running_count = 0
-        seen_running_leases: set[str] = set()
+        seen_running_sandboxes: set[str] = set()
         for session in provider_sessions:
             observed_state = session.get("observed_state")
             desired_state = session.get("desired_state")
@@ -318,9 +325,10 @@ def list_resource_providers() -> dict[str, Any]:
                 runtime_session_id=runtime_session_id,
                 session_metrics=session_metrics,
             )
-            if normalized == "running" and lease_id not in seen_running_leases:
+            running_identity = _resource_running_identity(session)
+            if normalized == "running" and running_identity and running_identity not in seen_running_sandboxes:
                 running_count += 1
-                seen_running_leases.add(lease_id)
+                seen_running_sandboxes.add(running_identity)
             owner = owners.get(thread_id, {"agent_name": "未绑定Agent", "avatar_url": None})
             session_identity = _resource_session_identity(session)
             if session_identity in seen_session_ids:
@@ -397,7 +405,7 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
     sessions, runtime_session_ids, _snapshot_by_lease, snapshot_by_sandbox = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_session_ids: set[str] = set()
-    seen_running_leases: set[tuple[str, str]] = set()
+    seen_running_sandboxes: set[tuple[str, str]] = set()
     for session in sessions:
         provider_instance = str(session.get("provider") or "local")
         provider_stats = stats.setdefault(provider_instance, {"sessions": 0, "running": 0})
@@ -406,7 +414,6 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
             seen_session_ids.add(session_identity)
             provider_stats["sessions"] += 1
 
-        lease_id = str(session.get("lease_id") or "")
         sandbox_id = str(session.get("sandbox_id") or "").strip()
         runtime_session_id = runtime_session_ids.get(sandbox_id)
         normalized = _resource_display_status(
@@ -415,9 +422,10 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
             runtime_session_id=runtime_session_id,
             session_metrics=_to_session_metrics(snapshot_by_sandbox.get(sandbox_id)),
         )
-        running_identity = (provider_instance, lease_id)
-        if normalized == "running" and lease_id and running_identity not in seen_running_leases:
-            seen_running_leases.add(running_identity)
+        running_identity = _resource_running_identity(session)
+        scoped_running_identity = (provider_instance, running_identity)
+        if normalized == "running" and running_identity and scoped_running_identity not in seen_running_sandboxes:
+            seen_running_sandboxes.add(scoped_running_identity)
             provider_stats["running"] += 1
 
     return stats
