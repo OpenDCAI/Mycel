@@ -33,8 +33,15 @@ def _lease_row(
     }
 
 
-def _single_agent_repos(*thread_ids: str):
-    thread_repo = _FakeThreadRepo({thread_id: {"agent_user_id": "agent-1", "owner_user_id": "owner-1"} for thread_id in thread_ids})
+def _single_agent_repos(*thread_specs: str | tuple[str, dict]):
+    rows: dict[str, dict] = {}
+    for spec in thread_specs:
+        if isinstance(spec, tuple):
+            thread_id, extra = spec
+            rows[thread_id] = {"agent_user_id": "agent-1", "owner_user_id": "owner-1", **extra}
+            continue
+        rows[spec] = {"agent_user_id": "agent-1", "owner_user_id": "owner-1"}
+    thread_repo = _FakeThreadRepo(rows)
     user_repo = _FakeUserRepo(
         {
             "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
@@ -132,7 +139,7 @@ class _FakeUserRepo:
 
 
 @pytest.mark.parametrize(
-    ("rows", "thread_ids", "expected_thread_ids", "expected_agents", "expected_recipe_id"),
+    ("rows", "thread_specs", "expected_thread_ids", "expected_agents", "expected_recipe_id"),
     [
         (
             [
@@ -156,15 +163,12 @@ class _FakeUserRepo:
                 _lease_row("lease-1", "thread-a"),
                 _lease_row("lease-1", "thread-b"),
             ],
-            ("thread-a", "thread-b"),
-            ["thread-a", "thread-b"],
+            (
+                ("thread-a", {"branch_index": 2, "is_main": False}),
+                ("thread-b", {"branch_index": 0, "is_main": True}),
+            ),
+            ["thread-b"],
             [
-                {
-                    "thread_id": "thread-a",
-                    "agent_user_id": "agent-1",
-                    "agent_name": "Morel",
-                    "avatar_url": "/api/users/agent-1/avatar",
-                },
                 {
                     "thread_id": "thread-b",
                     "agent_user_id": "agent-1",
@@ -175,17 +179,17 @@ class _FakeUserRepo:
             "local:default",
         ),
     ],
-    ids=["hide-subagent-threads", "keep-distinct-visible-threads"],
+    ids=["hide-subagent-threads", "collapse-visible-threads-to-canonical-owner-thread"],
 )
 def test_list_user_leases_visible_thread_contract(
     monkeypatch,
     rows,
-    thread_ids,
+    thread_specs,
     expected_thread_ids,
     expected_agents,
     expected_recipe_id,
 ):
-    thread_repo, user_repo = _single_agent_repos(*thread_ids)
+    thread_repo, user_repo = _single_agent_repos(*thread_specs)
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
 
@@ -524,6 +528,59 @@ def test_resolve_owned_lease_uses_canonical_sandbox_source(monkeypatch):
     assert lease["thread_id"] == "thread-parent"
     assert lease["thread_ids"] == ["thread-parent"]
     _assert_daytona_recipe(lease, runtime_session_id="provider-session-1")
+
+
+def test_resolve_owned_lease_collapses_visible_threads_to_canonical_owner_thread(monkeypatch):
+    rows = [
+        _lease_row("lease-1", "thread-a", sandbox_id="sandbox-1"),
+        _lease_row("lease-1", "thread-b", sandbox_id="sandbox-1"),
+    ]
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1", "branch_index": 2, "is_main": False},
+            "thread-b": {"agent_user_id": "agent-1", "owner_user_id": "owner-1", "branch_index": 0, "is_main": True},
+        }
+    )
+    user_repo = _FakeUserRepo(
+        {
+            "agent-1": _agent_user("agent-1", "Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    class _MultiThreadSandboxMonitorRepo:
+        def query_sandboxes(self):
+            return list(rows)
+
+        def query_sandbox_threads(self, sandbox_id: str):
+            assert sandbox_id == "sandbox-1"
+            return [{"thread_id": "thread-a"}, {"thread_id": "thread-b"}]
+
+        def query_sandbox_instance_id(self, sandbox_id: str):
+            assert sandbox_id == "sandbox-1"
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _MultiThreadSandboxMonitorRepo())
+
+    lease = sandbox_service.resolve_owned_lease(
+        "owner-1",
+        "lease-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert lease is not None
+    assert lease["thread_ids"] == ["thread-b"]
+    assert lease["agents"] == [
+        {
+            "thread_id": "thread-b",
+            "agent_user_id": "agent-1",
+            "agent_name": "Morel",
+            "avatar_url": "/api/users/agent-1/avatar",
+        }
+    ]
 
 
 def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch):

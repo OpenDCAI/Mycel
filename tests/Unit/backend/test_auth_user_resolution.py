@@ -97,8 +97,33 @@ async def test_get_current_user_id_coalesces_concurrent_user_existence_checks():
 async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
     request_app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-1"}),
-            terminal_repo=SimpleNamespace(get_active=lambda _thread_id: {"terminal_id": "term-1"}, list_by_thread=lambda _thread_id: []),
+            thread_repo=SimpleNamespace(
+                get_by_id=lambda _thread_id: {
+                    "id": "thread-1",
+                    "agent_user_id": "agent-1",
+                    "owner_user_id": "owner-1",
+                    "current_workspace_id": "workspace-1",
+                }
+            ),
+            workspace_repo=SimpleNamespace(
+                get_by_id=lambda _workspace_id: SimpleNamespace(
+                    id="workspace-1",
+                    owner_user_id="owner-1",
+                    sandbox_id="sandbox-1",
+                    workspace_path="/workspace",
+                )
+            ),
+            sandbox_repo=SimpleNamespace(
+                get_by_id=lambda _sandbox_id: SimpleNamespace(
+                    id="sandbox-1",
+                    owner_user_id="owner-1",
+                    provider_name="daytona",
+                    config={"legacy_lease_id": "lease-1"},
+                )
+            ),
+            terminal_repo=SimpleNamespace(
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("terminal_repo should not gate ownership"))
+            ),
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
             ),
@@ -112,7 +137,21 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
 
 
 @pytest.mark.asyncio
-async def test_verify_thread_owner_purges_incomplete_thread(monkeypatch: pytest.MonkeyPatch):
+async def test_verify_thread_row_owner_allows_terminal_less_visible_thread():
+    request_app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-1"}),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            ),
+        )
+    )
+
+    assert await dependencies.verify_thread_row_owner("thread-1", "owner-1", request_app) == "owner-1"
+
+
+@pytest.mark.asyncio
+async def test_verify_thread_owner_fails_loud_without_purging_terminal_less_thread(monkeypatch: pytest.MonkeyPatch):
     deleted: list[str] = []
     purged: list[str] = []
     rows = {"thread-1": {"agent_user_id": "agent-1"}}
@@ -149,7 +188,47 @@ async def test_verify_thread_owner_purges_incomplete_thread(monkeypatch: pytest.
     with pytest.raises(HTTPException) as exc_info:
         await dependencies.verify_thread_owner("thread-1", "owner-1", request_app)
 
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Thread not found"
-    assert purged == ["thread-1"]
-    assert deleted == ["thread-1"]
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Thread runtime incomplete: missing workspace/sandbox binding"
+    assert purged == []
+    assert deleted == []
+
+
+@pytest.mark.asyncio
+async def test_verify_thread_owner_allows_terminal_less_workspace_backed_thread():
+    request_app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_by_id=lambda _thread_id: {
+                    "id": "thread-1",
+                    "agent_user_id": "agent-1",
+                    "owner_user_id": "owner-1",
+                    "current_workspace_id": "workspace-1",
+                }
+            ),
+            workspace_repo=SimpleNamespace(
+                get_by_id=lambda _workspace_id: SimpleNamespace(
+                    id="workspace-1",
+                    owner_user_id="owner-1",
+                    sandbox_id="sandbox-1",
+                    workspace_path="/workspace",
+                )
+            ),
+            sandbox_repo=SimpleNamespace(
+                get_by_id=lambda _sandbox_id: SimpleNamespace(
+                    id="sandbox-1",
+                    owner_user_id="owner-1",
+                    provider_name="daytona",
+                    config={"legacy_lease_id": "lease-1"},
+                )
+            ),
+            terminal_repo=SimpleNamespace(
+                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("terminal_repo should not gate ownership"))
+            ),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            ),
+        )
+    )
+
+    assert await dependencies.verify_thread_owner("thread-1", "owner-1", request_app) == "owner-1"

@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.web.services.thread_runtime_binding_service import ThreadRuntimeBindingError, resolve_thread_runtime_binding
 from backend.web.utils.helpers import delete_thread_in_db
 
 
 def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
     # @@@incomplete-thread-purge - visible threads that cannot satisfy the
-    # current thread->terminal->lease->volume contract should be removed once,
+    # current thread->workspace->sandbox runtime binding should be removed once,
     # not kept alive behind endpoint-level repair guesses.
     delete_thread_in_db(thread_id)
     app.state.thread_repo.delete(thread_id)
@@ -33,69 +34,49 @@ def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
         queue_manager.clear_all(thread_id)
 
 
-def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
-    """Converge an owner-visible thread to the current runtime contract.
-
-    Returns one of:
-    - ``missing``: no thread row exists
-    - ``ready``: active terminal already present
-    - ``repaired_pointer``: terminal rows exist and active pointer was restored
-    - ``purged``: incomplete thread was deleted
-    """
+def inspect_owner_thread_runtime(app: Any, thread_id: str) -> str:
+    """Check an owner-visible thread against the runtime contract without mutating thread rows."""
 
     thread = app.state.thread_repo.get_by_id(thread_id)
     if thread is None:
         return "missing"
 
-    terminal_repo = getattr(app.state, "terminal_repo", None)
-    if terminal_repo is None:
-        raise RuntimeError("terminal_repo is required for thread runtime convergence")
-
-    active_terminal = terminal_repo.get_active(thread_id)
-    if active_terminal is not None:
+    try:
+        resolve_thread_runtime_binding(
+            thread_repo=app.state.thread_repo,
+            workspace_repo=app.state.workspace_repo,
+            sandbox_repo=app.state.sandbox_repo,
+            thread_id=thread_id,
+        )
         return "ready"
+    except (AttributeError, ThreadRuntimeBindingError):
+        return "incomplete"
 
-    terminals = terminal_repo.list_by_thread(thread_id)
-    if terminals:
-        terminal_repo.set_active(thread_id, str(terminals[0]["terminal_id"]))
-        return "repaired_pointer"
+
+def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
+    """Converge an owner-visible thread to the current runtime contract.
+
+    Returns one of:
+    - ``missing``: no thread row exists
+    - ``ready``: workspace/sandbox runtime binding is present
+    - ``purged``: incomplete thread was deleted
+    """
+
+    runtime_state = inspect_owner_thread_runtime(app, thread_id)
+    if runtime_state != "incomplete":
+        return runtime_state
 
     purge_incomplete_owner_thread(app, thread_id)
     return "purged"
 
 
 def summarize_owner_thread_runtime(app: Any, thread_ids: list[str]) -> dict[str, str]:
-    """Batch-converge owner-visible threads when terminal repo can summarize them."""
-
-    terminal_repo = getattr(app.state, "terminal_repo", None)
-    if terminal_repo is None:
-        raise RuntimeError("terminal_repo is required for thread runtime convergence")
-
-    summarize_threads = getattr(terminal_repo, "summarize_threads", None)
-    if not callable(summarize_threads):
-        raise RuntimeError("terminal_repo must support summarize_threads for owner runtime convergence")
-
-    summary = summarize_threads(thread_ids)
-    if not isinstance(summary, dict):
-        raise RuntimeError("terminal_repo.summarize_threads must return a dict")
+    """Batch-converge owner-visible threads against the workspace/sandbox runtime binding."""
     states: dict[str, str] = {}
     for thread_id in thread_ids:
-        item = summary.get(thread_id)
-        if item is None:
-            continue
-        if not isinstance(item, dict):
-            raise RuntimeError("terminal_repo.summarize_threads returned an invalid summary item")
-
-        active_terminal_id = str(item.get("active_terminal_id") or "").strip()
-        latest_terminal_id = str(item.get("latest_terminal_id") or "").strip()
-        if active_terminal_id:
-            states[thread_id] = "ready"
-            continue
-        if latest_terminal_id:
-            terminal_repo.set_active(thread_id, latest_terminal_id)
-            states[thread_id] = "repaired_pointer"
-            continue
-
-        purge_incomplete_owner_thread(app, thread_id)
-        states[thread_id] = "purged"
+        state = inspect_owner_thread_runtime(app, thread_id)
+        if state == "incomplete":
+            purge_incomplete_owner_thread(app, thread_id)
+            state = "purged"
+        states[thread_id] = state
     return states

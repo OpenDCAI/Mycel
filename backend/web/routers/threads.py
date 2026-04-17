@@ -18,6 +18,7 @@ from backend.web.core.dependencies import (
     get_thread_agent,
     get_thread_lock,
     verify_thread_owner,
+    verify_thread_row_owner,
 )
 from backend.web.models.requests import (
     CreateThreadRequest,
@@ -48,10 +49,8 @@ from backend.web.services.thread_launch_config_service import (
 from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
-    get_lease_status,
+    get_lease_status_from_repos,
     get_sandbox_info,
-    get_session_status,
-    get_terminal_status,
 )
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import delete_thread_in_db
@@ -1085,10 +1084,9 @@ async def get_thread_messages(
     Hot path: return in-memory state.  Cold path: rebuild from checkpoint.
     """
     sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     display_builder = app.state.display_builder
     entries = await _get_thread_display_entries(app, thread_id)
-    sandbox_info = get_sandbox_info(agent, thread_id, sandbox_type)
+    sandbox_info = get_sandbox_info(app, thread_id, sandbox_type)
     return {
         "thread_id": thread_id,
         "entries": entries,
@@ -1393,38 +1391,21 @@ async def get_thread_runtime(
     return status
 
 
-# Session/terminal/lease status endpoints
-@router.get("/{thread_id}/session")
-async def get_thread_session_status(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Get ChatSession status for a thread."""
-    try:
-        return await get_session_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
-
-
-@router.get("/{thread_id}/terminal")
-async def get_thread_terminal_status(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Get AbstractTerminal state for a thread."""
-    try:
-        return await get_terminal_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
-
-
+# Lease status endpoint
 @router.get("/{thread_id}/lease")
 async def get_thread_lease_status(
     thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_row_owner)] = None,
+    app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any] | None:
     """Get SandboxLease status for a thread."""
-    return await get_lease_status(agent, thread_id)
+    return await get_lease_status_from_repos(
+        app.state.thread_repo,
+        app.state.workspace_repo,
+        app.state.sandbox_repo,
+        app.state.lease_repo,
+        thread_id,
+    )
 
 
 # SSE response headers: disable proxy buffering for real-time streaming

@@ -84,10 +84,15 @@ async def list_workspace_path(
     if agent._sandbox.name == "local":
         raise HTTPException(400, "Agent has no remote sandbox")
 
+    try:
+        default_path = path or (await asyncio.to_thread(file_channel_service.get_file_channel_binding, thread_id)).workspace_path
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
     def _list_remote() -> dict[str, Any]:
         set_current_thread_id(thread_id)
         capability = agent._sandbox.manager.get_sandbox(thread_id)
-        target = path or capability._session.terminal.get_state().cwd
+        target = default_path
         result = capability.fs.list_dir(target)
         if result.error:
             raise RuntimeError(result.error)

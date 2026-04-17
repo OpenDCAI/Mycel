@@ -16,10 +16,11 @@ def test_file_channel_service_no_longer_imports_storage_factory() -> None:
     file_channel_source = inspect.getsource(file_channel_service)
 
     assert "backend.web.core.storage_factory" not in file_channel_source
-    assert "storage.runtime" in file_channel_source
     assert "backend.web.utils.helpers" in file_channel_source
     assert "SQLiteTerminalRepo" not in file_channel_source
     assert "SQLiteLeaseRepo" not in file_channel_source
+    assert "build_chat_session_repo" not in file_channel_source
+    assert "touch_thread_activity" not in file_channel_source
 
 
 def test_helpers_no_longer_import_storage_factory() -> None:
@@ -122,3 +123,47 @@ async def test_get_sandbox_files_exposes_workspace_binding_alongside_local_stagi
         "workspace_id": "workspace-1",
         "workspace_path": "/workspace/root",
     }
+
+
+@pytest.mark.asyncio
+async def test_remote_file_list_defaults_to_workspace_binding_not_terminal_cwd(monkeypatch: pytest.MonkeyPatch):
+    class FailingTerminal:
+        def get_state(self):
+            raise AssertionError("terminal cwd should not be used as file list default")
+
+    class FakeFs:
+        def __init__(self) -> None:
+            self.paths: list[str] = []
+
+        def list_dir(self, path: str):
+            self.paths.append(path)
+            return SimpleNamespace(error=None, entries=[])
+
+    fake_fs = FakeFs()
+    capability = SimpleNamespace(
+        fs=fake_fs,
+        _session=SimpleNamespace(terminal=FailingTerminal()),
+    )
+    agent = SimpleNamespace(
+        _sandbox=SimpleNamespace(
+            name="daytona",
+            manager=SimpleNamespace(get_sandbox=lambda thread_id: capability),
+        )
+    )
+
+    async def fake_get_or_create_agent(*_args: object, **_kwargs: object):
+        return agent
+
+    monkeypatch.setattr(thread_files_router, "resolve_thread_sandbox", lambda _app, _thread_id: "daytona")
+    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", fake_get_or_create_agent)
+    monkeypatch.setattr(
+        thread_files_router.file_channel_service,
+        "get_file_channel_binding",
+        lambda thread_id: SimpleNamespace(thread_id=thread_id, workspace_path="/workspace/root"),
+        raising=False,
+    )
+
+    result = await thread_files_router.list_workspace_path("thread-1", path=None, app=SimpleNamespace(state=SimpleNamespace()))
+
+    assert fake_fs.paths == ["/workspace/root"]
+    assert result == {"thread_id": "thread-1", "path": "/workspace/root", "entries": []}

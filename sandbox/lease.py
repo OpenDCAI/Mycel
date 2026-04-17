@@ -31,6 +31,7 @@ from sandbox.lifecycle import (
 from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import build_lease_repo as _build_strategy_lease_repo
 from storage.runtime import build_provider_event_repo as _build_strategy_provider_event_repo
+from storage.runtime import build_sandbox_repo as _build_strategy_sandbox_repo
 from storage.runtime import uses_supabase_runtime_defaults
 
 if TYPE_CHECKING:
@@ -94,6 +95,10 @@ def _make_lease_repo(db_path: Path | None = None):
 
 def _make_provider_event_repo():
     return _build_strategy_provider_event_repo()
+
+
+def _make_sandbox_repo():
+    return _build_strategy_sandbox_repo()
 
 
 @dataclass
@@ -311,6 +316,35 @@ class SQLiteLease(SandboxLease):
                 "started_at": self._current_instance.created_at.isoformat() if self._current_instance else None,
             },
         }
+
+    def _sandbox_bridge_id(self) -> str:
+        return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-lease-bridge:{self.lease_id}').hex}"
+
+    def _sync_sandbox_runtime_binding(self, provider_env_id: str | None, *, updated_at: Any) -> None:
+        if not _use_supabase_storage(self.db_path):
+            return
+        repo = _make_sandbox_repo()
+        try:
+            repo.update_runtime_binding(
+                sandbox_id=self._sandbox_bridge_id(),
+                provider_env_id=provider_env_id,
+                updated_at=updated_at,
+            )
+        finally:
+            repo.close()
+
+    def _sync_sandbox_observed_state(self, observed_state: str, *, updated_at: Any) -> None:
+        if not _use_supabase_storage(self.db_path):
+            return
+        repo = _make_sandbox_repo()
+        try:
+            repo.update_observed_state(
+                sandbox_id=self._sandbox_bridge_id(),
+                observed_state=observed_state,
+                updated_at=updated_at,
+            )
+        finally:
+            repo.close()
 
     def _append_event(
         self,
@@ -535,6 +569,9 @@ class SQLiteLease(SandboxLease):
             event_repo.close()
             repo.close()
         self._sync_from(lease_from_row(row, self.db_path))
+        if observed == "detached":
+            self._sync_sandbox_runtime_binding(None, updated_at=row.get("updated_at") or row.get("observed_at"))
+            self._sync_sandbox_observed_state("detached", updated_at=row.get("updated_at") or row.get("observed_at"))
 
     def _destroy_via_strategy_repos(self, provider: SandboxProvider, *, source: str) -> None:
         capability = provider.get_capability()
@@ -857,6 +894,10 @@ class SQLiteLease(SandboxLease):
                     finally:
                         repo.close()
                     self._sync_from(lease_from_row(row, self.db_path))
+                    self._sync_sandbox_runtime_binding(
+                        row.get("current_instance_id"),
+                        updated_at=row.get("updated_at") or row.get("observed_at"),
+                    )
                 else:
                     self.apply(
                         provider,
@@ -895,6 +936,10 @@ class SQLiteLease(SandboxLease):
                         finally:
                             repo.close()
                         self._sync_from(lease_from_row(row, self.db_path))
+                        self._sync_sandbox_runtime_binding(
+                            row.get("current_instance_id"),
+                            updated_at=row.get("updated_at") or row.get("observed_at"),
+                        )
                     else:
                         self.apply(
                             provider,
@@ -936,6 +981,10 @@ class SQLiteLease(SandboxLease):
                 finally:
                     repo.close()
                 self._sync_from(lease_from_row(row, self.db_path))
+                self._sync_sandbox_runtime_binding(
+                    row.get("current_instance_id"),
+                    updated_at=row.get("updated_at") or row.get("observed_at"),
+                )
             else:
                 self.apply(
                     provider,

@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime
+from backend.web.services.thread_runtime_convergence import inspect_owner_thread_runtime
 from sandbox.thread_context import set_current_thread_id
 
 
@@ -96,9 +96,26 @@ async def verify_thread_owner(
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
     """Verify that user_id owns the thread. Returns user_id."""
-    runtime_state = converge_owner_thread_runtime(app, thread_id)
-    if runtime_state in {"missing", "purged"}:
+    runtime_state = inspect_owner_thread_runtime(app, thread_id)
+    if runtime_state == "missing":
         raise HTTPException(404, "Thread not found")
+    if runtime_state == "incomplete":
+        raise HTTPException(409, "Thread runtime incomplete: missing workspace/sandbox binding")
+    thread = app.state.thread_repo.get_by_id(thread_id)
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if not agent_user or agent_user.owner_user_id != user_id:
+        raise HTTPException(403, "Not authorized")
+    return user_id
+
+
+async def verify_thread_row_owner(
+    thread_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[FastAPI, Depends(get_app)],
+) -> str:
+    """Verify ownership without mutating or converging thread runtime state."""
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")

@@ -27,6 +27,18 @@ def _default_eval_batch_service(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _default_monitor_thread_repo(monkeypatch):
+    class FakeCanonicalThreadRepo:
+        def list_by_ids(self, thread_ids: list[str]):
+            return [{"id": thread_id, "agent_user_id": "agent-1", "branch_index": 0, "is_main": True} for thread_id in thread_ids]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "build_thread_repo", lambda: FakeCanonicalThreadRepo())
+
+
+@pytest.fixture(autouse=True)
 def _clear_monitor_cleanup_operations():
     monitor_service.monitor_operation_service._OPERATIONS.clear()
     monitor_service.monitor_operation_service._TARGET_INDEX.clear()
@@ -207,8 +219,8 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
 
     assert payload["provider"]["id"] == "daytona"
     assert payload["sandbox_ids"] == ["sandbox-1", "sandbox-2"]
-    assert payload["lease_ids"] == ["lease-1", "lease-2"]
-    assert payload["thread_ids"] == ["thread-1", "thread-2"]
+    assert "lease_ids" not in payload
+    assert "thread_ids" not in payload
     assert payload["runtime_session_ids"] == ["runtime-1"]
 
 
@@ -424,6 +436,33 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
     assert payload["threads"] == [{"thread_id": "thread-1"}]
     assert payload["cleanup"]["allowed"] is False
     assert "lease" not in payload
+
+
+def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_thread(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            threads=[{"thread_id": "thread-child"}, {"thread_id": "thread-main"}],
+            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-main", "status": "active"}],
+        ),
+    )
+
+    class _ThreadRepo:
+        def list_by_ids(self, thread_ids: list[str]):
+            assert thread_ids == ["thread-child", "thread-main"]
+            return [
+                {"id": "thread-child", "agent_user_id": "agent-1", "branch_index": 2, "is_main": False},
+                {"id": "thread-main", "agent_user_id": "agent-1", "branch_index": 0, "is_main": True},
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "build_thread_repo", lambda: _ThreadRepo())
+
+    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+
+    assert payload["threads"] == [{"thread_id": "thread-main"}]
 
 
 def test_list_leases_uses_canonical_sandbox_source(monkeypatch):
@@ -999,6 +1038,30 @@ def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch
     assert payload["sandbox_id"] == "sandbox-1"
     assert payload["target"]["target_type"] == "lease"
     assert payload["target"]["target_id"] == "lease-1"
+
+
+def test_request_monitor_sandbox_cleanup_no_longer_records_thread_list_residue(monkeypatch):
+    calls: list[tuple[str, str, bool]] = []
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_detached_lease(),
+            threads=[{"thread_id": "thread-historical"}],
+            runtime_session_id="runtime-1",
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        _record_destroy(calls),
+        raising=False,
+    )
+
+    payload = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
+
+    assert payload["accepted"] is True
+    assert "thread_ids" not in (payload["operation"].get("target") or {})
+    assert "thread_state_after" not in (payload["operation"].get("result_truth") or {})
+    assert calls == [("lease-1", "daytona", True)]
 
 
 def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeypatch):

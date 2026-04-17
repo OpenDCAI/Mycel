@@ -72,14 +72,8 @@ async def prime_sandbox(agent: Any, thread_id: str) -> None:
     def _prime_sandbox() -> None:
         mgr = agent._sandbox.manager
         mgr.enforce_idle_timeouts()
-        terminal = mgr.get_terminal(thread_id)
-        if terminal:
-            existing = mgr.session_manager.get(thread_id, terminal.terminal_id)
-            if existing and existing.status == "paused" and not agent._sandbox.resume_thread(thread_id):
-                raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
-        agent._sandbox.ensure_session(thread_id)
-        terminal = mgr.get_terminal(thread_id)
-        lease = mgr.get_lease(terminal.lease_id) if terminal else None
+        capability = mgr.get_sandbox(thread_id)
+        lease = getattr(getattr(capability, "_session", None), "lease", None)
         if lease:
             lease_status = lease.refresh_instance_status(mgr.provider)
             if lease_status == "paused" and mgr.provider_capability.can_resume and not agent._sandbox.resume_thread(thread_id):

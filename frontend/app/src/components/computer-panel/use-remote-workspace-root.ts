@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { getThreadTerminal } from "../../api";
+import { getThreadFileChannel } from "../../api";
 
 interface UseRemoteWorkspaceRootOptions {
   threadId: string | null;
@@ -15,8 +15,8 @@ export function useRemoteWorkspaceRoot({ threadId, isRemote }: UseRemoteWorkspac
     if (!threadId) return undefined;
     if (!isRemote) return undefined;
 
-    const terminal = await getThreadTerminal(threadId);
-    return terminal.cwd;
+    const channel = await getThreadFileChannel(threadId);
+    return channel.workspace_path;
   }, [threadId, isRemote]);
 
   return { refreshWorkspaceRoot };

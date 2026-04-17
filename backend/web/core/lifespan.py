@@ -63,8 +63,6 @@ async def lifespan(app: FastAPI):
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.lease_repo = storage_container.lease_repo()
-    app.state.terminal_repo = storage_container.terminal_repo()
-    app.state.chat_session_repo = storage_container.chat_session_repo()
     app.state.thread_launch_pref_repo = storage_container.thread_launch_pref_repo()
     app.state.recipe_repo = storage_container.recipe_repo()
     app.state.workspace_repo = storage_container.workspace_repo()

@@ -8,8 +8,6 @@ from pathlib import Path
 
 from backend.web.utils.helpers import _get_container
 from config.user_paths import user_home_path
-from sandbox.clock import utc_now_iso
-from storage.runtime import build_chat_session_repo as make_chat_session_repo
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +73,6 @@ def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
     source = get_file_channel_source(thread_id)
     result = source.save_file(relative_path, content)
     result["thread_id"] = thread_id
-
-    repo = make_chat_session_repo()
-    try:
-        repo.touch_thread_activity(thread_id, utc_now_iso())
-    finally:
-        repo.close()
     return result
 
 

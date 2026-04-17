@@ -47,3 +47,23 @@ def test_get_file_channel_source_uses_workspace_owned_local_channel_root(monkeyp
     source = file_channel_service.get_file_channel_source("thread-1")
 
     assert source.host_path == expected_root
+
+
+def test_save_file_does_not_touch_chat_session_activity(monkeypatch):
+    class Source:
+        def save_file(self, relative_path: str, content: bytes) -> dict:
+            assert relative_path == "note.txt"
+            assert content == b"hello"
+            return {"path": "note.txt", "size": 5}
+
+    monkeypatch.setattr(file_channel_service, "get_file_channel_source", lambda _thread_id: Source())
+    monkeypatch.setattr(
+        file_channel_service,
+        "make_chat_session_repo",
+        lambda: (_ for _ in ()).throw(AssertionError("file channel save should not touch chat sessions")),
+        raising=False,
+    )
+
+    result = file_channel_service.save_file(thread_id="thread-1", relative_path="note.txt", content=b"hello")
+
+    assert result == {"path": "note.txt", "size": 5, "thread_id": "thread-1"}

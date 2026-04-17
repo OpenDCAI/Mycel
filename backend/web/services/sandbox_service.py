@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
+from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import is_virtual_thread_id
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
@@ -113,8 +114,7 @@ def list_user_leases(
                     "desired_state": row.get("desired_state"),
                     "created_at": row.get("created_at"),
                     "cwd": row.get("cwd"),
-                    "thread_ids": [],
-                    "agents": [],
+                    "_visible_threads": [],
                 },
             )
             if include_runtime_session_id and runtime_session_id and not group.get("runtime_session_id"):
@@ -122,7 +122,7 @@ def list_user_leases(
             if not group.get("sandbox_id"):
                 group["sandbox_id"] = str(row.get("sandbox_id") or "").strip() or None
             thread_id = str(row.get("thread_id") or "").strip()
-            if not _is_user_visible_lease_thread(thread_id) or thread_id in group["thread_ids"]:
+            if not _is_user_visible_lease_thread(thread_id):
                 continue
             thread = threads_by_id.get(thread_id)
             if thread is None:
@@ -133,17 +133,31 @@ def list_user_leases(
             agent_user = users_by_id.get(agent_user_id)
             if agent_user is None:
                 continue
-            group["thread_ids"].append(thread_id)
-            group["agents"].append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
+            group["_visible_threads"].append({"id": thread_id, **thread})
             if not group["cwd"] and row.get("cwd"):
                 group["cwd"] = row.get("cwd")
 
         leases: list[dict[str, Any]] = []
         for lease in grouped.values():
-            if not lease["thread_ids"]:
+            visible_threads = canonical_owner_threads(lease.pop("_visible_threads"))
+            if not visible_threads:
                 continue
             if not _is_user_visible_lease_state(lease):
                 continue
+            thread_ids: list[str] = []
+            agents: list[dict[str, Any]] = []
+            for thread in visible_threads:
+                thread_id = str(thread.get("id") or "").strip()
+                agent_user_id = str(thread.get("agent_user_id") or "").strip()
+                agent_user = users_by_id.get(agent_user_id)
+                if not thread_id or not agent_user_id or agent_user is None:
+                    continue
+                thread_ids.append(thread_id)
+                agents.append(_lease_agent_payload(thread_id, agent_user_id, agent_user))
+            if not thread_ids:
+                continue
+            lease["thread_ids"] = thread_ids
+            lease["agents"] = agents
             provider_name = lease["provider_name"]
             _apply_lease_recipe(lease, provider_name, lease["recipe"])
             leases.append(lease)
@@ -216,11 +230,10 @@ def resolve_owned_lease(
         if not sandbox_id:
             raise RuntimeError("sandbox_id is required for resolve_owned_lease")
 
-        thread_ids: list[str] = []
-        agents: list[dict[str, Any]] = []
+        visible_threads: list[dict[str, Any]] = []
         for row in monitor_repo.query_sandbox_threads(sandbox_id):
             thread_id = str(row.get("thread_id") or "").strip()
-            if not _is_user_visible_lease_thread(thread_id) or thread_id in thread_ids:
+            if not _is_user_visible_lease_thread(thread_id):
                 continue
             thread = thread_repo.get_by_id(thread_id)
             if thread is None:
@@ -228,6 +241,16 @@ def resolve_owned_lease(
             agent_user_id = str(thread.get("agent_user_id") or "").strip()
             if not agent_user_id:
                 continue
+            agent_user = user_repo.get_by_id(agent_user_id)
+            if agent_user is None or agent_user.owner_user_id != user_id:
+                continue
+            visible_threads.append({"id": thread_id, **thread})
+        visible_threads = canonical_owner_threads(visible_threads)
+        thread_ids: list[str] = []
+        agents: list[dict[str, Any]] = []
+        for thread in visible_threads:
+            thread_id = str(thread.get("id") or "").strip()
+            agent_user_id = str(thread.get("agent_user_id") or "").strip()
             agent_user = user_repo.get_by_id(agent_user_id)
             if agent_user is None or agent_user.owner_user_id != user_id:
                 continue

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 
 
@@ -23,43 +21,21 @@ class _FakeThreadRepo:
         self.rows.pop(thread_id, None)
 
 
-class _FakeTerminalRepo:
-    def __init__(self, *, active_by_thread=None, terminals_by_thread=None) -> None:
-        self._active_by_thread = dict(active_by_thread or {})
-        self._terminals_by_thread = {key: list(value) for key, value in (terminals_by_thread or {}).items()}
-        self.set_active_calls: list[tuple[str, str]] = []
+class _Repo:
+    def __init__(self, rows: dict[str, object]) -> None:
+        self.rows = rows
 
-    def get_active(self, thread_id: str):
-        return self._active_by_thread.get(thread_id)
-
-    def list_by_thread(self, thread_id: str):
-        return list(self._terminals_by_thread.get(thread_id, []))
-
-    def set_active(self, thread_id: str, terminal_id: str) -> None:
-        self.set_active_calls.append((thread_id, terminal_id))
-        for row in self._terminals_by_thread.get(thread_id, []):
-            if str(row["terminal_id"]) == terminal_id:
-                self._active_by_thread[thread_id] = row
-                break
-
-    def summarize_threads(self, thread_ids: list[str]):
-        summary: dict[str, dict[str, str | None]] = {}
-        for thread_id in thread_ids:
-            active = self._active_by_thread.get(thread_id)
-            terminals = self._terminals_by_thread.get(thread_id, [])
-            summary[thread_id] = {
-                "active_terminal_id": str(active["terminal_id"]) if active is not None else None,
-                "latest_terminal_id": str(terminals[0]["terminal_id"]) if terminals else None,
-            }
-        return summary
+    def get_by_id(self, row_id: str):
+        return self.rows.get(row_id)
 
 
-def _make_app(*, thread_repo, terminal_repo):
+def _make_app(*, thread_repo, workspace_repo=None, sandbox_repo=None):
     queue_manager = SimpleNamespace(clear_all=lambda _thread_id: None)
     return SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=thread_repo,
-            terminal_repo=terminal_repo,
+            workspace_repo=workspace_repo or _Repo({}),
+            sandbox_repo=sandbox_repo or _Repo({}),
             thread_sandbox={"thread-1": "local"},
             thread_cwd={"thread-1": "/workspace"},
             thread_event_buffers={"thread-1": object()},
@@ -71,35 +47,55 @@ def _make_app(*, thread_repo, terminal_repo):
     )
 
 
-def test_converge_owner_thread_runtime_repairs_missing_pointer_from_latest_terminal(monkeypatch) -> None:
-    thread_repo = _FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}})
-    terminal_repo = _FakeTerminalRepo(
-        terminals_by_thread={
-            "thread-1": [
-                {"terminal_id": "term-new", "lease_id": "lease-1"},
-                {"terminal_id": "term-old", "lease_id": "lease-1"},
-            ]
+def test_converge_owner_thread_runtime_accepts_workspace_sandbox_binding_without_terminal(monkeypatch) -> None:
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-1": {
+                "agent_user_id": "agent-1",
+                "owner_user_id": "owner-1",
+                "current_workspace_id": "workspace-1",
+            }
         }
     )
-    app = _make_app(thread_repo=thread_repo, terminal_repo=terminal_repo)
+    app = _make_app(
+        thread_repo=thread_repo,
+        workspace_repo=_Repo(
+            {
+                "workspace-1": SimpleNamespace(
+                    id="workspace-1",
+                    owner_user_id="owner-1",
+                    sandbox_id="sandbox-1",
+                    workspace_path="/workspace",
+                )
+            }
+        ),
+        sandbox_repo=_Repo(
+            {
+                "sandbox-1": SimpleNamespace(
+                    id="sandbox-1",
+                    owner_user_id="owner-1",
+                    provider_name="daytona",
+                    config={"legacy_lease_id": "lease-1"},
+                )
+            }
+        ),
+    )
 
     monkeypatch.setattr(
         "backend.web.services.thread_runtime_convergence.delete_thread_in_db",
-        lambda _thread_id: (_ for _ in ()).throw(AssertionError("purge should not run when terminals still exist")),
+        lambda _thread_id: (_ for _ in ()).throw(AssertionError("purge should not run when runtime binding exists")),
     )
 
     result = converge_owner_thread_runtime(app, "thread-1")
 
-    assert result == "repaired_pointer"
-    assert terminal_repo.set_active_calls == [("thread-1", "term-new")]
+    assert result == "ready"
     assert thread_repo.deleted == []
 
 
-def test_converge_owner_thread_runtime_purges_incomplete_thread_without_terminals(monkeypatch) -> None:
+def test_converge_owner_thread_runtime_purges_thread_without_workspace_binding(monkeypatch) -> None:
     purged: list[str] = []
-    thread_repo = _FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}})
-    terminal_repo = _FakeTerminalRepo()
-    app = _make_app(thread_repo=thread_repo, terminal_repo=terminal_repo)
+    thread_repo = _FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"}})
+    app = _make_app(thread_repo=thread_repo)
 
     monkeypatch.setattr(
         "backend.web.services.thread_runtime_convergence.delete_thread_in_db",
@@ -119,11 +115,47 @@ def test_converge_owner_thread_runtime_purges_incomplete_thread_without_terminal
     assert app.state.agent_pool == {}
 
 
-def test_summarize_owner_thread_runtime_requires_batch_summary_contract() -> None:
+def test_summarize_owner_thread_runtime_uses_workspace_sandbox_binding(monkeypatch) -> None:
+    purged: list[str] = []
     app = _make_app(
-        thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
-        terminal_repo=SimpleNamespace(),
+        thread_repo=_FakeThreadRepo(
+            {
+                "thread-1": {
+                    "agent_user_id": "agent-1",
+                    "owner_user_id": "owner-1",
+                    "current_workspace_id": "workspace-1",
+                },
+                "broken-thread": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+            }
+        ),
+        workspace_repo=_Repo(
+            {
+                "workspace-1": SimpleNamespace(
+                    id="workspace-1",
+                    owner_user_id="owner-1",
+                    sandbox_id="sandbox-1",
+                    workspace_path="/workspace",
+                )
+            }
+        ),
+        sandbox_repo=_Repo(
+            {
+                "sandbox-1": SimpleNamespace(
+                    id="sandbox-1",
+                    owner_user_id="owner-1",
+                    provider_name="daytona",
+                    config={"legacy_lease_id": "lease-1"},
+                )
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.web.services.thread_runtime_convergence.delete_thread_in_db",
+        lambda thread_id: purged.append(thread_id),
     )
 
-    with pytest.raises(RuntimeError, match="terminal_repo must support summarize_threads for owner runtime convergence"):
-        summarize_owner_thread_runtime(app, ["thread-1"])
+    assert summarize_owner_thread_runtime(app, ["thread-1", "broken-thread"]) == {
+        "thread-1": "ready",
+        "broken-thread": "purged",
+    }
+    assert purged == ["broken-thread"]

@@ -23,44 +23,53 @@ class SupabaseSandboxMonitorRepo:
         return None
 
     def query_threads(self, *, thread_id: str | None = None) -> list[dict]:
-        # Fetch active chat_sessions joined with sandbox summaries via legacy lease bridge.
-        q_sessions = self._client.table("chat_sessions").select("thread_id,chat_session_id,last_active_at,lease_id").neq("status", "closed")
-        if thread_id is not None:
-            q_sessions = q_sessions.eq("thread_id", thread_id)
-        sessions = q.rows(
-            q_sessions.execute(),
+        q_threads = q.schema_table(
+            self._client,
+            "agent",
+            "threads",
             _REPO,
-            "query_threads sessions",
+        ).select("id,current_workspace_id,last_active_at,updated_at,created_at")
+        if thread_id is not None:
+            q_threads = q_threads.eq("id", thread_id)
+        threads = q.rows(
+            q_threads.execute(),
+            _REPO,
+            "query_threads threads",
         )
-        if not sessions:
+        if not threads:
             return []
 
-        sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_threads")
-        lease_map = {lease_id: self._lease_row_from_sandbox(sandbox) for lease_id, sandbox in sandbox_rows.items()}
+        workspace_ids = [
+            str(row.get("current_workspace_id") or "").strip() for row in threads if str(row.get("current_workspace_id") or "").strip()
+        ]
+        workspace_by_id = self._workspace_rows_by_id(workspace_ids)
+        sandbox_ids = [
+            str(workspace.get("sandbox_id") or "").strip()
+            for workspace in workspace_by_id.values()
+            if str(workspace.get("sandbox_id") or "").strip()
+        ]
+        sandbox_by_id = self._sandbox_rows_by_id(sandbox_ids, "query_threads")
 
-        # Aggregate per thread_id
-        by_thread: dict[str, dict] = {}
-        for s in sessions:
-            tid = s["thread_id"]
-            last_active = s.get("last_active_at")
-            lease = lease_map.get(s.get("lease_id") or "")
-            if tid not in by_thread:
-                by_thread[tid] = {
-                    "thread_id": tid,
+        result: list[dict[str, Any]] = []
+        for thread in threads:
+            workspace_id = str(thread.get("current_workspace_id") or "").strip()
+            workspace = workspace_by_id.get(workspace_id)
+            sandbox = sandbox_by_id.get(str((workspace or {}).get("sandbox_id") or "").strip())
+            lease = self._lease_row_from_sandbox(sandbox) if sandbox else None
+            result.append(
+                {
+                    "thread_id": thread["id"],
                     "session_count": 0,
                     "sandbox_id": lease.get("sandbox_id") if lease else None,
-                    "last_active": last_active,
-                    "lease_id": s.get("lease_id"),
+                    "last_active": thread.get("last_active_at") or thread.get("updated_at") or thread.get("created_at"),
+                    "lease_id": lease.get("lease_id") if lease else None,
                     "provider_name": lease.get("provider_name") if lease else None,
                     "desired_state": lease.get("desired_state") if lease else None,
                     "observed_state": lease.get("observed_state") if lease else None,
                     "current_instance_id": lease.get("current_instance_id") if lease else None,
                 }
-            by_thread[tid]["session_count"] += 1
-            if last_active and (not by_thread[tid]["last_active"] or last_active > by_thread[tid]["last_active"]):
-                by_thread[tid]["last_active"] = last_active
-
-        return sorted(by_thread.values(), key=lambda x: x.get("last_active") or "", reverse=True)
+            )
+        return sorted(result, key=lambda x: x.get("last_active") or "", reverse=True)
 
     def query_thread_summary(self, thread_id: str) -> dict | None:
         results = self.query_threads(thread_id=thread_id)
@@ -93,22 +102,12 @@ class SupabaseSandboxMonitorRepo:
         if not rows:
             return []
 
-        lease_ids = [row["lease_id"] for row in rows]
-        terminals = q.rows_in_chunks(
-            lambda: self._client.table("abstract_terminals").select("lease_id,thread_id,created_at"),
-            "lease_id",
-            lease_ids,
-            _REPO,
-            "query_sandboxes terminals",
-        )
-        thread_by_lease: dict[str, str] = {}
-        for row in sorted(terminals, key=lambda x: x.get("created_at") or ""):
-            thread_by_lease[str(row.get("lease_id") or "")] = row["thread_id"]
+        thread_by_sandbox = self._thread_id_by_sandbox_id([row["sandbox_id"] for row in rows])
 
         result = []
         for row in rows:
             item = dict(row)
-            item["thread_id"] = thread_by_lease.get(row["lease_id"])
+            item["thread_id"] = thread_by_sandbox.get(row["sandbox_id"])
             result.append(item)
         return result
 
@@ -147,27 +146,7 @@ class SupabaseSandboxMonitorRepo:
         sandbox = self.query_sandbox(sandbox_id)
         if sandbox is None:
             return []
-        lease_id = str(sandbox.get("lease_id") or "").strip()
-        if not lease_id:
-            return []
-        rows = q.rows(
-            q.order(
-                self._client.table("abstract_terminals").select("thread_id").eq("lease_id", lease_id),
-                "created_at",
-                desc=True,
-                repo=_REPO,
-                operation="query_sandbox_threads",
-            ).execute(),
-            _REPO,
-            "query_sandbox_threads",
-        )
-        seen: set[str] = set()
-        result = []
-        for r in rows:
-            if r["thread_id"] not in seen:
-                seen.add(r["thread_id"])
-                result.append({"thread_id": r["thread_id"]})
-        return result
+        return [{"thread_id": thread_id} for thread_id in self._thread_ids_for_sandbox_id(sandbox_id)]
 
     def query_sandbox_instance_id(self, sandbox_id: str) -> str | None:
         sandbox_key = str(sandbox_id or "").strip()
@@ -237,17 +216,8 @@ class SupabaseSandboxMonitorRepo:
 
         # @@@sandbox-monitor-session-base - session aggregation surfaces now use
         # container.sandboxes as the object base and only keep lease ids as the
-        # residue join key for chat_sessions / terminals / instances.
+        # residue join key for chat_sessions.
         sandbox_rows = self._sandbox_rows_by_legacy_lease_id("query_resource_sessions")
-
-        all_terminals = q.rows(
-            self._client.table("abstract_terminals").select("lease_id,thread_id,created_at").execute(),
-            _REPO,
-            "query_resource_sessions terminals",
-        )
-        terminal_rows_by_lease: dict[str, list[dict[str, Any]]] = {}
-        for row in all_terminals:
-            terminal_rows_by_lease.setdefault(str(row.get("lease_id") or ""), []).append(dict(row))
 
         all_sessions = q.rows(
             self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,status,started_at").execute(),
@@ -275,14 +245,14 @@ class SupabaseSandboxMonitorRepo:
         for lid, sandbox in sandbox_rows.items():
             if lid in seen_leases:
                 continue
-            terminal_rows = terminal_rows_by_lease.get(lid, [])
-            if terminal_rows:
-                for terminal_row in terminal_rows:
+            thread_ids = self._thread_ids_for_sandbox_id(str(sandbox.get("id") or ""))
+            if thread_ids:
+                for thread_id in thread_ids:
                     result.append(
                         self._resource_session_row_from_sandbox(
                             sandbox,
                             session_id=None,
-                            thread_id=terminal_row.get("thread_id"),
+                            thread_id=thread_id,
                         )
                     )
                 continue
@@ -356,16 +326,120 @@ class SupabaseSandboxMonitorRepo:
             result[lease_id] = lease
         return result
 
+    def _legacy_lease_id(self, sandbox: dict[str, Any]) -> str | None:
+        config = sandbox.get("config")
+        if not isinstance(config, dict):
+            raise RuntimeError("sandbox.config must be an object")
+        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
+        return legacy_lease_id or None
+
     def _sandbox_rows_by_legacy_lease_id(self, operation: str) -> dict[str, dict[str, Any]]:
         result: dict[str, dict[str, Any]] = {}
         for sandbox in self._ordered_sandboxes(operation):
-            config = sandbox.get("config")
-            if not isinstance(config, dict):
-                raise RuntimeError("sandbox.config must be an object")
-            legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
+            legacy_lease_id = self._legacy_lease_id(sandbox)
             if not legacy_lease_id:
-                raise RuntimeError("sandbox legacy bridge is required")
+                continue
             result[legacy_lease_id] = sandbox
+        return result
+
+    def _workspace_rows_by_id(self, workspace_ids: list[str]) -> dict[str, dict[str, Any]]:
+        ordered_ids = [str(workspace_id or "").strip() for workspace_id in workspace_ids if str(workspace_id or "").strip()]
+        if not ordered_ids:
+            return {}
+        rows = q.rows_in_chunks(
+            lambda: q.schema_table(self._client, "container", "workspaces", _REPO).select("id,sandbox_id,updated_at,created_at"),
+            "id",
+            ordered_ids,
+            _REPO,
+            "workspace_rows_by_id",
+        )
+        return {str(row["id"]): row for row in rows}
+
+    def _sandbox_rows_by_id(self, sandbox_ids: list[str], operation: str) -> dict[str, dict[str, Any]]:
+        ordered_ids = {str(sandbox_id or "").strip() for sandbox_id in sandbox_ids if str(sandbox_id or "").strip()}
+        if not ordered_ids:
+            return {}
+        return {
+            str(sandbox["id"]): sandbox for sandbox in self._ordered_sandboxes(operation) if str(sandbox.get("id") or "") in ordered_ids
+        }
+
+    def _thread_id_by_sandbox_id(self, sandbox_ids: list[str]) -> dict[str, str]:
+        ordered_ids = [str(sandbox_id or "").strip() for sandbox_id in sandbox_ids if str(sandbox_id or "").strip()]
+        if not ordered_ids:
+            return {}
+
+        workspaces = q.rows_in_chunks(
+            lambda: q.schema_table(self._client, "container", "workspaces", _REPO).select("id,sandbox_id,updated_at,created_at"),
+            "sandbox_id",
+            ordered_ids,
+            _REPO,
+            "query_sandboxes workspaces",
+        )
+        workspace_to_sandbox: dict[str, str] = {}
+        for row in sorted(workspaces, key=lambda x: x.get("updated_at") or x.get("created_at") or ""):
+            workspace_id = str(row.get("id") or "").strip()
+            sandbox_id = str(row.get("sandbox_id") or "").strip()
+            if workspace_id and sandbox_id:
+                workspace_to_sandbox[workspace_id] = sandbox_id
+        if not workspace_to_sandbox:
+            return {}
+
+        threads = q.rows_in_chunks(
+            lambda: q.schema_table(self._client, "agent", "threads", _REPO).select("id,current_workspace_id,updated_at,created_at"),
+            "current_workspace_id",
+            list(workspace_to_sandbox),
+            _REPO,
+            "query_sandboxes threads",
+        )
+        result: dict[str, str] = {}
+        for row in sorted(threads, key=lambda x: x.get("updated_at") or x.get("created_at") or ""):
+            thread_id = str(row.get("id") or "").strip()
+            workspace_id = str(row.get("current_workspace_id") or "").strip()
+            sandbox_id = workspace_to_sandbox.get(workspace_id)
+            if thread_id and sandbox_id:
+                result[sandbox_id] = thread_id
+        return result
+
+    def _thread_ids_for_sandbox_id(self, sandbox_id: str) -> list[str]:
+        sandbox_key = str(sandbox_id or "").strip()
+        if not sandbox_key:
+            return []
+        workspaces = q.rows(
+            q.order(
+                q.schema_table(self._client, "container", "workspaces", _REPO)
+                .select("id,sandbox_id,updated_at,created_at")
+                .eq("sandbox_id", sandbox_key),
+                "updated_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_sandbox_threads workspaces",
+            ).execute(),
+            _REPO,
+            "query_sandbox_threads workspaces",
+        )
+        workspace_ids = [str(row.get("id") or "").strip() for row in workspaces if str(row.get("id") or "").strip()]
+        if not workspace_ids:
+            return []
+        threads = q.rows_in_chunks(
+            lambda: q.order(
+                q.schema_table(self._client, "agent", "threads", _REPO).select("id,current_workspace_id,updated_at,created_at"),
+                "updated_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_sandbox_threads threads",
+            ),
+            "current_workspace_id",
+            workspace_ids,
+            _REPO,
+            "query_sandbox_threads threads",
+        )
+        seen: set[str] = set()
+        result: list[str] = []
+        for row in sorted(threads, key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True):
+            thread_id = str(row.get("id") or "").strip()
+            if thread_id and thread_id not in seen:
+                seen.add(thread_id)
+                result.append(thread_id)
         return result
 
     def _require_sandbox_rows_by_legacy_lease_ids(self, lease_ids: list[str], operation: str) -> dict[str, dict[str, Any]]:
@@ -382,12 +456,7 @@ class SupabaseSandboxMonitorRepo:
         # @@@sandbox-monitor-bridge - summary surfaces now use container.sandboxes as the
         # object truth, but still expose legacy lease_id while monitor/runtime residue
         # remains lease-keyed.
-        config = sandbox.get("config")
-        if not isinstance(config, dict):
-            raise RuntimeError("sandbox.config must be an object")
-        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
-        if not legacy_lease_id:
-            raise RuntimeError("sandbox.config.legacy_lease_id is required")
+        legacy_lease_id = self._legacy_lease_id(sandbox)
         return {
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
             "lease_id": legacy_lease_id,
@@ -439,12 +508,7 @@ class SupabaseSandboxMonitorRepo:
         session_id: str | None,
         thread_id: str | None,
     ) -> dict:
-        config = sandbox.get("config")
-        if not isinstance(config, dict):
-            raise RuntimeError("sandbox.config must be an object")
-        legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
-        if not legacy_lease_id:
-            raise RuntimeError("sandbox.config.legacy_lease_id is required")
+        legacy_lease_id = self._legacy_lease_id(sandbox)
         return {
             "provider": sandbox.get("provider_name") or "local",
             "session_id": session_id,

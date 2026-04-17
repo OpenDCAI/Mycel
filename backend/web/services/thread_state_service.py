@@ -1,28 +1,15 @@
-"""Thread state query service for session/terminal/lease status."""
+"""Thread state query service for sandbox and lease status."""
 
 import asyncio
-from datetime import timedelta
 from typing import Any
 
-from backend.web.utils.helpers import get_lease_timestamps, get_terminal_timestamps
+from backend.web.services.thread_runtime_binding_service import resolve_thread_runtime_binding
 
 
-def _resolve_thread_sandbox_instance(mgr: Any, lease: Any) -> Any | None:
-    instance = lease.get_instance()
-    if instance is not None:
-        return instance
-    if getattr(mgr.provider_capability, "runtime_kind", None) != "local":
-        return None
-    # @@@local-status-convergence - local leases can have no bound instance until first capability/session
-    # touch. Converge through ensure_active_instance so TaskProgress reflects the actual local runtime
-    # instead of showing a fake detached state.
-    return lease.ensure_active_instance(mgr.provider)
-
-
-def _display_sandbox_status(lease: Any, instance: Any) -> str:
-    observed = getattr(lease, "observed_state", None)
+def _display_repo_sandbox_status(lease: dict[str, Any], instance: dict[str, Any]) -> str:
+    observed = lease.get("observed_state")
     if observed in {None, "", "detached"}:
-        status = getattr(instance, "status", None)
+        status = instance.get("status")
         if not isinstance(status, str) or not status:
             raise RuntimeError("Sandbox instance missing status")
         return status
@@ -31,32 +18,28 @@ def _display_sandbox_status(lease: Any, instance: Any) -> str:
     return observed
 
 
-def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
-    """Get sandbox session info for a thread.
-
-    Returns:
-        Dict with type, status, session_id, terminal_id, error (if any)
-    """
-    sandbox_info: dict[str, Any] = {"type": sandbox_type, "status": None, "session_id": None}
-    if not hasattr(agent, "_sandbox"):
-        return sandbox_info
+def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
+    """Get sandbox info for a thread from the target runtime binding."""
+    sandbox_info: dict[str, Any] = {"type": sandbox_type, "status": None}
 
     try:
-        mgr = agent._sandbox.manager
-        terminal = mgr.get_terminal(thread_id)
-        if terminal:
-            session = mgr.session_manager.get(thread_id, terminal.terminal_id)
-            if session:
-                sandbox_info["session_id"] = session.session_id
-            lease = mgr.get_lease(terminal.lease_id)
-            if lease:
-                instance = _resolve_thread_sandbox_instance(mgr, lease)
-                if instance:
-                    sandbox_info["status"] = _display_sandbox_status(lease, instance)
-                    sandbox_info["session_id"] = sandbox_info["session_id"] or instance.instance_id
-                else:
-                    sandbox_info["status"] = "detached"
-            sandbox_info["terminal_id"] = terminal.terminal_id
+        binding = resolve_thread_runtime_binding(
+            thread_repo=app.state.thread_repo,
+            workspace_repo=app.state.workspace_repo,
+            sandbox_repo=app.state.sandbox_repo,
+            thread_id=thread_id,
+        )
+        lease_id = str(binding.sandbox_config.get("legacy_lease_id") or "").strip()
+        if not lease_id:
+            return sandbox_info
+        lease = app.state.lease_repo.get(lease_id)
+        if not lease:
+            return sandbox_info
+        instance = lease.get("_instance")
+        if instance:
+            sandbox_info["status"] = _display_repo_sandbox_status(lease, instance)
+        else:
+            sandbox_info["status"] = "detached"
     except Exception as exc:
         sandbox_info["status"] = "error"
         sandbox_info["error"] = str(exc)
@@ -64,115 +47,51 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
     return sandbox_info
 
 
-async def get_session_status(agent: Any, thread_id: str) -> dict[str, Any]:
-    """Get ChatSession status for a thread.
-
-    Returns:
-        Dict with session_id, terminal_id, status, timestamps
-
-    Raises:
-        ValueError: If no session found for thread
-    """
-
-    def _get_session():
-        mgr = agent._sandbox.manager
-        terminal = mgr.get_terminal(thread_id)
-        if not terminal:
-            return None
-        return mgr.session_manager.get(thread_id, terminal.terminal_id)
-
-    session = await asyncio.to_thread(_get_session)
-    if not session:
-        raise ValueError(f"No session found for thread {thread_id}")
-
-    expires_by_idle = session.last_active_at + timedelta(seconds=session.policy.idle_ttl_sec)
-    expires_by_duration = session.started_at + timedelta(seconds=session.policy.max_duration_sec)
-    expires_at = min(expires_by_idle, expires_by_duration)
-
-    return {
-        "thread_id": thread_id,
-        "session_id": session.session_id,
-        "terminal_id": session.terminal.terminal_id,
-        "status": session.status,
-        "started_at": session.started_at.isoformat(),
-        "last_active_at": session.last_active_at.isoformat(),
-        "expires_at": expires_at.isoformat(),
-    }
+def _required_text(row: dict[str, Any], key: str, label: str) -> str:
+    value = str(row.get(key) or "").strip()
+    if not value:
+        raise RuntimeError(f"{label}.{key} is required")
+    return value
 
 
-async def get_terminal_status(agent: Any, thread_id: str) -> dict[str, Any]:
-    """Get AbstractTerminal state for a thread.
-
-    Returns:
-        Dict with terminal_id, lease_id, cwd, env_delta, version, timestamps
-
-    Raises:
-        ValueError: If no terminal found for thread
-    """
-
-    def _get_terminal():
-        mgr = agent._sandbox.manager
-        return mgr.get_terminal(thread_id)
-
-    terminal = await asyncio.to_thread(_get_terminal)
-    if not terminal:
-        raise ValueError(f"No terminal found for thread {thread_id}")
-
-    state = terminal.get_state()
-    created_at, updated_at = await asyncio.to_thread(get_terminal_timestamps, terminal.terminal_id)
-    return {
-        "thread_id": thread_id,
-        "terminal_id": terminal.terminal_id,
-        "lease_id": terminal.lease_id,
-        "cwd": state.cwd,
-        "env_delta": state.env_delta,
-        "version": state.state_version,
-        "created_at": created_at,
-        "updated_at": updated_at,
-    }
-
-
-async def get_lease_status(agent: Any, thread_id: str) -> dict[str, Any] | None:
-    """Get SandboxLease status for a thread.
-
-    Returns:
-        Dict with lease_id, provider_name, states, instance info, timestamps
-
-    Raises:
-        None: If no lease found for thread
-    """
-
-    def _get_lease():
-        mgr = agent._sandbox.manager
-        terminal = mgr.get_terminal(thread_id)
-        if not terminal:
-            return None
-        lease = mgr.get_lease(terminal.lease_id)
-        if not lease:
-            return None
-        return lease
-
-    lease = await asyncio.to_thread(_get_lease)
+async def get_lease_status_from_repos(
+    thread_repo: Any,
+    workspace_repo: Any,
+    sandbox_repo: Any,
+    lease_repo: Any,
+    thread_id: str,
+) -> dict[str, Any] | None:
+    """Get SandboxLease status from storage repos without bootstrapping an agent."""
+    binding = await asyncio.to_thread(
+        resolve_thread_runtime_binding,
+        thread_repo=thread_repo,
+        workspace_repo=workspace_repo,
+        sandbox_repo=sandbox_repo,
+        thread_id=thread_id,
+    )
+    lease_id = str(binding.sandbox_config.get("legacy_lease_id") or "").strip()
+    if not lease_id:
+        return None
+    lease = await asyncio.to_thread(lease_repo.get, lease_id)
     if not lease:
         return None
 
-    instance = lease.get_instance()
-    created_at, updated_at = await asyncio.to_thread(get_lease_timestamps, lease.lease_id)
+    instance = lease.get("_instance")
     return {
         "thread_id": thread_id,
-        "lease_id": lease.lease_id,
-        "provider_name": lease.provider_name,
-        "desired_state": lease.desired_state,
-        "observed_state": lease.observed_state,
-        "version": lease.version,
-        "last_error": lease.last_error,
+        "lease_id": _required_text(lease, "lease_id", "lease"),
+        "provider_name": _required_text(lease, "provider_name", "lease"),
+        "desired_state": lease.get("desired_state"),
+        "observed_state": lease.get("observed_state"),
+        "version": lease.get("version"),
+        "last_error": lease.get("last_error"),
         "instance": {
-            "instance_id": instance.instance_id if instance else None,
-            "state": instance.status if instance else None,
-            "started_at": instance.created_at.isoformat() if instance and instance.created_at else None,
+            "instance_id": instance.get("instance_id"),
+            "state": instance.get("status"),
+            "started_at": instance.get("created_at"),
         }
         if instance
         else None,
-        "created_at": created_at,
-        "updated_at": updated_at,
+        "created_at": _required_text(lease, "created_at", "lease"),
+        "updated_at": _required_text(lease, "updated_at", "lease"),
     }

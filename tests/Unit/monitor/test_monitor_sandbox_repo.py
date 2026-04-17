@@ -86,6 +86,24 @@ def _terminal(terminal_id: str, lease_id: str, thread_id: str, created_at: str) 
     }
 
 
+def _workspace(workspace_id: str, sandbox_id: str, *, updated_at: str = "2026-04-05T10:00:00") -> dict:
+    return {
+        "id": workspace_id,
+        "sandbox_id": sandbox_id,
+        "owner_user_id": "owner-1",
+        "workspace_path": "/workspace",
+        "updated_at": updated_at,
+    }
+
+
+def _thread(thread_id: str, workspace_id: str, *, updated_at: str = "2026-04-05T10:00:00") -> dict:
+    return {
+        "id": thread_id,
+        "current_workspace_id": workspace_id,
+        "updated_at": updated_at,
+    }
+
+
 def _sandbox(
     sandbox_id: str,
     *,
@@ -133,9 +151,13 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
                     legacy_lease_id="lease-1",
                 )
             ],
-            "chat_sessions": [
-                _session("sess-1", "thread-1", "lease-1", last_active_at="2026-04-05T10:01:00"),
-                _session("sess-2", "thread-2", "lease-1", last_active_at="2026-04-05T10:06:00"),
+            "container.workspaces": [
+                _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-2", "sandbox-1", updated_at="2026-04-05T10:06:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-2", "workspace-2", updated_at="2026-04-05T10:06:00"),
             ],
         }
     )
@@ -143,7 +165,7 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
     assert repo.query_threads(thread_id="thread-2") == [
         {
             "thread_id": "thread-2",
-            "session_count": 1,
+            "session_count": 0,
             "sandbox_id": "sandbox-1",
             "last_active": "2026-04-05T10:06:00",
             "lease_id": "lease-1",
@@ -165,8 +187,11 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypa
                     legacy_lease_id="lease-1",
                 )
             ],
-            "chat_sessions": [
-                _session("sess-1", "thread-1", "lease-1", last_active_at="2026-04-05T10:01:00"),
+            "container.workspaces": [
+                _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:01:00"),
             ],
         }
     )
@@ -180,7 +205,7 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypa
     assert repo.query_threads() == [
         {
             "thread_id": "thread-1",
-            "session_count": 1,
+            "session_count": 0,
             "sandbox_id": "sandbox-1",
             "last_active": "2026-04-05T10:01:00",
             "lease_id": "lease-1",
@@ -193,18 +218,19 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypa
 
 
 def test_query_threads_chunks_lease_lookup() -> None:
-    sessions = [
-        _session(f"sess-{index}", f"thread-{index}", f"lease-{index}", last_active_at=f"2026-04-05T10:{index % 60:02d}:00")
-        for index in range(175)
-    ]
     sandboxes = [
         _sandbox(f"sandbox-{index}", provider_env_id=f"instance-{index}", legacy_lease_id=f"lease-{index}") for index in range(175)
     ]
+    workspaces = [
+        _workspace(f"workspace-{index}", f"sandbox-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00") for index in range(175)
+    ]
+    threads = [_thread(f"thread-{index}", f"workspace-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00") for index in range(175)]
     repo = SupabaseSandboxMonitorRepo(
         _MaxInFilterClient(
             {
-                "chat_sessions": sessions,
                 "container.sandboxes": sandboxes,
+                "container.workspaces": workspaces,
+                "agent.threads": threads,
             }
         )
     )
@@ -224,9 +250,13 @@ def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(m
                     legacy_lease_id="lease-1",
                 )
             ],
-            "abstract_terminals": [
-                {"thread_id": "thread-2", "lease_id": "lease-1", "created_at": "2026-04-05T10:02:00"},
-                {"thread_id": "thread-1", "lease_id": "lease-1", "created_at": "2026-04-05T10:01:00"},
+            "container.workspaces": [
+                _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-2", "sandbox-1", updated_at="2026-04-05T10:02:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-2", "workspace-2", updated_at="2026-04-05T10:02:00"),
             ],
         }
     )
@@ -266,6 +296,38 @@ def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
         "desired_state": "paused",
         "observed_state": "paused",
         "current_instance_id": "provider-env-1",
+        "last_error": None,
+        "updated_at": "2026-04-05T10:10:00",
+    }
+
+
+def test_query_sandbox_allows_missing_legacy_lease_bridge() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="local",
+                    provider_env_id=None,
+                    desired_state="running",
+                    observed_state="running",
+                    updated_at="2026-04-05T10:10:00",
+                    sandbox_template_id="local:default",
+                    legacy_lease_id=None,
+                )
+            ]
+        }
+    )
+
+    assert repo.query_sandbox("sandbox-1") == {
+        "sandbox_id": "sandbox-1",
+        "lease_id": None,
+        "provider_name": "local",
+        "recipe_id": "local:default",
+        "recipe_json": None,
+        "desired_state": "running",
+        "observed_state": "running",
+        "current_instance_id": None,
         "last_error": None,
         "updated_at": "2026-04-05T10:10:00",
     }
@@ -408,7 +470,7 @@ def test_query_thread_sessions_no_longer_roundtrips_through_lease_summary_shell(
     ]
 
 
-def test_query_sandboxes_uses_latest_terminal_binding() -> None:
+def test_query_sandboxes_uses_latest_workspace_thread_binding() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -422,9 +484,13 @@ def test_query_sandboxes_uses_latest_terminal_binding() -> None:
                     legacy_lease_id="lease-1",
                 )
             ],
-            "abstract_terminals": [
-                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
-                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
+            "container.workspaces": [
+                _workspace("workspace-old", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-new", "sandbox-1", updated_at="2026-04-05T10:02:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-old", "workspace-old", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-new", "workspace-new", updated_at="2026-04-05T10:02:00"),
             ],
         }
     )
@@ -446,7 +512,7 @@ def test_query_sandboxes_uses_latest_terminal_binding() -> None:
     ]
 
 
-def test_query_sandboxes_reads_container_sandboxes_with_terminal_binding() -> None:
+def test_query_sandboxes_reads_container_sandboxes_with_workspace_binding() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -460,9 +526,13 @@ def test_query_sandboxes_reads_container_sandboxes_with_terminal_binding() -> No
                     legacy_lease_id="lease-1",
                 )
             ],
-            "abstract_terminals": [
-                _terminal("term-old", "lease-1", "thread-old", "2026-04-05T10:01:00"),
-                _terminal("term-new", "lease-1", "thread-new", "2026-04-05T10:02:00"),
+            "container.workspaces": [
+                _workspace("workspace-old", "sandbox-1", updated_at="2026-04-05T10:01:00"),
+                _workspace("workspace-new", "sandbox-1", updated_at="2026-04-05T10:02:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-old", "workspace-old", updated_at="2026-04-05T10:01:00"),
+                _thread("thread-new", "workspace-new", updated_at="2026-04-05T10:02:00"),
             ],
         }
     )
@@ -484,7 +554,7 @@ def test_query_sandboxes_reads_container_sandboxes_with_terminal_binding() -> No
     ]
 
 
-def test_query_sandboxes_chunks_terminal_binding_lookup() -> None:
+def test_query_sandboxes_chunks_workspace_thread_binding_lookup() -> None:
     sandboxes = [
         _sandbox(
             f"sandbox-{index}",
@@ -498,7 +568,8 @@ def test_query_sandboxes_chunks_terminal_binding_lookup() -> None:
         _MaxInFilterClient(
             {
                 "container.sandboxes": sandboxes,
-                "abstract_terminals": [_terminal("term-174", "lease-174", "thread-174", "2026-04-05T10:02:00")],
+                "container.workspaces": [_workspace("workspace-174", "sandbox-174", updated_at="2026-04-05T10:02:00")],
+                "agent.threads": [_thread("thread-174", "workspace-174", updated_at="2026-04-05T10:02:00")],
             }
         )
     )
@@ -551,6 +622,24 @@ def test_query_sandbox_instance_id_prefers_provider_session_id() -> None:
     )
 
     assert repo.query_sandbox_instance_id("sandbox-1") == "provider-session-1"
+
+
+def test_query_sandbox_instance_id_falls_back_without_legacy_lease_bridge() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="local",
+                    provider_env_id="sandbox-instance-1",
+                    observed_state="running",
+                    legacy_lease_id=None,
+                )
+            ],
+        }
+    )
+
+    assert repo.query_sandbox_instance_id("sandbox-1") == "sandbox-instance-1"
 
 
 def test_query_sandbox_instance_ids_chunks_large_lookup() -> None:
@@ -688,6 +777,24 @@ def test_list_probe_targets_prefers_provider_session_id() -> None:
     ]
 
 
+def test_list_probe_targets_skips_sandbox_without_legacy_lease_bridge() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-stale",
+                    provider_name="local",
+                    provider_env_id=None,
+                    observed_state="running",
+                    legacy_lease_id=None,
+                ),
+            ],
+        }
+    )
+
+    assert repo.list_probe_targets() == []
+
+
 def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge() -> None:
     repo = _repo(
         {
@@ -790,9 +897,13 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
                     legacy_lease_id="lease-recent",
                 ),
             ],
-            "abstract_terminals": [
-                _terminal("term-parent", "lease-terminal", "thread-parent", "2026-04-05T11:05:00"),
-                _terminal("term-subagent", "lease-terminal", "subagent-deadbeef", "2026-04-05T11:06:00"),
+            "container.workspaces": [
+                _workspace("workspace-parent", "sandbox-terminal", updated_at="2026-04-05T11:05:00"),
+                _workspace("workspace-subagent", "sandbox-terminal", updated_at="2026-04-05T11:06:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-parent", "workspace-parent", updated_at="2026-04-05T11:05:00"),
+                _thread("subagent-deadbeef", "workspace-subagent", updated_at="2026-04-05T11:06:00"),
             ],
             "chat_sessions": [
                 _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
@@ -816,7 +927,7 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
         {
             "provider": "daytona_selfhost",
             "session_id": None,
-            "thread_id": "thread-parent",
+            "thread_id": "subagent-deadbeef",
             "sandbox_id": "sandbox-terminal",
             "lease_id": "lease-terminal",
             "observed_state": "paused",
@@ -826,7 +937,7 @@ def test_query_resource_sessions_keeps_active_terminal_and_latest_closed_session
         {
             "provider": "daytona_selfhost",
             "session_id": None,
-            "thread_id": "subagent-deadbeef",
+            "thread_id": "thread-parent",
             "sandbox_id": "sandbox-terminal",
             "lease_id": "lease-terminal",
             "observed_state": "paused",
@@ -860,8 +971,11 @@ def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -
                     legacy_lease_id="lease-terminal",
                 ),
             ],
-            "abstract_terminals": [
-                _terminal("term-parent", "lease-terminal", "thread-parent", "2026-04-05T11:05:00"),
+            "container.workspaces": [
+                _workspace("workspace-parent", "sandbox-terminal", updated_at="2026-04-05T11:05:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-parent", "workspace-parent", updated_at="2026-04-05T11:05:00"),
             ],
             "chat_sessions": [
                 _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
