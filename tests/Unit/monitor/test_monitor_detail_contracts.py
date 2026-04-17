@@ -587,6 +587,30 @@ def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
     assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
 
 
+def test_get_monitor_sandbox_detail_allows_missing_lease_bridge_for_readonly_detail(monkeypatch):
+    _use_monitor_repo(
+        monkeypatch,
+        FakeLeaseRepo(
+            lease=_lease_row(lease_id=None, provider_name="local", observed_state="running", desired_state="running"),
+            threads=[],
+            sessions=[],
+            runtime_session_id="runtime-1",
+        ),
+    )
+
+    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+
+    assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
+    assert payload["runtime"]["runtime_session_id"] == "runtime-1"
+    assert payload["cleanup"] == {
+        "allowed": False,
+        "recommended_action": None,
+        "reason": "Sandbox has no lease bridge and cannot enter managed cleanup.",
+        "operation": None,
+        "recent_operations": [],
+    }
+
+
 def test_get_monitor_lease_detail_exposes_cleanup_state(monkeypatch):
     _use_monitor_repo(monkeypatch, FakeLeaseRepo(lease=_detached_lease()))
 
