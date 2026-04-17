@@ -579,19 +579,19 @@ def list_monitor_sandboxes() -> dict[str, Any]:
         repo.close()
 
 
-def list_monitor_provider_sessions() -> dict[str, Any]:
+def list_monitor_provider_orphan_runtimes() -> dict[str, Any]:
     _, managers = sandbox_service.init_providers_and_managers()
-    sessions = []
+    runtimes = []
     for item in sandbox_service.load_provider_orphan_sessions(managers):
-        sessions.append(
+        runtimes.append(
             {
-                "session_id": str(item.get("session_id") or ""),
+                "runtime_id": str(item.get("session_id") or ""),
                 "provider": str(item.get("provider") or ""),
                 "status": str(item.get("status") or "unknown"),
                 "source": "provider_orphan",
             }
         )
-    return {"count": len(sessions), "sessions": sessions}
+    return {"count": len(runtimes), "runtimes": runtimes}
 
 
 def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
@@ -830,13 +830,14 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
     return monitor_operation_service.request_lease_cleanup(lease_detail)
 
 
-def request_monitor_provider_session_cleanup(provider_name: str, session_id: str) -> dict[str, Any]:
+def request_monitor_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str) -> dict[str, Any]:
     provider = str(provider_name or "").strip()
-    session = str(session_id or "").strip()
-    for item in list_monitor_provider_sessions().get("sessions", []):
-        if str(item.get("provider") or "").strip() == provider and str(item.get("session_id") or "").strip() == session:
-            return monitor_operation_service.request_provider_session_cleanup(provider, session, item)
-    raise KeyError(f"Provider session not found: {provider}:{session}")
+    runtime = str(runtime_id or "").strip()
+    for item in list_monitor_provider_orphan_runtimes().get("runtimes", []):
+        if str(item.get("provider") or "").strip() == provider and str(item.get("runtime_id") or "").strip() == runtime:
+            session_truth = {**item, "session_id": runtime}
+            return monitor_operation_service.request_provider_session_cleanup(provider, runtime, session_truth)
+    raise KeyError(f"Provider orphan runtime not found: {provider}:{runtime}")
 
 
 def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:

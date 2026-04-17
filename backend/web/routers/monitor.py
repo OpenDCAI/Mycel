@@ -61,9 +61,9 @@ def sandboxes_snapshot():
     return monitor_service.list_monitor_sandboxes()
 
 
-@router.get("/provider-sessions")
-def provider_sessions_snapshot():
-    return monitor_service.list_monitor_provider_sessions()
+@router.get("/provider-orphan-runtimes")
+def provider_orphan_runtimes_snapshot():
+    return monitor_service.list_monitor_provider_orphan_runtimes()
 
 
 @router.get("/threads")
@@ -89,9 +89,9 @@ def sandbox_cleanup_action(sandbox_id: str):
     return _or_404(monitor_service.request_monitor_sandbox_cleanup, sandbox_id)
 
 
-@router.post("/provider-sessions/{provider_id}/{session_id}/cleanup")
-def provider_session_cleanup_action(provider_id: str, session_id: str):
-    return monitor_service.request_monitor_provider_session_cleanup(provider_id, session_id)
+@router.post("/provider-orphan-runtimes/{provider_id}/{runtime_id}/cleanup")
+def provider_orphan_runtime_cleanup_action(provider_id: str, runtime_id: str):
+    return monitor_service.request_monitor_provider_orphan_runtime_cleanup(provider_id, runtime_id)
 
 
 @router.get("/operations/{operation_id}")

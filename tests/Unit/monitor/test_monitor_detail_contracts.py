@@ -618,16 +618,16 @@ def test_get_monitor_operation_detail_uses_canonical_sandbox_source(monkeypatch)
     assert payload["sandbox_id"] == "sandbox-1"
 
 
-def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypatch):
+def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(monkeypatch):
     calls: list[tuple[str, str, str, str | None]] = []
     monkeypatch.setattr(
         monitor_service,
-        "list_monitor_provider_sessions",
+        "list_monitor_provider_orphan_runtimes",
         lambda: {
             "count": 1,
-            "sessions": [
+            "runtimes": [
                 {
-                    "session_id": "sandbox-1",
+                    "runtime_id": "sandbox-1",
                     "provider": "daytona_selfhost",
                     "status": "paused",
                     "source": "provider_orphan",
@@ -653,7 +653,7 @@ def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypat
         raising=False,
     )
 
-    payload = monitor_service.request_monitor_provider_session_cleanup("daytona_selfhost", "sandbox-1")
+    payload = monitor_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
 
     assert payload["accepted"] is True
     assert payload["message"] == "Provider session cleanup completed."
@@ -665,16 +665,16 @@ def test_request_monitor_provider_session_cleanup_uses_sandbox_manager(monkeypat
     assert calls == [("sandbox-1", "destroy", "daytona_selfhost", "daytona_selfhost")]
 
 
-def test_request_monitor_provider_session_cleanup_rejects_running_orphan(monkeypatch):
+def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(monkeypatch):
     calls: list[tuple[str, str, str | None]] = []
     monkeypatch.setattr(
         monitor_service,
-        "list_monitor_provider_sessions",
+        "list_monitor_provider_orphan_runtimes",
         lambda: {
             "count": 1,
-            "sessions": [
+            "runtimes": [
                 {
-                    "session_id": "sandbox-1",
+                    "runtime_id": "sandbox-1",
                     "provider": "daytona_selfhost",
                     "status": "running",
                     "source": "provider_orphan",
@@ -693,7 +693,7 @@ def test_request_monitor_provider_session_cleanup_rejects_running_orphan(monkeyp
         raising=False,
     )
 
-    payload = monitor_service.request_monitor_provider_session_cleanup("daytona_selfhost", "sandbox-1")
+    payload = monitor_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
 
     assert payload["accepted"] is False
     assert payload["operation"] is None
@@ -701,7 +701,7 @@ def test_request_monitor_provider_session_cleanup_rejects_running_orphan(monkeyp
     assert calls == []
 
 
-def test_list_monitor_provider_sessions_returns_provider_orphans(monkeypatch):
+def test_list_monitor_provider_orphan_runtimes_returns_provider_orphans(monkeypatch):
     monkeypatch.setattr(monitor_service.sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": object()}))
     monkeypatch.setattr(
         monitor_service.sandbox_service,
@@ -711,13 +711,13 @@ def test_list_monitor_provider_sessions_returns_provider_orphans(monkeypatch):
         ],
     )
 
-    payload = monitor_service.list_monitor_provider_sessions()
+    payload = monitor_service.list_monitor_provider_orphan_runtimes()
 
     assert payload == {
         "count": 1,
-        "sessions": [
+        "runtimes": [
             {
-                "session_id": "orphan-1",
+                "runtime_id": "orphan-1",
                 "provider": "daytona",
                 "status": "running",
                 "source": "provider_orphan",

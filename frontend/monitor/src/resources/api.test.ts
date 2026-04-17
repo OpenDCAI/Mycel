@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   browseMonitorSandbox,
-  cleanupMonitorProviderSession,
-  fetchMonitorProviderSessions,
+  cleanupMonitorProviderOrphanRuntime,
+  fetchMonitorProviderOrphanRuntimes,
   readMonitorSandboxFile,
 } from "./api";
 
@@ -12,39 +12,39 @@ describe("monitor resource API", () => {
     vi.unstubAllGlobals();
   });
 
-  it("fetches provider orphan sessions through the monitor API", async () => {
+  it("fetches provider orphan runtimes through the monitor API", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         count: 1,
-        sessions: [{ session_id: "sandbox-1", provider: "daytona_selfhost", status: "paused", source: "provider_orphan" }],
+        runtimes: [{ runtime_id: "sandbox-1", provider: "daytona_selfhost", status: "paused", source: "provider_orphan" }],
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const payload = await fetchMonitorProviderSessions();
+    const payload = await fetchMonitorProviderOrphanRuntimes();
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/monitor/provider-sessions", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/monitor/provider-orphan-runtimes", {
       headers: { "Content-Type": "application/json" },
     });
-    expect(payload.sessions[0].session_id).toBe("sandbox-1");
+    expect(payload.runtimes[0].runtime_id).toBe("sandbox-1");
   });
 
-  it("rejects malformed provider orphan payloads", async () => {
+  it("rejects malformed provider orphan runtime payloads", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ sessions: null }),
+        json: async () => ({ runtimes: null }),
       }),
     );
 
-    await expect(fetchMonitorProviderSessions()).rejects.toThrow(
-      "Unexpected /api/monitor/provider-sessions response shape",
+    await expect(fetchMonitorProviderOrphanRuntimes()).rejects.toThrow(
+      "Unexpected /api/monitor/provider-orphan-runtimes response shape",
     );
   });
 
-  it("cleans provider orphan sessions through the monitor API", async () => {
+  it("cleans provider orphan runtimes through the monitor API", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -55,9 +55,9 @@ describe("monitor resource API", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const payload = await cleanupMonitorProviderSession("daytona_selfhost", "sandbox/1");
+    const payload = await cleanupMonitorProviderOrphanRuntime("daytona_selfhost", "sandbox/1");
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/monitor/provider-sessions/daytona_selfhost/sandbox%2F1/cleanup", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/monitor/provider-orphan-runtimes/daytona_selfhost/sandbox%2F1/cleanup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });

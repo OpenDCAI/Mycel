@@ -1,4 +1,4 @@
-import type { BrowseItem, ProviderOrphanSessionsResponse, ResourceOverviewResponse } from "./types";
+import type { BrowseItem, ProviderOrphanRuntimesResponse, ResourceOverviewResponse } from "./types";
 
 function ensureProviderCardContract(payload: ResourceOverviewResponse): ResourceOverviewResponse {
   if (!payload || !payload.summary || !Array.isArray(payload.providers)) {
@@ -7,9 +7,9 @@ function ensureProviderCardContract(payload: ResourceOverviewResponse): Resource
   return payload;
 }
 
-function ensureProviderOrphanContract(payload: ProviderOrphanSessionsResponse): ProviderOrphanSessionsResponse {
-  if (!payload || !Array.isArray(payload.sessions)) {
-    throw new Error("Unexpected /api/monitor/provider-sessions response shape");
+function ensureProviderOrphanRuntimeContract(payload: ProviderOrphanRuntimesResponse): ProviderOrphanRuntimesResponse {
+  if (!payload || !Array.isArray(payload.runtimes)) {
+    throw new Error("Unexpected /api/monitor/provider-orphan-runtimes response shape");
   }
   return payload;
 }
@@ -41,16 +41,16 @@ export async function refreshMonitorResources(): Promise<ResourceOverviewRespons
   return ensureProviderCardContract(payload);
 }
 
-export async function fetchMonitorProviderSessions(): Promise<ProviderOrphanSessionsResponse> {
-  const payload = await fetchJsonOrThrow<ProviderOrphanSessionsResponse>("/api/monitor/provider-sessions", {
+export async function fetchMonitorProviderOrphanRuntimes(): Promise<ProviderOrphanRuntimesResponse> {
+  const payload = await fetchJsonOrThrow<ProviderOrphanRuntimesResponse>("/api/monitor/provider-orphan-runtimes", {
     headers: { "Content-Type": "application/json" },
   });
-  return ensureProviderOrphanContract(payload);
+  return ensureProviderOrphanRuntimeContract(payload);
 }
 
-export async function cleanupMonitorProviderSession(
+export async function cleanupMonitorProviderOrphanRuntime(
   providerId: string,
-  sessionId: string,
+  runtimeId: string,
 ): Promise<{
   accepted: boolean;
   message?: string | null;
@@ -60,10 +60,13 @@ export async function cleanupMonitorProviderSession(
     summary?: string | null;
   } | null;
 }> {
-  return fetchJsonOrThrow(`/api/monitor/provider-sessions/${encodeURIComponent(providerId)}/${encodeURIComponent(sessionId)}/cleanup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
+  return fetchJsonOrThrow(
+    `/api/monitor/provider-orphan-runtimes/${encodeURIComponent(providerId)}/${encodeURIComponent(runtimeId)}/cleanup`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function browseMonitorSandbox(sandboxId: string, path: string): Promise<{
