@@ -56,7 +56,6 @@ REQUIRED_LEASE_COLUMNS = {
     "needs_refresh",
     "refresh_hint_at",
     "status",
-    "volume_id",
     "created_at",
     "updated_at",
 }
@@ -130,7 +129,6 @@ class SandboxLease(ABC):
         last_error: str | None = None,
         needs_refresh: bool = False,
         refresh_hint_at: datetime | None = None,
-        volume_id: str | None = None,
         bind_mounts: list[dict[str, str]] | None = None,
     ):
         self.lease_id = lease_id
@@ -147,7 +145,6 @@ class SandboxLease(ABC):
         self.last_error = last_error
         self.needs_refresh = needs_refresh
         self.refresh_hint_at = refresh_hint_at
-        self.volume_id = volume_id
         self.bind_mounts = bind_mounts
 
     def get_instance(self) -> SandboxInstance | None:
@@ -212,7 +209,6 @@ class SQLiteLease(SandboxLease):
         last_error: str | None = None,
         needs_refresh: bool = False,
         refresh_hint_at: datetime | None = None,
-        volume_id: str | None = None,
     ):
         super().__init__(
             lease_id=lease_id,
@@ -229,7 +225,6 @@ class SQLiteLease(SandboxLease):
             last_error=last_error,
             needs_refresh=needs_refresh,
             refresh_hint_at=refresh_hint_at,
-            volume_id=volume_id,
         )
         self.db_path = resolve_sandbox_db_path(db_path)
         self._detached_instance: SandboxInstance | None = None
@@ -718,7 +713,6 @@ class SQLiteLease(SandboxLease):
         self.observed_at = other.observed_at
         self.last_error = other.last_error
         self.needs_refresh = other.needs_refresh
-        self.volume_id = other.volume_id
         self.refresh_hint_at = other.refresh_hint_at
 
     def apply(
@@ -1150,5 +1144,4 @@ def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
         last_error=row.get("last_error"),
         needs_refresh=bool(row.get("needs_refresh")),
         refresh_hint_at=refresh_hint_at,
-        volume_id=row.get("volume_id"),
     )

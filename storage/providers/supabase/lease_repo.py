@@ -45,7 +45,7 @@ class SupabaseLeaseRepo:
             .select(
                 "lease_id,provider_name,recipe_id,workspace_key,recipe_json,"
                 "current_instance_id,instance_created_at,desired_state,observed_state,version,"
-                "observed_at,last_error,needs_refresh,refresh_hint_at,status,volume_id,"
+                "observed_at,last_error,needs_refresh,refresh_hint_at,status,"
                 "created_at,updated_at"
             )
             .eq("lease_id", lease_id)

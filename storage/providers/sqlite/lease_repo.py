@@ -58,7 +58,7 @@ class SQLiteLeaseRepo:
                        current_instance_id, instance_created_at,
                        desired_state, observed_state, version,
                        observed_at, last_error, needs_refresh,
-                       refresh_hint_at, status, volume_id,
+                       refresh_hint_at, status,
                        created_at, updated_at
                 FROM sandbox_leases
                 WHERE lease_id = ?
@@ -441,7 +441,6 @@ class SQLiteLeaseRepo:
                 needs_refresh INTEGER NOT NULL DEFAULT 0,
                 refresh_hint_at TIMESTAMP,
                 status TEXT DEFAULT 'active',
-                volume_id TEXT,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL
             )
