@@ -49,7 +49,7 @@ from backend.web.services.thread_launch_config_service import (
 from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
-    get_lease_status,
+    get_lease_status_from_repos,
     get_sandbox_info,
 )
 from backend.web.services.thread_visibility import canonical_owner_threads
@@ -1397,10 +1397,10 @@ async def get_thread_runtime(
 async def get_thread_lease_status(
     thread_id: str,
     user_id: Annotated[str | None, Depends(verify_thread_row_owner)] = None,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+    app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any] | None:
     """Get SandboxLease status for a thread."""
-    return await get_lease_status(agent, thread_id)
+    return await get_lease_status_from_repos(app.state.terminal_repo, app.state.lease_repo, thread_id)
 
 
 # SSE response headers: disable proxy buffering for real-time streaming

@@ -3,8 +3,6 @@
 import asyncio
 from typing import Any
 
-from backend.web.utils.helpers import get_lease_timestamps
-
 
 def _resolve_thread_sandbox_instance(mgr: Any, lease: Any) -> Any | None:
     instance = lease.get_instance()
@@ -63,47 +61,39 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
     return sandbox_info
 
 
-async def get_lease_status(agent: Any, thread_id: str) -> dict[str, Any] | None:
-    """Get SandboxLease status for a thread.
+def _required_text(row: dict[str, Any], key: str, label: str) -> str:
+    value = str(row.get(key) or "").strip()
+    if not value:
+        raise RuntimeError(f"{label}.{key} is required")
+    return value
 
-    Returns:
-        Dict with lease_id, provider_name, states, instance info, timestamps
 
-    Raises:
-        None: If no lease found for thread
-    """
-
-    def _get_lease():
-        mgr = agent._sandbox.manager
-        terminal = mgr.get_terminal(thread_id)
-        if not terminal:
-            return None
-        lease = mgr.get_lease(terminal.lease_id)
-        if not lease:
-            return None
-        return lease
-
-    lease = await asyncio.to_thread(_get_lease)
+async def get_lease_status_from_repos(terminal_repo: Any, lease_repo: Any, thread_id: str) -> dict[str, Any] | None:
+    """Get SandboxLease status from storage repos without bootstrapping an agent."""
+    terminal = await asyncio.to_thread(terminal_repo.get_active, thread_id)
+    if not terminal:
+        return None
+    lease_id = _required_text(terminal, "lease_id", "terminal")
+    lease = await asyncio.to_thread(lease_repo.get, lease_id)
     if not lease:
         return None
 
-    instance = lease.get_instance()
-    created_at, updated_at = await asyncio.to_thread(get_lease_timestamps, lease.lease_id)
+    instance = lease.get("_instance")
     return {
         "thread_id": thread_id,
-        "lease_id": lease.lease_id,
-        "provider_name": lease.provider_name,
-        "desired_state": lease.desired_state,
-        "observed_state": lease.observed_state,
-        "version": lease.version,
-        "last_error": lease.last_error,
+        "lease_id": _required_text(lease, "lease_id", "lease"),
+        "provider_name": _required_text(lease, "provider_name", "lease"),
+        "desired_state": lease.get("desired_state"),
+        "observed_state": lease.get("observed_state"),
+        "version": lease.get("version"),
+        "last_error": lease.get("last_error"),
         "instance": {
-            "instance_id": instance.instance_id if instance else None,
-            "state": instance.status if instance else None,
-            "started_at": instance.created_at.isoformat() if instance and instance.created_at else None,
+            "instance_id": instance.get("instance_id"),
+            "state": instance.get("status"),
+            "started_at": instance.get("created_at"),
         }
         if instance
         else None,
-        "created_at": created_at,
-        "updated_at": updated_at,
+        "created_at": _required_text(lease, "created_at", "lease"),
+        "updated_at": _required_text(lease, "updated_at", "lease"),
     }

@@ -387,11 +387,61 @@ def _patch_create_thread_noop_guards():
 
 @pytest.mark.asyncio
 async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
-    with patch.object(threads_router, "get_lease_status", AsyncMock(return_value=None)) as get_lease_status:
-        result = await threads_router.get_thread_lease_status("thread-1", agent=object())
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            terminal_repo=SimpleNamespace(get_active=lambda _thread_id: None),
+            lease_repo=SimpleNamespace(),
+        )
+    )
 
-    get_lease_status.assert_awaited_once()
+    result = await threads_router.get_thread_lease_status("thread-1", app=app)
+
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_thread_lease_status_reads_repos_without_agent_bootstrap():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            terminal_repo=SimpleNamespace(get_active=lambda thread_id: {"lease_id": "lease-1"} if thread_id == "thread-1" else None),
+            lease_repo=SimpleNamespace(
+                get=lambda lease_id: {
+                    "lease_id": lease_id,
+                    "provider_name": "daytona",
+                    "desired_state": "running",
+                    "observed_state": "running",
+                    "version": 3,
+                    "last_error": None,
+                    "created_at": "2026-04-12T00:00:00Z",
+                    "updated_at": "2026-04-12T00:01:00Z",
+                    "_instance": {
+                        "instance_id": "instance-1",
+                        "status": "running",
+                        "created_at": "2026-04-12T00:00:10Z",
+                    },
+                }
+            ),
+        )
+    )
+
+    result = await threads_router.get_thread_lease_status("thread-1", app=app)
+
+    assert result == {
+        "thread_id": "thread-1",
+        "lease_id": "lease-1",
+        "provider_name": "daytona",
+        "desired_state": "running",
+        "observed_state": "running",
+        "version": 3,
+        "last_error": None,
+        "instance": {
+            "instance_id": "instance-1",
+            "state": "running",
+            "started_at": "2026-04-12T00:00:10Z",
+        },
+        "created_at": "2026-04-12T00:00:00Z",
+        "updated_at": "2026-04-12T00:01:00Z",
+    }
 
 
 def test_threads_router_no_longer_exposes_session_status_route():
