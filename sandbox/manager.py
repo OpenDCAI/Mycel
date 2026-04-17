@@ -308,14 +308,8 @@ class SandboxManager:
 
     def _destroy_daytona_managed_volume(self, lease_id: str) -> None:
         # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
-        # ref from lease identity directly, so cleanup no longer depends on lease.volume_id.
+        # ref from lease identity directly, so cleanup no longer depends on lease volume metadata.
         self.provider.delete_managed_volume(f"leon-volume-{lease_id}")
-
-    def _assert_no_legacy_volume_id(self, lease, *, action: str) -> None:
-        # @@@legacy-volume-stopline - after sandbox_volumes collapse, non-daytona runtime may only
-        # encounter volume_id as stale storage residue. Treat it as explicit data drift, not fallback input.
-        if self._requires_volume_bootstrap() and self.provider_capability.runtime_kind != "daytona_pty" and lease.volume_id:
-            raise ValueError(f"legacy volume_id is not allowed for non-daytona runtime {action}")
 
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
@@ -329,7 +323,6 @@ class SandboxManager:
         source_path = self._resolve_sync_source_path(thread_id)
 
         if self.provider_capability.runtime_kind != "daytona_pty":
-            self._assert_no_legacy_volume_id(lease, action="mount")
             self.volume.mount(thread_id, source_path, remote_path)
             return {"source_path": source_path, "remote_path": remote_path}
 
@@ -432,7 +425,7 @@ class SandboxManager:
 
     def _skip_volume_sync_for_local_lease(self, lease) -> bool:
         # @@@local-no-volume-sync - local sessions execute directly in host cwd, so upload/download
-        # must always no-op there. Legacy volume_id residue is not allowed to reactivate volume-backed sync.
+        # must always no-op there rather than reactivating volume-backed sync.
         return lease is not None and not self._requires_volume_bootstrap()
 
     def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
@@ -881,8 +874,6 @@ class SandboxManager:
         lease.destroy_instance(self.provider)
         if self.provider_capability.runtime_kind == "daytona_pty":
             self._destroy_daytona_managed_volume(lease_id)
-        else:
-            self._assert_no_legacy_volume_id(lease, action="cleanup")
         self.lease_store.delete(lease_id)
         return True
 

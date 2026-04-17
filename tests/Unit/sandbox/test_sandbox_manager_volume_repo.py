@@ -276,7 +276,7 @@ def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_pat
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id=None)
+    manager._get_lease = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     result = manager._setup_mounts("thread-1")
 
@@ -304,32 +304,31 @@ def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_pat
     assert source.host_path == (tmp_path / "staging").resolve()
 
 
-def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp_path):
+def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
-    lease = SimpleNamespace(lease_id="lease-1", volume_id=None)
+    lease = SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
     monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
 
     result = manager._setup_mounts("thread-1")
 
-    assert lease.volume_id is None
     assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
     assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
 
 
-def test_setup_mounts_daytona_does_not_require_volume_id(monkeypatch, tmp_path):
+def test_setup_mounts_daytona_uses_lease_id_for_managed_volume(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = _FakeDaytonaProvider()
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
-    lease = SimpleNamespace(lease_id="lease-1", volume_id=None)
+    lease = SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
     monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
@@ -354,7 +353,6 @@ def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
     class _Lease:
         lease_id = "lease-1"
         observed_state = "detached"
-        volume_id = "volume-1"
 
         def get_instance(self):
             return None
@@ -456,7 +454,7 @@ def test_enforce_idle_timeouts_accepts_aware_supabase_timestamps():
     assert manager.enforce_idle_timeouts() == 0
 
 
-def test_destroy_thread_resources_skips_local_sync_even_with_legacy_volume_id():
+def test_destroy_thread_resources_skips_local_sync_without_volume_metadata():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.provider = SimpleNamespace(name="local")
@@ -482,7 +480,6 @@ def test_destroy_thread_resources_skips_local_sync_even_with_legacy_volume_id():
     class _Lease:
         lease_id = "lease-1"
         observed_state = "running"
-        volume_id = "legacy-volume-1"
 
         def get_instance(self):
             return SimpleNamespace(instance_id="instance-1")
@@ -516,7 +513,6 @@ def test_destroy_thread_resources_hard_deletes_thread_chat_sessions_before_termi
     class _Lease:
         lease_id = "lease-1"
         observed_state = "running"
-        volume_id = None
 
         def get_instance(self):
             return SimpleNamespace(instance_id="instance-1")
@@ -565,7 +561,6 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     class _Lease:
         lease_id = "lease-1"
         observed_state = "detached"
-        volume_id = None
 
         def get_instance(self):
             return None
@@ -598,7 +593,7 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     assert deleted_leases == []
 
 
-def test_destroy_thread_resources_deletes_daytona_managed_volume_without_volume_id(tmp_path):
+def test_destroy_thread_resources_deletes_daytona_managed_volume_from_lease_id(tmp_path):
     manager = _new_test_manager()
     provider = _FakeDaytonaProvider()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
@@ -612,7 +607,6 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_without_volume_
     class _Lease:
         lease_id = "lease-1"
         observed_state = "detached"
-        volume_id = None
 
         def get_instance(self):
             return None
@@ -645,7 +639,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_without_volume_
     assert all_terminals == []
 
 
-def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized_daytona_source(tmp_path):
+def test_destroy_thread_resources_derives_daytona_volume_name_from_lease_id(tmp_path):
     manager = _new_test_manager()
     provider = _FakeDaytonaProvider()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
@@ -659,7 +653,6 @@ def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized
     class _Lease:
         lease_id = "lease-1"
         observed_state = "detached"
-        volume_id = "volume-1"
 
         def get_instance(self):
             return None
@@ -691,13 +684,13 @@ def test_destroy_thread_resources_derives_daytona_volume_name_without_serialized
     assert deleted_leases == ["lease-1"]
 
 
-def test_sync_uploads_skips_local_volume_sync_even_with_legacy_volume_id():
+def test_sync_uploads_skips_local_volume_sync_without_volume_metadata():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="legacy-volume-1")
-    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id="legacy-volume-1")
+    manager._get_lease = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: SimpleNamespace(
@@ -709,43 +702,11 @@ def test_sync_uploads_skips_local_volume_sync_even_with_legacy_volume_id():
     assert manager.volume.upload_calls == []
 
 
-def test_non_daytona_runtime_rejects_legacy_volume_id_during_mount_setup(tmp_path):
-    manager = _new_test_manager()
-    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
-    manager.volume = _FakeVolume()
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
-    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="legacy-volume-1")
-
-    with pytest.raises(ValueError, match="legacy volume_id is not allowed"):
-        manager._setup_mounts("thread-1")
-
-
-def test_non_daytona_runtime_rejects_legacy_volume_id_during_destroy():
-    manager = _new_test_manager()
-    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
-    manager.provider = SimpleNamespace(name="agentbay")
-    manager.terminal_store = SimpleNamespace(list_all=lambda: [])
-
-    class _Lease:
-        lease_id = "lease-1"
-        volume_id = "legacy-volume-1"
-
-        def destroy_instance(self, _provider):
-            return None
-
-    manager._get_lease = lambda _lease_id: _Lease()
-    manager.lease_store = SimpleNamespace(delete=lambda _lease_id: (_ for _ in ()).throw(AssertionError("lease delete should not happen")))
-
-    with pytest.raises(ValueError, match="legacy volume_id is not allowed"):
-        manager.destroy_lease_resources("lease-1")
-
-
 def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(monkeypatch):
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
-    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id="volume-1")
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager.resolve_volume_source = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume source should stay unused"))
 
     class _ThreadRepo:

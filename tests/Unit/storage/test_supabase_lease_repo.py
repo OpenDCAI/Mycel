@@ -25,6 +25,7 @@ def test_supabase_lease_repo_adopt_instance_fails_loudly_if_bootstrap_reload_mis
 class _FakeTable:
     def __init__(self) -> None:
         self.insert_payload = None
+        self.selected_cols = None
         self.eq_calls: list[tuple[str, object]] = []
         self.rows = [
             {
@@ -53,7 +54,8 @@ class _FakeTable:
         self.insert_payload = payload
         return self
 
-    def select(self, _cols):
+    def select(self, cols):
+        self.selected_cols = cols
         return self
 
     def eq(self, key, value):
@@ -106,6 +108,16 @@ def test_supabase_lease_repo_create_does_not_write_legacy_volume_id():
 
     payload = client.tables["sandbox_leases"].insert_payload
     assert "volume_id" not in payload
+
+
+def test_supabase_lease_repo_get_does_not_select_legacy_volume_id():
+    client = _FakeClient()
+    repo = SupabaseLeaseRepo(client)
+
+    result = repo.get("lease-1")
+
+    assert result is not None
+    assert "volume_id" not in client.tables["sandbox_leases"].selected_cols
 
 
 def test_supabase_lease_repo_adopt_instance_persists_integer_refresh_flag():
