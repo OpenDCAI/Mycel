@@ -221,8 +221,8 @@ def _is_user_visible_sandbox_thread(thread_id: str | None) -> bool:
 
 
 def _is_user_visible_sandbox_state(sandbox_row: dict[str, Any]) -> bool:
-    # @@@user-visible-lease-scope - product-facing lease surfaces should only
-    # expose leases the user can still act on, not historical stopped/destroying
+    # @@@user-visible-sandbox-scope - product-facing sandbox summaries should only
+    # expose sandboxes the user can still act on, not historical stopped/destroying
     # residue from monitor storage.
     status = map_lease_to_session_status(sandbox_row.get("observed_state"), sandbox_row.get("desired_state"))
     return status in {"running", "paused"}
