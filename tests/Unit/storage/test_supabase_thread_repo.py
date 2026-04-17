@@ -78,7 +78,7 @@ def test_supabase_thread_repo_create_writes_integer_main_flag():
         is_main=True,
         branch_index=0,
         owner_user_id="owner-1",
-        current_workspace_id="lease-1",
+        current_workspace_id="workspace-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -97,7 +97,7 @@ def test_supabase_thread_repo_create_defaults_active_status():
         is_main=True,
         branch_index=0,
         owner_user_id="owner-1",
-        current_workspace_id="lease-1",
+        current_workspace_id="workspace-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -118,7 +118,7 @@ def test_supabase_thread_repo_create_serializes_epoch_timestamps_for_agent_schem
         is_main=True,
         branch_index=0,
         owner_user_id="owner-1",
-        current_workspace_id="lease-1",
+        current_workspace_id="workspace-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -139,7 +139,7 @@ def test_supabase_thread_repo_create_defaults_updated_at_to_created_at_for_agent
         is_main=True,
         branch_index=0,
         owner_user_id="owner-1",
-        current_workspace_id="lease-1",
+        current_workspace_id="workspace-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -160,7 +160,7 @@ def test_supabase_thread_repo_create_uses_agent_user_id_not_member_id() -> None:
         is_main=True,
         branch_index=0,
         owner_user_id="owner-1",
-        current_workspace_id="lease-1",
+        current_workspace_id="workspace-1",
     )
 
     assert client.table_obj.insert_payload is not None
@@ -180,11 +180,11 @@ def test_supabase_thread_repo_create_writes_current_workspace_id() -> None:
         is_main=True,
         branch_index=0,
         owner_user_id="owner-1",
-        current_workspace_id="lease-1",
+        current_workspace_id="workspace-1",
     )
 
     assert client.table_obj.insert_payload is not None
-    assert client.table_obj.insert_payload["current_workspace_id"] == "lease-1"
+    assert client.table_obj.insert_payload["current_workspace_id"] == "workspace-1"
 
 
 def test_supabase_thread_repo_create_requires_current_workspace_id() -> None:
@@ -232,7 +232,7 @@ def test_supabase_thread_repo_create_requires_explicit_owner_user_id() -> None:
             created_at=1.0,
             is_main=True,
             branch_index=0,
-            current_workspace_id="lease-1",
+            current_workspace_id="workspace-1",
         )
 
 

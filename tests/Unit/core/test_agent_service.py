@@ -1352,7 +1352,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
                 "id": "parent-thread",
                 "agent_user_id": "agent-user-1",
                 "owner_user_id": "owner-1",
-                "current_workspace_id": "lease-parent",
+                "current_workspace_id": "workspace-parent",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-parent",
@@ -1384,7 +1384,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         assert child_thread is not None
         assert child_thread["agent_user_id"] == "agent-user-1"
         assert child_thread["owner_user_id"] == "owner-1"
-        assert child_thread["current_workspace_id"] == "lease-parent"
+        assert child_thread["current_workspace_id"] == "workspace-parent"
         assert child_thread["sandbox_type"] == "daytona_selfhost"
         assert child_thread["cwd"] == "/home/daytona"
         assert child_thread["is_main"] is False
