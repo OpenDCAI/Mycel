@@ -140,7 +140,6 @@ def bind_thread_to_existing_lease(
 def resolve_existing_sandbox_lease(
     sandbox: Any,
     *,
-    resolve_lease: Callable[[str], dict[str, Any] | None],
     db_path: Path | None = None,
     lease_repo: Any | None = None,
 ) -> dict[str, Any] | None:
@@ -150,37 +149,32 @@ def resolve_existing_sandbox_lease(
     provider_env_id = str(
         (sandbox.get("provider_env_id") if isinstance(sandbox, dict) else getattr(sandbox, "provider_env_id", None)) or ""
     ).strip()
-    if provider_name and provider_env_id:
-        # @@@existing-sandbox-live-lease-first
-        # Existing-sandbox reuse should resolve the live lease from sandbox runtime identity first.
-        # legacy_lease_id stays only as the compatibility fallback when the live provider-env binding
-        # has not been materialized yet.
-        target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-        _lease_repo = lease_repo
-        own_lease_repo = _lease_repo is None
-        if _lease_repo is None:
-            _lease_repo = make_lease_repo(db_path=target_db)
-        try:
-            lease = _lease_repo.find_by_instance(provider_name=provider_name, instance_id=provider_env_id)
-            if lease is not None:
-                return lease
-        finally:
-            if own_lease_repo:
-                _lease_repo.close()
-    config = sandbox.get("config") if isinstance(sandbox, dict) else getattr(sandbox, "config", None)
-    if not isinstance(config, dict):
-        raise RuntimeError("sandbox.config must be an object")
-    legacy_lease_id = str(config.get("legacy_lease_id") or "").strip()
-    if not legacy_lease_id:
-        raise RuntimeError("sandbox.config.legacy_lease_id is required")
-    return resolve_lease(legacy_lease_id)
+    if not provider_name:
+        raise RuntimeError("sandbox.provider_name is required")
+    if not provider_env_id:
+        raise RuntimeError("sandbox.provider_env_id is required")
+
+    # @@@existing-sandbox-runtime-identity - existing-sandbox reuse must bind
+    # through live runtime identity; legacy_lease_id is not a resolution fallback.
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    _lease_repo = lease_repo
+    own_lease_repo = _lease_repo is None
+    if _lease_repo is None:
+        _lease_repo = make_lease_repo(db_path=target_db)
+    try:
+        lease = _lease_repo.find_by_instance(provider_name=provider_name, instance_id=provider_env_id)
+        if lease is not None:
+            return lease
+    finally:
+        if own_lease_repo:
+            _lease_repo.close()
+    raise RuntimeError("sandbox provider_env_id did not resolve to a lease")
 
 
 def bind_thread_to_existing_sandbox(
     thread_id: str,
     sandbox: Any,
     *,
-    resolve_lease: Callable[[str], dict[str, Any] | None],
     cwd: str | None = None,
     db_path: Path | None = None,
     terminal_repo: Any | None = None,
@@ -188,14 +182,11 @@ def bind_thread_to_existing_sandbox(
 ) -> tuple[str, dict[str, Any]]:
     lease = resolve_existing_sandbox_lease(
         sandbox,
-        resolve_lease=resolve_lease,
         db_path=db_path,
         lease_repo=lease_repo,
     )
     if lease is None:
-        config = sandbox.get("config") if isinstance(sandbox, dict) else getattr(sandbox, "config", None)
-        legacy_lease_id = str((config or {}).get("legacy_lease_id") or "").strip()
-        raise RuntimeError(f"lease not found: {legacy_lease_id}")
+        raise RuntimeError("sandbox provider_env_id did not resolve to a lease")
     lease_id = str(lease.get("lease_id") or "").strip()
     if not lease_id:
         raise RuntimeError("lease.lease_id is required")

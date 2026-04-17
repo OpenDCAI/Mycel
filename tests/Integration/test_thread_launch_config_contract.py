@@ -122,6 +122,20 @@ class _FakeSandboxRepo:
         self.by_id[row.id] = row
 
 
+class _FakeLeaseRepo:
+    def __init__(self, row: dict[str, object] | None = None) -> None:
+        self._row = row
+        self.instance_queries: list[tuple[str, str]] = []
+
+    def find_by_instance(self, *, provider_name: str, instance_id: str):
+        self.instance_queries.append((provider_name, instance_id))
+        if self._row is None:
+            return None
+        row_provider = str(self._row.get("provider_name") or "").strip()
+        row_instance = str(self._row.get("provider_env_id") or self._row.get("current_instance_id") or "").strip()
+        return self._row if row_provider == provider_name and row_instance == instance_id else None
+
+
 def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
@@ -130,6 +144,7 @@ def _make_threads_app():
             recipe_repo=_FakeRecipeRepo(),
             workspace_repo=_FakeWorkspaceRepo(),
             sandbox_repo=_FakeSandboxRepo(),
+            lease_repo=_FakeLeaseRepo(),
             thread_sandbox={},
             thread_cwd={},
         )
@@ -627,8 +642,18 @@ async def test_create_thread_existing_lease_binds_without_launch_config_save() -
     app.state.sandbox_repo.by_id["sandbox-1"] = {
         "id": "sandbox-1",
         "owner_user_id": "owner-1",
+        "provider_name": "daytona_selfhost",
+        "provider_env_id": "instance-1",
         "config": {"legacy_lease_id": "lease-1"},
     }
+    app.state.lease_repo = _FakeLeaseRepo(
+        {
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "provider_env_id": "instance-1",
+            "recipe": {"id": "daytona:recipe-1"},
+        }
+    )
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
