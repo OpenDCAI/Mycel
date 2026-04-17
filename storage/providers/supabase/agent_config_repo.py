@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from storage.providers.supabase import _query as q
@@ -52,6 +53,9 @@ class SupabaseAgentConfigRepo:
 
     def save_config(self, agent_config_id: str, data: dict[str, Any]) -> None:
         payload = {"id": agent_config_id, **{k: v for k, v in data.items() if k != "id"}}
+        for timestamp_key in ("created_at", "updated_at"):
+            if timestamp_key in payload:
+                payload[timestamp_key] = _coerce_timestamptz(payload[timestamp_key])
         if "tools" in payload:
             payload["tools_json"] = payload.pop("tools")
         if "runtime" in payload:
@@ -160,3 +164,9 @@ class SupabaseAgentConfigRepo:
 
     def delete_sub_agent(self, sub_agent_id: str) -> None:
         self._table("agent_sub_agents").delete().eq("id", sub_agent_id).execute()
+
+
+def _coerce_timestamptz(value: Any) -> Any:
+    if isinstance(value, int | float):
+        return datetime.fromtimestamp(value / 1000, UTC).isoformat()
+    return value

@@ -198,11 +198,15 @@ def publish(
     user = user_repo.get_by_id(user_id)
     if user is None or user.agent_config_id is None:
         raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+    owner_user_id = getattr(user, "owner_user_id", None)
+    if owner_user_id is None:
+        raise RuntimeError(f"Agent user {user_id} is missing owner_user_id")
     agent_config_repo.save_config(
         user.agent_config_id,
         {
             "id": user.agent_config_id,
             "agent_user_id": user_id,
+            "owner_user_id": owner_user_id,
             "name": bundle.agent.name,
             "description": bundle.agent.description,
             "model": bundle.agent.model,

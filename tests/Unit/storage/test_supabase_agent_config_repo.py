@@ -72,6 +72,7 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
         {
             "id": "cfg-1",
             "agent_user_id": "user-agent-1",
+            "owner_user_id": "owner-1",
             "name": "Toad",
             "tools": ["search"],
             "runtime": {"tools:search": {"enabled": True}},
@@ -84,6 +85,7 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
     payload = client.tables["agent.agent_configs"].upsert_payload
     assert payload is not None
     assert payload["id"] == "cfg-1"
+    assert payload["owner_user_id"] == "owner-1"
     assert "member_id" not in payload
     assert payload["tools_json"] == ["search"]
     assert payload["runtime_json"] == {"tools:search": {"enabled": True}}
@@ -97,6 +99,27 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
     assert "mcp" not in payload
     assert "meta" not in payload
     assert "compact" not in payload
+
+
+def test_supabase_agent_config_repo_converts_millisecond_timestamps_for_timestamptz() -> None:
+    client = _FakeClient()
+    repo = SupabaseAgentConfigRepo(client)
+
+    repo.save_config(
+        "cfg-1",
+        {
+            "agent_user_id": "user-agent-1",
+            "owner_user_id": "owner-1",
+            "name": "Toad",
+            "created_at": 123000,
+            "updated_at": 456000,
+        },
+    )
+
+    payload = client.tables["agent.agent_configs"].upsert_payload
+    assert payload is not None
+    assert payload["created_at"] == "1970-01-01T00:02:03+00:00"
+    assert payload["updated_at"] == "1970-01-01T00:07:36+00:00"
 
 
 def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None:
