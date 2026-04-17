@@ -255,11 +255,13 @@ def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any
 
 def aggregate_provider_telemetry(
     *,
-    provider_sessions: list[dict[str, Any]],
+    provider_orphan_runtimes: list[dict[str, Any]],
     running_count: int,
     snapshot_by_sandbox: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    sandbox_ids = sorted({str(session.get("sandbox_id") or "").strip() for session in provider_sessions if session.get("sandbox_id")})
+    sandbox_ids = sorted(
+        {str(runtime.get("sandbox_id") or "").strip() for runtime in provider_orphan_runtimes if runtime.get("sandbox_id")}
+    )
     snapshots = [snapshot_by_sandbox[sandbox_id] for sandbox_id in sandbox_ids if sandbox_id in snapshot_by_sandbox]
 
     freshness = "stale"
