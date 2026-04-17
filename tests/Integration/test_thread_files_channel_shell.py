@@ -16,10 +16,11 @@ def test_file_channel_service_no_longer_imports_storage_factory() -> None:
     file_channel_source = inspect.getsource(file_channel_service)
 
     assert "backend.web.core.storage_factory" not in file_channel_source
-    assert "storage.runtime" in file_channel_source
     assert "backend.web.utils.helpers" in file_channel_source
     assert "SQLiteTerminalRepo" not in file_channel_source
     assert "SQLiteLeaseRepo" not in file_channel_source
+    assert "build_chat_session_repo" not in file_channel_source
+    assert "touch_thread_activity" not in file_channel_source
 
 
 def test_helpers_no_longer_import_storage_factory() -> None:
