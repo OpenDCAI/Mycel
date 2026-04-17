@@ -96,7 +96,7 @@ async def route_message_to_brain(
                 enable_trajectory=enable_trajectory,
                 message_metadata=meta,
             )
-            # @@@monitor-resource-cache-run-start - a fresh run can create or resume a lease immediately.
+            # @@@monitor-resource-cache-run-start - a fresh run can create or resume a sandbox runtime immediately.
             # Drop the cached monitor snapshot so the next /api/monitor/resources read reflects the live topology.
             clear_resource_overview_cache()
         return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
