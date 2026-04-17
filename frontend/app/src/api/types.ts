@@ -298,17 +298,6 @@ export interface StreamStatus {
   run_start_seq?: number;
 }
 
-export interface TerminalStatus {
-  thread_id: string;
-  terminal_id: string;
-  lease_id: string;
-  cwd: string;
-  env_delta: Record<string, string>;
-  version: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface LeaseStatus {
   thread_id: string;
   lease_id: string;
@@ -333,6 +322,13 @@ export interface SandboxFilesListResult {
   thread_id: string;
   path: string;
   entries: SandboxFileEntry[];
+}
+
+export interface ThreadFileChannelBinding {
+  thread_id: string;
+  files_path: string;
+  workspace_id: string;
+  workspace_path: string;
 }
 
 export interface SandboxFileResult {

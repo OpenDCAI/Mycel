@@ -247,19 +247,36 @@ describe("thread api client contract", () => {
     await expect(api.getThreadLease("thread-1")).rejects.toThrow("Malformed lease status");
   });
 
-  it("getThreadTerminal rejects malformed terminal state", async () => {
+  it("no longer exposes terminal status client", async () => {
+    expect("getThreadTerminal" in api).toBe(false);
+  });
+
+  it("getThreadFileChannel reads workspace path from files channel binding", async () => {
     authFetch.mockResolvedValue(okJson({
       thread_id: "thread-1",
-      terminal_id: "terminal-1",
-      lease_id: "lease-1",
-      cwd: "/workspace",
-      env_delta: { PATH: 123 },
-      version: "1",
-      created_at: "2026-04-12T00:00:00",
-      updated_at: "2026-04-12T00:01:00",
+      files_path: "/workspace/.mycel/files",
+      workspace_id: "workspace-1",
+      workspace_path: "/workspace",
     }));
 
-    await expect(api.getThreadTerminal("thread-1")).rejects.toThrow("Malformed terminal status");
+    await expect(api.getThreadFileChannel("thread-1")).resolves.toEqual({
+      thread_id: "thread-1",
+      files_path: "/workspace/.mycel/files",
+      workspace_id: "workspace-1",
+      workspace_path: "/workspace",
+    });
+    expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1/files/channels", undefined);
+  });
+
+  it("getThreadFileChannel rejects malformed workspace binding", async () => {
+    authFetch.mockResolvedValue(okJson({
+      thread_id: "thread-1",
+      files_path: "/workspace/.mycel/files",
+      workspace_id: "workspace-1",
+      workspace_path: null,
+    }));
+
+    await expect(api.getThreadFileChannel("thread-1")).rejects.toThrow("Malformed thread file channel");
   });
 
   it("getThreadPermissions rejects malformed permission payload identities", async () => {

@@ -1,9 +1,9 @@
-"""Thread state query service for session/terminal/lease status."""
+"""Thread state query service for sandbox and lease status."""
 
 import asyncio
 from typing import Any
 
-from backend.web.utils.helpers import get_lease_timestamps, get_terminal_timestamps
+from backend.web.utils.helpers import get_lease_timestamps
 
 
 def _resolve_thread_sandbox_instance(mgr: Any, lease: Any) -> Any | None:
@@ -61,38 +61,6 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
         sandbox_info["error"] = str(exc)
 
     return sandbox_info
-
-
-async def get_terminal_status(agent: Any, thread_id: str) -> dict[str, Any]:
-    """Get AbstractTerminal state for a thread.
-
-    Returns:
-        Dict with terminal_id, lease_id, cwd, env_delta, version, timestamps
-
-    Raises:
-        ValueError: If no terminal found for thread
-    """
-
-    def _get_terminal():
-        mgr = agent._sandbox.manager
-        return mgr.get_terminal(thread_id)
-
-    terminal = await asyncio.to_thread(_get_terminal)
-    if not terminal:
-        raise ValueError(f"No terminal found for thread {thread_id}")
-
-    state = terminal.get_state()
-    created_at, updated_at = await asyncio.to_thread(get_terminal_timestamps, terminal.terminal_id)
-    return {
-        "thread_id": thread_id,
-        "terminal_id": terminal.terminal_id,
-        "lease_id": terminal.lease_id,
-        "cwd": state.cwd,
-        "env_delta": state.env_delta,
-        "version": state.state_version,
-        "created_at": created_at,
-        "updated_at": updated_at,
-    }
 
 
 async def get_lease_status(agent: Any, thread_id: str) -> dict[str, Any] | None:

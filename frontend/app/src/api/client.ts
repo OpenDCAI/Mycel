@@ -4,7 +4,6 @@ import type {
   ThreadLaunchConfig,
   ThreadLaunchConfigResponse,
   StreamStatus,
-  TerminalStatus,
   LeaseStatus,
   ThreadDetail,
   ThreadSummary,
@@ -16,6 +15,7 @@ import type {
   SandboxFileResult,
   SandboxFilesListResult,
   SandboxUploadResult,
+  ThreadFileChannelBinding,
 } from "./types";
 
 import { authFetch } from "../store/auth-store";
@@ -428,33 +428,7 @@ function parseUserLeases(value: unknown): UserLeaseSummary[] {
   });
 }
 
-// --- Terminal/Lease API ---
-
-export async function getThreadTerminal(threadId: string): Promise<TerminalStatus> {
-  return parseTerminalStatus(await request(`/api/threads/${encodeURIComponent(threadId)}/terminal`));
-}
-
-function stringMap(value: unknown): Record<string, string> | null {
-  const payload = asRecord(value);
-  if (!payload) return null;
-  return Object.values(payload).every((item) => typeof item === "string") ? payload as Record<string, string> : null;
-}
-
-function parseTerminalStatus(value: unknown): TerminalStatus {
-  const payload = asRecord(value);
-  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
-  const terminal_id = payload ? recordString(payload, "terminal_id") : undefined;
-  const lease_id = payload ? recordString(payload, "lease_id") : undefined;
-  const cwd = payload ? recordString(payload, "cwd") : undefined;
-  const env_delta = stringMap(payload?.env_delta);
-  const version = payload?.version;
-  const created_at = payload ? recordString(payload, "created_at") : undefined;
-  const updated_at = payload ? recordString(payload, "updated_at") : undefined;
-  if (!payload || !thread_id || !terminal_id || !lease_id || !cwd || !env_delta || typeof version !== "number" || !created_at || !updated_at) {
-    throw new Error("Malformed terminal status");
-  }
-  return { ...payload, thread_id, terminal_id, lease_id, cwd, env_delta, version, created_at, updated_at } as TerminalStatus;
-}
+// --- Lease API ---
 
 export async function getThreadLease(threadId: string): Promise<LeaseStatus | null> {
   const response = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/lease`);
@@ -490,6 +464,22 @@ function sandboxFilesBase(threadId: string): string {
 export async function listSandboxFiles(threadId: string, path?: string): Promise<SandboxFilesListResult> {
   const q = path ? `?path=${encodeURIComponent(path)}` : "";
   return parseSandboxFilesList(await request(`${sandboxFilesBase(threadId)}/list${q}`));
+}
+
+export async function getThreadFileChannel(threadId: string): Promise<ThreadFileChannelBinding> {
+  return parseThreadFileChannel(await request(`${sandboxFilesBase(threadId)}/channels`));
+}
+
+function parseThreadFileChannel(value: unknown): ThreadFileChannelBinding {
+  const payload = asRecord(value);
+  const thread_id = payload ? recordString(payload, "thread_id") : undefined;
+  const files_path = payload ? recordString(payload, "files_path") : undefined;
+  const workspace_id = payload ? recordString(payload, "workspace_id") : undefined;
+  const workspace_path = payload ? recordString(payload, "workspace_path") : undefined;
+  if (!payload || !thread_id || !files_path || !workspace_id || !workspace_path) {
+    throw new Error("Malformed thread file channel");
+  }
+  return { thread_id, files_path, workspace_id, workspace_path };
 }
 
 function parseSandboxFilesList(value: unknown): SandboxFilesListResult {

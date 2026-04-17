@@ -51,7 +51,6 @@ from backend.web.services.thread_runtime_convergence import converge_owner_threa
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
-    get_terminal_status,
 )
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import delete_thread_in_db
@@ -1393,19 +1392,7 @@ async def get_thread_runtime(
     return status
 
 
-# Session/terminal/lease status endpoints
-@router.get("/{thread_id}/terminal")
-async def get_thread_terminal_status(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Get AbstractTerminal state for a thread."""
-    try:
-        return await get_terminal_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
-
-
+# Lease status endpoint
 @router.get("/{thread_id}/lease")
 async def get_thread_lease_status(
     thread_id: str,

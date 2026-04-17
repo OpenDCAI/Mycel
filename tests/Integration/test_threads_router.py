@@ -400,6 +400,12 @@ def test_threads_router_no_longer_exposes_session_status_route():
     assert "/api/threads/{thread_id}/session" not in paths
 
 
+def test_threads_router_no_longer_exposes_terminal_status_route():
+    paths = {getattr(route, "path", "") for route in threads_router.router.routes}
+
+    assert "/api/threads/{thread_id}/terminal" not in paths
+
+
 @pytest.mark.asyncio
 async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadata():
     thread_repo = _FakeThreadRepo()
