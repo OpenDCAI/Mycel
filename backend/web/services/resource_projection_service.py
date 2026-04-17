@@ -293,12 +293,12 @@ def list_resource_providers() -> dict[str, Any]:
         if not effective_available:
             unavailable_reason = str(item.get("reason") or capability_error or "provider unavailable")
 
-        provider_sessions = grouped.get(config_name, [])
+        provider_orphan_runtimes = grouped.get(config_name, [])
         normalized_sessions: list[dict[str, Any]] = []
         seen_session_ids: set[str] = set()
         running_count = 0
         seen_running_sandboxes: set[str] = set()
-        for session in provider_sessions:
+        for session in provider_orphan_runtimes:
             observed_state = session.get("observed_state")
             desired_state = session.get("desired_state")
             thread_id = str(session.get("thread_id") or "")
@@ -335,11 +335,11 @@ def list_resource_providers() -> dict[str, Any]:
 
         provider_type = _resolve_provider_type(provider_name)
         telemetry = _aggregate_provider_telemetry(
-            provider_sessions=provider_sessions,
+            provider_orphan_runtimes=provider_orphan_runtimes,
             running_count=running_count,
             snapshot_by_sandbox={
                 str(session.get("sandbox_id") or "").strip(): snapshot_by_sandbox[str(session.get("sandbox_id") or "").strip()]
-                for session in provider_sessions
+                for session in provider_orphan_runtimes
                 if str(session.get("sandbox_id") or "").strip() in snapshot_by_sandbox
             },
         )

@@ -101,6 +101,14 @@ def test_resource_projection_comments_use_sandbox_row_language() -> None:
     assert "detached leases that have neither a bound runtime" not in text
 
 
+def test_resource_projection_internal_orphan_runtime_grouping_uses_runtime_language() -> None:
+    projection_source = Path(resource_projection_service.__file__).read_text(encoding="utf-8")
+    common_source = Path(resource_common.__file__).read_text(encoding="utf-8")
+
+    assert "provider_sessions" not in projection_source
+    assert "provider_sessions" not in common_source
+
+
 def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None:
     session = {
         "session_id": "provider-session-1",
@@ -873,8 +881,8 @@ def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_tele
 
     captured: dict[str, object] = {}
 
-    def _fake_aggregate_provider_telemetry(*, provider_sessions, running_count, snapshot_by_sandbox):
-        captured["provider_sessions"] = provider_sessions
+    def _fake_aggregate_provider_telemetry(*, provider_orphan_runtimes, running_count, snapshot_by_sandbox):
+        captured["provider_orphan_runtimes"] = provider_orphan_runtimes
         captured["running_count"] = running_count
         captured["snapshot_keys"] = sorted(snapshot_by_sandbox.keys())
         return {
