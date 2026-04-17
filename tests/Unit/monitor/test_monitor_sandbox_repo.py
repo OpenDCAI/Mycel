@@ -32,6 +32,25 @@ class _MaxInFilterClient(FakeSupabaseClient):
         return query
 
 
+class _NoWorkspaceSandboxInQuery(FakeSupabaseQuery):
+    def in_(self, column: str, values: list[object]):
+        if self._table_name == "container.workspaces" and column == "sandbox_id":
+            raise AssertionError("query_sandboxes should not use sandbox_id IN against container.workspaces")
+        return super().in_(column, values)
+
+
+class _NoWorkspaceSandboxInClient(FakeSupabaseClient):
+    def table(self, table_name: str):
+        resolved_table = f"{self._schema_name}.{table_name}" if self._schema_name else table_name
+        query = _NoWorkspaceSandboxInQuery(resolved_table, self._tables)
+        if resolved_table in self._auto_seq_tables:
+            query._auto_seq = True
+        return query
+
+    def schema(self, schema_name: str):
+        return _NoWorkspaceSandboxInClient(self._tables, self._auto_seq_tables, schema_name=schema_name)
+
+
 def _repo(tables: dict) -> SupabaseSandboxMonitorRepo:
     return SupabaseSandboxMonitorRepo(FakeSupabaseClient(tables))
 
@@ -548,7 +567,28 @@ def test_query_sandboxes_reads_container_sandboxes_with_workspace_binding() -> N
     ]
 
 
-def test_query_sandboxes_chunks_workspace_thread_binding_lookup() -> None:
+def test_query_sandboxes_does_not_depend_on_workspace_sandbox_id_in_filter() -> None:
+    repo = SupabaseSandboxMonitorRepo(
+        _NoWorkspaceSandboxInClient(
+            {
+                "container.sandboxes": [
+                    _sandbox(
+                        "sandbox-1",
+                        provider_env_id="instance-1",
+                        updated_at="2026-04-05T10:10:00",
+                        legacy_lease_id="lease-1",
+                    )
+                ],
+                "container.workspaces": [_workspace("workspace-1", "sandbox-1")],
+                "agent.threads": [_thread("thread-1", "workspace-1")],
+            }
+        )
+    )
+
+    assert repo.query_sandboxes()[0]["thread_id"] == "thread-1"
+
+
+def test_query_sandboxes_handles_many_workspace_thread_bindings() -> None:
     sandboxes = [
         _sandbox(
             f"sandbox-{index}",
