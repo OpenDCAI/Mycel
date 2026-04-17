@@ -199,8 +199,8 @@ def _resource_session_identity(session: dict[str, Any]) -> str:
     sandbox_id = str(session.get("sandbox_id") or "")
     thread_id = str(session.get("thread_id") or "")
     # @@@resource-session-shell - resource session shell is now sandbox-first.
-    # lease ids remain compatibility residue for enrichment joins, not the
-    # primary user-visible session identity.
+    # Provider session ids are only an unbound-runtime fallback; bound rows use
+    # sandbox/thread identity on the user-visible Resources surface.
     if sandbox_id and thread_id:
         return f"{sandbox_id}:{thread_id}"
     session_id = str(session.get("session_id") or "")
@@ -227,7 +227,7 @@ def _resource_display_status(
     if status != "running":
         return status
     # @@@resource-detached-residue - monitor/resources should not inflate running counts with
-    # detached leases that have neither a bound runtime nor any live/quota snapshot. Those rows
+    # detached sandbox rows that have neither a bound runtime nor any live/quota snapshot. Those rows
     # are residue on this operator surface, even if the product-facing desired state still says running.
     if observed == "detached" and desired == "running" and not runtime_session_id and session_metrics is None:
         return "stopped"

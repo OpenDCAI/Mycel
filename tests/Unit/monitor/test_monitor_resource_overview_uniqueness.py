@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from backend.web.services import resource_common, resource_projection_service
@@ -89,6 +91,14 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
 
 def test_storage_runtime_no_longer_exposes_lease_shaped_snapshot_read_shell() -> None:
     assert not hasattr(storage_runtime, "list_resource_snapshots")
+
+
+def test_resource_projection_comments_use_sandbox_row_language() -> None:
+    source = Path(resource_projection_service.__file__)
+    text = source.read_text(encoding="utf-8")
+
+    assert "lease ids remain compatibility residue for enrichment joins" not in text
+    assert "detached leases that have neither a bound runtime" not in text
 
 
 def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None:
