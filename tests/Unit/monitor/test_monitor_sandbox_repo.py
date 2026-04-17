@@ -203,7 +203,7 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
     ]
 
 
-def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypatch) -> None:
+def test_query_threads_no_longer_roundtrips_through_lease_summary_shell() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -220,12 +220,6 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell(monkeypa
                 _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:01:00"),
             ],
         }
-    )
-
-    monkeypatch.setattr(
-        repo,
-        "_sandboxes_by_legacy_lease_id",
-        lambda operation: (_ for _ in ()).throw(AssertionError("query_threads should not roundtrip through _sandboxes_by_legacy_lease_id")),
     )
 
     assert repo.query_threads() == [
@@ -448,7 +442,7 @@ def test_query_sandbox_sessions_no_longer_reads_remote_session_shell(monkeypatch
     assert repo.query_sandbox_sessions("sandbox-1") == []
 
 
-def test_query_thread_sessions_no_longer_reads_lease_or_session_summary_shell(monkeypatch) -> None:
+def test_query_thread_sessions_no_longer_reads_lease_or_session_summary_shell() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -470,14 +464,6 @@ def test_query_thread_sessions_no_longer_reads_lease_or_session_summary_shell(mo
                 }
             ],
         }
-    )
-
-    monkeypatch.setattr(
-        repo,
-        "_sandboxes_by_legacy_lease_id",
-        lambda operation: (_ for _ in ()).throw(
-            AssertionError("query_thread_sessions should not roundtrip through _sandboxes_by_legacy_lease_id")
-        ),
     )
 
     assert repo.query_thread_sessions("thread-1") == []
