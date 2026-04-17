@@ -826,7 +826,7 @@ export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new"
                       {createMode === "existing" && (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-3">
-                            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">My Leases</div>
+                            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">My Sandboxes</div>
                             <div className="text-xs text-muted-foreground">{existingCount} available</div>
                           </div>
                           <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
