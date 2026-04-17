@@ -8,6 +8,7 @@ from typing import Any
 from storage.providers.supabase import _query as q
 
 _REPO = "agent_config repo"
+_SCHEMA = "agent"
 
 
 class SupabaseAgentConfigRepo:
@@ -17,13 +18,16 @@ class SupabaseAgentConfigRepo:
     def close(self) -> None:
         return None
 
+    def _table(self, table: str) -> Any:
+        return q.schema_table(self._client, _SCHEMA, table, _REPO)
+
     # ------------------------------------------------------------------
     # agent_configs (1:1 with agent_config id)
     # ------------------------------------------------------------------
 
     def get_config(self, agent_config_id: str) -> dict[str, Any] | None:
         rows = q.rows(
-            self._client.table("agent_configs").select("*").eq("id", agent_config_id).execute(),
+            self._table("agent_configs").select("*").eq("id", agent_config_id).execute(),
             _REPO,
             "get_config",
         )
@@ -67,10 +71,10 @@ class SupabaseAgentConfigRepo:
             else:
                 meta["compact"] = compact
         payload["meta_json"] = meta
-        self._client.table("agent_configs").upsert(payload).execute()
+        self._table("agent_configs").upsert(payload).execute()
 
     def delete_config(self, agent_config_id: str) -> None:
-        self._client.table("agent_configs").delete().eq("id", agent_config_id).execute()
+        self._table("agent_configs").delete().eq("id", agent_config_id).execute()
 
     # ------------------------------------------------------------------
     # agent_rules
@@ -78,7 +82,7 @@ class SupabaseAgentConfigRepo:
 
     def list_rules(self, agent_config_id: str) -> list[dict[str, Any]]:
         rows = q.rows(
-            self._client.table("agent_rules").select("*").eq("agent_config_id", agent_config_id).execute(),
+            self._table("agent_rules").select("*").eq("agent_config_id", agent_config_id).execute(),
             _REPO,
             "list_rules",
         )
@@ -87,11 +91,11 @@ class SupabaseAgentConfigRepo:
     def save_rule(self, agent_config_id: str, filename: str, content: str, rule_id: str | None = None) -> dict[str, Any]:
         rid = rule_id or str(uuid.uuid4())
         payload = {"id": rid, "agent_config_id": agent_config_id, "filename": filename, "content": content}
-        self._client.table("agent_rules").upsert(payload).execute()
+        self._table("agent_rules").upsert(payload).execute()
         return payload
 
     def delete_rule(self, rule_id: str) -> None:
-        self._client.table("agent_rules").delete().eq("id", rule_id).execute()
+        self._table("agent_rules").delete().eq("id", rule_id).execute()
 
     # ------------------------------------------------------------------
     # agent_skills
@@ -99,7 +103,7 @@ class SupabaseAgentConfigRepo:
 
     def list_skills(self, agent_config_id: str) -> list[dict[str, Any]]:
         rows = q.rows(
-            self._client.table("agent_skills").select("*").eq("agent_config_id", agent_config_id).execute(),
+            self._table("agent_skills").select("*").eq("agent_config_id", agent_config_id).execute(),
             _REPO,
             "list_skills",
         )
@@ -112,11 +116,11 @@ class SupabaseAgentConfigRepo:
         payload: dict[str, Any] = {"id": sid, "agent_config_id": agent_config_id, "name": name, "content": content}
         if meta:
             payload["meta_json"] = meta
-        self._client.table("agent_skills").upsert(payload, on_conflict="agent_config_id,name").execute()
+        self._table("agent_skills").upsert(payload, on_conflict="agent_config_id,name").execute()
         return payload
 
     def delete_skill(self, skill_id: str) -> None:
-        self._client.table("agent_skills").delete().eq("id", skill_id).execute()
+        self._table("agent_skills").delete().eq("id", skill_id).execute()
 
     # ------------------------------------------------------------------
     # agent_sub_agents
@@ -124,7 +128,7 @@ class SupabaseAgentConfigRepo:
 
     def list_sub_agents(self, agent_config_id: str) -> list[dict[str, Any]]:
         rows = q.rows(
-            self._client.table("agent_sub_agents").select("*").eq("agent_config_id", agent_config_id).execute(),
+            self._table("agent_sub_agents").select("*").eq("agent_config_id", agent_config_id).execute(),
             _REPO,
             "list_sub_agents",
         )
@@ -151,8 +155,8 @@ class SupabaseAgentConfigRepo:
             payload["tools_json"] = tools
         if system_prompt is not None:
             payload["system_prompt"] = system_prompt
-        self._client.table("agent_sub_agents").upsert(payload, on_conflict="agent_config_id,name").execute()
+        self._table("agent_sub_agents").upsert(payload, on_conflict="agent_config_id,name").execute()
         return payload
 
     def delete_sub_agent(self, sub_agent_id: str) -> None:
-        self._client.table("agent_sub_agents").delete().eq("id", sub_agent_id).execute()
+        self._table("agent_sub_agents").delete().eq("id", sub_agent_id).execute()
