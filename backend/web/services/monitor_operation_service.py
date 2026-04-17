@@ -10,7 +10,8 @@ from uuid import uuid4
 _LOCK = Lock()
 _OPERATIONS: dict[str, dict[str, Any]] = {}
 _TARGET_INDEX: dict[tuple[str, str], list[str]] = {}
-_ALLOWED_LEASE_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
+_ALLOWED_SANDBOX_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
+_SANDBOX_CLEANUP_ACTION = "sandbox_cleanup"
 
 
 def _now_iso() -> str:
@@ -80,7 +81,7 @@ def _can_close_stale_active_sessions(*, category: str, sessions: list[dict[str, 
     return category == "orphan_cleanup" and _has_active_sessions(sessions) and not _has_thread_bindings(threads)
 
 
-def build_lease_cleanup_truth(
+def build_sandbox_cleanup_truth(
     *,
     lease_id: str,
     sandbox_id: str | None = None,
@@ -105,7 +106,7 @@ def build_lease_cleanup_truth(
     elif not provider:
         allowed = False
         reason = "Sandbox has no provider and cannot enter managed cleanup."
-    elif category not in _ALLOWED_LEASE_CLEANUP_TRIAGE:
+    elif category not in _ALLOWED_SANDBOX_CLEANUP_TRIAGE:
         allowed = False
         reason = "Sandbox is not in a managed cleanup state."
     elif category == "orphan_cleanup":
@@ -130,19 +131,32 @@ def build_lease_cleanup_truth(
 
     return {
         "allowed": allowed,
-        "recommended_action": "lease_cleanup" if allowed else None,
+        "recommended_action": _SANDBOX_CLEANUP_ACTION if allowed else None,
         "reason": reason,
         "operation": _operation_view(latest) if latest else None,
         "recent_operations": [_operation_view(operation) for operation in operations[:5]],
     }
 
 
-def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
+def _cleanup_current_truth(*, sandbox_id: str, triage_category: str | None) -> dict[str, Any]:
+    return {
+        "sandbox_id": sandbox_id,
+        "triage_category": triage_category,
+    }
+
+
+def _sandbox_destroy_result(result: Any) -> Any:
+    if not isinstance(result, dict):
+        return result
+    return {key: value for key, value in result.items() if key != "lease_id"}
+
+
+def request_sandbox_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     lease = lease_detail["lease"]
     provider = lease_detail.get("provider") or {}
     runtime = lease_detail.get("runtime") or {}
     threads = lease_detail.get("threads") or []
-    cleanup = lease_detail.get("cleanup") or build_lease_cleanup_truth(
+    cleanup = lease_detail.get("cleanup") or build_sandbox_cleanup_truth(
         lease_id=str(lease.get("lease_id") or ""),
         sandbox_id=str(lease.get("sandbox_id") or ""),
         triage=lease_detail.get("triage"),
@@ -154,21 +168,22 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
 
     lease_id = str(lease.get("lease_id") or "")
     sandbox_id = str(lease.get("sandbox_id") or "")
+    current_truth = _cleanup_current_truth(
+        sandbox_id=sandbox_id,
+        triage_category=(lease_detail.get("triage") or {}).get("category"),
+    )
     if not cleanup["allowed"]:
         return {
             "accepted": False,
             "message": cleanup["reason"],
             "operation": None,
-            "current_truth": {
-                "lease_id": lease_id,
-                "triage_category": (lease_detail.get("triage") or {}).get("category"),
-            },
+            "current_truth": current_truth,
         }
 
     provider_name = str(provider.get("id") or lease.get("provider_name") or "").strip()
     runtime_session_id = str(runtime.get("runtime_session_id") or "").strip()
     operation = _new_operation(
-        kind="lease_cleanup",
+        kind=_SANDBOX_CLEANUP_ACTION,
         target_type="sandbox",
         target_id=sandbox_id,
         reason=cleanup["reason"],
@@ -207,27 +222,21 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
             "accepted": True,
             "message": str(exc),
             "operation": _operation_view(operation),
-            "current_truth": {
-                "lease_id": lease_id,
-                "triage_category": (lease_detail.get("triage") or {}).get("category"),
-            },
+            "current_truth": current_truth,
         }
 
     operation["result_truth"] = {
         "sandbox_state_before": lease.get("observed_state"),
         "sandbox_state_after": None,
         "runtime_state_after": None,
-        "destroy_result": result,
+        "destroy_result": _sandbox_destroy_result(result),
     }
     _append_event(operation, status="succeeded", message="Sandbox cleanup completed.")
     return {
         "accepted": True,
         "message": "Sandbox cleanup completed.",
         "operation": _operation_view(operation),
-        "current_truth": {
-            "lease_id": lease_id,
-            "triage_category": (lease_detail.get("triage") or {}).get("category"),
-        },
+        "current_truth": current_truth,
     }
 
 

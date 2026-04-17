@@ -686,7 +686,7 @@ def _sandbox_detail_cleanup_truth(
             "operation": None,
             "recent_operations": [],
         }
-    return monitor_operation_service.build_lease_cleanup_truth(
+    return monitor_operation_service.build_sandbox_cleanup_truth(
         lease_id=lease_id,
         sandbox_id=sandbox_id,
         triage=triage,
@@ -817,7 +817,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
         "runtime": runtime,
         "threads": threads,
         "sessions": payload.get("sessions") or [],
-        "cleanup": monitor_operation_service.build_lease_cleanup_truth(
+        "cleanup": monitor_operation_service.build_sandbox_cleanup_truth(
             lease_id=lease_id,
             sandbox_id=sandbox_id,
             triage=payload.get("triage"),
@@ -827,7 +827,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
             threads=threads,
         ),
     }
-    return monitor_operation_service.request_lease_cleanup(lease_detail)
+    return monitor_operation_service.request_sandbox_cleanup(lease_detail)
 
 
 def request_monitor_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str) -> dict[str, Any]:

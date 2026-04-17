@@ -149,7 +149,7 @@ def _detached_sandbox(**overrides):
 def _cleanup_state(reason: str):
     return {
         "allowed": True,
-        "recommended_action": "lease_cleanup",
+        "recommended_action": "sandbox_cleanup",
         "reason": reason,
         "operation": None,
         "recent_operations": [],
@@ -566,6 +566,12 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
 
     assert payload["accepted"] is True
     assert payload["message"] == "Sandbox cleanup completed."
+    assert payload["current_truth"] == {
+        "sandbox_id": "sandbox-1",
+        "triage_category": "detached_residue",
+    }
+    assert "lease_id" not in payload["current_truth"]
+    assert payload["operation"]["kind"] == "sandbox_cleanup"
     assert payload["operation"]["target_type"] == "sandbox"
     assert payload["operation"]["target_id"] == "sandbox-1"
     assert payload["operation"]["result_truth"]["sandbox_state_before"] == "detached"
@@ -859,7 +865,7 @@ def test_get_monitor_operation_detail_exposes_sandbox_relation_shell(monkeypatch
         monitor_service.monitor_operation_service,
         "get_operation_detail",
         lambda _operation_id: {
-            "operation": {"operation_id": "op-1", "kind": "lease_cleanup", "status": "succeeded"},
+            "operation": {"operation_id": "op-1", "kind": "sandbox_cleanup", "status": "succeeded"},
             "target": {
                 "target_type": "lease",
                 "target_id": "lease-1",
@@ -910,7 +916,7 @@ def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeyp
         monitor_service.monitor_operation_service,
         "get_operation_detail",
         lambda _operation_id: {
-            "operation": {"operation_id": "op-1", "kind": "lease_cleanup", "status": "succeeded"},
+            "operation": {"operation_id": "op-1", "kind": "sandbox_cleanup", "status": "succeeded"},
             "target": {
                 "target_type": "sandbox",
                 "target_id": "sandbox-1",

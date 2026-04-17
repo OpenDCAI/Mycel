@@ -41,10 +41,10 @@ describe("monitor relation shell", () => {
     expect(shell.sandboxHref).toBe("/sandboxes/sandbox-1");
   });
 
-  it("keeps operation target contract lease-shaped while switching read shell to sandbox", () => {
+  it("uses sandbox operation targets for cleanup relation shells", () => {
     const shell = buildOperationDetailShell({
-      operation: { operation_id: "op-1", status: "succeeded" },
-      target: { target_type: "lease", target_id: "lease-1" },
+      operation: { operation_id: "op-1", kind: "sandbox_cleanup", status: "succeeded" },
+      target: { target_type: "sandbox", target_id: "sandbox-1" },
       sandbox_id: "sandbox-1",
       result_truth: { sandbox_state_before: "running", sandbox_state_after: "destroyed" },
       events: [],

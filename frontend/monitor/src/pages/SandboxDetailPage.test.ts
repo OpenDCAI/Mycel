@@ -32,13 +32,13 @@ describe("sandbox detail page shell", () => {
       sessions: [{ chat_session_id: "chat-1", thread_id: "thread-1", status: "active" }],
       cleanup: {
         allowed: true,
-        recommended_action: "lease_cleanup",
-        reason: "Lease is orphan cleanup residue and can enter managed cleanup.",
+        recommended_action: "sandbox_cleanup",
+        reason: "Sandbox is orphan cleanup residue and can enter managed cleanup.",
         operation: {
           operation_id: "op-1",
-          kind: "lease_cleanup",
+          kind: "sandbox_cleanup",
           status: "succeeded",
-          summary: "Lease cleanup completed.",
+          summary: "Sandbox cleanup completed.",
         },
         recent_operations: [],
       },
