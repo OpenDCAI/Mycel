@@ -499,7 +499,7 @@ def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
     payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
-    assert payload["cleanup"] == _cleanup_state("Lease is orphan cleanup residue and can enter managed cleanup.")
+    assert payload["cleanup"] == _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup.")
 
 
 def test_get_monitor_sandbox_detail_allows_missing_lease_bridge_for_readonly_detail(monkeypatch):
@@ -545,7 +545,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
     payload = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
 
     assert payload["accepted"] is True
-    assert payload["message"] == "Lease cleanup completed."
+    assert payload["message"] == "Sandbox cleanup completed."
     assert payload["operation"]["target_type"] == "sandbox"
     assert payload["operation"]["target_id"] == "sandbox-1"
     assert payload["operation"]["result_truth"]["sandbox_state_before"] == "detached"

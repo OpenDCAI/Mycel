@@ -97,28 +97,28 @@ def build_lease_cleanup_truth(
 
     if has_active_sessions and not can_close_stale_active_sessions:
         allowed = False
-        reason = "Lease still has active sessions and cannot enter managed cleanup."
+        reason = "Sandbox still has active sessions and cannot enter managed cleanup."
     elif has_thread_bindings and category != "detached_residue":
         allowed = False
-        reason = "Lease still has thread bindings and cannot enter managed cleanup."
+        reason = "Sandbox still has thread bindings and cannot enter managed cleanup."
     elif not provider:
         allowed = False
-        reason = "Lease has no provider and cannot enter managed cleanup."
+        reason = "Sandbox has no provider and cannot enter managed cleanup."
     elif category not in _ALLOWED_LEASE_CLEANUP_TRIAGE:
         allowed = False
-        reason = "Lease is not in a managed cleanup state."
+        reason = "Sandbox is not in a managed cleanup state."
     elif category == "orphan_cleanup":
         allowed = True
         if can_close_stale_active_sessions:
-            reason = "Lease has only stale active sessions and can close them before cleanup."
+            reason = "Sandbox has only stale active sessions and can close them before cleanup."
         else:
-            reason = "Lease is orphan cleanup residue and can enter managed cleanup."
+            reason = "Sandbox is orphan cleanup residue and can enter managed cleanup."
     elif category == "detached_residue":
         allowed = True
-        reason = "Lease is detached residue and can detach stale thread bindings before cleanup."
+        reason = "Sandbox is detached residue and can detach stale thread bindings before cleanup."
     else:
         allowed = False
-        reason = "Lease is not in a managed cleanup state."
+        reason = "Sandbox is not in a managed cleanup state."
 
     operations = _operations_for_target("lease", lease_id)
     latest = operations[0] if operations else None
@@ -213,10 +213,10 @@ def request_lease_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         "runtime_state_after": None,
         "destroy_result": result,
     }
-    _append_event(operation, status="succeeded", message="Lease cleanup completed.")
+    _append_event(operation, status="succeeded", message="Sandbox cleanup completed.")
     return {
         "accepted": True,
-        "message": "Lease cleanup completed.",
+        "message": "Sandbox cleanup completed.",
         "operation": _operation_view(operation),
         "current_truth": {
             "lease_id": lease_id,
@@ -252,7 +252,7 @@ def request_provider_session_cleanup(provider_name: str, session_id: str, sessio
         kind="provider_session_cleanup",
         target_type="provider_session",
         target_id=target_id,
-        reason="Provider session is not lease-backed and can enter managed cleanup.",
+        reason="Provider session is not sandbox-backed and can enter managed cleanup.",
         target={
             "target_type": "provider_session",
             "provider_id": provider,

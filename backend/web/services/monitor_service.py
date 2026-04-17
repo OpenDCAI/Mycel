@@ -157,19 +157,19 @@ LEASE_SEMANTIC_ORDER = [
 LEASE_SEMANTIC_META = {
     "orphan_diverged": {
         "title": "Orphaned + Diverged",
-        "description": "Lease lost thread binding while desired and observed state still disagree.",
+        "description": "Sandbox lost thread binding while desired and observed state still disagree.",
     },
     "diverged": {
         "title": "Diverged",
-        "description": "Lease is still attached to a thread, but runtime state has not converged.",
+        "description": "Sandbox is still attached to a thread, but runtime state has not converged.",
     },
     "orphan": {
         "title": "Orphans",
-        "description": "Lease has no active thread binding. Usually cleanup or historical residue.",
+        "description": "Sandbox has no active thread binding. Usually cleanup or historical residue.",
     },
     "healthy": {
         "title": "Healthy",
-        "description": "Lease has a thread binding and desired state matches observed state.",
+        "description": "Sandbox has a thread binding and desired state matches observed state.",
     },
 }
 
@@ -184,25 +184,25 @@ LEASE_TRIAGE_ORDER = [
 LEASE_TRIAGE_META = {
     "active_drift": {
         "title": "Active Drift",
-        "description": "Leases whose desired and observed state still disagree recently enough to warrant attention.",
+        "description": "Sandboxes whose desired and observed state still disagree recently enough to warrant attention.",
         "tone": "warning",
     },
     "detached_residue": {
         "title": "Detached Residue",
         "description": (
-            "Leases still marked desired=running but observed=detached long after the runtime "
+            "Sandboxes still marked desired=running but observed=detached long after the runtime "
             "stopped moving. Usually cleanup debt, not live pressure."
         ),
         "tone": "danger",
     },
     "orphan_cleanup": {
         "title": "Orphan Cleanup",
-        "description": "Lease rows that have already lost thread binding and mainly represent cleanup backlog or historical residue.",
+        "description": "Sandboxes that have already lost thread binding and mainly represent cleanup backlog or historical residue.",
         "tone": "warning",
     },
     "healthy_capacity": {
         "title": "Healthy Capacity",
-        "description": "Leases with attached thread context and converged runtime state.",
+        "description": "Sandboxes with attached thread context and converged runtime state.",
         "tone": "success",
     },
 }
