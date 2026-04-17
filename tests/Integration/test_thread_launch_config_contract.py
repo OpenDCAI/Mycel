@@ -422,7 +422,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
         status="ready",
         observed_at=4.0,
         last_error=None,
-        config={"legacy_lease_id": "lease-4"},
+        config={},
         created_at=4.0,
         updated_at=4.0,
     )
@@ -644,7 +644,7 @@ async def test_create_thread_existing_lease_binds_without_launch_config_save() -
         "owner_user_id": "owner-1",
         "provider_name": "daytona_selfhost",
         "provider_env_id": "instance-1",
-        "config": {"legacy_lease_id": "lease-1"},
+        "config": {},
     }
     app.state.lease_repo = _FakeLeaseRepo(
         {

@@ -113,14 +113,13 @@ def _existing_sandbox_row(
     *,
     provider_name: str = "local",
     provider_env_id: str = "instance-1",
-    legacy_lease_id: str = "lease-1",
 ) -> dict[str, Any]:
     return {
         "id": "sandbox-1",
         "owner_user_id": "owner-1",
         "provider_name": provider_name,
         "provider_env_id": provider_env_id,
-        "config": {"legacy_lease_id": legacy_lease_id},
+        "config": {},
     }
 
 
@@ -996,7 +995,7 @@ async def test_list_threads_hides_internal_subagent_threads():
                 id=sandbox_id,
                 owner_user_id="owner-1",
                 provider_name="local",
-                config={"legacy_lease_id": "lease-1"},
+                config={},
             )
         ),
         agent_pool={},
@@ -1071,7 +1070,7 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
                 id=sandbox_id,
                 owner_user_id="owner-1",
                 provider_name="local",
-                config={"legacy_lease_id": "lease-1"},
+                config={},
             )
         ),
         agent_pool={},
@@ -1132,7 +1131,7 @@ async def test_list_threads_no_longer_requires_terminal_summary():
                 id=sandbox_id,
                 owner_user_id="owner-1",
                 provider_name="local",
-                config={"legacy_lease_id": "lease-1"},
+                config={},
             )
         ),
         terminal_repo=SimpleNamespace(
@@ -1204,7 +1203,7 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
                     id=sandbox_id,
                     owner_user_id="owner-1",
                     provider_name="local",
-                    config={"legacy_lease_id": "lease-healthy"},
+                    config={},
                 )
                 if sandbox_id == "sandbox-healthy"
                 else None

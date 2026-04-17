@@ -118,7 +118,7 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
                     id="sandbox-1",
                     owner_user_id="owner-1",
                     provider_name="daytona",
-                    config={"legacy_lease_id": "lease-1"},
+                    config={},
                 )
             ),
             terminal_repo=SimpleNamespace(
@@ -219,7 +219,7 @@ async def test_verify_thread_owner_allows_terminal_less_workspace_backed_thread(
                     id="sandbox-1",
                     owner_user_id="owner-1",
                     provider_name="daytona",
-                    config={"legacy_lease_id": "lease-1"},
+                    config={},
                 )
             ),
             terminal_repo=SimpleNamespace(

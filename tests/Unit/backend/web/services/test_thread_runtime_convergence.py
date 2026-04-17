@@ -75,7 +75,7 @@ def test_converge_owner_thread_runtime_accepts_workspace_sandbox_binding_without
                     id="sandbox-1",
                     owner_user_id="owner-1",
                     provider_name="daytona",
-                    config={"legacy_lease_id": "lease-1"},
+                    config={},
                 )
             }
         ),
@@ -144,7 +144,7 @@ def test_summarize_owner_thread_runtime_uses_workspace_sandbox_binding(monkeypat
                     id="sandbox-1",
                     owner_user_id="owner-1",
                     provider_name="daytona",
-                    config={"legacy_lease_id": "lease-1"},
+                    config={},
                 )
             }
         ),
