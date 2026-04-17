@@ -28,18 +28,6 @@ def is_virtual_thread_id(thread_id: str | None) -> bool:
     return bool(thread_id) and thread_id.startswith("(") and thread_id.endswith(")")
 
 
-def get_terminal_timestamps(terminal_id: str) -> tuple[str | None, str | None]:
-    """Get created_at and updated_at timestamps for a terminal."""
-    sandbox_db = resolve_sandbox_db_path()
-    if not sandbox_db.exists():
-        return None, None
-    repo = make_terminal_repo()
-    try:
-        return repo.get_timestamps(terminal_id)
-    finally:
-        repo.close()
-
-
 def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
     """Extract provider instance/session id from webhook payload."""
     direct_keys = ("session_id", "sandbox_id", "instance_id", "id")

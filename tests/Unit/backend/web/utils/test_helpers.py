@@ -106,16 +106,8 @@ def test_delete_thread_in_db_cleans_runtime_repos_when_supabase_defaults_without
     assert sync_state.closed
 
 
-def test_get_terminal_timestamps_uses_runtime_repo_factory_without_db_path(monkeypatch, tmp_path):
-    sandbox_db = tmp_path / "sandbox.db"
-    sandbox_db.touch()
-    terminal_repo = _ThreadRepo()
-
-    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
-    monkeypatch.setattr(helpers, "make_terminal_repo", lambda: terminal_repo)
-
-    assert helpers.get_terminal_timestamps("terminal-1") == ("created", "updated")
-    assert terminal_repo.closed
+def test_helpers_no_longer_expose_terminal_timestamp_helper() -> None:
+    assert not hasattr(helpers, "get_terminal_timestamps")
 
 
 def test_helpers_no_longer_expose_lease_timestamp_helper() -> None:
