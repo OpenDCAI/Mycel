@@ -111,27 +111,27 @@ def test_supabase_resource_snapshot_repo_instance_no_longer_exposes_lease_shaped
     assert not hasattr(repo, "list_snapshots_by_lease_ids")
 
 
-def test_supabase_resource_snapshot_repo_fails_loudly_when_live_schema_still_uses_lease_table_name() -> None:
+def test_supabase_resource_snapshot_repo_fails_loudly_when_target_snapshot_table_is_missing() -> None:
     client = _FakeClient()
     client.table_obj.error = RuntimeError(
         "Could not find the table 'container.resource_snapshots' in the schema cache; "
-        "Perhaps you meant the table 'staging.lease_resource_snapshots'"
+        "Perhaps you meant the old table 'lease_resource_snapshots'"
     )
     repo = SupabaseResourceSnapshotRepo(client)
 
-    with pytest.raises(RuntimeError, match="live schema still exposes staging\\.lease_resource_snapshots"):
+    with pytest.raises(RuntimeError, match="container\\.resource_snapshots is missing"):
         repo.list_snapshots_by_sandbox_ids([{"sandbox_id": "sandbox-1"}])
 
 
-def test_supabase_resource_snapshot_repo_write_fails_loudly_when_live_schema_still_uses_lease_table_name() -> None:
+def test_supabase_resource_snapshot_repo_write_fails_loudly_when_target_snapshot_table_is_missing() -> None:
     client = _FakeClient()
     client.table_obj.error = RuntimeError(
         "Could not find the table 'container.resource_snapshots' in the schema cache; "
-        "Perhaps you meant the table 'staging.lease_resource_snapshots'"
+        "Perhaps you meant the old table 'lease_resource_snapshots'"
     )
     repo = SupabaseResourceSnapshotRepo(client)
 
-    with pytest.raises(RuntimeError, match="land container\\.resource_snapshots instead of falling back"):
+    with pytest.raises(RuntimeError, match="stale lease_resource_snapshots residue is not a fallback"):
         repo.upsert_resource_snapshot_for_sandbox(
             sandbox_id="sandbox-1",
             provider_name="daytona",

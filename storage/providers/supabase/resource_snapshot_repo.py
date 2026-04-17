@@ -18,11 +18,11 @@ def _now_iso() -> str:
 
 def _raise_if_snapshot_schema_drift(err: Exception) -> None:
     message = str(err)
-    if f"{_SCHEMA}.{_TABLE}" not in message or "staging.lease_resource_snapshots" not in message:
+    if f"{_SCHEMA}.{_TABLE}" not in message or "lease_resource_snapshots" not in message:
         return
     raise RuntimeError(
-        "live schema still exposes staging.lease_resource_snapshots; "
-        "land container.resource_snapshots instead of falling back to the old lease table"
+        "container.resource_snapshots is missing; "
+        "stale lease_resource_snapshots residue is not a fallback"
     ) from err
 
 
