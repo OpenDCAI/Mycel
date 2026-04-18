@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { groupResourceSessions } from "./ResourcesPage";
-import type { ResourceSession } from "./resources/types";
+import { groupResourceRows } from "./ResourcesPage";
+import type { ResourceRow } from "./resources/types";
 
-describe("resource session grouping", () => {
-  it("groups sandbox-backed resource sessions by sandbox identity before lower lease-id residue", () => {
-    const sessions: ResourceSession[] = [
+describe("resource row grouping", () => {
+  it("groups sandbox-backed resource rows by sandbox identity before lower lease-id residue", () => {
+    const resourceRows: ResourceRow[] = [
       {
         id: "sandbox-1:thread-1",
         sandboxId: "sandbox-1",
@@ -24,7 +24,7 @@ describe("resource session grouping", () => {
       },
     ];
 
-    const groups = groupResourceSessions(sessions);
+    const groups = groupResourceRows(resourceRows);
 
     expect(groups).toHaveLength(1);
     expect(groups[0].sandboxId).toBe("sandbox-1");

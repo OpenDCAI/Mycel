@@ -27,8 +27,8 @@ import type {
   ProviderInfo,
   ProviderOrphanRuntime,
   ResourceOverviewResponse,
-  ResourceSession,
-  SessionMetrics,
+  ResourceMetrics,
+  ResourceRow,
 } from "./resources/types";
 
 const PROVIDER_TYPE_LABEL = {
@@ -69,21 +69,21 @@ const STATUS_LABEL = {
   destroying: "销毁中",
 } as const;
 
-const SESSION_STATUS_ORDER: Record<ResourceSession["status"], number> = {
+const RESOURCE_ROW_STATUS_ORDER: Record<ResourceRow["status"], number> = {
   running: 0,
   destroying: 1,
   paused: 2,
   stopped: 3,
 };
-const SANDBOX_FILTER_STATUSES: ResourceSession["status"][] = ["running", "paused", "stopped", "destroying"];
+const SANDBOX_FILTER_STATUSES: ResourceRow["status"][] = ["running", "paused", "stopped", "destroying"];
 
 interface SandboxGroup {
   sandboxId: string;
   displayId: string;
-  status: ResourceSession["status"];
-  sessions: ResourceSession[];
+  status: ResourceRow["status"];
+  sessions: ResourceRow[];
   startedAt: string;
-  metrics: SessionMetrics | null;
+  metrics: ResourceMetrics | null;
 }
 
 export function buildSandboxGroupDetailLink(group: { sandboxId?: string | null }) {
@@ -228,19 +228,19 @@ const PROVIDER_TYPE_GLYPH = {
   container: "▣",
 } as const;
 
-export function groupResourceSessions(sessions: ResourceSession[]): SandboxGroup[] {
-  const map = new Map<string, ResourceSession[]>();
-  for (const session of sessions) {
-    const key = session.sandboxId || session.id;
+export function groupResourceRows(resourceRows: ResourceRow[]): SandboxGroup[] {
+  const map = new Map<string, ResourceRow[]>();
+  for (const row of resourceRows) {
+    const key = row.sandboxId || row.id;
     const rows = map.get(key) ?? [];
-    rows.push(session);
+    rows.push(row);
     map.set(key, rows);
   }
 
   return Array.from(map.values())
     .map((group) => {
       const sorted = [...group].sort(
-        (left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4),
+        (left, right) => (RESOURCE_ROW_STATUS_ORDER[left.status] ?? 4) - (RESOURCE_ROW_STATUS_ORDER[right.status] ?? 4),
       );
       const best = sorted[0];
       const earliest = group.reduce(
@@ -256,7 +256,7 @@ export function groupResourceSessions(sessions: ResourceSession[]): SandboxGroup
         metrics: best.metrics ?? null,
       } satisfies SandboxGroup;
     })
-    .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4));
+    .sort((left, right) => (RESOURCE_ROW_STATUS_ORDER[left.status] ?? 4) - (RESOURCE_ROW_STATUS_ORDER[right.status] ?? 4));
 }
 
 function defaultProviderStatusFilter(groups: SandboxGroup[]): SandboxGroup["status"] | "all" {
@@ -269,12 +269,12 @@ function defaultProviderStatusFilter(groups: SandboxGroup[]): SandboxGroup["stat
   return "all";
 }
 
-function countSessions(sessions: ResourceSession[], status: ResourceSession["status"]): number {
-  return sessions.filter((session) => session.status === status).length;
+function countResourceRows(resourceRows: ResourceRow[], status: ResourceRow["status"]): number {
+  return resourceRows.filter((row) => row.status === status).length;
 }
 
-function countProviderSessions(providers: ProviderInfo[], status: ResourceSession["status"]): number {
-  return providers.reduce((total, provider) => total + countSessions(provider.sessions, status), 0);
+function countProviderResourceRows(providers: ProviderInfo[], status: ResourceRow["status"]): number {
+  return providers.reduce((total, provider) => total + countResourceRows(provider.sessions, status), 0);
 }
 
 function countRuntimeUnboundRunning(provider: ProviderInfo): number {
@@ -283,9 +283,9 @@ function countRuntimeUnboundRunning(provider: ProviderInfo): number {
   ).length;
 }
 
-function countDetachedResidue(sessions: ResourceSession[]): number {
-  return sessions.filter(
-    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
+function countDetachedResidue(resourceRows: ResourceRow[]): number {
+  return resourceRows.filter(
+    (row) => row.status === "stopped" && !row.runtimeSessionId && row.metrics == null,
   ).length;
 }
 
@@ -441,10 +441,10 @@ export default function ResourcesPage() {
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
   const selectedProviderOrphans = selected ? providerOrphans.filter((runtime) => runtime.provider === selected.id) : [];
-  const runningSessionCount = countProviderSessions(providers, "running");
-  const pausedSessionCount = countProviderSessions(providers, "paused");
-  const stoppedSessionCount = countProviderSessions(providers, "stopped");
-  const sandboxGroupCount = providers.reduce((total, provider) => total + groupResourceSessions(provider.sessions).length, 0);
+  const runningSessionCount = countProviderResourceRows(providers, "running");
+  const pausedSessionCount = countProviderResourceRows(providers, "paused");
+  const stoppedSessionCount = countProviderResourceRows(providers, "stopped");
+  const sandboxGroupCount = providers.reduce((total, provider) => total + groupResourceRows(provider.sessions).length, 0);
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -550,9 +550,9 @@ function ProviderCard({
   orphanCount: number;
   onSelect: () => void;
 }) {
-  const runningCount = countSessions(provider.sessions, "running");
-  const pausedCount = countSessions(provider.sessions, "paused");
-  const stoppedCount = countSessions(provider.sessions, "stopped");
+  const runningCount = countResourceRows(provider.sessions, "running");
+  const pausedCount = countResourceRows(provider.sessions, "paused");
+  const stoppedCount = countResourceRows(provider.sessions, "stopped");
   const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
   const detachedResidueCount = countDetachedResidue(provider.sessions);
   const unavailableHint =
@@ -566,7 +566,7 @@ function ProviderCard({
     .filter(Boolean)
     .join(" · ");
   const sessionDots = [...provider.sessions]
-    .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4))
+    .sort((left, right) => (RESOURCE_ROW_STATUS_ORDER[left.status] ?? 4) - (RESOURCE_ROW_STATUS_ORDER[right.status] ?? 4))
     .slice(0, 5);
 
   return (
@@ -653,7 +653,7 @@ function ProviderDetail({
 }) {
   const [selectedGroup, setSelectedGroup] = React.useState<SandboxGroup | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<SandboxGroup["status"] | "all">("all");
-  const groups = React.useMemo(() => groupResourceSessions(provider.sessions), [provider.sessions]);
+  const groups = React.useMemo(() => groupResourceRows(provider.sessions), [provider.sessions]);
   const filteredGroups = React.useMemo(
     () => (statusFilter === "all" ? groups : groups.filter((group) => group.status === statusFilter)),
     [groups, statusFilter],
@@ -674,11 +674,11 @@ function ProviderDetail({
       ),
     [groups],
   );
-  const runningCount = countSessions(provider.sessions, "running");
+  const runningCount = countResourceRows(provider.sessions, "running");
   const detachedResidueCount = countDetachedResidue(provider.sessions);
   const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
-  const pausedCount = countSessions(provider.sessions, "paused");
-  const stoppedCount = countSessions(provider.sessions, "stopped");
+  const pausedCount = countResourceRows(provider.sessions, "paused");
+  const stoppedCount = countResourceRows(provider.sessions, "stopped");
   const isLocal = provider.type === "local";
   const showUnavailableBanner = provider.status === "unavailable";
   const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
@@ -1183,7 +1183,7 @@ function MonitorFileBrowser({
       setLoading(true);
       setError(null);
       try {
-        // @@@local-monitor-browse - local resource sessions are host-bound, not active-instance-bound.
+        // @@@local-monitor-browse - local resource rows are host-bound, not active-instance-bound.
         // Reuse the same settings browse/read endpoints as the app resource surface.
         const data = isLocal
           ? await fetchJsonOrThrow<{

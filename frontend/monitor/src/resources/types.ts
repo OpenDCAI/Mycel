@@ -13,7 +13,7 @@ export interface ProviderCapabilities {
   mount: boolean;
 }
 
-export interface SessionMetrics {
+export interface ResourceMetrics {
   cpu: number | null;
   memory: number | null;
   memoryLimit: number | null;
@@ -27,7 +27,7 @@ export interface SessionMetrics {
   webUrl?: string;
 }
 
-export interface ResourceSession {
+export interface ResourceRow {
   id: string;
   sandboxId?: string;
   threadId: string;
@@ -38,7 +38,7 @@ export interface ResourceSession {
   status: "running" | "paused" | "stopped" | "destroying";
   startedAt: string;
   createdAt?: string;
-  metrics?: SessionMetrics;
+  metrics?: ResourceMetrics;
 }
 
 export interface ProviderInfo {
@@ -56,7 +56,7 @@ export interface ProviderInfo {
   capabilities: ProviderCapabilities;
   consoleUrl?: string;
   latencyMs?: number;
-  sessions: ResourceSession[];
+  sessions: ResourceRow[];
 }
 
 export interface ResourceSummary {
