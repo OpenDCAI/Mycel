@@ -171,6 +171,8 @@ class ChatToolService:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} has invalid title")
                 unread = c["unread_count"]
                 last = c.get("last_message")
+                if last is not None and not isinstance(last, dict):
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} last_message row is invalid")
                 if last is not None and "content" not in last:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} last_message is missing content")
                 if last is not None and not isinstance(last["content"], str):
@@ -320,6 +322,8 @@ class ChatToolService:
                     raise RuntimeError(f"Participant not found: {participant_id}")
                 target_name = target.display_name
                 chat = self._messaging.find_or_create_chat([eid, participant_id])
+                if not isinstance(chat, dict):
+                    raise RuntimeError("Created direct chat row is invalid")
                 if "id" not in chat:
                     raise RuntimeError("Created direct chat is missing id")
                 if not isinstance(chat["id"], str) or not chat["id"]:

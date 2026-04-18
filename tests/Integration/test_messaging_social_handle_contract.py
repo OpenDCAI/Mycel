@@ -521,6 +521,33 @@ def test_chat_tool_list_chats_requires_last_message_content_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_last_message_row_to_be_object_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": [{"id": "human-user-1", "name": "Human"}],
+                    "unread_count": 0,
+                    "last_message": "message-1",
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        list_chats.handler()
+
+    assert str(excinfo.value) == "Chat summary chat-1 last_message row is invalid"
+
+
 def test_chat_tool_list_chats_requires_string_title_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
@@ -1581,6 +1608,31 @@ def test_chat_tool_send_fails_before_unread_check_when_created_chat_is_missing_i
         send_message.handler(content="hello", participant_id="agent-user-1")
 
     assert str(excinfo.value) == "Created direct chat is missing id"
+    assert unread_checks == []
+    assert sent == []
+
+
+def test_chat_tool_send_fails_before_unread_check_when_created_chat_row_is_invalid() -> None:
+    registry = ToolRegistry()
+    unread_checks: list[tuple[str, str]] = []
+    sent: list[tuple[str, str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            find_or_create_chat=lambda _user_ids: "chat-1",
+            count_unread=lambda chat_id, user_id: unread_checks.append((chat_id, user_id)) or 0,
+            send=lambda chat_id, sender_id, content, **_kwargs: sent.append((chat_id, sender_id, content)),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        send_message.handler(content="hello", participant_id="agent-user-1")
+
+    assert str(excinfo.value) == "Created direct chat row is invalid"
     assert unread_checks == []
     assert sent == []
 
