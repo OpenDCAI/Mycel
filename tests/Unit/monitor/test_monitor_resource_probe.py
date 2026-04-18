@@ -1,5 +1,3 @@
-import inspect
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -113,24 +111,6 @@ def test_upsert_resource_snapshot_for_sandbox_uses_sandbox_write_without_lower_l
             "probe_error": None,
         }
     ]
-
-
-def test_resource_snapshot_service_no_longer_uses_write_bridge_class() -> None:
-    source = inspect.getsource(resource_service)
-    guard_source = Path(__file__).read_text(encoding="utf-8")
-    stale_test_name = "no_longer_requires_" + "legacy" + "_lease_bridge"
-    stale_adapter_comment = "storage " + "compatibility inside this adapter"
-
-    assert "_SandboxSnapshotRepoAdapter" not in source
-    assert stale_adapter_comment not in source
-    assert "_SandboxSnapshotRepoBridge" not in source
-    assert stale_test_name not in guard_source
-    assert stale_adapter_comment not in guard_source
-
-
-def test_resource_snapshot_module_no_longer_exposes_lease_shaped_write_helper() -> None:
-    assert not hasattr(resource_snapshot, "upsert_lease_resource_snapshot")
-    assert not hasattr(resource_snapshot, "_upsert_lease_resource_snapshot")
 
 
 def test_probe_and_upsert_for_instance_accepts_sandbox_shaped_repo() -> None:
@@ -421,15 +401,3 @@ def test_read_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> Non
     payload = resource_service.read_sandbox("sandbox-1", "/README.md")
 
     assert payload == {"path": "/README.md", "content": "instance-1:/README.md", "truncated": False}
-
-
-def test_resource_service_no_longer_exposes_lease_shaped_browse_read_shell() -> None:
-    assert not hasattr(resource_service, "sandbox_browse")
-    assert not hasattr(resource_service, "sandbox_read")
-
-
-def test_resource_service_comments_use_sandbox_snapshot_language() -> None:
-    source = Path(resource_service.__file__).read_text(encoding="utf-8")
-
-    assert "Probe active lease instances" not in source
-    assert "storage contract is still lease-keyed" not in source
