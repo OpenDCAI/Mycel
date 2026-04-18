@@ -83,7 +83,6 @@ def _can_close_stale_active_sessions(*, category: str, sessions: list[dict[str, 
 
 def build_sandbox_cleanup_truth(
     *,
-    lease_id: str,
     sandbox_id: str | None = None,
     triage: dict[str, Any] | None,
     provider_name: str | None,
@@ -148,26 +147,26 @@ def _sandbox_destroy_result(result: Any) -> Any:
     return {key: value for key, value in result.items() if key != "lease_id"}
 
 
-def request_sandbox_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
-    lease = lease_detail["lease"]
-    provider = lease_detail.get("provider") or {}
-    runtime = lease_detail.get("runtime") or {}
-    threads = lease_detail.get("threads") or []
-    cleanup = lease_detail.get("cleanup") or build_sandbox_cleanup_truth(
-        lease_id=str(lease.get("lease_id") or ""),
-        sandbox_id=str(lease.get("sandbox_id") or ""),
-        triage=lease_detail.get("triage"),
-        provider_name=str(provider.get("id") or lease.get("provider_name") or ""),
+def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
+    sandbox = sandbox_detail["sandbox"]
+    provider = sandbox_detail.get("provider") or {}
+    runtime = sandbox_detail.get("runtime") or {}
+    threads = sandbox_detail.get("threads") or []
+    cleanup = sandbox_detail.get("cleanup") or build_sandbox_cleanup_truth(
+        sandbox_id=str(sandbox.get("sandbox_id") or ""),
+        triage=sandbox_detail.get("triage"),
+        provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
         runtime_session_id=str(runtime.get("runtime_session_id") or ""),
-        sessions=lease_detail.get("sessions") or [],
+        sessions=sandbox_detail.get("sessions") or [],
         threads=threads,
     )
 
-    lease_id = str(lease.get("lease_id") or "")
-    sandbox_id = str(lease.get("sandbox_id") or "")
+    lower_runtime = sandbox_detail.get("lower_runtime") or {}
+    lower_runtime_handle = str(lower_runtime.get("handle") or "")
+    sandbox_id = str(sandbox.get("sandbox_id") or "")
     current_truth = _cleanup_current_truth(
         sandbox_id=sandbox_id,
-        triage_category=(lease_detail.get("triage") or {}).get("category"),
+        triage_category=(sandbox_detail.get("triage") or {}).get("category"),
     )
     if not cleanup["allowed"]:
         return {
@@ -176,8 +175,15 @@ def request_sandbox_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
             "operation": None,
             "current_truth": current_truth,
         }
+    if not lower_runtime_handle:
+        return {
+            "accepted": False,
+            "message": "Sandbox cleanup requires a managed runtime handle.",
+            "operation": None,
+            "current_truth": current_truth,
+        }
 
-    provider_name = str(provider.get("id") or lease.get("provider_name") or "").strip()
+    provider_name = str(provider.get("id") or sandbox.get("provider_name") or "").strip()
     runtime_session_id = str(runtime.get("runtime_session_id") or "").strip()
     operation = _new_operation(
         kind=_SANDBOX_CLEANUP_ACTION,
@@ -196,22 +202,22 @@ def request_sandbox_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
     from backend.web.services.sandbox_service import destroy_sandbox_lease
 
     try:
-        category = str((lease_detail.get("triage") or {}).get("category") or "").strip()
-        sessions = lease_detail.get("sessions") or []
+        category = str((sandbox_detail.get("triage") or {}).get("category") or "").strip()
+        sessions = sandbox_detail.get("sessions") or []
         detach_before_cleanup = category == "detached_residue" or _can_close_stale_active_sessions(
             category=category,
             sessions=sessions,
             threads=threads,
         )
         result = destroy_sandbox_lease(
-            lease_id=lease_id,
+            lease_id=lower_runtime_handle,
             provider_name=provider_name,
             detach_thread_bindings=detach_before_cleanup,
         )
     except Exception as exc:
         operation["result_truth"] = {
-            "sandbox_state_before": lease.get("observed_state"),
-            "sandbox_state_after": lease.get("observed_state"),
+            "sandbox_state_before": sandbox.get("observed_state"),
+            "sandbox_state_after": sandbox.get("observed_state"),
             "runtime_state_after": str(runtime.get("runtime_session_id") or "").strip() or None,
         }
         _append_event(operation, status="failed", message=str(exc))
@@ -223,7 +229,7 @@ def request_sandbox_cleanup(lease_detail: dict[str, Any]) -> dict[str, Any]:
         }
 
     operation["result_truth"] = {
-        "sandbox_state_before": lease.get("observed_state"),
+        "sandbox_state_before": sandbox.get("observed_state"),
         "sandbox_state_after": None,
         "runtime_state_after": None,
         "destroy_result": _sandbox_destroy_result(result),

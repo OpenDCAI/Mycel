@@ -629,7 +629,7 @@ def test_query_sandbox_cleanup_target_reads_structured_sandbox_target() -> None:
         "sandbox_id": "sandbox-1",
         "provider_name": "daytona_selfhost",
         "provider_env_id": "instance-sandbox",
-        "cleanup_lease_id": "lease-1",
+        "lower_runtime_handle": "lease-1",
     }
 
 

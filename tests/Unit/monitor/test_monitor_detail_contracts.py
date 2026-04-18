@@ -86,7 +86,7 @@ class FakeSandboxMonitorRepo:
             "sandbox_id": sandbox.get("sandbox_id") or sandbox_id,
             "provider_name": sandbox.get("provider_name"),
             "provider_env_id": sandbox.get("current_instance_id"),
-            "cleanup_lease_id": str(sandbox.get("lease_id") or "").strip() or None,
+            "lower_runtime_handle": str(sandbox.get("lease_id") or "").strip() or None,
         }
 
     def query_sandboxes(self):
@@ -513,7 +513,7 @@ def test_get_monitor_sandbox_detail_allows_missing_lease_bridge_for_readonly_det
     assert payload["cleanup"] == {
         "allowed": False,
         "recommended_action": None,
-        "reason": "Sandbox cleanup requires a managed runtime bridge.",
+        "reason": "Sandbox cleanup requires a managed runtime handle.",
         "operation": None,
         "recent_operations": [],
     }
@@ -552,6 +552,56 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
     assert "lease_state_before" not in payload["operation"]["result_truth"]
     assert "lease_state_after" not in payload["operation"]["result_truth"]
     assert calls == [("lease-1", "daytona", True)]
+
+
+def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_payload(monkeypatch):
+    captured: dict[str, object] = {}
+    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox(), runtime_session_id="runtime-1"))
+
+    def _record_request(payload):
+        captured.update(payload)
+        return {"accepted": True}
+
+    monkeypatch.setattr(monitor_service.monitor_operation_service, "request_sandbox_cleanup", _record_request)
+
+    assert monitor_service.request_monitor_sandbox_cleanup("sandbox-1") == {"accepted": True}
+
+    assert "lease" not in captured
+    assert "lease_id" not in captured["sandbox"]
+    assert captured["lower_runtime"] == {"handle": "lease-1"}
+
+
+def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypatch):
+    calls: list[tuple[str, str, bool]] = []
+    monkeypatch.setattr(
+        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        _record_destroy(calls),
+        raising=False,
+    )
+
+    payload = monitor_service.monitor_operation_service.request_sandbox_cleanup(
+        {
+            "sandbox": _detached_sandbox(),
+            "lower_runtime": {"handle": ""},
+            "triage": {"category": "orphan_cleanup"},
+            "provider": {"id": "daytona"},
+            "runtime": {"runtime_session_id": "runtime-1"},
+            "threads": [],
+            "sessions": [],
+            "cleanup": _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup."),
+        }
+    )
+
+    assert payload == {
+        "accepted": False,
+        "message": "Sandbox cleanup requires a managed runtime handle.",
+        "operation": None,
+        "current_truth": {
+            "sandbox_id": "sandbox-1",
+            "triage_category": "orphan_cleanup",
+        },
+    }
+    assert calls == []
 
 
 def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monkeypatch):
@@ -619,7 +669,6 @@ def test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_deleted_lease_ta
     monkeypatch.setattr(monitor_service.monitor_operation_service, "_operations_for_target", _record_operations_for_target)
 
     payload = monitor_service.monitor_operation_service.build_sandbox_cleanup_truth(
-        lease_id="lease-1",
         sandbox_id=None,
         triage={"category": "orphan_cleanup"},
         provider_name="daytona",

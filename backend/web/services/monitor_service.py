@@ -678,17 +678,16 @@ def _sandbox_detail_cleanup_truth(
     sessions: list[dict[str, Any]],
     threads: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    cleanup_lease_id = str(cleanup_target.get("cleanup_lease_id") or "").strip()
-    if not cleanup_lease_id:
+    lower_runtime_handle = str(cleanup_target.get("lower_runtime_handle") or "").strip()
+    if not lower_runtime_handle:
         return {
             "allowed": False,
             "recommended_action": None,
-            "reason": "Sandbox cleanup requires a managed runtime bridge.",
+            "reason": "Sandbox cleanup requires a managed runtime handle.",
             "operation": None,
             "recent_operations": [],
         }
     return monitor_operation_service.build_sandbox_cleanup_truth(
-        lease_id=cleanup_lease_id,
         sandbox_id=sandbox_id,
         triage=triage,
         provider_name=provider_name,
@@ -794,19 +793,16 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
     threads = payload.get("threads") or []
 
     cleanup_target = _sandbox_cleanup_target(sandbox_id)
-    cleanup_lease_id = str(cleanup_target.get("cleanup_lease_id") or "").strip()
-    lease_detail = {
-        "lease": {
-            **sandbox,
-            "lease_id": cleanup_lease_id,
-        },
+    lower_runtime_handle = str(cleanup_target.get("lower_runtime_handle") or "").strip()
+    sandbox_detail = {
+        "sandbox": sandbox,
+        "lower_runtime": {"handle": lower_runtime_handle},
         "triage": payload.get("triage"),
         "provider": provider,
         "runtime": runtime,
         "threads": threads,
         "sessions": payload.get("sessions") or [],
         "cleanup": monitor_operation_service.build_sandbox_cleanup_truth(
-            lease_id=cleanup_lease_id,
             sandbox_id=sandbox_id,
             triage=payload.get("triage"),
             provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
@@ -815,7 +811,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
             threads=threads,
         ),
     }
-    return monitor_operation_service.request_sandbox_cleanup(lease_detail)
+    return monitor_operation_service.request_sandbox_cleanup(sandbox_detail)
 
 
 def request_monitor_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str) -> dict[str, Any]:
@@ -851,8 +847,8 @@ def _sandbox_cleanup_target(sandbox_id: str) -> dict[str, Any]:
     if sandbox is None:
         raise KeyError(f"Sandbox not found: {sandbox_id}")
 
-    if not str(cleanup_target.get("cleanup_lease_id") or "").strip():
-        raise RuntimeError("monitor sandbox cleanup target missing managed runtime bridge")
+    if not str(cleanup_target.get("lower_runtime_handle") or "").strip():
+        raise RuntimeError("monitor sandbox cleanup target missing managed runtime handle")
     return cleanup_target
 
 
