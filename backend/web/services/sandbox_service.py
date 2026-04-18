@@ -628,7 +628,7 @@ def get_runtime_metrics(runtime_id: str, provider_hint: str | None = None) -> di
 
 
 def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = None) -> Any | None:
-    """Build one provider instance from sandbox config name. Used by resource_service for per-session ops."""
+    """Build one provider instance from sandbox config name. Used by resource_service for per-runtime ops."""
     providers, _ = init_providers_and_managers()
     if name in providers:
         return providers[name]

@@ -67,7 +67,7 @@ def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any
 
 
 async def prime_sandbox(agent: Any, thread_id: str) -> None:
-    """Prime sandbox session before tool calls to avoid race conditions."""
+    """Prime sandbox runtime before tool calls to avoid race conditions."""
 
     def _prime_sandbox() -> None:
         mgr = agent._sandbox.manager

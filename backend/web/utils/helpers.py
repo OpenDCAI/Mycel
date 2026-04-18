@@ -23,7 +23,7 @@ def is_virtual_thread_id(thread_id: str | None) -> bool:
 
 
 def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
-    """Extract provider instance/session id from webhook payload."""
+    """Extract provider lower-runtime id from webhook payload."""
     direct_keys = ("session_id", "sandbox_id", "instance_id", "id")
     for key in direct_keys:
         value = payload.get(key)
