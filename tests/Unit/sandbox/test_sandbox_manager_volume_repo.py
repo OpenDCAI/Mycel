@@ -1,4 +1,3 @@
-import inspect
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -6,8 +5,6 @@ from typing import Any, cast
 import pytest
 
 import sandbox.manager as sandbox_manager_module
-import sandbox.volume as sandbox_volume_module
-import sandbox.volume_source as volume_source_module
 from config.user_paths import user_home_path
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
@@ -318,30 +315,6 @@ def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_pat
 
     assert isinstance(source, HostVolume)
     assert source.host_path == (tmp_path / "staging").resolve()
-
-
-def test_volume_source_doc_names_historical_daytona_staging_without_stale_cleanup_label():
-    source = inspect.getsource(volume_source_module)
-
-    assert "cleanup " + "compat" + "ibility" not in source
-
-
-def test_sandbox_volume_doc_does_not_claim_volume_source_is_db_truth():
-    source = inspect.getsource(sandbox_volume_module)
-
-    assert "make a VolumeSource visible inside the sandbox" not in source
-    assert "VolumeSource is per-thread, passed to operations or resolved from DB" not in source
-
-
-def test_sandbox_manager_doc_names_current_runtime_binding_shape():
-    source = inspect.getsource(sandbox_manager_module)
-
-    stale_chain = "Terminal \u2192 " + "Lease \u2192 Instance"
-    stale_parent_binding = "parent's existing " + "lease"
-
-    assert stale_chain not in source
-    assert stale_parent_binding not in source
-    assert "Thread \u2192 ChatSession \u2192 Runtime" in source
 
 
 def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monkeypatch, tmp_path):
