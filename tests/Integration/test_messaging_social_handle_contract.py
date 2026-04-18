@@ -1278,6 +1278,32 @@ def test_read_messages_fails_before_mark_read_on_unknown_message_sender() -> Non
     assert marked == []
 
 
+def test_read_messages_fails_before_mark_read_on_missing_message_content() -> None:
+    registry = ToolRegistry()
+    marked: list[tuple[str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
+                {
+                    "sender_id": "agent-user-1",
+                }
+            ],
+            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+        ),
+    )
+
+    read_messages = registry.get("read_messages")
+    assert read_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        read_messages.handler(chat_id="chat-1", range="-1h:")
+
+    assert str(excinfo.value) == "Chat message from agent-user-1 is missing content"
+    assert marked == []
+
+
 def test_chat_tool_send_accepts_agent_user_target_id() -> None:
     registry = ToolRegistry()
     sent: list[tuple[str, str, str]] = []

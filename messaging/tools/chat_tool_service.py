@@ -107,9 +107,12 @@ class ChatToolService:
             sender_id = m.get("sender_id")
             name = self._message_sender_name(sender_id)
             tag = "you" if sender_id == eid else name
-            content = m.get("content", "")
             if m.get("retracted_at"):
                 content = "[已撤回]"
+            elif "content" in m:
+                content = m["content"]
+            else:
+                raise RuntimeError(f"Chat message from {sender_id} is missing content")
             lines.append(f"[{tag}]: {content}")
         return "\n".join(lines)
 
