@@ -6,7 +6,22 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.web.services import monitor_service
+from backend.web.services import monitor_operation_service, monitor_service
+
+
+def test_monitor_cleanup_truth_uses_chat_session_internal_names():
+    service_source = inspect.getsource(monitor_service)
+    operation_source = inspect.getsource(monitor_operation_service)
+
+    for old_name in (
+        "_derive_thread_summary_from_sessions",
+        "_has_active_sessions",
+        "_can_close_stale_active_sessions",
+        "has_active_sessions =",
+        "can_close_stale_active_sessions =",
+    ):
+        assert old_name not in service_source
+        assert old_name not in operation_source
 
 
 @pytest.fixture(autouse=True)
