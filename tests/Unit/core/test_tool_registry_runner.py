@@ -748,23 +748,32 @@ class TestToolRunnerErrorNormalization:
         runner = _make_runner([entry])
         req = _make_tool_call_request("Write", {})
         req.state = MagicMock()
+        started_hooks = []
+        completed_hooks = []
+        both_hooks_started = asyncio.Event()
+
+        async def wait_for_peer(label):
+            started_hooks.append(label)
+            if len(started_hooks) == 2:
+                both_hooks_started.set()
+            await asyncio.wait_for(both_hooks_started.wait(), timeout=0.5)
+            completed_hooks.append(label)
 
         async def post_hook_one(message, request):
-            await asyncio.sleep(0.05)
+            await wait_for_peer("one")
             return None
 
         async def post_hook_two(message, request):
-            await asyncio.sleep(0.05)
+            await wait_for_peer("two")
             return None
 
         req.state.post_tool_use = [post_hook_one, post_hook_two]
 
-        started = time.perf_counter()
         result = await runner.awrap_tool_call(req, AsyncMock())
-        elapsed = time.perf_counter() - started
 
         assert result.content == "plain success"
-        assert elapsed < 0.09
+        assert sorted(started_hooks) == ["one", "two"]
+        assert sorted(completed_hooks) == ["one", "two"]
 
     @pytest.mark.asyncio
     async def test_async_post_tool_use_hook_timeout_cancels_hook_and_preserves_result(self):
@@ -1419,23 +1428,32 @@ class TestToolRunnerErrorNormalization:
         runner = _make_runner([entry])
         req = _make_tool_call_request("Write", {})
         req.state = MagicMock()
+        started_hooks = []
+        completed_hooks = []
+        both_hooks_started = asyncio.Event()
+
+        async def wait_for_peer(label):
+            started_hooks.append(label)
+            if len(started_hooks) == 2:
+                both_hooks_started.set()
+            await asyncio.wait_for(both_hooks_started.wait(), timeout=0.5)
+            completed_hooks.append(label)
 
         async def hook_one(payload, request):
-            await asyncio.sleep(0.05)
+            await wait_for_peer("one")
             return None
 
         async def hook_two(payload, request):
-            await asyncio.sleep(0.05)
+            await wait_for_peer("two")
             return None
 
         req.state.pre_tool_use = [hook_one, hook_two]
 
-        started = time.perf_counter()
         result = await runner.awrap_tool_call(req, AsyncMock())
-        elapsed = time.perf_counter() - started
 
         assert result.content == "ok"
-        assert elapsed < 0.09
+        assert sorted(started_hooks) == ["one", "two"]
+        assert sorted(completed_hooks) == ["one", "two"]
 
     @pytest.mark.asyncio
     async def test_permission_checker_receives_permission_context_not_scheduler_flag(self):
