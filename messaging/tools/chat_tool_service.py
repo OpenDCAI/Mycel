@@ -140,7 +140,9 @@ class ChatToolService:
             lines = []
             for c in chats:
                 others = [member for member in c.get("members", []) if member["id"] != eid]
-                name = ", ".join(e["name"] for e in others) or "Unknown"
+                name = c.get("title")
+                if not name:
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing title")
                 unread = c.get("unread_count", 0)
                 last = c.get("last_message")
                 last_preview = f' — last: "{last["content"][:50]}"' if last else ""
