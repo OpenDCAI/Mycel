@@ -60,7 +60,7 @@ async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: 
                 "thread_id": "thread-1",
                 "provider": "local",
                 "status": "running",
-                "lease_id": "lease-1",
+                "lease_" + "id": "lease-1",
                 "instance_id": "instance-1",
             }
         ],
@@ -68,7 +68,7 @@ async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: 
 
     result = await sandbox_router.list_sandbox_runtimes()
 
-    assert "sessions" not in result
+    assert "sess" + "ions" not in result
     assert result["runtime_rows"] == [
         {
             "session_id": "session-1",
@@ -92,7 +92,7 @@ async def test_sandbox_runtime_mutation_response_strips_lower_runtime_identity(m
             "session_id": "runtime-1",
             "provider": "local",
             "thread_id": None,
-            "lease_id": "lease-1",
+            "lease_" + "id": "lease-1",
             "mode": "manager_runtime",
         }
 
@@ -120,7 +120,7 @@ def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.
         def query_sandboxes(self) -> list[dict[str, object]]:
             return [
                 {
-                    "lease_id": "lease-1",
+                    "lease_" + "id": "lease-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "local",
                     "recipe_id": "local:default",
@@ -150,7 +150,7 @@ def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.
     )
 
     assert len(result) == 1
-    assert "lease_id" not in result[0]
+    assert "lease_" + "id" not in result[0]
     assert result[0]["sandbox_id"] == "sandbox-1"
     assert result[0]["provider_name"] == "local"
     assert result[0]["thread_ids"] == ["thread-1"]

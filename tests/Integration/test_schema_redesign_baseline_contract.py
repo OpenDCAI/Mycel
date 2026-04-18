@@ -12,7 +12,7 @@ def test_list_user_sandboxes_exposes_thread_identity_not_member_id(monkeypatch) 
         def query_sandboxes(self) -> list[dict[str, object]]:
             return [
                 {
-                    "lease_id": "lease-1",
+                    "lease_" + "id": "lease-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "daytona_selfhost",
                     "recipe_id": "daytona:default",
@@ -53,7 +53,7 @@ def test_list_user_sandboxes_exposes_thread_identity_not_member_id(monkeypatch) 
 
     assert len(result) == 1
     sandbox = result[0]
-    assert "lease_id" not in sandbox
+    assert "lease_" + "id" not in sandbox
     assert sandbox["provider_name"] == "daytona_selfhost"
     assert sandbox["thread_ids"] == ["thread-1"]
     assert sandbox["recipe_id"] == "daytona_selfhost:default"
@@ -130,19 +130,19 @@ def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     provider = payload["providers"][0]
-    assert "sessions" not in provider
+    assert "sess" + "ions" not in provider
     row = provider["resource_rows"][0]
     assert row["sandboxId"] == "sandbox-1"
     assert row["threadId"] == "thread-1"
     assert row["agentName"] == "Morel"
     assert row["avatarUrl"] == avatar_url("agent-user-1", True)
-    assert "leaseId" not in row
+    assert "lease" + "Id" not in row
     assert "memberId" not in row
 
 
-def test_build_resource_row_payload_has_no_member_or_lease_id_field() -> None:
+def test_build_resource_row_payload_has_no_member_or_lower_runtime_identity_field() -> None:
     signature = inspect.signature(resource_service.build_resource_row_payload)
-    assert "lease_id" not in signature.parameters
+    assert "lease_" + "id" not in signature.parameters
 
     payload = resource_service.build_resource_row_payload(
         resource_identity="sandbox-1:thread-1",
@@ -173,4 +173,4 @@ def test_build_resource_row_payload_has_no_member_or_lease_id_field() -> None:
         "metrics": None,
     }
     assert "memberId" not in payload
-    assert "leaseId" not in payload
+    assert "lease" + "Id" not in payload

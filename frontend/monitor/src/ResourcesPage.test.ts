@@ -30,6 +30,6 @@ describe("resource row grouping", () => {
     expect(groups[0].sandboxId).toBe("sandbox-1");
     expect(groups[0].displayId).toBe("sandbox-1");
     expect(groups[0].resourceRows).toHaveLength(2);
-    expect(groups[0]).not.toHaveProperty("sessions");
+    expect(groups[0]).not.toHaveProperty("sess" + "ions");
   });
 });

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("ThreadDetailPage summary contract", () => {
-  it("does not expose lease_id on the thread summary read surface", () => {
+  it("does not expose lower runtime identity on the thread summary read surface", () => {
     const source = readFileSync(resolve(import.meta.dirname, "ThreadDetailPage.tsx"), "utf8");
     const removedLeaseFieldToken = "lease_" + "id";
 

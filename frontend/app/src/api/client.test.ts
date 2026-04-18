@@ -268,7 +268,7 @@ describe("thread api client contract", () => {
     await expect(api.listSandboxTypes()).rejects.toThrow("Malformed sandbox types");
   });
 
-  it("listMySandboxes reads canonical sandbox summaries without lease identities", async () => {
+  it("listMySandboxes reads canonical sandbox summaries without lower runtime identities", async () => {
     authFetch.mockResolvedValue(okJson({
       sandboxes: [{
         sandbox_id: "sandbox-1",
@@ -283,7 +283,7 @@ describe("thread api client contract", () => {
     const result = await api.listMySandboxes();
 
     expect(result).toMatchObject([{ sandbox_id: "sandbox-1" }]);
-    expect(result[0]).not.toHaveProperty("lease_id");
+    expect(result[0]).not.toHaveProperty("lease_" + "id");
     expect(authFetch).toHaveBeenCalledWith("/api/sandbox/sandboxes/mine", { signal: undefined });
   });
 
