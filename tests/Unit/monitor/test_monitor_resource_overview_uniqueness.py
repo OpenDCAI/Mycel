@@ -661,7 +661,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
     assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
 
 
-def test_visible_resource_session_stats_uses_sandbox_keyed_runtime_lookup(monkeypatch):
+def test_visible_resource_row_stats_uses_sandbox_keyed_runtime_lookup(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -682,12 +682,12 @@ def test_visible_resource_session_stats_uses_sandbox_keyed_runtime_lookup(monkey
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
-    stats = resource_projection_service.visible_resource_session_stats()
+    stats = resource_projection_service.visible_resource_row_stats()
 
     assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
 
 
-def test_visible_resource_session_stats_counts_running_sandbox_once_when_lease_residue_duplicates(monkeypatch):
+def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runtime_residue_duplicates(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -714,7 +714,7 @@ def test_visible_resource_session_stats_counts_running_sandbox_once_when_lease_r
     monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
-    stats = resource_projection_service.visible_resource_session_stats()
+    stats = resource_projection_service.visible_resource_row_stats()
 
     assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
 

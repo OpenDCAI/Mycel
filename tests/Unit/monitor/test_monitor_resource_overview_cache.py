@@ -22,7 +22,7 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
     cache.clear_resource_overview_cache()
     monkeypatch.setattr(
         cache.resource_projection_service,
-        "visible_resource_session_stats",
+        "visible_resource_row_stats",
         lambda: {"local": {"sessions": 0, "running": 0}},
     )
     monkeypatch.setattr(
@@ -61,7 +61,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
     cache.clear_resource_overview_cache()
     monkeypatch.setattr(
         cache.resource_projection_service,
-        "visible_resource_session_stats",
+        "visible_resource_row_stats",
         lambda: {"docker": {"sessions": 1, "running": 1}},
     )
     monkeypatch.setattr(
@@ -99,7 +99,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
 
     monkeypatch.setattr(
         cache.resource_projection_service,
-        "visible_resource_session_stats",
+        "visible_resource_row_stats",
         lambda: {"docker": {"sessions": 0, "running": 0}},
     )
     cached = cache.get_resource_overview_snapshot()
@@ -109,7 +109,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
     assert cached["triage"]["groups"][0]["key"] == "orphan_cleanup"
 
 
-def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkeypatch):
+def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(monkeypatch):
     cache.clear_resource_overview_cache()
 
     stale_payload = {
@@ -151,7 +151,7 @@ def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkey
     monkeypatch.setattr(cache.resource_projection_service, "list_resource_providers", lambda: next(calls))
     monkeypatch.setattr(
         cache.resource_projection_service,
-        "visible_resource_session_stats",
+        "visible_resource_row_stats",
         lambda: {"local": {"sessions": 1, "running": 1}},
     )
     monkeypatch.setattr(

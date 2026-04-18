@@ -386,7 +386,7 @@ def list_resource_providers() -> dict[str, Any]:
     return {"summary": summary, "providers": providers}
 
 
-def visible_resource_session_stats() -> dict[str, dict[str, int]]:
+def visible_resource_row_stats() -> dict[str, dict[str, int]]:
     sessions, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_resource_ids: set[str] = set()

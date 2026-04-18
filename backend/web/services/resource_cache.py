@@ -61,14 +61,14 @@ def _validate_resource_overview_payload(payload: dict[str, Any]) -> None:
             raise ResourceOverviewContractError(f"Malformed /api/resources payload: provider '{provider_id}' missing cardCpu contract")
 
 
-def _snapshot_drifted_from_live_sessions(snapshot: dict[str, Any]) -> bool:
-    live_stats = resource_projection_service.visible_resource_session_stats()
+def _snapshot_drifted_from_live_resource_rows(snapshot: dict[str, Any]) -> bool:
+    live_stats = resource_projection_service.visible_resource_row_stats()
     for provider in snapshot.get("providers") or []:
         provider_id = str(provider.get("id") or "")
         current = live_stats.get(provider_id, {"sessions": 0, "running": 0})
         cached_running = int(((provider.get("telemetry") or {}).get("running") or {}).get("used") or 0)
-        cached_sessions = len(provider.get("sessions") or [])
-        if cached_running != current["running"] or cached_sessions != current["sessions"]:
+        cached_resource_rows = len(provider.get("sessions") or [])
+        if cached_running != current["running"] or cached_resource_rows != current["sessions"]:
             return True
     for provider_id, current in live_stats.items():
         if current["running"] or current["sessions"]:
@@ -105,8 +105,8 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
         _validate_resource_overview_payload(cached)
         # @@@resource-cache-live-drift - durable runtime truth lands after a run
         # starts; if the cached Resources snapshot no longer matches visible
-        # sandbox/session counts, refresh instead of serving a stale zero-sandbox card.
-        if _snapshot_drifted_from_live_sessions(cached):
+        # resource row counts, refresh instead of serving a stale zero-sandbox card.
+        if _snapshot_drifted_from_live_resource_rows(cached):
             return refresh_resource_overview_sync()
         return cached
     # @@@cold-start-cache-fill - cold route fills cache once to keep first call deterministic.
