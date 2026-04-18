@@ -27,7 +27,9 @@ def make_chat_delivery_fn(app: Any):
     logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
 
     async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
-        raw_recipient_type = getattr(request.recipient_user, "type", "agent")
+        raw_recipient_type = getattr(request.recipient_user, "type", None)
+        if raw_recipient_type is None:
+            raise RuntimeError(f"Chat delivery recipient is missing user type: {request.recipient_id}")
         recipient_type = raw_recipient_type.value if isinstance(raw_recipient_type, Enum) else str(raw_recipient_type)
         envelope = AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=request.chat_id),
