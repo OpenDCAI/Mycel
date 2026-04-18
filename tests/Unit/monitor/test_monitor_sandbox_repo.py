@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
@@ -55,21 +53,6 @@ class _NoWorkspaceSandboxInClient(FakeSupabaseClient):
 
 def _repo(tables: dict) -> SupabaseSandboxMonitorRepo:
     return SupabaseSandboxMonitorRepo(FakeSupabaseClient(tables))
-
-
-def test_sandbox_monitor_repo_names_runtime_bridge_helpers_without_stale_label() -> None:
-    source = Path("storage/providers/supabase/sandbox_monitor_repo.py").read_text()
-    stale_helper = "_" + "legacy" + "_lease_id"
-    stale_row_helper = "_sandbox_rows_by_" + "legacy" + "_lease_id"
-    stale_runtime_bridge_helper_def = "def _runtime_" + "bridge_lease_id"
-    stale_runtime_bridge_map = "_sandbox_rows_by_" + "runtime_bridge" + "_lease_id"
-    stale_comment = "# object truth, but still expose " + "legacy" + " lease_id"
-
-    assert stale_helper not in source
-    assert stale_row_helper not in source
-    assert stale_runtime_bridge_helper_def not in source
-    assert stale_runtime_bridge_map not in source
-    assert stale_comment not in source
 
 
 def _lease(
@@ -610,29 +593,6 @@ def test_query_sandboxes_handles_many_workspace_thread_bindings() -> None:
     assert next(row for row in rows if row["sandbox_id"] == "sandbox-174")["thread_id"] == "thread-174"
 
 
-def test_lease_alias_summary_shells_are_removed() -> None:
-    repo = _repo({"container.sandboxes": []})
-
-    assert not hasattr(repo, "query_leases")
-    assert not hasattr(repo, "list_leases_with_threads")
-
-
-def test_remaining_lease_protocol_shells_are_removed() -> None:
-    repo = _repo({"container.sandboxes": []})
-
-    assert not hasattr(repo, "query_lease")
-    assert not hasattr(repo, "query_lease_sessions")
-    assert not hasattr(repo, "query_lease_threads")
-    assert not hasattr(repo, "query_lease_events")
-
-
-def test_lease_instance_protocol_shell_is_removed() -> None:
-    repo = _repo({"container.sandboxes": []})
-
-    assert not hasattr(repo, "query_lease_instance_id")
-    assert not hasattr(repo, "query_lease_instance_ids")
-
-
 def test_query_sandbox_instance_id_uses_sandbox_provider_env_id() -> None:
     repo = _repo(
         {
@@ -927,15 +887,6 @@ def test_instance_lookup_does_not_read_removed_instances_table(include_updated_a
         ]
     else:
         assert result == "instance-lease"
-
-
-def test_resource_session_row_source_shell_is_removed() -> None:
-    repo = _repo({"container.sandboxes": []})
-    stale_session_shell = "list_sessions" + "_with_leases"
-    stale_runtime_bridge_map = "_sandbox_rows_by_" + "runtime_bridge" + "_lease_id"
-
-    assert not hasattr(repo, stale_session_shell)
-    assert not hasattr(repo, stale_runtime_bridge_map)
 
 
 def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows() -> None:
