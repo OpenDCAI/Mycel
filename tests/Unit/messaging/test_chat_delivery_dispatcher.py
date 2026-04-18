@@ -51,7 +51,7 @@ def _member_repo(user_ids: list[str]) -> SimpleNamespace:
 
 
 def test_dispatcher_delivers_to_agent_user_ids() -> None:
-    delivered: list[tuple[str, str, str, str, str, str | None]] = []
+    delivered: list[tuple[str, str, str, str, str, str, str | None]] = []
 
     def deliver(request: ChatDeliveryRequest) -> None:
         delivered.append(
@@ -60,6 +60,7 @@ def test_dispatcher_delivers_to_agent_user_ids() -> None:
                 request.recipient_user.id,
                 request.content,
                 request.sender_name,
+                request.sender_type,
                 request.chat_id,
                 request.signal,
             )
@@ -73,7 +74,7 @@ def test_dispatcher_delivers_to_agent_user_ids() -> None:
 
     dispatcher.dispatch("chat-1", "human-user-1", "hello", [], signal="urgent")
 
-    assert delivered == [("agent-user-1", "agent-user-1", "hello", "Human", "chat-1", "urgent")]
+    assert delivered == [("agent-user-1", "agent-user-1", "hello", "Human", "human", "chat-1", "urgent")]
 
 
 def test_dispatcher_same_owner_group_delivers_without_relationship() -> None:
