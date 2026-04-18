@@ -26,7 +26,7 @@ The current codebase already treats `messaging/` as a bounded domain:
 
 - web routers depend on it
 - runtime chat tools depend on it
-- realtime bridge depends on it
+- realtime transport depends on it
 - relationship and delivery policy live under it
 
 But the ownership is still split across multiple surfaces.
@@ -63,7 +63,7 @@ This roadmap follows the same principles recorded in [AGENTS.md](/Users/lexicalm
 1. Single source of truth
 2. Ownership split and boundary clarity
 3. Proof class over helper noise
-4. Fail loud instead of preserving silent bridge shells
+4. Fail loud instead of preserving silent shell layers
 
 ## Target Ownership
 
@@ -154,7 +154,7 @@ Stopline:
 
 - no broad serializer rework
 - no frontend payload rename
-- no “bridge forever” fallback layer
+- no permanent translation layer
 
 ## Non-Goals
 

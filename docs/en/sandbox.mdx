@@ -159,13 +159,13 @@ API keys are resolved in order:
 2. Environment variable (`E2B_API_KEY`, `DAYTONA_API_KEY`, `AGENTBAY_API_KEY`)
 3. `~/.leon/config.env`
 
-## Session management
+## Sandbox runtime management
 
 ### Web UI
 
 From **Resources**:
-- Unified grid of all sessions across all providers
-- Click a session card → detail sheet with metrics and file browser
+- Unified grid of sandbox runtimes across all providers
+- Click a runtime card → detail sheet with metrics and file browser
 - Pause / Resume / Destroy via UI or API
 
 ### API endpoints
@@ -195,7 +195,7 @@ Sandbox runtime state is tracked in SQLite (`~/.leon/sandbox.db`):
 
 | Table | Purpose |
 |-------|---------|
-| `sandbox_leases` | Internal sandbox lifecycle bridge — provider, desired/observed state |
-| `sandbox_instances` | Provider-side session IDs |
-| `abstract_terminals` | Virtual terminals bound to Thread + sandbox lifecycle bridge |
+| `sandbox_leases` | Local sandbox lifecycle record — provider, desired/observed state |
+| `sandbox_instances` | Provider-side runtime IDs |
+| `abstract_terminals` | Virtual terminal pointers bound to Thread + sandbox runtime record |
 | `sandbox_resource_snapshots` | CPU, memory, disk metrics |

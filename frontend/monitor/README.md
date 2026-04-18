@@ -15,15 +15,15 @@ Local ports resolve in this order:
 - backend proxy target:
   - `LEON_BACKEND_PORT`
   - `git config --worktree --get worktree.ports.backend`
-  - fallback `8001`
+  - default `8001`
 - monitor dev server:
   - `LEON_MONITOR_PORT`
   - `git config --worktree --get worktree.ports.monitor-frontend`
-  - fallback `5174`
+  - default `5174`
 - monitor preview server:
   - `LEON_MONITOR_PREVIEW_PORT`
   - `git config --worktree --get worktree.ports.monitor-preview`
-  - fallback `4174`
+  - default `4174`
 
 The Vite `/api` proxy still fails loudly if these ports are wrong. This only fixes local-dev honesty; it does not auto-detect or heal bad config.
 
