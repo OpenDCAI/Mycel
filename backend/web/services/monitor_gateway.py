@@ -7,14 +7,12 @@ from typing import Any
 from backend.web.services import (
     monitor_evaluation_service,
     monitor_provider_runtime_service,
+    monitor_resource_service,
     monitor_sandbox_config_service,
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_thread_service,
-    resource_projection_service,
-    resource_service,
 )
-from backend.web.services.resource_cache import get_resource_overview_snapshot, refresh_resource_overview_sync
 
 
 def list_sandboxes() -> dict[str, Any]:
@@ -145,23 +143,20 @@ def get_evaluation_run_detail(run_id: str) -> dict[str, Any]:
 
 
 def get_resource_overview() -> dict[str, Any]:
-    return get_resource_overview_snapshot()
+    return monitor_resource_service.get_monitor_resource_overview()
 
 
 def refresh_resource_overview() -> dict[str, Any]:
-    # @@@manual-resource-refresh-must-probe - the monitor refresh button must fetch new
-    # sandbox metrics first; recomputing the overview alone just re-labels stale snapshots.
-    resource_service.refresh_resource_snapshots()
-    return refresh_resource_overview_sync()
+    return monitor_resource_service.refresh_monitor_resource_overview()
 
 
 def browse_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
-    return resource_service.browse_sandbox(sandbox_id, path)
+    return monitor_resource_service.browse_monitor_sandbox(sandbox_id, path)
 
 
 def read_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
-    return resource_service.read_sandbox(sandbox_id, path)
+    return monitor_resource_service.read_monitor_sandbox(sandbox_id, path)
 
 
 def list_user_resource_providers(app: Any, user_id: str) -> dict[str, Any]:
-    return resource_projection_service.list_user_resource_providers(app, user_id)
+    return monitor_resource_service.list_user_resource_providers(app, user_id)
