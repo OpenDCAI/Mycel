@@ -303,7 +303,12 @@ class MessagingService:
     def list_chats_for_user(self, user_id: str) -> list[dict[str, Any]]:
         """List all active chats for user with summary info."""
         chat_rows, members_by_chat, users_by_id, unread_by_chat = self._chat_projection_inputs(user_id)
-        latest_messages = self._messages.list_latest_by_chat_ids([chat.id for chat in chat_rows])
+        chat_ids = [chat.id for chat in chat_rows]
+        latest_messages = self._messages.list_latest_by_chat_ids(chat_ids)
+        chat_id_set = set(chat_ids)
+        for latest_chat_id in latest_messages:
+            if latest_chat_id not in chat_id_set:
+                raise RuntimeError(f"Latest message row references unrequested chat {latest_chat_id}")
         latest_sender_ids: set[str] = set()
         for row in latest_messages.values():
             sender_id = str(self._normalize_message_row(row).get("sender_id") or "")
