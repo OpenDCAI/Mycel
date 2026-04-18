@@ -364,6 +364,34 @@ def test_chat_tool_list_chats_requires_member_ids_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_group_chat_id_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "title": "Ops Room",
+                    "members": [
+                        {"id": "human-user-1", "name": "Human"},
+                        {"id": "agent-user-1", "name": "Agent"},
+                        {"id": "agent-user-2", "name": "Agent 2"},
+                    ],
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError, match="Group chat summary is missing id"):
+        list_chats.handler()
+
+
 def test_chat_tool_list_chats_requires_last_message_content_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
