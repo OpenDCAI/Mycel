@@ -94,21 +94,14 @@ async def lifespan(app: FastAPI):
 
     # Wire chat delivery after event loop is available
     # ---- Messaging system (Supabase-backed, required) ----
-    from backend.web.core.supabase_factory import create_messaging_supabase_client
     from core.agents.communication.delivery import make_chat_delivery_fn
     from messaging.delivery.resolver import HireVisitDeliveryResolver
     from messaging.relationships.service import RelationshipService
     from messaging.service import MessagingService
-    from storage.providers.supabase.messaging_repo import (
-        SupabaseChatMemberRepo,
-        SupabaseMessagesRepo,
-        SupabaseRelationshipRepo,
-    )
 
-    _msg_supabase = create_messaging_supabase_client()
-    _chat_member_repo = SupabaseChatMemberRepo(_msg_supabase)
-    _messages_repo = SupabaseMessagesRepo(_msg_supabase)
-    app.state.relationship_repo = SupabaseRelationshipRepo(_msg_supabase)
+    _chat_member_repo = storage_container.chat_member_repo()
+    _messages_repo = storage_container.messages_repo()
+    app.state.relationship_repo = storage_container.relationship_repo()
     app.state.chat_member_repo = _chat_member_repo
     app.state.messages_repo = _messages_repo
 

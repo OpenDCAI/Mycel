@@ -63,13 +63,3 @@ def create_supabase_auth_client():
         # @@@direct-gotrue - local auth may bypass Kong and hit GoTrue directly at /token.
         return SyncGoTrueClient(url=auth_url, headers={"apikey": key}, http_client=http_client)
     return create_client(url, key, options=ClientOptions(httpx_client=http_client))
-
-
-def create_messaging_supabase_client():
-    """Build a server-side Supabase client for messaging repos.
-
-    @@@messaging-runtime-schema - messaging is part of the same destructive
-    schema redesign as users/threads, so this client must honor LEON_DB_SCHEMA
-    instead of silently drifting back to public.
-    """
-    return _create_storage_client(schema=os.getenv("LEON_DB_SCHEMA", "public"))

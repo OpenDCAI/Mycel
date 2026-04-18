@@ -1,6 +1,6 @@
 from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
-from backend.web.core.supabase_factory import create_messaging_supabase_client, create_public_supabase_client, create_supabase_auth_client
+from backend.web.core.supabase_factory import create_public_supabase_client, create_supabase_auth_client
 
 
 def test_create_supabase_auth_client_prefers_auth_url(monkeypatch):
@@ -23,43 +23,6 @@ def test_create_supabase_auth_client_uses_direct_gotrue_for_auth_url(monkeypatch
 
     assert isinstance(client, SyncGoTrueClient)
     assert client._url == "http://auth.example.test"
-
-
-def test_create_messaging_supabase_client_uses_service_role_key(monkeypatch):
-    captured: dict[str, object] = {}
-
-    def fake_create_client(url, key, options=None):
-        captured["url"] = url
-        captured["key"] = key
-        captured["options"] = options
-        return object()
-
-    monkeypatch.setenv("SUPABASE_INTERNAL_URL", "http://storage.example.test")
-    monkeypatch.setenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
-    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
-    monkeypatch.setattr("backend.web.core.supabase_factory.create_client", fake_create_client)
-
-    create_messaging_supabase_client()
-
-    assert captured["url"] == "http://storage.example.test"
-    assert captured["key"] == "service-role-key"
-
-
-def test_create_messaging_supabase_client_uses_runtime_schema(monkeypatch):
-    captured: dict[str, object] = {}
-
-    def fake_create_client(url, key, options=None):
-        captured["options"] = options
-        return object()
-
-    monkeypatch.setenv("SUPABASE_INTERNAL_URL", "http://storage.example.test")
-    monkeypatch.setenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
-    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
-    monkeypatch.setattr("backend.web.core.supabase_factory.create_client", fake_create_client)
-
-    create_messaging_supabase_client()
-
-    assert getattr(captured["options"], "schema", None) == "staging"
 
 
 def test_create_public_supabase_client_forces_public_schema(monkeypatch):

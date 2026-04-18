@@ -48,6 +48,9 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "sandbox_repo": ("storage.providers.supabase.sandbox_repo", "SupabaseSandboxRepo"),
     "recipe_repo": ("storage.providers.supabase.recipe_repo", "SupabaseRecipeRepo"),
     "chat_repo": ("storage.providers.supabase.chat_repo", "SupabaseChatRepo"),
+    "chat_member_repo": ("storage.providers.supabase.messaging_repo", "SupabaseChatMemberRepo"),
+    "messages_repo": ("storage.providers.supabase.messaging_repo", "SupabaseMessagesRepo"),
+    "relationship_repo": ("storage.providers.supabase.messaging_repo", "SupabaseRelationshipRepo"),
     "invite_code_repo": ("storage.providers.supabase.invite_code_repo", "SupabaseInviteCodeRepo"),
     "user_settings_repo": ("storage.providers.supabase.user_settings_repo", "SupabaseUserSettingsRepo"),
     "agent_config_repo": ("storage.providers.supabase.agent_config_repo", "SupabaseAgentConfigRepo"),
@@ -122,6 +125,15 @@ class StorageContainer:
 
     def chat_repo(self) -> ChatRepo:
         return self._build("chat_repo")
+
+    def chat_member_repo(self) -> Any:
+        return self._build("chat_member_repo")
+
+    def messages_repo(self) -> Any:
+        return self._build("messages_repo")
+
+    def relationship_repo(self) -> Any:
+        return self._build("relationship_repo")
 
     def invite_code_repo(self) -> InviteCodeRepo:
         return self._build("invite_code_repo")
