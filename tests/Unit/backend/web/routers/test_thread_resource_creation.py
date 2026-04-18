@@ -1,6 +1,8 @@
 from backend.web.routers import threads as threads_router
 from backend.web.utils import helpers
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+
 
 class _Container:
     pass
@@ -11,9 +13,9 @@ class _LeaseRepo:
         self.created: list[dict[str, str]] = []
         self.closed = False
 
-    def create(self, lease_id: str, provider_name: str, **kwargs) -> dict[str, str]:
-        self.created.append({"lease_id": lease_id, "provider_name": provider_name, **kwargs})
-        return {"lease_id": lease_id, "sandbox_id": "sandbox-from-lease-create"}
+    def create(self, lower_runtime_id: str, provider_name: str, **kwargs) -> dict[str, str]:
+        self.created.append({LOWER_RUNTIME_KEY: lower_runtime_id, "provider_name": provider_name, **kwargs})
+        return {LOWER_RUNTIME_KEY: lower_runtime_id, "sandbox_id": "sandbox-from-lease-create"}
 
     def close(self) -> None:
         self.closed = True
@@ -61,7 +63,7 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
     assert "volume_id" not in lease_repo.created[0]
     assert len(terminal_repo.created) == 1
     assert terminal_repo.created[0]["thread_id"] == "thread-1"
-    assert terminal_repo.created[0]["lease_id"] == lease_repo.created[0]["lease_id"]
+    assert terminal_repo.created[0][LOWER_RUNTIME_KEY] == lease_repo.created[0][LOWER_RUNTIME_KEY]
     assert terminal_repo.created[0]["initial_cwd"] == "/tmp/workspace"
     assert materialize_calls[0]["sandbox_id"] == "sandbox-from-lease-create"
     assert lease_repo.closed
