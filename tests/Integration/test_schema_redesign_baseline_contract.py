@@ -72,7 +72,7 @@ def test_list_user_sandboxes_exposes_thread_identity_not_member_id(monkeypatch) 
     assert "member_id" not in sandbox["agents"][0]
 
 
-def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> None:
+def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
     class _State:
         thread_repo = object()
         user_repo = object()
@@ -129,13 +129,15 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
 
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
-    session = payload["providers"][0]["sessions"][0]
-    assert session["sandboxId"] == "sandbox-1"
-    assert session["threadId"] == "thread-1"
-    assert session["agentName"] == "Morel"
-    assert session["avatarUrl"] == avatar_url("agent-user-1", True)
-    assert "leaseId" not in session
-    assert "memberId" not in session
+    provider = payload["providers"][0]
+    assert "sessions" not in provider
+    row = provider["resource_rows"][0]
+    assert row["sandboxId"] == "sandbox-1"
+    assert row["threadId"] == "thread-1"
+    assert row["agentName"] == "Morel"
+    assert row["avatarUrl"] == avatar_url("agent-user-1", True)
+    assert "leaseId" not in row
+    assert "memberId" not in row
 
 
 def test_build_resource_row_payload_has_no_member_or_lease_id_field() -> None:
