@@ -8,8 +8,8 @@ from fastapi import APIRouter, HTTPException, Query
 from backend.web.services.sandbox_service import init_providers_and_managers
 from backend.web.utils.helpers import _get_container, extract_webhook_instance_id
 from sandbox.control_plane_repos import resolve_sandbox_db_path
-from sandbox.lease import lease_from_row
-from storage.runtime import build_lease_repo as make_lease_repo
+from sandbox.lease import lease_from_row as lower_runtime_from_row
+from storage.runtime import build_lease_repo as make_lower_runtime_repo
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -20,21 +20,21 @@ def _public_provider_event(row: dict[str, Any]) -> dict[str, Any]:
 
 @router.post("/{provider_name}")
 async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Ingest provider webhook: persist provider event and converge lease observed state."""
+    """Ingest provider webhook and converge matched lower-runtime state."""
     instance_id = extract_webhook_instance_id(payload)
     if not instance_id:
         raise HTTPException(400, "Webhook payload missing instance/session id")
 
     event_type = str(payload.get("event") or payload.get("type") or "unknown")
-    lease_repo = make_lease_repo()
+    runtime_repo = make_lower_runtime_repo()
     event_repo = _get_container().provider_event_repo()
     try:
-        lease_row = await asyncio.to_thread(lease_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
-        lease = lease_from_row(lease_row, resolve_sandbox_db_path()) if lease_row else None
-        matched_runtime_handle = lease.lease_id if lease else None
-        matched_sandbox_id = str((lease_row or {}).get("sandbox_id") or "").strip() or None
+        runtime_row = await asyncio.to_thread(runtime_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
+        lower_runtime = lower_runtime_from_row(runtime_row, resolve_sandbox_db_path()) if runtime_row else None
+        matched_runtime_handle = lower_runtime.lease_id if lower_runtime else None
+        matched_sandbox_id = str((runtime_row or {}).get("sandbox_id") or "").strip() or None
 
-        # @@@webhook-invalidation-only - Webhook is optimization only: persist event + mark lease stale.
+        # @@@webhook-runtime-observation - Webhook is optimization only: persist event + observe lower-runtime state.
         await asyncio.to_thread(
             event_repo.record,
             provider_name=provider_name,
@@ -45,10 +45,10 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
             matched_sandbox_id=matched_sandbox_id,
         )
     finally:
-        lease_repo.close()
+        runtime_repo.close()
         event_repo.close()
 
-    if not lease:
+    if not lower_runtime:
         return {
             "ok": True,
             "provider": provider_name,
@@ -71,7 +71,7 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     if not manager:
         raise HTTPException(503, f"Provider manager unavailable: {provider_name}")
     await asyncio.to_thread(
-        lease.apply,
+        lower_runtime.apply,
         manager.provider,
         event_type="observe.status",
         source="webhook",

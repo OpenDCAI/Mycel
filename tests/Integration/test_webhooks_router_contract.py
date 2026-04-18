@@ -7,7 +7,7 @@ from backend.web.routers import webhooks
 
 @pytest.mark.asyncio
 async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _LeaseRepo:
+    class _RuntimeRepo:
         db_path = "/tmp/fake-sandbox.db"
 
         def find_by_instance(self, *, provider_name: str, instance_id: str):
@@ -36,7 +36,7 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
             return self._event_repo
 
     event_repo = _EventRepo()
-    monkeypatch.setattr(webhooks, "make_lease_repo", lambda: _LeaseRepo())
+    monkeypatch.setattr(webhooks, "make_lower_runtime_repo", lambda: _RuntimeRepo())
     monkeypatch.setattr(webhooks, "_get_container", lambda: _Container(event_repo))
 
     payload = await webhooks.ingest_provider_webhook(
@@ -64,8 +64,10 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lease(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    class _LeaseRepo:
+async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lower_runtime(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    class _RuntimeRepo:
         def find_by_instance(self, *, provider_name: str, instance_id: str):
             assert provider_name == "local"
             assert instance_id == "inst-2"
@@ -91,7 +93,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
         def provider_event_repo(self) -> _EventRepo:
             return self._event_repo
 
-    class _Lease:
+    class _LowerRuntime:
         lease_id = "lease-1"
 
         def __init__(self) -> None:
@@ -113,19 +115,19 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
 
     expected_db_path = tmp_path / "sandbox.db"
     event_repo = _EventRepo()
-    lease = _Lease()
+    lower_runtime = _LowerRuntime()
 
     monkeypatch.setattr(webhooks, "resolve_sandbox_db_path", lambda: expected_db_path, raising=False)
-    monkeypatch.setattr(webhooks, "make_lease_repo", lambda: _LeaseRepo())
+    monkeypatch.setattr(webhooks, "make_lower_runtime_repo", lambda: _RuntimeRepo())
     monkeypatch.setattr(webhooks, "_get_container", lambda: _Container(event_repo))
     monkeypatch.setattr(webhooks, "init_providers_and_managers", lambda: ({}, {"local": _Manager()}))
 
-    def _fake_lease_from_row(row, db_path):
+    def _fake_lower_runtime_from_row(row, db_path):
         assert row == {"lease_id": "lease-1", "sandbox_id": "sandbox-1"}
         assert db_path == expected_db_path
-        return lease
+        return lower_runtime
 
-    monkeypatch.setattr(webhooks, "lease_from_row", _fake_lease_from_row)
+    monkeypatch.setattr(webhooks, "lower_runtime_from_row", _fake_lower_runtime_from_row)
 
     payload = await webhooks.ingest_provider_webhook(
         "local",
@@ -144,9 +146,9 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
             "matched_sandbox_id": "sandbox-1",
         }
     ]
-    assert lease.applied == [
+    assert lower_runtime.applied == [
         {
-            "provider": lease.applied[0]["provider"],
+            "provider": lower_runtime.applied[0]["provider"],
             "event_type": "observe.status",
             "source": "webhook",
             "payload": {"status": "running", "raw_event_type": "provider.running"},
