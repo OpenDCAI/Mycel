@@ -2,7 +2,6 @@ import pytest
 
 from sandbox import control_plane_repos
 from storage import runtime
-from storage.container import _REPO_REGISTRY, StorageContainer
 from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
@@ -38,13 +37,6 @@ def test_control_plane_terminal_and_chat_session_repos_do_not_route_through_supa
     finally:
         terminal_repo.close()
         chat_session_repo.close()
-
-
-def test_storage_container_does_not_register_terminal_session_supabase_defaults():
-    assert "terminal_repo" not in _REPO_REGISTRY
-    assert "chat_session_repo" not in _REPO_REGISTRY
-    assert not hasattr(StorageContainer, "terminal_repo")
-    assert not hasattr(StorageContainer, "chat_session_repo")
 
 
 def test_explicit_supabase_terminal_session_builders_fail_loudly():

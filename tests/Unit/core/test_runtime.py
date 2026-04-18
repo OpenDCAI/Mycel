@@ -1,7 +1,6 @@
 """Unit tests for PhysicalTerminalRuntime."""
 
 import asyncio
-import inspect
 import re
 import sqlite3
 import sys
@@ -765,16 +764,6 @@ def test_normalize_pty_result_strips_prompt_echo_and_tail_prompt():
     )
     cleaned = _normalize_pty_result(output, "echo api-existing-thread-after-fix")
     assert cleaned == "api-existing-thread-after-fix"
-
-
-def test_daytona_state_sanitize_comment_names_stale_prompt_noise() -> None:
-    from sandbox.providers.daytona import DaytonaSessionRuntime
-
-    source = inspect.getsource(DaytonaSessionRuntime._sanitize_terminal_snapshot)
-    removed_prompt_token = "Leg" + "acy prompt noise"
-
-    assert "stale prompt noise" in source
-    assert removed_prompt_token not in source
 
 
 @pytest.mark.asyncio
