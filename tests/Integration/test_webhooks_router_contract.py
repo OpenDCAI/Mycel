@@ -163,3 +163,46 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
             "payload": {"status": "running", "raw_event_type": "provider.running"},
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_list_provider_events_strips_lower_lease_match_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _EventRepo:
+        def list_recent(self, limit: int):
+            assert limit == 25
+            return [
+                {
+                    "event_id": 1,
+                    "provider_name": "daytona",
+                    "instance_id": "instance-1",
+                    "event_type": "started",
+                    "matched_lease_id": "lease-1",
+                    "matched_sandbox_id": "sandbox-1",
+                    "payload": {"ok": True},
+                }
+            ]
+
+        def close(self) -> None:
+            return None
+
+    class _Container:
+        def provider_event_repo(self) -> _EventRepo:
+            return _EventRepo()
+
+    monkeypatch.setattr(webhooks, "_get_container", lambda: _Container())
+
+    payload = await webhooks.list_provider_events(limit=25)
+
+    assert payload == {
+        "items": [
+            {
+                "event_id": 1,
+                "provider_name": "daytona",
+                "instance_id": "instance-1",
+                "event_type": "started",
+                "matched_sandbox_id": "sandbox-1",
+                "payload": {"ok": True},
+            }
+        ],
+        "count": 1,
+    }

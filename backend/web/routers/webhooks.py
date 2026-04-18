@@ -14,6 +14,10 @@ from storage.runtime import build_lease_repo as make_lease_repo
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
+def _public_provider_event(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in row.items() if key != "matched_lease_id"}
+
+
 @router.post("/{provider_name}")
 async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Ingest provider webhook: persist provider event and converge lease observed state."""
@@ -90,4 +94,4 @@ async def list_provider_events(limit: int = Query(default=100, ge=1, le=1000)) -
         items = await asyncio.to_thread(repo.list_recent, limit)
     finally:
         repo.close()
-    return {"items": items, "count": len(items)}
+    return {"items": [_public_provider_event(item) for item in items], "count": len(items)}
