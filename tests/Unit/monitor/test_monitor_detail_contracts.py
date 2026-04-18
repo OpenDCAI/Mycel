@@ -8,6 +8,7 @@ import pytest
 
 from backend.web.services import (
     monitor_operation_service,
+    monitor_provider_runtime_service,
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_service,
@@ -66,8 +67,8 @@ def _default_monitor_thread_repo(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _clear_monitor_cleanup_operations():
-    monitor_service.monitor_operation_service._OPERATIONS.clear()
-    monitor_service.monitor_operation_service._TARGET_INDEX.clear()
+    monitor_operation_service._OPERATIONS.clear()
+    monitor_operation_service._TARGET_INDEX.clear()
 
 
 def _sandbox_row(**overrides):
@@ -218,7 +219,7 @@ def _stub_thread_detail(monkeypatch, *, owner=None, trajectory=None):
 
 def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch):
     monkeypatch.setattr(
-        monitor_service,
+        monitor_provider_runtime_service,
         "get_resource_overview_snapshot",
         lambda: {
             "providers": [
@@ -247,7 +248,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
     assert "thread_ids" not in payload
     assert payload["runtime_session_ids"] == ["runtime-1"]
 
-    assert monitor_service._resource_row_values(
+    assert monitor_provider_runtime_service._resource_row_values(
         [
             {"sandboxId": "sandbox-2"},
             {"sandboxId": ""},
@@ -260,7 +261,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
 
 def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
     monkeypatch.setattr(
-        monitor_service,
+        monitor_provider_runtime_service,
         "get_resource_overview_snapshot",
         lambda: {
             "providers": [
@@ -289,7 +290,7 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
 
 
 def test_get_monitor_runtime_detail_uses_resource_row_local_naming():
-    source = inspect.getsource(monitor_service.get_monitor_runtime_detail)
+    source = inspect.getsource(monitor_provider_runtime_service.get_monitor_runtime_detail)
     old_loop_token = "for " + "session in provider.get"
     old_runtime_payload_token = '"runtime": ' + "session"
 
@@ -438,7 +439,7 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
 
 
 def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypatch):
-    monkeypatch.setattr(monitor_service, "get_resource_overview_snapshot", lambda: {"providers": []})
+    monkeypatch.setattr(monitor_provider_runtime_service, "get_resource_overview_snapshot", lambda: {"providers": []})
 
     with pytest.raises(KeyError, match="Provider not found: ghost"):
         monitor_service.get_monitor_provider_detail("ghost")
@@ -609,7 +610,7 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
         captured.update(payload)
         return {"accepted": True}
 
-    monkeypatch.setattr(monitor_service.monitor_operation_service, "request_sandbox_cleanup", _record_request)
+    monkeypatch.setattr(monitor_operation_service, "request_sandbox_cleanup", _record_request)
 
     assert monitor_service.request_monitor_sandbox_cleanup("sandbox-1") == {"accepted": True}
 
@@ -626,7 +627,7 @@ def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypa
         raising=False,
     )
 
-    payload = monitor_service.monitor_operation_service.request_sandbox_cleanup(
+    payload = monitor_operation_service.request_sandbox_cleanup(
         {
             "sandbox": _detached_sandbox(),
             "lower_runtime": {"handle": ""},
@@ -677,7 +678,7 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
 def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(monkeypatch):
     calls: list[tuple[str, str, str, str | None]] = []
     monkeypatch.setattr(
-        monitor_service,
+        monitor_provider_runtime_service,
         "list_monitor_provider_orphan_runtimes",
         lambda: {
             "count": 1,
@@ -741,7 +742,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
 def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(monkeypatch):
     calls: list[tuple[str, str, str | None]] = []
     monkeypatch.setattr(
-        monitor_service,
+        monitor_provider_runtime_service,
         "list_monitor_provider_orphan_runtimes",
         lambda: {
             "count": 1,
@@ -777,9 +778,11 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
 
 
 def test_list_monitor_provider_orphan_runtimes_returns_provider_orphans(monkeypatch):
-    monkeypatch.setattr(monitor_service.sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": object()}))
     monkeypatch.setattr(
-        monitor_service.sandbox_service,
+        monitor_provider_runtime_service.sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": object()})
+    )
+    monkeypatch.setattr(
+        monitor_provider_runtime_service.sandbox_service,
         "load_provider_orphan_runtimes",
         lambda _managers: [
             {"session_id": "orphan-1", "provider": "daytona", "source": "provider_orphan", "status": "running"},
@@ -944,7 +947,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
 
 def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeypatch):
     monkeypatch.setattr(
-        monitor_service.monitor_operation_service,
+        monitor_operation_service,
         "get_operation_detail",
         lambda _operation_id: {
             "operation": {"operation_id": "op-1", "kind": "sandbox_cleanup", "status": "succeeded"},

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.web.services import monitor_service, sandbox_service
+from backend.web.services import monitor_provider_runtime_service, monitor_service, sandbox_service
 
 
 class _FailingManager:
@@ -21,7 +21,7 @@ def _provider_runtime(runtime_id: str, status: str = "paused"):
 
 
 def test_provider_orphan_runtime_cleanup_uses_runtime_truth_name():
-    source = inspect.getsource(monitor_service.request_monitor_provider_orphan_runtime_cleanup)
+    source = inspect.getsource(monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup)
     removed_name = "session" + "_truth"
 
     assert removed_name not in source
