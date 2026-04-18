@@ -167,6 +167,9 @@ class MessagingService:
         ai_metadata: dict[str, Any] | None = None,
         enforce_caught_up: bool = False,
     ) -> dict[str, Any]:
+        if self._resolve_display_user(sender_id) is None:
+            raise RuntimeError(f"Chat message sender identity not found: {sender_id}")
+
         msg_id = str(uuid.uuid4())
 
         row: dict[str, Any] = {

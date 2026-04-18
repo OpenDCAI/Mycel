@@ -341,6 +341,24 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
     }
 
 
+def test_messaging_service_send_fails_before_persisting_unknown_sender() -> None:
+    created_rows: list[dict[str, Any]] = []
+    published: list[dict[str, object]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
+        messages_repo=SimpleNamespace(create=lambda row: created_rows.append(row) or row),
+        user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
+        event_bus=SimpleNamespace(publish=lambda _chat_id, payload: published.append(payload)),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat message sender identity not found: missing-user"):
+        service.send("chat-1", "missing-user", "hello")
+
+    assert created_rows == []
+    assert published == []
+
+
 def test_messaging_service_list_message_responses_projects_sender_name_from_agent_user_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(),
