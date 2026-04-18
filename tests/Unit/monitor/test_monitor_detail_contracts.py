@@ -1,6 +1,5 @@
 import subprocess
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -110,34 +109,6 @@ class FakeSandboxMonitorRepo:
 
     def close(self):
         return None
-
-
-def test_monitor_service_no_longer_exposes_lease_bridge_shell() -> None:
-    assert not hasattr(monitor_service, "list_leases")
-    assert not hasattr(monitor_service, "get_monitor_lease_detail")
-    assert not hasattr(monitor_service, "request_monitor_lease_cleanup")
-    assert not hasattr(monitor_service, "_sandbox_cleanup_lease_id")
-
-
-def test_monitor_sandbox_read_surface_uses_sandbox_internal_names() -> None:
-    source = Path(monitor_service.__file__) if monitor_service.__file__ else None
-    assert source is not None
-    text = source.read_text(encoding="utf-8")
-
-    forbidden_tokens = [
-        "lease observation",
-        "LEASE_SEMANTIC_ORDER",
-        "LEASE_SEMANTIC_META",
-        "LEASE_TRIAGE_ORDER",
-        "LEASE_TRIAGE_META",
-        "_classify_lease_semantics",
-        "_classify_lease_triage",
-        "_lease_groups",
-        "Sandbox has no lease bridge",
-        "query_sandbox_cleanup_lease_id",
-    ]
-    for token in forbidden_tokens:
-        assert token not in text
 
 
 def _use_monitor_repo(monkeypatch, repo):

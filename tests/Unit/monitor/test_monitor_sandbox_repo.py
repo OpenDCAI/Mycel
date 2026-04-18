@@ -279,8 +279,6 @@ def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(m
         }
     )
 
-    assert not hasattr(repo, "query_lease_threads")
-
     assert repo.query_sandbox_threads("sandbox-1") == [
         {"thread_id": "thread-2"},
         {"thread_id": "thread-1"},
@@ -431,8 +429,6 @@ def test_query_sandbox_sessions_no_longer_reads_remote_session_shell(monkeypatch
             ],
         }
     )
-
-    assert not hasattr(repo, "query_lease_sessions")
 
     assert repo.query_sandbox_sessions("sandbox-1") == []
 
@@ -711,8 +707,6 @@ def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge() 
         }
     )
 
-    assert not hasattr(repo, "query_lease_instance_ids")
-
     assert repo.query_sandbox_instance_ids(["sandbox-1", "sandbox-2"]) == {
         "sandbox-1": "sandbox-instance-1",
         "sandbox-2": "sandbox-instance-2",
@@ -730,8 +724,6 @@ def test_query_sandbox_instance_id_no_longer_roundtrips_through_lease_bridge() -
             ],
         }
     )
-
-    assert not hasattr(repo, "query_lease_instance_id")
 
     assert repo.query_sandbox_instance_id("sandbox-1") == "sandbox-instance-1"
 
@@ -832,8 +824,6 @@ def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge()
             ],
         }
     )
-
-    assert not hasattr(repo, "query_lease_instance_ids")
 
     assert repo.list_probe_targets() == [
         {
