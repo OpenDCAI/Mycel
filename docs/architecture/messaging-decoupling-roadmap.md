@@ -154,7 +154,7 @@ Stopline:
 
 - no broad serializer rework
 - no frontend payload rename
-- no “compat forever” fallback layer
+- no “bridge forever” fallback layer
 
 ## Non-Goals
 
