@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.web.services import monitor_provider_runtime_service, monitor_service, sandbox_service
+from backend.web.services import monitor_provider_runtime_service, sandbox_service
 
 
 class _FailingManager:
@@ -33,7 +33,7 @@ def test_monitor_provider_orphan_runtimes_do_not_refresh_all_managed_runtime_row
 
     monkeypatch.setattr(sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": manager}))
 
-    assert monitor_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
+    assert monitor_provider_runtime_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
 
 
 def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():

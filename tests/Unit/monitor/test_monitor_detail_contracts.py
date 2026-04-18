@@ -13,14 +13,17 @@ from backend.web.services import (
     monitor_sandbox_config_service,
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
-    monitor_service,
     monitor_thread_service,
 )
 
 
 def test_monitor_cleanup_truth_uses_chat_session_internal_names():
-    service_source = inspect.getsource(monitor_service)
-    operation_source = inspect.getsource(monitor_operation_service)
+    sources = (
+        inspect.getsource(monitor_operation_service),
+        inspect.getsource(monitor_sandbox_detail_service),
+        inspect.getsource(monitor_sandbox_projection_service),
+        inspect.getsource(monitor_thread_service),
+    )
 
     for old_name in (
         "_derive_thread_summary_from_sessions",
@@ -29,17 +32,11 @@ def test_monitor_cleanup_truth_uses_chat_session_internal_names():
         "has_active_sessions =",
         "can_close_stale_active_sessions =",
     ):
-        assert old_name not in service_source
-        assert old_name not in operation_source
+        assert all(old_name not in source for source in sources)
 
 
 @pytest.fixture(autouse=True)
 def _default_live_thread_ids(monkeypatch):
-    monkeypatch.setattr(
-        monitor_service,
-        "_live_thread_ids",
-        lambda thread_ids: {str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()},
-    )
     monkeypatch.setattr(
         monitor_sandbox_projection_service,
         "_live_thread_ids",
@@ -243,7 +240,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
         },
     )
 
-    payload = monitor_service.get_monitor_provider_detail("daytona")
+    payload = monitor_provider_runtime_service.get_monitor_provider_detail("daytona")
 
     assert payload["provider"]["id"] == "daytona"
     assert payload["sandbox_ids"] == ["sandbox-1", "sandbox-2"]
@@ -285,7 +282,7 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
         },
     )
 
-    payload = monitor_service.get_monitor_runtime_detail("runtime-1")
+    payload = monitor_provider_runtime_service.get_monitor_runtime_detail("runtime-1")
 
     assert payload["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in payload
@@ -312,7 +309,7 @@ def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_pa
         ],
     )
 
-    payload = monitor_service.get_monitor_sandbox_configs()
+    payload = monitor_sandbox_config_service.get_monitor_sandbox_configs()
 
     assert payload == {
         "source": "runtime_sandbox_inventory",
@@ -342,7 +339,7 @@ def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monk
     )
     monkeypatch.setattr(monitor_evaluation_service, "EVAL_SCENARIO_DIR", scenario_dir)
 
-    payload = monitor_service.get_monitor_evaluation_scenarios()
+    payload = monitor_evaluation_service.get_monitor_evaluation_scenarios()
 
     assert payload == {
         "items": [
@@ -369,7 +366,7 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
 
     monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
 
-    payload = monitor_service.create_monitor_evaluation_batch(
+    payload = monitor_evaluation_service.create_monitor_evaluation_batch(
         submitted_by_user_id="owner-1",
         agent_user_id="agent-1",
         scenario_ids=["scenario-1"],
@@ -425,7 +422,7 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
     monkeypatch.setattr(monitor_evaluation_service, "EVAL_SCENARIO_DIR", scenario_dir)
     monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
 
-    payload = monitor_service.start_monitor_evaluation_batch(
+    payload = monitor_evaluation_service.start_monitor_evaluation_batch(
         "batch-1",
         base_url="http://testserver",
         token="token-1",
@@ -445,7 +442,7 @@ def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypa
     monkeypatch.setattr(monitor_provider_runtime_service, "get_resource_overview_snapshot", lambda: {"providers": []})
 
     with pytest.raises(KeyError, match="Provider not found: ghost"):
-        monitor_service.get_monitor_provider_detail("ghost")
+        monitor_provider_runtime_service.get_monitor_provider_detail("ghost")
 
 
 def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
@@ -457,7 +454,7 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
         ),
     )
 
-    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+    payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
     assert payload["provider"] == {"id": "daytona", "name": "daytona"}
@@ -489,7 +486,7 @@ def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_
 
     monkeypatch.setattr(monitor_sandbox_detail_service, "build_thread_repo", lambda: _ThreadRepo())
 
-    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+    payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert payload["threads"] == [{"thread_id": "thread-main"}]
 
@@ -511,7 +508,7 @@ def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
     )
     monkeypatch.setattr(monitor_sandbox_projection_service, "_live_thread_ids", lambda thread_ids: set())
 
-    payload = monitor_service.list_monitor_sandboxes()
+    payload = monitor_sandbox_projection_service.list_monitor_sandboxes()
 
     assert payload["source"] == "sandbox_canonical"
     assert payload["items"][0]["sandbox_id"] == "sandbox-1"
@@ -528,7 +525,7 @@ def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
         ),
     )
 
-    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+    payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert payload["source"] == "sandbox_canonical"
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
@@ -540,7 +537,7 @@ def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
 def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
     _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox()))
 
-    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+    payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
     assert payload["cleanup"] == _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup.")
@@ -557,7 +554,7 @@ def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_read
         ),
     )
 
-    payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+    payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
     assert payload["runtime"]["runtime_session_id"] == "runtime-1"
@@ -586,7 +583,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         raising=False,
     )
 
-    payload = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
+    payload = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1")
 
     assert payload["accepted"] is True
     assert payload["message"] == "Sandbox cleanup completed."
@@ -615,7 +612,7 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
 
     monkeypatch.setattr(monitor_operation_service, "request_sandbox_cleanup", _record_request)
 
-    assert monitor_service.request_monitor_sandbox_cleanup("sandbox-1") == {"accepted": True}
+    assert monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1") == {"accepted": True}
 
     assert "lease" not in captured
     assert "lease_id" not in captured["sandbox"]
@@ -669,8 +666,8 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
         raising=False,
     )
 
-    created = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
-    detail = monitor_service.get_monitor_sandbox_detail("sandbox-1")
+    created = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1")
+    detail = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert detail["cleanup"]["operation"]["operation_id"] == created["operation"]["operation_id"]
     assert detail["cleanup"]["operation"]["target_type"] == "sandbox"
@@ -713,14 +710,14 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
         raising=False,
     )
 
-    payload = monitor_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
+    payload = monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
 
     assert payload["accepted"] is True
     assert payload["message"] == "Provider orphan runtime cleanup completed."
     assert payload["operation"]["kind"] == "provider_orphan_runtime_cleanup"
     assert payload["operation"]["status"] == "succeeded"
     assert payload["operation"]["target_type"] == "provider_orphan_runtime"
-    detail = monitor_service.get_monitor_operation_detail(payload["operation"]["operation_id"])
+    detail = monitor_sandbox_detail_service.get_monitor_operation_detail(payload["operation"]["operation_id"])
     destroy_result = detail["result_truth"]["destroy_result"]
     assert detail["target"] == {
         "target_type": "provider_orphan_runtime",
@@ -770,7 +767,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
         raising=False,
     )
 
-    payload = monitor_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
+    payload = monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
 
     assert payload["accepted"] is False
     assert payload["operation"] is None
@@ -792,7 +789,7 @@ def test_list_monitor_provider_orphan_runtimes_returns_provider_orphans(monkeypa
         ],
     )
 
-    payload = monitor_service.list_monitor_provider_orphan_runtimes()
+    payload = monitor_provider_runtime_service.list_monitor_provider_orphan_runtimes()
 
     assert payload == {
         "count": 1,
@@ -816,7 +813,7 @@ def test_list_monitor_sandboxes_ignores_stale_thread_refs_when_classifying_triag
     )
     monkeypatch.setattr(monitor_sandbox_projection_service, "_live_thread_ids", lambda thread_ids: set())
 
-    payload = monitor_service.list_monitor_sandboxes()
+    payload = monitor_sandbox_projection_service.list_monitor_sandboxes()
 
     assert payload["title"] == "All Sandboxes"
     assert payload["triage"]["summary"]["orphan_cleanup"] == 1
@@ -866,7 +863,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
         )
     )
 
-    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["thread"]["thread_id"] == "thread-1"
     assert payload["owner"]["display_name"] == "Ada"
@@ -913,7 +910,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
     _stub_thread_detail(monkeypatch, owner={"agent_user_id": "agent-1", "agent_name": "Toad"})
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo({"status": "active"}), user_repo=None))
 
-    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["summary"] == {
         "sandbox_id": "sandbox-1",
@@ -940,7 +937,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
         raising=False,
     )
 
-    payload = monitor_service.request_monitor_sandbox_cleanup("sandbox-1")
+    payload = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1")
 
     assert payload["accepted"] is True
     assert "thread_ids" not in (payload["operation"].get("target") or {})
@@ -968,7 +965,7 @@ def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeyp
         },
     )
 
-    payload = monitor_service.get_monitor_operation_detail("op-1")
+    payload = monitor_sandbox_detail_service.get_monitor_operation_detail("op-1")
 
     assert payload["sandbox_id"] == "sandbox-1"
     assert payload["target"]["target_type"] == "sandbox"
@@ -984,7 +981,7 @@ async def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(mon
     )
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo({"status": "active"}), user_repo=None))
 
-    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["owner"] == {
         "user_id": "agent-1",
@@ -1005,7 +1002,7 @@ async def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(mo
         )
     )
 
-    payload = await monitor_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
 
     assert payload["thread"] == {
         "id": "thread-1",

@@ -6,12 +6,12 @@ from backend.web.services import monitor_gateway
 
 def test_monitor_router_depends_on_gateway_not_internal_services():
     source = inspect.getsource(monitor)
+    broad_shell = "monitor" + "_service"
 
     forbidden = (
-        "from backend.web.services import monitor_service",
         "from backend.web.services import resource_service",
         "from backend.web.services.resource_cache import",
-        "monitor_service.",
+        f"{broad_shell}.",
         "resource_service.",
         "get_resource_overview_snapshot",
         "refresh_resource_overview_sync",
