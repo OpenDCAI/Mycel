@@ -63,12 +63,15 @@ class MessagingService:
         # @@@message-response-projection - public chat message payload must keep
         # sender projection ownership in MessagingService so route send/list stay thin.
         message = self._normalize_message_row(row)
-        sender = self._resolve_display_user(message.get("sender_id", ""))
+        sender_id = str(message.get("sender_id") or "")
+        sender = self._resolve_display_user(sender_id)
+        if sender is None:
+            raise RuntimeError(f"Chat message sender identity not found: {sender_id or '<missing>'}")
         return {
             "id": message["id"],
             "chat_id": message["chat_id"],
-            "sender_id": message.get("sender_id"),
-            "sender_name": sender.display_name if sender else "unknown",
+            "sender_id": sender_id,
+            "sender_name": sender.display_name,
             "content": message["content"],
             "message_type": message.get("message_type", "human"),
             "mentioned_ids": message.get("mentioned_ids") or [],
