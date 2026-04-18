@@ -15,7 +15,6 @@ export interface MarketplaceItemSummary {
   parent_id: string | null;
   download_count: number;
   visibility: string;
-  featured: boolean;
   tags: string[];
   created_at: string;
   updated_at: string;

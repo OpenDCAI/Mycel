@@ -13,6 +13,7 @@ from backend.web.models.marketplace import (
     UpgradeFromMarketplaceRequest,
 )
 from backend.web.services import marketplace_client
+from storage.contracts import MarketplaceHubNotFoundError, MarketplaceHubUnsupportedSortError
 
 router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
 
@@ -31,16 +32,26 @@ async def _verify_user_ownership(agent_user_id: str, user_id: str, user_repo: An
     await asyncio.to_thread(_check)
 
 
+async def _read_marketplace_hub(callable_: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(callable_, *args, **kwargs)
+    except MarketplaceHubNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=exc.args[0]) from exc
+    except MarketplaceHubUnsupportedSortError as exc:
+        raise HTTPException(status_code=400, detail=exc.args[0]) from exc
+
+
 @router.get("/items")
 async def list_marketplace_items(
+    request: Request,
     type: str | None = None,
     q: str | None = None,
     sort: str = "downloads",
     page: int = 1,
     page_size: int = 20,
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(
-        marketplace_client.list_items,
+    return await _read_marketplace_hub(
+        request.app.state.marketplace_hub_repo.list_items,
         type=type,
         q=q,
         sort=sort,
@@ -50,18 +61,18 @@ async def list_marketplace_items(
 
 
 @router.get("/items/{item_id}")
-async def get_marketplace_item_detail(item_id: str) -> dict[str, Any]:
-    return await asyncio.to_thread(marketplace_client.get_item_detail, item_id)
+async def get_marketplace_item_detail(item_id: str, request: Request) -> dict[str, Any]:
+    return await _read_marketplace_hub(request.app.state.marketplace_hub_repo.get_item_detail, item_id)
 
 
 @router.get("/items/{item_id}/lineage")
-async def get_marketplace_item_lineage(item_id: str) -> dict[str, Any]:
-    return await asyncio.to_thread(marketplace_client.get_item_lineage, item_id)
+async def get_marketplace_item_lineage(item_id: str, request: Request) -> dict[str, Any]:
+    return await _read_marketplace_hub(request.app.state.marketplace_hub_repo.get_item_lineage, item_id)
 
 
 @router.get("/items/{item_id}/versions/{version}")
-async def get_marketplace_item_version_snapshot(item_id: str, version: str) -> dict[str, Any]:
-    return await asyncio.to_thread(marketplace_client.get_item_version_snapshot, item_id, version)
+async def get_marketplace_item_version_snapshot(item_id: str, version: str, request: Request) -> dict[str, Any]:
+    return await _read_marketplace_hub(request.app.state.marketplace_hub_repo.get_item_version_snapshot, item_id, version)
 
 
 @router.post("/publish-agent-user")

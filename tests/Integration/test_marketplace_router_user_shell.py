@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from backend.web.models.marketplace import PublishAgentUserToMarketplaceRequest, UpgradeFromMarketplaceRequest
 from backend.web.routers import marketplace as marketplace_router
+from storage.contracts import MarketplaceHubNotFoundError, MarketplaceHubUnsupportedSortError
 
 
 def test_marketplace_router_exposes_agent_user_marketplace_routes() -> None:
@@ -116,62 +117,111 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
 
 
 @pytest.mark.asyncio
-async def test_list_marketplace_items_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_marketplace_items_reads_local_hub_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
     monkeypatch.setattr(
         marketplace_router.marketplace_client,
         "list_items",
-        lambda **kwargs: seen.update(kwargs) or {"items": [{"id": "item-1"}], "total": 1},
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("marketplace read path must not require external Hub HTTP")),
         raising=False,
     )
+    hub_repo = SimpleNamespace(
+        list_items=lambda **kwargs: seen.update(kwargs) or {"items": [{"id": "item-1"}], "total": 1},
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(marketplace_hub_repo=hub_repo)))
 
-    result = await marketplace_router.list_marketplace_items(type="skill", q="search", sort="newest", page=2, page_size=10)
+    result = await marketplace_router.list_marketplace_items(
+        request=request,
+        type="skill",
+        q="search",
+        sort="newest",
+        page=2,
+        page_size=10,
+    )
 
     assert result == {"items": [{"id": "item-1"}], "total": 1}
     assert seen == {"type": "skill", "q": "search", "sort": "newest", "page": 2, "page_size": 10}
 
 
 @pytest.mark.asyncio
-async def test_get_marketplace_item_detail_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_marketplace_item_detail_reads_local_hub_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         marketplace_router.marketplace_client,
         "get_item_detail",
-        lambda item_id: {"id": item_id, "name": "Repo Item"},
+        lambda _item_id: (_ for _ in ()).throw(AssertionError("marketplace read path must not require external Hub HTTP")),
         raising=False,
     )
+    hub_repo = SimpleNamespace(get_item_detail=lambda item_id: {"id": item_id, "name": "Repo Item"})
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(marketplace_hub_repo=hub_repo)))
 
-    result = await marketplace_router.get_marketplace_item_detail("item-1")
+    result = await marketplace_router.get_marketplace_item_detail("item-1", request=request)
 
     assert result == {"id": "item-1", "name": "Repo Item"}
 
 
 @pytest.mark.asyncio
-async def test_get_marketplace_item_lineage_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_marketplace_item_lineage_reads_local_hub_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         marketplace_router.marketplace_client,
         "get_item_lineage",
-        lambda item_id: {"ancestors": [], "children": [{"id": item_id}]},
+        lambda _item_id: (_ for _ in ()).throw(AssertionError("marketplace read path must not require external Hub HTTP")),
         raising=False,
     )
+    hub_repo = SimpleNamespace(get_item_lineage=lambda item_id: {"ancestors": [], "children": [{"id": item_id}]})
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(marketplace_hub_repo=hub_repo)))
 
-    result = await marketplace_router.get_marketplace_item_lineage("item-1")
+    result = await marketplace_router.get_marketplace_item_lineage("item-1", request=request)
 
     assert result == {"ancestors": [], "children": [{"id": "item-1"}]}
 
 
 @pytest.mark.asyncio
-async def test_get_marketplace_item_version_snapshot_forwards_into_marketplace_client(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_marketplace_item_version_snapshot_reads_local_hub_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         marketplace_router.marketplace_client,
         "get_item_version_snapshot",
-        lambda item_id, version: {"snapshot": {"meta": {"id": item_id, "version": version}}},
+        lambda _item_id, _version: (_ for _ in ()).throw(AssertionError("marketplace read path must not require external Hub HTTP")),
         raising=False,
     )
+    hub_repo = SimpleNamespace(
+        get_item_version_snapshot=lambda item_id, version: {"snapshot": {"meta": {"id": item_id, "version": version}}},
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(marketplace_hub_repo=hub_repo)))
 
-    result = await marketplace_router.get_marketplace_item_version_snapshot("item-1", "1.2.3")
+    result = await marketplace_router.get_marketplace_item_version_snapshot("item-1", "1.2.3", request=request)
 
     assert result == {"snapshot": {"meta": {"id": "item-1", "version": "1.2.3"}}}
+
+
+@pytest.mark.asyncio
+async def test_get_marketplace_item_detail_maps_missing_hub_row_to_404() -> None:
+    hub_repo = SimpleNamespace(
+        get_item_detail=lambda _item_id: (_ for _ in ()).throw(MarketplaceHubNotFoundError("Marketplace item not found: missing-item")),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(marketplace_hub_repo=hub_repo)))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await marketplace_router.get_marketplace_item_detail("missing-item", request=request)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Marketplace item not found: missing-item"
+
+
+@pytest.mark.asyncio
+async def test_list_marketplace_items_maps_unsupported_hub_sort_to_400() -> None:
+    hub_repo = SimpleNamespace(
+        list_items=lambda **_kwargs: (_ for _ in ()).throw(
+            MarketplaceHubUnsupportedSortError("Marketplace Hub sort is not supported by hub schema: featured")
+        ),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(marketplace_hub_repo=hub_repo)))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await marketplace_router.list_marketplace_items(request=request, sort="featured")
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Marketplace Hub sort is not supported by hub schema: featured"
 
 
 @pytest.mark.asyncio
