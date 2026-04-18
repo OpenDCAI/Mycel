@@ -1489,7 +1489,7 @@ async def run_child_thread_live(
     *,
     input_messages: list[Any],
 ) -> str:
-    """Run a spawned child agent through the normal web thread bridge."""
+    """Run a spawned child agent through the normal web thread path."""
     from backend.web.services.agent_pool import resolve_thread_sandbox
     from backend.web.utils.serializers import extract_text_content
 

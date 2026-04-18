@@ -1,4 +1,4 @@
-"""Typing indicator tracker — bridges agent run lifecycle to chat SSE.
+"""Typing indicator tracker - maps agent run lifecycle to chat SSE.
 
 Maps brain thread runs to chat typing events. Delivery calls start_chat(),
 streaming_service finally block calls stop(). Thread-safe (single event loop).

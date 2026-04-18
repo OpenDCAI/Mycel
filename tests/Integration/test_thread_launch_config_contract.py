@@ -439,7 +439,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
 
 
 @pytest.mark.parametrize("missing_workspace_id", ["lease-2", "missing-workspace"])
-def test_resolve_default_config_fails_loudly_when_thread_workspace_bridge_is_missing(missing_workspace_id: str) -> None:
+def test_resolve_default_config_fails_loudly_when_thread_workspace_binding_is_missing(missing_workspace_id: str) -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
         "thread_id": "agent-user-1-1",
@@ -482,7 +482,7 @@ def test_resolve_default_config_fails_loudly_when_thread_workspace_bridge_is_mis
         )
 
 
-def test_resolve_default_config_fails_loudly_when_workspace_repo_cannot_read_bridge() -> None:
+def test_resolve_default_config_fails_loudly_when_workspace_repo_cannot_read_binding() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
         "thread_id": "agent-user-1-1",
@@ -513,7 +513,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_repo_cannot_read_bri
         )
 
 
-def test_resolve_default_config_fails_loudly_for_malformed_workspace_bridge() -> None:
+def test_resolve_default_config_fails_loudly_for_malformed_workspace_binding() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
         "thread_id": "agent-user-1-1",
@@ -573,7 +573,7 @@ def test_require_owned_agent_raises_for_foreign_agent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_thread_existing_lease_binds_without_launch_config_save() -> None:
+async def test_create_thread_existing_sandbox_binds_without_launch_config_save() -> None:
     app = _make_threads_app()
     app.state.sandbox_repo.by_id["sandbox-1"] = {
         "id": "sandbox-1",

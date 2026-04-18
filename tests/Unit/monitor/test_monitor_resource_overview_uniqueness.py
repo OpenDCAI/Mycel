@@ -766,7 +766,7 @@ def test_list_resource_snapshots_by_sandbox_requires_repo_sandbox_wrapper(monkey
             return None
 
         def list_snapshots_by_lease_ids(self, lease_ids):
-            raise AssertionError("lease-shaped snapshot read shell should not remain an active runtime bridge")
+            raise AssertionError("lease-shaped snapshot read shell should not remain an active runtime path")
 
     monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _LeaseOnlyRepo())
 

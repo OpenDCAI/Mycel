@@ -309,7 +309,7 @@ def _validate_sandbox_quota_gate(app: Any, owner_user_id: str, payload: CreateTh
     return None
 
 
-def _request_bridge_text(row: Any, key: str, *, label: str) -> str:
+def _request_row_text(row: Any, key: str, *, label: str) -> str:
     value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
     if isinstance(value, str):
         value = value.strip()
@@ -336,8 +336,8 @@ def _resolve_owned_existing_sandbox_request_lease(
         return None
 
     # @@@existing-sandbox-request-cutover - incoming existing_sandbox_id is sandbox-shaped;
-    # lower runtime bridge identity is resolved only behind the row.
-    sandbox_owner_user_id = _request_bridge_text(sandbox, "owner_user_id", label="sandbox")
+    # lower runtime identity is resolved only behind the row.
+    sandbox_owner_user_id = _request_row_text(sandbox, "owner_user_id", label="sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
     return resolve_existing_sandbox_lease(
@@ -604,8 +604,8 @@ def _materialize_workspace_for_sandbox(
 
     workspace_id = f"workspace-{uuid.uuid4().hex}"
     now = time.time()
-    # @@@workspace-bridge-write - Phase 2 only cuts thread create writes to a real
-    # workspace row; lower lease_id remains a terminal/runtime bridge, not the workspace authority.
+    # @@@workspace-binding-write - Phase 2 cuts thread create writes to a real
+    # workspace row; lower lease_id remains terminal/runtime internals, not workspace authority.
     workspace_repo.create(
         WorkspaceRow(
             id=workspace_id,
@@ -719,7 +719,7 @@ def _create_owned_thread(
             cwd=bind_cwd,
             lease_repo=getattr(app.state, "lease_repo", None),
         )
-        selected_lease_id = _request_bridge_text(owned_lease, "lease_id", label="lease")
+        selected_lease_id = _request_row_text(owned_lease, "lease_id", label="lease")
         if owned_lease is None:
             raise HTTPException(403, "Sandbox not authorized")
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
@@ -735,8 +735,8 @@ def _create_owned_thread(
             workspace_path=bind_cwd or bound_cwd,
         )
     else:
-        # @@@create-write-bridge-first - replay-13 requires supported create paths
-        # to persist the concrete workspace bridge at thread-row creation time,
+        # @@@create-write-workspace-first - replay-13 requires supported create paths
+        # to persist the concrete workspace row at thread-row creation time,
         # not bind runtime truth after a workspace-blind row already exists.
         current_workspace_id = _create_thread_sandbox_resources(
             new_thread_id,
@@ -1350,7 +1350,7 @@ async def cancel_run(
 
 
 # ---------------------------------------------------------------------------
-# Background Run API — bridges frontend to agent._background_runs
+# Background Run API - exposes agent._background_runs to the frontend
 # ---------------------------------------------------------------------------
 
 

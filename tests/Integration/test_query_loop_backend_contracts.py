@@ -1,4 +1,4 @@
-"""Backend-facing regression tests for QueryLoop caller-contract bridge."""
+"""Backend-facing regression tests for QueryLoop web caller contracts."""
 
 from __future__ import annotations
 
@@ -186,7 +186,7 @@ class _QueryOkWithFailingCompactorModel:
         return AIMessage(content="OK")
 
 
-class _BridgeReactiveCompactMiddleware:
+class _CallerContractReactiveCompactMiddleware:
     compact_boundary_index = 1
 
     async def compact_messages_for_recovery(self, messages):
@@ -604,7 +604,7 @@ def _patch_fake_event_bus(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_repair_incomplete_tool_calls_uses_query_loop_state_bridge():
+async def test_repair_incomplete_tool_calls_uses_query_loop_state():
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(checkpointer=checkpointer)
     broken_ai = AIMessage(
@@ -635,7 +635,7 @@ async def test_repair_incomplete_tool_calls_uses_query_loop_state_bridge():
 
 
 @pytest.mark.asyncio
-async def test_get_thread_history_reads_messages_via_query_loop_state_bridge():
+async def test_get_thread_history_reads_messages_via_query_loop_state():
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(text="history reply", checkpointer=checkpointer)
     config = {"configurable": {"thread_id": "history-thread"}}
@@ -1398,7 +1398,7 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
     loop = _make_loop(
         model=_PromptTooLongTwiceModel(),
         checkpointer=checkpointer,
-        middleware=[_BridgeReactiveCompactMiddleware()],
+        middleware=[_CallerContractReactiveCompactMiddleware()],
     )
     config = {"configurable": {"thread_id": "prompt-too-long-thread"}}
 
@@ -1610,7 +1610,7 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
     recovery_loop = _make_loop(
         model=_PromptTooLongTwiceModel(),
         checkpointer=checkpointer,
-        middleware=[_BridgeReactiveCompactMiddleware()],
+        middleware=[_CallerContractReactiveCompactMiddleware()],
     )
     recovery_agent = SimpleNamespace(
         agent=recovery_loop,

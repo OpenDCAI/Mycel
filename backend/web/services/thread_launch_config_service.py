@@ -68,8 +68,8 @@ def _derive_default_config(
     providers: list[dict[str, Any]],
     sandbox_templates: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    for thread in _iter_default_bridge_threads(agent_threads):
-        # @@@workspace-bridge-read-precedence - launch-config resolves workspace-backed
+    for thread in _iter_default_workspace_threads(agent_threads):
+        # @@@workspace-binding-read-precedence - launch-config resolves workspace-backed
         # existing-mode defaults from workspace+sandbox truth before considering new defaults.
         config = _resolve_workspace_backed_existing_config(
             app=app,
@@ -104,19 +104,19 @@ def _derive_default_config(
     }
 
 
-def _iter_default_bridge_threads(agent_threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    threads_with_bridge = []
+def _iter_default_workspace_threads(agent_threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    threads_with_workspace = []
     for thread in agent_threads:
         current_workspace_id = str(thread.get("current_workspace_id") or "").strip()
         if current_workspace_id:
-            threads_with_bridge.append({**thread, "current_workspace_id": current_workspace_id})
+            threads_with_workspace.append({**thread, "current_workspace_id": current_workspace_id})
 
-    # @@@launch-config-thread-bridge-authority - replay-15 makes thread-owned
+    # @@@launch-config-thread-workspace-authority - replay-15 makes thread-owned
     # current_workspace_id the discovery authority for derived existing-mode
-    # defaults; workspace/sandbox lookup only materializes that bridge.
-    if threads_with_bridge and all(item.get("created_at") is not None for item in threads_with_bridge):
-        return sorted(threads_with_bridge, key=lambda item: item["created_at"], reverse=True)
-    return threads_with_bridge
+    # defaults; workspace/sandbox lookup only materializes the referenced rows.
+    if threads_with_workspace and all(item.get("created_at") is not None for item in threads_with_workspace):
+        return sorted(threads_with_workspace, key=lambda item: item["created_at"], reverse=True)
+    return threads_with_workspace
 
 
 def _resolve_workspace_backed_existing_config(
@@ -134,8 +134,8 @@ def _resolve_workspace_backed_existing_config(
     if workspace is None:
         raise RuntimeError(f"workspace not found: {current_workspace_id}")
 
-    sandbox_id = _required_bridge_text(workspace, "sandbox_id", "workspace")
-    workspace_owner_user_id = _required_bridge_text(workspace, "owner_user_id", "workspace")
+    sandbox_id = _required_row_text(workspace, "sandbox_id", "workspace")
+    workspace_owner_user_id = _required_row_text(workspace, "owner_user_id", "workspace")
     if workspace_owner_user_id != owner_user_id:
         raise PermissionError(f"workspace owner mismatch: expected {owner_user_id}, got {workspace_owner_user_id}")
     sandbox_repo = getattr(app.state, "sandbox_repo", None)
@@ -145,7 +145,7 @@ def _resolve_workspace_backed_existing_config(
     sandbox = sandbox_get_by_id(sandbox_id)
     if sandbox is None:
         raise RuntimeError(f"sandbox not found: {sandbox_id}")
-    sandbox_owner_user_id = _required_bridge_text(sandbox, "owner_user_id", "sandbox")
+    sandbox_owner_user_id = _required_row_text(sandbox, "owner_user_id", "sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
     sandbox_template = _resolve_workspace_backed_sandbox_template(
@@ -155,11 +155,11 @@ def _resolve_workspace_backed_existing_config(
     )
     return {
         "create_mode": "existing",
-        "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
+        "provider_config": _required_row_text(sandbox, "provider_name", "sandbox"),
         "sandbox_template": sandbox_template,
-        "existing_sandbox_id": _required_bridge_text(sandbox, "id", "sandbox"),
+        "existing_sandbox_id": _required_row_text(sandbox, "id", "sandbox"),
         "model": None,
-        "workspace": _required_bridge_text(workspace, "workspace_path", "workspace"),
+        "workspace": _required_row_text(workspace, "workspace_path", "workspace"),
     }
 
 
@@ -169,7 +169,7 @@ def _resolve_workspace_backed_sandbox_template(
     owner_user_id: str,
     sandbox: Any,
 ) -> dict[str, Any]:
-    sandbox_template_id = _required_bridge_text(sandbox, "sandbox_template_id", "sandbox")
+    sandbox_template_id = _required_row_text(sandbox, "sandbox_template_id", "sandbox")
     template_provider_name = str(sandbox_template_id.split(":", 1)[0]).strip()
     if not template_provider_name:
         raise RuntimeError("sandbox.sandbox_template_id must include provider name")
@@ -196,7 +196,7 @@ def _resolve_workspace_backed_sandbox_template(
     return normalize_recipe_snapshot(provider_type, data)
 
 
-def _required_bridge_text(row: Any, key: str, label: str) -> str:
+def _required_row_text(row: Any, key: str, label: str) -> str:
     value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
     if isinstance(value, str):
         value = value.strip()

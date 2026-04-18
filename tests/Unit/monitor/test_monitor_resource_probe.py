@@ -77,7 +77,7 @@ def test_upsert_resource_snapshot_for_sandbox_requires_repo_sandbox_wrapper(monk
         )
 
 
-def test_upsert_resource_snapshot_for_sandbox_uses_sandbox_write_without_lower_lease_bridge(monkeypatch) -> None:
+def test_upsert_resource_snapshot_for_sandbox_uses_sandbox_write_without_lower_runtime_handle(monkeypatch) -> None:
     repo = _FakeSandboxSnapshotRepo()
     monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: repo)
 

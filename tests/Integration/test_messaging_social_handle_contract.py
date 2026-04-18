@@ -72,7 +72,7 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     assert resolved.display_name == "Human"
 
 
-def test_messaging_display_user_resolver_does_not_bridge_removed_thread_user_id() -> None:
+def test_messaging_display_user_resolver_does_not_read_removed_thread_user_id() -> None:
     resolved = resolve_messaging_display_user(
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (

@@ -202,7 +202,7 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
     ]
 
 
-def test_query_threads_no_longer_roundtrips_through_lease_summary_shell() -> None:
+def test_query_threads_projects_workspace_backed_sandbox_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -235,7 +235,7 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell() -> Non
     ]
 
 
-def test_query_threads_chunks_lease_lookup() -> None:
+def test_query_threads_chunks_sandbox_lookup() -> None:
     sandboxes = [
         _sandbox(f"sandbox-{index}", provider_env_id=f"instance-{index}", historical_lease_id=f"lease-{index}") for index in range(175)
     ]
@@ -316,7 +316,7 @@ def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
     }
 
 
-def test_query_sandbox_allows_missing_lower_lease_bridge() -> None:
+def test_query_sandbox_allows_missing_lower_runtime_handle() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -633,7 +633,7 @@ def test_query_sandbox_cleanup_target_reads_structured_sandbox_target() -> None:
     }
 
 
-def test_query_sandbox_instance_id_falls_back_without_lower_lease_bridge() -> None:
+def test_query_sandbox_instance_id_falls_back_without_lower_runtime_handle() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -694,7 +694,7 @@ def test_query_sandbox_instance_ids_use_sandbox_provider_env_id() -> None:
     }
 
 
-def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge() -> None:
+def test_query_sandbox_instance_ids_use_sandbox_runtime_identity() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -713,7 +713,7 @@ def test_query_sandbox_instance_ids_no_longer_roundtrips_through_lease_bridge() 
     }
 
 
-def test_query_sandbox_instance_id_no_longer_roundtrips_through_lease_bridge() -> None:
+def test_query_sandbox_instance_id_uses_sandbox_runtime_identity() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -798,7 +798,7 @@ def test_list_probe_targets_skips_sandbox_without_provider_env_id() -> None:
     assert repo.list_probe_targets() == []
 
 
-def test_list_probe_targets_no_longer_roundtrips_through_lease_instance_bridge() -> None:
+def test_list_probe_targets_use_sandbox_runtime_identity() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -957,7 +957,7 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
     ]
 
 
-def test_query_resource_sessions_does_not_require_lower_lease_bridge_field() -> None:
+def test_query_resource_sessions_does_not_require_lower_runtime_handle() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -992,7 +992,7 @@ def test_query_resource_sessions_does_not_require_lower_lease_bridge_field() -> 
     ]
 
 
-def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -> None:
+def test_query_resource_sessions_projects_sandbox_rows_without_session_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -1016,14 +1016,6 @@ def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -
                 _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
             ],
         }
-    )
-
-    monkeypatch.setattr(
-        repo,
-        "_lease_row_from_sandbox",
-        lambda sandbox: (_ for _ in ()).throw(
-            AssertionError("query_resource_sessions should not materialize a lease_map through _lease_row_from_sandbox")
-        ),
     )
 
     assert repo.query_resource_sessions() == [

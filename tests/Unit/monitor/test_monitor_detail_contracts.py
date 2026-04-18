@@ -495,7 +495,7 @@ def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
     assert payload["cleanup"] == _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup.")
 
 
-def test_get_monitor_sandbox_detail_allows_missing_lease_bridge_for_readonly_detail(monkeypatch):
+def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_readonly_detail(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
         FakeSandboxMonitorRepo(

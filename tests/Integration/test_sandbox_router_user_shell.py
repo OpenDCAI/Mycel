@@ -38,7 +38,7 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_list_sandbox_sessions_strips_lower_lease_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_sandbox_sessions_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sandbox_router.sandbox_service, "init_providers_and_managers", lambda: ({}, {"local": object()}))
     monkeypatch.setattr(
         sandbox_router.sandbox_service,
@@ -69,7 +69,7 @@ async def test_list_sandbox_sessions_strips_lower_lease_identity(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_sandbox_session_mutation_response_strips_lower_lease_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_sandbox_session_mutation_response_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         sandbox_router.sandbox_service,
         "mutate_sandbox_session",
@@ -96,7 +96,7 @@ async def test_sandbox_session_mutation_response_strips_lower_lease_identity(mon
     }
 
 
-def test_list_user_sandboxes_projects_internal_lease_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.MonkeyPatch) -> None:
     class _MonitorRepo:
         def query_sandboxes(self) -> list[dict[str, object]]:
             return [

@@ -1,3 +1,5 @@
+"""Integration coverage for live child-thread execution contracts."""
+
 from __future__ import annotations
 
 import asyncio

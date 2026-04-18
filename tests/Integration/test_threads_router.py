@@ -434,7 +434,7 @@ def _patch_create_thread_noop_guards():
 
 
 @pytest.mark.asyncio
-async def test_get_thread_sandbox_status_returns_null_when_thread_has_no_runtime_bridge():
+async def test_get_thread_sandbox_status_returns_null_when_thread_has_no_runtime_binding():
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
@@ -1203,7 +1203,7 @@ async def test_create_thread_route_rejects_unavailable_provider():
 
 
 @pytest.mark.asyncio
-async def test_create_thread_route_rejects_unavailable_provider_for_existing_lease():
+async def test_create_thread_route_rejects_unavailable_provider_for_existing_sandbox():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     app.state.sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row(provider_name="daytona")
     app.state.lease_repo = _existing_sandbox_lease_repo(provider_name="daytona", recipe=None)
