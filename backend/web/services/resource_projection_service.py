@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services import resource_service, sandbox_service
+from backend.web.services import monitor_resource_runtime_service, resource_service, sandbox_service
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
 from backend.web.services.resource_common import aggregate_provider_telemetry as _aggregate_provider_telemetry
@@ -22,8 +22,6 @@ from backend.web.services.resource_common import to_resource_status as _to_resou
 from backend.web.services.sandbox_service import available_sandbox_types
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_sandbox_state_to_display_status
-from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
-from storage.runtime import list_resource_snapshots_by_sandbox
 
 
 def _now_iso() -> str:
@@ -102,43 +100,12 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
     }
 
 
-def _query_runtime_ids(repo: Any, sandbox_ids: list[str]) -> dict[str, str | None]:
-    ordered_ids = []
-    seen: set[str] = set()
-    for sandbox_id in sandbox_ids:
-        normalized = str(sandbox_id or "").strip()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        ordered_ids.append(normalized)
-    if not ordered_ids:
-        return {}
-
-    return repo.query_sandbox_instance_ids(ordered_ids)
-
-
-def _load_runtime_ids(sandbox_ids: list[str]) -> dict[str, str | None]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        return _query_runtime_ids(repo, sandbox_ids)
-    finally:
-        repo.close()
-
-
 def _load_visible_resource_runtime() -> tuple[
     list[dict[str, Any]],
     dict[str, str | None],
     dict[str, dict[str, Any]],
 ]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        resource_rows = _project_user_visible_resource_rows(repo, repo.query_resource_rows())
-        runtime_ids = _query_runtime_ids(repo, [str(resource_row.get("sandbox_id") or "") for resource_row in resource_rows])
-    finally:
-        repo.close()
-
-    snapshot_by_sandbox = list_resource_snapshots_by_sandbox(resource_rows)
-    return resource_rows, runtime_ids, snapshot_by_sandbox
+    return monitor_resource_runtime_service.load_visible_resource_runtime(_project_user_visible_resource_rows)
 
 
 def _backfill_runtime_ids(sandboxes: list[dict[str, Any]]) -> None:
@@ -146,7 +113,7 @@ def _backfill_runtime_ids(sandboxes: list[dict[str, Any]]) -> None:
     if not pending_sandboxes:
         return
 
-    runtime_ids = _load_runtime_ids([str(sandbox.get("sandbox_id") or "") for sandbox in pending_sandboxes])
+    runtime_ids = monitor_resource_runtime_service.load_runtime_ids([str(sandbox.get("sandbox_id") or "") for sandbox in pending_sandboxes])
     for sandbox in pending_sandboxes:
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip()
         runtime_id = runtime_ids.get(sandbox_id)

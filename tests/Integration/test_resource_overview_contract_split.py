@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor as monitor_router
 from backend.web.routers import resources as resources_router
-from backend.web.services import resource_common, resource_projection_service
+from backend.web.services import monitor_resource_runtime_service, resource_common, resource_projection_service
 
 
 class _State:
@@ -346,7 +346,7 @@ def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases,
         return leases
 
     monkeypatch.setattr(resource_projection_service.sandbox_service, "list_user_sandboxes", _fake_list_user_sandboxes)
-    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
     _patch_provider_contracts(
         monkeypatch,
         description="daytona",

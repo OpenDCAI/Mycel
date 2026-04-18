@@ -3,7 +3,13 @@ from __future__ import annotations
 import inspect
 from types import SimpleNamespace
 
-from backend.web.services import resource_common, resource_projection_service, resource_service, sandbox_service
+from backend.web.services import (
+    monitor_resource_runtime_service,
+    resource_common,
+    resource_projection_service,
+    resource_service,
+    sandbox_service,
+)
 from backend.web.utils.serializers import avatar_url
 
 
@@ -122,7 +128,7 @@ def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
         raising=False,
     )
     monkeypatch.setattr(
-        resource_projection_service,
+        monitor_resource_runtime_service,
         "make_sandbox_monitor_repo",
         lambda: SimpleNamespace(query_sandbox_instance_ids=lambda _sandbox_ids: {}, close=lambda: None),
     )
