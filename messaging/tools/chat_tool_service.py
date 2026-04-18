@@ -132,8 +132,11 @@ class ChatToolService:
 
         def handle(unread_only: bool = False, limit: int = 20) -> str:
             chats = self._messaging.list_chats_for_user(eid)
+            for c in chats:
+                if "unread_count" not in c:
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing unread_count")
             if unread_only:
-                chats = [c for c in chats if c.get("unread_count", 0) > 0]
+                chats = [c for c in chats if c["unread_count"] > 0]
             chats = chats[:limit]
             if not chats:
                 return "No chats found."
@@ -149,8 +152,6 @@ class ChatToolService:
                 name = c.get("title")
                 if not name:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing title")
-                if "unread_count" not in c:
-                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing unread_count")
                 unread = c["unread_count"]
                 last = c.get("last_message")
                 if last and "content" not in last:
