@@ -1559,6 +1559,25 @@ def test_chat_tool_search_fails_on_unknown_message_sender() -> None:
     assert str(excinfo.value) == "Chat message sender identity not found: missing-user"
 
 
+def test_chat_tool_search_fails_on_missing_message_content() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            search_messages=lambda _query, *, chat_id=None: [{"sender_id": "agent-user-1"}],
+        ),
+    )
+
+    search_messages = registry.get("search_messages")
+    assert search_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        search_messages.handler(query="hello")
+
+    assert str(excinfo.value) == "Chat search message from agent-user-1 is missing content"
+
+
 def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
     delivered: list[tuple[str, str]] = []
     dispatcher = ChatDeliveryDispatcher(

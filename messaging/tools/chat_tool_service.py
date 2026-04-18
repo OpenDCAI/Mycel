@@ -400,8 +400,11 @@ class ChatToolService:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
-                name = self._message_sender_name(m.get("sender_id"))
-                lines.append(f"[{name}] {m.get('content', '')[:100]}")
+                sender_id = m.get("sender_id")
+                name = self._message_sender_name(sender_id)
+                if "content" not in m:
+                    raise RuntimeError(f"Chat search message from {sender_id} is missing content")
+                lines.append(f"[{name}] {m['content'][:100]}")
             return "\n".join(lines)
 
         registry.register(
