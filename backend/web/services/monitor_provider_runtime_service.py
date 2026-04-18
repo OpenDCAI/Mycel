@@ -34,7 +34,7 @@ def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
     return {
         "provider": provider,
         "sandbox_ids": _resource_row_values(resource_rows, "sandboxId"),
-        "runtime_session_ids": _resource_row_values(resource_rows, "runtimeSessionId"),
+        "runtime_ids": _resource_row_values(resource_rows, "runtimeId"),
     }
 
 
@@ -42,12 +42,12 @@ def _resource_row_values(resource_rows: list[dict[str, Any]], key: str) -> list[
     return sorted({str(item.get(key) or "").strip() for item in resource_rows if str(item.get(key) or "").strip()})
 
 
-def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
+def get_monitor_runtime_detail(runtime_id: str) -> dict[str, Any]:
     snapshot = get_resource_overview_snapshot()
     for provider in snapshot.get("providers") or []:
         for resource_row in provider.get("resource_rows") or []:
-            current = str(resource_row.get("runtimeSessionId") or "").strip()
-            if current != runtime_session_id:
+            current = str(resource_row.get("runtimeId") or "").strip()
+            if current != runtime_id:
                 continue
             return {
                 "provider": {
@@ -60,7 +60,7 @@ def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
                 "sandbox_id": resource_row.get("sandboxId"),
                 "thread_id": resource_row.get("threadId"),
             }
-    raise KeyError(f"Runtime not found: {runtime_session_id}")
+    raise KeyError(f"Runtime not found: {runtime_id}")
 
 
 def request_monitor_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str) -> dict[str, Any]:

@@ -279,13 +279,13 @@ function countProviderResourceRows(providers: ProviderInfo[], status: ResourceRo
 
 function countRuntimeUnboundRunning(provider: ProviderInfo): number {
   return provider.resource_rows.filter(
-    (resourceRow) => provider.type !== "local" && resourceRow.status === "running" && !resourceRow.runtimeSessionId,
+    (resourceRow) => provider.type !== "local" && resourceRow.status === "running" && !resourceRow.runtimeId,
   ).length;
 }
 
 function countDetachedResidue(resourceRows: ResourceRow[]): number {
   return resourceRows.filter(
-    (row) => row.status === "stopped" && !row.runtimeSessionId && row.metrics == null,
+    (row) => row.status === "stopped" && !row.runtimeId && row.metrics == null,
   ).length;
 }
 
@@ -938,7 +938,7 @@ function SandboxCard({
     providerType !== "local" &&
     group.status === "running" &&
     Boolean(group.sandboxId) &&
-    !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeSessionId));
+    !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeId));
   const showQuotaOnlyDiskState =
     metrics != null &&
     metrics.disk == null &&
@@ -946,7 +946,7 @@ function SandboxCard({
     Boolean(metrics.diskNote || metrics.probeError);
   const showDetachedResidueState =
     group.status === "stopped" &&
-    !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeSessionId)) &&
+    !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeId)) &&
     metrics == null;
   const showMissingMetricsState =
     group.status === "running" &&
@@ -1033,7 +1033,7 @@ function SandboxInspector({
       ? "沙盒已暂停，恢复运行后才能浏览文件。"
       : providerType !== "local" &&
           group.sandboxId &&
-          !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeSessionId))
+          !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeId))
         ? "当前沙盒没有 active runtime binding，无法浏览文件。"
         : null;
   const detailLink = buildSandboxGroupDetailLink(group);
@@ -1071,11 +1071,11 @@ function SandboxInspector({
                         {resourceRow.threadId}
                       </Link>
                     </div>
-                    {resourceRow.runtimeSessionId && (
+                    {resourceRow.runtimeId && (
                       <div className="sandbox-resource-row__meta">
                         runtime{" "}
-                        <Link className="sandbox-link" to={`/runtimes/${resourceRow.runtimeSessionId}`}>
-                          {resourceRow.runtimeSessionId}
+                        <Link className="sandbox-link" to={`/runtimes/${resourceRow.runtimeId}`}>
+                          {resourceRow.runtimeId}
                         </Link>
                       </div>
                     )}

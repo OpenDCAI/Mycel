@@ -600,7 +600,7 @@ def test_list_resource_providers_deduplicates_same_lower_runtime_thread_even_wit
     ]
 
 
-def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(monkeypatch):
+def test_list_resource_providers_keeps_remote_runtime_id_actor_first(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -633,7 +633,8 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
     resource_row = provider["resource_rows"][0]
 
     assert provider["consoleUrl"] == "https://example.com/daytona"
-    assert resource_row["runtimeSessionId"] == "provider-session-1"
+    assert resource_row["runtimeId"] == "provider-session-1"
+    assert "runtimeSessionId" not in resource_row
     assert resource_row["agentUserId"] == "agent-remote"
     assert resource_row["agentName"] == "Remote Agent"
     assert resource_row["avatarUrl"] == "/api/users/agent-remote/avatar"
@@ -684,7 +685,8 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(
     payload = resource_projection_service.list_resource_providers()
     resource_rows = payload["providers"][0]["resource_rows"]
 
-    assert [resource_row["runtimeSessionId"] for resource_row in resource_rows] == ["runtime-a", "runtime-b"]
+    assert [resource_row["runtimeId"] for resource_row in resource_rows] == ["runtime-a", "runtime-b"]
+    assert all("runtimeSessionId" not in resource_row for resource_row in resource_rows)
     assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
 
 
@@ -835,8 +837,8 @@ def test_load_visible_resource_runtime_returns_only_sandbox_keyed_snapshots(monk
         lambda resource_rows: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
 
-    resource_rows, runtime_session_ids, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
+    resource_rows, runtime_ids, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
 
     assert [resource_row["sandbox_id"] for resource_row in resource_rows] == ["sandbox-a"]
-    assert runtime_session_ids == {"sandbox-a": None}
+    assert runtime_ids == {"sandbox-a": None}
     assert snapshot_by_sandbox == {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}

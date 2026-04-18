@@ -147,7 +147,7 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
             {"accepted": True},
         ),
         ("get", "/api/monitor/operations/op-1", "get_monitor_operation_detail", {"operation": {"operation_id": "op-1"}}),
-        ("get", "/api/monitor/runtimes/runtime-1", "get_monitor_runtime_detail", {"runtime": {"runtimeSessionId": "runtime-1"}}),
+        ("get", "/api/monitor/runtimes/runtime-1", "get_monitor_runtime_detail", {"runtime": {"runtimeId": "runtime-1"}}),
         ("get", "/api/monitor/sandbox-configs", "get_monitor_sandbox_configs", {"providers": [], "count": 0}),
         ("get", "/api/monitor/evaluation", "get_monitor_evaluation_workbench", {"headline": "Evaluation Workbench"}),
         ("get", "/api/monitor/evaluation/batches", "get_monitor_evaluation_batches", {"items": [], "count": 0}),

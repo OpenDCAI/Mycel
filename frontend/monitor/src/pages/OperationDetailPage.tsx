@@ -15,7 +15,6 @@ type OperationDetailPayload = {
     target_type?: string | null;
     target_id?: string | null;
     provider_id?: string | null;
-    runtime_session_id?: string | null;
     runtime_id?: string | null;
   } | null;
   sandbox_id?: string | null;
@@ -41,7 +40,7 @@ const OPERATION_STATUS_CLASS_BY_STATUS: Record<string, string> = {
 
 export function buildOperationDetailShell(data: OperationDetailPayload) {
   const sandboxId = data.sandbox_id ?? null;
-  const runtimeId = data.target?.runtime_session_id ?? data.target?.runtime_id ?? null;
+  const runtimeId = data.target?.runtime_id ?? null;
   return {
     surfaceHref: "/sandboxes",
     targetLabel: "Sandbox",

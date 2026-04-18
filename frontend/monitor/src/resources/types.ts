@@ -31,7 +31,7 @@ export interface ResourceRow {
   id: string;
   sandboxId?: string;
   threadId: string;
-  runtimeSessionId?: string | null;
+  runtimeId?: string | null;
   agentUserId?: string | null;
   agentName: string;
   avatarUrl?: string | null;

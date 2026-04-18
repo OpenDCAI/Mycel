@@ -47,8 +47,8 @@ def get_operation_detail(operation_id: str) -> dict[str, Any]:
     return monitor_sandbox_detail_service.get_monitor_operation_detail(operation_id)
 
 
-def get_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
-    return monitor_provider_runtime_service.get_monitor_runtime_detail(runtime_session_id)
+def get_runtime_detail(runtime_id: str) -> dict[str, Any]:
+    return monitor_provider_runtime_service.get_monitor_runtime_detail(runtime_id)
 
 
 def get_sandbox_configs() -> dict[str, Any]:

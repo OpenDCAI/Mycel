@@ -22,7 +22,7 @@ describe("monitor relation shell", () => {
     const shell = buildProviderRelationShell({
       provider: { id: "daytona", name: "daytona" },
       sandbox_ids: ["sandbox-1", "sandbox-2"],
-      runtime_session_ids: ["runtime-1"],
+      runtime_ids: ["runtime-1"],
     });
 
     expect(shell.sandboxTitle).toBe("Sandboxes");
@@ -32,7 +32,7 @@ describe("monitor relation shell", () => {
   it("uses sandbox detail link for runtime relations", () => {
     const shell = buildRuntimeRelationShell({
       provider: { id: "daytona" },
-      runtime: { runtimeSessionId: "runtime-1" },
+      runtime: { runtimeId: "runtime-1" },
       sandbox_id: "sandbox-1",
       thread_id: "thread-1",
     });

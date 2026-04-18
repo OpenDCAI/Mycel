@@ -26,7 +26,7 @@ describe("sandbox detail page shell", () => {
         name: "docker",
       },
       runtime: {
-        runtime_session_id: "runtime-1",
+        runtime_id: "runtime-1",
       },
       threads: [{ thread_id: "thread-1" }],
       runtime_rows: [{ chat_session_id: "chat-1", thread_id: "thread-1", status: "active" }],

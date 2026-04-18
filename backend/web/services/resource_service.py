@@ -47,7 +47,7 @@ def build_resource_row_payload(
     resource_identity: str,
     sandbox_id: str | None = None,
     thread_id: str,
-    runtime_session_id: str | None,
+    runtime_id: str | None,
     owner: dict[str, Any],
     status: str,
     started_at: str,
@@ -65,8 +65,8 @@ def build_resource_row_payload(
     }
     if sandbox_id:
         payload["sandboxId"] = sandbox_id
-    if runtime_session_id:
-        payload["runtimeSessionId"] = runtime_session_id
+    if runtime_id:
+        payload["runtimeId"] = runtime_id
     return payload
 
 

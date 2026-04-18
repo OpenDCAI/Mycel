@@ -90,11 +90,11 @@ _MISSING = object()
 
 
 class FakeSandboxMonitorRepo:
-    def __init__(self, *, sandbox=None, threads=None, runtime_rows=None, runtime_session_id="runtime-1", sandboxes=None):
+    def __init__(self, *, sandbox=None, threads=None, runtime_rows=None, runtime_id="runtime-1", sandboxes=None):
         self.sandbox = sandbox
         self.threads = threads or []
         self.runtime_rows = runtime_rows or []
-        self.runtime_session_id = runtime_session_id
+        self.runtime_id = runtime_id
         self.sandboxes = sandboxes or []
 
     def query_sandbox(self, sandbox_id):
@@ -132,7 +132,7 @@ class FakeSandboxMonitorRepo:
         return self.runtime_rows
 
     def query_sandbox_instance_id(self, _sandbox_id):
-        return self.runtime_session_id
+        return self.runtime_id
 
     def close(self):
         return None
@@ -231,7 +231,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
                             "leaseId": "lease-1",
                             "sandboxId": "sandbox-1",
                             "threadId": "thread-1",
-                            "runtimeSessionId": "runtime-1",
+                            "runtimeId": "runtime-1",
                         },
                         {"leaseId": "lease-2", "sandboxId": "sandbox-2", "threadId": "thread-2"},
                     ],
@@ -246,7 +246,8 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
     assert payload["sandbox_ids"] == ["sandbox-1", "sandbox-2"]
     assert "lease_ids" not in payload
     assert "thread_ids" not in payload
-    assert payload["runtime_session_ids"] == ["runtime-1"]
+    assert payload["runtime_ids"] == ["runtime-1"]
+    assert "runtime_session_ids" not in payload
 
     assert monitor_provider_runtime_service._resource_row_values(
         [
@@ -271,7 +272,7 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
                     "status": "active",
                     "resource_rows": [
                         {
-                            "runtimeSessionId": "runtime-1",
+                            "runtimeId": "runtime-1",
                             "leaseId": "lease-1",
                             "sandboxId": "sandbox-1",
                             "threadId": "thread-1",
@@ -458,7 +459,7 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
     assert payload["provider"] == {"id": "daytona", "name": "daytona"}
-    assert payload["runtime"] == {"runtime_session_id": "runtime-1"}
+    assert payload["runtime"] == {"runtime_id": "runtime-1"}
     assert payload["threads"] == [{"thread_id": "thread-1"}]
     assert payload["runtime_rows"] == [
         {
@@ -561,14 +562,15 @@ def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_read
             sandbox=_sandbox_row(lease_id=None, provider_name="local", observed_state="running", desired_state="running"),
             threads=[],
             runtime_rows=[],
-            runtime_session_id="runtime-1",
+            runtime_id="runtime-1",
         ),
     )
 
     payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
-    assert payload["runtime"]["runtime_session_id"] == "runtime-1"
+    assert payload["runtime"]["runtime_id"] == "runtime-1"
+    assert "runtime_session_id" not in payload["runtime"]
     assert payload["cleanup"] == {
         "allowed": False,
         "recommended_action": None,
@@ -585,7 +587,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         FakeSandboxMonitorRepo(
             sandbox=_detached_sandbox(),
             threads=[{"thread_id": "thread-historical"}],
-            runtime_session_id="runtime-1",
+            runtime_id="runtime-1",
         ),
     )
     monkeypatch.setattr(
@@ -615,7 +617,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
 
 def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_payload(monkeypatch):
     captured: dict[str, object] = {}
-    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox(), runtime_session_id="runtime-1"))
+    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox(), runtime_id="runtime-1"))
 
     def _record_request(payload):
         captured.update(payload)
@@ -644,7 +646,7 @@ def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypa
             "lower_runtime": {"handle": ""},
             "triage": {"category": "orphan_cleanup"},
             "provider": {"id": "daytona"},
-            "runtime": {"runtime_session_id": "runtime-1"},
+            "runtime": {"runtime_id": "runtime-1"},
             "threads": [],
             "runtime_rows": [],
             "cleanup": _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup."),
@@ -668,7 +670,7 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
     repo = FakeSandboxMonitorRepo(
         sandbox=_detached_sandbox(),
         threads=[{"thread_id": "thread-historical"}],
-        runtime_session_id="runtime-1",
+        runtime_id="runtime-1",
     )
     _use_monitor_repo(monkeypatch, repo)
     monkeypatch.setattr(
@@ -941,7 +943,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
         FakeSandboxMonitorRepo(
             sandbox=_detached_sandbox(),
             threads=[{"thread_id": "thread-historical"}],
-            runtime_session_id="runtime-1",
+            runtime_id="runtime-1",
         ),
     )
     monkeypatch.setattr(
@@ -968,7 +970,7 @@ def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeyp
                 "target_type": "sandbox",
                 "target_id": "sandbox-1",
                 "provider_id": "daytona",
-                "runtime_session_id": "runtime-1",
+                "runtime_id": "runtime-1",
             },
             "result_truth": {
                 "lease_state_before": "running",

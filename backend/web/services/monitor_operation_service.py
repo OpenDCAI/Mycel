@@ -192,7 +192,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
         }
 
     provider_name = str(provider.get("id") or sandbox.get("provider_name") or "").strip()
-    runtime_session_id = str(runtime.get("runtime_session_id") or "").strip()
+    runtime_id = str(runtime.get("runtime_id") or "").strip()
     operation = _new_operation(
         kind=_SANDBOX_CLEANUP_ACTION,
         target_type="sandbox",
@@ -202,7 +202,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
             "target_type": "sandbox",
             "target_id": sandbox_id,
             "provider_id": provider_name,
-            "runtime_session_id": runtime_session_id or None,
+            "runtime_id": runtime_id or None,
         },
     )
     _append_event(operation, status="running", message="Destroy flow started")
@@ -226,7 +226,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
         operation["result_truth"] = {
             "sandbox_state_before": sandbox.get("observed_state"),
             "sandbox_state_after": sandbox.get("observed_state"),
-            "runtime_state_after": str(runtime.get("runtime_session_id") or "").strip() or None,
+            "runtime_state_after": str(runtime.get("runtime_id") or "").strip() or None,
         }
         _append_event(operation, status="failed", message=str(exc))
         return {

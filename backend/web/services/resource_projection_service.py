@@ -54,14 +54,14 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         if status == "running":
             running_count += 1
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip() or None
-        secondary_identity = str(sandbox.get("runtime_session_id") or "sandbox").strip()
+        secondary_identity = str(sandbox.get("runtime_id") or "sandbox").strip()
         resource_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{secondary_identity}:{thread_id}"
         resource_rows.append(
             resource_service.build_resource_row_payload(
                 resource_identity=resource_identity,
                 sandbox_id=sandbox_id,
                 thread_id=thread_id,
-                runtime_session_id=sandbox.get("runtime_session_id"),
+                runtime_id=sandbox.get("runtime_id"),
                 owner=owner,
                 status=status,
                 started_at=str(sandbox.get("created_at") or ""),
@@ -102,7 +102,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
     }
 
 
-def _query_runtime_session_ids(repo: Any, sandbox_ids: list[str]) -> dict[str, str | None]:
+def _query_runtime_ids(repo: Any, sandbox_ids: list[str]) -> dict[str, str | None]:
     ordered_ids = []
     seen: set[str] = set()
     for sandbox_id in sandbox_ids:
@@ -117,10 +117,10 @@ def _query_runtime_session_ids(repo: Any, sandbox_ids: list[str]) -> dict[str, s
     return repo.query_sandbox_instance_ids(ordered_ids)
 
 
-def _load_runtime_session_ids(sandbox_ids: list[str]) -> dict[str, str | None]:
+def _load_runtime_ids(sandbox_ids: list[str]) -> dict[str, str | None]:
     repo = make_sandbox_monitor_repo()
     try:
-        return _query_runtime_session_ids(repo, sandbox_ids)
+        return _query_runtime_ids(repo, sandbox_ids)
     finally:
         repo.close()
 
@@ -133,27 +133,25 @@ def _load_visible_resource_runtime() -> tuple[
     repo = make_sandbox_monitor_repo()
     try:
         resource_rows = _project_user_visible_resource_rows(repo, repo.query_resource_rows())
-        runtime_session_ids = _query_runtime_session_ids(
-            repo, [str(resource_row.get("sandbox_id") or "") for resource_row in resource_rows]
-        )
+        runtime_ids = _query_runtime_ids(repo, [str(resource_row.get("sandbox_id") or "") for resource_row in resource_rows])
     finally:
         repo.close()
 
     snapshot_by_sandbox = list_resource_snapshots_by_sandbox(resource_rows)
-    return resource_rows, runtime_session_ids, snapshot_by_sandbox
+    return resource_rows, runtime_ids, snapshot_by_sandbox
 
 
-def _backfill_runtime_session_ids(sandboxes: list[dict[str, Any]]) -> None:
-    pending_sandboxes = [sandbox for sandbox in sandboxes if not str(sandbox.get("runtime_session_id") or "").strip()]
+def _backfill_runtime_ids(sandboxes: list[dict[str, Any]]) -> None:
+    pending_sandboxes = [sandbox for sandbox in sandboxes if not str(sandbox.get("runtime_id") or "").strip()]
     if not pending_sandboxes:
         return
 
-    runtime_session_ids = _load_runtime_session_ids([str(sandbox.get("sandbox_id") or "") for sandbox in pending_sandboxes])
+    runtime_ids = _load_runtime_ids([str(sandbox.get("sandbox_id") or "") for sandbox in pending_sandboxes])
     for sandbox in pending_sandboxes:
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip()
-        runtime_session_id = runtime_session_ids.get(sandbox_id)
-        if runtime_session_id:
-            sandbox["runtime_session_id"] = runtime_session_id
+        runtime_id = runtime_ids.get(sandbox_id)
+        if runtime_id:
+            sandbox["runtime_id"] = runtime_id
 
 
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
@@ -167,7 +165,7 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
-    _backfill_runtime_session_ids(sandboxes)
+    _backfill_runtime_ids(sandboxes)
 
     sandboxes_by_provider: dict[str, list[dict[str, Any]]] = {}
     for sandbox in sandboxes:
@@ -220,7 +218,7 @@ def _resource_display_status(
     *,
     observed_state: str | None,
     desired_state: str | None,
-    runtime_session_id: str | None,
+    runtime_id: str | None,
     resource_metrics: dict[str, Any] | None,
 ) -> str:
     status = map_sandbox_state_to_display_status(observed_state, desired_state)
@@ -231,7 +229,7 @@ def _resource_display_status(
     # @@@resource-detached-residue - monitor/resources should not inflate running counts with
     # detached sandbox rows that have neither a bound runtime nor any live/quota snapshot. Those rows
     # are residue on this operator surface, even if the product-facing desired state still says running.
-    if observed == "detached" and desired == "running" and not runtime_session_id and resource_metrics is None:
+    if observed == "detached" and desired == "running" and not runtime_id and resource_metrics is None:
         return "stopped"
     return status
 
@@ -274,7 +272,7 @@ def _project_user_visible_resource_rows(repo: Any, rows: list[dict[str, Any]]) -
 
 
 def list_resource_providers() -> dict[str, Any]:
-    resource_rows, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
+    resource_rows, runtime_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for resource_row in resource_rows:
@@ -305,12 +303,12 @@ def list_resource_providers() -> dict[str, Any]:
             desired_state = resource_row.get("desired_state")
             thread_id = str(resource_row.get("thread_id") or "")
             sandbox_id = str(resource_row.get("sandbox_id") or "").strip()
-            runtime_session_id = runtime_session_ids.get(str(resource_row.get("sandbox_id") or "").strip())
+            runtime_id = runtime_ids.get(str(resource_row.get("sandbox_id") or "").strip())
             resource_metrics = _to_resource_metrics(snapshot_by_sandbox.get(sandbox_id))
             normalized = _resource_display_status(
                 observed_state=observed_state,
                 desired_state=desired_state,
-                runtime_session_id=runtime_session_id,
+                runtime_id=runtime_id,
                 resource_metrics=resource_metrics,
             )
             running_identity = _resource_running_identity(resource_row)
@@ -327,7 +325,7 @@ def list_resource_providers() -> dict[str, Any]:
                     resource_identity=resource_identity,
                     sandbox_id=str(resource_row.get("sandbox_id") or "").strip() or None,
                     thread_id=thread_id,
-                    runtime_session_id=runtime_session_id,
+                    runtime_id=runtime_id,
                     owner=owner,
                     status=normalized,
                     started_at=str(resource_row.get("created_at") or ""),
@@ -389,7 +387,7 @@ def list_resource_providers() -> dict[str, Any]:
 
 
 def visible_resource_row_stats() -> dict[str, dict[str, int]]:
-    resource_rows, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
+    resource_rows, runtime_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_resource_ids: set[str] = set()
     seen_running_sandboxes: set[tuple[str, str]] = set()
@@ -402,11 +400,11 @@ def visible_resource_row_stats() -> dict[str, dict[str, int]]:
             provider_stats["resource_rows"] += 1
 
         sandbox_id = str(resource_row.get("sandbox_id") or "").strip()
-        runtime_session_id = runtime_session_ids.get(sandbox_id)
+        runtime_id = runtime_ids.get(sandbox_id)
         normalized = _resource_display_status(
             observed_state=resource_row.get("observed_state"),
             desired_state=resource_row.get("desired_state"),
-            runtime_session_id=runtime_session_id,
+            runtime_id=runtime_id,
             resource_metrics=_to_resource_metrics(snapshot_by_sandbox.get(sandbox_id)),
         )
         running_identity = _resource_running_identity(resource_row)

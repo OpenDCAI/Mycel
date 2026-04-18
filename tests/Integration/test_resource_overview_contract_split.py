@@ -22,13 +22,13 @@ class _App:
 
 
 class _FakeMonitorRepo:
-    def __init__(self, runtime_session_ids: dict[str, str | None]) -> None:
-        self._runtime_session_ids = runtime_session_ids
+    def __init__(self, runtime_ids: dict[str, str | None]) -> None:
+        self._runtime_ids = runtime_ids
         self.batch_calls: list[list[str]] = []
 
     def query_sandbox_instance_ids(self, sandbox_ids: list[str]) -> dict[str, str | None]:
         self.batch_calls.append(list(sandbox_ids))
-        return {sandbox_id: self._runtime_session_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
+        return {sandbox_id: self._runtime_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
 
     def close(self) -> None:
         return None
@@ -67,7 +67,7 @@ def _lease(
     observed_state: str = "running",
     desired_state: str = "running",
     created_at: str = "2026-04-07T10:00:00Z",
-    runtime_session_id: str | None = None,
+    runtime_id: str | None = None,
     cwd: str | None = None,
     recipe: dict | None = None,
 ) -> dict:
@@ -81,8 +81,8 @@ def _lease(
         "desired_state": desired_state,
         "created_at": created_at,
     }
-    if runtime_session_id is not None:
-        payload["runtime_session_id"] = runtime_session_id
+    if runtime_id is not None:
+        payload["runtime_id"] = runtime_id
     if cwd is not None:
         payload["cwd"] = cwd
     if recipe is not None:
@@ -149,7 +149,7 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
                 agent_user_id="agent-1",
                 agent_name="Morel",
                 avatar_url="/api/users/agent-1/avatar",
-                runtime_session_id="provider-session-1",
+                runtime_id="provider-session-1",
                 cwd="/home/daytona/app",
                 recipe={"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
             )
@@ -182,7 +182,8 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
     assert resource_row["agentUserId"] == "agent-1"
     assert resource_row["agentName"] == "Morel"
     assert resource_row["avatarUrl"] == "/api/users/agent-1/avatar"
-    assert resource_row["runtimeSessionId"] == "provider-session-1"
+    assert resource_row["runtimeId"] == "provider-session-1"
+    assert "runtimeSessionId" not in resource_row
     assert resource_row["startedAt"] == "2026-04-07T10:00:00Z"
     assert "memberId" not in resource_row
     assert "memberName" not in resource_row
@@ -200,7 +201,7 @@ def test_user_resource_projection_omits_lease_id(monkeypatch) -> None:
                 agent_user_id="agent-1",
                 agent_name="Morel",
                 avatar_url="/api/users/agent-1/avatar",
-                runtime_session_id="provider-session-1",
+                runtime_id="provider-session-1",
                 cwd="/home/daytona/app",
                 recipe={"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
             )
@@ -233,7 +234,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                 avatar_url="/api/users/agent-1/avatar",
                 observed_state="paused",
                 desired_state="paused",
-                runtime_session_id="provider-session-1",
+                runtime_id="provider-session-1",
             )
         ],
     )
@@ -259,7 +260,8 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
         "code": "PROVIDER_UNAVAILABLE",
         "message": "provider unavailable",
     }
-    assert payload["providers"][0]["resource_rows"][0]["runtimeSessionId"] == "provider-session-1"
+    assert payload["providers"][0]["resource_rows"][0]["runtimeId"] == "provider-session-1"
+    assert "runtimeSessionId" not in payload["providers"][0]["resource_rows"][0]
     assert payload["providers"][0]["resource_rows"][0]["agentUserId"] == "agent-1"
     assert payload["providers"][0]["resource_rows"][0]["agentName"] == "Morel"
     assert payload["providers"][0]["resource_rows"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
@@ -268,7 +270,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
 
 
 @pytest.mark.parametrize(
-    ("leases", "runtime_session_ids", "assertions"),
+    ("leases", "runtime_ids", "assertions"),
     [
         (
             [
@@ -297,8 +299,9 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
             ],
             {"sandbox-local": None, "sandbox-remote": "provider-session-remote"},
             lambda payload: (
-                "runtimeSessionId" not in {item["id"]: item for item in payload["providers"]}["local"]["resource_rows"][0],
-                {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["resource_rows"][0]["runtimeSessionId"]
+                "runtimeId" not in {item["id"]: item for item in payload["providers"]}["local"]["resource_rows"][0],
+                "runtimeSessionId" not in {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["resource_rows"][0],
+                {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["resource_rows"][0]["runtimeId"]
                 == "provider-session-remote",
             ),
         ),
@@ -328,15 +331,16 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
             ],
             {"sandbox-a": "provider-session-a", "sandbox-b": "provider-session-b"},
             lambda payload: (
-                [resource_row["runtimeSessionId"] for resource_row in payload["providers"][0]["resource_rows"]]
+                all("runtimeSessionId" not in resource_row for resource_row in payload["providers"][0]["resource_rows"]),
+                [resource_row["runtimeId"] for resource_row in payload["providers"][0]["resource_rows"]]
                 == ["provider-session-a", "provider-session-b"],
             ),
         ),
     ],
     ids=["skip-local-backfill", "batch-backfill-remote-only"],
 )
-def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases, runtime_session_ids, assertions) -> None:
-    monitor_repo = _FakeMonitorRepo(runtime_session_ids)
+def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases, runtime_ids, assertions) -> None:
+    monitor_repo = _FakeMonitorRepo(runtime_ids)
 
     def _fake_list_user_sandboxes(owner_user_id: str, **kwargs):
         return leases
@@ -377,7 +381,7 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
                 agent_user_id="agent-1",
                 agent_name="Morel",
                 avatar_url="/api/users/agent-1/avatar",
-                runtime_session_id="provider-session-1",
+                runtime_id="provider-session-1",
             )
         ],
     )
@@ -400,7 +404,8 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
     resource_row = payload["providers"][0]["resource_rows"][0]
     assert payload["summary"]["scope"] == "user"
     assert payload["providers"][0]["id"] == "daytona_selfhost"
-    assert resource_row["runtimeSessionId"] == "provider-session-1"
+    assert resource_row["runtimeId"] == "provider-session-1"
+    assert "runtimeSessionId" not in resource_row
     assert resource_row["agentUserId"] == "agent-1"
     assert resource_row["agentName"] == "Morel"
     assert resource_row["avatarUrl"] == "/api/users/agent-1/avatar"

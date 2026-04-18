@@ -148,7 +148,7 @@ def test_build_resource_row_payload_has_no_member_or_lease_id_field() -> None:
         resource_identity="sandbox-1:thread-1",
         sandbox_id="sandbox-1",
         thread_id="thread-1",
-        runtime_session_id="provider-session-1",
+        runtime_id="provider-session-1",
         owner={
             "thread_id": "thread-1",
             "agent_user_id": "agent-1",
@@ -164,7 +164,7 @@ def test_build_resource_row_payload_has_no_member_or_lease_id_field() -> None:
         "id": "sandbox-1:thread-1",
         "sandboxId": "sandbox-1",
         "threadId": "thread-1",
-        "runtimeSessionId": "provider-session-1",
+        "runtimeId": "provider-session-1",
         "agentUserId": "agent-1",
         "agentName": "Toad",
         "avatarUrl": "/api/users/agent-1/avatar",

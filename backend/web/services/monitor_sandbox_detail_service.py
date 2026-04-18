@@ -75,7 +75,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
 
     threads = repo.query_sandbox_threads(sandbox_id)
     runtime_rows = repo.query_sandbox_runtime_rows(sandbox_id)
-    runtime_session_id = repo.query_sandbox_instance_id(sandbox_id)
+    runtime_id = repo.query_sandbox_instance_id(sandbox_id)
     runtime_projection = _runtime_row_projection(runtime_rows)
 
     raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
@@ -106,7 +106,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
             "name": provider_name,
         },
         "runtime": {
-            "runtime_session_id": runtime_session_id,
+            "runtime_id": runtime_id,
         },
         "threads": live_thread_refs,
         "runtime_rows": runtime_projection,

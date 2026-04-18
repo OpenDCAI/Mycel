@@ -27,7 +27,7 @@ export function MonitorRoutes() {
         <Route path="/sandboxes" element={<SandboxesPage />} />
         <Route path="/sandboxes/:sandboxId" element={<SandboxDetailPage />} />
         <Route path="/operations/:operationId" element={<OperationDetailPage />} />
-        <Route path="/runtimes/:runtimeSessionId" element={<RuntimeDetailPage />} />
+        <Route path="/runtimes/:runtimeId" element={<RuntimeDetailPage />} />
         <Route path="/threads" element={<ThreadsPage />} />
         <Route path="/threads/:threadId" element={<ThreadDetailPage />} />
         <Route path="/evaluation" element={<EvaluationPage />} />

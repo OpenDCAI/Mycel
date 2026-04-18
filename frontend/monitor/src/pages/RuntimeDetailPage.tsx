@@ -11,7 +11,7 @@ type RuntimeDetailPayload = {
     consoleUrl?: string | null;
   } | null;
   runtime?: {
-    runtimeSessionId?: string | null;
+    runtimeId?: string | null;
     status?: string | null;
     threadId?: string | null;
     agentName?: string | null;
@@ -30,11 +30,11 @@ export function buildRuntimeRelationShell(data: RuntimeDetailPayload) {
 }
 
 export default function RuntimeDetailPage() {
-  const params = useParams<{ runtimeSessionId: string }>();
-  const runtimeSessionId = params.runtimeSessionId ?? "";
-  const { data, error } = useMonitorData<RuntimeDetailPayload>(`/runtimes/${runtimeSessionId}`);
+  const params = useParams<{ runtimeId: string }>();
+  const runtimeId = params.runtimeId ?? "";
+  const { data, error } = useMonitorData<RuntimeDetailPayload>(`/runtimes/${runtimeId}`);
 
-  if (error) return <ErrorState title={`Runtime ${runtimeSessionId}`} error={error} />;
+  if (error) return <ErrorState title={`Runtime ${runtimeId}`} error={error} />;
   if (!data) return <div>Loading...</div>;
 
   const provider = data.provider ?? {};
@@ -44,7 +44,7 @@ export default function RuntimeDetailPage() {
 
   return (
     <div className="page">
-      <h1>{`Runtime ${runtime.runtimeSessionId ?? runtimeSessionId}`}</h1>
+      <h1>{`Runtime ${runtime.runtimeId ?? runtimeId}`}</h1>
       <p className="description">
         {runtime.agentName ?? "Sandbox runtime"} · {runtime.status ?? "-"}
       </p>

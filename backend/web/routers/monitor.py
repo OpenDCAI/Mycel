@@ -88,9 +88,9 @@ def operation_detail_snapshot(operation_id: str):
     return _or_404(monitor_gateway.get_operation_detail, operation_id)
 
 
-@router.get("/runtimes/{runtime_session_id}")
-def runtime_detail_snapshot(runtime_session_id: str):
-    return _or_404(monitor_gateway.get_runtime_detail, runtime_session_id)
+@router.get("/runtimes/{runtime_id}")
+def runtime_detail_snapshot(runtime_id: str):
+    return _or_404(monitor_gateway.get_runtime_detail, runtime_id)
 
 
 @router.get("/sandbox-configs")

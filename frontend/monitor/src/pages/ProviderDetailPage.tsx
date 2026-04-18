@@ -13,7 +13,7 @@ type ProviderDetailPayload = {
     consoleUrl?: string | null;
   };
   sandbox_ids?: string[] | null;
-  runtime_session_ids?: string[] | null;
+  runtime_ids?: string[] | null;
 };
 
 function RelatedIdSection({ title, ids, href }: { title: string; ids: string[]; href: (id: string) => string }) {
@@ -54,7 +54,7 @@ export default function ProviderDetailPage() {
   const provider = data.provider ?? {};
   const relationShell = buildProviderRelationShell(data);
   const sandboxes = data.sandbox_ids ?? [];
-  const runtimes = data.runtime_session_ids ?? [];
+  const runtimes = data.runtime_ids ?? [];
 
   return (
     <div className="page">

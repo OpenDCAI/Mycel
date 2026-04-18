@@ -28,7 +28,7 @@ export type SandboxDetailPayload = {
     name?: string | null;
   } | null;
   runtime?: {
-    runtime_session_id?: string | null;
+    runtime_id?: string | null;
   } | null;
   threads?: Array<{
     thread_id?: string | null;
@@ -231,8 +231,8 @@ export default function SandboxDetailPage() {
           <article className="surface-card">
             <p className="surface-card__eyebrow">Runtime</p>
             <p className="surface-card__value surface-card__value--compact">
-              {data.runtime?.runtime_session_id ? (
-                <Link to={`/runtimes/${data.runtime.runtime_session_id}`}>{data.runtime.runtime_session_id}</Link>
+              {data.runtime?.runtime_id ? (
+                <Link to={`/runtimes/${data.runtime.runtime_id}`}>{data.runtime.runtime_id}</Link>
               ) : (
                 "-"
               )}
