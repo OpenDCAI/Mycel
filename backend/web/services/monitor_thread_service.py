@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_sandbox_read_service, monitor_thread_read_service, monitor_thread_trajectory_service
+from backend.web.services import (
+    monitor_sandbox_read_service,
+    monitor_thread_read_service,
+    monitor_thread_trajectory_service,
+    owner_thread_workbench_service,
+)
 
 
 def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
-    from backend.web.routers.threads import build_owner_thread_workbench
-
-    return build_owner_thread_workbench(app, user_id)
+    return owner_thread_workbench_service.build_owner_thread_workbench(app, user_id)
 
 
 def _derive_thread_summary_from_runtime_rows(runtime_rows: list[dict[str, Any]]) -> dict[str, Any] | None:

@@ -6,7 +6,6 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import UTC
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -33,6 +32,10 @@ from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
+from backend.web.services.owner_thread_workbench_service import (
+    build_owner_thread_workbench_from_rows,
+    sidebar_label,
+)
 from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
@@ -41,12 +44,10 @@ from backend.web.services.streaming_service import (
 )
 from backend.web.services.thread_launch_config_service import resolve_default_config
 from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
-from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.web.services.thread_state_service import (
     get_sandbox_info,
     get_sandbox_status_from_repos,
 )
-from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
@@ -60,20 +61,6 @@ from storage.contracts import WorkspaceRow
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
-
-
-def _is_internal_child_thread(thread_id: str) -> bool:
-    return thread_id.startswith("subagent-")
-
-
-def _sidebar_label(*, is_main: bool, branch_index: int) -> str | None:
-    if branch_index < 0:
-        raise ValueError(f"branch_index must be >= 0, got {branch_index}")
-    if is_main and branch_index != 0:
-        raise ValueError(f"Default thread must have branch_index=0, got {branch_index}")
-    if not is_main and branch_index == 0:
-        raise ValueError("Child thread must have branch_index>0")
-    return None
 
 
 def _invalidate_resource_overview_cache() -> None:
@@ -378,7 +365,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
         "agent_user_id": agent_user.id,
         "agent_name": agent_user.display_name,
         "branch_index": thread["branch_index"],
-        "sidebar_label": _sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
+        "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
         "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
         "is_main": thread["is_main"],
     }
@@ -811,7 +798,7 @@ def _create_owned_thread(
         "agent_user_id": agent_user_id,
         "agent_name": agent_user.display_name,
         "branch_index": branch_index,
-        "sidebar_label": _sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
+        "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_user_id, bool(agent_user.avatar)),
         "is_main": resolved_is_main,
     }
@@ -899,59 +886,6 @@ async def get_default_thread_config(
 ) -> dict[str, Any]:
     config = await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
     return config
-
-
-def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
-    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
-    return build_owner_thread_workbench_from_rows(app, raw)
-
-
-def build_owner_thread_workbench_from_rows(app: Any, raw: list[dict[str, Any]]) -> dict[str, Any]:
-    from core.runtime.middleware.monitor import AgentState
-
-    pool = app.state.agent_pool
-    runtime_states = summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
-    visible_threads = []
-    for t in raw:
-        tid = t["id"]
-        runtime_state = runtime_states.get(tid) or converge_owner_thread_runtime(app, tid)
-        if runtime_state in {"missing", "purged"}:
-            continue
-        if _is_internal_child_thread(tid):
-            continue
-        visible_threads.append(t)
-
-    threads = []
-    for t in canonical_owner_threads(visible_threads):
-        tid = t["id"]
-        sandbox_type = t.get("sandbox_type", "local")
-        running = False
-        agent = pool.get(f"{tid}:{sandbox_type}")
-        if agent and hasattr(agent, "runtime"):
-            running = agent.runtime.current_state == AgentState.ACTIVE
-        last_active = app.state.thread_last_active.get(tid)
-        from datetime import datetime
-
-        updated_at = datetime.fromtimestamp(last_active, tz=UTC).isoformat() if last_active else None
-
-        threads.append(
-            {
-                "thread_id": tid,
-                "sandbox": t.get("sandbox_type", "local"),
-                "agent_name": t.get("agent_name"),
-                "agent_user_id": t.get("agent_user_id"),
-                "branch_index": t.get("branch_index"),
-                "sidebar_label": _sidebar_label(
-                    is_main=bool(t.get("is_main", False)),
-                    branch_index=int(t.get("branch_index", 0)),
-                ),
-                "avatar_url": avatar_url(t.get("agent_user_id"), bool(t.get("agent_avatar"))),
-                "is_main": t.get("is_main", False),
-                "running": running,
-                "updated_at": updated_at,
-            }
-        )
-    return {"threads": threads}
 
 
 @router.get("")

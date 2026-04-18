@@ -61,3 +61,10 @@ def test_monitor_thread_detail_uses_trajectory_read_port():
     assert "build_monitor_thread_trajectory" not in thread_source
     assert "monitor_thread_trajectory_service" in thread_source
     assert "build_monitor_thread_trajectory" in trajectory_source
+
+
+def test_monitor_thread_list_does_not_depend_on_threads_router():
+    thread_source = inspect.getsource(monitor_thread_service)
+
+    assert "backend.web.routers.threads" not in thread_source
+    assert "owner_thread_workbench_service" in thread_source
