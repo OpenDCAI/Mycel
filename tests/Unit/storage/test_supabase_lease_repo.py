@@ -2,6 +2,7 @@ import inspect
 
 import pytest
 
+import storage.providers.supabase.lease_repo as lease_repo_module
 from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
 from tests.fakes.supabase import FakeSupabaseClient
 
@@ -22,6 +23,13 @@ def test_supabase_lease_repo_names_container_bridge_without_adapter_label():
 
     assert "Lease-compatible adapter" not in source
     assert "Container-backed LeaseRepo bridge" in source
+
+
+def test_supabase_lease_repo_internal_bridge_state_not_named_as_compat_helper():
+    source = inspect.getsource(lease_repo_module)
+
+    assert "def _compat(" not in source
+    assert "compat =" not in source
 
 
 def _sandbox_row(
@@ -139,7 +147,7 @@ def test_supabase_lease_repo_create_writes_container_sandbox_bridge():
     assert "volume_id" not in row
 
 
-def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and_compat_state():
+def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and_bridge_state():
     tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
     repo = SupabaseLeaseRepo(client=_client(tables))
 
@@ -158,7 +166,7 @@ def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and
     assert updated["_instance"]["instance_id"] == "inst-1"
 
 
-def test_supabase_lease_repo_persist_metadata_updates_container_and_compat_fields():
+def test_supabase_lease_repo_persist_metadata_updates_container_and_bridge_state_fields():
     tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
     repo = SupabaseLeaseRepo(client=_client(tables))
 
@@ -177,16 +185,16 @@ def test_supabase_lease_repo_persist_metadata_updates_container_and_compat_field
     )
 
     row = tables["container.sandboxes"][0]
-    compat = row["config"]["lease_compat"]
+    bridge_state = row["config"]["lease_compat"]
     assert updated["lease_id"] == "lease-1"
     assert row["sandbox_template_id"] == "local:python"
     assert row["observed_state"] == "unknown"
     assert row["last_error"] == "provider boom"
-    assert compat["recipe_json"] == '{"id":"local:python"}'
-    assert compat["version"] == 3
-    assert compat["needs_refresh"] == 1
-    assert compat["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
-    assert compat["status"] == "recovering"
+    assert bridge_state["recipe_json"] == '{"id":"local:python"}'
+    assert bridge_state["version"] == 3
+    assert bridge_state["needs_refresh"] == 1
+    assert bridge_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+    assert bridge_state["status"] == "recovering"
 
 
 def test_supabase_lease_repo_observe_status_detaches_instance_from_container_sandbox():
@@ -200,26 +208,26 @@ def test_supabase_lease_repo_observe_status_detaches_instance_from_container_san
     )
 
     row = tables["container.sandboxes"][0]
-    compat = row["config"]["lease_compat"]
+    bridge_state = row["config"]["lease_compat"]
     assert updated["lease_id"] == "lease-1"
     assert row["provider_env_id"] is None
     assert row["observed_state"] == "detached"
-    assert compat["status"] == "expired"
-    assert compat["needs_refresh"] == 0
-    assert compat["refresh_hint_at"] is None
-    assert compat["instance_created_at"] is None
+    assert bridge_state["status"] == "expired"
+    assert bridge_state["needs_refresh"] == 0
+    assert bridge_state["refresh_hint_at"] is None
+    assert bridge_state["instance_created_at"] is None
     assert updated["_instance"] is None
 
 
-def test_supabase_lease_repo_mark_needs_refresh_updates_compat_only():
+def test_supabase_lease_repo_mark_needs_refresh_updates_bridge_state_only():
     tables = {"container.sandboxes": [_sandbox_row(needs_refresh=0, refresh_hint_at=None)]}
     repo = SupabaseLeaseRepo(client=_client(tables))
 
     assert repo.mark_needs_refresh("lease-1", hint_at="2026-04-07T00:00:06+00:00") is True
 
-    compat = tables["container.sandboxes"][0]["config"]["lease_compat"]
-    assert compat["needs_refresh"] == 1
-    assert compat["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+    bridge_state = tables["container.sandboxes"][0]["config"]["lease_compat"]
+    assert bridge_state["needs_refresh"] == 1
+    assert bridge_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
 
 
 def test_supabase_lease_repo_delete_removes_container_sandbox_bridge():
