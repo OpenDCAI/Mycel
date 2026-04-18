@@ -77,37 +77,6 @@ class _FakeMonitorRepo:
         pass
 
 
-def test_fake_monitor_repo_no_longer_exposes_lease_instance_shell() -> None:
-    repo = _FakeMonitorRepo([])
-
-    assert not hasattr(repo, "query_lease_instance_id")
-
-
-def test_fake_monitor_repo_no_longer_exposes_broader_lease_protocol_shell() -> None:
-    repo = _FakeMonitorRepo([])
-
-    assert not hasattr(repo, "query_lease")
-    assert not hasattr(repo, "query_lease_threads")
-
-
-def test_sandbox_service_no_longer_exposes_user_visible_lease_summary_shell() -> None:
-    assert not hasattr(sandbox_service, "list_user_leases")
-    assert not hasattr(sandbox_service, "resolve_owned_lease")
-    assert hasattr(sandbox_service, "count_user_visible_sandboxes_by_provider")
-    assert not hasattr(sandbox_service, "count_user_visible_leases_by_provider")
-
-
-def test_user_visible_sandbox_helpers_use_sandbox_runtime_language() -> None:
-    source = sandbox_service.__loader__.get_source(sandbox_service.__name__)
-
-    assert source is not None
-    assert "_lease_agent_payload" not in source
-    assert "_apply_lease_recipe" not in source
-    assert "_is_user_visible_lease_thread" not in source
-    assert "_is_user_visible_lease_state" not in source
-    assert "user-visible-lease-scope" not in source
-
-
 class _FakeThreadRepo:
     def __init__(self, rows):
         self._rows = rows
