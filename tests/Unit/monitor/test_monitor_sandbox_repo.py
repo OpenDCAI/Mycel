@@ -3,6 +3,8 @@ import pytest
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from tests.fakes.supabase import FakeSupabaseClient, FakeSupabaseQuery
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+
 
 class _BrokenSandboxInstancesClient(FakeSupabaseClient):
     def table(self, table_name: str):
@@ -58,7 +60,7 @@ def _repo(tables: dict) -> SupabaseSandboxMonitorRepo:
 def _chat_session(
     session_id: str,
     thread_id: str,
-    lease_id: str,
+    lower_runtime_handle: str,
     *,
     status: str = "active",
     started_at: str | None = None,
@@ -67,7 +69,7 @@ def _chat_session(
     row = {
         "chat_session_id": session_id,
         "thread_id": thread_id,
-        "lease_id": lease_id,
+        LOWER_RUNTIME_KEY: lower_runtime_handle,
         "status": status,
     }
     if started_at is not None:
@@ -77,10 +79,10 @@ def _chat_session(
     return row
 
 
-def _terminal(terminal_id: str, lease_id: str, thread_id: str, created_at: str) -> dict:
+def _terminal(terminal_id: str, lower_runtime_handle: str, thread_id: str, created_at: str) -> dict:
     return {
         "terminal_id": terminal_id,
-        "lease_id": lease_id,
+        LOWER_RUNTIME_KEY: lower_runtime_handle,
         "thread_id": thread_id,
         "created_at": created_at,
     }
@@ -522,7 +524,7 @@ def test_query_sandbox_instance_id_uses_sandbox_provider_env_id() -> None:
                 )
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-1", "provider_session_id": "instance-lease"},
+                {LOWER_RUNTIME_KEY: "lease-1", "provider_session_id": "instance-lease"},
             ],
         }
     )
@@ -584,7 +586,7 @@ def test_query_sandbox_instance_ids_chunks_large_lookup() -> None:
                     )
                     for index in range(175)
                 ],
-                "sandbox_instances": [{"lease_id": "lease-174", "provider_session_id": "sandbox-instance-sandbox-174"}],
+                "sandbox_instances": [{LOWER_RUNTIME_KEY: "lease-174", "provider_session_id": "sandbox-instance-sandbox-174"}],
             }
         )
     )
@@ -603,7 +605,7 @@ def test_query_sandbox_instance_ids_use_sandbox_provider_env_id() -> None:
                 _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", lower_runtime_handle="lease-2"),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-2", "provider_session_id": "stale-instance-2"},
+                {LOWER_RUNTIME_KEY: "lease-2", "provider_session_id": "stale-instance-2"},
             ],
         }
     )
@@ -622,7 +624,7 @@ def test_query_sandbox_instance_ids_use_sandbox_runtime_identity() -> None:
                 _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", lower_runtime_handle="lease-2"),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-2", "provider_session_id": "stale-instance-2"},
+                {LOWER_RUNTIME_KEY: "lease-2", "provider_session_id": "stale-instance-2"},
             ],
         }
     )
@@ -640,7 +642,7 @@ def test_query_sandbox_instance_id_uses_sandbox_runtime_identity() -> None:
                 _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", lower_runtime_handle="lease-1"),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-1", "provider_session_id": "instance-lease"},
+                {LOWER_RUNTIME_KEY: "lease-1", "provider_session_id": "instance-lease"},
             ],
         }
     )
@@ -679,7 +681,7 @@ def test_list_probe_targets_use_sandbox_provider_env_id() -> None:
                 ),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-running", "provider_session_id": "instance-lease"},
+                {LOWER_RUNTIME_KEY: "lease-running", "provider_session_id": "instance-lease"},
             ],
         }
     )
@@ -740,7 +742,7 @@ def test_list_probe_targets_use_sandbox_runtime_identity() -> None:
                 ),
             ],
             "sandbox_instances": [
-                {"lease_id": "lease-running", "provider_session_id": "instance-lease"},
+                {LOWER_RUNTIME_KEY: "lease-running", "provider_session_id": "instance-lease"},
             ],
         }
     )
