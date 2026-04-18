@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from backend.web.services import monitor_operation_repo_service
-from backend.web.services import monitor_runtime_operation_service as runtime_operation
+from backend.web.services import monitor_runtime_mutation_service as runtime_mutation
 
 _ALLOWED_SANDBOX_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
 _SANDBOX_CLEANUP_ACTION = "sandbox_cleanup"
@@ -198,8 +198,8 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
             runtime_rows=runtime_rows,
             threads=threads,
         )
-        result = runtime_operation.execute_sandbox_cleanup(
-            runtime_operation.SandboxCleanupRequest(
+        result = runtime_mutation.execute_sandbox_cleanup(
+            runtime_mutation.SandboxCleanupRequest(
                 lower_runtime_handle=lower_runtime_handle,
                 provider_name=provider_name,
                 detach_thread_bindings=detach_before_cleanup,
@@ -271,8 +271,8 @@ def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str,
     _append_event(operation, status="running", message="Destroy flow started")
 
     try:
-        result = runtime_operation.execute_provider_orphan_runtime_cleanup(
-            runtime_operation.ProviderOrphanRuntimeCleanupRequest(
+        result = runtime_mutation.execute_provider_orphan_runtime_cleanup(
+            runtime_mutation.ProviderOrphanRuntimeCleanupRequest(
                 provider_name=provider,
                 runtime_id=runtime,
             )

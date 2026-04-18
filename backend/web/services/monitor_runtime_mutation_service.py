@@ -1,4 +1,4 @@
-"""Runtime mutation executor for Monitor operations."""
+"""Sandbox runtime mutation port for Monitor operations."""
 
 from __future__ import annotations
 
