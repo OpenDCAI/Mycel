@@ -46,6 +46,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "thread_repo": ("storage.providers.supabase.thread_repo", "SupabaseThreadRepo"),
     "workspace_repo": ("storage.providers.supabase.workspace_repo", "SupabaseWorkspaceRepo"),
     "sandbox_repo": ("storage.providers.supabase.sandbox_repo", "SupabaseSandboxRepo"),
+    "sandbox_monitor_repo": ("storage.providers.supabase.sandbox_monitor_repo", "SupabaseSandboxMonitorRepo"),
     "recipe_repo": ("storage.providers.supabase.recipe_repo", "SupabaseRecipeRepo"),
     "chat_repo": ("storage.providers.supabase.chat_repo", "SupabaseChatRepo"),
     "chat_member_repo": ("storage.providers.supabase.messaging_repo", "SupabaseChatMemberRepo"),
@@ -119,6 +120,9 @@ class StorageContainer:
 
     def sandbox_repo(self) -> SandboxRepo:
         return self._build("sandbox_repo")
+
+    def sandbox_monitor_repo(self) -> Any:
+        return self._build("sandbox_monitor_repo")
 
     def recipe_repo(self) -> RecipeRepo:
         return self._build("recipe_repo")

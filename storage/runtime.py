@@ -129,10 +129,12 @@ def build_sandbox_monitor_repo(
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
 ):
-    client = _resolve_supabase_client(supabase_client, supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY)
-    from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
-
-    return SupabaseSandboxMonitorRepo(client)
+    return _build_storage_repo(
+        "sandbox_monitor_repo",
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        default_supabase_client_factory=_WEB_SUPABASE_CLIENT_FACTORY,
+    )
 
 
 def build_provider_event_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):

@@ -16,6 +16,12 @@ def test_storage_container_exposes_sandbox_repo() -> None:
     assert container.sandbox_repo().__class__.__name__ == "SupabaseSandboxRepo"
 
 
+def test_storage_container_exposes_sandbox_monitor_repo() -> None:
+    container = StorageContainer(supabase_client=_FakeClient())
+
+    assert container.sandbox_monitor_repo().__class__.__name__ == "SupabaseSandboxMonitorRepo"
+
+
 def test_runtime_builder_exposes_sandbox_repo() -> None:
     repo = build_sandbox_repo(supabase_client=_FakeClient())
 
