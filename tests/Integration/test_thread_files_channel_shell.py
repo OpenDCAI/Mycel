@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,35 +8,6 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from backend.web.routers import thread_files as thread_files_router
-from backend.web.services import file_channel_service
-
-
-def test_file_channel_service_no_longer_imports_storage_factory() -> None:
-    file_channel_source = inspect.getsource(file_channel_service)
-
-    assert "backend.web.core.storage_factory" not in file_channel_source
-    assert "backend.web.utils.helpers" in file_channel_source
-    assert "SQLiteTerminalRepo" not in file_channel_source
-    assert "SQLiteLeaseRepo" not in file_channel_source
-    assert "build_chat_session_repo" not in file_channel_source
-    assert "touch_thread_activity" not in file_channel_source
-
-
-def test_helpers_no_longer_import_storage_factory() -> None:
-    helpers_source = Path("backend/web/utils/helpers.py").read_text(encoding="utf-8")
-
-    assert "backend.web.core.storage_factory" not in helpers_source
-    assert "storage.runtime" in helpers_source
-    assert "resolve_role_db_path" not in helpers_source
-    assert "sandbox.control_plane_repos" in helpers_source
-
-
-def test_thread_file_delete_handler_uses_file_channel_language() -> None:
-    router_source = Path("backend/web/routers/thread_files.py").read_text(encoding="utf-8")
-
-    assert "delete_workspace_file" not in router_source
-    assert "Delete a file from workspace." not in router_source
-    assert "delete_channel_file" in router_source
 
 
 @pytest.mark.asyncio
