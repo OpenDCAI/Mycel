@@ -23,7 +23,7 @@ type ThreadDetailPayload = {
     desired_state?: string | null;
     observed_state?: string | null;
   } | null;
-  sessions?: Array<{
+  runtime_rows?: Array<{
     chat_session_id?: string | null;
     status?: string | null;
   }> | null;

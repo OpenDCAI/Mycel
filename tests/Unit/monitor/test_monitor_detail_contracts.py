@@ -90,10 +90,10 @@ _MISSING = object()
 
 
 class FakeSandboxMonitorRepo:
-    def __init__(self, *, sandbox=None, threads=None, sessions=None, runtime_session_id="runtime-1", sandboxes=None):
+    def __init__(self, *, sandbox=None, threads=None, runtime_rows=None, runtime_session_id="runtime-1", sandboxes=None):
         self.sandbox = sandbox
         self.threads = threads or []
-        self.sessions = sessions or []
+        self.runtime_rows = runtime_rows or []
         self.runtime_session_id = runtime_session_id
         self.sandboxes = sandboxes or []
 
@@ -129,7 +129,7 @@ class FakeSandboxMonitorRepo:
         return self.threads
 
     def query_sandbox_runtime_rows(self, _sandbox_id):
-        return self.sessions
+        return self.runtime_rows
 
     def query_sandbox_instance_id(self, _sandbox_id):
         return self.runtime_session_id
@@ -191,15 +191,15 @@ class FakeThreadRepo:
 
 
 class FakeMonitorThreadRepo:
-    def __init__(self, *, summary=None, sessions=None):
+    def __init__(self, *, summary=None, runtime_rows=None):
         self.summary = summary
-        self.sessions = sessions or []
+        self.runtime_rows = runtime_rows or []
 
     def query_thread_summary(self, _thread_id):
         return self.summary
 
     def query_thread_runtime_rows(self, _thread_id):
-        return self.sessions
+        return self.runtime_rows
 
     def close(self):
         return None
@@ -450,7 +450,7 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
         monkeypatch,
         FakeSandboxMonitorRepo(
             threads=[{"thread_id": "thread-1"}],
-            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
+            runtime_rows=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
         ),
     )
 
@@ -460,6 +460,17 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
     assert payload["provider"] == {"id": "daytona", "name": "daytona"}
     assert payload["runtime"] == {"runtime_session_id": "runtime-1"}
     assert payload["threads"] == [{"thread_id": "thread-1"}]
+    assert payload["runtime_rows"] == [
+        {
+            "chat_session_id": "session-1",
+            "thread_id": "thread-1",
+            "status": "active",
+            "started_at": None,
+            "ended_at": None,
+            "close_reason": None,
+        }
+    ]
+    assert "sessions" not in payload
     assert payload["cleanup"]["allowed"] is False
     assert "lease" not in payload
 
@@ -469,7 +480,7 @@ def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_
         monkeypatch,
         FakeSandboxMonitorRepo(
             threads=[{"thread_id": "thread-child"}, {"thread_id": "thread-main"}],
-            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-main", "status": "active"}],
+            runtime_rows=[{"chat_session_id": "session-1", "thread_id": "thread-main", "status": "active"}],
         ),
     )
 
@@ -521,7 +532,7 @@ def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
         FakeSandboxMonitorRepo(
             sandbox=_sandbox_row(),
             threads=[{"thread_id": "thread-1"}],
-            sessions=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
+            runtime_rows=[{"chat_session_id": "session-1", "thread_id": "thread-1", "status": "active"}],
         ),
     )
 
@@ -549,7 +560,7 @@ def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_read
         FakeSandboxMonitorRepo(
             sandbox=_sandbox_row(lease_id=None, provider_name="local", observed_state="running", desired_state="running"),
             threads=[],
-            sessions=[],
+            runtime_rows=[],
             runtime_session_id="runtime-1",
         ),
     )
@@ -635,7 +646,7 @@ def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypa
             "provider": {"id": "daytona"},
             "runtime": {"runtime_session_id": "runtime-1"},
             "threads": [],
-            "sessions": [],
+            "runtime_rows": [],
             "cleanup": _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup."),
         }
     )
@@ -834,7 +845,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
                 "desired_state": "running",
                 "observed_state": "running",
             },
-            sessions=[{"chat_session_id": "session-1", "status": "active"}],
+            runtime_rows=[{"chat_session_id": "session-1", "status": "active"}],
         ),
     )
     _stub_thread_detail(
@@ -869,6 +880,8 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
     assert payload["owner"]["display_name"] == "Ada"
     assert payload["summary"]["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in payload["summary"]
+    assert payload["runtime_rows"] == [{"chat_session_id": "session-1", "status": "active"}]
+    assert "sessions" not in payload
     assert payload["trajectory"]["run_id"] == "run-1"
     assert payload["trajectory"]["conversation"][0]["role"] == "human"
     assert payload["trajectory"]["events"][0]["event_type"] == "tool_call"
@@ -890,7 +903,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
     _use_monitor_repo(
         monkeypatch,
         FakeMonitorThreadRepo(
-            sessions=[
+            runtime_rows=[
                 {
                     "chat_session_id": "sess-1",
                     "status": "closed",

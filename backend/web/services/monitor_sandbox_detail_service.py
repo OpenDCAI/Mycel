@@ -109,7 +109,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
             "runtime_session_id": runtime_session_id,
         },
         "threads": live_thread_refs,
-        "sessions": runtime_projection,
+        "runtime_rows": runtime_projection,
         "cleanup": _sandbox_detail_cleanup_truth(
             sandbox_id=str(sandbox.get("sandbox_id") or "").strip(),
             cleanup_target=cleanup_target,
@@ -153,7 +153,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
     provider = payload.get("provider") or {}
     runtime = payload.get("runtime") or {}
     threads = payload.get("threads") or []
-    runtime_rows = payload.get("sessions") or []
+    runtime_rows = payload.get("runtime_rows") or []
 
     cleanup_target = _sandbox_cleanup_target(sandbox_id)
     lower_runtime_handle = str(cleanup_target.get("lower_runtime_handle") or "").strip()
@@ -164,7 +164,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
         "provider": provider,
         "runtime": runtime,
         "threads": threads,
-        "sessions": runtime_rows,
+        "runtime_rows": runtime_rows,
         "cleanup": monitor_operation_service.build_sandbox_cleanup_truth(
             sandbox_id=sandbox_id,
             triage=payload.get("triage"),

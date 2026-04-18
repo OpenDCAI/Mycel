@@ -29,7 +29,7 @@ describe("sandbox detail page shell", () => {
         runtime_session_id: "runtime-1",
       },
       threads: [{ thread_id: "thread-1" }],
-      sessions: [{ chat_session_id: "chat-1", thread_id: "thread-1", status: "active" }],
+      runtime_rows: [{ chat_session_id: "chat-1", thread_id: "thread-1", status: "active" }],
       cleanup: {
         allowed: true,
         recommended_action: "sandbox_cleanup",

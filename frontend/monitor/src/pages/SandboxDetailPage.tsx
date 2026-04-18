@@ -33,7 +33,7 @@ export type SandboxDetailPayload = {
   threads?: Array<{
     thread_id?: string | null;
   }> | null;
-  sessions?: Array<{
+  runtime_rows?: Array<{
     chat_session_id?: string | null;
     thread_id?: string | null;
     status?: string | null;
@@ -99,8 +99,8 @@ export default function SandboxDetailPage() {
 
   const shell = buildSandboxDetailShell(data);
   const threads = data.threads ?? [];
-  const sessions = data.sessions ?? [];
-  const latestSession = sessions[0] ?? null;
+  const runtimeRows = data.runtime_rows ?? [];
+  const latestRuntimeRow = runtimeRows[0] ?? null;
   const cleanup = data.cleanup ?? {};
   const cleanupAllowed = Boolean(cleanup.allowed);
   const recentOperations = (cleanup.recent_operations ?? []).filter(
@@ -249,7 +249,7 @@ export default function SandboxDetailPage() {
           <article className="surface-card">
             <p className="surface-card__eyebrow">{shell.threadActivityTitle}</p>
             <p className="surface-card__value surface-card__value--compact">
-              {latestSession?.chat_session_id ?? shell.noThreadActivityLabel}
+              {latestRuntimeRow?.chat_session_id ?? shell.noThreadActivityLabel}
             </p>
             <p className="surface-card__body">{shell.threadActivityBody}</p>
           </article>
@@ -272,7 +272,7 @@ export default function SandboxDetailPage() {
           </div>
           <div>
             <strong>{shell.threadActivityStatusLabel}</strong>
-            <span>{latestSession?.status ?? "-"}</span>
+            <span>{latestRuntimeRow?.status ?? "-"}</span>
           </div>
         </div>
       </section>

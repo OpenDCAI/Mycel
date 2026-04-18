@@ -165,7 +165,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
         sandbox_id=str(sandbox.get("sandbox_id") or ""),
         triage=sandbox_detail.get("triage"),
         provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
-        runtime_rows=sandbox_detail.get("sessions") or [],
+        runtime_rows=sandbox_detail.get("runtime_rows") or [],
         threads=threads,
     )
 
@@ -211,7 +211,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
 
     try:
         category = str((sandbox_detail.get("triage") or {}).get("category") or "").strip()
-        runtime_rows = sandbox_detail.get("sessions") or []
+        runtime_rows = sandbox_detail.get("runtime_rows") or []
         detach_before_cleanup = category == "detached_residue" or _can_close_stale_active_runtime_rows(
             category=category,
             runtime_rows=runtime_rows,
