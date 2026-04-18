@@ -21,7 +21,7 @@ from backend.web.services.resource_common import to_resource_status as _to_resou
 from backend.web.services.resource_common import to_session_metrics as _to_session_metrics
 from backend.web.services.sandbox_service import available_sandbox_types
 from sandbox.providers.local import LocalSessionProvider
-from storage.models import map_lease_to_session_status
+from storage.models import map_sandbox_state_to_display_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import list_resource_snapshots_by_sandbox
 
@@ -50,7 +50,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
     for sandbox in sandboxes:
         thread_id = str((sandbox.get("thread_ids") or [None])[0] or "")
         owner = (sandbox.get("agents") or [{}])[0]
-        status = map_lease_to_session_status(sandbox.get("observed_state"), sandbox.get("desired_state"))
+        status = map_sandbox_state_to_display_status(sandbox.get("observed_state"), sandbox.get("desired_state"))
         if status == "running":
             running_count += 1
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip() or None
@@ -221,7 +221,7 @@ def _resource_display_status(
     runtime_session_id: str | None,
     session_metrics: dict[str, Any] | None,
 ) -> str:
-    status = map_lease_to_session_status(observed_state, desired_state)
+    status = map_sandbox_state_to_display_status(observed_state, desired_state)
     observed = str(observed_state or "").strip().lower()
     desired = str(desired_state or "").strip().lower()
     if status != "running":

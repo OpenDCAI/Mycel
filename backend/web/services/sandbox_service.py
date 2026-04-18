@@ -17,7 +17,7 @@ from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
-from storage.models import map_lease_to_session_status
+from storage.models import map_sandbox_state_to_display_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import build_storage_container
 
@@ -218,7 +218,7 @@ def _is_user_visible_sandbox_state(sandbox_row: dict[str, Any]) -> bool:
     # @@@user-visible-sandbox-scope - product-facing sandbox summaries should only
     # expose sandboxes the user can still act on, not historical stopped/destroying
     # residue from monitor storage.
-    status = map_lease_to_session_status(sandbox_row.get("observed_state"), sandbox_row.get("desired_state"))
+    status = map_sandbox_state_to_display_status(sandbox_row.get("observed_state"), sandbox_row.get("desired_state"))
     return status in {"running", "paused"}
 
 
