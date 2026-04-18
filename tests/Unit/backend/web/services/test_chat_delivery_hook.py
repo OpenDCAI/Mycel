@@ -70,3 +70,31 @@ async def test_chat_delivery_hook_requires_recipient_user_type() -> None:
         await asyncio.to_thread(deliver, request)
 
     assert gateway.called is False
+
+
+@pytest.mark.asyncio
+async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
+    class RecordingGateway:
+        called = False
+
+        async def dispatch_chat(self, _envelope):
+            self.called = True
+
+    gateway = RecordingGateway()
+    app = SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=gateway))
+    deliver = chat_delivery_hook.make_chat_delivery_fn(app)
+    request = ChatDeliveryRequest(
+        recipient_id="agent-user-1",
+        recipient_user=SimpleNamespace(type="agent"),
+        content="hello",
+        sender_name="Human",
+        chat_id="chat-1",
+        sender_id="human-user-1",
+        sender_avatar_url=None,
+        signal=None,
+    )
+
+    with pytest.raises(RuntimeError, match="Chat delivery recipient is missing user id: agent-user-1"):
+        await asyncio.to_thread(deliver, request)
+
+    assert gateway.called is False
