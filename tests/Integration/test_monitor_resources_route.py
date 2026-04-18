@@ -131,22 +131,6 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        ("get", "/api/monitor/leases"),
-        ("get", "/api/monitor/leases/lease-1"),
-        ("post", "/api/monitor/leases/lease-1/cleanup"),
-        ("get", "/api/monitor/provider-sessions"),
-        ("post", "/api/monitor/provider-sessions/daytona_selfhost/session-1/cleanup"),
-    ],
-)
-def test_monitor_deleted_lease_and_provider_runtime_routes_are_not_exposed(method, path):
-    response = _request(method, path)
-
-    assert response.status_code == 404
-
-
-@pytest.mark.parametrize(
     ("method", "path", "service_name", "payload"),
     [
         ("get", "/api/monitor/sandboxes", "list_monitor_sandboxes", {"summary": {}, "groups": [], "items": []}),

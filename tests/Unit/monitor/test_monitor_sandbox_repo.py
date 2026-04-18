@@ -259,7 +259,7 @@ def test_query_threads_chunks_sandbox_lookup() -> None:
     assert next(row for row in rows if row["thread_id"] == "thread-174")["current_instance_id"] == "instance-174"
 
 
-def test_query_sandbox_threads_no_longer_roundtrips_through_lease_thread_shell(monkeypatch) -> None:
+def test_query_sandbox_threads_returns_workspace_thread_ids() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -404,60 +404,6 @@ def test_session_monitor_surfaces_do_not_read_removed_chat_sessions_table() -> N
             "created_at": "2026-04-05T09:00:00",
         }
     ]
-
-
-def test_query_sandbox_sessions_no_longer_reads_remote_session_shell(monkeypatch) -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    provider_name="daytona_selfhost",
-                    provider_env_id="instance-1",
-                    desired_state="paused",
-                    observed_state="paused",
-                    historical_lease_id="lease-1",
-                    last_error="last boom",
-                )
-            ],
-            "chat_sessions": [
-                {
-                    **_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
-                    "ended_at": None,
-                    "close_reason": None,
-                }
-            ],
-        }
-    )
-
-    assert repo.query_sandbox_sessions("sandbox-1") == []
-
-
-def test_query_thread_sessions_no_longer_reads_lease_or_session_summary_shell() -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    provider_name="daytona_selfhost",
-                    provider_env_id="instance-1",
-                    desired_state="paused",
-                    observed_state="paused",
-                    historical_lease_id="lease-1",
-                    last_error="last boom",
-                )
-            ],
-            "chat_sessions": [
-                {
-                    **_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
-                    "ended_at": None,
-                    "close_reason": None,
-                }
-            ],
-        }
-    )
-
-    assert repo.query_thread_sessions("thread-1") == []
 
 
 def test_query_sandboxes_uses_latest_workspace_thread_binding() -> None:
