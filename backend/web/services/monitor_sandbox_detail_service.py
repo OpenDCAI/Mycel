@@ -4,25 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_operation_service, monitor_sandbox_read_service
+from backend.web.services import monitor_operation_service, monitor_sandbox_read_service, monitor_thread_read_service
 from backend.web.services import monitor_sandbox_projection_service as sandbox_projection
-from backend.web.services.thread_visibility import canonical_owner_threads
-from storage.runtime import build_thread_repo
 
 
 def _canonical_live_thread_refs(raw_thread_ids: list[str]) -> list[dict[str, Any]]:
     live_threads = sandbox_projection._live_thread_ids(raw_thread_ids)
-    if not live_threads:
-        return []
-
-    repo = build_thread_repo()
-    try:
-        rows = repo.list_by_ids([thread_id for thread_id in raw_thread_ids if thread_id in live_threads])
-    finally:
-        repo.close()
-
-    canonical = canonical_owner_threads(rows)
-    return [{"thread_id": str(row.get("id") or "").strip()} for row in canonical if str(row.get("id") or "").strip()]
+    return monitor_thread_read_service.load_canonical_live_thread_refs(raw_thread_ids, live_threads)
 
 
 def _runtime_row_projection(runtime_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

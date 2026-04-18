@@ -15,6 +15,7 @@ from backend.web.services import (
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_sandbox_read_service,
+    monitor_thread_read_service,
     monitor_thread_service,
 )
 
@@ -68,7 +69,7 @@ def _default_monitor_thread_repo(monkeypatch):
         def close(self):
             return None
 
-    monkeypatch.setattr(monitor_sandbox_detail_service, "build_thread_repo", lambda: FakeCanonicalThreadRepo())
+    monkeypatch.setattr(monitor_thread_read_service, "build_thread_repo", lambda: FakeCanonicalThreadRepo())
 
 
 @pytest.fixture(autouse=True)
@@ -210,8 +211,8 @@ class FakeMonitorThreadRepo:
 
 def _stub_thread_detail(monkeypatch, *, owner=None, trajectory=None):
     monkeypatch.setattr(
-        monitor_thread_service,
-        "_thread_owners",
+        monitor_thread_read_service,
+        "thread_owners",
         lambda *_args, **_kwargs: {"thread-1": owner},
     )
     monkeypatch.setattr(
@@ -499,7 +500,7 @@ def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_
         def close(self):
             return None
 
-    monkeypatch.setattr(monitor_sandbox_detail_service, "build_thread_repo", lambda: _ThreadRepo())
+    monkeypatch.setattr(monitor_thread_read_service, "build_thread_repo", lambda: _ThreadRepo())
 
     payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
