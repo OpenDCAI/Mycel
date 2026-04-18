@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services.thread_history_service import get_thread_history_payload
-from storage.runtime import build_storage_container
+from backend.web.services import monitor_trace_read_service
 
 
 def _summarize_trace_event(event_type: str, payload: dict[str, Any]) -> str:
@@ -85,22 +84,14 @@ def _merge_trace_events(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 async def build_monitor_thread_trajectory(app: Any, thread_id: str) -> dict[str, Any]:
-    history = await get_thread_history_payload(app=app, thread_id=thread_id, limit=200, truncate=0)
-
-    container = build_storage_container()
-    repo = container.run_event_repo()
-    try:
-        run_id = repo.latest_run_id(thread_id)
-        if run_id is None:
-            return {
-                "run_id": None,
-                "conversation": history["messages"],
-                "events": [],
-            }
-
-        rows = repo.list_events(thread_id, run_id, after=0, limit=1000)
-    finally:
-        repo.close()
+    history = await monitor_trace_read_service.load_thread_history_payload(app, thread_id)
+    run_id, rows = monitor_trace_read_service.load_latest_run_events(thread_id)
+    if run_id is None:
+        return {
+            "run_id": None,
+            "conversation": history["messages"],
+            "events": [],
+        }
 
     normalized = [_normalize_trace_event(row, run_id) for row in rows]
     events = _merge_trace_events([item for item in normalized if item is not None])

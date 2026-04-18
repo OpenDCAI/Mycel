@@ -7,6 +7,8 @@ from backend.web.services import (
     monitor_thread_read_service,
     monitor_thread_service,
     monitor_thread_trajectory_service,
+    monitor_trace_read_service,
+    monitor_trace_service,
 )
 
 
@@ -61,6 +63,17 @@ def test_monitor_thread_detail_uses_trajectory_read_port():
     assert "build_monitor_thread_trajectory" not in thread_source
     assert "monitor_thread_trajectory_service" in thread_source
     assert "build_monitor_thread_trajectory" in trajectory_source
+
+
+def test_monitor_trace_uses_trace_read_source_port():
+    trace_source = inspect.getsource(monitor_trace_service)
+    read_source = inspect.getsource(monitor_trace_read_service)
+
+    assert "thread_history_service" not in trace_source
+    assert "build_storage_container" not in trace_source
+    assert "monitor_trace_read_service" in trace_source
+    assert "get_thread_history_payload" in read_source
+    assert "build_storage_container" in read_source
 
 
 def test_monitor_thread_list_does_not_depend_on_threads_router():
