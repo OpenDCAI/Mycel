@@ -13,6 +13,7 @@ from backend.web.services import (
     monitor_operation_service,
     monitor_provider_runtime_inventory_service,
     monitor_provider_runtime_service,
+    monitor_sandbox_config_provider_service,
     monitor_sandbox_config_service,
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
@@ -310,7 +311,7 @@ def test_get_monitor_runtime_detail_uses_resource_row_local_naming():
 def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_path):
     monkeypatch.setattr(monitor_sandbox_config_service.web_config, "LOCAL_WORKSPACE_ROOT", tmp_path)
     monkeypatch.setattr(
-        monitor_sandbox_config_service.sandbox_service,
+        monitor_sandbox_config_provider_service,
         "available_sandbox_types",
         lambda: [
             {"name": "local", "provider": "local", "available": True},
