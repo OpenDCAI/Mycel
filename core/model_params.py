@@ -1,4 +1,4 @@
-"""Model parameter normalization for provider/model-specific compatibility."""
+"""Model parameter normalization for provider/model-specific request shapes."""
 
 from __future__ import annotations
 

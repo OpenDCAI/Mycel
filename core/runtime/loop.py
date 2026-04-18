@@ -1789,7 +1789,7 @@ class QueryLoop:
             return None
 
     async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
-        """Compatibility helper for tests and bridge callers that still inspect channel_values."""
+        """State snapshot helper for tests and bridge callers that still inspect channel_values."""
         state = await self._load_thread_checkpoint_state(thread_id)
         if state is None:
             return {}

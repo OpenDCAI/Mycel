@@ -77,7 +77,7 @@ class SupabaseSandboxMonitorRepo:
 
     def query_thread_sessions(self, thread_id: str) -> list[dict]:
         # @@@monitor-session-demotion - Supabase no longer owns runtime-local chat
-        # session history; remote monitor detail must not read legacy chat_sessions.
+        # session history; remote monitor detail must not read runtime-local chat_sessions.
         return []
 
     def query_sandboxes(self) -> list[dict]:

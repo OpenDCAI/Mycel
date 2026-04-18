@@ -151,7 +151,7 @@ Code: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Consolas, monos
 
 ### Animation Presets
 
-Use class names directly. Prefer `motion-*` names; `animate-*` aliases exist for backward compatibility.
+Use class names directly. Prefer `motion-*` names; `animate-*` aliases remain during the motion naming transition.
 
 | Class | Animation | Duration | Usage |
 |-------|-----------|----------|-------|
