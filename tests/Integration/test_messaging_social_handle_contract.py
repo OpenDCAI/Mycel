@@ -1376,6 +1376,29 @@ def test_chat_tool_send_fails_before_unread_check_when_created_chat_id_is_empty(
     assert sent == []
 
 
+def test_chat_tool_send_fails_before_send_when_unread_count_is_invalid() -> None:
+    registry = ToolRegistry()
+    sent: list[tuple[str, str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            find_or_create_chat=lambda _user_ids: {"id": "chat-1"},
+            count_unread=lambda _chat_id, _user_id: None,
+            send=lambda chat_id, sender_id, content, **_kwargs: sent.append((chat_id, sender_id, content)),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        send_message.handler(content="hello", participant_id="agent-user-1")
+
+    assert str(excinfo.value) == "Chat unread count is invalid for chat chat-1"
+    assert sent == []
+
+
 def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
     registry = ToolRegistry()
     sent: list[dict[str, object]] = []

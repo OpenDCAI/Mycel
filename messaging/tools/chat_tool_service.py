@@ -314,6 +314,8 @@ class ChatToolService:
             # delivery invariant: you must consume unread messages before replying,
             # otherwise siblings can race on stale history and fork the conversation.
             unread = self._messaging.count_unread(resolved_chat_id, eid)
+            if type(unread) is not int:
+                raise RuntimeError(f"Chat unread count is invalid for chat {resolved_chat_id}")
             if unread > 0:
                 return tool_error(
                     f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.",
