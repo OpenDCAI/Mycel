@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.web.core.dependencies import get_current_user_id
-from backend.web.services import resource_projection_service
+from backend.web.services import monitor_gateway
 
 router = APIRouter(prefix="/api/resources", tags=["resources"])
 
@@ -20,7 +20,7 @@ async def resources_overview(
 ) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(
-            resource_projection_service.list_user_resource_providers,
+            monitor_gateway.list_user_resource_providers,
             request.app,
             user_id,
         )

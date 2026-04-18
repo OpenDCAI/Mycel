@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor, resources
-from backend.web.services import monitor_service, resource_service
+from backend.web.services import monitor_gateway
 
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
@@ -46,10 +46,14 @@ def _resource_snapshot() -> dict:
 
 
 def _stub_dashboard_dependencies(monkeypatch):
-    monkeypatch.setattr(monitor, "get_resource_overview_snapshot", _resource_snapshot)
     monkeypatch.setattr(
-        monitor.monitor_service,
-        "list_monitor_sandboxes",
+        monitor_gateway,
+        "get_resource_overview",
+        _resource_snapshot,
+    )
+    monkeypatch.setattr(
+        monitor_gateway,
+        "list_sandboxes",
         lambda: {
             "summary": {"total": 2, "diverged": 1, "orphan": 0, "orphan_diverged": 0},
             "groups": [],
@@ -57,8 +61,8 @@ def _stub_dashboard_dependencies(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        monitor.monitor_service,
-        "get_monitor_evaluation_workbench",
+        monitor_gateway,
+        "get_evaluation_workbench",
         lambda: {
             "summary": "Recent persisted evaluation runs and their runtime state.",
             "overview": {"running_runs": 1},
@@ -78,8 +82,8 @@ def test_monitor_resources_refresh_probes_before_rebuilding_snapshot(monkeypatch
         calls.append("refresh")
         return _resource_snapshot()
 
-    monkeypatch.setattr(resource_service, "refresh_resource_snapshots", _probe)
-    monkeypatch.setattr(monitor, "refresh_resource_overview_sync", _refresh)
+    monkeypatch.setattr(monitor_gateway.resource_service, "refresh_resource_snapshots", _probe)
+    monkeypatch.setattr(monitor_gateway, "refresh_resource_overview_sync", _refresh)
 
     response = _request("post", "/api/monitor/resources/refresh")
 
@@ -89,11 +93,9 @@ def test_monitor_resources_refresh_probes_before_rebuilding_snapshot(monkeypatch
 
 
 def test_monitor_and_product_resource_routes_coexist(monkeypatch):
-    from backend.web.services import resource_projection_service
-
-    monkeypatch.setattr(monitor, "get_resource_overview_snapshot", _resource_snapshot)
+    monkeypatch.setattr(monitor_gateway, "get_resource_overview", _resource_snapshot)
     monkeypatch.setattr(
-        resource_projection_service,
+        monitor_gateway,
         "list_user_resource_providers",
         lambda *_args, **_kwargs: {"summary": {"snapshot_at": "now"}, "providers": []},
     )
@@ -161,7 +163,23 @@ def test_monitor_routes_delegate_to_service(monkeypatch, method, path, service_n
         calls.append((args, kwargs))
         return payload
 
-    monkeypatch.setattr(monitor_service, service_name, _sync)
+    gateway_name = {
+        "list_monitor_sandboxes": "list_sandboxes",
+        "list_monitor_provider_orphan_runtimes": "list_provider_orphan_runtimes",
+        "get_monitor_provider_detail": "get_provider_detail",
+        "get_monitor_sandbox_detail": "get_sandbox_detail",
+        "request_monitor_sandbox_cleanup": "request_sandbox_cleanup",
+        "request_monitor_provider_orphan_runtime_cleanup": "request_provider_orphan_runtime_cleanup",
+        "get_monitor_operation_detail": "get_operation_detail",
+        "get_monitor_runtime_detail": "get_runtime_detail",
+        "get_monitor_sandbox_configs": "get_sandbox_configs",
+        "get_monitor_evaluation_workbench": "get_evaluation_workbench",
+        "get_monitor_evaluation_batches": "get_evaluation_batches",
+        "get_monitor_evaluation_scenarios": "get_evaluation_scenarios",
+        "get_monitor_evaluation_batch_detail": "get_evaluation_batch_detail",
+        "get_monitor_evaluation_run_detail": "get_evaluation_run_detail",
+    }[service_name]
+    monkeypatch.setattr(monitor_gateway, gateway_name, _sync)
 
     response = _request(method, path)
 
@@ -178,7 +196,7 @@ def test_monitor_threads_routes_use_authenticated_owner(monkeypatch):
         calls.append((app, user_id))
         return expected
 
-    monkeypatch.setattr(monitor_service, "list_monitor_threads", _list_threads)
+    monkeypatch.setattr(monitor_gateway, "list_threads", _list_threads)
     app = _app()
     app.dependency_overrides[monitor.get_current_user_id] = lambda: "owner-1"
 
@@ -193,7 +211,7 @@ def test_monitor_thread_detail_route_awaits_service(monkeypatch):
     async def _detail(app, thread_id):
         return {"thread": {"thread_id": thread_id}, "trajectory": {"events": []}}
 
-    monkeypatch.setattr(monitor_service, "get_monitor_thread_detail", _detail)
+    monkeypatch.setattr(monitor_gateway, "get_thread_detail", _detail)
 
     response = _request("get", "/api/monitor/threads/thread-1")
 
@@ -216,7 +234,15 @@ def test_monitor_detail_routes_map_missing_rows_to_404(monkeypatch, path, servic
     def _raise(*_args, **_kwargs):
         raise KeyError(message)
 
-    monkeypatch.setattr(monitor_service, service_name, _raise)
+    gateway_name = {
+        "get_monitor_provider_detail": "get_provider_detail",
+        "get_monitor_sandbox_detail": "get_sandbox_detail",
+        "get_monitor_operation_detail": "get_operation_detail",
+        "get_monitor_runtime_detail": "get_runtime_detail",
+        "get_monitor_evaluation_batch_detail": "get_evaluation_batch_detail",
+        "get_monitor_evaluation_run_detail": "get_evaluation_run_detail",
+    }[service_name]
+    monkeypatch.setattr(monitor_gateway, gateway_name, _raise)
 
     response = _request("get", path, raise_server_exceptions=False)
 
@@ -228,13 +254,13 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
     create_calls = []
     start_calls = []
     monkeypatch.setattr(
-        monitor_service,
-        "create_monitor_evaluation_batch",
+        monitor_gateway,
+        "create_evaluation_batch",
         lambda **kwargs: create_calls.append(kwargs) or {"batch": {"batch_id": "batch-1"}},
     )
     monkeypatch.setattr(
-        monitor_service,
-        "start_monitor_evaluation_batch",
+        monitor_gateway,
+        "start_evaluation_batch",
         lambda **kwargs: start_calls.append(kwargs) or {"accepted": True},
     )
     app = _app()
@@ -274,7 +300,7 @@ def test_monitor_sandbox_routes_map_runtime_failures_to_503(monkeypatch, verb, p
     def _raise(*_args, **_kwargs):
         raise RuntimeError("provider unavailable")
 
-    monkeypatch.setattr(resource_service, service_name, _raise)
+    monkeypatch.setattr(monitor_gateway, service_name, _raise)
 
     response = _request(verb, path, raise_server_exceptions=False)
 
@@ -293,7 +319,7 @@ def test_monitor_sandbox_routes_use_sandbox_shaped_path_subject(monkeypatch, pat
     calls: list[tuple[str, str]] = []
 
     monkeypatch.setattr(
-        resource_service,
+        monitor_gateway,
         service_name,
         lambda sandbox_id, value: calls.append((sandbox_id, value)) or {"ok": True},
     )

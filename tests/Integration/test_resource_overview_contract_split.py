@@ -119,8 +119,8 @@ def test_resources_overview_maps_runtime_error_to_500(monkeypatch) -> None:
 
 def test_monitor_resources_route_stays_global(monkeypatch) -> None:
     monkeypatch.setattr(
-        monitor_router,
-        "get_resource_overview_snapshot",
+        monitor_router.monitor_gateway,
+        "get_resource_overview",
         lambda: {"summary": {"snapshot_at": "now"}, "providers": [{"id": "global-daytona"}]},
     )
 
