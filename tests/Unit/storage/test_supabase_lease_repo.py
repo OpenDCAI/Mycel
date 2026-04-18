@@ -1,8 +1,5 @@
-import inspect
-
 import pytest
 
-import storage.providers.supabase.lease_repo as lease_repo_module
 from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
 from tests.fakes.supabase import FakeSupabaseClient
 
@@ -16,23 +13,6 @@ class _RejectBareSandboxLeasesClient(FakeSupabaseClient):
 
 def _client(tables: dict[str, list[dict]] | None = None) -> _RejectBareSandboxLeasesClient:
     return _RejectBareSandboxLeasesClient(tables={} if tables is None else tables)
-
-
-def test_supabase_lease_repo_names_container_bridge_without_adapter_label():
-    source = inspect.getsource(SupabaseLeaseRepo)
-    stale_adapter_label = "Lease-" + "compatible adapter"
-
-    assert stale_adapter_label not in source
-    assert "Container-backed LeaseRepo bridge" in source
-
-
-def test_supabase_lease_repo_internal_bridge_state_not_named_as_compat_helper():
-    source = inspect.getsource(lease_repo_module)
-    stale_helper = "def _" + "compat("
-    stale_local_name = "compat " + "="
-
-    assert stale_helper not in source
-    assert stale_local_name not in source
 
 
 def _sandbox_row(

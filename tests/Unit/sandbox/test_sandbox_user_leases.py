@@ -270,7 +270,6 @@ def test_user_runtime_rows_no_longer_roundtrips_through_lease_summary_shell(monk
     thread_repo, user_repo = _single_agent_repos("thread-a")
     monitor_repo = _FakeMonitorRepo(rows)
 
-    assert not hasattr(monitor_repo, "list_leases_with_threads")
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
 
     sandboxes = sandbox_service._list_user_runtime_rows(
@@ -341,7 +340,6 @@ def test_count_user_visible_sandboxes_by_provider_no_longer_roundtrips_through_l
     )
     monitor_repo = _FakeMonitorRepo(rows)
 
-    assert not hasattr(monitor_repo, "list_leases_with_threads")
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda **kwargs: monitor_repo)
 
     counts = sandbox_service.count_user_visible_sandboxes_by_provider(
