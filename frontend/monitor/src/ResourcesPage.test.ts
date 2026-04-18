@@ -4,7 +4,7 @@ import { groupResourceSessions } from "./ResourcesPage";
 import type { ResourceSession } from "./resources/types";
 
 describe("resource session grouping", () => {
-  it("groups sandbox-backed resource sessions by sandbox identity before legacy lease residue", () => {
+  it("groups sandbox-backed resource sessions by sandbox identity before lower lease-id residue", () => {
     const sessions: ResourceSession[] = [
       {
         id: "sandbox-1:thread-1",
