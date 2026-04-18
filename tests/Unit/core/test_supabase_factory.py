@@ -1,6 +1,7 @@
+import pytest
 from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
-from backend.web.core.supabase_factory import create_public_supabase_client, create_supabase_auth_client
+from backend.web.core.supabase_factory import create_public_supabase_client, create_supabase_auth_client, create_supabase_client
 
 
 def test_create_supabase_auth_client_prefers_auth_url(monkeypatch):
@@ -23,6 +24,32 @@ def test_create_supabase_auth_client_uses_direct_gotrue_for_auth_url(monkeypatch
 
     assert isinstance(client, SyncGoTrueClient)
     assert client._url == "http://auth.example.test"
+
+
+def test_create_supabase_client_requires_runtime_schema(monkeypatch):
+    monkeypatch.setenv("SUPABASE_INTERNAL_URL", "http://storage.example.test")
+    monkeypatch.setenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.delenv("LEON_DB_SCHEMA", raising=False)
+
+    with pytest.raises(RuntimeError, match="LEON_DB_SCHEMA is required"):
+        create_supabase_client()
+
+
+def test_create_supabase_client_uses_runtime_schema(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_create_client(url, key, options=None):
+        captured["options"] = options
+        return object()
+
+    monkeypatch.setenv("SUPABASE_INTERNAL_URL", "http://storage.example.test")
+    monkeypatch.setenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setenv("LEON_DB_SCHEMA", "agent")
+    monkeypatch.setattr("backend.web.core.supabase_factory.create_client", fake_create_client)
+
+    create_supabase_client()
+
+    assert getattr(captured["options"], "schema", None) == "agent"
 
 
 def test_create_public_supabase_client_forces_public_schema(monkeypatch):

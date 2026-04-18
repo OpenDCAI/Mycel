@@ -36,9 +36,16 @@ def _create_storage_client(*, schema: str):
     return create_client(url, key, options=ClientOptions(httpx_client=http_client, schema=schema))
 
 
+def _resolve_runtime_schema() -> str:
+    schema = str(os.getenv("LEON_DB_SCHEMA") or "").strip()
+    if not schema:
+        raise RuntimeError("LEON_DB_SCHEMA is required for Supabase runtime storage.")
+    return schema
+
+
 def create_supabase_client():
     """Build a supabase-py client for the runtime schema."""
-    return _create_storage_client(schema=os.getenv("LEON_DB_SCHEMA", "public"))
+    return _create_storage_client(schema=_resolve_runtime_schema())
 
 
 def create_public_supabase_client():
