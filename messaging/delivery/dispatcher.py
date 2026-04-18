@@ -96,7 +96,4 @@ class ChatDeliveryDispatcher:
     ) -> None:
         if not self._delivery_fn:
             return
-        try:
-            self._delivery_fn(recipient_id, recipient, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
-        except Exception:
-            logger.exception("[messaging] delivery failed for member %s", recipient_id)
+        self._delivery_fn(recipient_id, recipient, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)

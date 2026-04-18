@@ -110,7 +110,7 @@ def test_dispatcher_respects_non_deliver_policy(action: DeliveryAction) -> None:
     assert delivered == []
 
 
-def test_dispatcher_continues_after_delivery_function_failure() -> None:
+def test_dispatcher_fails_loudly_when_delivery_function_fails() -> None:
     delivered: list[str] = []
 
     def deliver(recipient_id: str, *_args: Any, **_kwargs: Any) -> None:
@@ -124,6 +124,7 @@ def test_dispatcher_continues_after_delivery_function_failure() -> None:
         delivery_fn=deliver,
     )
 
-    dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
+    with pytest.raises(RuntimeError, match="agent offline"):
+        dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
 
-    assert delivered == ["agent-user-2"]
+    assert delivered == []
