@@ -134,7 +134,7 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
     }
     void refreshPermissions();
 
-    // @@@permission-poll-bridge - permission requests are thread-scoped runtime
+    // @@@permission-poll-thread-state - permission requests are thread-scoped runtime
     // state, but they are not first-class SSE events yet. Poll the small
     // thread endpoint so ask-mode is owner-visible without inventing a second
     // client-side state source.

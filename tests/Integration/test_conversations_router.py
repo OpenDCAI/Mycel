@@ -208,7 +208,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
                 list_by_owner_user_id=lambda _user_id: [],
-                get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not bridge visit rows itself")),
+                get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not read visit rows itself")),
             ),
             agent_pool={},
             thread_last_active={},

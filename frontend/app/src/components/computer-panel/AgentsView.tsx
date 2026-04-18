@@ -41,7 +41,7 @@ export function AgentsView({ steps }: AgentsViewProps) {
   const threadId = stream?.thread_id || undefined;
   const { entries, loading, refreshThread, setEntries, displaySeq } = useThreadData(threadId);
   const refreshThreads = useCallback(async () => {}, []);
-  // @@@child-thread-live-bridge - the Agent pane must subscribe to the child
+  // @@@child-thread-live-stream - the Agent pane must subscribe to the child
   // thread's own SSE stream. Polling child detail alone misses the running
   // window and makes the pane look empty until a later refresh.
   const childStream = useThreadStream(threadId ?? "", {

@@ -140,7 +140,7 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
         ("post", "/api/monitor/provider-sessions/daytona_selfhost/session-1/cleanup"),
     ],
 )
-def test_monitor_deleted_lease_and_provider_session_routes_are_not_exposed(method, path):
+def test_monitor_deleted_lease_and_provider_runtime_routes_are_not_exposed(method, path):
     response = _request(method, path)
 
     assert response.status_code == 404

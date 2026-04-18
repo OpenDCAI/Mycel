@@ -381,11 +381,11 @@ async def test_leon_agent_ainit_pushes_late_checkpointer_into_memory_middleware(
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_astream_interface_compatible(tmp_path):
-    """astream yields dicts with 'agent' key — compatible with LangGraph stream_mode=updates."""
+async def test_leon_agent_astream_updates_follow_langgraph_contract(tmp_path):
+    """astream updates mode yields dicts with LangGraph node keys."""
     from core.runtime.agent import LeonAgent
 
-    mock_model = _mock_model("Compatible response")
+    mock_model = _mock_model("LangGraph update response")
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -418,7 +418,7 @@ async def test_leon_agent_astream_messages_updates_mode_yields_langgraph_tuples(
     """messages+updates mode must yield LangGraph-style (mode, data) tuples for SSE consumers."""
     from core.runtime.agent import LeonAgent
 
-    mock_model = _mock_model("Tuple compatible response")
+    mock_model = _mock_model("Tuple stream response")
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -444,7 +444,7 @@ async def test_leon_agent_astream_messages_updates_mode_yields_langgraph_tuples(
         message_chunks = [data for mode, data in chunks if mode == "messages"]
         first_msg_chunk, first_metadata = message_chunks[0]
         assert isinstance(first_msg_chunk, AIMessageChunk)
-        assert "Tuple compatible response" in str(first_msg_chunk.content)
+        assert "Tuple stream response" in str(first_msg_chunk.content)
         assert isinstance(first_metadata, dict)
 
         update_chunks = [data for mode, data in chunks if mode == "updates"]
@@ -996,13 +996,13 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_remove
     assert "- Your owner: Owner 2 (human user_id: human-user-2)" in prompt
 
 
-def test_leon_agent_chat_identity_prompt_does_not_bridge_removed_thread_user_id() -> None:
+def test_leon_agent_chat_identity_prompt_ignores_removed_thread_user_id_lookup() -> None:
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
-    agent._thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("removed thread-user bridge should not be used"))
+    agent._thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("removed thread-user lookup should not be used"))
     agent._chat_repos = {
         "chat_identity_id": "thread-user-3",
         "owner_id": "human-user-3",

@@ -19,7 +19,14 @@ pytestmark = pytest.mark.skipif(
 )
 
 from core.runtime.agent import create_leon_agent
+from core.runtime.middleware.memory.summary_store import SummaryStore
 from sandbox.thread_context import set_current_thread_id
+
+
+def _memory_middleware(agent):
+    middleware = getattr(agent, "_memory_middleware", None)
+    assert middleware is not None, "summary persistence E2E requires memory middleware"
+    return middleware
 
 
 @pytest.fixture
@@ -62,15 +69,10 @@ class TestFullAgentSummaryPersistence:
             verbose=True,
         )
 
-        # Override db_path and lower threshold for testing
-        if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-            from core.runtime.middleware.memory.summary_store import SummaryStore
-
-            agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
-            # Lower threshold to 1000 tokens to trigger compaction easily
-            agent._memory_middleware._compaction_threshold = 0.01  # 1% of 100k = 1000 tokens
-            # Lower keep_recent_tokens so we actually have messages to summarize
-            agent._memory_middleware.compactor.keep_recent_tokens = 500  # Keep only last 500 tokens
+        memory = _memory_middleware(agent)
+        memory.summary_store = SummaryStore(Path(test_db_path))
+        memory._compaction_threshold = 0.01
+        memory.compactor.keep_recent_tokens = 500
 
         try:
             # Send ONE large message to exceed threshold and trigger compaction
@@ -93,11 +95,12 @@ class TestFullAgentSummaryPersistence:
             assert "messages" in result
 
             # Verify summary was saved to store
-            store = agent._memory_middleware.summary_store
+            memory = _memory_middleware(agent)
+            store = memory.summary_store
             print(f"[Test] Checking summary store: {store}")
             print(f"[Test] Thread ID: {thread_id}")
-            print(f"[Test] Cached summary exists: {agent._memory_middleware._cached_summary is not None}")
-            print(f"[Test] Compact up to index: {agent._memory_middleware._compact_up_to_index}")
+            print(f"[Test] Cached summary exists: {memory._cached_summary is not None}")
+            print(f"[Test] Compact up to index: {memory._compact_up_to_index}")
 
             summary = store.get_latest_summary(thread_id)
             print(f"[Test] Retrieved summary: {summary}")
@@ -120,11 +123,8 @@ class TestFullAgentSummaryPersistence:
             verbose=True,
         )
 
-        # Override db_path for testing
-        if hasattr(agent2, "_memory_middleware") and agent2._memory_middleware:
-            from core.runtime.middleware.memory.summary_store import SummaryStore
-
-            agent2._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
+        memory2 = _memory_middleware(agent2)
+        memory2.summary_store = SummaryStore(Path(test_db_path))
 
         try:
             # Continue conversation - should restore summary
@@ -137,9 +137,9 @@ class TestFullAgentSummaryPersistence:
             assert "messages" in result
 
             # Verify summary was restored
-            assert agent2._memory_middleware._cached_summary is not None, "Summary should be restored"
-            assert agent2._memory_middleware._compact_up_to_index >= 0
-            print(f"[Test] Summary restored: compact_up_to_index={agent2._memory_middleware._compact_up_to_index}")
+            assert memory2._cached_summary is not None, "Summary should be restored"
+            assert memory2._compact_up_to_index >= 0
+            print(f"[Test] Summary restored: compact_up_to_index={memory2._compact_up_to_index}")
 
         finally:
             agent2.close()
@@ -168,15 +168,10 @@ class TestAgentSplitTurnE2E:
             verbose=True,
         )
 
-        # Override db_path and lower threshold for testing
-        if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-            from core.runtime.middleware.memory.summary_store import SummaryStore
-
-            agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
-            # Lower threshold to trigger compaction
-            agent._memory_middleware._compaction_threshold = 0.01
-            # Lower keep_recent_tokens so we actually have messages to summarize
-            agent._memory_middleware.compactor.keep_recent_tokens = 500
+        memory = _memory_middleware(agent)
+        memory.summary_store = SummaryStore(Path(test_db_path))
+        memory._compaction_threshold = 0.01
+        memory.compactor.keep_recent_tokens = 500
 
         try:
             # Send a very large message to trigger split turn
@@ -188,7 +183,7 @@ class TestAgentSplitTurnE2E:
             assert result is not None
 
             # Check if split turn was triggered
-            store = agent._memory_middleware.summary_store
+            store = memory.summary_store
             summary = store.get_latest_summary(thread_id)
 
             # Split turn may or may not be triggered depending on context size
@@ -233,12 +228,9 @@ class TestAgentConcurrentThreads:
                 verbose=True,
             )
 
-            # Override db_path and lower threshold for testing
-            if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-                from core.runtime.middleware.memory.summary_store import SummaryStore
-
-                agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
-                agent._memory_middleware._compaction_threshold = 0.01
+            memory = _memory_middleware(agent)
+            memory.summary_store = SummaryStore(Path(test_db_path))
+            memory._compaction_threshold = 0.01
 
             try:
                 # Each thread creates different files with ONE large message
@@ -260,8 +252,6 @@ class TestAgentConcurrentThreads:
                 agent.close()
 
         # Verify summaries are isolated
-        from core.runtime.middleware.memory.summary_store import SummaryStore
-
         store = SummaryStore(Path(test_db_path))
 
         for thread_id in thread_ids:
@@ -292,11 +282,8 @@ class TestAgentConcurrentThreads:
                 verbose=True,
             )
 
-            # Override db_path for testing
-            if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-                from core.runtime.middleware.memory.summary_store import SummaryStore
-
-                agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
+            memory = _memory_middleware(agent)
+            memory.summary_store = SummaryStore(Path(test_db_path))
 
             try:
                 # Continue conversation - should restore correct summary
@@ -307,7 +294,7 @@ class TestAgentConcurrentThreads:
                 assert result is not None
 
                 # Verify correct summary was restored
-                if agent._memory_middleware._cached_summary:
+                if memory._cached_summary:
                     print(f"[Test] Thread {thread_id}: summary restored")
                 else:
                     print(f"[Test] Thread {thread_id}: no summary to restore")

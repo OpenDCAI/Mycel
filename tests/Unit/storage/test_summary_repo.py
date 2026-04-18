@@ -50,6 +50,6 @@ def test_supabase_summary_repo_save_list_get_and_delete():
     assert "summaries" not in tables
 
 
-def test_supabase_summary_repo_requires_compatible_client():
+def test_supabase_summary_repo_requires_table_query_client():
     with pytest.raises(RuntimeError, match="table\\(name\\)"):
         SupabaseSummaryRepo(client=object())
