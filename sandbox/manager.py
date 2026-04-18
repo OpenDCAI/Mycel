@@ -558,9 +558,6 @@ class SandboxManager:
     def create_background_command_session(self, thread_id: str, initial_cwd: str) -> Any:
         default_row = self.terminal_store.get_default(thread_id)
         if default_row is None:
-            # Fallback: pointer row may predate default_terminal_id tracking; try active terminal
-            default_row = self.terminal_store.get_active(thread_id)
-        if default_row is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
         default_terminal = terminal_from_row(default_row, self.db_path)
         lease = self._get_lease(default_terminal.lease_id)
