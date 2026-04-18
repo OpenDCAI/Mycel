@@ -1351,6 +1351,31 @@ def test_chat_tool_send_fails_before_unread_check_when_created_chat_is_missing_i
     assert sent == []
 
 
+def test_chat_tool_send_fails_before_unread_check_when_created_chat_id_is_empty() -> None:
+    registry = ToolRegistry()
+    unread_checks: list[tuple[str, str]] = []
+    sent: list[tuple[str, str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            find_or_create_chat=lambda _user_ids: {"id": ""},
+            count_unread=lambda chat_id, user_id: unread_checks.append((chat_id, user_id)) or 0,
+            send=lambda chat_id, sender_id, content, **_kwargs: sent.append((chat_id, sender_id, content)),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        send_message.handler(content="hello", participant_id="agent-user-1")
+
+    assert str(excinfo.value) == "Created direct chat has invalid id"
+    assert unread_checks == []
+    assert sent == []
+
+
 def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
     registry = ToolRegistry()
     sent: list[dict[str, object]] = []
