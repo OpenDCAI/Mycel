@@ -123,7 +123,10 @@ class HireVisitDeliveryResolver:
         members = self._chat_members.list_members(chat_id)
 
         for member in members:
-            if member.get("user_id") != user_id:
+            member_user_id = member.get("user_id")
+            if not member_user_id:
+                raise RuntimeError(f"Chat mute member row is missing user_id in chat {chat_id}")
+            if member_user_id != user_id:
                 continue
             if not member.get("muted", False):
                 return False
@@ -133,4 +136,4 @@ class HireVisitDeliveryResolver:
                 if isinstance(mute_until, (int, float)) and mute_until < time.time():
                     return False
             return True
-        return False
+        raise RuntimeError(f"Chat {chat_id} is missing delivery recipient member row {user_id}")
