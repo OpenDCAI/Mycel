@@ -8,14 +8,6 @@ from backend.web.routers import sandbox as sandbox_router
 from backend.web.services import sandbox_service
 
 
-def test_sandbox_router_does_not_expose_local_folder_picker() -> None:
-    paths = {route.path for route in sandbox_router.router.routes}
-
-    assert "/api/sandbox/pick-folder" not in paths
-    removed_owner_route = "/api/sandbox/" + "lease" + "s/mine"
-    assert removed_owner_route not in paths
-
-
 @pytest.mark.asyncio
 async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}

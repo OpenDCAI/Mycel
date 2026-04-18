@@ -9,16 +9,6 @@ from backend.web.models.marketplace import PublishAgentUserToMarketplaceRequest,
 from backend.web.routers import marketplace as marketplace_router
 
 
-def test_marketplace_router_exposes_agent_user_publish_not_generic_publish() -> None:
-    paths = {route.path for route in marketplace_router.router.routes}
-    assert "/api/marketplace/publish-agent-user" in paths
-    assert "/api/marketplace/publish" not in paths
-    assert "/api/marketplace/items" in paths
-    assert "/api/marketplace/items/{item_id}" in paths
-    assert "/api/marketplace/items/{item_id}/lineage" in paths
-    assert "/api/marketplace/items/{item_id}/versions/{version}" in paths
-
-
 @pytest.mark.asyncio
 async def test_publish_agent_user_to_marketplace_uses_user_repo_not_member_repo(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}

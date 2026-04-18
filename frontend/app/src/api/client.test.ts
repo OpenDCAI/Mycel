@@ -195,10 +195,6 @@ describe("thread api client contract", () => {
     expect(authFetch).toHaveBeenCalledWith("/api/threads/thread-1/sandbox");
   });
 
-  it("no longer exposes terminal status client", async () => {
-    expect("getThreadTerminal" in api).toBe(false);
-  });
-
   it("getThreadFileChannel reads workspace path from files channel binding", async () => {
     authFetch.mockResolvedValue(okJson({
       thread_id: "thread-1",

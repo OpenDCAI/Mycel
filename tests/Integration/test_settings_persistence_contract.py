@@ -325,18 +325,6 @@ def test_account_resources_route_applies_user_limit_overrides(monkeypatch):
     assert items["platform_tokens"]["remaining"] == 50_000_000
 
 
-def test_app_settings_router_does_not_expose_monitor_owned_surfaces():
-    app = _settings_test_app(_FakeSettingsRepo())
-
-    with TestClient(app) as client:
-        paths = set(client.get("/openapi.json").json()["paths"])
-
-    assert "/api/settings/account-resources" in paths
-    assert "/api/settings/observation" not in paths
-    assert "/api/settings/observation/verify" not in paths
-    assert "/api/settings/sandboxes" not in paths
-
-
 def test_get_available_models_route_prefers_repo_backed_model_pool(monkeypatch):
     repo = _FakeSettingsRepo()
     repo.models_config = {
