@@ -42,3 +42,31 @@ async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
 
     with pytest.raises(RuntimeError, match="runtime gateway down"):
         await asyncio.to_thread(deliver, request)
+
+
+@pytest.mark.asyncio
+async def test_chat_delivery_hook_requires_recipient_user_type() -> None:
+    class RecordingGateway:
+        called = False
+
+        async def dispatch_chat(self, _envelope):
+            self.called = True
+
+    gateway = RecordingGateway()
+    app = SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=gateway))
+    deliver = chat_delivery_hook.make_chat_delivery_fn(app)
+    request = ChatDeliveryRequest(
+        recipient_id="agent-user-1",
+        recipient_user=SimpleNamespace(id="agent-user-1"),
+        content="hello",
+        sender_name="Human",
+        chat_id="chat-1",
+        sender_id="human-user-1",
+        sender_avatar_url=None,
+        signal=None,
+    )
+
+    with pytest.raises(RuntimeError, match="Chat delivery recipient is missing user type: agent-user-1"):
+        await asyncio.to_thread(deliver, request)
+
+    assert gateway.called is False
