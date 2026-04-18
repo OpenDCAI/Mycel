@@ -17,6 +17,7 @@ import logging
 import time
 from typing import Any
 
+from messaging.contracts import RelationshipRow
 from messaging.delivery.actions import DeliveryAction
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ class HireVisitDeliveryResolver:
 
         # Fetch relationship once for checks 2, 6, 7
         rel = self._relationships.get(recipient_id, sender_id) if self._relationships else None
-        rel_state = rel.get("state") if rel else "none"
+        rel_state = self._relationship_state(rel) if rel else "none"
 
         # 2. HIRE → DELIVER
         if rel_state == "hire":
@@ -90,6 +91,14 @@ class HireVisitDeliveryResolver:
 
         # 8. Default → DELIVER
         return DeliveryAction.DELIVER
+
+    def _relationship_state(self, relationship: dict[str, Any]) -> str:
+        try:
+            if "state" not in relationship:
+                raise ValueError("missing relationship state")
+            return RelationshipRow.model_validate(relationship).state
+        except Exception as exc:
+            raise RuntimeError(f"Invalid relationship row {relationship.get('id') or '<missing>'}") from exc
 
     def _get_contact(self, owner_id: str, target_id: str):
         """Fetch contact row from the directional contacts table."""

@@ -1389,6 +1389,26 @@ def test_delivery_resolver_propagates_contact_repo_failures() -> None:
         resolver.resolve("agent-user-1", "chat-1", "human-user-1")
 
 
+def test_delivery_resolver_fails_on_invalid_existing_relationship_row() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
+        relationship_repo=SimpleNamespace(
+            get=lambda _recipient_id, _sender_id: {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:01Z",
+            }
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Invalid relationship row hire_visit:agent-user-1:human-user-1"):
+        resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+
 def test_delivery_resolver_requires_current_chat_member_contract() -> None:
     resolver = HireVisitDeliveryResolver(
         contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
