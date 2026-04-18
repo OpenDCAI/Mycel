@@ -138,6 +138,8 @@ class ChatToolService:
             for c in chats:
                 if "unread_count" not in c:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing unread_count")
+                if type(c["unread_count"]) is not int:
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} has invalid unread_count")
             if unread_only:
                 chats = [c for c in chats if c["unread_count"] > 0]
             chats = chats[:limit]
