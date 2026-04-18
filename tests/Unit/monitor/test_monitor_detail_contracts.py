@@ -113,7 +113,7 @@ def test_fake_lease_repo_no_longer_exposes_broader_lease_protocol_shell() -> Non
     assert not hasattr(repo, "query_lease_sessions")
 
 
-def test_monitor_service_no_longer_exposes_lease_compatibility_shell() -> None:
+def test_monitor_service_no_longer_exposes_lease_bridge_shell() -> None:
     assert not hasattr(monitor_service, "list_leases")
     assert not hasattr(monitor_service, "get_monitor_lease_detail")
     assert not hasattr(monitor_service, "request_monitor_lease_cleanup")

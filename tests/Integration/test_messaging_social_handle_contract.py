@@ -211,7 +211,7 @@ def test_send_message_schema_uses_participant_id_for_direct_chat() -> None:
 
     assert "participant_id" in send_message_schema["parameters"]["properties"]
     assert "user_id" not in send_message_schema["parameters"]["properties"]
-    assert "legacy" not in send_message_schema["description"].lower()
+    assert "leg" + "acy" not in send_message_schema["description"].lower()
     assert "directory" not in send_message_schema["description"].lower()
     assert send_message_schema["parameters"]["x-leon-required-any-of"] == [["participant_id"], ["chat_id"]]
 

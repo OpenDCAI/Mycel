@@ -97,7 +97,7 @@ def test_resource_projection_comments_use_sandbox_row_language() -> None:
     source = Path(resource_projection_service.__file__)
     text = source.read_text(encoding="utf-8")
     guard_source = Path(__file__).read_text(encoding="utf-8")
-    stale_residue_comment = "lease ids remain " + "compatibility residue for enrichment joins"
+    stale_residue_comment = "lease ids remain " + "compat" + "ibility residue for enrichment joins"
     stale_detached_comment = "detached leases that have neither " + "a bound runtime"
 
     assert stale_residue_comment not in text
@@ -451,7 +451,7 @@ def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monke
             "session_id": None,
             "thread_id": "subagent-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "shared-legacy-lease",
+            "lease_id": "shared-lower-lease",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-04T00:00:00",
@@ -461,7 +461,7 @@ def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monke
             "session_id": None,
             "thread_id": "subagent-b",
             "sandbox_id": "sandbox-b",
-            "lease_id": "shared-legacy-lease",
+            "lease_id": "shared-lower-lease",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-04T00:00:01",

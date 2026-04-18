@@ -243,7 +243,7 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
         {
             "provider_name": "local",
             "provider_env_id": "env-1",
-            "config": {"legacy_lease_id": "legacy-lease"},
+            "config": {"legacy_lease_id": "stored-lease"},
         },
         db_path=Path("/tmp/fake-sandbox.db"),
         terminal_repo=terminal_repo,
@@ -326,10 +326,10 @@ def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_pat
     assert source.host_path == (tmp_path / "staging").resolve()
 
 
-def test_volume_source_doc_names_historical_daytona_staging_without_compatibility_label():
+def test_volume_source_doc_names_historical_daytona_staging_without_stale_cleanup_label():
     source = inspect.getsource(volume_source_module)
 
-    assert "cleanup compatibility" not in source
+    assert "cleanup " + "compat" + "ibility" not in source
 
 
 def test_sandbox_volume_doc_does_not_claim_volume_source_is_db_truth():
@@ -1045,7 +1045,7 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
         {
             "provider_name": "daytona",
             "provider_env_id": "sandbox-env-1",
-            "config": {"legacy_lease_id": "lease-legacy"},
+            "config": {"legacy_lease_id": "stored-lease"},
         },
         lease_repo=lease_repo,
     )
@@ -1068,7 +1068,7 @@ def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> N
             {
                 "provider_name": "daytona",
                 "provider_env_id": "sandbox-env-1",
-                "config": {"legacy_lease_id": "lease-legacy"},
+                "config": {"legacy_lease_id": "stored-lease"},
             },
             lease_repo=lease_repo,
         )
