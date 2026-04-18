@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
 
-from backend.web.models.marketplace import PublishAgentUserToMarketplaceRequest, UpgradeFromMarketplaceRequest
+from backend.web.models.marketplace import (
+    InstallFromMarketplaceRequest,
+    PublishAgentUserToMarketplaceRequest,
+    UpgradeFromMarketplaceRequest,
+)
 from backend.web.routers import marketplace as marketplace_router
 
 
 def test_marketplace_router_exposes_agent_user_marketplace_routes() -> None:
-    paths = {route.path for route in marketplace_router.router.routes}
+    paths = {getattr(route, "path", "") for route in marketplace_router.router.routes}
 
     assert "/api/marketplace/publish-agent-user" in paths
     assert "/api/marketplace/items" in paths
@@ -51,7 +56,7 @@ async def test_publish_agent_user_to_marketplace_uses_user_repo_not_member_repo(
         )
     )
 
-    result = await marketplace_router.publish_agent_user_to_marketplace(req=req, user_id="owner-1", request=request)
+    result = await marketplace_router.publish_agent_user_to_marketplace(req=req, user_id="owner-1", request=cast(Any, request))
 
     assert result == {"ok": True}
     assert seen["user_id"] == "agent-1"
@@ -80,7 +85,7 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
         )
     )
 
-    result = await marketplace_router.upgrade_from_marketplace(req=req, user_id="owner-1", request=request)
+    result = await marketplace_router.upgrade_from_marketplace(req=req, user_id="owner-1", request=cast(Any, request))
 
     assert result == {"ok": True}
     assert seen["user_id"] == "agent-1"
@@ -105,9 +110,9 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
             )
         )
     )
-    req = SimpleNamespace(item_id="item-1", agent_user_id="agent-1")
+    req = InstallFromMarketplaceRequest(item_id="item-1", agent_user_id="agent-1")
 
-    result = await marketplace_router.download_from_marketplace(req=req, user_id="owner-1", request=request)
+    result = await marketplace_router.download_from_marketplace(req=req, user_id="owner-1", request=cast(Any, request))
 
     assert result == {"ok": True}
     assert seen["item_id"] == "item-1"
@@ -127,10 +132,8 @@ async def test_list_marketplace_items_reads_hub_http_client(monkeypatch: pytest.
         lambda **kwargs: seen.update(kwargs) or {"items": [{"id": "item-1"}], "total": 1},
         raising=False,
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
 
     result = await marketplace_router.list_marketplace_items(
-        request=request,
         type="skill",
         q="search",
         sort="newest",
@@ -150,9 +153,8 @@ async def test_get_marketplace_item_detail_reads_hub_http_client(monkeypatch: py
         lambda item_id: {"id": item_id, "name": "Hub Item"},
         raising=False,
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
 
-    result = await marketplace_router.get_marketplace_item_detail("item-1", request=request)
+    result = await marketplace_router.get_marketplace_item_detail("item-1")
 
     assert result == {"id": "item-1", "name": "Hub Item"}
 
@@ -165,9 +167,8 @@ async def test_get_marketplace_item_lineage_reads_hub_http_client(monkeypatch: p
         lambda item_id: {"ancestors": [], "children": [{"id": item_id}]},
         raising=False,
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
 
-    result = await marketplace_router.get_marketplace_item_lineage("item-1", request=request)
+    result = await marketplace_router.get_marketplace_item_lineage("item-1")
 
     assert result == {"ancestors": [], "children": [{"id": "item-1"}]}
 
@@ -180,9 +181,8 @@ async def test_get_marketplace_item_version_snapshot_reads_hub_http_client(monke
         lambda item_id, version: {"snapshot": {"meta": {"id": item_id, "version": version}}},
         raising=False,
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
 
-    result = await marketplace_router.get_marketplace_item_version_snapshot("item-1", "1.2.3", request=request)
+    result = await marketplace_router.get_marketplace_item_version_snapshot("item-1", "1.2.3")
 
     assert result == {"snapshot": {"meta": {"id": "item-1", "version": "1.2.3"}}}
 
@@ -195,10 +195,9 @@ async def test_get_marketplace_item_detail_preserves_hub_http_404(monkeypatch: p
         lambda _item_id: (_ for _ in ()).throw(HTTPException(status_code=404, detail="Marketplace item not found")),
         raising=False,
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
 
     with pytest.raises(HTTPException) as exc_info:
-        await marketplace_router.get_marketplace_item_detail("missing-item", request=request)
+        await marketplace_router.get_marketplace_item_detail("missing-item")
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Marketplace item not found"
@@ -212,10 +211,9 @@ async def test_list_marketplace_items_preserves_hub_http_400(monkeypatch: pytest
         lambda **_kwargs: (_ for _ in ()).throw(HTTPException(status_code=400, detail="Unsupported sort: featured")),
         raising=False,
     )
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
 
     with pytest.raises(HTTPException) as exc_info:
-        await marketplace_router.list_marketplace_items(request=request, sort="featured")
+        await marketplace_router.list_marketplace_items(sort="featured")
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "Unsupported sort: featured"
