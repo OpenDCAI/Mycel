@@ -63,7 +63,7 @@ This roadmap follows the same principles recorded in [AGENTS.md](/Users/lexicalm
 1. Single source of truth
 2. Ownership split and boundary clarity
 3. Proof class over helper noise
-4. Fail loud instead of preserving silent compatibility shells
+4. Fail loud instead of preserving silent bridge shells
 
 ## Target Ownership
 
