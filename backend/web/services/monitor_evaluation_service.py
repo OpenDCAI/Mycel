@@ -4,14 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_evaluation_execution_service
-from eval.batch_service import EvaluationBatchService
-from eval.storage import TrajectoryStore
-from storage.runtime import build_evaluation_batch_repo
-
-
-def make_eval_batch_service() -> EvaluationBatchService:
-    return EvaluationBatchService(batch_repo=build_evaluation_batch_repo())
+from backend.web.services import monitor_evaluation_execution_service, monitor_evaluation_read_service
 
 
 def _build_monitor_evaluation_run_fact_rows(metrics_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -47,7 +40,7 @@ def _build_monitor_evaluation_run_row(run: dict[str, Any], metrics_rows: list[di
 
 
 def get_monitor_evaluation_workbench() -> dict[str, Any]:
-    store = TrajectoryStore()
+    store = monitor_evaluation_read_service.make_trajectory_store()
     runs = store.list_runs(limit=25)
     if not runs:
         return {
@@ -94,18 +87,18 @@ def get_monitor_evaluation_workbench() -> dict[str, Any]:
 
 
 def get_monitor_evaluation_run_detail(run_id: str) -> dict[str, Any]:
-    store = TrajectoryStore()
+    store = monitor_evaluation_read_service.make_trajectory_store()
     run = store.get_run(run_id)
     if run is None:
         raise KeyError(f"Evaluation run not found: {run_id}")
     run_row = _build_monitor_evaluation_run_row(run, store.get_metrics(run_id))
     detail = {"run": run_row, "facts": run_row["facts"], "limitations": []}
-    detail["batch_run"] = make_eval_batch_service().get_batch_run_for_eval_run(run_id)
+    detail["batch_run"] = monitor_evaluation_read_service.make_eval_batch_service().get_batch_run_for_eval_run(run_id)
     return detail
 
 
 def get_monitor_evaluation_batches(limit: int = 50) -> dict[str, Any]:
-    items = make_eval_batch_service().list_batches(limit=limit)
+    items = monitor_evaluation_read_service.make_eval_batch_service().list_batches(limit=limit)
     return {
         "items": items,
         "count": len(items),
@@ -135,7 +128,7 @@ def create_monitor_evaluation_batch(
     sandbox: str,
     max_concurrent: int,
 ) -> dict[str, Any]:
-    batch = make_eval_batch_service().create_batch(
+    batch = monitor_evaluation_read_service.make_eval_batch_service().create_batch(
         submitted_by_user_id=submitted_by_user_id,
         agent_user_id=agent_user_id,
         scenario_ids=scenario_ids,
@@ -152,7 +145,7 @@ def start_monitor_evaluation_batch(
     token: str,
     schedule_task,
 ) -> dict[str, Any]:
-    batch_service = make_eval_batch_service()
+    batch_service = monitor_evaluation_read_service.make_eval_batch_service()
     detail = batch_service.get_batch_detail(batch_id)
     batch = detail["batch"]
     config = batch.get("config_json") or {}
@@ -183,4 +176,4 @@ def start_monitor_evaluation_batch(
 
 
 def get_monitor_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
-    return make_eval_batch_service().get_batch_detail(batch_id)
+    return monitor_evaluation_read_service.make_eval_batch_service().get_batch_detail(batch_id)

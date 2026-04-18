@@ -8,6 +8,7 @@ import pytest
 
 from backend.web.services import (
     monitor_evaluation_execution_service,
+    monitor_evaluation_read_service,
     monitor_evaluation_service,
     monitor_operation_repo_service,
     monitor_operation_service,
@@ -61,7 +62,7 @@ def _default_eval_batch_service(monkeypatch):
         def list_batch_runs_for_thread(self, _thread_id):
             return []
 
-    monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
 
 
 @pytest.fixture(autouse=True)
@@ -374,7 +375,7 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
             calls.append(kwargs)
             return {"batch_id": "batch-created", "status": "pending"}
 
-    monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     payload = monitor_evaluation_service.create_monitor_evaluation_batch(
         submitted_by_user_id="owner-1",
@@ -430,7 +431,7 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
             return {"batch_id": batch_id, "status": status}
 
     monkeypatch.setattr(monitor_evaluation_execution_service, "EVAL_SCENARIO_DIR", scenario_dir)
-    monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     payload = monitor_evaluation_service.start_monitor_evaluation_batch(
         "batch-1",

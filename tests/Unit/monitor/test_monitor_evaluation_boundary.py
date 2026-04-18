@@ -1,6 +1,11 @@
 import inspect
 
-from backend.web.services import monitor_evaluation_execution_service, monitor_evaluation_service, monitor_gateway
+from backend.web.services import (
+    monitor_evaluation_execution_service,
+    monitor_evaluation_read_service,
+    monitor_evaluation_service,
+    monitor_gateway,
+)
 
 
 def test_monitor_gateway_evaluation_surfaces_use_narrow_evaluation_service():
@@ -32,3 +37,15 @@ def test_monitor_evaluation_service_uses_execution_port_for_runtime_work():
     assert "EvalClient" in execution_source
     assert "EvalRunner" in execution_source
     assert "EvaluationBatchExecutor" in execution_source
+
+
+def test_monitor_evaluation_service_uses_read_source_for_store_and_batch_repo():
+    service_source = inspect.getsource(monitor_evaluation_service)
+    read_source = inspect.getsource(monitor_evaluation_read_service)
+
+    assert "monitor_evaluation_read_service" in service_source
+    assert "TrajectoryStore" not in service_source
+    assert "build_evaluation_batch_repo" not in service_source
+
+    assert "TrajectoryStore" in read_source
+    assert "build_evaluation_batch_repo" in read_source
