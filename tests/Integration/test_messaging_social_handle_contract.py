@@ -413,6 +413,30 @@ def test_chat_tool_list_chats_requires_unread_count_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_unread_filter_requires_unread_count_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": [{"id": "human-user-1", "name": "Human"}],
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError, match="Chat summary chat-1 is missing unread_count"):
+        list_chats.handler(unread_only=True)
+
+
 def test_chat_tool_service_rejects_removed_constructor_user_id() -> None:
     registry = ToolRegistry()
 
