@@ -7,6 +7,8 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
+from backend.web.services import monitor_runtime_operation_service as runtime_operation
+
 _LOCK = Lock()
 _OPERATIONS: dict[str, dict[str, Any]] = {}
 _TARGET_INDEX: dict[tuple[str, str], list[str]] = {}
@@ -207,8 +209,6 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
     )
     _append_event(operation, status="running", message="Destroy flow started")
 
-    from backend.web.services.sandbox_service import destroy_sandbox_runtime
-
     try:
         category = str((sandbox_detail.get("triage") or {}).get("category") or "").strip()
         runtime_rows = sandbox_detail.get("runtime_rows") or []
@@ -217,10 +217,12 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
             runtime_rows=runtime_rows,
             threads=threads,
         )
-        result = destroy_sandbox_runtime(
-            lower_runtime_handle=lower_runtime_handle,
-            provider_name=provider_name,
-            detach_thread_bindings=detach_before_cleanup,
+        result = runtime_operation.execute_sandbox_cleanup(
+            runtime_operation.SandboxCleanupRequest(
+                lower_runtime_handle=lower_runtime_handle,
+                provider_name=provider_name,
+                detach_thread_bindings=detach_before_cleanup,
+            )
         )
     except Exception as exc:
         operation["result_truth"] = {
@@ -287,13 +289,12 @@ def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str,
     )
     _append_event(operation, status="running", message="Destroy flow started")
 
-    from backend.web.services.sandbox_service import mutate_sandbox_runtime
-
     try:
-        result = mutate_sandbox_runtime(
-            runtime_id=runtime,
-            action="destroy",
-            provider_hint=provider,
+        result = runtime_operation.execute_provider_orphan_runtime_cleanup(
+            runtime_operation.ProviderOrphanRuntimeCleanupRequest(
+                provider_name=provider,
+                runtime_id=runtime,
+            )
         )
     except Exception as exc:
         operation["result_truth"] = {

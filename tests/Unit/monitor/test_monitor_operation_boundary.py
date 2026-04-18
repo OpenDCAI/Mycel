@@ -1,0 +1,11 @@
+import inspect
+
+from backend.web.services import monitor_operation_service
+
+
+def test_monitor_operation_service_delegates_runtime_mutation_to_executor():
+    source = inspect.getsource(monitor_operation_service)
+
+    assert "sandbox_service" not in source
+    assert "destroy_sandbox_runtime" not in source
+    assert "mutate_sandbox_runtime" not in source
