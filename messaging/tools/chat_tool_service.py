@@ -160,7 +160,10 @@ class ChatToolService:
                 unread_str = f" ({unread} unread)" if unread > 0 else ""
                 is_group = len(others) >= 2
                 if is_group:
-                    id_str = f" [chat_id: {c['id']}]"
+                    chat_id = c.get("id")
+                    if not chat_id:
+                        raise RuntimeError("Group chat summary is missing id")
+                    id_str = f" [chat_id: {chat_id}]"
                 else:
                     other_id = others[0]["id"] if others else ""
                     id_str = f" [id: {other_id}]" if other_id else ""
