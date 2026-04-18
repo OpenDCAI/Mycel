@@ -10,7 +10,7 @@ def test_broad_monitor_shell_is_retired():
     remaining_imports = []
     for root in ("backend", "tests"):
         for path in (repo_root / root).rglob("*.py"):
-            source = path.read_text()
+            source = path.read_text(encoding="utf-8")
             if retired_module in source:
                 remaining_imports.append(path.relative_to(repo_root).as_posix())
 
