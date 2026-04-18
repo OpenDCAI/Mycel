@@ -357,7 +357,13 @@ class MessagingService:
         if not chat_ids:
             return [], {}, {}, {}
 
-        chat_rows = [chat for chat in self._chats.list_by_ids(chat_ids) if chat.status == "active"]
+        loaded_chat_rows = self._chats.list_by_ids(chat_ids)
+        loaded_chat_ids = {str(chat.id) for chat in loaded_chat_rows}
+        missing_chat_ids = [chat_id for chat_id in chat_ids if str(chat_id) not in loaded_chat_ids]
+        if missing_chat_ids:
+            raise RuntimeError(f"Chat membership references missing chat row {missing_chat_ids[0]}")
+
+        chat_rows = [chat for chat in loaded_chat_rows if chat.status == "active"]
         active_chat_ids = [chat.id for chat in chat_rows]
         if not active_chat_ids:
             return [], {}, {}, {}

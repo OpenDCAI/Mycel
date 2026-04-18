@@ -821,6 +821,21 @@ def test_messaging_service_conversation_summaries_fail_when_viewer_member_row_is
         service.list_conversation_summaries_for_user("human-user-1")
 
 
+def test_messaging_service_conversation_summaries_fail_when_chat_row_is_missing() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(list_by_ids=lambda _chat_ids: []),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        user_repo=SimpleNamespace(list_by_ids=lambda _user_ids: []),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat membership references missing chat row chat-1"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
 def test_messaging_service_conversation_summaries_fail_without_projectable_title() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
