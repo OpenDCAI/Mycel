@@ -802,6 +802,25 @@ def test_messaging_service_conversation_summaries_fail_on_unrequested_member_cha
         service.list_conversation_summaries_for_user("human-user-1")
 
 
+def test_messaging_service_conversation_summaries_fail_when_viewer_member_row_is_missing() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [{"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0}],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda _user_ids: [SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)],
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat chat-1 is missing viewer member row human-user-1"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
 def test_messaging_service_conversation_summaries_fail_without_projectable_title() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(

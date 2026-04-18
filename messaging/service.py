@@ -372,6 +372,10 @@ class MessagingService:
             if member.get("user_id") == user_id:
                 last_read_by_chat[chat_id] = int(member.get("last_read_seq") or 0)
 
+        for chat_id in active_chat_ids:
+            if chat_id not in last_read_by_chat:
+                raise RuntimeError(f"Chat {chat_id} is missing viewer member row {user_id}")
+
         visible_chats = [chat for chat in chat_rows if chat.id in last_read_by_chat]
         if not visible_chats:
             return [], {}, {}, {}
