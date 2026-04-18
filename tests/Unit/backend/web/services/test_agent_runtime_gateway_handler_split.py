@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from backend.protocols.agent_runtime import AgentGatewayDeliveryResult, AgentThreadInputResult
+from backend.protocols.agent_runtime import AgentChatDeliveryResult, AgentThreadInputResult
 from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 
 
@@ -15,7 +15,7 @@ class _FakeChatHandler:
 
     async def dispatch(self, envelope):
         self.called_with = envelope
-        return AgentGatewayDeliveryResult(status="accepted", thread_id="thread-1")
+        return AgentChatDeliveryResult(status="accepted", thread_id="thread-1")
 
 
 @dataclass
@@ -60,7 +60,7 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
     chat_result = await gateway.dispatch_chat(chat_envelope)
     thread_result = await gateway.dispatch_thread_input(thread_envelope)
 
-    assert chat_result == AgentGatewayDeliveryResult(status="accepted", thread_id="thread-1")
+    assert chat_result == AgentChatDeliveryResult(status="accepted", thread_id="thread-1")
     assert thread_result == AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
     assert chat_handler.called_with is chat_envelope
     assert thread_input_handler.called_with is thread_envelope
@@ -109,7 +109,7 @@ async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
 
     result = await gateway.dispatch_chat(envelope)
 
-    assert result == AgentGatewayDeliveryResult(status="accepted", thread_id="thread-1")
+    assert result == AgentChatDeliveryResult(status="accepted", thread_id="thread-1")
     assert external_handler.called_with is envelope
 
 

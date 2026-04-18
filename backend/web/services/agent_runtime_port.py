@@ -6,14 +6,14 @@ from typing import Any, Protocol
 
 from backend.protocols.agent_runtime import (
     AgentChatDeliveryEnvelope,
-    AgentGatewayDeliveryResult,
+    AgentChatDeliveryResult,
     AgentThreadInputEnvelope,
     AgentThreadInputResult,
 )
 
 
 class AgentRuntimeGatewayPort(Protocol):
-    async def dispatch_chat(self, envelope: AgentChatDeliveryEnvelope) -> AgentGatewayDeliveryResult: ...
+    async def dispatch_chat(self, envelope: AgentChatDeliveryEnvelope) -> AgentChatDeliveryResult: ...
 
     async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult: ...
 

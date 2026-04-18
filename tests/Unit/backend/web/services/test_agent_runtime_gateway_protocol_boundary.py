@@ -10,8 +10,11 @@ def test_agent_runtime_protocol_types_live_outside_web_service_layer() -> None:
 
     assert protocol_module.AgentChatDeliveryEnvelope.__module__ == "backend.protocols.agent_runtime"
     assert protocol_module.AgentThreadInputEnvelope.__module__ == "backend.protocols.agent_runtime"
+    assert protocol_module.AgentChatDeliveryResult.__module__ == "backend.protocols.agent_runtime"
+    assert not hasattr(protocol_module, "AgentGatewayDeliveryResult")
     assert not hasattr(gateway_module, "AgentChatDeliveryEnvelope")
     assert not hasattr(gateway_module, "AgentThreadInputEnvelope")
+    assert not hasattr(gateway_module, "AgentChatDeliveryResult")
 
 
 def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -> None:
@@ -42,3 +45,12 @@ def test_agent_runtime_thread_input_result_is_a_protocol_object() -> None:
     assert protocol_module.AgentThreadInputResult.__module__ == "backend.protocols.agent_runtime"
     assert gateway_hints["return"] is protocol_module.AgentThreadInputResult
     assert port_hints["return"] is protocol_module.AgentThreadInputResult
+
+
+def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
+    gateway_module = importlib.import_module("backend.web.services.agent_runtime_gateway")
+
+    constructor_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.__init__)
+
+    assert "AgentChatRuntimeHandler" in str(constructor_hints["chat_handlers"])
+    assert constructor_hints["thread_input_handler"] == gateway_module.AgentThreadInputRuntimeHandler | None

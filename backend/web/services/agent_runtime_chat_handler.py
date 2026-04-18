@@ -17,9 +17,7 @@ class NativeAgentChatDeliveryHandler:
     def __init__(self, app: Any) -> None:
         self._app = app
 
-    async def dispatch(
-        self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope
-    ) -> agent_runtime_protocol.AgentGatewayDeliveryResult:
+    async def dispatch(self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope) -> agent_runtime_protocol.AgentChatDeliveryResult:
         from langchain_core.runnables.config import var_child_runnable_config
 
         var_child_runnable_config.set(None)
@@ -37,7 +35,7 @@ class NativeAgentChatDeliveryHandler:
 
         if not thread_id:
             logger.warning("Recipient %s has no thread, skipping delivery", envelope.recipient.agent_user_id)
-            return agent_runtime_protocol.AgentGatewayDeliveryResult(status="skipped", thread_id=None, reason="missing_thread")
+            return agent_runtime_protocol.AgentChatDeliveryResult(status="skipped", thread_id=None, reason="missing_thread")
 
         from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
         from backend.web.services.streaming_service import _ensure_thread_handlers
@@ -68,7 +66,7 @@ class NativeAgentChatDeliveryHandler:
             sender_name=envelope.sender.display_name,
             sender_avatar_url=envelope.sender.avatar_url,
         )
-        return agent_runtime_protocol.AgentGatewayDeliveryResult(status="accepted", thread_id=thread_id)
+        return agent_runtime_protocol.AgentChatDeliveryResult(status="accepted", thread_id=thread_id)
 
     def _select_runtime_thread_id(self, recipient_id: str) -> str | None:
         thread = self._app.state.thread_repo.get_by_user_id(recipient_id)
