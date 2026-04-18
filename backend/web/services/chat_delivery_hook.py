@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 import logging
 from enum import Enum
 from typing import Any
@@ -56,16 +55,7 @@ def make_chat_delivery_fn(app: Any):
             deliver_to_runtime_gateway(request),
             loop,
         )
-
-        future.add_done_callback(functools.partial(_log_delivery_result, request.recipient_id))
+        future.result()
+        logger.info("[delivery] async delivery completed for %s", request.recipient_id)
 
     return _deliver
-
-
-def _log_delivery_result(recipient_id: str, f: Any) -> None:
-    """Done-callback for async delivery futures."""
-    exc = f.exception()
-    if exc:
-        logger.error("[delivery] async delivery failed for %s: %s", recipient_id, exc, exc_info=exc)
-    else:
-        logger.info("[delivery] async delivery completed for %s", recipient_id)
