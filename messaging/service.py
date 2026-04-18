@@ -98,7 +98,7 @@ class MessagingService:
             social_user_id = member.get("user_id")
             user = self._resolve_display_user(social_user_id) if social_user_id else None
             if user is None:
-                continue
+                raise RuntimeError(f"Chat member {social_user_id or '<missing>'} is not a resolvable user row")
             # @@@thread-social-member-projection - outward chat members must keep the
             # social/thread user id while borrowing display/avatar fields from the resolved user row.
             member_info.append(

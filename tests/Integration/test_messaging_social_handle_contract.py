@@ -524,6 +524,31 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
     assert chats[0]["unread_count"] == 0
 
 
+def test_messaging_service_chat_detail_fails_on_unknown_member_identity() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "human-user-1"},
+                {"user_id": "missing-user"},
+            ],
+        ),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
+            ),
+        ),
+    )
+
+    chat = SimpleNamespace(id="chat-1", title=None, status="active", created_at="2026-04-07T00:00:00Z")
+
+    with pytest.raises(RuntimeError) as excinfo:
+        service.get_chat_detail(chat)
+
+    assert str(excinfo.value) == "Chat member missing-user is not a resolvable user row"
+
+
 def test_messaging_service_list_chats_ignores_blank_other_names_in_title_default() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
