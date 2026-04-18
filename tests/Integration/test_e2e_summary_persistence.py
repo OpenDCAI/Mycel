@@ -69,12 +69,12 @@ class TestFullAgentSummaryPersistence:
             verbose=True,
         )
 
-        memory = _memory_middleware(agent)
-        memory.summary_store = SummaryStore(Path(test_db_path))
-        memory._compaction_threshold = 0.01
-        memory.compactor.keep_recent_tokens = 500
-
         try:
+            memory = _memory_middleware(agent)
+            memory.summary_store = SummaryStore(Path(test_db_path))
+            memory._compaction_threshold = 0.01
+            memory.compactor.keep_recent_tokens = 500
+
             # Send ONE large message to exceed threshold and trigger compaction
             # This avoids the event loop issue with multiple invoke() calls
             large_message = (
@@ -123,10 +123,10 @@ class TestFullAgentSummaryPersistence:
             verbose=True,
         )
 
-        memory2 = _memory_middleware(agent2)
-        memory2.summary_store = SummaryStore(Path(test_db_path))
-
         try:
+            memory2 = _memory_middleware(agent2)
+            memory2.summary_store = SummaryStore(Path(test_db_path))
+
             # Continue conversation - should restore summary
             result = agent2.invoke(
                 "What files did we create earlier?",
@@ -168,12 +168,12 @@ class TestAgentSplitTurnE2E:
             verbose=True,
         )
 
-        memory = _memory_middleware(agent)
-        memory.summary_store = SummaryStore(Path(test_db_path))
-        memory._compaction_threshold = 0.01
-        memory.compactor.keep_recent_tokens = 500
-
         try:
+            memory = _memory_middleware(agent)
+            memory.summary_store = SummaryStore(Path(test_db_path))
+            memory._compaction_threshold = 0.01
+            memory.compactor.keep_recent_tokens = 500
+
             # Send a very large message to trigger split turn
             # This simulates a scenario where the new turn is too large
             large_content = "x" * 50000  # 50KB of content
@@ -228,11 +228,11 @@ class TestAgentConcurrentThreads:
                 verbose=True,
             )
 
-            memory = _memory_middleware(agent)
-            memory.summary_store = SummaryStore(Path(test_db_path))
-            memory._compaction_threshold = 0.01
-
             try:
+                memory = _memory_middleware(agent)
+                memory.summary_store = SummaryStore(Path(test_db_path))
+                memory._compaction_threshold = 0.01
+
                 # Each thread creates different files with ONE large message
                 large_message = (
                     f"""
@@ -282,10 +282,10 @@ class TestAgentConcurrentThreads:
                 verbose=True,
             )
 
-            memory = _memory_middleware(agent)
-            memory.summary_store = SummaryStore(Path(test_db_path))
-
             try:
+                memory = _memory_middleware(agent)
+                memory.summary_store = SummaryStore(Path(test_db_path))
+
                 # Continue conversation - should restore correct summary
                 result = agent.invoke(
                     f"What files did we create in {thread_id}?",
