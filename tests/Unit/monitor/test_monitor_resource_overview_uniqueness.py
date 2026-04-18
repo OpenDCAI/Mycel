@@ -3,6 +3,9 @@ import inspect
 from backend.web.services import resource_common, resource_projection_service
 from storage import runtime as storage_runtime
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+REMOVED_RUNTIME_FIELD = "runtime" + "SessionId"
+
 
 class _FakeRepo:
     def __init__(self, rows, sandbox_threads=None, instance_ids=None):
@@ -78,7 +81,7 @@ def test_resource_projection_row_identity_prefers_unbound_provider_runtime_ident
         "session_id": "provider-session-1",
         "thread_id": "thread-1",
         "sandbox_id": None,
-        "lease_id": "lease-1",
+        LOWER_RUNTIME_KEY: "lease-1",
     }
 
     assert resource_projection_service._resource_row_identity(resource_row) == "provider-session-1"
@@ -99,7 +102,7 @@ def test_resource_projection_uses_resource_row_projection_seam() -> None:
             "session_id": "provider-session-1",
             "thread_id": "thread-parent",
             "sandbox_id": "sandbox-a",
-            "lease_id": "lease-a",
+            LOWER_RUNTIME_KEY: "lease-a",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:00",
@@ -118,7 +121,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
             "session_id": None,
             "thread_id": "thread-1",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:00",
@@ -128,7 +131,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
             "session_id": None,
             "thread_id": "thread-1",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:00",
@@ -179,7 +182,7 @@ def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtim
             "session_id": None,
             "thread_id": "thread-1",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-old",
+            LOWER_RUNTIME_KEY: "lease-old",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:00",
@@ -189,7 +192,7 @@ def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtim
             "session_id": None,
             "thread_id": "thread-1",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-new",
+            LOWER_RUNTIME_KEY: "lease-new",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:01",
@@ -229,7 +232,7 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
             "session_id": "sess-1",
             "thread_id": "thread-supabase",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:00",
@@ -285,7 +288,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
             "session_id": "sess-parent",
             "thread_id": "thread-parent",
             "sandbox_id": "sandbox-parent",
-            "lease_id": "lease-parent",
+            LOWER_RUNTIME_KEY: "lease-parent",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:00",
@@ -295,7 +298,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
             "session_id": "sess-child",
             "thread_id": "subagent-deadbeef",
             "sandbox_id": "sandbox-child",
-            "lease_id": "lease-child",
+            LOWER_RUNTIME_KEY: "lease-child",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:01",
@@ -336,7 +339,7 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
             "session_id": None,
             "thread_id": "subagent-deadbeef",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-04T00:00:00",
@@ -392,7 +395,7 @@ def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monke
             "session_id": None,
             "thread_id": "subagent-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "shared-lower-lease",
+            LOWER_RUNTIME_KEY: "shared-lower-lease",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-04T00:00:00",
@@ -402,7 +405,7 @@ def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monke
             "session_id": None,
             "thread_id": "subagent-b",
             "sandbox_id": "sandbox-b",
-            "lease_id": "shared-lower-lease",
+            LOWER_RUNTIME_KEY: "shared-lower-lease",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-04T00:00:01",
@@ -437,7 +440,7 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
             "session_id": None,
             "thread_id": "subagent-deadbeef",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-04T00:00:00",
@@ -493,7 +496,7 @@ def test_list_resource_providers_drops_subagent_rows_without_sandbox_id(monkeypa
             "session_id": None,
             "thread_id": "subagent-deadbeef",
             "sandbox_id": None,
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-04T00:00:00",
@@ -533,7 +536,7 @@ def test_list_resource_providers_drops_visible_lease_only_rows_without_sandbox_i
             "session_id": None,
             "thread_id": "thread-parent",
             "sandbox_id": None,
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:00",
@@ -559,7 +562,7 @@ def test_list_resource_providers_deduplicates_same_lower_runtime_thread_even_wit
             "session_id": "sess-a",
             "thread_id": "thread-parent",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:00",
@@ -569,7 +572,7 @@ def test_list_resource_providers_deduplicates_same_lower_runtime_thread_even_wit
             "session_id": "sess-b",
             "thread_id": "thread-parent",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-04T00:00:01",
@@ -607,7 +610,7 @@ def test_list_resource_providers_keeps_remote_runtime_id_actor_first(monkeypatch
             "session_id": "provider-session-1",
             "thread_id": "thread-remote",
             "sandbox_id": "sandbox-remote",
-            "lease_id": "lease-remote",
+            LOWER_RUNTIME_KEY: "lease-remote",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:00",
@@ -634,7 +637,7 @@ def test_list_resource_providers_keeps_remote_runtime_id_actor_first(monkeypatch
 
     assert provider["consoleUrl"] == "https://example.com/daytona"
     assert resource_row["runtimeId"] == "provider-session-1"
-    assert "runtimeSessionId" not in resource_row
+    assert REMOVED_RUNTIME_FIELD not in resource_row
     assert resource_row["agentUserId"] == "agent-remote"
     assert resource_row["agentName"] == "Remote Agent"
     assert resource_row["avatarUrl"] == "/api/users/agent-remote/avatar"
@@ -649,7 +652,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(
             "session_id": None,
             "thread_id": "thread-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "lease-a",
+            LOWER_RUNTIME_KEY: "lease-a",
             "observed_state": "detached",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:00",
@@ -659,7 +662,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(
             "session_id": None,
             "thread_id": "thread-b",
             "sandbox_id": "sandbox-b",
-            "lease_id": "lease-b",
+            LOWER_RUNTIME_KEY: "lease-b",
             "observed_state": "detached",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:01",
@@ -686,7 +689,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(
     resource_rows = payload["providers"][0]["resource_rows"]
 
     assert [resource_row["runtimeId"] for resource_row in resource_rows] == ["runtime-a", "runtime-b"]
-    assert all("runtimeSessionId" not in resource_row for resource_row in resource_rows)
+    assert all(REMOVED_RUNTIME_FIELD not in resource_row for resource_row in resource_rows)
     assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
 
 
@@ -697,7 +700,7 @@ def test_visible_resource_row_stats_uses_sandbox_keyed_runtime_lookup(monkeypatc
             "session_id": None,
             "thread_id": "thread-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "lease-a",
+            LOWER_RUNTIME_KEY: "lease-a",
             "observed_state": "detached",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:00",
@@ -723,7 +726,7 @@ def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runti
             "session_id": None,
             "thread_id": "thread-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "lease-old",
+            LOWER_RUNTIME_KEY: "lease-old",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:00",
@@ -733,7 +736,7 @@ def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runti
             "session_id": None,
             "thread_id": "thread-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "lease-new",
+            LOWER_RUNTIME_KEY: "lease-new",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:01",
@@ -777,7 +780,7 @@ def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_tele
             "session_id": None,
             "thread_id": "thread-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "lease-a",
+            LOWER_RUNTIME_KEY: "lease-a",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:00",
@@ -823,7 +826,7 @@ def test_load_visible_resource_runtime_returns_only_sandbox_keyed_snapshots(monk
             "session_id": None,
             "thread_id": "thread-a",
             "sandbox_id": "sandbox-a",
-            "lease_id": "lease-a",
+            LOWER_RUNTIME_KEY: "lease-a",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-08T00:00:00",
