@@ -110,6 +110,8 @@ class ChatToolService:
             if m.get("retracted_at"):
                 content = "[已撤回]"
             elif "content" in m:
+                if not isinstance(m["content"], str):
+                    raise RuntimeError(f"Chat message from {sender_id} has invalid content")
                 content = m["content"]
             else:
                 raise RuntimeError(f"Chat message from {sender_id} is missing content")
@@ -161,6 +163,8 @@ class ChatToolService:
                 last = c.get("last_message")
                 if last is not None and "content" not in last:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} last_message is missing content")
+                if last is not None and not isinstance(last["content"], str):
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} last_message has invalid content")
                 last_preview = f' — last: "{last["content"][:50]}"' if last else ""
                 unread_str = f" ({unread} unread)" if unread > 0 else ""
                 is_group = len(others) >= 2
@@ -412,6 +416,8 @@ class ChatToolService:
                 name = self._message_sender_name(sender_id)
                 if "content" not in m:
                     raise RuntimeError(f"Chat search message from {sender_id} is missing content")
+                if not isinstance(m["content"], str):
+                    raise RuntimeError(f"Chat search message from {sender_id} has invalid content")
                 lines.append(f"[{name}] {m['content'][:100]}")
             return "\n".join(lines)
 

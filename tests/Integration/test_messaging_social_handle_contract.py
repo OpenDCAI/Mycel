@@ -442,6 +442,33 @@ def test_chat_tool_list_chats_requires_empty_last_message_content_contract() -> 
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_string_last_message_content_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": [{"id": "human-user-1", "name": "Human"}],
+                    "unread_count": 0,
+                    "last_message": {"content": None},
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        list_chats.handler()
+
+    assert str(excinfo.value) == "Chat summary chat-1 last_message has invalid content"
+
+
 def test_chat_tool_list_chats_requires_unread_count_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
@@ -1331,6 +1358,33 @@ def test_read_messages_fails_before_mark_read_on_missing_message_content() -> No
     assert marked == []
 
 
+def test_read_messages_fails_before_mark_read_on_invalid_message_content() -> None:
+    registry = ToolRegistry()
+    marked: list[tuple[str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
+                {
+                    "sender_id": "agent-user-1",
+                    "content": None,
+                }
+            ],
+            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+        ),
+    )
+
+    read_messages = registry.get("read_messages")
+    assert read_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        read_messages.handler(chat_id="chat-1", range="-1h:")
+
+    assert str(excinfo.value) == "Chat message from agent-user-1 has invalid content"
+    assert marked == []
+
+
 def test_chat_tool_send_accepts_agent_user_target_id() -> None:
     registry = ToolRegistry()
     sent: list[tuple[str, str, str]] = []
@@ -1676,6 +1730,25 @@ def test_chat_tool_search_fails_on_missing_message_content() -> None:
         search_messages.handler(query="hello")
 
     assert str(excinfo.value) == "Chat search message from agent-user-1 is missing content"
+
+
+def test_chat_tool_search_fails_on_invalid_message_content() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            search_messages=lambda _query, *, chat_id=None: [{"sender_id": "agent-user-1", "content": None}],
+        ),
+    )
+
+    search_messages = registry.get("search_messages")
+    assert search_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        search_messages.handler(query="hello")
+
+    assert str(excinfo.value) == "Chat search message from agent-user-1 has invalid content"
 
 
 def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
