@@ -130,8 +130,6 @@ def test_remote_runtime_treats_broken_pipe_as_infra_error():
     assert _RemoteRuntimeBase._looks_like_infra_error("[Errno 32] Broken pipe") is True
 
 
-# TODO(windows-compat): LocalPersistentShellRuntime uses Unix PTY + /tmp paths.
-# Tracked in: https://github.com/OpenDCAI/Mycel/issues — Windows shell support needed.
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
 class TestLocalPersistentShellRuntime:
     """Test LocalPersistentShellRuntime."""
