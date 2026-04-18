@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 
-def test_root_agent_compatibility_shim_is_removed():
+def test_deleted_root_agent_entrypoint_shim_is_removed():
     repo_root = Path(__file__).resolve().parents[3]
 
     assert not (repo_root / "agent.py").exists()
