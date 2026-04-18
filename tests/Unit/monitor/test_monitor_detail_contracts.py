@@ -670,11 +670,20 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
     assert payload["operation"]["status"] == "succeeded"
     assert payload["operation"]["target_type"] == "provider_orphan_runtime"
     detail = monitor_service.get_monitor_operation_detail(payload["operation"]["operation_id"])
+    destroy_result = detail["result_truth"]["destroy_result"]
     assert detail["target"] == {
         "target_type": "provider_orphan_runtime",
         "provider_id": "daytona_selfhost",
         "runtime_id": "sandbox-1",
     }
+    assert destroy_result == {
+        "ok": True,
+        "action": "destroy",
+        "session_id": "sandbox-1",
+        "provider": "daytona_selfhost",
+        "mode": "manager_runtime",
+    }
+    assert "lease_id" not in destroy_result
     assert payload["current_truth"] == {
         "provider_id": "daytona_selfhost",
         "runtime_id": "sandbox-1",
