@@ -1454,6 +1454,28 @@ def test_delivery_resolver_requires_current_chat_member_contract() -> None:
         resolver.resolve("agent-user-1", "chat-1", "human-user-1")
 
 
+def test_delivery_resolver_fails_on_chat_member_row_missing_user_id() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{}]),
+        relationship_repo=None,
+    )
+
+    with pytest.raises(RuntimeError, match="Chat mute member row is missing user_id in chat chat-1"):
+        resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+
+def test_delivery_resolver_fails_when_recipient_membership_is_missing() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "human-user-1"}]),
+        relationship_repo=None,
+    )
+
+    with pytest.raises(RuntimeError, match="Chat chat-1 is missing delivery recipient member row agent-user-1"):
+        resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+
 def test_delivery_resolver_notifies_when_new_contact_edge_is_muted() -> None:
     resolver = HireVisitDeliveryResolver(
         contact_repo=SimpleNamespace(
