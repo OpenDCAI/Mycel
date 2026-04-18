@@ -315,6 +315,30 @@ def test_chat_tool_list_chats_uses_messaging_service_title() -> None:
     assert result == "- Solo Ops"
 
 
+def test_chat_tool_list_chats_requires_members_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError, match="Chat summary chat-1 is missing members"):
+        list_chats.handler()
+
+
 def test_chat_tool_service_rejects_removed_constructor_user_id() -> None:
     registry = ToolRegistry()
 

@@ -139,7 +139,10 @@ class ChatToolService:
                 return "No chats found."
             lines = []
             for c in chats:
-                others = [member for member in c.get("members", []) if member["id"] != eid]
+                members = c.get("members")
+                if not isinstance(members, list):
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing members")
+                others = [member for member in members if member["id"] != eid]
                 name = c.get("title")
                 if not name:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing title")
