@@ -31,6 +31,9 @@ def make_chat_delivery_fn(app: Any):
         if raw_recipient_type is None:
             raise RuntimeError(f"Chat delivery recipient is missing user type: {request.recipient_id}")
         recipient_type = raw_recipient_type.value if isinstance(raw_recipient_type, Enum) else str(raw_recipient_type)
+        recipient_user_id = getattr(request.recipient_user, "id", None)
+        if recipient_user_id is None:
+            raise RuntimeError(f"Chat delivery recipient is missing user id: {request.recipient_id}")
         envelope = AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=request.chat_id),
             sender=AgentRuntimeActor(
@@ -44,7 +47,7 @@ def make_chat_delivery_fn(app: Any):
             message=AgentRuntimeMessage(content=request.content, signal=request.signal),
             extensions={
                 "mycel": {
-                    "recipient_user_id": getattr(request.recipient_user, "id", request.recipient_id),
+                    "recipient_user_id": recipient_user_id,
                     "recipient_user_type": recipient_type,
                 }
             },
@@ -52,7 +55,7 @@ def make_chat_delivery_fn(app: Any):
         await get_agent_runtime_gateway(app).dispatch_chat(envelope)
 
     def _deliver(request: ChatDeliveryRequest) -> None:
-        logger.info("[delivery] _deliver called: recipient=%s user=%s", request.recipient_id, request.recipient_user.id)
+        logger.info("[delivery] _deliver called: recipient=%s", request.recipient_id)
         future = asyncio.run_coroutine_threadsafe(
             deliver_to_runtime_gateway(request),
             loop,
