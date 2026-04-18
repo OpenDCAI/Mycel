@@ -81,7 +81,7 @@ interface SandboxGroup {
   sandboxId: string;
   displayId: string;
   status: ResourceRow["status"];
-  sessions: ResourceRow[];
+  resourceRows: ResourceRow[];
   startedAt: string;
   metrics: ResourceMetrics | null;
 }
@@ -244,14 +244,14 @@ export function groupResourceRows(resourceRows: ResourceRow[]): SandboxGroup[] {
       );
       const best = sorted[0];
       const earliest = group.reduce(
-        (min, session) => (session.startedAt < min ? session.startedAt : min),
+        (min, resourceRow) => (resourceRow.startedAt < min ? resourceRow.startedAt : min),
         group[0].startedAt,
       );
       return {
         sandboxId: group[0].sandboxId ?? "",
         displayId: group[0].sandboxId ?? "local",
         status: best.status,
-        sessions: sorted,
+        resourceRows: sorted,
         startedAt: earliest,
         metrics: best.metrics ?? null,
       } satisfies SandboxGroup;
@@ -279,7 +279,7 @@ function countProviderResourceRows(providers: ProviderInfo[], status: ResourceRo
 
 function countRuntimeUnboundRunning(provider: ProviderInfo): number {
   return provider.sessions.filter(
-    (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
+    (resourceRow) => provider.type !== "local" && resourceRow.status === "running" && !resourceRow.runtimeSessionId,
   ).length;
 }
 
@@ -558,14 +558,14 @@ function ProviderCard({
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
-  const sessionSummary = [
+  const resourceRowSummary = [
     `${runningCount} 运行中`,
     pausedCount > 0 ? `${pausedCount} 已暂停` : null,
     stoppedCount > 0 ? `${stoppedCount} 已结束` : null,
   ]
     .filter(Boolean)
     .join(" · ");
-  const sessionDots = [...provider.sessions]
+  const resourceDots = [...provider.sessions]
     .sort((left, right) => (RESOURCE_ROW_STATUS_ORDER[left.status] ?? 4) - (RESOURCE_ROW_STATUS_ORDER[right.status] ?? 4))
     .slice(0, 5);
 
@@ -614,14 +614,14 @@ function ProviderCard({
         {provider.sessions.length > 0 && (
           <div className="provider-card__activity">
             <div className="provider-card__session-dots" aria-hidden="true">
-              {sessionDots.map((session) => (
+              {resourceDots.map((resourceRow) => (
                 <span
-                  key={session.id}
-                  className={cx("provider-card__session-dot", `provider-card__session-dot--${session.status}`)}
+                  key={resourceRow.id}
+                  className={cx("provider-card__session-dot", `provider-card__session-dot--${resourceRow.status}`)}
                 />
               ))}
             </div>
-            <span>{sessionSummary}</span>
+            <span>{resourceRowSummary}</span>
           </div>
         )}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 未连上沙盒</span>}
@@ -790,7 +790,7 @@ function ProviderDetail({
                 <div className="sandbox-grid">
                   {filteredGroups.map((group) => (
                     <SandboxCard
-                      key={group.sandboxId || group.sessions.map((session) => session.id).join("|")}
+                      key={group.sandboxId || group.resourceRows.map((resourceRow) => resourceRow.id).join("|")}
                       group={group}
                       providerType={provider.type}
                       onOpen={() => setSelectedGroup(group)}
@@ -925,7 +925,7 @@ function SandboxCard({
   onOpen: () => void;
 }) {
   const duration = formatStartedAtDuration(group.startedAt);
-  const names = group.sessions.map((session) => session.agentName || "未绑定").join(", ");
+  const names = group.resourceRows.map((resourceRow) => resourceRow.agentName || "未绑定").join(", ");
   const metrics = group.metrics;
   const hasMetrics =
     metrics != null &&
@@ -938,7 +938,7 @@ function SandboxCard({
     providerType !== "local" &&
     group.status === "running" &&
     Boolean(group.sandboxId) &&
-    !group.sessions.some((session) => Boolean(session.runtimeSessionId));
+    !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeSessionId));
   const showQuotaOnlyDiskState =
     metrics != null &&
     metrics.disk == null &&
@@ -946,7 +946,7 @@ function SandboxCard({
     Boolean(metrics.diskNote || metrics.probeError);
   const showDetachedResidueState =
     group.status === "stopped" &&
-    !group.sessions.some((session) => Boolean(session.runtimeSessionId)) &&
+    !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeSessionId)) &&
     metrics == null;
   const showMissingMetricsState =
     group.status === "running" &&
@@ -967,14 +967,14 @@ function SandboxCard({
       <div className="sandbox-card__body">
         <div className="sandbox-card__agent-row">
           <div className="sandbox-card__avatar-stack">
-            {group.sessions.slice(0, 3).map((session) => (
+            {group.resourceRows.slice(0, 3).map((resourceRow) => (
               <MonitorAvatar
-                key={session.id}
-                name={session.agentName || "未绑定"}
-                avatarUrl={session.avatarUrl}
+                key={resourceRow.id}
+                name={resourceRow.agentName || "未绑定"}
+                avatarUrl={resourceRow.avatarUrl}
               />
             ))}
-            {group.sessions.length > 3 && <MonitorAvatar name="" count={group.sessions.length - 3} />}
+            {group.resourceRows.length > 3 && <MonitorAvatar name="" count={group.resourceRows.length - 3} />}
           </div>
           <div className="sandbox-card__names">{names}</div>
         </div>
@@ -988,9 +988,9 @@ function SandboxCard({
         {showDetachedResidueState && <div className="sandbox-card__warning">历史残留</div>}
         {showMissingMetricsState && <div className="sandbox-card__warning">等待运行中的沙盒上报指标</div>}
         <div className="sandbox-card__thread-list">
-          {group.sessions.slice(0, 2).map((session) => (
-            <div key={session.id} className="sandbox-card__thread">
-              {session.threadId}
+          {group.resourceRows.slice(0, 2).map((resourceRow) => (
+            <div key={resourceRow.id} className="sandbox-card__thread">
+              {resourceRow.threadId}
             </div>
           ))}
         </div>
@@ -1033,7 +1033,7 @@ function SandboxInspector({
       ? "沙盒已暂停，恢复运行后才能浏览文件。"
       : providerType !== "local" &&
           group.sandboxId &&
-          !group.sessions.some((session) => Boolean(session.runtimeSessionId))
+          !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeSessionId))
         ? "当前沙盒没有 active runtime session，无法浏览文件。"
         : null;
   const detailLink = buildSandboxGroupDetailLink(group);
@@ -1056,34 +1056,34 @@ function SandboxInspector({
         <div className="sandbox-modal__section">
           <h4>Agent</h4>
           <div className="sandbox-session-list">
-            {group.sessions.map((session) => (
-              <div key={session.id} className="sandbox-session-row">
+            {group.resourceRows.map((resourceRow) => (
+              <div key={resourceRow.id} className="sandbox-session-row">
                 <div className="sandbox-session-row__identity">
                   <MonitorAvatar
-                    name={session.agentName || "未绑定"}
-                    avatarUrl={session.avatarUrl}
+                    name={resourceRow.agentName || "未绑定"}
+                    avatarUrl={resourceRow.avatarUrl}
                     size="lg"
                   />
                   <div>
-                    <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
+                    <div className="sandbox-session-row__name">{resourceRow.agentName || "未绑定"}</div>
                     <div className="sandbox-session-row__meta">
-                      <Link className="sandbox-link" to={`/threads/${session.threadId}`}>
-                        {session.threadId}
+                      <Link className="sandbox-link" to={`/threads/${resourceRow.threadId}`}>
+                        {resourceRow.threadId}
                       </Link>
                     </div>
-                    {session.runtimeSessionId && (
+                    {resourceRow.runtimeSessionId && (
                       <div className="sandbox-session-row__meta">
                         runtime{" "}
-                        <Link className="sandbox-link" to={`/runtimes/${session.runtimeSessionId}`}>
-                          {session.runtimeSessionId}
+                        <Link className="sandbox-link" to={`/runtimes/${resourceRow.runtimeSessionId}`}>
+                          {resourceRow.runtimeSessionId}
                         </Link>
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="sandbox-session-row__status">
-                  <span className={`provider-status-dot provider-status-dot--${session.status}`} />
-                  <span>{STATUS_LABEL[session.status]}</span>
+                  <span className={`provider-status-dot provider-status-dot--${resourceRow.status}`} />
+                  <span>{STATUS_LABEL[resourceRow.status]}</span>
                 </div>
               </div>
             ))}
