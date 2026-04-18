@@ -515,7 +515,9 @@ def _make_streaming_app(
     if include_route_locks:
         state.thread_locks = {}
         state.thread_locks_guard = asyncio.Lock()
-    return SimpleNamespace(state=state), queue_manager
+    app = SimpleNamespace(state=state)
+    state.agent_runtime_gateway = NativeAgentRuntimeGateway(app)
+    return app, queue_manager
 
 
 def _make_direct_streaming_context(

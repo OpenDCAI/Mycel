@@ -14,7 +14,7 @@ from backend.protocols.agent_runtime import (
     AgentChatMessage,
     AgentChatRecipient,
 )
-from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
+from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 from storage.contracts import UserRow
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def make_chat_delivery_fn(app: Any):
                 }
             },
         )
-        await NativeAgentRuntimeGateway(app).dispatch_chat(envelope)
+        await get_agent_runtime_gateway(app).dispatch_chat(envelope)
 
     def _deliver(
         recipient_id: str,

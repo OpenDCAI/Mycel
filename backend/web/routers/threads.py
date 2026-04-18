@@ -1038,7 +1038,7 @@ async def send_message(
 
     from backend.protocols.agent_runtime import AgentThreadInputEnvelope
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-    from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
+    from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths
@@ -1053,7 +1053,7 @@ async def send_message(
             agent=agent,
         )
 
-    return await NativeAgentRuntimeGateway(app).dispatch_thread_input(
+    return await get_agent_runtime_gateway(app).dispatch_thread_input(
         AgentThreadInputEnvelope(
             thread_id=thread_id,
             content=message,
@@ -1174,7 +1174,7 @@ async def resolve_thread_permission_request(
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
         from backend.protocols.agent_runtime import AgentThreadInputEnvelope
-        from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
+        from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 
         answered_payload = _build_ask_user_question_answered_payload(
             pending_request,
@@ -1182,7 +1182,7 @@ async def resolve_thread_permission_request(
             annotations=getattr(payload, "annotations", None),
         )
 
-        followup = await NativeAgentRuntimeGateway(app).dispatch_thread_input(
+        followup = await get_agent_runtime_gateway(app).dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 content=_format_ask_user_question_followup(
