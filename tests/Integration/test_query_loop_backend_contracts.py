@@ -515,7 +515,9 @@ def _make_streaming_app(
     if include_route_locks:
         state.thread_locks = {}
         state.thread_locks_guard = asyncio.Lock()
-    return SimpleNamespace(state=state), queue_manager
+    app = SimpleNamespace(state=state)
+    state.agent_runtime_gateway = NativeAgentRuntimeGateway(app)
+    return app, queue_manager
 
 
 def _make_direct_streaming_context(
@@ -2078,7 +2080,7 @@ async def test_cancel_task_route_marks_bash_run_cancelled_and_forces_process_sto
     response = await threads_router.cancel_task(
         thread_id,
         "cmd-cancel-route",
-        SimpleNamespace(app=app),
+        cast(Any, SimpleNamespace(app=app)),
     )
 
     assert response == {"success": True}

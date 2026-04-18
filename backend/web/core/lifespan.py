@@ -130,6 +130,10 @@ async def lifespan(app: FastAPI):
     app.state.thread_event_buffers = {}
     app.state.subagent_buffers = {}
 
+    from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
+
+    app.state.agent_runtime_gateway = NativeAgentRuntimeGateway(app)
+
     from backend.web.services.display_builder import DisplayBuilder
 
     app.state.display_builder = DisplayBuilder()

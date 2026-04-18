@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 from contextlib import contextmanager
@@ -166,17 +167,17 @@ class _FakeRecipeRepo:
 async def test_send_message_passes_enable_trajectory_to_agent_runtime_gateway() -> None:
     captured: list[Any] = []
 
-    async def dispatch_thread_input(_gateway: Any, envelope: Any) -> dict[str, str]:
-        captured.append(envelope)
-        return {"status": "started", "thread_id": "thread-1"}
+    class _Gateway:
+        async def dispatch_thread_input(self, envelope: Any) -> dict[str, str]:
+            captured.append(envelope)
+            return {"status": "started", "thread_id": "thread-1"}
 
-    with patch("backend.web.services.agent_runtime_gateway.NativeAgentRuntimeGateway.dispatch_thread_input", dispatch_thread_input):
-        result = await threads_router.send_message(
-            "thread-1",
-            SendMessageRequest(message="hello", enable_trajectory=True),
-            user_id="owner-1",
-            app=SimpleNamespace(),
-        )
+    result = await threads_router.send_message(
+        "thread-1",
+        SendMessageRequest(message="hello", enable_trajectory=True),
+        user_id="owner-1",
+        app=SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=_Gateway())),
+    )
 
     assert result == {"status": "started", "thread_id": "thread-1"}
     assert captured[0].enable_trajectory is True
@@ -387,12 +388,8 @@ class _FakeAskUserQuestionAgent(_FakePermissionAgent):
         return True
 
 
-class _NullLock:
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
+class _NullLock(asyncio.Lock):
+    pass
 
 
 def _make_threads_app(
@@ -1228,7 +1225,6 @@ async def test_resolve_thread_permission_request_persists_resolution():
 @pytest.mark.asyncio
 async def test_resolve_ask_user_question_request_starts_followup_run_with_answers():
     agent = _FakeAskUserQuestionAgent()
-    app = SimpleNamespace()
     payload = ResolvePermissionRequest.model_validate(
         {
             "decision": "allow",
@@ -1246,20 +1242,20 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
 
     captured: list[Any] = []
 
-    async def dispatch_thread_input(_gateway: Any, envelope: Any) -> dict[str, str]:
-        captured.append(envelope)
-        return {"status": "started", "routing": "direct", "thread_id": "thread-1"}
+    class _Gateway:
+        async def dispatch_thread_input(self, envelope: Any) -> dict[str, str]:
+            captured.append(envelope)
+            return {"status": "started", "routing": "direct", "thread_id": "thread-1"}
 
-    with patch("backend.web.services.agent_runtime_gateway.NativeAgentRuntimeGateway.dispatch_thread_input", dispatch_thread_input):
-        result = await threads_router.resolve_thread_permission_request(
-            "thread-1",
-            "perm-ask",
-            payload,
-            user_id="owner-1",
-            agent=agent,
-            app=app,
-            thread_lock=_NullLock(),
-        )
+    result = await threads_router.resolve_thread_permission_request(
+        "thread-1",
+        "perm-ask",
+        payload,
+        user_id="owner-1",
+        agent=agent,
+        app=SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=_Gateway())),
+        thread_lock=_NullLock(),
+    )
 
     assert result == {
         "ok": True,
