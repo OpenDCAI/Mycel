@@ -76,8 +76,7 @@ def _derive_default_config(
             current_workspace_id=thread["current_workspace_id"],
             owner_user_id=owner_user_id,
         )
-        if config is not None:
-            return config
+        return config
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
@@ -125,40 +124,43 @@ def _resolve_workspace_backed_existing_config(
     app: Any,
     current_workspace_id: str,
     owner_user_id: str,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     workspace_repo = getattr(app.state, "workspace_repo", None)
     get_by_id = getattr(workspace_repo, "get_by_id", None)
-    if callable(get_by_id):
-        workspace = get_by_id(current_workspace_id)
-        if workspace is not None:
-            sandbox_id = _required_bridge_text(workspace, "sandbox_id", "workspace")
-            workspace_owner_user_id = _required_bridge_text(workspace, "owner_user_id", "workspace")
-            if workspace_owner_user_id != owner_user_id:
-                raise PermissionError(f"workspace owner mismatch: expected {owner_user_id}, got {workspace_owner_user_id}")
-            sandbox_repo = getattr(app.state, "sandbox_repo", None)
-            sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
-            if not callable(sandbox_get_by_id):
-                raise RuntimeError("sandbox_repo must support get_by_id")
-            sandbox = sandbox_get_by_id(sandbox_id)
-            if sandbox is None:
-                raise RuntimeError(f"sandbox not found: {sandbox_id}")
-            sandbox_owner_user_id = _required_bridge_text(sandbox, "owner_user_id", "sandbox")
-            if sandbox_owner_user_id != owner_user_id:
-                raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
-            sandbox_template = _resolve_workspace_backed_sandbox_template(
-                app=app,
-                owner_user_id=owner_user_id,
-                sandbox=sandbox,
-            )
-            return {
-                "create_mode": "existing",
-                "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
-                "sandbox_template": sandbox_template,
-                "existing_sandbox_id": _required_bridge_text(sandbox, "id", "sandbox"),
-                "model": None,
-                "workspace": _required_bridge_text(workspace, "workspace_path", "workspace"),
-            }
-    return None
+    if not callable(get_by_id):
+        raise RuntimeError("workspace_repo must support get_by_id")
+
+    workspace = get_by_id(current_workspace_id)
+    if workspace is None:
+        raise RuntimeError(f"workspace not found: {current_workspace_id}")
+
+    sandbox_id = _required_bridge_text(workspace, "sandbox_id", "workspace")
+    workspace_owner_user_id = _required_bridge_text(workspace, "owner_user_id", "workspace")
+    if workspace_owner_user_id != owner_user_id:
+        raise PermissionError(f"workspace owner mismatch: expected {owner_user_id}, got {workspace_owner_user_id}")
+    sandbox_repo = getattr(app.state, "sandbox_repo", None)
+    sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
+    if not callable(sandbox_get_by_id):
+        raise RuntimeError("sandbox_repo must support get_by_id")
+    sandbox = sandbox_get_by_id(sandbox_id)
+    if sandbox is None:
+        raise RuntimeError(f"sandbox not found: {sandbox_id}")
+    sandbox_owner_user_id = _required_bridge_text(sandbox, "owner_user_id", "sandbox")
+    if sandbox_owner_user_id != owner_user_id:
+        raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
+    sandbox_template = _resolve_workspace_backed_sandbox_template(
+        app=app,
+        owner_user_id=owner_user_id,
+        sandbox=sandbox,
+    )
+    return {
+        "create_mode": "existing",
+        "provider_config": _required_bridge_text(sandbox, "provider_name", "sandbox"),
+        "sandbox_template": sandbox_template,
+        "existing_sandbox_id": _required_bridge_text(sandbox, "id", "sandbox"),
+        "model": None,
+        "workspace": _required_bridge_text(workspace, "workspace_path", "workspace"),
+    }
 
 
 def _resolve_workspace_backed_sandbox_template(
