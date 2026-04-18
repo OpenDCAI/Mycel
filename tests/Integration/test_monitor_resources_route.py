@@ -84,6 +84,11 @@ def test_monitor_resources_refresh_probes_before_rebuilding_snapshot(monkeypatch
 
     monkeypatch.setattr(monitor_resource_service.resource_service, "refresh_resource_snapshots", _probe)
     monkeypatch.setattr(monitor_resource_service, "refresh_resource_overview_sync", _refresh)
+    monkeypatch.setattr(
+        monitor_resource_service.monitor_sandbox_projection_service,
+        "list_monitor_sandboxes",
+        lambda: {"triage": _resource_snapshot()["triage"]},
+    )
 
     response = _request("post", "/api/monitor/resources/refresh")
 

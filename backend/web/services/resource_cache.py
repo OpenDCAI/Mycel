@@ -10,7 +10,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services import monitor_sandbox_projection_service, resource_projection_service, resource_service
+from backend.web.services import resource_projection_service, resource_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 
@@ -36,13 +36,6 @@ def _read_refresh_interval_sec() -> float:
     if value <= 0:
         raise RuntimeError("LEON_MONITOR_RESOURCES_REFRESH_SEC must be > 0")
     return value
-
-
-def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
-    sandbox_payload = monitor_sandbox_projection_service.list_monitor_sandboxes()
-    triage = sandbox_payload.get("triage") or {"summary": {}, "groups": []}
-    payload["triage"] = triage
-    return payload
 
 
 def _validate_resource_overview_payload(payload: dict[str, Any]) -> None:
@@ -83,7 +76,6 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     global _snapshot_cache
     started = time.perf_counter()
     payload = resource_projection_service.list_resource_providers()
-    payload = _attach_monitor_triage(payload)
     _validate_resource_overview_payload(payload)
     summary = payload.setdefault("summary", {})
     snapshot_at = str(summary.get("snapshot_at") or datetime.now(UTC).isoformat().replace("+00:00", "Z"))
