@@ -18,18 +18,6 @@ from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_r
 from storage.runtime import upsert_resource_snapshot_for_sandbox
 
 
-class _SandboxSnapshotRepoBridge:
-    def __init__(self, *, sandbox_id: str) -> None:
-        self._sandbox_id = sandbox_id
-
-    # @@@snapshot-write-bridge - resource probe callers are sandbox-shaped now.
-    # Keep the storage write seam behind this bridge so service callers keep
-    # treating sandbox_id as the outward write subject.
-    def upsert_resource_snapshot_for_sandbox(self, **kwargs) -> None:
-        kwargs.pop("sandbox_id", None)
-        upsert_resource_snapshot_for_sandbox(sandbox_id=self._sandbox_id, **kwargs)
-
-
 def get_provider_display_contract(config_name: str) -> dict[str, Any]:
     provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
     catalog = _CATALOG.get(provider_name) or _CatalogEntry(vendor=None, description=provider_name, provider_type="cloud")
@@ -210,7 +198,6 @@ def refresh_resource_snapshots() -> dict[str, Any]:
             probe_mode=probe_mode,
             provider=provider,
             instance_id=instance_id,
-            repo=_SandboxSnapshotRepoBridge(sandbox_id=sandbox_id),
         )
         probed += 1
         if not result["ok"]:

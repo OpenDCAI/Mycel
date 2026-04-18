@@ -115,13 +115,7 @@ def test_upsert_resource_snapshot_for_sandbox_uses_sandbox_write_without_lower_l
     ]
 
 
-def test_resource_snapshot_bridge_no_longer_exposes_lease_shaped_write_shell() -> None:
-    bridge = resource_service._SandboxSnapshotRepoBridge(sandbox_id="sandbox-1")
-
-    assert not hasattr(bridge, "upsert_lease_resource_snapshot")
-
-
-def test_resource_snapshot_write_bridge_is_not_named_as_adapter() -> None:
+def test_resource_snapshot_service_no_longer_uses_write_bridge_class() -> None:
     source = inspect.getsource(resource_service)
     guard_source = Path(__file__).read_text(encoding="utf-8")
     stale_test_name = "no_longer_requires_" + "legacy" + "_lease_bridge"
@@ -129,7 +123,7 @@ def test_resource_snapshot_write_bridge_is_not_named_as_adapter() -> None:
 
     assert "_SandboxSnapshotRepoAdapter" not in source
     assert stale_adapter_comment not in source
-    assert "_SandboxSnapshotRepoBridge" in source
+    assert "_SandboxSnapshotRepoBridge" not in source
     assert stale_test_name not in guard_source
     assert stale_adapter_comment not in guard_source
 
@@ -223,7 +217,7 @@ def test_probe_and_upsert_for_instance_requires_sandbox_id() -> None:
     assert result == {"ok": False, "error": "sandbox-shaped snapshot helper requires sandbox_id"}
 
 
-def test_refresh_resource_snapshots_routes_successful_probe_through_sandbox_wrapper(monkeypatch):
+def test_refresh_resource_snapshots_routes_successful_probe_through_snapshot_helper(monkeypatch):
     monkeypatch.setattr(
         resource_service,
         "make_sandbox_monitor_repo",
@@ -246,7 +240,7 @@ def test_refresh_resource_snapshots_routes_successful_probe_through_sandbox_wrap
     def _fake_upsert_resource_snapshot_for_sandbox(**kwargs):
         captured.append(kwargs)
 
-    monkeypatch.setattr(resource_service, "upsert_resource_snapshot_for_sandbox", _fake_upsert_resource_snapshot_for_sandbox)
+    monkeypatch.setattr(resource_snapshot, "upsert_resource_snapshot_for_sandbox", _fake_upsert_resource_snapshot_for_sandbox)
 
     result = resource_service.refresh_resource_snapshots()
 
@@ -309,6 +303,7 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
     assert result["errors"] == 0
     assert result["running_targets"] == 1
     assert result["non_running_targets"] == 0
+    assert all("repo" not in call for call in calls)
     assert all("lease_id" not in call for call in calls)
     assert {call["sandbox_id"] for call in calls} == {"sandbox-1"}
     assert {call["probe_mode"] for call in calls} == {"running_runtime"}
