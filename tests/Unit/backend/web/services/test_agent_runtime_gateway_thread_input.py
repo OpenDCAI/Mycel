@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.protocols.agent_runtime import AgentThreadInputEnvelope
+from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 from core.runtime.middleware.monitor import AgentState
 
@@ -41,6 +41,15 @@ def _fake_app() -> SimpleNamespace:
     )
 
 
+def _thread_input(content: str = "hello", *, enable_trajectory: bool = False) -> AgentThreadInputEnvelope:
+    return AgentThreadInputEnvelope(
+        thread_id="thread-1",
+        sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="owner"),
+        message=AgentRuntimeMessage(content=content),
+        enable_trajectory=enable_trajectory,
+    )
+
+
 @pytest.mark.asyncio
 async def test_gateway_thread_input_clears_resource_overview_cache_when_starting_run() -> None:
     app = _fake_app()
@@ -52,7 +61,7 @@ async def test_gateway_thread_input_clears_resource_overview_cache_when_starting
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
         patch("backend.web.services.resource_cache.clear_resource_overview_cache") as clear_cache,
     ):
-        result = await NativeAgentRuntimeGateway(app).dispatch_thread_input(AgentThreadInputEnvelope(thread_id="thread-1", content="hello"))
+        result = await NativeAgentRuntimeGateway(app).dispatch_thread_input(_thread_input())
 
     assert result == {"status": "started", "routing": "direct", "run_id": "run-123", "thread_id": "thread-1"}
     clear_cache.assert_called_once_with()
@@ -69,7 +78,7 @@ async def test_gateway_thread_input_requires_agent_runtime() -> None:
         patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
     ):
         with pytest.raises(AttributeError):
-            await NativeAgentRuntimeGateway(app).dispatch_thread_input(AgentThreadInputEnvelope(thread_id="thread-1", content="hello"))
+            await NativeAgentRuntimeGateway(app).dispatch_thread_input(_thread_input())
 
 
 @pytest.mark.asyncio
@@ -83,8 +92,6 @@ async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run(
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123") as start_run,
         patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
     ):
-        await NativeAgentRuntimeGateway(app).dispatch_thread_input(
-            AgentThreadInputEnvelope(thread_id="thread-1", content="hello", enable_trajectory=True)
-        )
+        await NativeAgentRuntimeGateway(app).dispatch_thread_input(_thread_input(enable_trajectory=True))
 
     assert start_run.call_args.kwargs["enable_trajectory"] is True

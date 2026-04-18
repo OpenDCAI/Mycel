@@ -8,11 +8,11 @@ from enum import Enum
 from typing import Any
 
 from backend.protocols.agent_runtime import (
-    AgentChatActor,
     AgentChatContext,
     AgentChatDeliveryEnvelope,
-    AgentChatMessage,
     AgentChatRecipient,
+    AgentRuntimeActor,
+    AgentRuntimeMessage,
 )
 from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 from storage.contracts import UserRow
@@ -41,14 +41,15 @@ def make_chat_delivery_fn(app: Any):
         recipient_type = raw_recipient_type.value if isinstance(raw_recipient_type, Enum) else str(raw_recipient_type)
         envelope = AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=chat_id),
-            sender=AgentChatActor(
+            sender=AgentRuntimeActor(
                 user_id=sender_id,
                 user_type="unknown",
                 display_name=sender_name,
                 avatar_url=sender_avatar_url,
+                source="chat",
             ),
             recipient=AgentChatRecipient(agent_user_id=recipient_id, runtime_source="mycel"),
-            message=AgentChatMessage(content=content, signal=signal),
+            message=AgentRuntimeMessage(content=content, signal=signal),
             extensions={
                 "mycel": {
                     "recipient_user_id": getattr(recipient_user, "id", recipient_id),

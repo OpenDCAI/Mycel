@@ -39,16 +39,16 @@ class NativeAgentThreadInputHandler:
                 return {"status": "cancelled", "routing": "cancelled", "thread_id": thread_id}
 
             state = agent.runtime.current_state
-            logger.debug("[agent-runtime-gateway] thread=%s state=%s source=%s", thread_id[:15], state, envelope.source)
+            logger.debug("[agent-runtime-gateway] thread=%s state=%s source=%s", thread_id[:15], state, envelope.sender.source)
 
             if agent.runtime.current_state == AgentState.ACTIVE:
                 qm.enqueue(
-                    envelope.content,
+                    envelope.message.content,
                     thread_id,
                     "steer",
-                    source=envelope.source,
-                    sender_name=envelope.sender_name,
-                    sender_avatar_url=envelope.sender_avatar_url,
+                    source=envelope.sender.source,
+                    sender_name=envelope.sender.display_name,
+                    sender_avatar_url=envelope.sender.avatar_url,
                     is_steer=True,
                 )
                 logger.debug("[agent-runtime-gateway] thread input enqueued")
@@ -60,30 +60,30 @@ class NativeAgentThreadInputHandler:
             async with lock:
                 if not agent.runtime.transition(AgentState.ACTIVE):
                     qm.enqueue(
-                        envelope.content,
+                        envelope.message.content,
                         thread_id,
                         "steer",
-                        source=envelope.source,
-                        sender_name=envelope.sender_name,
-                        sender_avatar_url=envelope.sender_avatar_url,
+                        source=envelope.sender.source,
+                        sender_name=envelope.sender.display_name,
+                        sender_avatar_url=envelope.sender.avatar_url,
                         is_steer=True,
                     )
                     logger.debug("[agent-runtime-gateway] thread input enqueued after transition race")
                     return {"status": "injected", "routing": "steer", "thread_id": thread_id}
                 logger.debug("[agent-runtime-gateway] thread input starts run")
                 meta = {
-                    "source": envelope.source,
-                    "sender_name": envelope.sender_name,
-                    "sender_avatar_url": envelope.sender_avatar_url,
+                    "source": envelope.sender.source,
+                    "sender_name": envelope.sender.display_name,
+                    "sender_avatar_url": envelope.sender.avatar_url,
                 }
-                if envelope.message_metadata:
-                    meta.update(envelope.message_metadata)
-                if envelope.attachments:
-                    meta["attachments"] = envelope.attachments
+                if envelope.message.metadata:
+                    meta.update(envelope.message.metadata)
+                if envelope.message.attachments:
+                    meta["attachments"] = envelope.message.attachments
                 run_id = start_agent_run(
                     agent,
                     thread_id,
-                    envelope.content,
+                    envelope.message.content,
                     self._app,
                     enable_trajectory=envelope.enable_trajectory,
                     message_metadata=meta,

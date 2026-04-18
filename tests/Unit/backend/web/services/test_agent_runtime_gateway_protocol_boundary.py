@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from typing import get_type_hints
 
 
 def test_agent_runtime_protocol_types_live_outside_web_service_layer() -> None:
@@ -11,3 +12,20 @@ def test_agent_runtime_protocol_types_live_outside_web_service_layer() -> None:
     assert protocol_module.AgentThreadInputEnvelope.__module__ == "backend.protocols.agent_runtime"
     assert not hasattr(gateway_module, "AgentChatDeliveryEnvelope")
     assert not hasattr(gateway_module, "AgentThreadInputEnvelope")
+
+
+def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -> None:
+    protocol_module = importlib.import_module("backend.protocols.agent_runtime")
+
+    chat_fields = get_type_hints(protocol_module.AgentChatDeliveryEnvelope)
+    thread_fields = get_type_hints(protocol_module.AgentThreadInputEnvelope)
+
+    assert chat_fields["sender"] is protocol_module.AgentRuntimeActor
+    assert chat_fields["message"] is protocol_module.AgentRuntimeMessage
+    assert chat_fields["transport"] is protocol_module.AgentRuntimeTransport
+    assert thread_fields["sender"] is protocol_module.AgentRuntimeActor
+    assert thread_fields["message"] is protocol_module.AgentRuntimeMessage
+    assert thread_fields["transport"] is protocol_module.AgentRuntimeTransport
+    assert "content" not in thread_fields
+    assert "source" not in thread_fields
+    assert "message_metadata" not in thread_fields

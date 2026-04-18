@@ -13,11 +13,12 @@ class AgentChatContext:
 
 
 @dataclass(frozen=True)
-class AgentChatActor:
+class AgentRuntimeActor:
     user_id: str
     user_type: str
     display_name: str
     avatar_url: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -27,16 +28,18 @@ class AgentChatRecipient:
 
 
 @dataclass(frozen=True)
-class AgentChatMessage:
+class AgentRuntimeMessage:
     content: str
     content_type: str = "text"
     message_id: str | None = None
     signal: str | None = None
     created_at: str | None = None
+    attachments: list[str] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
-class AgentChatTransport:
+class AgentRuntimeTransport:
     delivery_id: str | None = None
     correlation_id: str | None = None
     idempotency_key: str | None = None
@@ -45,10 +48,10 @@ class AgentChatTransport:
 @dataclass(frozen=True)
 class AgentChatDeliveryEnvelope:
     chat: AgentChatContext
-    sender: AgentChatActor
+    sender: AgentRuntimeActor
     recipient: AgentChatRecipient
-    message: AgentChatMessage
-    transport: AgentChatTransport = AgentChatTransport()
+    message: AgentRuntimeMessage
+    transport: AgentRuntimeTransport = AgentRuntimeTransport()
     protocol_version: Literal["agent.chat.delivery.v1"] = "agent.chat.delivery.v1"
     event_type: Literal["chat.message"] = "chat.message"
     extensions: dict[str, Any] | None = None
@@ -57,13 +60,10 @@ class AgentChatDeliveryEnvelope:
 @dataclass(frozen=True)
 class AgentThreadInputEnvelope:
     thread_id: str
-    content: str
-    source: str = "owner"
+    sender: AgentRuntimeActor
+    message: AgentRuntimeMessage
+    transport: AgentRuntimeTransport = AgentRuntimeTransport()
     enable_trajectory: bool = False
-    sender_name: str | None = None
-    sender_avatar_url: str | None = None
-    attachments: list[str] | None = None
-    message_metadata: dict[str, Any] | None = None
     protocol_version: Literal["agent.thread.input.v1"] = "agent.thread.input.v1"
     event_type: Literal["thread.input"] = "thread.input"
 
