@@ -143,10 +143,9 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def query_resource_sessions(self) -> list[dict]:
-        sandbox_rows = self._sandbox_rows_by_runtime_bridge_lease_id("query_resource_sessions")
         result = []
 
-        for sandbox in sandbox_rows.values():
+        for sandbox in self._ordered_sandboxes("query_resource_sessions"):
             thread_ids = self._thread_ids_for_sandbox_id(str(sandbox.get("id") or ""))
             if thread_ids:
                 for thread_id in thread_ids:
@@ -206,15 +205,6 @@ class SupabaseSandboxMonitorRepo:
             raise RuntimeError("sandbox.config must be an object")
         bridge_lease_id = str(config.get("legacy_lease_id") or "").strip()
         return bridge_lease_id or None
-
-    def _sandbox_rows_by_runtime_bridge_lease_id(self, operation: str) -> dict[str, dict[str, Any]]:
-        result: dict[str, dict[str, Any]] = {}
-        for sandbox in self._ordered_sandboxes(operation):
-            bridge_lease_id = self._runtime_bridge_lease_id(sandbox)
-            if not bridge_lease_id:
-                continue
-            result[bridge_lease_id] = sandbox
-        return result
 
     def _workspace_rows_by_id(self, workspace_ids: list[str]) -> dict[str, dict[str, Any]]:
         ordered_ids = [str(workspace_id or "").strip() for workspace_id in workspace_ids if str(workspace_id or "").strip()]
@@ -342,13 +332,11 @@ class SupabaseSandboxMonitorRepo:
         session_id: str | None,
         thread_id: str | None,
     ) -> dict:
-        bridge_lease_id = self._runtime_bridge_lease_id(sandbox)
         return {
             "provider": sandbox.get("provider_name") or "local",
             "session_id": session_id,
             "thread_id": thread_id,
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
-            "lease_id": bridge_lease_id,
             "observed_state": sandbox.get("observed_state"),
             "desired_state": sandbox.get("desired_state"),
             "created_at": sandbox.get("created_at"),

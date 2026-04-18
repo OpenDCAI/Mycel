@@ -61,10 +61,12 @@ def test_sandbox_monitor_repo_names_runtime_bridge_helpers_without_stale_label()
     source = Path("storage/providers/supabase/sandbox_monitor_repo.py").read_text()
     stale_helper = "_" + "legacy" + "_lease_id"
     stale_row_helper = "_sandbox_rows_by_" + "legacy" + "_lease_id"
+    stale_runtime_bridge_map = "_sandbox_rows_by_" + "runtime_bridge" + "_lease_id"
     stale_comment = "# object truth, but still expose " + "legacy" + " lease_id"
 
     assert stale_helper not in source
     assert stale_row_helper not in source
+    assert stale_runtime_bridge_map not in source
     assert stale_comment not in source
 
 
@@ -418,7 +420,6 @@ def test_session_monitor_surfaces_do_not_read_removed_chat_sessions_table() -> N
             "session_id": None,
             "thread_id": "thread-1",
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-05T09:00:00",
@@ -911,8 +912,11 @@ def test_instance_lookup_does_not_read_removed_instances_table(include_updated_a
 
 def test_resource_session_row_source_shell_is_removed() -> None:
     repo = _repo({"container.sandboxes": []})
+    stale_session_shell = "list_sessions" + "_with_leases"
+    stale_runtime_bridge_map = "_sandbox_rows_by_" + "runtime_bridge" + "_lease_id"
 
-    assert not hasattr(repo, "list_sessions_with_leases")
+    assert not hasattr(repo, stale_session_shell)
+    assert not hasattr(repo, stale_runtime_bridge_map)
 
 
 def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows() -> None:
@@ -959,7 +963,6 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
             "session_id": None,
             "thread_id": None,
             "sandbox_id": "sandbox-recent",
-            "lease_id": "lease-recent",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-05T12:00:00",
@@ -969,7 +972,6 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
             "session_id": None,
             "thread_id": "subagent-deadbeef",
             "sandbox_id": "sandbox-terminal",
-            "lease_id": "lease-terminal",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-05T11:00:00",
@@ -979,7 +981,6 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
             "session_id": None,
             "thread_id": "thread-parent",
             "sandbox_id": "sandbox-terminal",
-            "lease_id": "lease-terminal",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-05T11:00:00",
@@ -989,11 +990,45 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
             "session_id": None,
             "thread_id": None,
             "sandbox_id": "sandbox-active",
-            "lease_id": "lease-active",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-05T10:00:00",
         },
+    ]
+
+
+def test_query_resource_sessions_does_not_require_lower_lease_bridge_field() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-clean",
+                    provider_name="docker",
+                    desired_state="running",
+                    observed_state="running",
+                    created_at="2026-04-05T13:00:00",
+                    historical_lease_id=None,
+                ),
+            ],
+            "container.workspaces": [
+                _workspace("workspace-clean", "sandbox-clean", updated_at="2026-04-05T13:05:00"),
+            ],
+            "agent.threads": [
+                _thread("thread-clean", "workspace-clean", updated_at="2026-04-05T13:05:00"),
+            ],
+        }
+    )
+
+    assert repo.query_resource_sessions() == [
+        {
+            "provider": "docker",
+            "session_id": None,
+            "thread_id": "thread-clean",
+            "sandbox_id": "sandbox-clean",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-05T13:00:00",
+        }
     ]
 
 
@@ -1037,7 +1072,6 @@ def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -
             "session_id": None,
             "thread_id": "thread-parent",
             "sandbox_id": "sandbox-terminal",
-            "lease_id": "lease-terminal",
             "observed_state": "paused",
             "desired_state": "paused",
             "created_at": "2026-04-05T11:00:00",
@@ -1047,7 +1081,6 @@ def test_query_resource_sessions_no_longer_materializes_lease_map(monkeypatch) -
             "session_id": None,
             "thread_id": None,
             "sandbox_id": "sandbox-active",
-            "lease_id": "lease-active",
             "observed_state": "running",
             "desired_state": "running",
             "created_at": "2026-04-05T10:00:00",
