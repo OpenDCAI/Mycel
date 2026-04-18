@@ -11,7 +11,7 @@ def test_default_terminal_and_chat_session_builders_use_local_runtime_store(monk
     monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
 
     def reject_supabase_repo(repo_method: str, **_kwargs):
-        raise AssertionError(f"{repo_method} should not use Supabase staging persistence by default")
+        raise AssertionError(f"{repo_method} should not use Supabase storage persistence by default")
 
     monkeypatch.setattr(runtime, "_build_storage_repo", reject_supabase_repo)
 
@@ -43,8 +43,8 @@ def test_explicit_supabase_terminal_session_builders_fail_loudly():
     class _Client:
         pass
 
-    with pytest.raises(RuntimeError, match="Supabase terminal/session runtime repos have been removed"):
+    with pytest.raises(RuntimeError, match="Supabase terminal and chat runtime repos have been removed"):
         runtime.build_terminal_repo(supabase_client=_Client())
 
-    with pytest.raises(RuntimeError, match="Supabase terminal/session runtime repos have been removed"):
+    with pytest.raises(RuntimeError, match="Supabase terminal and chat runtime repos have been removed"):
         runtime.build_chat_session_repo(supabase_client=_Client())

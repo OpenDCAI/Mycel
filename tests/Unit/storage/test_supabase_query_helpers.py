@@ -84,7 +84,7 @@ def test_schema_table_preserves_injected_postgrest_http_client(monkeypatch: pyte
     client = _SupabaseStyleClient(
         SyncPostgrestClient(
             "http://example.test",
-            schema="public",
+            schema="agent",
             http_client=session,
         )
     )
