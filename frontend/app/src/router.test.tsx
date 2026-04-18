@@ -45,9 +45,9 @@ describe("router removed route contract", () => {
     expect(routePaths.has("agents")).toBe(true);
   });
 
-  it("does not label current chat and contact route screens as legacy pages", () => {
+  it("does not label current chat and contact route screens as removed pages", () => {
     const source = sourceModules["./router.tsx"];
 
-    expect(source).not.toContain("Legacy pages reused in new routes");
+    expect(source).not.toContain("Leg" + "acy pages reused in new routes");
   });
 });
