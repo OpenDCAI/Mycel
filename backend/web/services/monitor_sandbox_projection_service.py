@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from backend.web.services import monitor_sandbox_read_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
-from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 SANDBOX_SEMANTIC_ORDER = [
     "orphan_diverged",
@@ -269,8 +269,4 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[st
 
 
 def list_monitor_sandboxes() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Sandboxes")
-    finally:
-        repo.close()
+    return _map_monitor_sandboxes(monitor_sandbox_read_service.list_sandbox_rows(), title="All Sandboxes")
