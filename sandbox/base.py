@@ -96,8 +96,8 @@ def _run_coroutine_blocking[T](coro: Coroutine[Any, Any, T], *, timeout: float |
     error: dict[str, BaseException] = {}
     done = threading.Event()
 
-    # @@@same-loop-init-bridge - init commands can run while the web request event loop is already active;
-    # running run_coroutine_threadsafe(...).result() on that same loop deadlocks, so bridge through a helper thread.
+    # @@@same-loop-init-dispatch - init commands can run while the web request event loop is already active;
+    # running run_coroutine_threadsafe(...).result() on that same loop deadlocks, so dispatch through a helper thread.
     def _runner() -> None:
         try:
             result["value"] = asyncio.run(coro)
@@ -113,7 +113,7 @@ def _run_coroutine_blocking[T](coro: Coroutine[Any, Any, T], *, timeout: float |
     if "value" in error:
         raise error["value"]
     if "value" not in result:
-        raise RuntimeError("Coroutine bridge finished without a result")
+        raise RuntimeError("Coroutine helper thread finished without a result")
     return result["value"]
 
 

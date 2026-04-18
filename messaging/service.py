@@ -192,7 +192,7 @@ class MessagingService:
         created = self._normalize_message_row(created_row)
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
-        # Publish to event bus (SSE / Realtime bridge)
+        # Publish to event bus (SSE / realtime transport)
         if self._event_bus:
             self._event_bus.publish(
                 chat_id,
