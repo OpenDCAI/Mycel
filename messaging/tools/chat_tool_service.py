@@ -87,6 +87,14 @@ class ChatToolService:
             return None
         return self._messaging.resolve_display_user(social_user_id)
 
+    def _message_sender_name(self, sender_id: str | None) -> str:
+        if not sender_id:
+            raise RuntimeError("Chat message sender identity not found: <missing>")
+        sender = self._resolve_display_user(sender_id)
+        if not sender:
+            raise RuntimeError(f"Chat message sender identity not found: {sender_id}")
+        return sender.display_name
+
     def _register(self, registry: ToolRegistry) -> None:
         self._register_list_chats(registry)
         self._register_chat_read(registry)
@@ -96,9 +104,9 @@ class ChatToolService:
     def _format_msgs(self, msgs: list[dict], eid: str) -> str:
         lines = []
         for m in msgs:
-            sender = self._resolve_display_user(m.get("sender_id", ""))
-            name = sender.display_name if sender else "unknown"
-            tag = "you" if m.get("sender_id") == eid else name
+            sender_id = m.get("sender_id")
+            name = self._message_sender_name(sender_id)
+            tag = "you" if sender_id == eid else name
             content = m.get("content", "")
             if m.get("retracted_at"):
                 content = "[已撤回]"
@@ -193,13 +201,15 @@ class ChatToolService:
                 msgs = self._fetch_by_range(chat_id, parsed)
                 if not msgs:
                     return "No messages in that range."
+                rendered = self._format_msgs(msgs, eid)
                 self._messaging.mark_read(chat_id, eid)
-                return self._format_msgs(msgs, eid)
+                return rendered
 
             msgs = self._messaging.list_unread(chat_id, eid)
             if msgs:
+                rendered = self._format_msgs(msgs, eid)
                 self._messaging.mark_read(chat_id, eid)
-                return self._format_msgs(msgs, eid)
+                return rendered
 
             return (
                 "No unread messages. To read history, call again with range:\n"
@@ -371,8 +381,7 @@ class ChatToolService:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
-                sender = self._resolve_display_user(m.get("sender_id", ""))
-                name = sender.display_name if sender else "unknown"
+                name = self._message_sender_name(m.get("sender_id"))
                 lines.append(f"[{name}] {m.get('content', '')[:100]}")
             return "\n".join(lines)
 

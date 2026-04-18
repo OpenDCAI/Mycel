@@ -398,6 +398,31 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_agen
     ]
 
 
+def test_messaging_service_list_message_responses_fails_on_unknown_sender() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(),
+        messages_repo=SimpleNamespace(
+            list_by_chat=lambda _chat_id, **_kwargs: [
+                {
+                    "id": "msg-1",
+                    "chat_id": "chat-1",
+                    "sender_user_id": "missing-user",
+                    "content": "hello",
+                    "message_type": "human",
+                    "created_at": "2026-04-07T00:00:00Z",
+                }
+            ]
+        ),
+        user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        service.list_message_responses("chat-1", viewer_id="human-user-1")
+
+    assert str(excinfo.value) == "Chat message sender identity not found: missing-user"
+
+
 def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo() -> None:
     created_rows: list[tuple[dict[str, Any], int | None]] = []
 
@@ -831,6 +856,33 @@ def test_chat_tool_formats_agent_user_id_sender_as_agent_name() -> None:
     assert "[Toad]: hello" in rendered
 
 
+def test_read_messages_fails_before_mark_read_on_unknown_message_sender() -> None:
+    registry = ToolRegistry()
+    marked: list[tuple[str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
+                {
+                    "sender_id": "missing-user",
+                    "content": f"after={after};before={before}",
+                }
+            ],
+            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+        ),
+    )
+
+    read_messages = registry.get("read_messages")
+    assert read_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        read_messages.handler(chat_id="chat-1", range="-1h:")
+
+    assert str(excinfo.value) == "Chat message sender identity not found: missing-user"
+    assert marked == []
+
+
 def test_chat_tool_send_accepts_agent_user_target_id() -> None:
     registry = ToolRegistry()
     sent: list[tuple[str, str, str]] = []
@@ -1065,6 +1117,25 @@ def test_chat_tool_search_uses_messaging_service_direct_chat_lookup_without_memb
 
     assert result == "No messages matching 'hello'."
     assert search_calls == [("hello", "chat-1")]
+
+
+def test_chat_tool_search_fails_on_unknown_message_sender() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            search_messages=lambda _query, *, chat_id=None: [{"sender_id": "missing-user", "content": f"chat_id={chat_id}"}],
+        ),
+    )
+
+    search_messages = registry.get("search_messages")
+    assert search_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        search_messages.handler(query="hello")
+
+    assert str(excinfo.value) == "Chat message sender identity not found: missing-user"
 
 
 def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
