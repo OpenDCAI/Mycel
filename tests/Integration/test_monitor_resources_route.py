@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -45,13 +43,6 @@ def _resource_snapshot() -> dict:
             "groups": [],
         },
     }
-
-
-def test_monitor_deleted_route_guard_uses_deleted_route_language() -> None:
-    source = Path(__file__).read_text()
-
-    old_name = "def test_monitor_" + "leg" + "acy_monitor_routes_are_not_exposed"
-    assert old_name not in source
 
 
 def _stub_dashboard_dependencies(monkeypatch):
