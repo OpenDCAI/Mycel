@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.web.services import monitor_sandbox_read_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
-from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 
 def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
@@ -70,12 +70,9 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
     if thread is None:
         raise KeyError(f"Thread not found: {thread_id}")
 
-    repo = make_sandbox_monitor_repo()
-    try:
-        summary = repo.query_thread_summary(thread_id)
-        runtime_rows = repo.query_thread_runtime_rows(thread_id)
-    finally:
-        repo.close()
+    rows = monitor_sandbox_read_service.load_thread_detail_rows(thread_id)
+    summary = rows["summary"]
+    runtime_rows = rows["runtime_rows"]
 
     if summary is None:
         summary = _derive_thread_summary_from_runtime_rows(runtime_rows)

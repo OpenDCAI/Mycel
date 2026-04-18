@@ -43,3 +43,14 @@ def load_sandbox_cleanup_target(sandbox_id: str) -> dict[str, Any]:
     if sandbox is None:
         raise KeyError(f"Sandbox not found: {sandbox_id}")
     return cleanup_target
+
+
+def load_thread_detail_rows(thread_id: str) -> dict[str, Any]:
+    repo = make_sandbox_monitor_repo()
+    try:
+        return {
+            "summary": repo.query_thread_summary(thread_id),
+            "runtime_rows": repo.query_thread_runtime_rows(thread_id),
+        }
+    finally:
+        repo.close()
