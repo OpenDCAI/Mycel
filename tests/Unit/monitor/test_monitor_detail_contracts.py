@@ -185,7 +185,7 @@ class FakeMonitorThreadRepo:
     def query_thread_summary(self, _thread_id):
         return self.summary
 
-    def query_thread_sessions(self, _thread_id):
+    def query_thread_runtime_rows(self, _thread_id):
         return self.sessions
 
     def close(self):

@@ -762,7 +762,7 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
         summary = repo.query_thread_summary(thread_id)
-        chat_sessions = repo.query_thread_sessions(thread_id)
+        chat_sessions = repo.query_thread_runtime_rows(thread_id)
     finally:
         repo.close()
 

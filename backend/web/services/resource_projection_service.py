@@ -132,7 +132,7 @@ def _load_visible_resource_runtime() -> tuple[
 ]:
     repo = make_sandbox_monitor_repo()
     try:
-        resource_rows = _project_user_visible_resource_rows(repo, repo.query_resource_sessions())
+        resource_rows = _project_user_visible_resource_rows(repo, repo.query_resource_rows())
         runtime_session_ids = _query_runtime_session_ids(
             repo, [str(resource_row.get("sandbox_id") or "") for resource_row in resource_rows]
         )

@@ -10,7 +10,7 @@ class _FakeRepo:
         self._sandbox_threads = sandbox_threads or {}
         self._instance_ids = instance_ids or {}
 
-    def query_resource_sessions(self):
+    def query_resource_rows(self):
         return list(self._rows)
 
     def query_sandbox_threads(self, sandbox_id: str):

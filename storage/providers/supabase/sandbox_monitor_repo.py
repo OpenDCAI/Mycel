@@ -74,7 +74,7 @@ class SupabaseSandboxMonitorRepo:
         results = self.query_threads(thread_id=thread_id)
         return results[0] if results else None
 
-    def query_thread_sessions(self, thread_id: str) -> list[dict]:
+    def query_thread_runtime_rows(self, thread_id: str) -> list[dict]:
         # @@@monitor-session-demotion - Supabase no longer owns runtime-local chat
         # session history; remote monitor detail must not read runtime-local chat_sessions.
         return []
@@ -159,15 +159,15 @@ class SupabaseSandboxMonitorRepo:
             result[sandbox_id] = provider_env_id or None
         return result
 
-    def query_resource_sessions(self) -> list[dict]:
+    def query_resource_rows(self) -> list[dict]:
         result = []
 
-        for sandbox in self._ordered_sandboxes("query_resource_sessions"):
+        for sandbox in self._ordered_sandboxes("query_resource_rows"):
             thread_ids = self._thread_ids_for_sandbox_id(str(sandbox.get("id") or ""))
             if thread_ids:
                 for thread_id in thread_ids:
                     result.append(
-                        self._resource_session_row_from_sandbox(
+                        self._resource_row_from_sandbox(
                             sandbox,
                             session_id=None,
                             thread_id=thread_id,
@@ -176,7 +176,7 @@ class SupabaseSandboxMonitorRepo:
                 continue
 
             result.append(
-                self._resource_session_row_from_sandbox(
+                self._resource_row_from_sandbox(
                     sandbox,
                     session_id=None,
                     thread_id=None,
@@ -330,7 +330,7 @@ class SupabaseSandboxMonitorRepo:
             "updated_at": sandbox.get("updated_at"),
         }
 
-    def _resource_session_row_from_sandbox(
+    def _resource_row_from_sandbox(
         self,
         sandbox: dict[str, Any],
         *,

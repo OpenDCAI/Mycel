@@ -321,7 +321,7 @@ def test_query_sandbox_allows_missing_lower_runtime_handle() -> None:
     }
 
 
-def test_query_thread_sessions_ignores_removed_chat_sessions_rows() -> None:
+def test_query_thread_runtime_rows_ignores_removed_chat_sessions_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -345,7 +345,7 @@ def test_query_thread_sessions_ignores_removed_chat_sessions_rows() -> None:
         }
     )
 
-    assert repo.query_thread_sessions("thread-1") == []
+    assert repo.query_thread_runtime_rows("thread-1") == []
 
 
 def test_chat_session_monitor_surfaces_do_not_read_removed_chat_sessions_table() -> None:
@@ -365,9 +365,9 @@ def test_chat_session_monitor_surfaces_do_not_read_removed_chat_sessions_table()
         )
     )
 
-    assert repo.query_thread_sessions("thread-1") == []
+    assert repo.query_thread_runtime_rows("thread-1") == []
     assert repo.query_sandbox_sessions("sandbox-1") == []
-    assert repo.query_resource_sessions() == [
+    assert repo.query_resource_rows() == [
         {
             "provider": "local",
             "session_id": None,
@@ -799,7 +799,7 @@ def test_instance_lookup_does_not_read_removed_instances_table(include_updated_a
         assert result == "instance-lease"
 
 
-def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows() -> None:
+def test_query_resource_rows_uses_sandbox_thread_rows_without_session_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -837,7 +837,7 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
         }
     )
 
-    assert repo.query_resource_sessions() == [
+    assert repo.query_resource_rows() == [
         {
             "provider": "docker",
             "session_id": None,
@@ -877,7 +877,7 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
     ]
 
 
-def test_query_resource_sessions_does_not_require_lower_runtime_handle() -> None:
+def test_query_resource_rows_does_not_require_lower_runtime_handle() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -899,7 +899,7 @@ def test_query_resource_sessions_does_not_require_lower_runtime_handle() -> None
         }
     )
 
-    assert repo.query_resource_sessions() == [
+    assert repo.query_resource_rows() == [
         {
             "provider": "docker",
             "session_id": None,
@@ -912,7 +912,7 @@ def test_query_resource_sessions_does_not_require_lower_runtime_handle() -> None
     ]
 
 
-def test_query_resource_sessions_projects_sandbox_rows_without_session_rows() -> None:
+def test_query_resource_rows_projects_sandbox_rows_without_session_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
@@ -938,7 +938,7 @@ def test_query_resource_sessions_projects_sandbox_rows_without_session_rows() ->
         }
     )
 
-    assert repo.query_resource_sessions() == [
+    assert repo.query_resource_rows() == [
         {
             "provider": "daytona_selfhost",
             "session_id": None,
