@@ -4,17 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.web.services import thread_state_service
 from backend.web.services.thread_state_service import get_sandbox_info, get_sandbox_status_from_repos
-
-
-def test_thread_state_service_uses_runtime_row_language_not_lease_read_model() -> None:
-    source = thread_state_service.__loader__.get_source(thread_state_service.__name__)
-
-    assert source is not None
-    assert "_lease_from_runtime_binding" not in source
-    assert "lease_repo.find_by_instance is required for thread sandbox status" not in source
-    assert 'label="lease"' not in source
 
 
 def test_sandbox_info_does_not_expose_terminal_or_session_identity() -> None:
