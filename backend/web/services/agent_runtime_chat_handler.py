@@ -34,8 +34,7 @@ class NativeAgentChatDeliveryHandler:
         )
 
         if not thread_id:
-            logger.warning("Recipient %s has no thread, skipping delivery", envelope.recipient.agent_user_id)
-            return agent_runtime_protocol.AgentChatDeliveryResult(status="skipped", thread_id=None, reason="missing_thread")
+            raise RuntimeError(f"Agent chat recipient has no runtime thread: {envelope.recipient.agent_user_id}")
 
         from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
         from backend.web.services.streaming_service import _ensure_thread_handlers

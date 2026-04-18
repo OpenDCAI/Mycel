@@ -70,9 +70,8 @@ class AgentThreadInputEnvelope:
 
 @dataclass(frozen=True)
 class AgentChatDeliveryResult:
-    status: Literal["accepted", "skipped"]
-    thread_id: str | None
-    reason: str | None = None
+    status: Literal["accepted"]
+    thread_id: str
 
 
 @dataclass(frozen=True)

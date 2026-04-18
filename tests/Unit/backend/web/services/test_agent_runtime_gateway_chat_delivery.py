@@ -76,25 +76,22 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-1"
-    assert result.reason is None
     assert started == [("thread-1", "chat-1", "agent-user-1")]
     assert unread_calls == [("chat-1", "agent-user-1")]
     assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
 
 
 @pytest.mark.asyncio
-async def test_gateway_dispatch_chat_skips_missing_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_gateway_dispatch_chat_raises_for_missing_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.web.services.agent_pool.get_or_create_agent", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError)
     )
     app, started, unread_calls, enqueued = _app(threads=[])
     app.state.thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: [])
 
-    result = await NativeAgentRuntimeGateway(app).dispatch_chat(_envelope())
+    with pytest.raises(RuntimeError, match="Agent chat recipient has no runtime thread: agent-user-1"):
+        await NativeAgentRuntimeGateway(app).dispatch_chat(_envelope())
 
-    assert result.status == "skipped"
-    assert result.thread_id is None
-    assert result.reason == "missing_thread"
     assert started == []
     assert unread_calls == []
     assert enqueued == []
