@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 
@@ -41,7 +42,7 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
     thread_input_handler = _FakeThreadInputHandler()
     gateway = NativeAgentRuntimeGateway(
         app=object(),
-        chat_handler=chat_handler,
+        chat_handlers={"mycel": chat_handler},
         thread_input_handler=thread_input_handler,
     )
     chat_envelope = AgentChatDeliveryEnvelope(
@@ -67,6 +68,16 @@ def test_split_handler_modules_are_the_behavior_owners() -> None:
 
     assert NativeAgentChatDeliveryHandler.__name__ == "NativeAgentChatDeliveryHandler"
     assert NativeAgentThreadInputHandler.__name__ == "NativeAgentThreadInputHandler"
+
+
+def test_gateway_rejects_single_chat_handler_entrypoint() -> None:
+    constructor: Any = NativeAgentRuntimeGateway
+    with pytest.raises(TypeError, match="chat_handler"):
+        constructor(
+            app=object(),
+            chat_handler=_FakeChatHandler(),
+            thread_input_handler=_FakeThreadInputHandler(),
+        )
 
 
 @pytest.mark.asyncio
