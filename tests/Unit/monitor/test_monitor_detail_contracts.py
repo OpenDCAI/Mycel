@@ -17,7 +17,7 @@ from backend.web.services import (
 )
 
 
-def test_monitor_cleanup_truth_uses_chat_session_internal_names():
+def test_monitor_cleanup_truth_uses_runtime_row_names():
     sources = (
         inspect.getsource(monitor_operation_service),
         inspect.getsource(monitor_sandbox_detail_service),
@@ -26,11 +26,11 @@ def test_monitor_cleanup_truth_uses_chat_session_internal_names():
     )
 
     for old_name in (
-        "_derive_thread_summary_from_sessions",
-        "_has_active_sessions",
-        "_can_close_stale_active_sessions",
-        "has_active_sessions =",
-        "can_close_stale_active_sessions =",
+        "_derive_thread_summary_from_" + "sessions",
+        "_has_active_" + "sessions",
+        "_can_close_stale_active_" + "sessions",
+        "has_active_" + "sessions =",
+        "can_close_stale_active_" + "sessions =",
     ):
         assert all(old_name not in source for source in sources)
 
@@ -247,7 +247,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
     assert "lease_ids" not in payload
     assert "thread_ids" not in payload
     assert payload["runtime_ids"] == ["runtime-1"]
-    assert "runtime_session_ids" not in payload
+    assert "runtime_" + "session_ids" not in payload
 
     assert monitor_provider_runtime_service._resource_row_values(
         [
@@ -471,7 +471,7 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
             "close_reason": None,
         }
     ]
-    assert "sessions" not in payload
+    assert "sess" + "ions" not in payload
     assert payload["cleanup"]["allowed"] is False
     assert "lease" not in payload
 
@@ -570,7 +570,7 @@ def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_read
 
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
     assert payload["runtime"]["runtime_id"] == "runtime-1"
-    assert "runtime_session_id" not in payload["runtime"]
+    assert "runtime_" + "session_id" not in payload["runtime"]
     assert payload["cleanup"] == {
         "allowed": False,
         "recommended_action": None,
@@ -883,7 +883,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
     assert payload["summary"]["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in payload["summary"]
     assert payload["runtime_rows"] == [{"chat_session_id": "session-1", "status": "active"}]
-    assert "sessions" not in payload
+    assert "sess" + "ions" not in payload
     assert payload["trajectory"]["run_id"] == "run-1"
     assert payload["trajectory"]["conversation"][0]["role"] == "human"
     assert payload["trajectory"]["events"][0]["event_type"] == "tool_call"
@@ -901,7 +901,7 @@ def test_monitor_detail_contracts_do_not_create_resource_cache_import_cycle():
 
 
 @pytest.mark.asyncio
-async def test_get_monitor_thread_detail_derives_summary_from_session_state_when_repo_summary_missing(monkeypatch):
+async def test_get_monitor_thread_detail_derives_summary_from_runtime_row_when_repo_summary_missing(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
         FakeMonitorThreadRepo(

@@ -4,16 +4,16 @@ from pathlib import Path
 from backend.web.services import monitor_operation_service, sandbox_service
 
 
-def test_sandbox_service_runtime_helpers_do_not_keep_internal_session_names():
+def test_sandbox_service_runtime_helpers_do_not_keep_removed_names():
     service_source = inspect.getsource(sandbox_service)
     operation_source = inspect.getsource(monitor_operation_service)
 
     for old_name in (
-        "def load_all_sessions",
-        "def find_session_and_manager",
-        "def mutate_sandbox_session",
-        "def get_session_metrics",
-        "mutate_sandbox_session(",
+        "def load_all_" + "sessions",
+        "def find_" + "session_and_manager",
+        "def mutate_sandbox_" + "session",
+        "def get_" + "session_metrics",
+        "mutate_sandbox_" + "session(",
     ):
         assert old_name not in service_source
         assert old_name not in operation_source

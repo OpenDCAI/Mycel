@@ -42,7 +42,7 @@ def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
 def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypatch):
     deleted_terminals: list[str] = []
     destroyed: list[str] = []
-    deleted_sessions: list[tuple[str, str]] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
     terminal_rows = [
         {"terminal_id": "term-stale", "lease_id": "lease-1", "thread_id": "thread-missing"},
     ]
@@ -53,7 +53,7 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
             delete=lambda terminal_id: deleted_terminals.append(terminal_id),
         )
         session_manager = SimpleNamespace(
-            delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason))
+            delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason))
         )
 
         def get_lease(self, lease_id: str):
@@ -84,7 +84,7 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
     result = sandbox_service.destroy_sandbox_runtime(lower_runtime_handle="lease-1", provider_name="daytona_selfhost")
 
     assert result["ok"] is True
-    assert deleted_sessions == [("thread-missing", "stale_terminal_pruned")]
+    assert deleted_thread_chats == [("thread-missing", "stale_terminal_pruned")]
     assert deleted_terminals == ["term-stale"]
     assert destroyed == ["lease-1"]
 
@@ -92,7 +92,7 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
 def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(monkeypatch):
     deleted_terminals: list[str] = []
     destroyed: list[str] = []
-    deleted_sessions: list[tuple[str, str]] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
     terminal_rows = [
         {"terminal_id": "term-live", "lease_id": "lease-1", "thread_id": "thread-live"},
     ]
@@ -103,7 +103,7 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
             delete=lambda terminal_id: deleted_terminals.append(terminal_id),
         )
         session_manager = SimpleNamespace(
-            delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason))
+            delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason))
         )
 
         def get_lease(self, lease_id: str):
@@ -138,6 +138,6 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
     )
 
     assert result["ok"] is True
-    assert deleted_sessions == [("thread-live", "detached_sandbox_cleanup")]
+    assert deleted_thread_chats == [("thread-live", "detached_sandbox_cleanup")]
     assert deleted_terminals == ["term-live"]
     assert destroyed == ["lease-1"]

@@ -356,7 +356,7 @@ def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = provider
     manager.volume = _FakeVolume()
-    deleted_sessions: list[tuple[str, str]] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
@@ -385,7 +385,7 @@ def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
         db_path=Path("/tmp/fake-sandbox.db"),
     )
     manager.session_manager = SimpleNamespace(
-        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
     manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
 
@@ -393,7 +393,7 @@ def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
     assert destroyed_leases == ["lease-1"]
     assert provider.deleted_volumes == ["leon-volume-lease-1"]
     assert deleted_terminals == ["term-1"]
-    assert deleted_sessions == [("thread-1", "thread_deleted")]
+    assert deleted_thread_chats == [("thread-1", "thread_deleted")]
     assert deleted_leases == ["lease-1"]
     assert all_terminals == []
 
@@ -481,11 +481,11 @@ def test_destroy_thread_resources_skips_local_sync_without_volume_metadata():
     )
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: SimpleNamespace(session_id="sess-1"),
-        delete=lambda session_id, reason: deleted_sessions.append((session_id, reason)),
-        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+        delete=lambda session_id, reason: deleted_thread_chats.append((session_id, reason)),
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
     deleted_terminals: list[str] = []
-    deleted_sessions: list[tuple[str, str]] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
     destroy_calls: list[str] = []
 
     class _Lease:
@@ -505,7 +505,7 @@ def test_destroy_thread_resources_skips_local_sync_without_volume_metadata():
     assert manager.destroy_thread_resources("thread-1") is True
     assert manager.volume.download_calls == []
     assert manager.volume.cleared == ["thread-1"]
-    assert deleted_sessions == [("thread-1", "thread_deleted")]
+    assert deleted_thread_chats == [("thread-1", "thread_deleted")]
     assert deleted_terminals == ["term-1"]
     assert destroy_calls == ["lease-1"]
     assert deleted_leases == ["lease-1"]
@@ -560,7 +560,7 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.provider = SimpleNamespace(name="local")
     manager.volume = _FakeVolume()
-    deleted_sessions: list[tuple[str, str]] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
@@ -593,12 +593,12 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
         db_path=Path("/tmp/fake-sandbox.db"),
     )
     manager.session_manager = SimpleNamespace(
-        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
     manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
 
     assert manager.destroy_thread_resources("thread-1") is True
-    assert deleted_sessions == [("thread-1", "thread_deleted")]
+    assert deleted_thread_chats == [("thread-1", "thread_deleted")]
     assert deleted_terminals == ["term-1"]
     assert destroyed_leases == []
     assert deleted_leases == []
@@ -610,7 +610,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_from_lease_id(t
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = provider
     manager.volume = _FakeVolume()
-    deleted_sessions: list[tuple[str, str]] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
@@ -639,7 +639,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_from_lease_id(t
         db_path=Path("/tmp/fake-sandbox.db"),
     )
     manager.session_manager = SimpleNamespace(
-        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
     manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
 
@@ -656,7 +656,7 @@ def test_destroy_thread_resources_derives_daytona_volume_name_from_lease_id(tmp_
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = provider
     manager.volume = _FakeVolume()
-    deleted_sessions: list[tuple[str, str]] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
     deleted_terminals: list[str] = []
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
@@ -685,7 +685,7 @@ def test_destroy_thread_resources_derives_daytona_volume_name_from_lease_id(tmp_
         db_path=Path("/tmp/fake-sandbox.db"),
     )
     manager.session_manager = SimpleNamespace(
-        delete_thread=lambda thread_id, reason="thread_deleted": deleted_sessions.append((thread_id, reason)),
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
     manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
 
@@ -924,7 +924,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
     created_terminal = SimpleNamespace(updated_state=None)
     default_terminal = SimpleNamespace(lease_id="lease-1", get_state=lambda: default_state)
     created_rows: list[dict[str, str]] = []
-    created_sessions: list[dict[str, Any]] = []
+    created_background_commands: list[dict[str, Any]] = []
 
     def from_row(row, _db_path):
         if row["terminal_id"] == "term-default":
@@ -959,7 +959,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
     )
     manager._get_lease = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
     manager._assert_lease_provider = lambda _lease, _thread_id: None
-    manager.session_manager = SimpleNamespace(create=lambda **kwargs: created_sessions.append(kwargs) or kwargs)
+    manager.session_manager = SimpleNamespace(create=lambda **kwargs: created_background_commands.append(kwargs) or kwargs)
     monkeypatch.setattr(sandbox_manager_module, "terminal_from_row", from_row)
 
     session = manager.create_background_command_session("thread-1", "/workspace/task")
@@ -970,7 +970,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
     assert created_terminal.updated_state.cwd == "/workspace/task"
     assert created_terminal.updated_state.env_delta == {"TOKEN": "value"}
     assert created_terminal.updated_state.state_version == 7
-    assert session is created_sessions[0]
+    assert session is created_background_commands[0]
 
 
 def test_resume_session_rebinds_live_session_lease_after_resume():
