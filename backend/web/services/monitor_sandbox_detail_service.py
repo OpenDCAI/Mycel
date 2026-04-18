@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_operation_service
+from backend.web.services import monitor_operation_service, monitor_sandbox_read_service
 from backend.web.services import monitor_sandbox_projection_service as sandbox_projection
 from backend.web.services.thread_visibility import canonical_owner_threads
-from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import build_thread_repo
 
 
@@ -67,15 +66,12 @@ def _sandbox_detail_cleanup_truth(
     )
 
 
-def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
-    sandbox = repo.query_sandbox(sandbox_id)
-    if sandbox is None:
-        raise KeyError(f"Sandbox not found: {sandbox_id}")
-    cleanup_target = repo.query_sandbox_cleanup_target(sandbox_id) or {}
-
-    threads = repo.query_sandbox_threads(sandbox_id)
-    runtime_rows = repo.query_sandbox_runtime_rows(sandbox_id)
-    runtime_id = repo.query_sandbox_instance_id(sandbox_id)
+def _build_monitor_sandbox_detail(rows: dict[str, Any]) -> dict[str, Any]:
+    sandbox = rows["sandbox"]
+    cleanup_target = rows["cleanup_target"]
+    threads = rows["threads"]
+    runtime_rows = rows["runtime_rows"]
+    runtime_id = rows["runtime_id"]
     runtime_projection = _runtime_row_projection(runtime_rows)
 
     raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
@@ -122,26 +118,15 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
 
 
 def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        return {
-            "source": "sandbox_canonical",
-            **_build_monitor_sandbox_detail(repo, sandbox_id),
-        }
-    finally:
-        repo.close()
+    rows = monitor_sandbox_read_service.load_sandbox_detail_rows(sandbox_id)
+    return {
+        "source": "sandbox_canonical",
+        **_build_monitor_sandbox_detail(rows),
+    }
 
 
 def _sandbox_cleanup_target(sandbox_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        sandbox = repo.query_sandbox(sandbox_id)
-        cleanup_target = repo.query_sandbox_cleanup_target(sandbox_id) or {}
-    finally:
-        repo.close()
-    if sandbox is None:
-        raise KeyError(f"Sandbox not found: {sandbox_id}")
-
+    cleanup_target = monitor_sandbox_read_service.load_sandbox_cleanup_target(sandbox_id)
     if not str(cleanup_target.get("lower_runtime_handle") or "").strip():
         raise RuntimeError("monitor sandbox cleanup target missing managed runtime handle")
     return cleanup_target

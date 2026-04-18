@@ -144,7 +144,6 @@ class FakeSandboxMonitorRepo:
 
 
 def _use_monitor_repo(monkeypatch, repo):
-    monkeypatch.setattr(monitor_sandbox_detail_service, "make_sandbox_monitor_repo", lambda: repo)
     monkeypatch.setattr(monitor_sandbox_read_service, "make_sandbox_monitor_repo", lambda: repo)
     monkeypatch.setattr(monitor_thread_service, "make_sandbox_monitor_repo", lambda: repo)
 
