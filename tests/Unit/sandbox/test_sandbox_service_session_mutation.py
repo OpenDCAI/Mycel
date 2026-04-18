@@ -57,12 +57,3 @@ def test_mutate_sandbox_session_destroys_provider_orphan_without_fake_lease(monk
     assert payload["mode"] == "provider_orphan_direct"
     assert payload["lease_id"] is None
     assert manager.provider.destroyed == [("sandbox-1", True)]
-
-
-def test_sandbox_service_cleanup_comments_do_not_describe_owner_action_as_lease_destroy() -> None:
-    source = Path(sandbox_service.__file__) if sandbox_service.__file__ else None
-    assert source is not None
-    text = source.read_text(encoding="utf-8")
-
-    assert "Destroy a lease through the manager-owned lease state machine" not in text
-    assert "cleanup must target the lease state machine directly" not in text

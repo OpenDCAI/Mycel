@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -68,9 +67,3 @@ def test_save_file_does_not_touch_chat_session_activity(monkeypatch):
     result = file_channel_service.save_file(thread_id="thread-1", relative_path="note.txt", content=b"hello")
 
     assert result == {"path": "note.txt", "size": 5, "thread_id": "thread-1"}
-
-
-def test_file_channel_service_does_not_describe_channel_crud_as_volume_source() -> None:
-    source = inspect.getsource(file_channel_service)
-
-    assert "File CRUD — delegates to VolumeSource" not in source

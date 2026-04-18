@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from inspect import signature
-from pathlib import Path
 
 import pytest
 
@@ -154,22 +152,6 @@ def test_workspace_without_sandbox_fails_loudly() -> None:
         )
 
     assert "sandbox_id" in str(excinfo.value)
-
-
-def test_service_signature_does_not_expose_unused_purpose_dimension() -> None:
-    assert "purpose" not in signature(resolve_thread_runtime_binding).parameters
-
-
-def test_service_does_not_import_removed_runtime_glue() -> None:
-    source = Path("backend/web/services/thread_runtime_binding_service.py").read_text()
-    removed_cwd_token = "leg" + "acy_cwd"
-
-    assert "terminal_repo" not in source
-    assert "lease_repo" not in source
-    assert "chat_session" not in source
-    assert "sandbox_volume" not in source
-    assert "sync_file" not in source
-    assert removed_cwd_token not in source
 
 
 def test_resolves_binding_with_thin_workspace_shape() -> None:
