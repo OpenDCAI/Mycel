@@ -219,6 +219,16 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
     assert "thread_ids" not in payload
     assert payload["runtime_session_ids"] == ["runtime-1"]
 
+    assert monitor_service._resource_row_values(
+        [
+            {"sandboxId": "sandbox-2"},
+            {"sandboxId": ""},
+            {"sandboxId": "sandbox-1"},
+            {"sandboxId": "sandbox-1"},
+        ],
+        "sandboxId",
+    ) == ["sandbox-1", "sandbox-2"]
+
 
 def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
     monkeypatch.setattr(

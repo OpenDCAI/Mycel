@@ -133,3 +133,30 @@ def test_metric_adds_error_only_when_present():
         "freshness": "stale",
         "error": "probe failed",
     }
+
+
+def test_resource_metrics_normalize_live_snapshot_values() -> None:
+    metrics = resource_common.to_resource_metrics(
+        {
+            "cpu_used": 25,
+            "memory_used_mb": 2048,
+            "memory_total_mb": 4096,
+            "disk_used_gb": 12,
+            "disk_total_gb": 50,
+            "network_rx_kbps": 100,
+            "network_tx_kbps": 50,
+        }
+    )
+
+    assert metrics == {
+        "cpu": 25.0,
+        "memory": 2.0,
+        "memoryLimit": 4.0,
+        "memoryNote": None,
+        "disk": 12.0,
+        "diskLimit": 50.0,
+        "diskNote": None,
+        "networkIn": 100.0,
+        "networkOut": 50.0,
+        "probeError": None,
+    }

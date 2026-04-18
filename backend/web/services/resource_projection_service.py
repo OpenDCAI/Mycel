@@ -17,8 +17,8 @@ from backend.web.services.resource_common import resolve_instance_capabilities a
 from backend.web.services.resource_common import resolve_provider_name
 from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.web.services.resource_common import thread_owners as _thread_owners
+from backend.web.services.resource_common import to_resource_metrics as _to_resource_metrics
 from backend.web.services.resource_common import to_resource_status as _to_resource_status
-from backend.web.services.resource_common import to_session_metrics as _to_session_metrics
 from backend.web.services.sandbox_service import available_sandbox_types
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_sandbox_state_to_display_status
@@ -304,7 +304,7 @@ def list_resource_providers() -> dict[str, Any]:
             thread_id = str(session.get("thread_id") or "")
             sandbox_id = str(session.get("sandbox_id") or "").strip()
             runtime_session_id = runtime_session_ids.get(str(session.get("sandbox_id") or "").strip())
-            session_metrics = _to_session_metrics(snapshot_by_sandbox.get(sandbox_id))
+            session_metrics = _to_resource_metrics(snapshot_by_sandbox.get(sandbox_id))
             normalized = _resource_display_status(
                 observed_state=observed_state,
                 desired_state=desired_state,
@@ -405,7 +405,7 @@ def visible_resource_row_stats() -> dict[str, dict[str, int]]:
             observed_state=session.get("observed_state"),
             desired_state=session.get("desired_state"),
             runtime_session_id=runtime_session_id,
-            session_metrics=_to_session_metrics(snapshot_by_sandbox.get(sandbox_id)),
+            session_metrics=_to_resource_metrics(snapshot_by_sandbox.get(sandbox_id)),
         )
         running_identity = _resource_running_identity(session)
         scoped_running_identity = (provider_instance, running_identity)

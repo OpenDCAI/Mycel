@@ -152,7 +152,7 @@ def _as_float(value: Any) -> float | None:
     return None
 
 
-def to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | None:
+def to_resource_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | None:
     if not snapshot:
         return None
     cpu = _as_float(snapshot.get("cpu_used"))

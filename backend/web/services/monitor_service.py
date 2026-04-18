@@ -715,16 +715,16 @@ def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
     if provider is None:
         raise KeyError(f"Provider not found: {provider_id}")
 
-    sessions = provider.get("sessions") or []
+    resource_rows = provider.get("sessions") or []
     return {
         "provider": provider,
-        "sandbox_ids": _session_values(sessions, "sandboxId"),
-        "runtime_session_ids": _session_values(sessions, "runtimeSessionId"),
+        "sandbox_ids": _resource_row_values(resource_rows, "sandboxId"),
+        "runtime_session_ids": _resource_row_values(resource_rows, "runtimeSessionId"),
     }
 
 
-def _session_values(sessions: list[dict[str, Any]], key: str) -> list[str]:
-    return sorted({str(item.get(key) or "").strip() for item in sessions if str(item.get(key) or "").strip()})
+def _resource_row_values(resource_rows: list[dict[str, Any]], key: str) -> list[str]:
+    return sorted({str(item.get(key) or "").strip() for item in resource_rows if str(item.get(key) or "").strip()})
 
 
 def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
