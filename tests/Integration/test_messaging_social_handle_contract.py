@@ -6,8 +6,15 @@ from typing import Any, cast
 
 import pytest
 
+from backend.web.services.agent_runtime_gateway import (
+    AgentChatActor,
+    AgentChatContext,
+    AgentChatDeliveryEnvelope,
+    AgentChatMessage,
+    AgentChatRecipient,
+    NativeAgentRuntimeGateway,
+)
 from backend.web.utils.serializers import avatar_url
-from core.agents.communication import delivery as delivery_module
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope
@@ -1211,7 +1218,9 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
 
 
 @pytest.mark.asyncio
-async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and_unread(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_agent_runtime_gateway_uses_recipient_social_user_id_for_thread_lookup_and_unread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     started, unread_calls, enqueued = await _run_chat_delivery(monkeypatch, chat_id="chat-1", unread_count=7)
 
     assert started == [("thread-1", "chat-1", "agent-user-1")]
@@ -1219,7 +1228,8 @@ async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and
     assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
 
 
-def test_recipient_thread_resolution_requires_current_thread_repo_contract() -> None:
+@pytest.mark.asyncio
+async def test_recipient_thread_resolution_requires_current_thread_repo_contract() -> None:
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
@@ -1230,7 +1240,16 @@ def test_recipient_thread_resolution_requires_current_thread_repo_contract() -> 
     )
 
     with pytest.raises(AttributeError):
-        delivery_module._resolve_recipient_thread_id(app, "agent-user-1")
+        await NativeAgentRuntimeGateway(app).dispatch_chat(_chat_delivery_envelope())
+
+
+def _chat_delivery_envelope(*, chat_id: str = "chat-1", signal: str | None = "ping") -> AgentChatDeliveryEnvelope:
+    return AgentChatDeliveryEnvelope(
+        chat=AgentChatContext(chat_id=chat_id),
+        sender=AgentChatActor(user_id="human-user-1", user_type="human", display_name="Human"),
+        recipient=AgentChatRecipient(agent_user_id="agent-user-1", runtime_source="mycel"),
+        message=AgentChatMessage(content="hello", signal=signal),
+    )
 
 
 async def _run_chat_delivery(
@@ -1277,15 +1296,7 @@ async def _run_chat_delivery(
         )
     )
 
-    await delivery_module._async_deliver(
-        app,
-        "agent-user-1",
-        cast(Any, SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)),
-        "Human",
-        chat_id,
-        "human-user-1",
-        signal="ping",
-    )
+    await NativeAgentRuntimeGateway(app).dispatch_chat(_chat_delivery_envelope(chat_id=chat_id))
 
     return started, unread_calls, enqueued
 
@@ -1351,7 +1362,7 @@ async def _run_chat_delivery(
     ],
     ids=["active-child-main-idle", "ready-child-main-idle", "ready-child-active-main", "latest-live-child"],
 )
-async def test_async_deliver_prefers_latest_live_child_thread_over_active_main(
+async def test_agent_runtime_gateway_prefers_latest_live_child_thread_over_active_main(
     monkeypatch: pytest.MonkeyPatch,
     threads,
     pool,

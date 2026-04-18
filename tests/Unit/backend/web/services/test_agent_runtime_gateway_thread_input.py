@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.web.services.message_routing import route_message_to_brain
+from backend.web.services.agent_runtime_gateway import AgentThreadInputEnvelope, NativeAgentRuntimeGateway
 from core.runtime.middleware.monitor import AgentState
 
 
@@ -41,7 +41,7 @@ def _fake_app() -> SimpleNamespace:
 
 
 @pytest.mark.asyncio
-async def test_route_message_to_brain_clears_resource_overview_cache_when_starting_run() -> None:
+async def test_gateway_thread_input_clears_resource_overview_cache_when_starting_run() -> None:
     app = _fake_app()
     agent = _FakeAgent()
 
@@ -51,14 +51,14 @@ async def test_route_message_to_brain_clears_resource_overview_cache_when_starti
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
         patch("backend.web.services.resource_cache.clear_resource_overview_cache") as clear_cache,
     ):
-        result = await route_message_to_brain(app, "thread-1", "hello")
+        result = await NativeAgentRuntimeGateway(app).dispatch_thread_input(AgentThreadInputEnvelope(thread_id="thread-1", content="hello"))
 
     assert result == {"status": "started", "routing": "direct", "run_id": "run-123", "thread_id": "thread-1"}
     clear_cache.assert_called_once_with()
 
 
 @pytest.mark.asyncio
-async def test_route_message_to_brain_requires_agent_runtime() -> None:
+async def test_gateway_thread_input_requires_agent_runtime() -> None:
     app = _fake_app()
 
     with (
@@ -68,11 +68,11 @@ async def test_route_message_to_brain_requires_agent_runtime() -> None:
         patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
     ):
         with pytest.raises(AttributeError):
-            await route_message_to_brain(app, "thread-1", "hello")
+            await NativeAgentRuntimeGateway(app).dispatch_thread_input(AgentThreadInputEnvelope(thread_id="thread-1", content="hello"))
 
 
 @pytest.mark.asyncio
-async def test_route_message_to_brain_passes_enable_trajectory_to_start_agent_run() -> None:
+async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run() -> None:
     app = _fake_app()
     agent = _FakeAgent()
 
@@ -82,6 +82,8 @@ async def test_route_message_to_brain_passes_enable_trajectory_to_start_agent_ru
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123") as start_run,
         patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
     ):
-        await route_message_to_brain(app, "thread-1", "hello", enable_trajectory=True)
+        await NativeAgentRuntimeGateway(app).dispatch_thread_input(
+            AgentThreadInputEnvelope(thread_id="thread-1", content="hello", enable_trajectory=True)
+        )
 
     assert start_run.call_args.kwargs["enable_trajectory"] is True
