@@ -144,7 +144,7 @@ def _cleanup_current_truth(*, sandbox_id: str, triage_category: str | None) -> d
 def _sandbox_destroy_result(result: Any) -> Any:
     if not isinstance(result, dict):
         return result
-    return {key: value for key, value in result.items() if key != "lease_id"}
+    return {key: value for key, value in result.items() if key not in {"lease_id", "lower_runtime_handle"}}
 
 
 def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
@@ -199,7 +199,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
     )
     _append_event(operation, status="running", message="Destroy flow started")
 
-    from backend.web.services.sandbox_service import destroy_sandbox_lease
+    from backend.web.services.sandbox_service import destroy_sandbox_runtime
 
     try:
         category = str((sandbox_detail.get("triage") or {}).get("category") or "").strip()
@@ -209,8 +209,8 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
             sessions=sessions,
             threads=threads,
         )
-        result = destroy_sandbox_lease(
-            lease_id=lower_runtime_handle,
+        result = destroy_sandbox_runtime(
+            lower_runtime_handle=lower_runtime_handle,
             provider_name=provider_name,
             detach_thread_bindings=detach_before_cleanup,
         )

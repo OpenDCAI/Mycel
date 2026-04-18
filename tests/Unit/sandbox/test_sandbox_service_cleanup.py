@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from backend.web.services import sandbox_service
 
 
-def test_destroy_sandbox_lease_uses_manager_destroy_lease_resources(monkeypatch):
+def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
     calls: list[str] = []
 
     class _Manager:
@@ -27,19 +27,19 @@ def test_destroy_sandbox_lease_uses_manager_destroy_lease_resources(monkeypatch)
         lambda: SimpleNamespace(thread_repo=lambda: SimpleNamespace(close=lambda: None)),
     )
 
-    result = sandbox_service.destroy_sandbox_lease(lease_id="lease-1", provider_name="daytona_selfhost")
+    result = sandbox_service.destroy_sandbox_runtime(lower_runtime_handle="lease-1", provider_name="daytona_selfhost")
 
     assert result == {
         "ok": True,
         "action": "destroy",
-        "lease_id": "lease-1",
+        "lower_runtime_handle": "lease-1",
         "provider": "daytona_selfhost",
-        "mode": "manager_lease",
+        "mode": "manager_runtime",
     }
     assert calls == ["lease-1"]
 
 
-def test_destroy_sandbox_lease_prunes_stale_terminals_before_destroy(monkeypatch):
+def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypatch):
     deleted_terminals: list[str] = []
     destroyed: list[str] = []
     deleted_sessions: list[tuple[str, str]] = []
@@ -81,7 +81,7 @@ def test_destroy_sandbox_lease_prunes_stale_terminals_before_destroy(monkeypatch
     )
     monkeypatch.setattr(sandbox_service, "build_storage_container", lambda: _Container())
 
-    result = sandbox_service.destroy_sandbox_lease(lease_id="lease-1", provider_name="daytona_selfhost")
+    result = sandbox_service.destroy_sandbox_runtime(lower_runtime_handle="lease-1", provider_name="daytona_selfhost")
 
     assert result["ok"] is True
     assert deleted_sessions == [("thread-missing", "stale_terminal_pruned")]
@@ -89,7 +89,7 @@ def test_destroy_sandbox_lease_prunes_stale_terminals_before_destroy(monkeypatch
     assert destroyed == ["lease-1"]
 
 
-def test_destroy_sandbox_lease_detaches_threads_with_sandbox_cleanup_reason(monkeypatch):
+def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(monkeypatch):
     deleted_terminals: list[str] = []
     destroyed: list[str] = []
     deleted_sessions: list[tuple[str, str]] = []
@@ -131,8 +131,8 @@ def test_destroy_sandbox_lease_detaches_threads_with_sandbox_cleanup_reason(monk
     )
     monkeypatch.setattr(sandbox_service, "build_storage_container", lambda: _Container())
 
-    result = sandbox_service.destroy_sandbox_lease(
-        lease_id="lease-1",
+    result = sandbox_service.destroy_sandbox_runtime(
+        lower_runtime_handle="lease-1",
         provider_name="daytona_selfhost",
         detach_thread_bindings=True,
     )

@@ -140,17 +140,17 @@ def _blocked_cleanup_state(reason: str):
 
 
 def _record_destroy(calls):
-    def _destroy_sandbox_lease(*, lease_id: str, provider_name: str, detach_thread_bindings: bool = False):
-        calls.append((lease_id, provider_name, detach_thread_bindings))
+    def _destroy_sandbox_runtime(*, lower_runtime_handle: str, provider_name: str, detach_thread_bindings: bool = False):
+        calls.append((lower_runtime_handle, provider_name, detach_thread_bindings))
         return {
             "ok": True,
             "action": "destroy",
-            "lease_id": lease_id,
+            "lower_runtime_handle": lower_runtime_handle,
             "provider": provider_name,
-            "mode": "manager_lease",
+            "mode": "manager_runtime",
         }
 
-    return _destroy_sandbox_lease
+    return _destroy_sandbox_runtime
 
 
 class FakeThreadRepo:
@@ -530,7 +530,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         ),
     )
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -574,7 +574,7 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
 def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypatch):
     calls: list[tuple[str, str, bool]] = []
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -613,7 +613,7 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
     )
     _use_monitor_repo(monkeypatch, repo)
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -873,7 +873,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
         ),
     )
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_lease",
+        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )

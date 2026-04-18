@@ -536,59 +536,59 @@ def mutate_sandbox_session(
     }
 
 
-def destroy_sandbox_lease(*, lease_id: str, provider_name: str, detach_thread_bindings: bool = False) -> dict[str, Any]:
+def destroy_sandbox_runtime(*, lower_runtime_handle: str, provider_name: str, detach_thread_bindings: bool = False) -> dict[str, Any]:
     """Destroy lower sandbox runtime resources through the manager state machine."""
     _, managers = init_providers_and_managers()
     manager = managers.get(provider_name)
     if manager is None:
         raise RuntimeError(f"Provider manager unavailable: {provider_name}")
 
-    lease = manager.get_lease(lease_id)
+    lease = manager.get_lease(lower_runtime_handle)
     if lease is None:
-        raise RuntimeError(f"Lease not found: {lease_id}")
+        raise RuntimeError(f"Lower runtime not found: {lower_runtime_handle}")
 
-    # @@@lease-destroy-seam - detached residue may have no visible live session,
+    # @@@runtime-destroy-seam - detached residue may have no visible live session,
     # so cleanup must target the lower runtime handle directly rather than session lookup.
-    _prune_stale_lease_terminals(manager, lease_id)
+    _prune_stale_runtime_terminals(manager, lower_runtime_handle)
     if detach_thread_bindings:
-        _detach_lease_terminals(manager, lease_id)
-    if not manager.destroy_lease_resources(lease_id):
-        raise RuntimeError(f"Lease not found: {lease_id}")
+        _detach_runtime_terminals(manager, lower_runtime_handle)
+    if not manager.destroy_lease_resources(lower_runtime_handle):
+        raise RuntimeError(f"Lower runtime not found: {lower_runtime_handle}")
     return {
         "ok": True,
         "action": "destroy",
-        "lease_id": lease_id,
+        "lower_runtime_handle": lower_runtime_handle,
         "provider": provider_name,
-        "mode": "manager_lease",
+        "mode": "manager_runtime",
     }
 
 
-def _detach_lease_terminals(manager: Any, lease_id: str) -> None:
+def _detach_runtime_terminals(manager: Any, lower_runtime_handle: str) -> None:
     for row in list(manager.terminal_store.list_all()):
-        if str(row.get("lease_id") or "") != lease_id:
+        if str(row.get("lease_id") or "") != lower_runtime_handle:
             continue
         thread_id = str(row.get("thread_id") or "").strip()
         terminal_id = str(row.get("terminal_id") or "").strip()
         if not terminal_id:
-            raise RuntimeError(f"Lease {lease_id} has terminal row without terminal_id")
+            raise RuntimeError(f"Lower runtime {lower_runtime_handle} has terminal row without terminal_id")
         if thread_id:
             manager.session_manager.delete_thread(thread_id, reason="detached_sandbox_cleanup")
         manager.terminal_store.delete(terminal_id)
 
 
-def _prune_stale_lease_terminals(manager: Any, lease_id: str) -> None:
+def _prune_stale_runtime_terminals(manager: Any, lower_runtime_handle: str) -> None:
     thread_repo = build_storage_container().thread_repo()
     try:
         for row in list(manager.terminal_store.list_all()):
-            if str(row.get("lease_id") or "") != lease_id:
+            if str(row.get("lease_id") or "") != lower_runtime_handle:
                 continue
             thread_id = str(row.get("thread_id") or "").strip()
             if thread_id and not is_virtual_thread_id(thread_id) and thread_repo.get_by_id(thread_id) is not None:
                 continue
             terminal_id = str(row.get("terminal_id") or "").strip()
             if not terminal_id:
-                raise RuntimeError(f"Lease {lease_id} has terminal row without terminal_id")
-            # @@@lease-cleanup-stale-terminal-prune - detached residue can keep dead terminal
+                raise RuntimeError(f"Lower runtime {lower_runtime_handle} has terminal row without terminal_id")
+            # @@@runtime-cleanup-stale-terminal-prune - detached residue can keep dead terminal
             # pointers long after the owning thread row is gone; drop only those stale pointers
             # before enforcing the remaining bound-terminal guard.
             if thread_id and not is_virtual_thread_id(thread_id):
