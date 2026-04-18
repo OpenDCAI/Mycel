@@ -117,7 +117,7 @@ class FakeSandboxMonitorRepo:
     def query_sandbox_threads(self, _sandbox_id):
         return self.threads
 
-    def query_sandbox_sessions(self, _sandbox_id):
+    def query_sandbox_runtime_rows(self, _sandbox_id):
         return self.sessions
 
     def query_sandbox_instance_id(self, _sandbox_id):

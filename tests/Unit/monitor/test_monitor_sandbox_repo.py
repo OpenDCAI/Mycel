@@ -366,7 +366,7 @@ def test_chat_session_monitor_surfaces_do_not_read_removed_chat_sessions_table()
     )
 
     assert repo.query_thread_runtime_rows("thread-1") == []
-    assert repo.query_sandbox_sessions("sandbox-1") == []
+    assert repo.query_sandbox_runtime_rows("sandbox-1") == []
     assert repo.query_resource_rows() == [
         {
             "provider": "local",

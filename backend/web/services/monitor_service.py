@@ -601,7 +601,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
     cleanup_target = repo.query_sandbox_cleanup_target(sandbox_id) or {}
 
     threads = repo.query_sandbox_threads(sandbox_id)
-    chat_sessions = repo.query_sandbox_sessions(sandbox_id)
+    chat_sessions = repo.query_sandbox_runtime_rows(sandbox_id)
     runtime_session_id = repo.query_sandbox_instance_id(sandbox_id)
 
     raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]

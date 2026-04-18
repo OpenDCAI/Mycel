@@ -121,7 +121,7 @@ class SupabaseSandboxMonitorRepo:
             }
         return None
 
-    def query_sandbox_sessions(self, sandbox_id: str) -> list[dict]:
+    def query_sandbox_runtime_rows(self, sandbox_id: str) -> list[dict]:
         # @@@monitor-session-demotion - sandbox detail still has sandbox/thread
         # facts, but Supabase session rows are no longer admitted remote truth.
         return []
