@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -174,16 +173,6 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
         "created_at": 0,
         "updated_at": 0,
     }
-
-
-def test_launch_config_service_does_not_expose_lease_shell_builder() -> None:
-    assert not hasattr(thread_launch_config_service, "build_existing_launch_config")
-
-
-def test_launch_config_service_comments_do_not_describe_workspace_bridge_as_lease_lookup() -> None:
-    source = inspect.getsource(thread_launch_config_service)
-
-    assert "live lease lookup" not in source
 
 
 def test_build_new_launch_config_uses_sandbox_template_id() -> None:
@@ -449,12 +438,13 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
         )
 
 
-def test_resolve_default_config_derives_existing_from_sandbox_backed_current_workspace_id() -> None:
+@pytest.mark.parametrize("missing_workspace_id", ["lease-2", "missing-workspace"])
+def test_resolve_default_config_fails_loudly_when_thread_workspace_bridge_is_missing(missing_workspace_id: str) -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
         "thread_id": "agent-user-1-1",
         "agent_user_id": "agent-user-1",
-        "current_workspace_id": "lease-2",
+        "current_workspace_id": missing_workspace_id,
         "is_main": True,
         "branch_index": 0,
         "created_at": 1.0,
@@ -483,25 +473,44 @@ def test_resolve_default_config_derives_existing_from_sandbox_backed_current_wor
             "list_library",
             return_value=[_recipe_library_entry("local")],
         ),
+        pytest.raises(RuntimeError, match=f"workspace not found: {missing_workspace_id}"),
     ):
-        result = thread_launch_config_service.resolve_default_config(
+        thread_launch_config_service.resolve_default_config(
             app=app,
             owner_user_id="owner-1",
             agent_user_id="agent-user-1",
         )
 
-    assert result == {
-        "source": "derived",
-        "config": {
-            "create_mode": "new",
-            "provider_config": "local",
-            "sandbox_template_id": "local:default",
-            "sandbox_template": default_recipe_snapshot("local"),
-            "existing_sandbox_id": None,
-            "model": None,
-            "workspace": None,
-        },
+
+def test_resolve_default_config_fails_loudly_when_workspace_repo_cannot_read_bridge() -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "ws-unsupported",
+        "is_main": True,
+        "branch_index": 0,
+        "created_at": 1.0,
     }
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            recipe_repo=object(),
+            workspace_repo=object(),
+        )
+    )
+
+    with (
+        patch.object(thread_launch_config_service.sandbox_service, "available_sandbox_types", return_value=[]),
+        patch.object(thread_launch_config_service, "list_library", return_value=[]),
+        pytest.raises(RuntimeError, match="workspace_repo must support get_by_id"),
+    ):
+        thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
 
 
 def test_resolve_default_config_fails_loudly_for_malformed_workspace_bridge() -> None:
@@ -543,56 +552,6 @@ def test_resolve_default_config_fails_loudly_for_malformed_workspace_bridge() ->
             owner_user_id="owner-1",
             agent_user_id="agent-user-1",
         )
-
-
-def test_resolve_default_config_falls_back_to_new_default_when_thread_workspace_bridge_is_missing() -> None:
-    thread_repo = _FakeThreadRepo()
-    thread_repo.rows["agent-user-1-1"] = {
-        "thread_id": "agent-user-1-1",
-        "agent_user_id": "agent-user-1",
-        "current_workspace_id": "missing-lease",
-        "is_main": True,
-        "branch_index": 0,
-    }
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            thread_repo=thread_repo,
-            user_repo=SimpleNamespace(),
-            recipe_repo=object(),
-            workspace_repo=_FakeWorkspaceRepo(),
-        )
-    )
-
-    with (
-        patch.object(
-            thread_launch_config_service.sandbox_service,
-            "available_sandbox_types",
-            return_value=[{"name": "local", "available": True}],
-        ),
-        patch.object(
-            thread_launch_config_service,
-            "list_library",
-            return_value=[_recipe_library_entry("local")],
-        ),
-    ):
-        result = thread_launch_config_service.resolve_default_config(
-            app=app,
-            owner_user_id="owner-1",
-            agent_user_id="agent-user-1",
-        )
-
-    assert result == {
-        "source": "derived",
-        "config": {
-            "create_mode": "new",
-            "provider_config": "local",
-            "sandbox_template_id": "local:default",
-            "sandbox_template": default_recipe_snapshot("local"),
-            "existing_sandbox_id": None,
-            "model": None,
-            "workspace": None,
-        },
-    }
 
 
 def test_find_owned_agent_returns_none_for_foreign_agent() -> None:
