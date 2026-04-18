@@ -93,11 +93,15 @@ def test_command_wrapper_supports_execute_async():
 
 def test_capability_doc_names_agent_facing_runtime_binding_surface():
     source = inspect.getsource(capability_module)
+    guard_source = inspect.getsource(test_capability_doc_names_agent_facing_runtime_binding_surface)
     stale_chain = "Terminal \u2192 " + "Lease"
-    stale_interface_label = "same interface " + "as before"
+    stale_interface_label = "same " + "interface " + "as before"
+    stale_interface_partial = "same " + "interface "
 
     assert stale_chain not in source
     assert stale_interface_label not in source
+    assert stale_interface_partial not in source
+    assert stale_interface_partial not in guard_source
     assert "agent-facing thread/runtime/sandbox binding surface" in source
 
 
