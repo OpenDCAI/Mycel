@@ -2080,7 +2080,7 @@ async def test_cancel_task_route_marks_bash_run_cancelled_and_forces_process_sto
     response = await threads_router.cancel_task(
         thread_id,
         "cmd-cancel-route",
-        SimpleNamespace(app=app),
+        cast(Any, SimpleNamespace(app=app)),
     )
 
     assert response == {"success": True}
