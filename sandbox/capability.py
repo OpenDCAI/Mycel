@@ -1,8 +1,8 @@
-"""SandboxCapability - Wrapper that hides new architecture from agents.
+"""SandboxCapability - Agent-facing sandbox binding surface.
 
 This module provides the capability object that agents interact with.
-It wraps the new architecture (ChatSession → Runtime → Terminal → Lease)
-while maintaining the same interface as before.
+It wraps the agent-facing thread/runtime/sandbox binding surface while
+keeping lower runtime identity details behind the capability interface.
 """
 
 from __future__ import annotations
@@ -26,7 +26,8 @@ class SandboxCapability:
     """Agent-facing capability object.
 
     Wraps ChatSession and provides access to command execution and filesystem.
-    Agents see the same interface as before - all complexity is hidden.
+    Agents interact through command and filesystem handles; lower runtime
+    binding details stay behind this capability object.
 
     Usage:
         sandbox = sandbox_manager.get_sandbox(thread_id)
