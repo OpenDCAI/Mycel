@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_sandbox_projection_service, monitor_service, resource_projection_service, resource_service
+from backend.web.services import (
+    monitor_sandbox_detail_service,
+    monitor_sandbox_projection_service,
+    monitor_service,
+    resource_projection_service,
+    resource_service,
+)
 from backend.web.services.resource_cache import get_resource_overview_snapshot, refresh_resource_overview_sync
 
 
@@ -25,11 +31,11 @@ def get_provider_detail(provider_id: str) -> dict[str, Any]:
 
 
 def get_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
-    return monitor_service.get_monitor_sandbox_detail(sandbox_id)
+    return monitor_sandbox_detail_service.get_monitor_sandbox_detail(sandbox_id)
 
 
 def request_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
-    return monitor_service.request_monitor_sandbox_cleanup(sandbox_id)
+    return monitor_sandbox_detail_service.request_monitor_sandbox_cleanup(sandbox_id)
 
 
 def request_provider_orphan_runtime_cleanup(provider_id: str, runtime_id: str) -> dict[str, Any]:
@@ -37,7 +43,7 @@ def request_provider_orphan_runtime_cleanup(provider_id: str, runtime_id: str) -
 
 
 def get_operation_detail(operation_id: str) -> dict[str, Any]:
-    return monitor_service.get_monitor_operation_detail(operation_id)
+    return monitor_sandbox_detail_service.get_monitor_operation_detail(operation_id)
 
 
 def get_runtime_detail(runtime_session_id: str) -> dict[str, Any]:

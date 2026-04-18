@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.web.services import monitor_operation_service, monitor_sandbox_projection_service, monitor_service
+from backend.web.services import (
+    monitor_operation_service,
+    monitor_sandbox_detail_service,
+    monitor_sandbox_projection_service,
+    monitor_service,
+)
 
 
 def test_monitor_cleanup_truth_uses_chat_session_internal_names():
@@ -56,7 +61,7 @@ def _default_monitor_thread_repo(monkeypatch):
         def close(self):
             return None
 
-    monkeypatch.setattr(monitor_service, "build_thread_repo", lambda: FakeCanonicalThreadRepo())
+    monkeypatch.setattr(monitor_sandbox_detail_service, "build_thread_repo", lambda: FakeCanonicalThreadRepo())
 
 
 @pytest.fixture(autouse=True)
@@ -134,6 +139,7 @@ class FakeSandboxMonitorRepo:
 
 def _use_monitor_repo(monkeypatch, repo):
     monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: repo)
+    monkeypatch.setattr(monitor_sandbox_detail_service, "make_sandbox_monitor_repo", lambda: repo)
     monkeypatch.setattr(monitor_sandbox_projection_service, "make_sandbox_monitor_repo", lambda: repo)
 
 
@@ -477,7 +483,7 @@ def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_
         def close(self):
             return None
 
-    monkeypatch.setattr(monitor_service, "build_thread_repo", lambda: _ThreadRepo())
+    monkeypatch.setattr(monitor_sandbox_detail_service, "build_thread_repo", lambda: _ThreadRepo())
 
     payload = monitor_service.get_monitor_sandbox_detail("sandbox-1")
 
