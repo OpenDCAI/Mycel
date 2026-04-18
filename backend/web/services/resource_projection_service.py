@@ -201,13 +201,13 @@ def _resource_row_identity(resource_row: dict[str, Any]) -> str:
     sandbox_id = str(resource_row.get("sandbox_id") or "")
     thread_id = str(resource_row.get("thread_id") or "")
     # @@@resource-row-identity - resource rows are sandbox-first on the user-visible surface.
-    # Provider-native session ids are only an unbound-runtime secondary identity; bound rows use
+    # Provider-native runtime ids are only an unbound-runtime secondary identity; bound rows use
     # sandbox/thread identity on the user-visible Resources surface.
     if sandbox_id and thread_id:
         return f"{sandbox_id}:{thread_id}"
-    provider_runtime_id = str(resource_row.get("session_id") or "")
-    if provider_runtime_id:
-        return provider_runtime_id
+    provider_runtime_identity = str(resource_row.get("session_id") or "")
+    if provider_runtime_identity:
+        return provider_runtime_identity
     return thread_id or "unbound"
 
 

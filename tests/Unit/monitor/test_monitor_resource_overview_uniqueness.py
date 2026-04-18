@@ -1,3 +1,5 @@
+import inspect
+
 from backend.web.services import resource_common, resource_projection_service
 from storage import runtime as storage_runtime
 
@@ -72,7 +74,7 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
 
-def test_resource_projection_row_identity_prefers_unbound_provider_runtime_id() -> None:
+def test_resource_projection_row_identity_prefers_unbound_provider_runtime_identity() -> None:
     resource_row = {
         "session_id": "provider-session-1",
         "thread_id": "thread-1",
@@ -82,6 +84,13 @@ def test_resource_projection_row_identity_prefers_unbound_provider_runtime_id() 
 
     assert resource_projection_service._resource_row_identity(resource_row) == "provider-session-1"
     assert resource_projection_service._resource_running_identity(resource_row) == ""
+
+
+def test_resource_row_identity_comment_uses_runtime_identity_language() -> None:
+    source = inspect.getsource(resource_projection_service._resource_row_identity)
+    old_comment_token = "Provider-native " + "session ids"
+
+    assert old_comment_token not in source
 
 
 def test_resource_projection_uses_resource_row_projection_seam() -> None:
