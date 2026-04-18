@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from eval.batch_executor import EvaluationBatchExecutor
+from backend.web.services import monitor_evaluation_execution_service
 from eval.batch_service import EvaluationBatchService
-from eval.harness.client import EvalClient
-from eval.harness.runner import EvalRunner
-from eval.harness.scenario import load_scenarios_from_dir
-from eval.models import EvalScenario
 from eval.storage import TrajectoryStore
 from storage.runtime import build_evaluation_batch_repo
-
-EVAL_SCENARIO_DIR = Path(__file__).resolve().parents[3] / "eval" / "scenarios"
 
 
 def make_eval_batch_service() -> EvaluationBatchService:
@@ -129,7 +122,7 @@ def get_monitor_evaluation_scenarios() -> dict[str, Any]:
             "message_count": len(scenario.messages),
             "timeout_seconds": scenario.timeout_seconds,
         }
-        for scenario in load_scenarios_from_dir(EVAL_SCENARIO_DIR)
+        for scenario in monitor_evaluation_execution_service.load_monitor_eval_scenarios()
     ]
     return {"items": items, "count": len(items)}
 
@@ -152,32 +145,6 @@ def create_monitor_evaluation_batch(
     return {"batch": batch}
 
 
-def _select_eval_scenarios(scenario_ids: list[str], *, sandbox: str) -> list[EvalScenario]:
-    catalog = {scenario.id: scenario for scenario in load_scenarios_from_dir(EVAL_SCENARIO_DIR)}
-    missing = [scenario_id for scenario_id in scenario_ids if scenario_id not in catalog]
-    if missing:
-        raise KeyError(f"Evaluation scenarios not found: {', '.join(missing)}")
-    return [catalog[scenario_id].model_copy(update={"sandbox": sandbox}) for scenario_id in scenario_ids]
-
-
-async def _run_monitor_evaluation_batch(
-    *,
-    batch_id: str,
-    scenarios: list[EvalScenario],
-    base_url: str,
-    token: str,
-    agent_user_id: str,
-    batch_service: EvaluationBatchService,
-) -> None:
-    client = EvalClient(base_url=base_url, token=token)
-    try:
-        runner = EvalRunner(client=client, agent_user_id=agent_user_id, store=TrajectoryStore())
-        executor = EvaluationBatchExecutor(runner=runner, batch_service=batch_service)
-        await executor.run_batch(batch_id, scenarios)
-    finally:
-        await client.close()
-
-
 def start_monitor_evaluation_batch(
     batch_id: str,
     *,
@@ -198,13 +165,13 @@ def start_monitor_evaluation_batch(
         raise ValueError("Evaluation batch is missing sandbox")
     if not agent_user_id:
         raise ValueError("Evaluation batch is missing agent_user_id")
-    scenarios = _select_eval_scenarios(
+    scenarios = monitor_evaluation_execution_service.select_monitor_eval_scenarios(
         [str(scenario_id) for scenario_id in scenario_ids],
         sandbox=str(sandbox),
     )
     updated = batch_service.update_batch_status(batch_id, "running")
     schedule_task(
-        _run_monitor_evaluation_batch,
+        monitor_evaluation_execution_service.run_monitor_evaluation_batch,
         batch_id=batch_id,
         scenarios=scenarios,
         base_url=base_url.rstrip("/"),

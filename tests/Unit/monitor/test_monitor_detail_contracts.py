@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from backend.web.services import (
+    monitor_evaluation_execution_service,
     monitor_evaluation_service,
     monitor_operation_repo_service,
     monitor_operation_service,
@@ -343,7 +344,7 @@ def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monk
             ]
         )
     )
-    monkeypatch.setattr(monitor_evaluation_service, "EVAL_SCENARIO_DIR", scenario_dir)
+    monkeypatch.setattr(monitor_evaluation_execution_service, "EVAL_SCENARIO_DIR", scenario_dir)
 
     payload = monitor_evaluation_service.get_monitor_evaluation_scenarios()
 
@@ -425,7 +426,7 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
         def update_batch_status(self, batch_id, status):
             return {"batch_id": batch_id, "status": status}
 
-    monkeypatch.setattr(monitor_evaluation_service, "EVAL_SCENARIO_DIR", scenario_dir)
+    monkeypatch.setattr(monitor_evaluation_execution_service, "EVAL_SCENARIO_DIR", scenario_dir)
     monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     payload = monitor_evaluation_service.start_monitor_evaluation_batch(
