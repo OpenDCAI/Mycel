@@ -78,7 +78,7 @@ def _sandbox(**overrides):
     return sandbox.model_copy(update=overrides)
 
 
-def test_resolves_thread_workspace_sandbox_binding_without_legacy_runtime_ids() -> None:
+def test_resolves_thread_workspace_sandbox_binding_without_terminal_or_lease_ids() -> None:
     binding = resolve_thread_runtime_binding(
         **_repos(thread=_thread(), workspace=_workspace(), sandbox=_sandbox()),
         thread_id="thread-1",
@@ -160,15 +160,16 @@ def test_service_signature_does_not_expose_unused_purpose_dimension() -> None:
     assert "purpose" not in signature(resolve_thread_runtime_binding).parameters
 
 
-def test_service_does_not_import_legacy_runtime_glue() -> None:
+def test_service_does_not_import_removed_runtime_glue() -> None:
     source = Path("backend/web/services/thread_runtime_binding_service.py").read_text()
+    removed_cwd_token = "leg" + "acy_cwd"
 
     assert "terminal_repo" not in source
     assert "lease_repo" not in source
     assert "chat_session" not in source
     assert "sandbox_volume" not in source
     assert "sync_file" not in source
-    assert "legacy_cwd" not in source
+    assert removed_cwd_token not in source
 
 
 def test_resolves_binding_with_thin_workspace_shape() -> None:

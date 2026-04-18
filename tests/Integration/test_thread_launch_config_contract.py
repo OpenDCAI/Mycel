@@ -449,7 +449,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
         )
 
 
-def test_resolve_default_config_derives_existing_from_legacy_lease_backed_current_workspace_id() -> None:
+def test_resolve_default_config_derives_existing_from_sandbox_backed_current_workspace_id() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
         "thread_id": "agent-user-1-1",

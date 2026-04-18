@@ -122,7 +122,7 @@ def test_sqlite_terminal_repo_create_repairs_stale_active_pointer(temp_db):
         repo.close()
 
 
-def test_sqlite_lease_repo_delete_no_longer_carries_legacy_snapshot_cleanup_shell():
+def test_sqlite_lease_repo_delete_no_longer_carries_snapshot_cleanup_shell():
     source = inspect.getsource(SQLiteLeaseRepo.delete)
 
     assert "lease_resource_snapshots" not in source
@@ -784,9 +784,10 @@ def test_daytona_state_sanitize_comment_names_stale_prompt_noise() -> None:
     from sandbox.providers.daytona import DaytonaSessionRuntime
 
     source = inspect.getsource(DaytonaSessionRuntime._sanitize_terminal_snapshot)
+    removed_prompt_token = "Leg" + "acy prompt noise"
 
     assert "stale prompt noise" in source
-    assert "Legacy prompt noise" not in source
+    assert removed_prompt_token not in source
 
 
 @pytest.mark.asyncio

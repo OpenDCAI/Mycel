@@ -8,7 +8,7 @@ def test_sqlite_lease_repo_docstring_names_lower_runtime_bridge() -> None:
     assert "Sandbox lease CRUD" not in doc
 
 
-def test_sqlite_lease_repo_schema_does_not_create_legacy_volume_id(tmp_path):
+def test_sqlite_lease_repo_schema_does_not_create_removed_volume_id(tmp_path):
     repo = SQLiteLeaseRepo(tmp_path / "sandbox.db")
     try:
         cols = {row[1] for row in repo._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}

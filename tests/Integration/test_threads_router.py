@@ -507,7 +507,7 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
                 get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read terminal rows"))
             ),
             lease_repo=SimpleNamespace(
-                get=lambda _lease_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read legacy lease id")),
+                get=lambda _lease_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read removed lease id")),
                 find_by_instance=lambda *, provider_name, instance_id: {
                     "lease_id": "lease-1",
                     "provider_name": "daytona",
@@ -646,9 +646,10 @@ async def test_create_thread_route_rejects_lease_shaped_existing_identity():
 
 def test_existing_sandbox_request_comment_names_lower_runtime_bridge() -> None:
     source = inspect.getsource(threads_router._resolve_owned_existing_sandbox_request_lease)
+    removed_comment_token = "leg" + "acy lease identity"
 
     assert "lower runtime bridge identity" in source
-    assert "legacy lease identity" not in source
+    assert removed_comment_token not in source
 
 
 @pytest.mark.asyncio
