@@ -45,6 +45,65 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
     }
 
 
+@pytest.mark.asyncio
+async def test_list_sandbox_sessions_strips_lower_lease_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sandbox_router.sandbox_service, "init_providers_and_managers", lambda: ({}, {"local": object()}))
+    monkeypatch.setattr(
+        sandbox_router.sandbox_service,
+        "load_all_sessions",
+        lambda _managers: [
+            {
+                "session_id": "session-1",
+                "thread_id": "thread-1",
+                "provider": "local",
+                "status": "running",
+                "lease_id": "lease-1",
+                "instance_id": "instance-1",
+            }
+        ],
+    )
+
+    result = await sandbox_router.list_sandbox_sessions()
+
+    assert result["sessions"] == [
+        {
+            "session_id": "session-1",
+            "thread_id": "thread-1",
+            "provider": "local",
+            "status": "running",
+            "instance_id": "instance-1",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sandbox_session_mutation_response_strips_lower_lease_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sandbox_router.sandbox_service,
+        "mutate_sandbox_session",
+        lambda **_kwargs: {
+            "ok": True,
+            "action": "pause",
+            "session_id": "session-1",
+            "provider": "local",
+            "thread_id": None,
+            "lease_id": "lease-1",
+            "mode": "manager_lease",
+        },
+    )
+
+    result = await sandbox_router.pause_sandbox_session("session-1")
+
+    assert result == {
+        "ok": True,
+        "action": "pause",
+        "session_id": "session-1",
+        "provider": "local",
+        "thread_id": None,
+        "mode": "manager_lease",
+    }
+
+
 def test_list_user_sandboxes_projects_internal_lease_rows(monkeypatch: pytest.MonkeyPatch) -> None:
     class _MonitorRepo:
         def query_sandboxes(self) -> list[dict[str, object]]:

@@ -19,14 +19,19 @@ def _runtime_http_error(exc: RuntimeError) -> HTTPException:
 
 async def _mutate_session_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
     try:
-        return await asyncio.to_thread(
+        result = await asyncio.to_thread(
             sandbox_service.mutate_sandbox_session,
             session_id=session_id,
             action=action,
             provider_hint=provider,
         )
+        return _public_session_payload(result)
     except RuntimeError as e:
         raise _runtime_http_error(e) from e
+
+
+def _public_session_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in row.items() if key != "lease_id"}
 
 
 @router.get("/types")
@@ -41,7 +46,7 @@ async def list_sandbox_sessions() -> dict[str, Any]:
     """List all sandbox sessions across providers."""
     _, managers = await asyncio.to_thread(sandbox_service.init_providers_and_managers)
     sessions = await asyncio.to_thread(sandbox_service.load_all_sessions, managers)
-    return {"sessions": sessions}
+    return {"sessions": [_public_session_payload(session) for session in sessions]}
 
 
 @router.get("/sandboxes/mine")
