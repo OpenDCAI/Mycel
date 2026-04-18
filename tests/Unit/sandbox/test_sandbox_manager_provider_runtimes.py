@@ -15,7 +15,7 @@ def _manager_for_provider(provider: SimpleNamespace) -> SandboxManager:
     return manager
 
 
-def test_list_sessions_propagates_provider_runtime_list_errors() -> None:
+def test_provider_runtime_listing_propagates_provider_errors() -> None:
     def _raise_provider_error():
         raise RuntimeError("provider boom")
 
@@ -25,7 +25,7 @@ def test_list_sessions_propagates_provider_runtime_list_errors() -> None:
         manager.list_sessions()
 
 
-def test_list_sessions_rejects_non_list_provider_runtime_result() -> None:
+def test_provider_runtime_listing_rejects_non_list_provider_result() -> None:
     manager = _manager_for_provider(
         SimpleNamespace(name="daytona", list_provider_runtimes=lambda: (SimpleNamespace(session_id="runtime-1"),))
     )
