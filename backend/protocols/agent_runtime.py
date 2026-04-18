@@ -73,3 +73,17 @@ class AgentGatewayDeliveryResult:
     status: Literal["accepted", "skipped"]
     thread_id: str | None
     reason: str | None = None
+
+
+@dataclass(frozen=True)
+class AgentThreadInputResult:
+    status: Literal["cancelled", "injected", "started"]
+    routing: Literal["cancelled", "steer", "direct"]
+    thread_id: str
+    run_id: str | None = None
+
+    def to_response(self) -> dict[str, str]:
+        response = {"status": self.status, "routing": self.routing, "thread_id": self.thread_id}
+        if self.run_id is not None:
+            response["run_id"] = self.run_id
+        return response

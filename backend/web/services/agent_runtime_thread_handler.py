@@ -18,7 +18,7 @@ class NativeAgentThreadInputHandler:
     def __init__(self, app: Any) -> None:
         self._app = app
 
-    async def dispatch(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> dict[str, Any]:
+    async def dispatch(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> agent_runtime_protocol.AgentThreadInputResult:
         from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
         from backend.web.services.resource_cache import clear_resource_overview_cache
         from backend.web.services.streaming_service import start_agent_run
@@ -36,7 +36,7 @@ class NativeAgentThreadInputHandler:
             qm = self._app.state.queue_manager
 
             if startup_cancel is not None and startup_cancel.cancelled():
-                return {"status": "cancelled", "routing": "cancelled", "thread_id": thread_id}
+                return agent_runtime_protocol.AgentThreadInputResult(status="cancelled", routing="cancelled", thread_id=thread_id)
 
             state = agent.runtime.current_state
             logger.debug("[agent-runtime-gateway] thread=%s state=%s source=%s", thread_id[:15], state, envelope.sender.source)
@@ -52,7 +52,7 @@ class NativeAgentThreadInputHandler:
                     is_steer=True,
                 )
                 logger.debug("[agent-runtime-gateway] thread input enqueued")
-                return {"status": "injected", "routing": "steer", "thread_id": thread_id}
+                return agent_runtime_protocol.AgentThreadInputResult(status="injected", routing="steer", thread_id=thread_id)
 
             locks = self._app.state.thread_locks
             async with self._app.state.thread_locks_guard:
@@ -69,7 +69,7 @@ class NativeAgentThreadInputHandler:
                         is_steer=True,
                     )
                     logger.debug("[agent-runtime-gateway] thread input enqueued after transition race")
-                    return {"status": "injected", "routing": "steer", "thread_id": thread_id}
+                    return agent_runtime_protocol.AgentThreadInputResult(status="injected", routing="steer", thread_id=thread_id)
                 logger.debug("[agent-runtime-gateway] thread input starts run")
                 meta = {
                     "source": envelope.sender.source,
@@ -91,7 +91,7 @@ class NativeAgentThreadInputHandler:
                 # @@@monitor-resource-cache-run-start - a fresh run can create or resume a sandbox runtime immediately.
                 # Drop the cached monitor snapshot so the next /api/monitor/resources read reflects the live topology.
                 clear_resource_overview_cache()
-            return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
+            return agent_runtime_protocol.AgentThreadInputResult(status="started", routing="direct", run_id=run_id, thread_id=thread_id)
         finally:
             if startup_cancel is not None and self._app.state.thread_tasks.get(thread_id) is startup_cancel:
                 self._app.state.thread_tasks.pop(thread_id, None)

@@ -31,6 +31,8 @@ class NativeAgentRuntimeGateway:
             raise ValueError(f"No Agent chat runtime handler registered for runtime_source={envelope.recipient.runtime_source!r}")
         return await handler.dispatch(envelope)
 
-    async def dispatch_thread_input(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> dict[str, Any]:
+    async def dispatch_thread_input(
+        self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope
+    ) -> agent_runtime_protocol.AgentThreadInputResult:
         """Route direct thread input through the Agent-side gateway."""
         return await self._thread_input_handler.dispatch(envelope)

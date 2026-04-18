@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from backend.protocols.agent_runtime import AgentGatewayDeliveryResult
+from backend.protocols.agent_runtime import AgentGatewayDeliveryResult, AgentThreadInputResult
 from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 
 
@@ -24,7 +24,7 @@ class _FakeThreadInputHandler:
 
     async def dispatch(self, envelope):
         self.called_with = envelope
-        return {"status": "started", "thread_id": "thread-1"}
+        return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
 
 
 @pytest.mark.asyncio
@@ -61,7 +61,7 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
     thread_result = await gateway.dispatch_thread_input(thread_envelope)
 
     assert chat_result == AgentGatewayDeliveryResult(status="accepted", thread_id="thread-1")
-    assert thread_result == {"status": "started", "thread_id": "thread-1"}
+    assert thread_result == AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
     assert chat_handler.called_with is chat_envelope
     assert thread_input_handler.called_with is thread_envelope
 
