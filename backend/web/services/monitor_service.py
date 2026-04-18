@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.web.core import config as web_config
-from backend.web.services import monitor_operation_service, sandbox_service
+from backend.web.services import monitor_operation_service, monitor_sandbox_projection_service, sandbox_service
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from backend.web.services.thread_visibility import canonical_owner_threads
 from eval.batch_executor import EvaluationBatchExecutor
@@ -572,11 +572,7 @@ def _map_monitor_sandboxes(rows: list[dict[str, Any]], *, title: str) -> dict[st
 
 
 def list_monitor_sandboxes() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
-    try:
-        return _map_monitor_sandboxes(repo.query_sandboxes(), title="All Sandboxes")
-    finally:
-        repo.close()
+    return monitor_sandbox_projection_service.list_monitor_sandboxes()
 
 
 def list_monitor_provider_orphan_runtimes() -> dict[str, Any]:

@@ -10,7 +10,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services import monitor_service, resource_projection_service, resource_service
+from backend.web.services import monitor_sandbox_projection_service, resource_projection_service, resource_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 
@@ -39,7 +39,7 @@ def _read_refresh_interval_sec() -> float:
 
 
 def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
-    sandbox_payload = monitor_service.list_monitor_sandboxes()
+    sandbox_payload = monitor_sandbox_projection_service.list_monitor_sandboxes()
     triage = sandbox_payload.get("triage") or {"summary": {}, "groups": []}
     payload["triage"] = triage
     return payload

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.web.services import monitor_operation_service, monitor_service
+from backend.web.services import monitor_operation_service, monitor_sandbox_projection_service, monitor_service
 
 
 def test_monitor_cleanup_truth_uses_chat_session_internal_names():
@@ -28,6 +28,11 @@ def test_monitor_cleanup_truth_uses_chat_session_internal_names():
 def _default_live_thread_ids(monkeypatch):
     monkeypatch.setattr(
         monitor_service,
+        "_live_thread_ids",
+        lambda thread_ids: {str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()},
+    )
+    monkeypatch.setattr(
+        monitor_sandbox_projection_service,
         "_live_thread_ids",
         lambda thread_ids: {str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()},
     )
@@ -129,6 +134,7 @@ class FakeSandboxMonitorRepo:
 
 def _use_monitor_repo(monkeypatch, repo):
     monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: repo)
+    monkeypatch.setattr(monitor_sandbox_projection_service, "make_sandbox_monitor_repo", lambda: repo)
 
 
 def _detached_sandbox(**overrides):
@@ -493,7 +499,7 @@ def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
             ]
         ),
     )
-    monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
+    monkeypatch.setattr(monitor_sandbox_projection_service, "_live_thread_ids", lambda thread_ids: set())
 
     payload = monitor_service.list_monitor_sandboxes()
 
@@ -796,7 +802,7 @@ def test_list_monitor_sandboxes_ignores_stale_thread_refs_when_classifying_triag
             sandboxes=[_sandbox_row(sandbox_id="sandbox-1", desired_state="paused", observed_state="paused", thread_id="thread-gone")]
         ),
     )
-    monkeypatch.setattr(monitor_service, "_live_thread_ids", lambda thread_ids: set())
+    monkeypatch.setattr(monitor_sandbox_projection_service, "_live_thread_ids", lambda thread_ids: set())
 
     payload = monitor_service.list_monitor_sandboxes()
 

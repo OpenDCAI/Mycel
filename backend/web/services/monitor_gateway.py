@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_service, resource_projection_service, resource_service
+from backend.web.services import monitor_sandbox_projection_service, monitor_service, resource_projection_service, resource_service
 from backend.web.services.resource_cache import get_resource_overview_snapshot, refresh_resource_overview_sync
 
 
 def list_sandboxes() -> dict[str, Any]:
-    return monitor_service.list_monitor_sandboxes()
+    return monitor_sandbox_projection_service.list_monitor_sandboxes()
 
 
 def list_provider_orphan_runtimes() -> dict[str, Any]:

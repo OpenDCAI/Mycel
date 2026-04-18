@@ -13,7 +13,7 @@ def _triage_payload(category: str) -> dict:
     return {
         "triage": {
             "summary": summary,
-            "groups": [{"key": category, "items": [{"lease_id": "lease-1"}]}],
+            "groups": [{"key": category, "items": [{"sandbox_id": "sandbox-1"}]}],
         }
     }
 
@@ -40,10 +40,9 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        cache,
-        "monitor_service",
-        type("_MonitorService", (), {"list_monitor_sandboxes": staticmethod(lambda: _triage_payload("detached_residue"))}),
-        raising=False,
+        cache.monitor_sandbox_projection_service,
+        "list_monitor_sandboxes",
+        lambda: _triage_payload("detached_residue"),
     )
 
     payload = cache.refresh_resource_overview_sync()
@@ -79,10 +78,9 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
         },
     )
     monkeypatch.setattr(
-        cache,
-        "monitor_service",
-        type("_MonitorService", (), {"list_monitor_sandboxes": staticmethod(lambda: _triage_payload("orphan_cleanup"))}),
-        raising=False,
+        cache.monitor_sandbox_projection_service,
+        "list_monitor_sandboxes",
+        lambda: _triage_payload("orphan_cleanup"),
     )
     cache.refresh_resource_overview_sync()
 
@@ -155,10 +153,9 @@ def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(m
         lambda: {"local": {"resource_rows": 1, "running": 1}},
     )
     monkeypatch.setattr(
-        cache,
-        "monitor_service",
-        type("_MonitorService", (), {"list_monitor_sandboxes": staticmethod(lambda: _triage_payload("healthy_capacity"))}),
-        raising=False,
+        cache.monitor_sandbox_projection_service,
+        "list_monitor_sandboxes",
+        lambda: _triage_payload("healthy_capacity"),
     )
 
     cache.refresh_resource_overview_sync()
