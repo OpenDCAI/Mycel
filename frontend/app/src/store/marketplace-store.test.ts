@@ -201,6 +201,22 @@ describe("useMarketplaceStore", () => {
     });
   });
 
+  it("passes agent_user_id when downloading a Skill into an Agent", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ resource_id: "FastAPI", type: "skill", version: "1.0.0", agent_user_id: "agent-1" }),
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await useMarketplaceStore.getState().download("skill-1", "agent-1");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/marketplace/download");
+    expect(JSON.parse(String(init?.body))).toEqual({ item_id: "skill-1", agent_user_id: "agent-1" });
+  });
+
   it("preserves backend detail when marketplace publish returns an honest 503", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: false,

@@ -67,6 +67,11 @@ class TestInstallFromMarketplaceRequest:
     def test_valid(self):
         req = InstallFromMarketplaceRequest(item_id="abc-123")
         assert req.item_id == "abc-123"
+        assert req.agent_user_id is None
+
+    def test_accepts_agent_user_id(self):
+        req = InstallFromMarketplaceRequest(item_id="abc-123", agent_user_id="agent-1")
+        assert req.agent_user_id == "agent-1"
 
     def test_missing_item_id_raises(self):
         with pytest.raises(ValidationError):
