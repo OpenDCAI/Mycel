@@ -10,10 +10,23 @@ from pathlib import Path
 
 import pytest
 
+from sandbox.thread_context import set_current_messages, set_current_run_id, set_current_thread_id
+
 # Add project root to sys.path
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
+
+@pytest.fixture(autouse=True)
+def clean_sandbox_thread_context():
+    set_current_thread_id("")
+    set_current_run_id("")
+    set_current_messages([])
+    yield
+    set_current_thread_id("")
+    set_current_run_id("")
+    set_current_messages([])
 
 
 def _unlink_db(db_path: Path) -> None:

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from backend.web.services import (
+    monitor_evaluation_service,
     monitor_operation_service,
     monitor_provider_runtime_service,
     monitor_sandbox_detail_service,
@@ -51,7 +52,7 @@ def _default_eval_batch_service(monkeypatch):
         def list_batch_runs_for_thread(self, _thread_id):
             return []
 
-    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
 
 
 @pytest.fixture(autouse=True)
@@ -338,7 +339,7 @@ def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monk
             ]
         )
     )
-    monkeypatch.setattr(monitor_service, "EVAL_SCENARIO_DIR", scenario_dir)
+    monkeypatch.setattr(monitor_evaluation_service, "EVAL_SCENARIO_DIR", scenario_dir)
 
     payload = monitor_service.get_monitor_evaluation_scenarios()
 
@@ -365,7 +366,7 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
             calls.append(kwargs)
             return {"batch_id": "batch-created", "status": "pending"}
 
-    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     payload = monitor_service.create_monitor_evaluation_batch(
         submitted_by_user_id="owner-1",
@@ -420,8 +421,8 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
         def update_batch_status(self, batch_id, status):
             return {"batch_id": batch_id, "status": status}
 
-    monkeypatch.setattr(monitor_service, "EVAL_SCENARIO_DIR", scenario_dir)
-    monkeypatch.setattr(monitor_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_service, "EVAL_SCENARIO_DIR", scenario_dir)
+    monkeypatch.setattr(monitor_evaluation_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     payload = monitor_service.start_monitor_evaluation_batch(
         "batch-1",
