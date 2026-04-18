@@ -1,3 +1,4 @@
+import inspect
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -258,6 +259,15 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
     assert payload["sandbox_id"] == "sandbox-1"
     assert "lease_id" not in payload
     assert payload["thread_id"] == "thread-1"
+
+
+def test_get_monitor_runtime_detail_uses_resource_row_local_naming():
+    source = inspect.getsource(monitor_service.get_monitor_runtime_detail)
+    old_loop_token = "for " + "session in provider.get"
+    old_runtime_payload_token = '"runtime": ' + "session"
+
+    assert old_loop_token not in source
+    assert old_runtime_payload_token not in source
 
 
 def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_path):

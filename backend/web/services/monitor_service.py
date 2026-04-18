@@ -730,8 +730,8 @@ def _resource_row_values(resource_rows: list[dict[str, Any]], key: str) -> list[
 def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
     snapshot = get_resource_overview_snapshot()
     for provider in snapshot.get("providers") or []:
-        for session in provider.get("sessions") or []:
-            current = str(session.get("runtimeSessionId") or "").strip()
+        for resource_row in provider.get("sessions") or []:
+            current = str(resource_row.get("runtimeSessionId") or "").strip()
             if current != runtime_session_id:
                 continue
             return {
@@ -741,9 +741,9 @@ def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
                     "status": provider.get("status"),
                     "consoleUrl": provider.get("consoleUrl"),
                 },
-                "runtime": session,
-                "sandbox_id": session.get("sandboxId"),
-                "thread_id": session.get("threadId"),
+                "runtime": resource_row,
+                "sandbox_id": resource_row.get("sandboxId"),
+                "thread_id": resource_row.get("threadId"),
             }
     raise KeyError(f"Runtime not found: {runtime_session_id}")
 
