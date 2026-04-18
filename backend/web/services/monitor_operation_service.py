@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from threading import Lock
 from typing import Any
 from uuid import uuid4
 
+from backend.web.services import monitor_operation_repo_service
 from backend.web.services import monitor_runtime_operation_service as runtime_operation
 
-_LOCK = Lock()
-_OPERATIONS: dict[str, dict[str, Any]] = {}
-_TARGET_INDEX: dict[tuple[str, str], list[str]] = {}
 _ALLOWED_SANDBOX_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
 _SANDBOX_CLEANUP_ACTION = "sandbox_cleanup"
 
@@ -41,6 +38,7 @@ def _append_event(operation: dict[str, Any], *, status: str, message: str) -> No
     operation["updated_at"] = timestamp
     operation["summary"] = message
     operation["events"].append({"at": timestamp, "status": status, "message": message})
+    monitor_operation_repo_service.default_monitor_operation_repo().save(operation)
 
 
 def _new_operation(*, kind: str, target_type: str, target_id: str, reason: str, target: dict[str, Any]) -> dict[str, Any]:
@@ -59,16 +57,11 @@ def _new_operation(*, kind: str, target_type: str, target_id: str, reason: str, 
         "result_truth": {},
         "events": [{"at": timestamp, "status": "pending", "message": "Cleanup queued"}],
     }
-    with _LOCK:
-        _OPERATIONS[operation["operation_id"]] = operation
-        _TARGET_INDEX.setdefault((target_type, target_id), []).insert(0, operation["operation_id"])
-    return operation
+    return monitor_operation_repo_service.default_monitor_operation_repo().create(operation)
 
 
 def _operations_for_target(target_type: str, target_id: str) -> list[dict[str, Any]]:
-    with _LOCK:
-        ids = list(_TARGET_INDEX.get((target_type, target_id), []))
-        return [dict(_OPERATIONS[operation_id]) for operation_id in ids if operation_id in _OPERATIONS]
+    return monitor_operation_repo_service.default_monitor_operation_repo().list_for_target(target_type, target_id)
 
 
 def _has_active_runtime_rows(runtime_rows: list[dict[str, Any]]) -> bool:
@@ -314,11 +307,9 @@ def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str,
 
 
 def get_operation_detail(operation_id: str) -> dict[str, Any]:
-    with _LOCK:
-        operation = _OPERATIONS.get(operation_id)
-        if operation is None:
-            raise KeyError(f"Operation not found: {operation_id}")
-        payload = dict(operation)
+    payload = monitor_operation_repo_service.default_monitor_operation_repo().get(operation_id)
+    if payload is None:
+        raise KeyError(f"Operation not found: {operation_id}")
 
     return {
         "operation": _operation_view(payload),

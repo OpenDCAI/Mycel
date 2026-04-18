@@ -8,6 +8,7 @@ import pytest
 
 from backend.web.services import (
     monitor_evaluation_service,
+    monitor_operation_repo_service,
     monitor_operation_service,
     monitor_provider_runtime_service,
     monitor_sandbox_config_service,
@@ -72,8 +73,7 @@ def _default_monitor_thread_repo(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _clear_monitor_cleanup_operations():
-    monitor_operation_service._OPERATIONS.clear()
-    monitor_operation_service._TARGET_INDEX.clear()
+    monitor_operation_repo_service.default_monitor_operation_repo().clear()
 
 
 def _sandbox_row(**overrides):
