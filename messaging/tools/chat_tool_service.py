@@ -142,6 +142,9 @@ class ChatToolService:
                 members = c.get("members")
                 if not isinstance(members, list):
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing members")
+                for member in members:
+                    if "id" not in member:
+                        raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} member row is missing id")
                 others = [member for member in members if member["id"] != eid]
                 name = c.get("title")
                 if not name:
