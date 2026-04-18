@@ -188,6 +188,26 @@ def test_relationship_upgrade_does_not_write_removed_hire_timestamp_columns() ->
     assert "hire_snapshot" not in captured
 
 
+def test_relationship_list_for_user_fails_on_invalid_row() -> None:
+    service = RelationshipService(
+        SimpleNamespace(
+            list_for_user=lambda _user_id: [
+                {
+                    "id": "hire_visit:agent-user-1:human-user-1",
+                    "user_low": "agent-user-1",
+                    "user_high": "human-user-1",
+                    "kind": "hire_visit",
+                    "state": "visit",
+                    "created_at": "2026-04-07T00:00:00Z",
+                }
+            ]
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="Invalid relationship row hire_visit:agent-user-1:human-user-1"):
+        service.list_for_user("human-user-1")
+
+
 def test_chat_tool_registry_exposes_final_contract_only() -> None:
     registry = ToolRegistry()
     ChatToolService(

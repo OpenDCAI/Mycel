@@ -79,8 +79,8 @@ class RelationshipService:
         for r in rows:
             try:
                 result.append(RelationshipRow.model_validate(r))
-            except Exception:
-                logger.warning("[relationship] invalid row: %s", r)
+            except Exception as exc:
+                raise RuntimeError(f"Invalid relationship row {r.get('id') or '<missing>'}") from exc
         return result
 
     def get_by_id(self, relationship_id: str) -> dict | None:
