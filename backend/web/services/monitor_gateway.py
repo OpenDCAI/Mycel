@@ -7,9 +7,9 @@ from typing import Any
 from backend.web.services import (
     monitor_evaluation_service,
     monitor_provider_runtime_service,
+    monitor_sandbox_config_service,
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
-    monitor_service,
     monitor_thread_service,
     resource_projection_service,
     resource_service,
@@ -54,7 +54,7 @@ def get_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
 
 
 def get_sandbox_configs() -> dict[str, Any]:
-    return monitor_service.get_monitor_sandbox_configs()
+    return monitor_sandbox_config_service.get_monitor_sandbox_configs()
 
 
 async def get_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:

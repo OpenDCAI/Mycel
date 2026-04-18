@@ -5,14 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from backend.web.core import config as web_config
 from backend.web.services import (
     monitor_evaluation_service,
     monitor_provider_runtime_service,
+    monitor_sandbox_config_service,
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_thread_service,
-    sandbox_service,
 )
 
 
@@ -24,13 +23,7 @@ def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
 
 
 def get_monitor_sandbox_configs() -> dict[str, Any]:
-    providers = sandbox_service.available_sandbox_types()
-    return {
-        "source": "runtime_sandbox_inventory",
-        "default_local_cwd": str(web_config.LOCAL_WORKSPACE_ROOT),
-        "count": len(providers),
-        "providers": providers,
-    }
+    return monitor_sandbox_config_service.get_monitor_sandbox_configs()
 
 
 def get_resource_overview_snapshot() -> dict[str, Any]:
