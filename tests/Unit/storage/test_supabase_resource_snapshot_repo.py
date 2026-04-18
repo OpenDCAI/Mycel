@@ -94,28 +94,26 @@ def test_supabase_resource_snapshot_repo_chunks_large_snapshot_lookup() -> None:
 
 def test_supabase_resource_snapshot_repo_fails_loudly_when_target_snapshot_table_is_missing() -> None:
     client = _FakeClient()
-    client.table_obj.error = RuntimeError(
-        "Could not find the table 'container.resource_snapshots' in the schema cache; "
-        "Perhaps you meant the old table 'lease_resource_snapshots'"
-    )
+    client.table_obj.error = RuntimeError("Could not find the table 'container.resource_snapshots' in the schema cache")
     repo = SupabaseResourceSnapshotRepo(client)
 
-    with pytest.raises(RuntimeError, match="container\\.resource_snapshots is missing"):
+    with pytest.raises(RuntimeError, match="container\\.resource_snapshots is missing") as exc_info:
         repo.list_snapshots_by_sandbox_ids([{"sandbox_id": "sandbox-1"}])
+
+    assert "schema cache" in str(exc_info.value)
 
 
 def test_supabase_resource_snapshot_repo_write_fails_loudly_when_target_snapshot_table_is_missing() -> None:
     client = _FakeClient()
-    client.table_obj.error = RuntimeError(
-        "Could not find the table 'container.resource_snapshots' in the schema cache; "
-        "Perhaps you meant the old table 'lease_resource_snapshots'"
-    )
+    client.table_obj.error = RuntimeError("Could not find the table 'container.resource_snapshots' in the schema cache")
     repo = SupabaseResourceSnapshotRepo(client)
 
-    with pytest.raises(RuntimeError, match="container\\.resource_snapshots is missing"):
+    with pytest.raises(RuntimeError, match="container\\.resource_snapshots is missing") as exc_info:
         repo.upsert_resource_snapshot_for_sandbox(
             sandbox_id="sandbox-1",
             provider_name="daytona",
             observed_state="running",
             probe_mode="runtime",
         )
+
+    assert "schema cache" in str(exc_info.value)
