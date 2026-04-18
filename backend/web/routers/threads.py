@@ -5,6 +5,7 @@ import json
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import UTC
 from typing import Annotated, Any
 
@@ -280,9 +281,9 @@ def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
     if payload.existing_sandbox_id:
-        owned_lease = _resolve_owned_existing_sandbox_request_lease(app, owner_user_id, payload.existing_sandbox_id)
-        if owned_lease is not None:
-            sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
+        lower_runtime_row = _resolve_owned_existing_sandbox_request_lease(app, owner_user_id, payload.existing_sandbox_id)
+        if lower_runtime_row is not None:
+            sandbox_type = str(lower_runtime_row["provider_name"] or sandbox_type)
     if sandbox_type == "local":
         return None
     provider = sandbox_service.build_provider_from_config_name(sandbox_type)
@@ -316,6 +317,14 @@ def _request_row_text(row: Any, key: str, *, label: str) -> str:
     if value is None or value == "":
         raise RuntimeError(f"{label}.{key} is required")
     return str(value)
+
+
+@dataclass(frozen=True)
+class _ExistingSandboxThreadBinding:
+    sandbox_id: str
+    sandbox_type: str
+    workspace_path: str | None
+    thread_cwd: str
 
 
 def _resolve_owned_existing_sandbox_request_lease(
@@ -561,6 +570,8 @@ def _create_thread_sandbox_resources(
         raise RuntimeError("lease_repo.create must return sandbox_id for thread sandbox resources")
 
     terminal_repo = make_terminal_repo()
+    if terminal_repo is None:
+        raise RuntimeError("terminal_repo is required for thread sandbox resources")
     try:
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
         # @@@initial-cwd - local threads own their requested cwd; remote threads start from provider defaults.
@@ -640,6 +651,52 @@ def _resolve_existing_sandbox_bind_cwd(
     return str(owned_rows[0].workspace_path or "").strip() or None
 
 
+def _bind_existing_sandbox_for_thread(
+    app: Any,
+    owner_user_id: str,
+    thread_id: str,
+    existing_sandbox_id: str,
+    requested_cwd: str | None,
+) -> _ExistingSandboxThreadBinding:
+    sandbox_id = str(existing_sandbox_id or "").strip()
+    sandbox = app.state.sandbox_repo.get_by_id(sandbox_id)
+    if sandbox is None:
+        raise HTTPException(403, "Sandbox not authorized")
+
+    resolved_lease = _resolve_owned_existing_sandbox_request_lease(
+        app,
+        owner_user_id,
+        sandbox_id,
+    )
+    if resolved_lease is None:
+        raise HTTPException(403, "Sandbox not authorized")
+
+    bind_cwd = _resolve_existing_sandbox_bind_cwd(
+        app.state.workspace_repo,
+        sandbox_id=sandbox_id,
+        owner_user_id=owner_user_id,
+        requested_cwd=requested_cwd,
+    )
+    bound_cwd, bound_lease = bind_thread_to_existing_sandbox(
+        thread_id,
+        sandbox,
+        cwd=bind_cwd,
+        lease_repo=getattr(app.state, "lease_repo", None),
+    )
+    if bound_lease is None:
+        raise HTTPException(403, "Sandbox not authorized")
+
+    # @@@existing-sandbox-binding-boundary - lower lease identity is only the
+    # mechanism used by sandbox.manager to attach a terminal; router control
+    # flow should stay sandbox/workspace-shaped after this point.
+    return _ExistingSandboxThreadBinding(
+        sandbox_id=sandbox_id,
+        sandbox_type=str(bound_lease["provider_name"] or ""),
+        workspace_path=bind_cwd or bound_cwd,
+        thread_cwd=bound_cwd,
+    )
+
+
 def _resolve_owned_recipe_snapshot(
     app: Any,
     owner_user_id: str,
@@ -693,46 +750,26 @@ def _create_owned_thread(
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_user_id)
 
-    selected_lease_id = None
-    owned_lease: dict[str, Any] | None = None
+    existing_binding: _ExistingSandboxThreadBinding | None = None
     if payload.existing_sandbox_id:
-        sandbox = app.state.sandbox_repo.get_by_id(payload.existing_sandbox_id)
-        if sandbox is None:
-            raise HTTPException(403, "Sandbox not authorized")
-        preview_lease = _resolve_owned_existing_sandbox_request_lease(
+        existing_binding = _bind_existing_sandbox_for_thread(
             app,
             owner_user_id,
-            payload.existing_sandbox_id,
-        )
-        if preview_lease is None:
-            raise HTTPException(403, "Sandbox not authorized")
-        sandbox_id = str(payload.existing_sandbox_id).strip()
-        bind_cwd = _resolve_existing_sandbox_bind_cwd(
-            app.state.workspace_repo,
-            sandbox_id=sandbox_id,
-            owner_user_id=owner_user_id,
-            requested_cwd=payload.cwd,
-        )
-        bound_cwd, owned_lease = bind_thread_to_existing_sandbox(
             new_thread_id,
-            sandbox,
-            cwd=bind_cwd,
-            lease_repo=getattr(app.state, "lease_repo", None),
+            payload.existing_sandbox_id,
+            payload.cwd,
         )
-        selected_lease_id = _request_row_text(owned_lease, "lease_id", label="lease")
-        if owned_lease is None:
-            raise HTTPException(403, "Sandbox not authorized")
-        sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
+        sandbox_type = existing_binding.sandbox_type or sandbox_type
     selected_recipe = None
-    if not selected_lease_id:
+    if existing_binding is None:
         selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.sandbox_template_id)
 
-    if selected_lease_id:
+    if existing_binding is not None:
         current_workspace_id = _materialize_workspace_for_sandbox(
             app.state.workspace_repo,
-            sandbox_id=sandbox_id,
+            sandbox_id=existing_binding.sandbox_id,
             owner_user_id=owner_user_id,
-            workspace_path=bind_cwd or bound_cwd,
+            workspace_path=existing_binding.workspace_path,
         )
     else:
         # @@@create-write-workspace-first - replay-13 requires supported create paths
@@ -746,7 +783,6 @@ def _create_owned_thread(
             workspace_repo=app.state.workspace_repo,
             owner_user_id=owner_user_id,
         )
-        bound_cwd = None
 
     app.state.thread_repo.create(
         thread_id=new_thread_id,
@@ -766,8 +802,8 @@ def _create_owned_thread(
     if payload.cwd:
         app.state.thread_cwd[new_thread_id] = payload.cwd
 
-    if selected_lease_id:
-        app.state.thread_cwd[new_thread_id] = bound_cwd
+    if existing_binding is not None:
+        app.state.thread_cwd[new_thread_id] = existing_binding.thread_cwd
 
     return {
         "thread_id": new_thread_id,
