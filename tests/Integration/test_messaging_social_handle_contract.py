@@ -364,6 +364,33 @@ def test_chat_tool_list_chats_requires_member_ids_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_string_member_ids_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": [{"id": None, "name": "Human"}],
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        list_chats.handler()
+
+    assert str(excinfo.value) == "Chat summary chat-1 member row has invalid id"
+
+
 def test_chat_tool_list_chats_requires_group_chat_id_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
@@ -392,6 +419,37 @@ def test_chat_tool_list_chats_requires_group_chat_id_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_string_group_chat_id_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": 123,
+                    "title": "Ops Room",
+                    "members": [
+                        {"id": "human-user-1", "name": "Human"},
+                        {"id": "agent-user-1", "name": "Agent"},
+                        {"id": "agent-user-2", "name": "Agent 2"},
+                    ],
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        list_chats.handler()
+
+    assert str(excinfo.value) == "Group chat summary has invalid id"
+
+
 def test_chat_tool_list_chats_requires_last_message_content_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
@@ -415,6 +473,33 @@ def test_chat_tool_list_chats_requires_last_message_content_contract() -> None:
 
     with pytest.raises(RuntimeError, match="Chat summary chat-1 last_message is missing content"):
         list_chats.handler()
+
+
+def test_chat_tool_list_chats_requires_string_title_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": 123,
+                    "members": [{"id": "human-user-1", "name": "Human"}],
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        list_chats.handler()
+
+    assert str(excinfo.value) == "Chat summary chat-1 has invalid title"
 
 
 def test_chat_tool_list_chats_requires_empty_last_message_content_contract() -> None:

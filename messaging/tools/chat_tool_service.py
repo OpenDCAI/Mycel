@@ -155,10 +155,14 @@ class ChatToolService:
                 for member in members:
                     if "id" not in member:
                         raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} member row is missing id")
+                    if not isinstance(member["id"], str):
+                        raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} member row has invalid id")
                 others = [member for member in members if member["id"] != eid]
                 name = c.get("title")
                 if not name:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing title")
+                if not isinstance(name, str):
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} has invalid title")
                 unread = c["unread_count"]
                 last = c.get("last_message")
                 if last is not None and "content" not in last:
@@ -172,6 +176,8 @@ class ChatToolService:
                     chat_id = c.get("id")
                     if not chat_id:
                         raise RuntimeError("Group chat summary is missing id")
+                    if not isinstance(chat_id, str):
+                        raise RuntimeError("Group chat summary has invalid id")
                     id_str = f" [chat_id: {chat_id}]"
                 else:
                     other_id = others[0]["id"] if others else ""
