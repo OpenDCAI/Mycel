@@ -315,7 +315,7 @@ class MessagingService:
         result: list[dict[str, Any]] = []
         for chat in chat_rows:
             member_info = self._project_chat_members(members_by_chat[chat.id], users_by_id)
-            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, member_info, user_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.id, chat.title, member_info, user_id)
             result.append(
                 {
                     "id": chat.id,
@@ -337,7 +337,7 @@ class MessagingService:
         result: list[dict[str, Any]] = []
         for chat in chat_rows:
             member_info = self._project_chat_members(members_by_chat[chat.id], users_by_id)
-            title, chat_avatar_url = self._chat_title_and_avatar(chat.title, member_info, user_id)
+            title, chat_avatar_url = self._chat_title_and_avatar(chat.id, chat.title, member_info, user_id)
             result.append(
                 {
                     "id": chat.id,
@@ -401,10 +401,17 @@ class MessagingService:
     def _project_chat_members(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
         return [self._project_known_user_member(str(member.get("user_id") or ""), users_by_id) for member in members]
 
-    def _chat_title_and_avatar(self, title: str | None, members: list[dict[str, Any]], viewer_id: str) -> tuple[str, str | None]:
+    def _chat_title_and_avatar(
+        self, chat_id: str, title: str | None, members: list[dict[str, Any]], viewer_id: str
+    ) -> tuple[str, str | None]:
         other_members = [member for member in members if member["id"] != viewer_id]
+        if title:
+            return title, other_members[0]["avatar_url"] if other_members else None
         other_names = [member["name"] for member in other_members if member.get("name")]
-        return title or ", ".join(other_names) or "Chat", other_members[0]["avatar_url"] if other_members else None
+        projected_title = ", ".join(other_names)
+        if not projected_title:
+            raise RuntimeError(f"Chat {chat_id} has no projectable title")
+        return projected_title, other_members[0]["avatar_url"] if other_members else None
 
     def _project_latest_message(self, row: dict[str, Any] | None, users_by_id: dict[str, Any]) -> dict[str, Any] | None:
         if row is None:
