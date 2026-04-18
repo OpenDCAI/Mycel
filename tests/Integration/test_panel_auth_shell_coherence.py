@@ -946,7 +946,7 @@ def test_delete_agent_user_clears_dependent_edges_before_agent_config():
     assert calls == ["contacts:agent-1", "config:cfg-1", "user:agent-1"]
 
 
-def test_delete_agent_user_uses_current_delete_dependency_order_without_legacy_cleanup():
+def test_delete_agent_user_uses_current_delete_dependency_order_without_stale_cleanup_shell():
     agent = _agent_user(user_id="agent-1")
     calls: list[str] = []
 
