@@ -339,6 +339,31 @@ def test_chat_tool_list_chats_requires_members_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_member_ids_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": [{"name": "Human"}],
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError, match="Chat summary chat-1 member row is missing id"):
+        list_chats.handler()
+
+
 def test_chat_tool_service_rejects_removed_constructor_user_id() -> None:
     registry = ToolRegistry()
 
