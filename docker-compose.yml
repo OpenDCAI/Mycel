@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    networks:
+      - default
+      - supabase
     volumes:
       # @@@staging-leon-home-volume - staging runtime state (models/members/sandboxes)
       # must survive container replacement, otherwise each deploy boots with an empty ~/.leon.
@@ -21,3 +24,8 @@ services:
 
 volumes:
   leon-home:
+
+networks:
+  supabase:
+    external: true
+    name: supabase_default
