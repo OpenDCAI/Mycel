@@ -6,14 +6,14 @@ from typing import Any, cast
 
 import pytest
 
-from backend.web.services.agent_runtime_gateway import (
+from backend.protocols.agent_runtime import (
     AgentChatActor,
     AgentChatContext,
     AgentChatDeliveryEnvelope,
     AgentChatMessage,
     AgentChatRecipient,
-    NativeAgentRuntimeGateway,
 )
+from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry

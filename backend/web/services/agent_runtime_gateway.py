@@ -4,81 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
+from backend.protocols import agent_runtime as agent_runtime_protocol
 from core.runtime.middleware.monitor import AgentState
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class AgentChatContext:
-    chat_id: str
-    title: str | None = None
-
-
-@dataclass(frozen=True)
-class AgentChatActor:
-    user_id: str
-    user_type: str
-    display_name: str
-    avatar_url: str | None = None
-
-
-@dataclass(frozen=True)
-class AgentChatRecipient:
-    agent_user_id: str
-    runtime_source: str
-
-
-@dataclass(frozen=True)
-class AgentChatMessage:
-    content: str
-    content_type: str = "text"
-    message_id: str | None = None
-    signal: str | None = None
-    created_at: str | None = None
-
-
-@dataclass(frozen=True)
-class AgentChatTransport:
-    delivery_id: str | None = None
-    correlation_id: str | None = None
-    idempotency_key: str | None = None
-
-
-@dataclass(frozen=True)
-class AgentChatDeliveryEnvelope:
-    chat: AgentChatContext
-    sender: AgentChatActor
-    recipient: AgentChatRecipient
-    message: AgentChatMessage
-    transport: AgentChatTransport = AgentChatTransport()
-    protocol_version: Literal["agent.chat.delivery.v1"] = "agent.chat.delivery.v1"
-    event_type: Literal["chat.message"] = "chat.message"
-    extensions: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class AgentThreadInputEnvelope:
-    thread_id: str
-    content: str
-    source: str = "owner"
-    enable_trajectory: bool = False
-    sender_name: str | None = None
-    sender_avatar_url: str | None = None
-    attachments: list[str] | None = None
-    message_metadata: dict[str, Any] | None = None
-    protocol_version: Literal["agent.thread.input.v1"] = "agent.thread.input.v1"
-    event_type: Literal["thread.input"] = "thread.input"
-
-
-@dataclass(frozen=True)
-class AgentGatewayDeliveryResult:
-    status: Literal["accepted", "skipped"]
-    thread_id: str | None
-    reason: str | None = None
 
 
 class NativeAgentRuntimeGateway:
@@ -87,7 +18,9 @@ class NativeAgentRuntimeGateway:
     def __init__(self, app: Any) -> None:
         self._app = app
 
-    async def dispatch_chat(self, envelope: AgentChatDeliveryEnvelope) -> AgentGatewayDeliveryResult:
+    async def dispatch_chat(
+        self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope
+    ) -> agent_runtime_protocol.AgentGatewayDeliveryResult:
         from langchain_core.runnables.config import var_child_runnable_config
 
         var_child_runnable_config.set(None)
@@ -105,7 +38,7 @@ class NativeAgentRuntimeGateway:
 
         if not thread_id:
             logger.warning("Recipient %s has no thread, skipping delivery", envelope.recipient.agent_user_id)
-            return AgentGatewayDeliveryResult(status="skipped", thread_id=None, reason="missing_thread")
+            return agent_runtime_protocol.AgentGatewayDeliveryResult(status="skipped", thread_id=None, reason="missing_thread")
 
         from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
         from backend.web.services.streaming_service import _ensure_thread_handlers
@@ -136,9 +69,9 @@ class NativeAgentRuntimeGateway:
             sender_name=envelope.sender.display_name,
             sender_avatar_url=envelope.sender.avatar_url,
         )
-        return AgentGatewayDeliveryResult(status="accepted", thread_id=thread_id)
+        return agent_runtime_protocol.AgentGatewayDeliveryResult(status="accepted", thread_id=thread_id)
 
-    async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> dict[str, Any]:
+    async def dispatch_thread_input(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> dict[str, Any]:
         """Route direct thread input through the Agent-side gateway."""
         from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
         from backend.web.services.resource_cache import clear_resource_overview_cache
