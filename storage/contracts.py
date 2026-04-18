@@ -16,7 +16,7 @@ NotificationType = Literal["steer", "command", "agent", "chat"]
 
 
 class LeaseRepo(Protocol):
-    """Lower sandbox runtime bridge. Returns raw dicts — domain object construction is the consumer's job."""
+    """Lower sandbox runtime persistence. Returns raw dicts for domain object construction."""
 
     def close(self) -> None: ...
     def get(self, lease_id: str) -> dict[str, Any] | None: ...
@@ -83,8 +83,8 @@ class ProviderEventRepo(Protocol):
         instance_id: str,
         event_type: str,
         payload: dict[str, Any],
+        matched_runtime_handle: str | None,
         matched_sandbox_id: str | None,
-        lower_runtime_handle: str | None,
     ) -> None: ...
     def list_recent(self, limit: int = 100) -> list[dict[str, Any]]: ...
 

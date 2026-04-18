@@ -40,8 +40,8 @@ def _sandbox_row(
         "observed_at": "2026-04-07T00:00:05+00:00",
         "last_error": None,
         "config": {
-            "legacy_lease_id": lease_id,
-            "lease_compat": {
+            "runtime_handle": lease_id,
+            "runtime_state": {
                 "recipe_id": "local:default",
                 "recipe_json": '{"id":"local:default"}',
                 "workspace_key": None,
@@ -57,7 +57,7 @@ def _sandbox_row(
     }
 
 
-def test_supabase_lease_repo_get_reads_container_sandboxes_lease_bridge():
+def test_supabase_lease_repo_get_reads_container_sandbox_runtime_state():
     repo = SupabaseLeaseRepo(client=_client({"container.sandboxes": [_sandbox_row()]}))
 
     lease = repo.get("lease-1")
@@ -83,28 +83,28 @@ def test_supabase_lease_repo_create_requires_owner_user_id():
         repo.create("lease-1", "local")
 
 
-def test_supabase_lease_repo_get_fails_loudly_when_lease_compat_not_backfilled():
+def test_supabase_lease_repo_get_fails_loudly_when_runtime_state_is_missing():
     row = _sandbox_row()
-    row["config"].pop("lease_compat")
+    row["config"].pop("runtime_state")
     repo = SupabaseLeaseRepo(client=_client({"container.sandboxes": [row]}))
 
-    with pytest.raises(RuntimeError, match="missing config.lease_compat"):
+    with pytest.raises(RuntimeError, match="missing config.runtime_state"):
         repo.get("lease-1")
 
 
-def test_supabase_lease_repo_provider_list_ignores_stale_bridge_shells_without_lease_compat():
+def test_supabase_lease_repo_provider_list_ignores_stale_rows_without_runtime_state():
     stale = _sandbox_row(sandbox_id="sandbox-stale", lease_id="lease-stale")
-    stale["config"].pop("lease_compat")
+    stale["config"].pop("runtime_state")
     repo = SupabaseLeaseRepo(client=_client({"container.sandboxes": [_sandbox_row(), stale]}))
 
     leases = repo.list_by_provider("local")
 
     assert [lease["lease_id"] for lease in leases] == ["lease-1"]
-    with pytest.raises(RuntimeError, match="missing config.lease_compat"):
+    with pytest.raises(RuntimeError, match="missing config.runtime_state"):
         repo.get("lease-stale")
 
 
-def test_supabase_lease_repo_create_writes_container_sandbox_bridge():
+def test_supabase_lease_repo_create_writes_container_sandbox_runtime_state():
     tables: dict[str, list[dict]] = {}
     repo = SupabaseLeaseRepo(client=_client(tables))
 
@@ -127,13 +127,14 @@ def test_supabase_lease_repo_create_writes_container_sandbox_bridge():
     assert row["status"] == "ready"
     assert created["current_instance_id"] is None
     assert created["_instance"] is None
-    assert row["config"]["legacy_lease_id"] == "lease-1"
-    assert row["config"]["lease_compat"]["recipe_json"] == '{"id":"local:default"}'
-    assert row["config"]["lease_compat"]["needs_refresh"] == 0
+    assert row["config"]["runtime_handle"] == "lease-1"
+    assert row["config"]["runtime_state"]["recipe_json"] == '{"id":"local:default"}'
+    assert row["config"]["runtime_state"]["needs_refresh"] == 0
+    assert set(row["config"]) == {"runtime_handle", "runtime_state"}
     assert "volume_id" not in row
 
 
-def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and_bridge_state():
+def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and_state():
     tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
     repo = SupabaseLeaseRepo(client=_client(tables))
 
@@ -147,12 +148,12 @@ def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and
     row = tables["container.sandboxes"][0]
     assert row["provider_env_id"] == "inst-1"
     assert row["observed_state"] == "running"
-    assert row["config"]["lease_compat"]["version"] == 1
-    assert row["config"]["lease_compat"]["needs_refresh"] == 1
+    assert row["config"]["runtime_state"]["version"] == 1
+    assert row["config"]["runtime_state"]["needs_refresh"] == 1
     assert updated["_instance"]["instance_id"] == "inst-1"
 
 
-def test_supabase_lease_repo_persist_metadata_updates_container_and_bridge_state_fields():
+def test_supabase_lease_repo_persist_metadata_updates_container_runtime_state_fields():
     tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
     repo = SupabaseLeaseRepo(client=_client(tables))
 
@@ -171,16 +172,16 @@ def test_supabase_lease_repo_persist_metadata_updates_container_and_bridge_state
     )
 
     row = tables["container.sandboxes"][0]
-    bridge_state = row["config"]["lease_compat"]
+    runtime_state = row["config"]["runtime_state"]
     assert updated["lease_id"] == "lease-1"
     assert row["sandbox_template_id"] == "local:python"
     assert row["observed_state"] == "unknown"
     assert row["last_error"] == "provider boom"
-    assert bridge_state["recipe_json"] == '{"id":"local:python"}'
-    assert bridge_state["version"] == 3
-    assert bridge_state["needs_refresh"] == 1
-    assert bridge_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
-    assert bridge_state["status"] == "recovering"
+    assert runtime_state["recipe_json"] == '{"id":"local:python"}'
+    assert runtime_state["version"] == 3
+    assert runtime_state["needs_refresh"] == 1
+    assert runtime_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+    assert runtime_state["status"] == "recovering"
 
 
 def test_supabase_lease_repo_observe_status_detaches_instance_from_container_sandbox():
@@ -194,29 +195,29 @@ def test_supabase_lease_repo_observe_status_detaches_instance_from_container_san
     )
 
     row = tables["container.sandboxes"][0]
-    bridge_state = row["config"]["lease_compat"]
+    runtime_state = row["config"]["runtime_state"]
     assert updated["lease_id"] == "lease-1"
     assert row["provider_env_id"] is None
     assert row["observed_state"] == "detached"
-    assert bridge_state["status"] == "expired"
-    assert bridge_state["needs_refresh"] == 0
-    assert bridge_state["refresh_hint_at"] is None
-    assert bridge_state["instance_created_at"] is None
+    assert runtime_state["status"] == "expired"
+    assert runtime_state["needs_refresh"] == 0
+    assert runtime_state["refresh_hint_at"] is None
+    assert runtime_state["instance_created_at"] is None
     assert updated["_instance"] is None
 
 
-def test_supabase_lease_repo_mark_needs_refresh_updates_bridge_state_only():
+def test_supabase_lease_repo_mark_needs_refresh_updates_runtime_state_only():
     tables = {"container.sandboxes": [_sandbox_row(needs_refresh=0, refresh_hint_at=None)]}
     repo = SupabaseLeaseRepo(client=_client(tables))
 
     assert repo.mark_needs_refresh("lease-1", hint_at="2026-04-07T00:00:06+00:00") is True
 
-    bridge_state = tables["container.sandboxes"][0]["config"]["lease_compat"]
-    assert bridge_state["needs_refresh"] == 1
-    assert bridge_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+    runtime_state = tables["container.sandboxes"][0]["config"]["runtime_state"]
+    assert runtime_state["needs_refresh"] == 1
+    assert runtime_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
 
 
-def test_supabase_lease_repo_delete_removes_container_sandbox_bridge():
+def test_supabase_lease_repo_delete_removes_container_sandbox_runtime_row():
     tables = {"container.sandboxes": [_sandbox_row()]}
     repo = SupabaseLeaseRepo(client=_client(tables))
 

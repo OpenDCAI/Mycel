@@ -240,7 +240,7 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
         {
             "provider_name": "local",
             "provider_env_id": "env-1",
-            "config": {"legacy_lease_id": "stored-lease"},
+            "config": {"runtime_handle": "stored-runtime"},
         },
         db_path=Path("/tmp/fake-sandbox.db"),
         terminal_repo=terminal_repo,
@@ -1079,7 +1079,7 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
         {
             "provider_name": "daytona",
             "provider_env_id": "sandbox-env-1",
-            "config": {"legacy_lease_id": "stored-lease"},
+            "config": {"runtime_handle": "stored-runtime"},
         },
         lease_repo=lease_repo,
     )
@@ -1102,7 +1102,7 @@ def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> N
             {
                 "provider_name": "daytona",
                 "provider_env_id": "sandbox-env-1",
-                "config": {"legacy_lease_id": "stored-lease"},
+                "config": {"runtime_handle": "stored-runtime"},
             },
             lease_repo=lease_repo,
         )

@@ -175,14 +175,14 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
 
     assert fake_sandbox_repo.binding_updates == [
         {
-            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
+            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:lease-1').hex}",
             "provider_env_id": None,
             "updated_at": "2026-04-17T00:00:05+00:00",
         }
     ]
     assert fake_sandbox_repo.observed_state_updates == [
         {
-            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
+            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:lease-1').hex}",
             "observed_state": "detached",
             "updated_at": "2026-04-17T00:00:05+00:00",
         }
@@ -241,7 +241,7 @@ def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(
     assert instance.instance_id == "inst-created"
     assert fake_sandbox_repo.binding_updates == [
         {
-            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-lease-bridge:lease-1').hex}",
+            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:lease-1').hex}",
             "provider_env_id": "inst-created",
             "updated_at": "2026-04-17T00:00:05+00:00",
         }

@@ -150,10 +150,7 @@ def _sandbox_destroy_result(result: Any) -> Any:
 def _provider_runtime_destroy_result(result: Any) -> Any:
     if not isinstance(result, dict):
         return result
-    payload = {key: value for key, value in result.items() if key not in {"lease_id", "lower_runtime_handle"}}
-    if payload.get("mode") == "manager_lease":
-        payload["mode"] = "manager_runtime"
-    return payload
+    return {key: value for key, value in result.items() if key not in {"lease_id", "lower_runtime_handle"}}
 
 
 def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:

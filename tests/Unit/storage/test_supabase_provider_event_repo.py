@@ -11,12 +11,12 @@ def test_supabase_provider_event_repo_uses_observability_schema_table() -> None:
         instance_id="instance-1",
         event_type="started",
         payload={"ok": True},
+        matched_runtime_handle="lease-1",
         matched_sandbox_id="sandbox-1",
-        lower_runtime_handle="lease-1",
     )
 
     row = tables["observability.provider_events"][0]
     assert row["provider_name"] == "daytona"
-    assert row["matched_lease_id"] == "lease-1"
+    assert row["matched_runtime_handle"] == "lease-1"
     assert row["matched_sandbox_id"] == "sandbox-1"
     assert "provider_events" not in tables

@@ -57,8 +57,8 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
             "instance_id": "inst-1",
             "event_type": "provider.updated",
             "payload": {"instance_id": "inst-1", "event": "provider.updated"},
+            "matched_runtime_handle": None,
             "matched_sandbox_id": None,
-            "lower_runtime_handle": None,
         }
     ]
 
@@ -140,8 +140,8 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
             "instance_id": "inst-2",
             "event_type": "provider.running",
             "payload": {"instance_id": "inst-2", "event": "provider.running"},
+            "matched_runtime_handle": "lease-1",
             "matched_sandbox_id": "sandbox-1",
-            "lower_runtime_handle": "lease-1",
         }
     ]
     assert lease.applied == [
@@ -155,7 +155,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
 
 
 @pytest.mark.asyncio
-async def test_list_provider_events_strips_lower_lease_match_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_provider_events_strips_lower_runtime_match_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     class _EventRepo:
         def list_recent(self, limit: int):
             assert limit == 25
@@ -165,7 +165,7 @@ async def test_list_provider_events_strips_lower_lease_match_identity(monkeypatc
                     "provider_name": "daytona",
                     "instance_id": "instance-1",
                     "event_type": "started",
-                    "matched_lease_id": "lease-1",
+                    "matched_runtime_handle": "lease-1",
                     "matched_sandbox_id": "sandbox-1",
                     "payload": {"ok": True},
                 }

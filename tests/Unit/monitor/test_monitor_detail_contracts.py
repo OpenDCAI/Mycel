@@ -653,7 +653,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
             "session_id": session_id,
             "provider": provider_hint,
             "lease_id": "lease-adopt-1",
-            "mode": "manager_lease",
+            "mode": "manager_runtime",
         }
 
     monkeypatch.setattr(

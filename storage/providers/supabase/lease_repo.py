@@ -15,8 +15,8 @@ _SANDBOX_COLS = (
     "id,owner_user_id,provider_name,provider_env_id,sandbox_template_id,"
     "desired_state,observed_state,status,observed_at,last_error,config,created_at,updated_at"
 )
-_LEGACY_LEASE_ID = "legacy_lease_id"
-_LEASE_COMPAT = "lease_compat"
+_RUNTIME_HANDLE = "runtime_handle"
+_RUNTIME_STATE = "runtime_state"
 
 
 def _utc_now_iso() -> str:
@@ -27,7 +27,7 @@ def _sandbox_id_for_lease(lease_id: str) -> str:
     normalized = str(lease_id or "").strip()
     if not normalized:
         raise RuntimeError("lease_id is required")
-    return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-lease-bridge:{normalized}').hex}"
+    return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-runtime:{normalized}').hex}"
 
 
 def _config(row: dict[str, Any]) -> dict[str, Any]:
@@ -39,26 +39,26 @@ def _config(row: dict[str, Any]) -> dict[str, Any]:
     return dict(value)
 
 
-def _bridge_state(row: dict[str, Any]) -> dict[str, Any]:
-    value = _config(row).get(_LEASE_COMPAT)
+def _runtime_state(row: dict[str, Any]) -> dict[str, Any]:
+    value = _config(row).get(_RUNTIME_STATE)
     if value is None:
-        raise RuntimeError(f"container sandbox missing config.{_LEASE_COMPAT}: {row.get('id')}")
+        raise RuntimeError(f"container sandbox missing config.{_RUNTIME_STATE}: {row.get('id')}")
     if not isinstance(value, dict):
-        raise RuntimeError(f"container sandbox lease_compat must be an object: {row.get('id')}")
+        raise RuntimeError(f"container sandbox runtime_state must be an object: {row.get('id')}")
     return dict(value)
 
 
 def _lease_id(row: dict[str, Any]) -> str:
-    value = _config(row).get(_LEGACY_LEASE_ID)
+    value = _config(row).get(_RUNTIME_HANDLE)
     if isinstance(value, str):
         value = value.strip()
     if not value:
-        raise RuntimeError(f"container sandbox missing config.{_LEGACY_LEASE_ID}: {row.get('id')}")
+        raise RuntimeError(f"container sandbox missing config.{_RUNTIME_HANDLE}: {row.get('id')}")
     return str(value)
 
 
-def _has_lease_bridge_state(row: dict[str, Any]) -> bool:
-    return _config(row).get(_LEASE_COMPAT) is not None
+def _has_runtime_state(row: dict[str, Any]) -> bool:
+    return _config(row).get(_RUNTIME_STATE) is not None
 
 
 def _int_flag(value: Any) -> int:
@@ -82,25 +82,25 @@ def _instance_from_lease(row: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _lease_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
-    bridge_state = _bridge_state(row)
+    runtime_state = _runtime_state(row)
     result = {
         "sandbox_id": row.get("id"),
         "lease_id": _lease_id(row),
         "provider_name": row.get("provider_name"),
-        "recipe_id": bridge_state.get("recipe_id") or row.get("sandbox_template_id"),
-        "workspace_key": bridge_state.get("workspace_key"),
-        "recipe_json": bridge_state.get("recipe_json"),
+        "recipe_id": runtime_state.get("recipe_id") or row.get("sandbox_template_id"),
+        "workspace_key": runtime_state.get("workspace_key"),
+        "recipe_json": runtime_state.get("recipe_json"),
         "current_instance_id": row.get("provider_env_id"),
-        "instance_created_at": bridge_state.get("instance_created_at"),
+        "instance_created_at": runtime_state.get("instance_created_at"),
         "desired_state": row.get("desired_state"),
         "observed_state": row.get("observed_state"),
         "instance_status": row.get("observed_state"),
-        "version": int(bridge_state.get("version") or 0),
+        "version": int(runtime_state.get("version") or 0),
         "observed_at": row.get("observed_at"),
         "last_error": row.get("last_error"),
-        "needs_refresh": _int_flag(bridge_state.get("needs_refresh")),
-        "refresh_hint_at": bridge_state.get("refresh_hint_at"),
-        "status": bridge_state.get("status") or "active",
+        "needs_refresh": _int_flag(runtime_state.get("needs_refresh")),
+        "refresh_hint_at": runtime_state.get("refresh_hint_at"),
+        "status": runtime_state.get("status") or "active",
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
@@ -110,14 +110,14 @@ def _lease_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
 
 def _patched_config(row: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
     config = _config(row)
-    bridge_state = _bridge_state(row)
-    bridge_state.update(updates)
-    config[_LEASE_COMPAT] = bridge_state
+    runtime_state = _runtime_state(row)
+    runtime_state.update(updates)
+    config[_RUNTIME_STATE] = runtime_state
     return config
 
 
 class SupabaseLeaseRepo:
-    """Container-backed LeaseRepo bridge for lower sandbox runtime contracts."""
+    """Container-backed LeaseRepo for lower sandbox runtime contracts."""
 
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
@@ -135,7 +135,7 @@ class SupabaseLeaseRepo:
 
     def _sandbox_rows(self) -> list[dict[str, Any]]:
         rows = q.rows(self._sandboxes().select(_SANDBOX_COLS).execute(), _REPO, "list sandboxes")
-        return [dict(row) for row in rows if _config(dict(row)).get(_LEGACY_LEASE_ID)]
+        return [dict(row) for row in rows if _config(dict(row)).get(_RUNTIME_HANDLE)]
 
     def _sandbox_by_lease_id(self, lease_id: str) -> dict[str, Any] | None:
         for row in self._sandbox_rows():
@@ -174,8 +174,8 @@ class SupabaseLeaseRepo:
                 "observed_at": now,
                 "last_error": None,
                 "config": {
-                    _LEGACY_LEASE_ID: lease_id,
-                    _LEASE_COMPAT: {
+                    _RUNTIME_HANDLE: lease_id,
+                    _RUNTIME_STATE: {
                         "recipe_id": recipe_id,
                         "recipe_json": recipe_json,
                         "workspace_key": None,
@@ -352,7 +352,7 @@ class SupabaseLeaseRepo:
 
     def list_all(self) -> list[dict[str, Any]]:
         return sorted(
-            [_lease_from_sandbox(row) for row in self._sandbox_rows() if _has_lease_bridge_state(row)],
+            [_lease_from_sandbox(row) for row in self._sandbox_rows() if _has_runtime_state(row)],
             key=lambda row: row.get("created_at") or "",
             reverse=True,
         )

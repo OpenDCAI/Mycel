@@ -117,7 +117,7 @@ class SupabaseSandboxMonitorRepo:
                 "sandbox_id": sandbox_key,
                 "provider_name": str(sandbox.get("provider_name") or "").strip(),
                 "provider_env_id": str(sandbox.get("provider_env_id") or "").strip() or None,
-                "lower_runtime_handle": str(config.get("legacy_lease_id") or "").strip() or None,
+                "lower_runtime_handle": str(config.get("runtime_handle") or "").strip() or None,
             }
         return None
 

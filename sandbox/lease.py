@@ -312,8 +312,8 @@ class SQLiteLease(SandboxLease):
             },
         }
 
-    def _sandbox_bridge_id(self) -> str:
-        return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-lease-bridge:{self.lease_id}').hex}"
+    def _sandbox_runtime_id(self) -> str:
+        return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-runtime:{self.lease_id}').hex}"
 
     def _sync_sandbox_runtime_binding(self, provider_env_id: str | None, *, updated_at: Any) -> None:
         if not _use_supabase_storage(self.db_path):
@@ -321,7 +321,7 @@ class SQLiteLease(SandboxLease):
         repo = _make_sandbox_repo()
         try:
             repo.update_runtime_binding(
-                sandbox_id=self._sandbox_bridge_id(),
+                sandbox_id=self._sandbox_runtime_id(),
                 provider_env_id=provider_env_id,
                 updated_at=updated_at,
             )
@@ -334,7 +334,7 @@ class SQLiteLease(SandboxLease):
         repo = _make_sandbox_repo()
         try:
             repo.update_observed_state(
-                sandbox_id=self._sandbox_bridge_id(),
+                sandbox_id=self._sandbox_runtime_id(),
                 observed_state=observed_state,
                 updated_at=updated_at,
             )
@@ -532,8 +532,8 @@ class SQLiteLease(SandboxLease):
                         instance_id=self._current_instance.instance_id,
                         event_type="provider.error",
                         payload={"error": self.last_error, "source": source},
-                        matched_lease_id=self.lease_id,
-                        matched_sandbox_id=self._sandbox_bridge_id(),
+                        matched_runtime_handle=self.lease_id,
+                        matched_sandbox_id=self._sandbox_runtime_id(),
                     )
             finally:
                 event_repo.close()
@@ -559,8 +559,8 @@ class SQLiteLease(SandboxLease):
                     instance_id=instance_id,
                     event_type="observe.status",
                     payload={"status": observed, "instance_id": instance_id},
-                    matched_lease_id=self.lease_id,
-                    matched_sandbox_id=self._sandbox_bridge_id(),
+                    matched_runtime_handle=self.lease_id,
+                    matched_sandbox_id=self._sandbox_runtime_id(),
                 )
         finally:
             event_repo.close()
@@ -619,8 +619,8 @@ class SQLiteLease(SandboxLease):
                     instance_id=instance_id,
                     event_type="intent.destroy",
                     payload={"instance_id": instance_id, "source": source},
-                    matched_lease_id=self.lease_id,
-                    matched_sandbox_id=self._sandbox_bridge_id(),
+                    matched_runtime_handle=self.lease_id,
+                    matched_sandbox_id=self._sandbox_runtime_id(),
                 )
         finally:
             event_repo.close()
@@ -688,8 +688,8 @@ class SQLiteLease(SandboxLease):
                 instance_id=instance_id,
                 event_type=event_type,
                 payload={"instance_id": instance_id, "source": source},
-                matched_lease_id=self.lease_id,
-                matched_sandbox_id=self._sandbox_bridge_id(),
+                matched_runtime_handle=self.lease_id,
+                matched_sandbox_id=self._sandbox_runtime_id(),
             )
         finally:
             event_repo.close()

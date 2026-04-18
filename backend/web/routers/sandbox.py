@@ -31,10 +31,7 @@ async def _mutate_session_action(session_id: str, action: str, provider: str | N
 
 
 def _public_session_payload(row: dict[str, Any]) -> dict[str, Any]:
-    payload = {key: value for key, value in row.items() if key != "lease_id"}
-    if payload.get("mode") == "manager_lease":
-        payload["mode"] = "manager_runtime"
-    return payload
+    return {key: value for key, value in row.items() if key != "lease_id"}
 
 
 @router.get("/types")
