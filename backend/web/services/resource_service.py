@@ -42,9 +42,9 @@ def build_provider_availability_payload(*, available: bool, running_count: int, 
     }
 
 
-def build_resource_session_payload(
+def build_resource_row_payload(
     *,
-    session_identity: str,
+    resource_identity: str,
     sandbox_id: str | None = None,
     thread_id: str,
     runtime_session_id: str | None,
@@ -54,7 +54,7 @@ def build_resource_session_payload(
     metrics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     payload = {
-        "id": session_identity,
+        "id": resource_identity,
         "threadId": thread_id,
         "agentUserId": owner.get("agent_user_id"),
         "agentName": str(owner.get("agent_name") or "未绑定Agent"),

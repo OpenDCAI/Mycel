@@ -45,7 +45,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
     capabilities, capability_error = resource_service.get_provider_capability_contract(config_name)
     provider_type = str(display["type"])
 
-    sessions: list[dict[str, Any]] = []
+    resource_rows: list[dict[str, Any]] = []
     running_count = 0
     for sandbox in sandboxes:
         thread_id = str((sandbox.get("thread_ids") or [None])[0] or "")
@@ -55,10 +55,10 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
             running_count += 1
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip() or None
         secondary_identity = str(sandbox.get("runtime_session_id") or "sandbox").strip()
-        session_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{secondary_identity}:{thread_id}"
-        sessions.append(
-            resource_service.build_resource_session_payload(
-                session_identity=session_identity,
+        resource_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{secondary_identity}:{thread_id}"
+        resource_rows.append(
+            resource_service.build_resource_row_payload(
+                resource_identity=resource_identity,
                 sandbox_id=sandbox_id,
                 thread_id=thread_id,
                 runtime_session_id=sandbox.get("runtime_session_id"),
@@ -98,7 +98,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         "telemetry": telemetry,
         "cardCpu": dict(telemetry["cpu"]),
         "consoleUrl": display["console_url"],
-        "sessions": sessions,
+        "sessions": resource_rows,
     }
 
 
@@ -195,17 +195,17 @@ def _is_resource_visible_thread(thread_id: str | None) -> bool:
     return not raw.startswith("subagent-")
 
 
-def _resource_session_identity(session: dict[str, Any]) -> str:
-    sandbox_id = str(session.get("sandbox_id") or "")
-    thread_id = str(session.get("thread_id") or "")
-    # @@@resource-session-shell - resource session shell is now sandbox-first.
-    # Provider session ids are only an unbound-runtime secondary identity; bound rows use
+def _resource_row_identity(resource_row: dict[str, Any]) -> str:
+    sandbox_id = str(resource_row.get("sandbox_id") or "")
+    thread_id = str(resource_row.get("thread_id") or "")
+    # @@@resource-row-identity - resource rows are sandbox-first on the user-visible surface.
+    # Provider-native session ids are only an unbound-runtime secondary identity; bound rows use
     # sandbox/thread identity on the user-visible Resources surface.
     if sandbox_id and thread_id:
         return f"{sandbox_id}:{thread_id}"
-    session_id = str(session.get("session_id") or "")
-    if session_id:
-        return session_id
+    provider_runtime_id = str(resource_row.get("session_id") or "")
+    if provider_runtime_id:
+        return provider_runtime_id
     return thread_id or "unbound"
 
 
@@ -294,8 +294,8 @@ def list_resource_providers() -> dict[str, Any]:
             unavailable_reason = str(item.get("reason") or capability_error or "provider unavailable")
 
         provider_orphan_runtimes = grouped.get(config_name, [])
-        normalized_sessions: list[dict[str, Any]] = []
-        seen_session_ids: set[str] = set()
+        normalized_resource_rows: list[dict[str, Any]] = []
+        seen_resource_ids: set[str] = set()
         running_count = 0
         seen_running_sandboxes: set[str] = set()
         for session in provider_orphan_runtimes:
@@ -316,13 +316,13 @@ def list_resource_providers() -> dict[str, Any]:
                 running_count += 1
                 seen_running_sandboxes.add(running_identity)
             owner = owners.get(thread_id, {"agent_name": "未绑定Agent", "avatar_url": None})
-            session_identity = _resource_session_identity(session)
-            if session_identity in seen_session_ids:
+            resource_identity = _resource_row_identity(session)
+            if resource_identity in seen_resource_ids:
                 continue
-            seen_session_ids.add(session_identity)
-            normalized_sessions.append(
-                resource_service.build_resource_session_payload(
-                    session_identity=session_identity,
+            seen_resource_ids.add(resource_identity)
+            normalized_resource_rows.append(
+                resource_service.build_resource_row_payload(
+                    resource_identity=resource_identity,
                     sandbox_id=str(session.get("sandbox_id") or "").strip() or None,
                     thread_id=thread_id,
                     runtime_session_id=runtime_session_id,
@@ -372,7 +372,7 @@ def list_resource_providers() -> dict[str, Any]:
                 "telemetry": telemetry,
                 "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),
                 "consoleUrl": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
-                "sessions": normalized_sessions,
+                "sessions": normalized_resource_rows,
             }
         )
 
@@ -389,14 +389,14 @@ def list_resource_providers() -> dict[str, Any]:
 def visible_resource_session_stats() -> dict[str, dict[str, int]]:
     sessions, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
-    seen_session_ids: set[str] = set()
+    seen_resource_ids: set[str] = set()
     seen_running_sandboxes: set[tuple[str, str]] = set()
     for session in sessions:
         provider_instance = str(session.get("provider") or "local")
         provider_stats = stats.setdefault(provider_instance, {"sessions": 0, "running": 0})
-        session_identity = _resource_session_identity(session)
-        if session_identity not in seen_session_ids:
-            seen_session_ids.add(session_identity)
+        resource_identity = _resource_row_identity(session)
+        if resource_identity not in seen_resource_ids:
+            seen_resource_ids.add(resource_identity)
             provider_stats["sessions"] += 1
 
         sandbox_id = str(session.get("sandbox_id") or "").strip()

@@ -72,7 +72,7 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
 
-def test_resource_projection_identity_prefers_provider_session_id() -> None:
+def test_resource_projection_row_identity_prefers_unbound_provider_runtime_id() -> None:
     session = {
         "session_id": "provider-session-1",
         "thread_id": "thread-1",
@@ -80,7 +80,7 @@ def test_resource_projection_identity_prefers_provider_session_id() -> None:
         "lease_id": "lease-1",
     }
 
-    assert resource_projection_service._resource_session_identity(session) == "provider-session-1"
+    assert resource_projection_service._resource_row_identity(session) == "provider-session-1"
     assert resource_projection_service._resource_running_identity(session) == ""
 
 

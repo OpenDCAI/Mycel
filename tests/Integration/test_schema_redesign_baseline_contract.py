@@ -138,12 +138,12 @@ def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> Non
     assert "memberId" not in session
 
 
-def test_build_resource_session_payload_has_no_member_or_lease_id_field() -> None:
-    signature = inspect.signature(resource_service.build_resource_session_payload)
+def test_build_resource_row_payload_has_no_member_or_lease_id_field() -> None:
+    signature = inspect.signature(resource_service.build_resource_row_payload)
     assert "lease_id" not in signature.parameters
 
-    payload = resource_service.build_resource_session_payload(
-        session_identity="sandbox-1:thread-1",
+    payload = resource_service.build_resource_row_payload(
+        resource_identity="sandbox-1:thread-1",
         sandbox_id="sandbox-1",
         thread_id="thread-1",
         runtime_session_id="provider-session-1",
