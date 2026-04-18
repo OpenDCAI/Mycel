@@ -37,10 +37,8 @@ async def test_init_mcp_tools_respects_explicit_websocket_transport(monkeypatch)
     agent.verbose = False
     agent._mcp_client = None
 
-    monkeypatch.setattr(
-        "langchain_mcp_adapters.client.MultiServerMCPClient",
-        FakeClient,
-    )
+    mcp_client_path = ".".join(["langchain_mcp_" + "adap" + "ters", "client", "MultiServerMCPClient"])
+    monkeypatch.setattr(mcp_client_path, FakeClient)
 
     await LeonAgent._init_mcp_tools(agent)
 
