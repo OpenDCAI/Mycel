@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
+import tomllib
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "check-dev-validity.sh"
+DOCKERFILE = ROOT / "Dockerfile"
+PYPROJECT = ROOT / "pyproject.toml"
 
 
 REQUIRED_ENV = {
@@ -168,6 +172,14 @@ class CheckDevValidityScriptTests(unittest.TestCase):
         self.assertIn("dev validity smoke passed", result.stdout)
         self.assertIn("login ok", result.stdout)
         self.assertIn("default-config ok", result.stdout)
+
+    def test_dockerfile_sync_extras_exist_in_pyproject(self) -> None:
+        optional_dependencies = tomllib.loads(PYPROJECT.read_text())["project"].get("optional-dependencies", {})
+        dockerfile = DOCKERFILE.read_text()
+
+        requested_extras = set(re.findall(r"--extra\s+([A-Za-z0-9_-]+)", dockerfile))
+
+        self.assertLessEqual(requested_extras, set(optional_dependencies))
 
 
 if __name__ == "__main__":

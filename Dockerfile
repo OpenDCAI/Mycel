@@ -9,11 +9,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 # @@@sandbox-sdk-image-parity - shared staging/provider inventory should reflect runtime truth,
 # not "SDK missing from image" accidents while config files are present.
-RUN uv sync --frozen --no-dev --extra sandbox --extra e2b --extra daytona --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy source and install project
 COPY . .
-RUN uv sync --frozen --no-dev --extra sandbox --extra e2b --extra daytona
+RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 
