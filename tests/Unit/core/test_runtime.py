@@ -41,12 +41,12 @@ class _DomainLeaseStore:
     def __init__(self, repo: SQLiteLeaseRepo):
         self._repo = repo
 
-    def create(self, lease_id, provider_name, **kw):
-        row = self._repo.create(lease_id, provider_name, **kw)
+    def create(self, lower_runtime_id, provider_name, **kw):
+        row = self._repo.create(lower_runtime_id, provider_name, **kw)
         return lease_from_row(row, self._repo.db_path)
 
-    def get(self, lease_id):
-        row = self._repo.get(lease_id)
+    def get(self, lower_runtime_id):
+        row = self._repo.get(lower_runtime_id)
         return lease_from_row(row, self._repo.db_path) if row else None
 
     def __getattr__(self, name):
