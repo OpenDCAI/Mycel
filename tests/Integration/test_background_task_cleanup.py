@@ -109,7 +109,7 @@ def _agent_tool_json(result) -> dict:
 
 @pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None,
-    reason="bash background cleanup integration requires Unix-compatible bash",
+    reason="bash background cleanup integration requires a Unix shell",
 )
 def test_taskstop_terminates_real_background_bash_run(tmp_path):
     async def run():
@@ -153,7 +153,7 @@ def test_taskstop_terminates_real_background_bash_run(tmp_path):
 
 @pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None,
-    reason="bash background cleanup integration requires Unix-compatible bash",
+    reason="bash background cleanup integration requires a Unix shell",
 )
 def test_request_background_run_stop_kills_real_shell_command_tree(tmp_path):
     async def run():
@@ -177,7 +177,7 @@ def test_request_background_run_stop_kills_real_shell_command_tree(tmp_path):
 
 @pytest.mark.skipif(
     sys.platform == "win32",
-    reason="nested-shell cancel truth integration requires Unix-compatible shells",
+    reason="nested-shell cancel truth integration requires Unix shells",
 )
 @pytest.mark.parametrize("executor_cls", _available_posix_background_executors(), ids=lambda cls: cls.shell_name)
 def test_request_background_run_stop_prevents_nested_shell_late_write_side_effect(tmp_path, executor_cls):

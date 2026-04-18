@@ -208,14 +208,14 @@ function MonitorAvatar({
   }
 
   const sizeClass = size === "lg" ? "sandbox-avatar--lg" : "";
-  const fallbackStyle = avatarColor(name || "?");
+  const placeholderStyle = avatarColor(name || "?");
 
   return (
     <div
       className={cx("sandbox-avatar", sizeClass)}
       title={name || "未绑定"}
       aria-label={`${name || "未绑定"} avatar`}
-      style={!avatarUrl ? fallbackStyle : undefined}
+      style={!avatarUrl ? placeholderStyle : undefined}
     >
       {avatarUrl ? <img src={avatarUrl} alt="" /> : initials(name || "未绑定")}
     </div>
