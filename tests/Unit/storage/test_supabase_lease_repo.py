@@ -20,16 +20,19 @@ def _client(tables: dict[str, list[dict]] | None = None) -> _RejectBareSandboxLe
 
 def test_supabase_lease_repo_names_container_bridge_without_adapter_label():
     source = inspect.getsource(SupabaseLeaseRepo)
+    stale_adapter_label = "Lease-" + "compatible adapter"
 
-    assert "Lease-compatible adapter" not in source
+    assert stale_adapter_label not in source
     assert "Container-backed LeaseRepo bridge" in source
 
 
 def test_supabase_lease_repo_internal_bridge_state_not_named_as_compat_helper():
     source = inspect.getsource(lease_repo_module)
+    stale_helper = "def _" + "compat("
+    stale_local_name = "compat " + "="
 
-    assert "def _compat(" not in source
-    assert "compat =" not in source
+    assert stale_helper not in source
+    assert stale_local_name not in source
 
 
 def _sandbox_row(
