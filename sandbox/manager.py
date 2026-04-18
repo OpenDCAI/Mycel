@@ -155,7 +155,7 @@ def resolve_existing_sandbox_lease(
         raise RuntimeError("sandbox.provider_env_id is required")
 
     # @@@existing-sandbox-runtime-identity - existing-sandbox reuse must bind
-    # through live runtime identity; legacy_lease_id is not a resolution fallback.
+    # through live runtime identity; the stored bridge lease id is not a resolution fallback.
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     _lease_repo = lease_repo
     own_lease_repo = _lease_repo is None

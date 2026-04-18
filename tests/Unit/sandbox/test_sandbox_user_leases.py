@@ -313,7 +313,7 @@ def test_user_runtime_rows_no_longer_roundtrips_through_lease_summary_shell(monk
     assert [lease["lease_id"] for lease in leases] == ["lease-1"]
 
 
-def test_list_user_sandboxes_no_longer_calls_public_lease_compat_reader(monkeypatch):
+def test_list_user_sandboxes_no_longer_calls_public_lease_bridge_reader(monkeypatch):
     rows = [_lease_row("lease-1", "thread-a", sandbox_id="sandbox-1")]
     thread_repo, user_repo = _single_agent_repos("thread-a")
     monitor_repo = _FakeMonitorRepo(rows)

@@ -10,7 +10,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-# CC L4b Legacy Compact: system prompt is simple (~200 tokens) — NOT inherited from parent.
+# CC L4b compact: system prompt is simple (~200 tokens) — NOT inherited from parent.
 # Using a distinct simple system prompt prevents reusing the parent conversation's cache
 # (different system prompt → different prefix hash), and reduces input token cost.
 COMPACT_SYSTEM_PROMPT = "You are a helpful AI assistant tasked with summarizing conversations."
@@ -102,7 +102,7 @@ class ContextCompactor:
     ) -> str:
         """Generate a summary of the given messages using the LLM.
 
-        Aligned with CC L4b Legacy Compact:
+        Aligned with CC L4b compact:
         - Uses COMPACT_SYSTEM_PROMPT (simple, ~200 tokens — NOT parent system prompt)
         - No tools passed (extended thinking disabled, tools=[])
         - Slices from compact_boundary forward
