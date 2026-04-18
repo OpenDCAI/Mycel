@@ -302,6 +302,8 @@ class ChatToolService:
                     raise RuntimeError(f"Participant not found: {participant_id}")
                 target_name = target.display_name
                 chat = self._messaging.find_or_create_chat([eid, participant_id])
+                if "id" not in chat:
+                    raise RuntimeError("Created direct chat is missing id")
                 resolved_chat_id = chat["id"]
             else:
                 raise RuntimeError("Provide participant_id (for 1:1) or chat_id (for group)")
