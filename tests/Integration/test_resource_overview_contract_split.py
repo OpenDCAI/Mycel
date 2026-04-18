@@ -10,7 +10,7 @@ from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor as monitor_router
 from backend.web.routers import resources as resources_router
 from backend.web.services import (
-    monitor_resource_runtime_service,
+    monitor_resource_read_service,
     resource_common,
     resource_projection_service,
     resource_provider_boundary_service,
@@ -353,7 +353,7 @@ def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases,
     monkeypatch.setattr(
         resource_provider_boundary_service, "load_user_sandboxes", lambda _app, _owner_user_id: _fake_list_user_sandboxes(_owner_user_id)
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
     _patch_provider_contracts(
         monkeypatch,
         description="daytona",

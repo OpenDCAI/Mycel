@@ -4,7 +4,7 @@ import inspect
 from types import SimpleNamespace
 
 from backend.web.services import (
-    monitor_resource_runtime_service,
+    monitor_resource_read_service,
     resource_common,
     resource_projection_service,
     resource_provider_boundary_service,
@@ -129,7 +129,7 @@ def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
         raising=False,
     )
     monkeypatch.setattr(
-        monitor_resource_runtime_service,
+        monitor_resource_read_service,
         "make_sandbox_monitor_repo",
         lambda: SimpleNamespace(query_sandbox_instance_ids=lambda _sandbox_ids: {}, close=lambda: None),
     )

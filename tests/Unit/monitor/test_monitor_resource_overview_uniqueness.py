@@ -1,7 +1,7 @@
 import inspect
 
 from backend.web.services import (
-    monitor_resource_runtime_service,
+    monitor_resource_read_service,
     resource_common,
     resource_projection_service,
     resource_provider_boundary_service,
@@ -64,7 +64,7 @@ class _FakeUserRepo:
 
 
 def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: repo)
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: repo)
     monkeypatch.setattr(
         resource_provider_boundary_service,
         "available_sandbox_types",
@@ -78,7 +78,7 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
         lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(resource_projection_service, "_thread_owners", owners)
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
 
 def test_resource_projection_row_identity_prefers_unbound_provider_runtime_identity() -> None:
@@ -143,7 +143,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
         },
     ]
 
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
         resource_provider_boundary_service,
         "available_sandbox_types",
@@ -159,7 +159,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
     local = payload["providers"][0]
@@ -204,7 +204,7 @@ def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtim
         },
     ]
 
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
         resource_provider_boundary_service,
         "available_sandbox_types",
@@ -220,7 +220,7 @@ def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtim
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
     local = payload["providers"][0]
@@ -244,7 +244,7 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
         },
     ]
 
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
         resource_provider_boundary_service,
         "available_sandbox_types",
@@ -267,7 +267,7 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
         "build_user_repo",
         lambda **_kwargs: _FakeUserRepo([_FakeUser("agent-1", "Toad")]),
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
 
@@ -310,7 +310,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
         },
     ]
 
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
         resource_provider_boundary_service,
         "available_sandbox_types",
@@ -328,7 +328,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": tid, "agent_name": tid, "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
     resource_rows = payload["providers"][0]["resource_rows"]
@@ -352,7 +352,7 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
     ]
 
     monkeypatch.setattr(
-        monitor_resource_runtime_service,
+        monitor_resource_read_service,
         "make_sandbox_monitor_repo",
         lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
     )
@@ -373,7 +373,7 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
     resource_rows = payload["providers"][0]["resource_rows"]
@@ -453,7 +453,7 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
     ]
 
     monkeypatch.setattr(
-        monitor_resource_runtime_service,
+        monitor_resource_read_service,
         "make_sandbox_monitor_repo",
         lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
     )
@@ -474,7 +474,7 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
     resource_rows = payload["providers"][0]["resource_rows"]
@@ -509,7 +509,7 @@ def test_list_resource_providers_drops_subagent_rows_without_sandbox_id(monkeypa
     ]
 
     monkeypatch.setattr(
-        monitor_resource_runtime_service,
+        monitor_resource_read_service,
         "make_sandbox_monitor_repo",
         lambda: _FakeRepo(rows),
     )
@@ -526,7 +526,7 @@ def test_list_resource_providers_drops_subagent_rows_without_sandbox_id(monkeypa
         lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda _thread_ids: {})
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
 
@@ -713,11 +713,11 @@ def test_visible_resource_row_stats_uses_sandbox_keyed_runtime_lookup(monkeypatc
     ]
 
     monkeypatch.setattr(
-        monitor_resource_runtime_service,
+        monitor_resource_read_service,
         "make_sandbox_monitor_repo",
         lambda: _FakeRepo(rows, instance_ids={"sandbox-a": "runtime-a"}),
     )
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     stats = resource_projection_service.visible_resource_row_stats()
 
@@ -748,8 +748,8 @@ def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runti
         },
     ]
 
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
-    monkeypatch.setattr(monitor_resource_runtime_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     stats = resource_projection_service.visible_resource_row_stats()
 
@@ -798,7 +798,7 @@ def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_tele
         lambda thread_ids: {tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(
-        monitor_resource_runtime_service,
+        monitor_resource_read_service,
         "list_resource_snapshots_by_sandbox",
         lambda _resource_rows: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
@@ -838,9 +838,9 @@ def test_load_visible_resource_runtime_returns_only_sandbox_keyed_snapshots(monk
         },
     ]
 
-    monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
-        monitor_resource_runtime_service,
+        monitor_resource_read_service,
         "list_resource_snapshots_by_sandbox",
         lambda resource_rows: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
