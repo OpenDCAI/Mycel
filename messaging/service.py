@@ -367,7 +367,7 @@ class MessagingService:
         for member in self._chat_members_repo.list_members_for_chats(active_chat_ids):
             chat_id = str(member.get("chat_id") or "")
             if chat_id not in members_by_chat:
-                continue
+                raise RuntimeError(f"Chat member row references unrequested chat {chat_id or '<missing>'}")
             members_by_chat[chat_id].append(member)
             if member.get("user_id") == user_id:
                 last_read_by_chat[chat_id] = int(member.get("last_read_seq") or 0)

@@ -647,9 +647,13 @@ def test_messaging_service_conversation_summaries_use_bulk_projection_repos() ->
             list_members_for_chats=lambda chat_ids: (
                 calls.append(f"members:{','.join(chat_ids)}")
                 or [
-                    {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 4},
-                    {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
-                    {"chat_id": "chat-closed", "user_id": "human-user-1", "last_read_seq": 0},
+                    member
+                    for member in [
+                        {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 4},
+                        {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+                        {"chat_id": "chat-closed", "user_id": "human-user-1", "last_read_seq": 0},
+                    ]
+                    if member["chat_id"] in chat_ids
                 ]
             ),
             list_members=lambda _chat_id: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch members one by one")),
@@ -735,6 +739,28 @@ def test_messaging_service_conversation_summaries_fail_on_missing_member_user_id
     )
 
     with pytest.raises(RuntimeError, match="Chat member <missing> is not a resolvable user row"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
+def test_messaging_service_conversation_summaries_fail_on_unrequested_member_chat_id() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0},
+                {"chat_id": "chat-extra", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat member row references unrequested chat chat-extra"):
         service.list_conversation_summaries_for_user("human-user-1")
 
 
