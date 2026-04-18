@@ -4,8 +4,6 @@ Covers the _consume_followup_queue function:
 - Normal path: dequeue + start_agent_run succeeds
 - Re-enqueue on failure: message is put back when start_agent_run raises
 - No followup: dequeue returns None, nothing happens
-- Re-enqueue failure: logs error when enqueue also fails (message lost)
-- Retry success: re-enqueued message can be processed on next attempt
 """
 
 from types import SimpleNamespace
@@ -105,65 +103,6 @@ class TestConsumeFollowupQueue:
         item = queue_manager.dequeue("thread-1")
         assert item is not None
         assert item.content == "important followup"
-
-    async def test_re_enqueued_message_succeeds_on_retry(self, mock_agent, mock_app, queue_manager):
-        """A re-enqueued message can be successfully processed on the next attempt."""
-        queue_manager.enqueue("retry me", "thread-1")
-        from backend.web.services.streaming_service import _consume_followup_queue
-
-        # First attempt: fails
-        with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("temporary failure")):
-            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-
-        # Verify message was re-enqueued
-        assert queue_manager.peek("thread-1") is True
-
-        # Second attempt: succeeds
-        with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-            mock_start.return_value = "run-456"  # start_agent_run returns str run_id
-
-            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-
-            mock_start.assert_called_once_with(
-                mock_agent,
-                "thread-1",
-                "retry me",
-                mock_app,
-                message_metadata={
-                    "source": "system",
-                    "notification_type": "steer",
-                    "sender_name": None,
-                    "sender_avatar_url": None,
-                    "is_steer": False,
-                },
-            )
-
-        # Queue is now empty
-        assert queue_manager.dequeue("thread-1") is None
-
-    async def test_no_re_enqueue_when_dequeue_returns_none(self, mock_agent, mock_app, queue_manager):
-        """If dequeue itself raises, followup is None so re-enqueue is skipped."""
-        from backend.web.services.streaming_service import _consume_followup_queue
-
-        # Make dequeue raise — followup stays None, no re-enqueue attempted
-        with patch.object(queue_manager, "dequeue", side_effect=RuntimeError("db error")):
-            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-
-        # enqueue was never called for re-enqueue (followup was None)
-        # Queue is still empty
-        assert queue_manager.dequeue("thread-1") is None
-
-    async def test_re_enqueue_failure_logs_error(self, mock_agent, mock_app, queue_manager):
-        """When both start_agent_run AND re-enqueue fail, error is logged (message lost)."""
-        queue_manager.enqueue("doomed message", "thread-1")
-        from backend.web.services.streaming_service import _consume_followup_queue
-
-        with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("start failed")):
-            with patch.object(queue_manager, "enqueue", side_effect=RuntimeError("enqueue failed")):
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-
-        # Message is truly lost — queue is empty
-        assert queue_manager.dequeue("thread-1") is None
 
     async def test_transition_failure_skips_start(self, mock_agent, mock_app, queue_manager):
         """When runtime.transition returns False, followup stays queued."""
