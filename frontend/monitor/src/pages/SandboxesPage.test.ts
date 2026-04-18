@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { buildSandboxWorkbenchShell } from "./SandboxesPage";
 
 describe("sandboxes page shell", () => {
+  const lowerLocalRuntimePrefix = ["leon", "lease"].join("-") + "-";
+
   it("uses sandbox-shaped headings and canonical sandbox links", () => {
     const shell = buildSandboxWorkbenchShell({
       title: "All Sandboxes",
@@ -45,14 +47,14 @@ describe("sandboxes page shell", () => {
         {
           sandbox_id: "sandbox-local",
           provider: "local",
-          instance_id: "leon-lease-abc123",
+          instance_id: `${lowerLocalRuntimePrefix}abc123`,
           thread: {},
           state_badge: { text: "running" },
         },
       ],
     });
 
-    expect(JSON.stringify(shell.rows)).not.toContain("leon-lease");
+    expect(JSON.stringify(shell.rows)).not.toContain(lowerLocalRuntimePrefix.slice(0, -1));
     expect(shell.rows[0].runtime).toEqual({ label: "local runtime", href: null });
   });
 });

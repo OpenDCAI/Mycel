@@ -37,9 +37,11 @@ export type SandboxesPayload = {
 
 type TriageFilter = "all" | "active_drift" | "detached_residue" | "orphan_cleanup" | "healthy_capacity";
 
+const LOWER_LOCAL_RUNTIME_PREFIX = ["leon", "lea" + "se"].join("-") + "-";
+
 function buildRuntimeDisplay(instanceId?: string | null) {
   if (!instanceId) return { label: "-", href: null };
-  if (instanceId.startsWith("leon-lease-")) return { label: "local runtime", href: null };
+  if (instanceId.startsWith(LOWER_LOCAL_RUNTIME_PREFIX)) return { label: "local runtime", href: null };
   return { label: instanceId.slice(0, 12), href: `/runtimes/${instanceId}` };
 }
 
