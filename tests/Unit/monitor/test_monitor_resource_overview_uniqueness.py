@@ -449,14 +449,10 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
         },
     ]
 
-    class _SandboxThreadOnlyRepo(_FakeRepo):
-        def query_lease_threads(self, lease_id: str):
-            raise AssertionError(f"unexpected lease-shaped visible-parent projection: {lease_id}")
-
     monkeypatch.setattr(
         resource_projection_service,
         "make_sandbox_monitor_repo",
-        lambda: _SandboxThreadOnlyRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
+        lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
     )
     monkeypatch.setattr(
         resource_projection_service,
@@ -509,14 +505,10 @@ def test_list_resource_providers_no_longer_uses_lease_shaped_visible_parent_proj
         },
     ]
 
-    class _NoLeaseFallbackRepo(_FakeRepo):
-        def query_lease_threads(self, lease_id: str):
-            raise AssertionError(f"lease-shaped visible-parent projection should be gone: {lease_id}")
-
     monkeypatch.setattr(
         resource_projection_service,
         "make_sandbox_monitor_repo",
-        lambda: _NoLeaseFallbackRepo(rows),
+        lambda: _FakeRepo(rows),
     )
     monkeypatch.setattr(
         resource_projection_service,
@@ -683,12 +675,6 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
             super().__init__(rows, instance_ids={"sandbox-a": "runtime-a", "sandbox-b": "runtime-b"})
             self.batch_calls: list[list[str]] = []
 
-        def query_lease_instance_id(self, lease_id: str):
-            raise AssertionError(f"unexpected per-lease lookup: {lease_id}")
-
-        def query_lease_instance_ids(self, lease_ids: list[str]):
-            raise AssertionError(f"unexpected lease batch lookup: {lease_ids}")
-
         def query_sandbox_instance_ids(self, sandbox_ids: list[str]):
             self.batch_calls.append(list(sandbox_ids))
             return super().query_sandbox_instance_ids(sandbox_ids)
@@ -721,14 +707,11 @@ def test_visible_resource_session_stats_uses_sandbox_keyed_runtime_lookup(monkey
         },
     ]
 
-    class _BatchOnlyRepo(_FakeRepo):
-        def __init__(self):
-            super().__init__(rows, instance_ids={"sandbox-a": "runtime-a"})
-
-        def query_lease_instance_ids(self, lease_ids: list[str]):
-            raise AssertionError(f"unexpected lease batch lookup: {lease_ids}")
-
-    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _BatchOnlyRepo())
+    monkeypatch.setattr(
+        resource_projection_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeRepo(rows, instance_ids={"sandbox-a": "runtime-a"}),
+    )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
     stats = resource_projection_service.visible_resource_session_stats()

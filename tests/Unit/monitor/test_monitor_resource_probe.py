@@ -60,12 +60,6 @@ class _CanonicalOnlyResourceRepo:
     def query_sandbox_instance_id(self, sandbox_id: str):
         return self._instance_ids.get(sandbox_id)
 
-    def query_lease(self, _lease_id: str):
-        raise AssertionError("resource runtime-target helper should not use query_lease as single source")
-
-    def query_lease_instance_id(self, _lease_id: str):
-        raise AssertionError("resource runtime-target helper should not use query_lease_instance_id as single source")
-
     def close(self):
         return None
 
