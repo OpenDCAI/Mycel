@@ -73,15 +73,34 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
 
 
 def test_resource_projection_row_identity_prefers_unbound_provider_runtime_id() -> None:
-    session = {
+    resource_row = {
         "session_id": "provider-session-1",
         "thread_id": "thread-1",
         "sandbox_id": None,
         "lease_id": "lease-1",
     }
 
-    assert resource_projection_service._resource_row_identity(session) == "provider-session-1"
-    assert resource_projection_service._resource_running_identity(session) == ""
+    assert resource_projection_service._resource_row_identity(resource_row) == "provider-session-1"
+    assert resource_projection_service._resource_running_identity(resource_row) == ""
+
+
+def test_resource_projection_uses_resource_row_projection_seam() -> None:
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "provider-session-1",
+            "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-a",
+            "lease_id": "lease-a",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        }
+    ]
+
+    projected = resource_projection_service._project_user_visible_resource_rows(_FakeRepo(rows), rows)
+
+    assert projected == rows
 
 
 def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch):
@@ -768,8 +787,8 @@ def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_tele
 
     captured: dict[str, object] = {}
 
-    def _fake_aggregate_provider_telemetry(*, provider_orphan_runtimes, running_count, snapshot_by_sandbox):
-        captured["provider_orphan_runtimes"] = provider_orphan_runtimes
+    def _fake_aggregate_provider_telemetry(*, provider_resource_rows, running_count, snapshot_by_sandbox):
+        captured["provider_resource_rows"] = provider_resource_rows
         captured["running_count"] = running_count
         captured["snapshot_keys"] = sorted(snapshot_by_sandbox.keys())
         return {
@@ -808,8 +827,8 @@ def test_load_visible_resource_runtime_returns_only_sandbox_keyed_snapshots(monk
         lambda sessions: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
 
-    sessions, runtime_session_ids, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
+    resource_rows, runtime_session_ids, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
 
-    assert [session["sandbox_id"] for session in sessions] == ["sandbox-a"]
+    assert [resource_row["sandbox_id"] for resource_row in resource_rows] == ["sandbox-a"]
     assert runtime_session_ids == {"sandbox-a": None}
     assert snapshot_by_sandbox == {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}

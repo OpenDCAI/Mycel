@@ -132,13 +132,15 @@ def _load_visible_resource_runtime() -> tuple[
 ]:
     repo = make_sandbox_monitor_repo()
     try:
-        sessions = _project_user_visible_resource_sessions(repo, repo.query_resource_sessions())
-        runtime_session_ids = _query_runtime_session_ids(repo, [str(session.get("sandbox_id") or "") for session in sessions])
+        resource_rows = _project_user_visible_resource_rows(repo, repo.query_resource_sessions())
+        runtime_session_ids = _query_runtime_session_ids(
+            repo, [str(resource_row.get("sandbox_id") or "") for resource_row in resource_rows]
+        )
     finally:
         repo.close()
 
-    snapshot_by_sandbox = list_resource_snapshots_by_sandbox(sessions)
-    return sessions, runtime_session_ids, snapshot_by_sandbox
+    snapshot_by_sandbox = list_resource_snapshots_by_sandbox(resource_rows)
+    return resource_rows, runtime_session_ids, snapshot_by_sandbox
 
 
 def _backfill_runtime_session_ids(sandboxes: list[dict[str, Any]]) -> None:
@@ -209,8 +211,8 @@ def _resource_row_identity(resource_row: dict[str, Any]) -> str:
     return thread_id or "unbound"
 
 
-def _resource_running_identity(session: dict[str, Any]) -> str:
-    sandbox_id = str(session.get("sandbox_id") or "").strip()
+def _resource_running_identity(resource_row: dict[str, Any]) -> str:
+    sandbox_id = str(resource_row.get("sandbox_id") or "").strip()
     return sandbox_id
 
 
@@ -219,7 +221,7 @@ def _resource_display_status(
     observed_state: str | None,
     desired_state: str | None,
     runtime_session_id: str | None,
-    session_metrics: dict[str, Any] | None,
+    resource_metrics: dict[str, Any] | None,
 ) -> str:
     status = map_sandbox_state_to_display_status(observed_state, desired_state)
     observed = str(observed_state or "").strip().lower()
@@ -229,12 +231,12 @@ def _resource_display_status(
     # @@@resource-detached-residue - monitor/resources should not inflate running counts with
     # detached sandbox rows that have neither a bound runtime nor any live/quota snapshot. Those rows
     # are residue on this operator surface, even if the product-facing desired state still says running.
-    if observed == "detached" and desired == "running" and not runtime_session_id and session_metrics is None:
+    if observed == "detached" and desired == "running" and not runtime_session_id and resource_metrics is None:
         return "stopped"
     return status
 
 
-def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _project_user_visible_resource_rows(repo: Any, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Project raw monitor rows into the user-visible resource surface."""
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
@@ -272,14 +274,14 @@ def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]
 
 
 def list_resource_providers() -> dict[str, Any]:
-    sessions, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
+    resource_rows, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
 
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for session in sessions:
-        provider_instance = str(session.get("provider") or "local")
-        grouped.setdefault(provider_instance, []).append(session)
+    for resource_row in resource_rows:
+        provider_instance = str(resource_row.get("provider") or "local")
+        grouped.setdefault(provider_instance, []).append(resource_row)
 
-    owners = _thread_owners([str(session["thread_id"]) for session in sessions if session.get("thread_id")])
+    owners = _thread_owners([str(resource_row["thread_id"]) for resource_row in resource_rows if resource_row.get("thread_id")])
 
     providers: list[dict[str, Any]] = []
     for item in available_sandbox_types():
@@ -293,54 +295,54 @@ def list_resource_providers() -> dict[str, Any]:
         if not effective_available:
             unavailable_reason = str(item.get("reason") or capability_error or "provider unavailable")
 
-        provider_orphan_runtimes = grouped.get(config_name, [])
+        provider_resource_rows = grouped.get(config_name, [])
         normalized_resource_rows: list[dict[str, Any]] = []
         seen_resource_ids: set[str] = set()
         running_count = 0
         seen_running_sandboxes: set[str] = set()
-        for session in provider_orphan_runtimes:
-            observed_state = session.get("observed_state")
-            desired_state = session.get("desired_state")
-            thread_id = str(session.get("thread_id") or "")
-            sandbox_id = str(session.get("sandbox_id") or "").strip()
-            runtime_session_id = runtime_session_ids.get(str(session.get("sandbox_id") or "").strip())
-            session_metrics = _to_resource_metrics(snapshot_by_sandbox.get(sandbox_id))
+        for resource_row in provider_resource_rows:
+            observed_state = resource_row.get("observed_state")
+            desired_state = resource_row.get("desired_state")
+            thread_id = str(resource_row.get("thread_id") or "")
+            sandbox_id = str(resource_row.get("sandbox_id") or "").strip()
+            runtime_session_id = runtime_session_ids.get(str(resource_row.get("sandbox_id") or "").strip())
+            resource_metrics = _to_resource_metrics(snapshot_by_sandbox.get(sandbox_id))
             normalized = _resource_display_status(
                 observed_state=observed_state,
                 desired_state=desired_state,
                 runtime_session_id=runtime_session_id,
-                session_metrics=session_metrics,
+                resource_metrics=resource_metrics,
             )
-            running_identity = _resource_running_identity(session)
+            running_identity = _resource_running_identity(resource_row)
             if normalized == "running" and running_identity and running_identity not in seen_running_sandboxes:
                 running_count += 1
                 seen_running_sandboxes.add(running_identity)
             owner = owners.get(thread_id, {"agent_name": "未绑定Agent", "avatar_url": None})
-            resource_identity = _resource_row_identity(session)
+            resource_identity = _resource_row_identity(resource_row)
             if resource_identity in seen_resource_ids:
                 continue
             seen_resource_ids.add(resource_identity)
             normalized_resource_rows.append(
                 resource_service.build_resource_row_payload(
                     resource_identity=resource_identity,
-                    sandbox_id=str(session.get("sandbox_id") or "").strip() or None,
+                    sandbox_id=str(resource_row.get("sandbox_id") or "").strip() or None,
                     thread_id=thread_id,
                     runtime_session_id=runtime_session_id,
                     owner=owner,
                     status=normalized,
-                    started_at=str(session.get("created_at") or ""),
-                    metrics=session_metrics,
+                    started_at=str(resource_row.get("created_at") or ""),
+                    metrics=resource_metrics,
                 )
             )
 
         provider_type = _resolve_provider_type(provider_name)
         telemetry = _aggregate_provider_telemetry(
-            provider_orphan_runtimes=provider_orphan_runtimes,
+            provider_resource_rows=provider_resource_rows,
             running_count=running_count,
             snapshot_by_sandbox={
-                str(session.get("sandbox_id") or "").strip(): snapshot_by_sandbox[str(session.get("sandbox_id") or "").strip()]
-                for session in provider_orphan_runtimes
-                if str(session.get("sandbox_id") or "").strip() in snapshot_by_sandbox
+                str(resource_row.get("sandbox_id") or "").strip(): snapshot_by_sandbox[str(resource_row.get("sandbox_id") or "").strip()]
+                for resource_row in provider_resource_rows
+                if str(resource_row.get("sandbox_id") or "").strip() in snapshot_by_sandbox
             },
         )
         if config_name == "local" and effective_available and capabilities.get("metrics"):
@@ -387,27 +389,27 @@ def list_resource_providers() -> dict[str, Any]:
 
 
 def visible_resource_row_stats() -> dict[str, dict[str, int]]:
-    sessions, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
+    resource_rows, runtime_session_ids, snapshot_by_sandbox = _load_visible_resource_runtime()
     stats: dict[str, dict[str, int]] = {}
     seen_resource_ids: set[str] = set()
     seen_running_sandboxes: set[tuple[str, str]] = set()
-    for session in sessions:
-        provider_instance = str(session.get("provider") or "local")
+    for resource_row in resource_rows:
+        provider_instance = str(resource_row.get("provider") or "local")
         provider_stats = stats.setdefault(provider_instance, {"sessions": 0, "running": 0})
-        resource_identity = _resource_row_identity(session)
+        resource_identity = _resource_row_identity(resource_row)
         if resource_identity not in seen_resource_ids:
             seen_resource_ids.add(resource_identity)
             provider_stats["sessions"] += 1
 
-        sandbox_id = str(session.get("sandbox_id") or "").strip()
+        sandbox_id = str(resource_row.get("sandbox_id") or "").strip()
         runtime_session_id = runtime_session_ids.get(sandbox_id)
         normalized = _resource_display_status(
-            observed_state=session.get("observed_state"),
-            desired_state=session.get("desired_state"),
+            observed_state=resource_row.get("observed_state"),
+            desired_state=resource_row.get("desired_state"),
             runtime_session_id=runtime_session_id,
-            session_metrics=_to_resource_metrics(snapshot_by_sandbox.get(sandbox_id)),
+            resource_metrics=_to_resource_metrics(snapshot_by_sandbox.get(sandbox_id)),
         )
-        running_identity = _resource_running_identity(session)
+        running_identity = _resource_running_identity(resource_row)
         scoped_running_identity = (provider_instance, running_identity)
         if normalized == "running" and running_identity and scoped_running_identity not in seen_running_sandboxes:
             seen_running_sandboxes.add(scoped_running_identity)
