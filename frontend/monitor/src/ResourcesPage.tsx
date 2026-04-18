@@ -133,7 +133,7 @@ function formatMetric(value: number | null | undefined, unit: string): string {
   return `${formatNumber(value)}${unit}`;
 }
 
-function formatSessionMetricRange(used: number | null | undefined, limit: number | null | undefined, unit: string): string {
+function formatResourceMetricRange(used: number | null | undefined, limit: number | null | undefined, unit: string): string {
   if (used == null && limit == null) {
     return "--";
   }
@@ -441,9 +441,9 @@ export default function ResourcesPage() {
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
   const selectedProviderOrphans = selected ? providerOrphans.filter((runtime) => runtime.provider === selected.id) : [];
-  const runningSessionCount = countProviderResourceRows(providers, "running");
-  const pausedSessionCount = countProviderResourceRows(providers, "paused");
-  const stoppedSessionCount = countProviderResourceRows(providers, "stopped");
+  const runningResourceRowCount = countProviderResourceRows(providers, "running");
+  const pausedResourceRowCount = countProviderResourceRows(providers, "paused");
+  const stoppedResourceRowCount = countProviderResourceRows(providers, "stopped");
   const sandboxGroupCount = providers.reduce((total, provider) => total + groupResourceRows(provider.sessions).length, 0);
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
@@ -489,9 +489,9 @@ export default function ResourcesPage() {
             {summary?.active_providers ?? 0} 活跃 provider
           </div>
           <div className="resources-summary-pill">{sandboxGroupCount} 沙盒</div>
-          <div className="resources-summary-pill">{runningSessionCount} 运行中</div>
-          {pausedSessionCount > 0 && <div className="resources-summary-pill">{pausedSessionCount} 已暂停</div>}
-          {stoppedSessionCount > 0 && <div className="resources-summary-pill">{stoppedSessionCount} 已结束</div>}
+          <div className="resources-summary-pill">{runningResourceRowCount} 运行中</div>
+          {pausedResourceRowCount > 0 && <div className="resources-summary-pill">{pausedResourceRowCount} 已暂停</div>}
+          {stoppedResourceRowCount > 0 && <div className="resources-summary-pill">{stoppedResourceRowCount} 已结束</div>}
           {providerOrphans.length > 0 && <div className="resources-summary-pill">{providerOrphans.length} 未绑定运行时</div>}
           <div className="resources-summary-pill">
             <span
@@ -613,11 +613,11 @@ function ProviderCard({
       <div className="provider-card__footer">
         {provider.sessions.length > 0 && (
           <div className="provider-card__activity">
-            <div className="provider-card__session-dots" aria-hidden="true">
+            <div className="provider-card__resource-dots" aria-hidden="true">
               {resourceDots.map((resourceRow) => (
                 <span
                   key={resourceRow.id}
-                  className={cx("provider-card__session-dot", `provider-card__session-dot--${resourceRow.status}`)}
+                  className={cx("provider-card__resource-dot", `provider-card__resource-dot--${resourceRow.status}`)}
                 />
               ))}
             </div>
@@ -724,11 +724,11 @@ function ProviderDetail({
         ) : (
           <>
             {showUnavailableBanner && (
-              // @@@unavailable-with-sessions - monitor state differs from the app resource tab:
+              // @@@unavailable-with-resource-rows - monitor state differs from the app resource tab:
               // an unavailable provider can still carry historical/live sandbox rows, so keep the detail
               // surface inspectable instead of hard-disabling the whole card.
               <div className="provider-warning-banner">
-                {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条关联 session，可继续检查。
+                {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条资源记录，可继续检查。
               </div>
             )}
 
@@ -980,7 +980,7 @@ function SandboxCard({
         </div>
         {showRuntimeBindingWarning && (
           // @@@running-card-without-runtime - a persisted sandbox row can still say `running`
-          // after the live runtime session disappears; the card has to surface that drift
+          // after the live runtime binding disappears; the card has to surface that drift
           // before opening a guaranteed-failing file browser.
           <div className="sandbox-card__warning">未连上运行时</div>
         )}
@@ -997,9 +997,9 @@ function SandboxCard({
       </div>
       {hasMetrics && (
         <div className="sandbox-card__metrics">
-          <span>CPU {formatSessionMetricRange(metrics?.cpu, null, "%")}</span>
-          <span>RAM {formatSessionMetricRange(metrics?.memory, metrics?.memoryLimit, "GB")}</span>
-          <span>Disk {formatSessionMetricRange(metrics?.disk, metrics?.diskLimit, "GB")}</span>
+          <span>CPU {formatResourceMetricRange(metrics?.cpu, null, "%")}</span>
+          <span>RAM {formatResourceMetricRange(metrics?.memory, metrics?.memoryLimit, "GB")}</span>
+          <span>Disk {formatResourceMetricRange(metrics?.disk, metrics?.diskLimit, "GB")}</span>
         </div>
       )}
       <div className="sandbox-card__identity">{group.displayId}</div>
@@ -1034,7 +1034,7 @@ function SandboxInspector({
       : providerType !== "local" &&
           group.sandboxId &&
           !group.resourceRows.some((resourceRow) => Boolean(resourceRow.runtimeSessionId))
-        ? "当前沙盒没有 active runtime session，无法浏览文件。"
+        ? "当前沙盒没有 active runtime binding，无法浏览文件。"
         : null;
   const detailLink = buildSandboxGroupDetailLink(group);
 
@@ -1055,24 +1055,24 @@ function SandboxInspector({
 
         <div className="sandbox-modal__section">
           <h4>Agent</h4>
-          <div className="sandbox-session-list">
+          <div className="sandbox-resource-row-list">
             {group.resourceRows.map((resourceRow) => (
-              <div key={resourceRow.id} className="sandbox-session-row">
-                <div className="sandbox-session-row__identity">
+              <div key={resourceRow.id} className="sandbox-resource-row">
+                <div className="sandbox-resource-row__identity">
                   <MonitorAvatar
                     name={resourceRow.agentName || "未绑定"}
                     avatarUrl={resourceRow.avatarUrl}
                     size="lg"
                   />
                   <div>
-                    <div className="sandbox-session-row__name">{resourceRow.agentName || "未绑定"}</div>
-                    <div className="sandbox-session-row__meta">
+                    <div className="sandbox-resource-row__name">{resourceRow.agentName || "未绑定"}</div>
+                    <div className="sandbox-resource-row__meta">
                       <Link className="sandbox-link" to={`/threads/${resourceRow.threadId}`}>
                         {resourceRow.threadId}
                       </Link>
                     </div>
                     {resourceRow.runtimeSessionId && (
-                      <div className="sandbox-session-row__meta">
+                      <div className="sandbox-resource-row__meta">
                         runtime{" "}
                         <Link className="sandbox-link" to={`/runtimes/${resourceRow.runtimeSessionId}`}>
                           {resourceRow.runtimeSessionId}
@@ -1081,7 +1081,7 @@ function SandboxInspector({
                     )}
                   </div>
                 </div>
-                <div className="sandbox-session-row__status">
+                <div className="sandbox-resource-row__status">
                   <span className={`provider-status-dot provider-status-dot--${resourceRow.status}`} />
                   <span>{STATUS_LABEL[resourceRow.status]}</span>
                 </div>
