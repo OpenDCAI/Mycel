@@ -149,7 +149,9 @@ class ChatToolService:
                 name = c.get("title")
                 if not name:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing title")
-                unread = c.get("unread_count", 0)
+                if "unread_count" not in c:
+                    raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing unread_count")
+                unread = c["unread_count"]
                 last = c.get("last_message")
                 if last and "content" not in last:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} last_message is missing content")
