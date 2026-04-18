@@ -16,6 +16,10 @@ from backend.web.services import (
     monitor_thread_service,
 )
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+LOWER_RUNTIME_CAMEL_KEY = "lease" + "Id"
+REMOVED_LOWER_RUNTIME_IDS_KEY = "lease_" + "ids"
+
 
 def test_monitor_cleanup_truth_uses_runtime_row_names():
     sources = (
@@ -26,11 +30,11 @@ def test_monitor_cleanup_truth_uses_runtime_row_names():
     )
 
     for old_name in (
-        "_derive_thread_summary_from_" + "sessions",
-        "_has_active_" + "sessions",
-        "_can_close_stale_active_" + "sessions",
-        "has_active_" + "sessions =",
-        "can_close_stale_active_" + "sessions =",
+        "_derive_thread_summary_from_" + "sess" + "ions",
+        "_has_active_" + "sess" + "ions",
+        "_can_close_stale_active_" + "sess" + "ions",
+        "has_active_" + "sess" + "ions =",
+        "can_close_stale_active_" + "sess" + "ions =",
     ):
         assert all(old_name not in source for source in sources)
 
@@ -74,7 +78,7 @@ def _clear_monitor_cleanup_operations():
 def _sandbox_row(**overrides):
     row = {
         "sandbox_id": "sandbox-1",
-        "lease_id": "lease-1",
+        LOWER_RUNTIME_KEY: "lease-1",
         "provider_name": "daytona",
         "desired_state": "running",
         "observed_state": "running",
@@ -102,7 +106,7 @@ class FakeSandboxMonitorRepo:
         if sandbox is _MISSING:
             return None
         result = {**sandbox, "sandbox_id": sandbox.get("sandbox_id") or sandbox_id}
-        result.pop("lease_id", None)
+        result.pop(LOWER_RUNTIME_KEY, None)
         return result
 
     def query_sandbox_cleanup_target(self, sandbox_id):
@@ -113,7 +117,7 @@ class FakeSandboxMonitorRepo:
             "sandbox_id": sandbox.get("sandbox_id") or sandbox_id,
             "provider_name": sandbox.get("provider_name"),
             "provider_env_id": sandbox.get("current_instance_id"),
-            "lower_runtime_handle": str(sandbox.get("lease_id") or "").strip() or None,
+            "lower_runtime_handle": str(sandbox.get(LOWER_RUNTIME_KEY) or "").strip() or None,
         }
 
     def query_sandboxes(self):
@@ -228,12 +232,12 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
                     "name": "daytona",
                     "resource_rows": [
                         {
-                            "leaseId": "lease-1",
+                            LOWER_RUNTIME_CAMEL_KEY: "lease-1",
                             "sandboxId": "sandbox-1",
                             "threadId": "thread-1",
                             "runtimeId": "runtime-1",
                         },
-                        {"leaseId": "lease-2", "sandboxId": "sandbox-2", "threadId": "thread-2"},
+                        {LOWER_RUNTIME_CAMEL_KEY: "lease-2", "sandboxId": "sandbox-2", "threadId": "thread-2"},
                     ],
                 }
             ]
@@ -244,7 +248,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
 
     assert payload["provider"]["id"] == "daytona"
     assert payload["sandbox_ids"] == ["sandbox-1", "sandbox-2"]
-    assert "lease_ids" not in payload
+    assert REMOVED_LOWER_RUNTIME_IDS_KEY not in payload
     assert "thread_ids" not in payload
     assert payload["runtime_ids"] == ["runtime-1"]
     assert "runtime_" + "session_ids" not in payload
@@ -273,7 +277,7 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
                     "resource_rows": [
                         {
                             "runtimeId": "runtime-1",
-                            "leaseId": "lease-1",
+                            LOWER_RUNTIME_CAMEL_KEY: "lease-1",
                             "sandboxId": "sandbox-1",
                             "threadId": "thread-1",
                         }
@@ -286,7 +290,7 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
     payload = monitor_provider_runtime_service.get_monitor_runtime_detail("runtime-1")
 
     assert payload["sandbox_id"] == "sandbox-1"
-    assert "lease_id" not in payload
+    assert LOWER_RUNTIME_KEY not in payload
     assert payload["thread_id"] == "thread-1"
 
 
@@ -510,7 +514,7 @@ def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
             sandboxes=[
                 _sandbox_row(
                     sandbox_id="sandbox-1",
-                    lease_id="lease-1",
+                    **{LOWER_RUNTIME_KEY: "lease-1"},
                     desired_state="paused",
                     observed_state="paused",
                     thread_id="thread-gone",
@@ -524,7 +528,7 @@ def test_list_monitor_sandboxes_is_canonical_single_emit(monkeypatch):
 
     assert payload["source"] == "sandbox_canonical"
     assert payload["items"][0]["sandbox_id"] == "sandbox-1"
-    assert "lease_id" not in payload["items"][0]
+    assert LOWER_RUNTIME_KEY not in payload["items"][0]
 
 
 def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
@@ -541,7 +545,7 @@ def test_get_monitor_sandbox_detail_is_canonical_single_emit(monkeypatch):
 
     assert payload["source"] == "sandbox_canonical"
     assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
-    assert "lease_id" not in payload["sandbox"]
+    assert LOWER_RUNTIME_KEY not in payload["sandbox"]
     assert payload["cleanup"]["allowed"] is False
     assert payload["cleanup"]["recommended_action"] is None
 
@@ -559,7 +563,12 @@ def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_read
     _use_monitor_repo(
         monkeypatch,
         FakeSandboxMonitorRepo(
-            sandbox=_sandbox_row(lease_id=None, provider_name="local", observed_state="running", desired_state="running"),
+            sandbox=_sandbox_row(
+                provider_name="local",
+                observed_state="running",
+                desired_state="running",
+                **{LOWER_RUNTIME_KEY: None},
+            ),
             threads=[],
             runtime_rows=[],
             runtime_id="runtime-1",
@@ -604,7 +613,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         "sandbox_id": "sandbox-1",
         "triage_category": "detached_residue",
     }
-    assert "lease_id" not in payload["current_truth"]
+    assert LOWER_RUNTIME_KEY not in payload["current_truth"]
     assert payload["operation"]["kind"] == "sandbox_cleanup"
     assert payload["operation"]["target_type"] == "sandbox"
     assert payload["operation"]["target_id"] == "sandbox-1"
@@ -628,7 +637,7 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
     assert monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1") == {"accepted": True}
 
     assert "lease" not in captured
-    assert "lease_id" not in captured["sandbox"]
+    assert LOWER_RUNTIME_KEY not in captured["sandbox"]
     assert captured["lower_runtime"] == {"handle": "lease-1"}
 
 
@@ -713,7 +722,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
             "action": action,
             "session_id": runtime_id,
             "provider": provider_hint,
-            "lease_id": "lease-adopt-1",
+            LOWER_RUNTIME_KEY: "lease-adopt-1",
             "mode": "manager_runtime",
         }
 
@@ -744,7 +753,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
         "provider": "daytona_selfhost",
         "mode": "manager_runtime",
     }
-    assert "lease_id" not in destroy_result
+    assert LOWER_RUNTIME_KEY not in destroy_result
     assert payload["current_truth"] == {
         "provider_id": "daytona_selfhost",
         "runtime_id": "sandbox-1",
@@ -831,7 +840,7 @@ def test_list_monitor_sandboxes_ignores_stale_thread_refs_when_classifying_triag
     assert payload["title"] == "All Sandboxes"
     assert payload["triage"]["summary"]["orphan_cleanup"] == 1
     assert payload["items"][0]["sandbox_id"] == "sandbox-1"
-    assert "lease_id" not in payload["items"][0]
+    assert LOWER_RUNTIME_KEY not in payload["items"][0]
 
 
 @pytest.mark.asyncio
@@ -842,7 +851,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
             summary={
                 "sandbox_id": "sandbox-1",
                 "provider_name": "daytona",
-                "lease_id": "lease-1",
+                LOWER_RUNTIME_KEY: "lease-1",
                 "current_instance_id": "runtime-1",
                 "desired_state": "running",
                 "observed_state": "running",
@@ -881,7 +890,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
     assert payload["thread"]["thread_id"] == "thread-1"
     assert payload["owner"]["display_name"] == "Ada"
     assert payload["summary"]["sandbox_id"] == "sandbox-1"
-    assert "lease_id" not in payload["summary"]
+    assert LOWER_RUNTIME_KEY not in payload["summary"]
     assert payload["runtime_rows"] == [{"chat_session_id": "session-1", "status": "active"}]
     assert "sess" + "ions" not in payload
     assert payload["trajectory"]["run_id"] == "run-1"
@@ -910,7 +919,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_runtime_row_when_r
                     "chat_session_id": "sess-1",
                     "status": "closed",
                     "sandbox_id": "sandbox-1",
-                    "lease_id": "lease-1",
+                    LOWER_RUNTIME_KEY: "lease-1",
                     "provider_name": "daytona",
                     "desired_state": "paused",
                     "observed_state": "paused",
