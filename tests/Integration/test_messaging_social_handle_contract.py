@@ -12,6 +12,7 @@ from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope
 from messaging.delivery.actions import DeliveryAction
+from messaging.delivery.dispatcher import ChatDeliveryDispatcher
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.display_user import resolve_messaging_display_user
 from messaging.relationships.service import RelationshipService
@@ -91,10 +92,8 @@ def test_messaging_display_user_resolver_does_not_read_removed_thread_user_id() 
 
 def test_deliver_to_agents_does_not_require_main_thread_id():
     delivered: list[tuple[str, str]] = []
-    service = MessagingService(
-        chat_repo=SimpleNamespace(),
+    dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
-        messages_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
@@ -105,7 +104,7 @@ def test_deliver_to_agents_does_not_require_main_thread_id():
         delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
     )
 
-    service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
+    dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
 
     assert delivered == [("agent-user-1", "agent-user-1")]
 
@@ -1045,10 +1044,8 @@ def test_chat_tool_search_uses_messaging_service_direct_chat_lookup_without_memb
 
 def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
     delivered: list[tuple[str, str]] = []
-    service = MessagingService(
-        chat_repo=SimpleNamespace(),
+    dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
-        messages_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
@@ -1059,7 +1056,7 @@ def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
         delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
     )
 
-    service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
+    dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
 
     assert delivered == [("agent-user-1", "agent-user-1")]
 
@@ -1077,8 +1074,7 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
         ),
         relationship_repo=SimpleNamespace(get=lambda _a, _b: None),
     )
-    service = MessagingService(
-        chat_repo=SimpleNamespace(),
+    dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
                 {"user_id": "human-user-1"},
@@ -1086,7 +1082,6 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
                 {"user_id": "agent-user-2"},
             ]
         ),
-        messages_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)
@@ -1102,7 +1097,7 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
         delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
     )
 
-    service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
+    dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
 
     assert delivered == [("agent-user-1", "agent-user-1"), ("agent-user-2", "agent-user-2")]
 
@@ -1187,8 +1182,7 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
         ),
         relationship_repo=SimpleNamespace(get=lambda _a, _b: None),
     )
-    service = MessagingService(
-        chat_repo=SimpleNamespace(),
+    dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
                 {"user_id": "human-user-1"},
@@ -1196,7 +1190,6 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
                 {"user_id": "agent-user-2"},
             ]
         ),
-        messages_repo=SimpleNamespace(),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)
@@ -1212,7 +1205,7 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
         delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
     )
 
-    service._deliver_to_agents("chat-1", "agent-user-1", "hello", [])
+    dispatcher.dispatch("chat-1", "agent-user-1", "hello", [])
 
     assert delivered == [("agent-user-2", "agent-user-2")]
 

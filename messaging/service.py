@@ -14,11 +14,11 @@ import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from enum import Enum
 from typing import Any
 
 from backend.web.utils.serializers import avatar_url
 from messaging.contracts import ContentType, MessageType
+from messaging.delivery.dispatcher import ChatDeliveryDispatcher
 from messaging.display_user import resolve_messaging_display_user
 
 logger = logging.getLogger(__name__)
@@ -36,14 +36,19 @@ class MessagingService:
         thread_repo: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
+        delivery_dispatcher: ChatDeliveryDispatcher | None = None,
         event_bus: Any | None = None,
     ) -> None:
         self._chats = chat_repo
         self._chat_members_repo = chat_member_repo
         self._messages = messages_repo
         self._user_repo = user_repo
-        self._delivery_resolver = delivery_resolver
-        self._delivery_fn = delivery_fn
+        self._delivery_dispatcher = delivery_dispatcher or ChatDeliveryDispatcher(
+            chat_member_repo=chat_member_repo,
+            user_repo=user_repo,
+            delivery_resolver=delivery_resolver,
+            delivery_fn=delivery_fn,
+        )
         self._event_bus = event_bus
 
     def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
@@ -105,7 +110,7 @@ class MessagingService:
         return member_info
 
     def set_delivery_fn(self, fn: Callable) -> None:
-        self._delivery_fn = fn
+        self._delivery_dispatcher.set_delivery_fn(fn)
 
     # ------------------------------------------------------------------
     # Chat lifecycle
@@ -204,63 +209,9 @@ class MessagingService:
 
         # Deliver to agent recipients
         if message_type in ("human", "ai"):
-            self._deliver_to_agents(chat_id, sender_id, content, mentions or [], signal=signal)
+            self._delivery_dispatcher.dispatch(chat_id, sender_id, content, mentions or [], signal=signal)
 
         return created
-
-    def _deliver_to_agents(
-        self,
-        chat_id: str,
-        sender_id: str,
-        content: str,
-        mentions: list[str],
-        signal: str | None = None,
-    ) -> None:
-        mention_set = set(mentions)
-        members = self._chat_members_repo.list_members(chat_id)
-        sender_user = self._resolve_display_user(sender_id)
-        sender_name = sender_user.display_name if sender_user else "unknown"
-        sender_avatar_url = avatar_url(sender_user.id if sender_user else sender_id, bool(sender_user.avatar if sender_user else None))
-        sender_raw_type = getattr(sender_user, "type", None) if sender_user else None
-        sender_type = sender_raw_type.value if isinstance(sender_raw_type, Enum) else sender_raw_type
-        sender_owner_id = sender_user.id if sender_user and sender_type == "human" else getattr(sender_user, "owner_user_id", None)
-
-        for member in members:
-            uid = member.get("user_id")
-            if not uid or uid == sender_id:
-                continue
-            m = self._resolve_display_user(uid)
-            if not m:
-                continue
-            member_raw_type = getattr(m, "type", None)
-            member_type = member_raw_type.value if isinstance(member_raw_type, Enum) else member_raw_type
-            if member_type == "human":
-                continue
-
-            # @@@same-owner-group-delivery - explicit group membership among the same owner
-            # must reach sibling actors even when no relationship row exists yet.
-            if sender_owner_id and getattr(m, "owner_user_id", None) == sender_owner_id:
-                if self._delivery_fn:
-                    try:
-                        self._delivery_fn(uid, m, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
-                    except Exception:
-                        logger.exception("[messaging] delivery failed for member %s", uid)
-                continue
-
-            from messaging.delivery.actions import DeliveryAction
-
-            if self._delivery_resolver:
-                is_mentioned = uid in mention_set
-                action = self._delivery_resolver.resolve(uid, chat_id, sender_id, is_mentioned=is_mentioned)
-                if action != DeliveryAction.DELIVER:
-                    logger.info("[messaging] POLICY %s for %s", action.value, uid[:15])
-                    continue
-
-            if self._delivery_fn:
-                try:
-                    self._delivery_fn(uid, m, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
-                except Exception:
-                    logger.exception("[messaging] delivery failed for member %s", uid)
 
     # ------------------------------------------------------------------
     # Lifecycle operations
