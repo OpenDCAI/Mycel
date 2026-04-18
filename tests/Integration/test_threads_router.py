@@ -1279,8 +1279,8 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
         )
     ]
     assert len(captured) == 1
-    assert captured[0].source == "internal"
-    assert captured[0].message_metadata == {
+    assert captured[0].sender.source == "internal"
+    assert captured[0].message.metadata == {
         "ask_user_question_answered": {
             "questions": [
                 {
@@ -1302,7 +1302,7 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             "annotations": {"source": "ask-user-ui"},
         }
     }
-    followup_message = captured[0].content
+    followup_message = captured[0].message.content
     assert "AskUserQuestion" in followup_message
     assert "Minimal" in followup_message
     assert "Choose a style" in followup_message

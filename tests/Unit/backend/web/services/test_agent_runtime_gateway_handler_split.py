@@ -30,11 +30,11 @@ class _FakeThreadInputHandler:
 @pytest.mark.asyncio
 async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> None:
     from backend.protocols.agent_runtime import (
-        AgentChatActor,
         AgentChatContext,
         AgentChatDeliveryEnvelope,
-        AgentChatMessage,
         AgentChatRecipient,
+        AgentRuntimeActor,
+        AgentRuntimeMessage,
         AgentThreadInputEnvelope,
     )
 
@@ -47,11 +47,15 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
     )
     chat_envelope = AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id="chat-1"),
-        sender=AgentChatActor(user_id="human-1", user_type="human", display_name="Human"),
+        sender=AgentRuntimeActor(user_id="human-1", user_type="human", display_name="Human"),
         recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel"),
-        message=AgentChatMessage(content="hello"),
+        message=AgentRuntimeMessage(content="hello"),
     )
-    thread_envelope = AgentThreadInputEnvelope(thread_id="thread-1", content="hello")
+    thread_envelope = AgentThreadInputEnvelope(
+        thread_id="thread-1",
+        sender=AgentRuntimeActor(user_id="human-1", user_type="human", display_name="Owner", source="owner"),
+        message=AgentRuntimeMessage(content="hello"),
+    )
 
     chat_result = await gateway.dispatch_chat(chat_envelope)
     thread_result = await gateway.dispatch_thread_input(thread_envelope)
@@ -83,11 +87,11 @@ def test_gateway_rejects_single_chat_handler_entrypoint() -> None:
 @pytest.mark.asyncio
 async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
     from backend.protocols.agent_runtime import (
-        AgentChatActor,
         AgentChatContext,
         AgentChatDeliveryEnvelope,
-        AgentChatMessage,
         AgentChatRecipient,
+        AgentRuntimeActor,
+        AgentRuntimeMessage,
     )
 
     external_handler = _FakeChatHandler()
@@ -98,9 +102,9 @@ async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
     )
     envelope = AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id="chat-1"),
-        sender=AgentChatActor(user_id="human-1", user_type="human", display_name="Human"),
+        sender=AgentRuntimeActor(user_id="human-1", user_type="human", display_name="Human"),
         recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="external-hook"),
-        message=AgentChatMessage(content="hello"),
+        message=AgentRuntimeMessage(content="hello"),
     )
 
     result = await gateway.dispatch_chat(envelope)
@@ -112,11 +116,11 @@ async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
 @pytest.mark.asyncio
 async def test_gateway_rejects_unregistered_chat_runtime_source() -> None:
     from backend.protocols.agent_runtime import (
-        AgentChatActor,
         AgentChatContext,
         AgentChatDeliveryEnvelope,
-        AgentChatMessage,
         AgentChatRecipient,
+        AgentRuntimeActor,
+        AgentRuntimeMessage,
     )
 
     gateway = NativeAgentRuntimeGateway(
@@ -126,9 +130,9 @@ async def test_gateway_rejects_unregistered_chat_runtime_source() -> None:
     )
     envelope = AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id="chat-1"),
-        sender=AgentChatActor(user_id="human-1", user_type="human", display_name="Human"),
+        sender=AgentRuntimeActor(user_id="human-1", user_type="human", display_name="Human"),
         recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="external-hook"),
-        message=AgentChatMessage(content="hello"),
+        message=AgentRuntimeMessage(content="hello"),
     )
 
     with pytest.raises(ValueError, match="No Agent chat runtime handler registered for runtime_source='external-hook'"):

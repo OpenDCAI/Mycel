@@ -6,11 +6,11 @@ from typing import Any
 import pytest
 
 from backend.protocols.agent_runtime import (
-    AgentChatActor,
     AgentChatContext,
     AgentChatDeliveryEnvelope,
-    AgentChatMessage,
     AgentChatRecipient,
+    AgentRuntimeActor,
+    AgentRuntimeMessage,
 )
 from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 from core.runtime.middleware.monitor import AgentState
@@ -52,9 +52,9 @@ def _app(
 def _envelope(*, chat_id: str = "chat-1", signal: str | None = "ping") -> AgentChatDeliveryEnvelope:
     return AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id=chat_id),
-        sender=AgentChatActor(user_id="human-user-1", user_type="human", display_name="Human"),
+        sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human"),
         recipient=AgentChatRecipient(agent_user_id="agent-user-1", runtime_source="mycel"),
-        message=AgentChatMessage(content="hello", signal=signal),
+        message=AgentRuntimeMessage(content="hello", signal=signal),
     )
 
 

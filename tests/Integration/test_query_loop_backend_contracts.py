@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from backend.protocols.agent_runtime import AgentThreadInputEnvelope
+from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 from backend.web.models.requests import SendMessageRequest
 from backend.web.routers import threads as threads_router
 from backend.web.routers.threads import get_thread_history, get_thread_messages
@@ -1224,7 +1224,13 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", fake_get_or_create_agent)
 
     startup_task = asyncio.create_task(
-        NativeAgentRuntimeGateway(app).dispatch_thread_input(AgentThreadInputEnvelope(thread_id=thread_id, content="start"))
+        NativeAgentRuntimeGateway(app).dispatch_thread_input(
+            AgentThreadInputEnvelope(
+                thread_id=thread_id,
+                sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="owner"),
+                message=AgentRuntimeMessage(content="start"),
+            )
+        )
     )
     await asyncio.wait_for(agent_lookup_started.wait(), timeout=2)
     cancel_handle = app.state.thread_tasks[thread_id]

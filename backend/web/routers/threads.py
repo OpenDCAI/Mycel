@@ -1036,7 +1036,7 @@ async def send_message(
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
-    from backend.protocols.agent_runtime import AgentThreadInputEnvelope
+    from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
     from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 
@@ -1056,10 +1056,9 @@ async def send_message(
     return await get_agent_runtime_gateway(app).dispatch_thread_input(
         AgentThreadInputEnvelope(
             thread_id=thread_id,
-            content=message,
-            source="owner",
+            sender=AgentRuntimeActor(user_id=user_id, user_type="human", display_name="Owner", source="owner"),
+            message=AgentRuntimeMessage(content=message, attachments=payload.attachments or None),
             enable_trajectory=payload.enable_trajectory,
-            attachments=payload.attachments or None,
         )
     )
 
@@ -1173,7 +1172,7 @@ async def resolve_thread_permission_request(
 
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
-        from backend.protocols.agent_runtime import AgentThreadInputEnvelope
+        from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
         from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 
         answered_payload = _build_ask_user_question_answered_payload(
@@ -1185,13 +1184,20 @@ async def resolve_thread_permission_request(
         followup = await get_agent_runtime_gateway(app).dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
-                content=_format_ask_user_question_followup(
-                    pending_request,
-                    answers=answers,
-                    annotations=getattr(payload, "annotations", None),
+                sender=AgentRuntimeActor(
+                    user_id=user_id or "internal",
+                    user_type="system",
+                    display_name="Internal",
+                    source="internal",
                 ),
-                source="internal",
-                message_metadata={"ask_user_question_answered": answered_payload},
+                message=AgentRuntimeMessage(
+                    content=_format_ask_user_question_followup(
+                        pending_request,
+                        answers=answers,
+                        annotations=getattr(payload, "annotations", None),
+                    ),
+                    metadata={"ask_user_question_answered": answered_payload},
+                ),
             ),
         )
 
