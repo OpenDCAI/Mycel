@@ -63,11 +63,10 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
 class StorageContainer:
     """Composition root for storage repos (Supabase-only)."""
 
-    def __init__(self, supabase_client: Any, public_supabase_client: Any | None = None) -> None:
+    def __init__(self, supabase_client: Any) -> None:
         if supabase_client is None:
             raise RuntimeError("StorageContainer requires a supabase_client.")
         self._supabase_client = supabase_client
-        self._public_supabase_client = public_supabase_client or supabase_client
 
     def _build(self, name: str, *, client: Any | None = None) -> Any:
         mod_path, cls_name = _REPO_REGISTRY[name]

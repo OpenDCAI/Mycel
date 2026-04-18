@@ -28,18 +28,10 @@ def build_storage_container(
     *,
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
-    public_supabase_client: Any | None = None,
-    public_supabase_client_factory: str | None = None,
 ) -> StorageContainer:
     """Build a runtime storage container (Supabase-only)."""
     client = _resolve_supabase_client(supabase_client, supabase_client_factory)
-    if public_supabase_client is not None:
-        public_client = public_supabase_client
-    elif public_supabase_client_factory:
-        public_client = _resolve_supabase_client(factory_ref=public_supabase_client_factory)
-    else:
-        public_client = None
-    return StorageContainer(supabase_client=client, public_supabase_client=public_client)
+    return StorageContainer(supabase_client=client)
 
 
 def _build_storage_repo(
@@ -48,12 +40,10 @@ def _build_storage_repo(
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
     default_supabase_client_factory: str | None = None,
-    public_supabase_client_factory: str | None = None,
 ) -> Any:
     container = build_storage_container(
         supabase_client=supabase_client,
         supabase_client_factory=supabase_client_factory or default_supabase_client_factory,
-        public_supabase_client_factory=public_supabase_client_factory,
     )
     return getattr(container, repo_method)()
 

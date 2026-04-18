@@ -19,3 +19,10 @@ def test_build_storage_container_exposes_messaging_repos() -> None:
     assert container.chat_member_repo().__class__.__name__ == "SupabaseChatMemberRepo"
     assert container.messages_repo().__class__.__name__ == "SupabaseMessagesRepo"
     assert container.relationship_repo().__class__.__name__ == "SupabaseRelationshipRepo"
+
+
+def test_storage_container_does_not_keep_public_schema_client() -> None:
+    container = StorageContainer(supabase_client=FakeSupabaseClient())
+    removed_public_client_slot = "_public_" + "supabase_client"
+
+    assert not hasattr(container, removed_public_client_slot)

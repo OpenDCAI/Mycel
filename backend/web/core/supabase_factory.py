@@ -48,11 +48,6 @@ def create_supabase_client():
     return _create_storage_client(schema=_resolve_runtime_schema())
 
 
-def create_public_supabase_client():
-    """Build a supabase-py client pinned to the public schema."""
-    return _create_storage_client(schema="public")
-
-
 def create_supabase_auth_client():
     """Build a supabase-py auth client for end-user auth flows.
 
