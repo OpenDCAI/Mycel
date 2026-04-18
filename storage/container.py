@@ -20,6 +20,7 @@ from .contracts import (
     RecipeRepo,
     ResourceSnapshotRepo,
     RunEventRepo,
+    SandboxMonitorRepo,
     SandboxRepo,
     SummaryRepo,
     ThreadRepo,
@@ -121,7 +122,7 @@ class StorageContainer:
     def sandbox_repo(self) -> SandboxRepo:
         return self._build("sandbox_repo")
 
-    def sandbox_monitor_repo(self) -> Any:
+    def sandbox_monitor_repo(self) -> SandboxMonitorRepo:
         return self._build("sandbox_monitor_repo")
 
     def recipe_repo(self) -> RecipeRepo:
