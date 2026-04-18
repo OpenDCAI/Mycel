@@ -1,4 +1,4 @@
-"""Chat delivery adapter for the Agent Runtime Gateway."""
+"""Chat delivery hook for the Agent Runtime Gateway."""
 
 from __future__ import annotations
 
