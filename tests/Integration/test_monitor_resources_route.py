@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor, resources
-from backend.web.services import monitor_gateway, monitor_resource_service
+from backend.web.services import monitor_gateway, monitor_resource_io_service, monitor_resource_service
 
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
@@ -82,7 +82,7 @@ def test_monitor_resources_refresh_probes_before_rebuilding_snapshot(monkeypatch
         calls.append("refresh")
         return _resource_snapshot()
 
-    monkeypatch.setattr(monitor_resource_service.resource_service, "refresh_resource_snapshots", _probe)
+    monkeypatch.setattr(monitor_resource_io_service, "refresh_resource_snapshots", _probe)
     monkeypatch.setattr(monitor_resource_service, "refresh_resource_overview_sync", _refresh)
     monkeypatch.setattr(
         monitor_resource_service.monitor_sandbox_projection_service,
