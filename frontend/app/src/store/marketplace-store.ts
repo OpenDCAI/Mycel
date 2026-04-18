@@ -90,7 +90,7 @@ interface MarketplaceState {
 
   // Actions (go through Mycel backend)
   downloading: boolean;
-  download: (itemId: string) => Promise<{ resource_id: string; type: string; version: string }>;
+  download: (itemId: string, agentUserId?: string) => Promise<{ resource_id: string; type: string; version: string; agent_user_id?: string }>;
   upgrade: (userId: string, itemId: string) => Promise<void>;
   publishAgentUserToMarketplace: (userId: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
 }
@@ -259,12 +259,12 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
 
   downloading: false,
 
-  download: async (itemId) => {
+  download: async (itemId, agentUserId) => {
     set({ downloading: true });
     try {
-      const data = await backendApi<{ resource_id: string; type: string; version: string }>("/download", {
+      const data = await backendApi<{ resource_id: string; type: string; version: string; agent_user_id?: string }>("/download", {
         method: "POST",
-        body: JSON.stringify({ item_id: itemId }),
+        body: JSON.stringify({ item_id: itemId, ...(agentUserId ? { agent_user_id: agentUserId } : {}) }),
       });
       return data;
     } finally {

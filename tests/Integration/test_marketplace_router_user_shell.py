@@ -96,15 +96,16 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
 
     monkeypatch.setattr(marketplace_router.marketplace_client, "download", lambda **kwargs: seen.update(kwargs) or {"ok": True})
 
+    owner_agent = SimpleNamespace(id="agent-1", owner_user_id="owner-1")
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                user_repo=SimpleNamespace(),
+                user_repo=SimpleNamespace(get_by_id=lambda user_id: owner_agent if user_id == "agent-1" else None),
                 agent_config_repo=SimpleNamespace(),
             )
         )
     )
-    req = SimpleNamespace(item_id="item-1")
+    req = SimpleNamespace(item_id="item-1", agent_user_id="agent-1")
 
     result = await marketplace_router.download_from_marketplace(req=req, user_id="owner-1", request=request)
 
@@ -113,6 +114,7 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
     assert seen["agent_config_repo"] is request.app.state.agent_config_repo
+    assert seen["agent_user_id"] == "agent-1"
 
 
 @pytest.mark.asyncio

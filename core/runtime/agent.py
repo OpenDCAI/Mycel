@@ -1201,7 +1201,8 @@ class LeonAgent:
             )
 
         # Skills tools
-        if self.config.skills.enabled and self.config.skills.paths:
+        bundle_skills = self._agent_bundle.skills if hasattr(self, "_agent_bundle") and self._agent_bundle else []
+        if self.config.skills.enabled and (self.config.skills.paths or bundle_skills):
             # Use the agent bundle's skills enabled/disabled state if available.
             enabled_skills = self.config.skills.skills
             if hasattr(self, "_agent_bundle") and self._agent_bundle:
@@ -1212,6 +1213,7 @@ class LeonAgent:
                 registry=self._tool_registry,
                 skill_paths=self.config.skills.paths,
                 enabled_skills=enabled_skills,
+                inline_skills=bundle_skills,
             )
 
         # Task tools (DEFERRED - discoverable via tool_search)

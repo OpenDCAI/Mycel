@@ -104,12 +104,15 @@ async def download_from_marketplace(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    if req.agent_user_id is not None:
+        await _verify_user_ownership(req.agent_user_id, user_id, user_repo)
     return await asyncio.to_thread(
         marketplace_client.download,
         item_id=req.item_id,
         owner_user_id=user_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
+        agent_user_id=req.agent_user_id,
     )
 
 

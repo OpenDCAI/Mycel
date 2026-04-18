@@ -99,7 +99,7 @@ class TestDownloadSkill:
     def test_writes_skill_md(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
         monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
-        hub_resp = _make_hub_response("skill", "my-skill", content="# My Skill\nDo stuff")
+        hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
@@ -110,12 +110,14 @@ class TestDownloadSkill:
         assert result["resource_id"] == "my-skill"
         skill_md = lib / "skills" / "my-skill" / "SKILL.md"
         assert skill_md.exists()
-        assert skill_md.read_text(encoding="utf-8") == "# My Skill\nDo stuff"
+        assert skill_md.read_text(encoding="utf-8") == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
 
     def test_meta_json_has_source_tracking(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
         monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
-        hub_resp = _make_hub_response("skill", "tracked-skill", version="2.1.0", publisher="alice")
+        hub_resp = _make_hub_response(
+            "skill", "tracked-skill", content="---\nname: Tracked Skill\n---\n# Hello", version="2.1.0", publisher="alice"
+        )
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
@@ -130,7 +132,7 @@ class TestDownloadSkill:
     def test_path_traversal_blocked(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
         monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
-        hub_resp = _make_hub_response("skill", "../../evil")
+        hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
@@ -140,6 +142,51 @@ class TestDownloadSkill:
 
         # Ensure no files written outside library
         assert not (tmp_path / "evil").exists()
+
+    def test_installs_skill_to_agent_config_when_agent_user_id_is_provided(self):
+        import backend.web.services.marketplace_client as marketplace_client
+
+        saved: list[tuple[str, str, str, dict[str, object] | None]] = []
+        user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
+
+        class _AgentConfigRepo:
+            def save_skill(self, agent_config_id: str, name: str, content: str, meta: dict[str, object] | None = None) -> None:
+                saved.append((agent_config_id, name, content, meta))
+
+        hub_resp = _make_hub_response(
+            "skill",
+            "fastapi",
+            version="1.2.3",
+            publisher="skillsmp",
+            content="---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter.",
+        )
+
+        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
+            result = marketplace_client.download(
+                "skillsmp:fastapi",
+                owner_user_id="owner-1",
+                user_repo=user_repo,
+                agent_config_repo=_AgentConfigRepo(),
+                agent_user_id="agent-user-1",
+            )
+
+        assert result == {"resource_id": "FastAPI", "type": "skill", "version": "1.2.3", "agent_user_id": "agent-user-1"}
+        assert saved == [
+            (
+                "cfg-1",
+                "FastAPI",
+                "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter.",
+                {
+                    "name": "FastAPI",
+                    "desc": "A test item",
+                    "source": {
+                        "marketplace_item_id": "skillsmp:fastapi",
+                        "installed_version": "1.2.3",
+                        "publisher": "skillsmp",
+                    },
+                },
+            )
+        ]
 
 
 # ── Download — agent ──
@@ -220,8 +267,8 @@ class TestDownloadIdempotency:
         lib = tmp_path / "library"
         monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
 
-        v1 = _make_hub_response("skill", "idem-skill", content="V1", version="1.0.0")
-        v2 = _make_hub_response("skill", "idem-skill", content="V2", version="1.0.1")
+        v1 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV1", version="1.0.0")
+        v2 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV2", version="1.0.1")
 
         from backend.web.services.marketplace_client import download
 
@@ -233,7 +280,7 @@ class TestDownloadIdempotency:
 
         assert result["version"] == "1.0.1"
         content = (lib / "skills" / "idem-skill" / "SKILL.md").read_text(encoding="utf-8")
-        assert content == "V2"
+        assert content == "---\nname: Idem Skill\n---\nV2"
         meta = json.loads((lib / "skills" / "idem-skill" / "meta.json").read_text(encoding="utf-8"))
         assert meta["source"]["installed_version"] == "1.0.1"
 

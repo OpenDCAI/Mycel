@@ -15,6 +15,7 @@ class PublishAgentUserToMarketplaceRequest(BaseModel):
 
 class InstallFromMarketplaceRequest(BaseModel):
     item_id: str
+    agent_user_id: str | None = None
 
 
 class UpgradeFromMarketplaceRequest(BaseModel):

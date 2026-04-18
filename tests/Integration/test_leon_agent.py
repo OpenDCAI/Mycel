@@ -574,6 +574,64 @@ async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path)
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    class _Repo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return {
+                "id": "cfg-1",
+                "name": "Repo Toad",
+                "description": "Repo-backed agent",
+                "tools": ["*"],
+                "system_prompt": "You are Repo Toad.",
+                "status": "active",
+                "version": "1.0.0",
+                "runtime": {"skills:FastAPI": {"enabled": True, "desc": "Use FastAPI conventions"}},
+                "mcp": {},
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return [
+                {
+                    "name": "FastAPI",
+                    "content": "---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
+                    "meta_json": {"desc": "Build FastAPI services"},
+                }
+            ]
+
+    mock_model = _mock_model("Repo skill response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        skill_tool = agent._tool_registry.get("load_skill")
+        assert skill_tool is not None
+        assert "FastAPI" in skill_tool.get_schema()["description"]
+        assert skill_tool.handler("FastAPI") == "Loaded skill: FastAPI\n\nAlways use APIRouter."
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell(tmp_path):
     """Repo-rooted live startup must ignore a stale member-dir shell with conflicting MCP state."""
     from core.runtime.agent import LeonAgent

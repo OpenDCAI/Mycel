@@ -56,6 +56,19 @@ def _hub_error_detail(response: httpx.Response) -> str | None:
     return detail if isinstance(detail, str) and detail else None
 
 
+def _skill_metadata_from_content(content: str) -> dict[str, Any]:
+    if not content.startswith("---\n"):
+        raise ValueError("Skill snapshot must be a SKILL.md document with frontmatter")
+    try:
+        _, frontmatter, _body = content.split("---", 2)
+    except ValueError as exc:
+        raise ValueError("Skill snapshot must be a SKILL.md document with frontmatter") from exc
+    metadata = yaml.safe_load(frontmatter) or {}
+    if not isinstance(metadata, dict) or not metadata.get("name"):
+        raise ValueError("Skill snapshot frontmatter must include name")
+    return metadata
+
+
 def list_items(
     *,
     type: str | None = None,
@@ -242,6 +255,7 @@ def download(
     owner_user_id: str = "system",
     user_repo: Any = None,
     agent_config_repo: Any = None,
+    agent_user_id: str | None = None,
 ) -> dict:
     """Download a marketplace item to local library or install an agent user."""
     result = _hub_api("POST", f"/items/{item_id}/download")
@@ -255,13 +269,44 @@ def download(
     now = int(time.time() * 1000)
 
     if item_type == "skill":
+        content = snapshot.get("content", "")
+        if not isinstance(content, str):
+            raise ValueError("Skill snapshot content must be a string")
+        skill_metadata = _skill_metadata_from_content(content)
+
+        if agent_user_id is not None:
+            if user_repo is None or agent_config_repo is None:
+                raise RuntimeError("user_repo and agent_config_repo are required to install a skill to an agent")
+            user = user_repo.get_by_id(agent_user_id)
+            if user is None or user.owner_user_id != owner_user_id:
+                raise RuntimeError(f"Agent user not found for owner: {agent_user_id}")
+            if not getattr(user, "agent_config_id", None):
+                raise RuntimeError(f"Agent user has no agent_config_id: {agent_user_id}")
+
+            skill_name = str(skill_metadata["name"])
+            agent_config_repo.save_skill(
+                user.agent_config_id,
+                skill_name,
+                content,
+                meta={
+                    "name": skill_name,
+                    "desc": item.get("description", ""),
+                    "source": {
+                        "marketplace_item_id": item_id,
+                        "installed_version": installed_version,
+                        "publisher": item.get("publisher_username", ""),
+                    },
+                },
+            )
+            logger.info("Installed skill %s to agent user %s", skill_name, agent_user_id)
+            return {"resource_id": skill_name, "type": "skill", "version": installed_version, "agent_user_id": agent_user_id}
+
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
         skill_dir = (LIBRARY_DIR / "skills" / slug).resolve()
         if not skill_dir.is_relative_to((LIBRARY_DIR / "skills").resolve()):
             raise ValueError(f"Invalid slug: {slug}")
         skill_dir.mkdir(parents=True, exist_ok=True)
 
-        content = snapshot.get("content", "")
         (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
         meta = snapshot.get("meta", {})
