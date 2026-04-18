@@ -692,7 +692,7 @@ def _sandbox_detail_cleanup_truth(
         triage=triage,
         provider_name=provider_name,
         runtime_session_id=runtime_session_id,
-        chat_sessions=runtime_rows,
+        runtime_rows=runtime_rows,
         threads=threads,
     )
 
@@ -808,7 +808,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
             triage=payload.get("triage"),
             provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
             runtime_session_id=str(runtime.get("runtime_session_id") or ""),
-            chat_sessions=runtime_rows,
+            runtime_rows=runtime_rows,
             threads=threads,
         ),
     }

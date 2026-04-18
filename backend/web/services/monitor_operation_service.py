@@ -69,16 +69,16 @@ def _operations_for_target(target_type: str, target_id: str) -> list[dict[str, A
         return [dict(_OPERATIONS[operation_id]) for operation_id in ids if operation_id in _OPERATIONS]
 
 
-def _has_active_chat_sessions(chat_sessions: list[dict[str, Any]]) -> bool:
-    return any(str(item.get("status") or "").strip().lower() == "active" for item in chat_sessions)
+def _has_active_runtime_rows(runtime_rows: list[dict[str, Any]]) -> bool:
+    return any(str(item.get("status") or "").strip().lower() == "active" for item in runtime_rows)
 
 
 def _has_thread_bindings(threads: list[dict[str, Any]]) -> bool:
     return any(str(item.get("thread_id") or "").strip() for item in threads)
 
 
-def _can_close_stale_active_chat_sessions(*, category: str, chat_sessions: list[dict[str, Any]], threads: list[dict[str, Any]]) -> bool:
-    return category == "orphan_cleanup" and _has_active_chat_sessions(chat_sessions) and not _has_thread_bindings(threads)
+def _can_close_stale_active_runtime_rows(*, category: str, runtime_rows: list[dict[str, Any]], threads: list[dict[str, Any]]) -> bool:
+    return category == "orphan_cleanup" and _has_active_runtime_rows(runtime_rows) and not _has_thread_bindings(threads)
 
 
 def build_sandbox_cleanup_truth(
@@ -87,22 +87,22 @@ def build_sandbox_cleanup_truth(
     triage: dict[str, Any] | None,
     provider_name: str | None,
     runtime_session_id: str | None,
-    chat_sessions: list[dict[str, Any]],
+    runtime_rows: list[dict[str, Any]],
     threads: list[dict[str, Any]],
 ) -> dict[str, Any]:
     category = str((triage or {}).get("category") or "").strip()
-    has_active_chat_sessions = _has_active_chat_sessions(chat_sessions)
+    has_active_runtime_rows = _has_active_runtime_rows(runtime_rows)
     has_thread_bindings = _has_thread_bindings(threads)
-    can_close_stale_active_chat_sessions = _can_close_stale_active_chat_sessions(
+    can_close_stale_active_runtime_rows = _can_close_stale_active_runtime_rows(
         category=category,
-        chat_sessions=chat_sessions,
+        runtime_rows=runtime_rows,
         threads=threads,
     )
     provider = str(provider_name or "").strip()
 
-    if has_active_chat_sessions and not can_close_stale_active_chat_sessions:
+    if has_active_runtime_rows and not can_close_stale_active_runtime_rows:
         allowed = False
-        reason = "Sandbox still has active chat sessions and cannot enter managed cleanup."
+        reason = "Sandbox still has active runtime rows and cannot enter managed cleanup."
     elif has_thread_bindings and category != "detached_residue":
         allowed = False
         reason = "Sandbox still has thread bindings and cannot enter managed cleanup."
@@ -114,8 +114,8 @@ def build_sandbox_cleanup_truth(
         reason = "Sandbox is not in a managed cleanup state."
     elif category == "orphan_cleanup":
         allowed = True
-        if can_close_stale_active_chat_sessions:
-            reason = "Sandbox has only stale active chat sessions and can close them before cleanup."
+        if can_close_stale_active_runtime_rows:
+            reason = "Sandbox has only stale active runtime rows and can close them before cleanup."
         else:
             reason = "Sandbox is orphan cleanup residue and can enter managed cleanup."
     elif category == "detached_residue":
@@ -167,7 +167,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
         triage=sandbox_detail.get("triage"),
         provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
         runtime_session_id=str(runtime.get("runtime_session_id") or ""),
-        chat_sessions=sandbox_detail.get("sessions") or [],
+        runtime_rows=sandbox_detail.get("sessions") or [],
         threads=threads,
     )
 
@@ -213,10 +213,10 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
 
     try:
         category = str((sandbox_detail.get("triage") or {}).get("category") or "").strip()
-        chat_sessions = sandbox_detail.get("sessions") or []
-        detach_before_cleanup = category == "detached_residue" or _can_close_stale_active_chat_sessions(
+        runtime_rows = sandbox_detail.get("sessions") or []
+        detach_before_cleanup = category == "detached_residue" or _can_close_stale_active_runtime_rows(
             category=category,
-            chat_sessions=chat_sessions,
+            runtime_rows=runtime_rows,
             threads=threads,
         )
         result = destroy_sandbox_runtime(
