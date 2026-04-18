@@ -46,7 +46,6 @@ def _sandbox_detail_cleanup_truth(
     cleanup_target: dict[str, Any],
     triage: dict[str, Any],
     provider_name: str,
-    runtime_session_id: str | None,
     runtime_rows: list[dict[str, Any]],
     threads: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -63,7 +62,6 @@ def _sandbox_detail_cleanup_truth(
         sandbox_id=sandbox_id,
         triage=triage,
         provider_name=provider_name,
-        runtime_session_id=runtime_session_id,
         runtime_rows=runtime_rows,
         threads=threads,
     )
@@ -117,7 +115,6 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
             cleanup_target=cleanup_target,
             triage=triage,
             provider_name=provider_name,
-            runtime_session_id=runtime_session_id,
             runtime_rows=runtime_projection,
             threads=live_thread_refs,
         ),
@@ -172,7 +169,6 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
             sandbox_id=sandbox_id,
             triage=payload.get("triage"),
             provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
-            runtime_session_id=str(runtime.get("runtime_session_id") or ""),
             runtime_rows=runtime_rows,
             threads=threads,
         ),

@@ -86,7 +86,6 @@ def build_sandbox_cleanup_truth(
     sandbox_id: str | None = None,
     triage: dict[str, Any] | None,
     provider_name: str | None,
-    runtime_session_id: str | None,
     runtime_rows: list[dict[str, Any]],
     threads: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -166,7 +165,6 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
         sandbox_id=str(sandbox.get("sandbox_id") or ""),
         triage=sandbox_detail.get("triage"),
         provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
-        runtime_session_id=str(runtime.get("runtime_session_id") or ""),
         runtime_rows=sandbox_detail.get("sessions") or [],
         threads=threads,
     )
