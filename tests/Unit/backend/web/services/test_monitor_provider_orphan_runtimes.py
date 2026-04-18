@@ -23,8 +23,10 @@ def _provider_runtime(runtime_id: str, status: str = "paused"):
 def test_provider_orphan_runtime_cleanup_uses_runtime_truth_name():
     source = inspect.getsource(monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup)
     removed_name = "session" + "_truth"
+    removed_field = "session" + "_id"
 
     assert removed_name not in source
+    assert removed_field not in source
     assert "runtime_truth" in source
 
 
