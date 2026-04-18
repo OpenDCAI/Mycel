@@ -251,6 +251,32 @@ def test_chat_tool_service_accepts_chat_identity_id_contract() -> None:
     assert registry.get("list_chats") is not None
 
 
+def test_chat_tool_list_chats_uses_messaging_service_title() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": [{"id": "human-user-1", "name": "Human"}],
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    result = list_chats.handler()
+
+    assert result == "- Solo Ops"
+
+
 def test_chat_tool_service_rejects_removed_constructor_user_id() -> None:
     registry = ToolRegistry()
 
