@@ -55,7 +55,7 @@ describe("monitor relation shell", () => {
     expect(shell.targetLabel).toBe("Sandbox");
     expect(shell.beforeLabel).toBe("Sandbox Before");
     expect(shell.afterLabel).toBe("Sandbox After");
-    expect(shell.runtimeBody).toBe("Runtime session linked to the target sandbox.");
+    expect(shell.runtimeBody).toBe("Runtime linked to the target sandbox.");
     expect(shell.providerBody).toBe("Provider surface responsible for the target sandbox runtime.");
   });
 

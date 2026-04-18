@@ -237,7 +237,7 @@ export default function SandboxDetailPage() {
                 "-"
               )}
             </p>
-            <p className="surface-card__body">Live runtime session linked to this sandbox.</p>
+            <p className="surface-card__body">Live runtime linked to this sandbox.</p>
           </article>
           <article className="surface-card">
             <p className="surface-card__eyebrow">Thread</p>

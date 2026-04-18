@@ -50,7 +50,7 @@ export function buildOperationDetailShell(data: OperationDetailPayload) {
     runtimeLabel: runtimeId,
     beforeLabel: "Sandbox Before",
     afterLabel: "Sandbox After",
-    runtimeBody: "Runtime session linked to the target sandbox.",
+    runtimeBody: "Runtime linked to the target sandbox.",
     providerBody: "Provider surface responsible for the target sandbox runtime.",
   };
 }
