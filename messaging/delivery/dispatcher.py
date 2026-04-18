@@ -59,9 +59,11 @@ class ChatDeliveryDispatcher:
         mention_set = set(mentions)
         members = self._chat_members_repo.list_members(chat_id)
         sender_user = self._resolve_display_user(sender_id)
-        sender_name = sender_user.display_name if sender_user else "unknown"
-        sender_avatar_url = avatar_url(sender_user.id if sender_user else sender_id, bool(sender_user.avatar if sender_user else None))
-        sender_raw_type = getattr(sender_user, "type", None) if sender_user else None
+        if sender_user is None:
+            raise RuntimeError(f"Chat delivery sender identity not found: {sender_id}")
+        sender_name = sender_user.display_name
+        sender_avatar_url = avatar_url(sender_user.id, bool(sender_user.avatar))
+        sender_raw_type = getattr(sender_user, "type", None)
         sender_type = sender_raw_type.value if isinstance(sender_raw_type, Enum) else sender_raw_type
         sender_owner_id = sender_user.id if sender_user and sender_type == "human" else getattr(sender_user, "owner_user_id", None)
 

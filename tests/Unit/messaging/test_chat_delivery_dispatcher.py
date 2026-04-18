@@ -151,3 +151,17 @@ def test_dispatcher_fails_loudly_when_delivery_function_is_missing() -> None:
 
     with pytest.raises(RuntimeError, match="Chat delivery function is not configured"):
         dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
+
+
+def test_dispatcher_fails_loudly_when_sender_identity_is_missing() -> None:
+    delivered: list[str] = []
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=_member_repo(["missing-user", "agent-user-1"]),
+        user_repo=_user_repo(),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat delivery sender identity not found: missing-user"):
+        dispatcher.dispatch("chat-1", "missing-user", "hello", [])
+
+    assert delivered == []
