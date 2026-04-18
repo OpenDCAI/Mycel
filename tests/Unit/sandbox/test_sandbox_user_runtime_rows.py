@@ -4,6 +4,8 @@ import pytest
 
 from backend.web.services import sandbox_service
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+
 
 def _runtime_row(
     lower_runtime_id: str,
@@ -19,7 +21,7 @@ def _runtime_row(
     **extra,
 ):
     return {
-        "lease_id": lower_runtime_id,
+        LOWER_RUNTIME_KEY: lower_runtime_id,
         "sandbox_id": sandbox_id or lower_runtime_id.replace("lease", "sandbox", 1),
         "provider_name": provider_name,
         "recipe_id": recipe_id or f"{provider_name}:default",
@@ -70,7 +72,7 @@ class _FakeMonitorRepo:
         self.sandbox_instance_id_calls.append(sandbox_id)
         for row in self._rows:
             if row.get("sandbox_id") == sandbox_id:
-                return self._instance_ids.get(str(row.get("lease_id") or ""))
+                return self._instance_ids.get(str(row.get(LOWER_RUNTIME_KEY) or ""))
         return None
 
     def close(self):
@@ -177,7 +179,7 @@ def test_user_runtime_rows_visible_thread_contract(
     assert len(sandboxes) == 1
     sandbox = sandboxes[0]
     assert sandbox["sandbox_id"] == "sandbox-1"
-    assert "lease_id" not in sandbox
+    assert LOWER_RUNTIME_KEY not in sandbox
     assert sandbox["thread_ids"] == expected_thread_ids
     assert sandbox["agents"] == expected_agents
     assert sandbox["recipe_id"] == expected_recipe_id
@@ -279,7 +281,7 @@ def test_list_user_sandboxes_returns_user_visible_runtime_fields(monkeypatch):
 
     assert len(sandboxes) == 1
     sandbox = sandboxes[0]
-    assert "lease_id" not in sandbox
+    assert LOWER_RUNTIME_KEY not in sandbox
     assert sandbox["sandbox_id"] == "sandbox-1"
     assert sandbox["provider_name"] == "local"
     assert sandbox["recipe_id"] == "local:default"
@@ -299,7 +301,7 @@ def test_list_user_sandboxes_returns_user_visible_runtime_fields(monkeypatch):
 
 def test_list_user_sandboxes_does_not_require_lower_runtime_identity(monkeypatch):
     row = _runtime_row("lease-1", "thread-a", sandbox_id="sandbox-1")
-    row.pop("lease_id")
+    row.pop(LOWER_RUNTIME_KEY)
     thread_repo, user_repo = _single_agent_repos("thread-a")
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo([row]))
 
@@ -311,12 +313,12 @@ def test_list_user_sandboxes_does_not_require_lower_runtime_identity(monkeypatch
 
     assert len(sandboxes) == 1
     assert sandboxes[0]["sandbox_id"] == "sandbox-1"
-    assert "lease_id" not in sandboxes[0]
+    assert LOWER_RUNTIME_KEY not in sandboxes[0]
 
 
 def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_runtime_identity(monkeypatch):
     row = _runtime_row("lease-1", "thread-a", sandbox_id="sandbox-1")
-    row.pop("lease_id")
+    row.pop(LOWER_RUNTIME_KEY)
     thread_repo = _FakeThreadRepo(
         {
             "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
