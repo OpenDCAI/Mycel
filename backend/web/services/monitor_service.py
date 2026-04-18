@@ -819,8 +819,8 @@ def request_monitor_provider_orphan_runtime_cleanup(provider_name: str, runtime_
     runtime = str(runtime_id or "").strip()
     for item in list_monitor_provider_orphan_runtimes().get("runtimes", []):
         if str(item.get("provider") or "").strip() == provider and str(item.get("runtime_id") or "").strip() == runtime:
-            session_truth = {**item, "session_id": runtime}
-            return monitor_operation_service.request_provider_orphan_runtime_cleanup(provider, runtime, session_truth)
+            runtime_truth = {**item, "session_id": runtime}
+            return monitor_operation_service.request_provider_orphan_runtime_cleanup(provider, runtime, runtime_truth)
     raise KeyError(f"Provider orphan runtime not found: {provider}:{runtime}")
 
 

@@ -1,3 +1,4 @@
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +18,14 @@ class _FailingManager:
 
 def _provider_runtime(runtime_id: str, status: str = "paused"):
     return SimpleNamespace(session_id=runtime_id, status=status)
+
+
+def test_provider_orphan_runtime_cleanup_uses_runtime_truth_name():
+    source = inspect.getsource(monitor_service.request_monitor_provider_orphan_runtime_cleanup)
+    removed_name = "session" + "_truth"
+
+    assert removed_name not in source
+    assert "runtime_truth" in source
 
 
 def test_monitor_provider_orphan_runtimes_do_not_refresh_all_managed_runtime_rows(monkeypatch):
