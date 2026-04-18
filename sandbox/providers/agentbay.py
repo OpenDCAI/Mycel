@@ -205,7 +205,7 @@ class AgentBayProvider(SandboxProvider):
         )
 
         if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
-            # @@@agentbay-shell-link-route - shared staging proved shell can degrade into the API path
+            # @@@agentbay-shell-link-route - shared provider runs proved shell can degrade into the API path
             # despite hydrated direct-call metadata; take the explicit LinkUrl route when shell server is known.
             result = self._call_link_url_tool(session, "shell", exec_args, shell_server)
             print(
@@ -442,7 +442,7 @@ class AgentBayProvider(SandboxProvider):
 
     @staticmethod
     def _session_needs_direct_call_refresh(session: Any) -> bool:
-        # @@@agentbay-direct-call-hydration - shared staging may return a create-session object
+        # @@@agentbay-direct-call-hydration - shared provider runs may return a create-session object
         # without token/link_url/mcpTools; refresh once so shell execution stays on the richer LinkUrl path.
         if not getattr(session, "token", ""):
             return True

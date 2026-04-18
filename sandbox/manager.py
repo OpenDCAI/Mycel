@@ -396,7 +396,7 @@ class SandboxManager:
 
     def _resolve_sync_source_path(self, thread_id: str) -> Path:
         # @@@sync-source-truth - sync no longer needs dropped volume-row truth; it only needs
-        # the workspace-owned local staging root that backs the current file channel.
+        # the workspace-owned local file root that backs the current file channel.
         container = build_storage_container()
         thread_repo = container.thread_repo()
         try:

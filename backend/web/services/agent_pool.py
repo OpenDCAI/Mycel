@@ -107,7 +107,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                     app_obj.state.thread_cwd[thread_id] = str(workspace_root)
                 # @@@host-local-cwd-is-advisory - persisted local thread cwd can come from another
                 # host (for example a macOS path stored in shared Supabase but replayed inside a
-                # Linux staging container). Only pin workspace_root when that path exists here.
+                # Linux deployment container). Only pin workspace_root when that path exists here.
                 elif path.exists() and path.is_dir():
                     workspace_root = path.resolve()
                     app_obj.state.thread_cwd[thread_id] = str(workspace_root)

@@ -1,7 +1,7 @@
 """Volume source abstraction — where files physically live.
 
-Current runtime truth only needs host-backed staging paths.
-Historical Daytona staging rows still deserialize here so cleanup can remove their host paths.
+Current runtime truth only needs host-backed file roots.
+Historical Daytona file-root rows still deserialize here so cleanup can remove their host paths.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def _resolve_safe_path(base: Path, relative_path: str) -> Path:
 
 
 class HostVolume:
-    """Host filesystem volume used by host-backed providers and Daytona staging."""
+    """Host filesystem volume used by host-backed providers and Daytona file roots."""
 
     def __init__(self, base_path: Path):
         self.base_path = base_path.expanduser().resolve()

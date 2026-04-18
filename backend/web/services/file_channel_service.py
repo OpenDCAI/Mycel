@@ -33,7 +33,7 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
     """Resolve split file-channel truth for a thread.
 
     Ownership/binding lives on the thread -> workspace edge.
-    Host staging remains whatever local file root the current runtime uses.
+    Host file storage remains whatever local root the current runtime uses.
     """
     container = _get_container()
     thread_repo = container.thread_repo()

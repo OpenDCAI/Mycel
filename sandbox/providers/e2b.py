@@ -149,7 +149,7 @@ class E2BProvider(SandboxProvider):
         timeout: int = 300,
         provider_name: str | None = None,
     ):
-        # @@@e2b-sdk-presence - staging inventory must fail loudly when the SDK is absent,
+        # @@@e2b-sdk-presence - provider inventory must fail loudly when the SDK is absent,
         # otherwise provider catalog/create-thread gates can overclaim e2b availability.
         from e2b import Sandbox  # noqa: F401
 

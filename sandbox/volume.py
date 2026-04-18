@@ -55,11 +55,11 @@ class SandboxVolume:
         return getattr(self.provider, "WORKSPACE_ROOT", "/workspace") + "/files"
 
     def sync_upload(self, thread_id: str, session_id: str, source_path: Path, remote_path: str, files: list[str] | None = None) -> None:
-        """Sync files from local staging path to sandbox."""
+        """Sync files from the local file root to sandbox."""
         self._sync.upload(source_path, remote_path, session_id, self.provider, files=files, state_key=thread_id)
 
     def sync_download(self, thread_id: str, session_id: str, source_path: Path, remote_path: str) -> None:
-        """Sync files from sandbox back to local staging path."""
+        """Sync files from sandbox back to the local file root."""
         self._sync.download(source_path, remote_path, session_id, self.provider, state_key=thread_id)
 
     def clear_sync_state(self, thread_id: str) -> None:
