@@ -146,18 +146,6 @@ def _cleanup_current_truth(*, sandbox_id: str, triage_category: str | None) -> d
     }
 
 
-def _sandbox_destroy_result(result: Any) -> Any:
-    if not isinstance(result, dict):
-        return result
-    return {key: value for key, value in result.items() if key not in {"lease_id", "lower_runtime_handle"}}
-
-
-def _provider_runtime_destroy_result(result: Any) -> Any:
-    if not isinstance(result, dict):
-        return result
-    return {key: value for key, value in result.items() if key not in {"lease_id", "lower_runtime_handle"}}
-
-
 def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
     sandbox = sandbox_detail["sandbox"]
     provider = sandbox_detail.get("provider") or {}
@@ -242,7 +230,7 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
         "sandbox_state_before": sandbox.get("observed_state"),
         "sandbox_state_after": None,
         "runtime_state_after": None,
-        "destroy_result": _sandbox_destroy_result(result),
+        "destroy_result": result.destroy_result,
     }
     _append_event(operation, status="succeeded", message="Sandbox cleanup completed.")
     return {
@@ -312,7 +300,7 @@ def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str,
             },
         }
 
-    operation["result_truth"] = {"destroy_result": _provider_runtime_destroy_result(result)}
+    operation["result_truth"] = {"destroy_result": result.destroy_result}
     _append_event(operation, status="succeeded", message="Provider orphan runtime cleanup completed.")
     return {
         "accepted": True,
