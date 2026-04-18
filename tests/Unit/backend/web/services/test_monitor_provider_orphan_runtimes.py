@@ -12,14 +12,14 @@ class _FailingManager:
         self.provider_capability = SimpleNamespace(inspect_visible=True)
 
     def list_sessions(self):
-        raise AssertionError("provider orphan runtime endpoint must not refresh all lease sessions")
+        raise AssertionError("provider orphan runtime endpoint must not refresh all managed runtime rows")
 
 
 def _provider_runtime(runtime_id: str, status: str = "paused"):
     return SimpleNamespace(session_id=runtime_id, status=status)
 
 
-def test_monitor_provider_orphan_runtimes_do_not_refresh_all_lease_sessions(monkeypatch):
+def test_monitor_provider_orphan_runtimes_do_not_refresh_all_managed_runtime_rows(monkeypatch):
     manager = _FailingManager()
 
     monkeypatch.setattr(sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": manager}))

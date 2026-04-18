@@ -395,7 +395,7 @@ def load_all_sessions(managers: dict) -> list[dict]:
 
 
 def load_provider_orphan_sessions(managers: dict) -> list[dict]:
-    """Load provider-visible sessions that are not backed by a known lease."""
+    """Load provider-visible runtimes that are not backed by a known managed runtime row."""
     sessions: list[dict] = []
     for provider_name, manager in managers.items():
         provider = getattr(manager, "provider", None)
