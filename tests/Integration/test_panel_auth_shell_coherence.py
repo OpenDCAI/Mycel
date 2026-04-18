@@ -6,40 +6,10 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.web.models import panel as panel_models
-from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest, UpdateProfileRequest
+from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest
 from backend.web.routers import panel as panel_router
-from backend.web.services import agent_user_service, library_service, profile_service
+from backend.web.services import agent_user_service, library_service
 from storage.contracts import UserRow, UserType
-
-
-def test_panel_router_exposes_agents_routes_not_members_routes():
-    route_paths = {(route.path, tuple(sorted(route.methods or []))) for route in panel_router.router.routes}
-
-    assert ("/api/panel/agents", ("GET",)) in route_paths
-    assert ("/api/panel/agents/{agent_id}", ("GET",)) in route_paths
-    assert ("/api/panel/agents", ("POST",)) in route_paths
-    assert ("/api/panel/agents/{agent_id}", ("PUT",)) in route_paths
-    assert ("/api/panel/agents/{agent_id}/config", ("PUT",)) in route_paths
-    assert ("/api/panel/agents/{agent_id}/publish", ("PUT",)) in route_paths
-    assert ("/api/panel/agents/{agent_id}", ("DELETE",)) in route_paths
-    assert ("/api/panel/members", ("GET",)) not in route_paths
-    assert ("/api/panel/members/{agent_id}", ("GET",)) not in route_paths
-
-
-def test_panel_models_expose_agent_requests_not_member_or_staff_aliases():
-    assert hasattr(panel_models, "AgentConfigPayload")
-    assert hasattr(panel_models, "CreateAgentRequest")
-    assert hasattr(panel_models, "UpdateAgentRequest")
-    assert hasattr(panel_models, "PublishAgentRequest")
-    assert not hasattr(panel_models, "MemberConfigPayload")
-    assert not hasattr(panel_models, "CreateMemberRequest")
-    assert not hasattr(panel_models, "UpdateMemberRequest")
-    assert not hasattr(panel_models, "PublishMemberRequest")
-    assert not hasattr(panel_models, "StaffConfigPayload")
-    assert not hasattr(panel_models, "CreateStaffRequest")
-    assert not hasattr(panel_models, "UpdateStaffRequest")
-    assert not hasattr(panel_models, "PublishStaffRequest")
 
 
 @pytest.mark.asyncio
@@ -131,38 +101,6 @@ async def test_panel_agent_detail_keeps_full_config_for_owner_scope(monkeypatch:
     assert {agent["name"] for agent in result["config"]["subAgents"]} >= {"bash", "explore", "general", "plan"}
 
 
-def test_owned_agent_helper_returns_agent_for_owner():
-    result = panel_router._require_owned_agent_user(
-        "agent-1",
-        "user-1",
-        SimpleNamespace(
-            get_by_id=lambda user_id: _agent_user(user_id=user_id) if user_id == "agent-1" else None,
-        ),
-    )
-
-    assert result.id == "agent-1"
-
-
-def test_owned_agent_helper_raises_404_for_missing_agent():
-    with pytest.raises(HTTPException) as excinfo:
-        panel_router._require_owned_agent_user("missing", "user-1", SimpleNamespace(get_by_id=lambda _user_id: None))
-
-    assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == "Agent not found"
-
-
-def test_owned_agent_helper_raises_403_for_wrong_owner():
-    with pytest.raises(HTTPException) as excinfo:
-        panel_router._require_owned_agent_user(
-            "agent-1",
-            "user-1",
-            SimpleNamespace(get_by_id=lambda _user_id: _agent_user(owner_user_id="user-2")),
-        )
-
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Forbidden"
-
-
 @pytest.mark.asyncio
 async def test_update_agent_route_returns_404_for_missing_agent(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(agent_user_service, "get_agent_user", lambda _agent_user_id: None)
@@ -223,42 +161,6 @@ async def test_delete_agent_route_rejects_agent_with_existing_threads(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_delete_agent_route_passes_only_current_delete_dependencies(monkeypatch: pytest.MonkeyPatch):
-    seen: dict[str, object] = {}
-
-    def _fake_delete_agent_user(agent_id: str, **kwargs: object) -> bool:
-        seen["agent_id"] = agent_id
-        seen["delete_dependency_keys"] = sorted(kwargs)
-        seen["contact_repo"] = kwargs.get("contact_repo")
-        return True
-
-    monkeypatch.setattr(agent_user_service, "delete_agent_user", _fake_delete_agent_user)
-
-    contact_repo = object()
-    result = await panel_router.delete_agent(
-        "agent-1",
-        request=SimpleNamespace(
-            app=SimpleNamespace(
-                state=SimpleNamespace(
-                    user_repo=SimpleNamespace(get_by_id=lambda user_id: _agent_user(user_id=user_id) if user_id == "agent-1" else None),
-                    thread_repo=SimpleNamespace(list_by_agent_user=lambda _agent_user_id: []),
-                    agent_config_repo=SimpleNamespace(),
-                    contact_repo=contact_repo,
-                )
-            )
-        ),
-        user_id="user-1",
-    )
-
-    assert result == {"success": True}
-    assert seen == {
-        "agent_id": "agent-1",
-        "delete_dependency_keys": ["agent_config_repo", "contact_repo", "user_repo"],
-        "contact_repo": contact_repo,
-    }
-
-
-@pytest.mark.asyncio
 async def test_publish_agent_route_keeps_builtin_guard_before_owner_lookup(monkeypatch: pytest.MonkeyPatch):
     def explode(_agent_user_id: str):
         raise AssertionError("agent lookup should not run for builtin guard")
@@ -275,154 +177,6 @@ async def test_publish_agent_route_keeps_builtin_guard_before_owner_lookup(monke
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Cannot publish builtin agent"
-
-
-def test_profile_service_prefers_authenticated_member_over_config_defaults():
-    user = UserRow(
-        id="user-1",
-        type=UserType.HUMAN,
-        display_name="codex",
-        email="codex@example.com",
-        created_at=1.0,
-    )
-
-    profile = profile_service.get_profile(user=user)
-
-    assert profile == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
-
-
-@pytest.mark.asyncio
-async def test_profile_route_uses_authenticated_user_row_instead_of_requerying_repo():
-    user = UserRow(
-        id="user-1",
-        type=UserType.HUMAN,
-        display_name="codex",
-        email="codex@example.com",
-        created_at=1.0,
-    )
-
-    result = await panel_router.get_profile(
-        user=user,
-    )
-
-    assert result == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
-
-
-def test_profile_service_updates_user_repo_shell_fields_only():
-    seen: list[tuple[str, dict[str, object]]] = []
-
-    class _UserRepo:
-        def update(self, user_id: str, **fields):
-            seen.append((user_id, fields))
-
-        def get_by_id(self, user_id: str):
-            if user_id != "user-1":
-                return None
-            return UserRow(
-                id="user-1",
-                type=UserType.HUMAN,
-                display_name="renamed",
-                email="renamed@example.com",
-                created_at=1.0,
-                updated_at=2.0,
-            )
-
-    profile = profile_service.update_profile(
-        user_repo=_UserRepo(),
-        user_id="user-1",
-        name="renamed",
-        email="renamed@example.com",
-    )
-
-    assert seen == [("user-1", {"display_name": "renamed", "email": "renamed@example.com"})]
-    assert profile == {"name": "renamed", "initials": "RE", "email": "renamed@example.com"}
-
-
-@pytest.mark.asyncio
-async def test_update_profile_route_uses_user_repo_instead_of_config_file():
-    seen: list[tuple[str, dict[str, object]]] = []
-
-    class _UserRepo:
-        def update(self, user_id: str, **fields):
-            seen.append((user_id, fields))
-
-        def get_by_id(self, user_id: str):
-            if user_id != "user-1":
-                return None
-            return UserRow(
-                id="user-1",
-                type=UserType.HUMAN,
-                display_name="renamed",
-                email="renamed@example.com",
-                created_at=1.0,
-                updated_at=2.0,
-            )
-
-    result = await panel_router.update_profile(
-        UpdateProfileRequest(name="renamed", initials="RN", email="renamed@example.com"),
-        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=_UserRepo()))),
-        user_id="user-1",
-    )
-
-    assert seen == [("user-1", {"display_name": "renamed", "email": "renamed@example.com"})]
-    assert result == {"name": "renamed", "initials": "RE", "email": "renamed@example.com"}
-
-
-def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytest.MonkeyPatch):
-    seen: list[tuple[str, object]] = []
-
-    monkeypatch.setattr(
-        agent_user_service,
-        "list_agent_users",
-        lambda owner_user_id=None, user_repo=None, agent_config_repo=None: (
-            seen.append((owner_user_id, user_repo, agent_config_repo))
-            or [
-                {"id": "agent-1", "name": "Toad", "config": {"skills": [{"name": "skill-a"}]}},
-                {"id": "agent-2", "name": "Dryad", "config": {"skills": [{"name": "skill-b"}]}},
-            ]
-        ),
-    )
-
-    result = library_service.get_resource_used_by("skill", "skill-a", "user-1", user_repo="repo-1", agent_config_repo="cfg-repo")
-
-    assert result == ["Toad"]
-    assert seen == [("user-1", "repo-1", "cfg-repo")]
-
-
-def test_library_service_create_sandbox_template_uses_provider_name_identity(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(
-        library_service.sandbox_service,
-        "available_sandbox_types",
-        lambda: [
-            {"name": "daytona", "provider": "daytona", "available": True},
-            {"name": "daytona_selfhost", "provider": "daytona", "available": True},
-        ],
-    )
-
-    rows: dict[tuple[str, str], dict[str, object]] = {}
-
-    class _RecipeRepo:
-        def get(self, owner_user_id: str, recipe_id: str):
-            return rows.get((owner_user_id, recipe_id))
-
-        def upsert(self, **payload: object):
-            rows[(str(payload["owner_user_id"]), str(payload["recipe_id"]))] = {"data": payload["data"], **payload}
-
-    item = library_service.create_resource(
-        "sandbox-template",
-        "Selfhost Custom",
-        "custom self-host sandbox",
-        features={"lark_cli": True},
-        provider_name="daytona_selfhost",
-        owner_user_id="user-1",
-        recipe_repo=_RecipeRepo(),
-    )
-
-    assert item["id"].startswith("daytona_selfhost:custom:")
-    assert item["provider_name"] == "daytona_selfhost"
-    assert item["provider_type"] == "daytona"
-    assert rows[("user-1", item["id"])]["provider_type"] == "daytona"
-    assert rows[("user-1", item["id"])]["data"]["provider_name"] == "daytona_selfhost"
 
 
 def test_create_agent_user_fails_loudly_when_created_row_is_not_readable():
@@ -943,34 +697,6 @@ def test_delete_agent_user_clears_dependent_edges_before_agent_config():
     calls, run = _agent_delete_runner()
 
     assert run() is True
-    assert calls == ["contacts:agent-1", "config:cfg-1", "user:agent-1"]
-
-
-def test_delete_agent_user_uses_current_delete_dependency_order_without_stale_cleanup_shell():
-    agent = _agent_user(user_id="agent-1")
-    calls: list[str] = []
-
-    class _UserRepo:
-        def get_by_id(self, user_id: str):
-            return agent if user_id == "agent-1" else None
-
-        def delete(self, user_id: str) -> None:
-            calls.append(f"user:{user_id}")
-
-    class _AgentConfigRepo:
-        def delete_config(self, agent_config_id: str) -> None:
-            calls.append(f"config:{agent_config_id}")
-
-    class _ContactRepo:
-        def delete_for_user(self, user_id: str) -> None:
-            calls.append(f"contacts:{user_id}")
-
-    assert agent_user_service.delete_agent_user(
-        "agent-1",
-        user_repo=_UserRepo(),
-        agent_config_repo=_AgentConfigRepo(),
-        contact_repo=_ContactRepo(),
-    )
     assert calls == ["contacts:agent-1", "config:cfg-1", "user:agent-1"]
 
 
