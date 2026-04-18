@@ -37,8 +37,19 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
     }
 
 
+def test_sandbox_runtime_routes_do_not_expose_session_paths() -> None:
+    route_paths = {getattr(route, "path", "") for route in sandbox_router.router.routes}
+
+    assert "/api/sandbox/runtimes" in route_paths
+    assert "/api/sandbox/runtimes/{runtime_id}/metrics" in route_paths
+    assert "/api/sandbox/runtimes/{runtime_id}/pause" in route_paths
+    assert "/api/sandbox/runtimes/{runtime_id}/resume" in route_paths
+    assert "/api/sandbox/runtimes/{runtime_id}" in route_paths
+    assert not any("/sessions" in path for path in route_paths)
+
+
 @pytest.mark.asyncio
-async def test_list_sandbox_sessions_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sandbox_router.sandbox_service, "init_providers_and_managers", lambda: ({}, {"local": object()}))
     monkeypatch.setattr(
         sandbox_router.sandbox_service,
@@ -55,9 +66,10 @@ async def test_list_sandbox_sessions_strips_lower_runtime_identity(monkeypatch: 
         ],
     )
 
-    result = await sandbox_router.list_sandbox_sessions()
+    result = await sandbox_router.list_sandbox_runtimes()
 
-    assert result["sessions"] == [
+    assert "sessions" not in result
+    assert result["runtime_rows"] == [
         {
             "session_id": "session-1",
             "thread_id": "thread-1",
@@ -69,31 +81,38 @@ async def test_list_sandbox_sessions_strips_lower_runtime_identity(monkeypatch: 
 
 
 @pytest.mark.asyncio
-async def test_sandbox_session_mutation_response_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        sandbox_router.sandbox_service,
-        "mutate_sandbox_runtime",
-        lambda **_kwargs: {
+async def test_sandbox_runtime_mutation_response_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_mutate_sandbox_runtime(**kwargs: object) -> dict[str, object]:
+        seen.update(kwargs)
+        return {
             "ok": True,
             "action": "pause",
-            "session_id": "session-1",
+            "session_id": "runtime-1",
             "provider": "local",
             "thread_id": None,
             "lease_id": "lease-1",
             "mode": "manager_runtime",
-        },
+        }
+
+    monkeypatch.setattr(
+        sandbox_router.sandbox_service,
+        "mutate_sandbox_runtime",
+        fake_mutate_sandbox_runtime,
     )
 
-    result = await sandbox_router.pause_sandbox_session("session-1")
+    result = await sandbox_router.pause_sandbox_runtime("runtime-1")
 
     assert result == {
         "ok": True,
         "action": "pause",
-        "session_id": "session-1",
+        "session_id": "runtime-1",
         "provider": "local",
         "thread_id": None,
         "mode": "manager_runtime",
     }
+    assert seen["runtime_id"] == "runtime-1"
 
 
 def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.MonkeyPatch) -> None:
