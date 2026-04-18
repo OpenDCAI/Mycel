@@ -9,6 +9,8 @@ from backend.web.services import (
     monitor_thread_trajectory_service,
     monitor_trace_read_service,
     monitor_trace_service,
+    owner_thread_workbench_read_service,
+    owner_thread_workbench_service,
 )
 
 
@@ -81,3 +83,12 @@ def test_monitor_thread_list_does_not_depend_on_threads_router():
 
     assert "backend.web.routers.threads" not in thread_source
     assert "owner_thread_workbench_service" in thread_source
+
+
+def test_owner_thread_workbench_uses_app_state_read_source():
+    workbench_source = inspect.getsource(owner_thread_workbench_service)
+    read_source = inspect.getsource(owner_thread_workbench_read_service)
+
+    assert "app.state" not in workbench_source
+    assert "owner_thread_workbench_read_service" in workbench_source
+    assert "app.state" in read_source
