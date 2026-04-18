@@ -10,6 +10,7 @@ from backend.web.services import (
     monitor_evaluation_service,
     monitor_operation_repo_service,
     monitor_operation_service,
+    monitor_provider_runtime_inventory_service,
     monitor_provider_runtime_service,
     monitor_sandbox_config_service,
     monitor_sandbox_detail_service,
@@ -801,12 +802,9 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
 
 def test_list_monitor_provider_orphan_runtimes_returns_provider_orphans(monkeypatch):
     monkeypatch.setattr(
-        monitor_provider_runtime_service.sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": object()})
-    )
-    monkeypatch.setattr(
-        monitor_provider_runtime_service.sandbox_service,
-        "load_provider_orphan_runtimes",
-        lambda _managers: [
+        monitor_provider_runtime_inventory_service,
+        "load_provider_orphan_runtime_rows",
+        lambda: [
             {"session_id": "orphan-1", "provider": "daytona", "source": "provider_orphan", "status": "running"},
         ],
     )

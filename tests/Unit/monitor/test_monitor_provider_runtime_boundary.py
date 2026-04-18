@@ -1,6 +1,6 @@
 import inspect
 
-from backend.web.services import monitor_gateway
+from backend.web.services import monitor_gateway, monitor_provider_runtime_inventory_service, monitor_provider_runtime_service
 
 
 def test_monitor_gateway_provider_runtime_uses_narrow_service():
@@ -12,3 +12,14 @@ def test_monitor_gateway_provider_runtime_uses_narrow_service():
     assert f"{broad_shell}.get_monitor_provider_detail" not in source
     assert f"{broad_shell}.get_monitor_runtime_detail" not in source
     assert f"{broad_shell}.request_monitor_provider_orphan_runtime_cleanup" not in source
+
+
+def test_monitor_provider_runtime_uses_inventory_read_port():
+    source = inspect.getsource(monitor_provider_runtime_service)
+    inventory_source = inspect.getsource(monitor_provider_runtime_inventory_service)
+
+    assert "sandbox_service" not in source
+    assert "init_providers_and_managers" not in source
+    assert "load_provider_orphan_runtime_rows" in source
+    assert "init_providers_and_managers" in inventory_source
+    assert "load_provider_orphan_runtimes" in inventory_source

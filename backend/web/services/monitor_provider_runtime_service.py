@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_operation_service, sandbox_service
+from backend.web.services import monitor_operation_service, monitor_provider_runtime_inventory_service
 from backend.web.services.resource_cache import get_resource_overview_snapshot
 
 
 def list_monitor_provider_orphan_runtimes() -> dict[str, Any]:
-    _, managers = sandbox_service.init_providers_and_managers()
     runtimes = []
-    for item in sandbox_service.load_provider_orphan_runtimes(managers):
+    for item in monitor_provider_runtime_inventory_service.load_provider_orphan_runtime_rows():
         runtimes.append(
             {
                 "runtime_id": str(item.get("session_id") or ""),
