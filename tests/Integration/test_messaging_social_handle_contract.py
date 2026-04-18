@@ -389,6 +389,31 @@ def test_chat_tool_list_chats_requires_last_message_content_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_empty_last_message_content_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": [{"id": "human-user-1", "name": "Human"}],
+                    "unread_count": 0,
+                    "last_message": {},
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError, match="Chat summary chat-1 last_message is missing content"):
+        list_chats.handler()
+
+
 def test_chat_tool_list_chats_requires_unread_count_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
