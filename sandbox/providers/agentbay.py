@@ -143,7 +143,7 @@ class AgentBayProvider(SandboxProvider):
     def pause_session(self, session_id: str) -> bool:
         session = self._get_session(session_id)
         # @@@agentbay-benefit-level - Some AgentBay accounts reject pause/resume with
-        # BenefitLevel.NotSupport; keep fail-loud and do not fallback.
+        # BenefitLevel.NotSupport; keep fail-loud and do not substitute behavior.
         result = session.beta_pause()
         if result.success:
             return True
