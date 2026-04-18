@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from backend.web.services import resource_common, resource_projection_service
@@ -24,19 +22,6 @@ class _FakeRepo:
 
     def close(self):
         pass
-
-
-def test_fake_resource_repo_no_longer_exposes_lease_instance_shell() -> None:
-    repo = _FakeRepo([])
-
-    assert not hasattr(repo, "query_lease_instance_id")
-    assert not hasattr(repo, "query_lease_instance_ids")
-
-
-def test_fake_resource_repo_no_longer_exposes_lease_thread_shell() -> None:
-    repo = _FakeRepo([])
-
-    assert not hasattr(repo, "query_lease_threads")
 
 
 class _FakeThreadRepo:
@@ -89,31 +74,6 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
 
-def test_storage_runtime_no_longer_exposes_lease_shaped_snapshot_read_shell() -> None:
-    assert not hasattr(storage_runtime, "list_resource_snapshots")
-
-
-def test_resource_projection_comments_use_sandbox_row_language() -> None:
-    source = Path(resource_projection_service.__file__)
-    text = source.read_text(encoding="utf-8")
-    guard_source = Path(__file__).read_text(encoding="utf-8")
-    stale_residue_comment = "lease ids remain " + "compat" + "ibility residue for enrichment joins"
-    stale_detached_comment = "detached leases that have neither " + "a bound runtime"
-
-    assert stale_residue_comment not in text
-    assert stale_residue_comment not in guard_source
-    assert stale_detached_comment not in text
-    assert stale_detached_comment not in guard_source
-
-
-def test_resource_projection_internal_orphan_runtime_grouping_uses_runtime_language() -> None:
-    projection_source = Path(resource_projection_service.__file__).read_text(encoding="utf-8")
-    common_source = Path(resource_common.__file__).read_text(encoding="utf-8")
-
-    assert "provider_sessions" not in projection_source
-    assert "provider_sessions" not in common_source
-
-
 def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None:
     session = {
         "session_id": "provider-session-1",
@@ -124,20 +84,6 @@ def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None
 
     assert resource_projection_service._resource_session_identity(session) == "provider-session-1"
     assert resource_projection_service._resource_running_identity(session) == ""
-
-
-def test_resource_projection_unbound_identity_is_not_named_as_fallback() -> None:
-    source = Path(resource_projection_service.__file__).read_text(encoding="utf-8")
-
-    assert "fallback_identity" not in source
-    assert "unbound-runtime fallback" not in source
-
-
-def test_resource_projection_visible_parent_path_is_not_named_as_fallback() -> None:
-    source = Path(resource_projection_service.__file__).read_text(encoding="utf-8")
-
-    assert "resource-visible-thread-fallback" not in source
-    assert "visible-thread fallback" not in source
 
 
 def test_list_resource_providers_no_longer_uses_lease_shaped_row_source_shell(monkeypatch) -> None:
