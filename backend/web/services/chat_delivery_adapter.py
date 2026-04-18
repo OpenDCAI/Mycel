@@ -7,14 +7,14 @@ import logging
 from enum import Enum
 from typing import Any
 
-from backend.web.services.agent_runtime_gateway import (
+from backend.protocols.agent_runtime import (
     AgentChatActor,
     AgentChatContext,
     AgentChatDeliveryEnvelope,
     AgentChatMessage,
     AgentChatRecipient,
-    NativeAgentRuntimeGateway,
 )
+from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 from storage.contracts import UserRow
 
 logger = logging.getLogger(__name__)
