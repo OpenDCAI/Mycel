@@ -96,9 +96,14 @@ def test_storage_runtime_no_longer_exposes_lease_shaped_snapshot_read_shell() ->
 def test_resource_projection_comments_use_sandbox_row_language() -> None:
     source = Path(resource_projection_service.__file__)
     text = source.read_text(encoding="utf-8")
+    guard_source = Path(__file__).read_text(encoding="utf-8")
+    stale_residue_comment = "lease ids remain " + "compatibility residue for enrichment joins"
+    stale_detached_comment = "detached leases that have neither " + "a bound runtime"
 
-    assert "lease ids remain compatibility residue for enrichment joins" not in text
-    assert "detached leases that have neither a bound runtime" not in text
+    assert stale_residue_comment not in text
+    assert stale_residue_comment not in guard_source
+    assert stale_detached_comment not in text
+    assert stale_detached_comment not in guard_source
 
 
 def test_resource_projection_internal_orphan_runtime_grouping_uses_runtime_language() -> None:
