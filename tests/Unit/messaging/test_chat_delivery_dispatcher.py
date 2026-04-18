@@ -141,3 +141,13 @@ def test_dispatcher_fails_loudly_when_delivery_function_fails() -> None:
         dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
 
     assert delivered == []
+
+
+def test_dispatcher_fails_loudly_when_delivery_function_is_missing() -> None:
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=_member_repo(["human-user-1", "agent-user-1"]),
+        user_repo=_user_repo(),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat delivery function is not configured"):
+        dispatcher.dispatch("chat-1", "human-user-1", "hello", [])

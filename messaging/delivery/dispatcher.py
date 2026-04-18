@@ -111,7 +111,7 @@ class ChatDeliveryDispatcher:
         signal: str | None,
     ) -> None:
         if not self._delivery_fn:
-            return
+            raise RuntimeError("Chat delivery function is not configured")
         self._delivery_fn(
             ChatDeliveryRequest(
                 recipient_id=recipient_id,
