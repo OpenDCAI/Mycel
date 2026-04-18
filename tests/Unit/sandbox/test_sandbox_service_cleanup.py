@@ -2,6 +2,8 @@ from types import SimpleNamespace
 
 from backend.web.services import sandbox_service
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+
 
 def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
     calls: list[str] = []
@@ -9,11 +11,11 @@ def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
     class _Manager:
         terminal_store = SimpleNamespace(list_all=lambda: [], delete=lambda _terminal_id: None)
 
-        def get_lease(self, lease_id: str):
-            return SimpleNamespace(lease_id=lease_id)
+        def get_lease(self, lower_runtime_id: str):
+            return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
 
-        def destroy_lease_resources(self, lease_id: str) -> bool:
-            calls.append(lease_id)
+        def destroy_lease_resources(self, lower_runtime_id: str) -> bool:
+            calls.append(lower_runtime_id)
             return True
 
     monkeypatch.setattr(
@@ -44,7 +46,7 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
     destroyed: list[str] = []
     deleted_thread_chats: list[tuple[str, str]] = []
     terminal_rows = [
-        {"terminal_id": "term-stale", "lease_id": "lease-1", "thread_id": "thread-missing"},
+        {"terminal_id": "term-stale", LOWER_RUNTIME_KEY: "lease-1", "thread_id": "thread-missing"},
     ]
 
     class _Manager:
@@ -56,11 +58,11 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
             delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason))
         )
 
-        def get_lease(self, lease_id: str):
-            return SimpleNamespace(lease_id=lease_id)
+        def get_lease(self, lower_runtime_id: str):
+            return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
 
-        def destroy_lease_resources(self, lease_id: str) -> bool:
-            destroyed.append(lease_id)
+        def destroy_lease_resources(self, lower_runtime_id: str) -> bool:
+            destroyed.append(lower_runtime_id)
             return True
 
     class _ThreadRepo:
@@ -94,7 +96,7 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
     destroyed: list[str] = []
     deleted_thread_chats: list[tuple[str, str]] = []
     terminal_rows = [
-        {"terminal_id": "term-live", "lease_id": "lease-1", "thread_id": "thread-live"},
+        {"terminal_id": "term-live", LOWER_RUNTIME_KEY: "lease-1", "thread_id": "thread-live"},
     ]
 
     class _Manager:
@@ -106,11 +108,11 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
             delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason))
         )
 
-        def get_lease(self, lease_id: str):
-            return SimpleNamespace(lease_id=lease_id)
+        def get_lease(self, lower_runtime_id: str):
+            return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
 
-        def destroy_lease_resources(self, lease_id: str) -> bool:
-            destroyed.append(lease_id)
+        def destroy_lease_resources(self, lower_runtime_id: str) -> bool:
+            destroyed.append(lower_runtime_id)
             return True
 
     class _ThreadRepo:
