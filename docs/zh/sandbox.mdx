@@ -151,7 +151,7 @@ keywords: [沙箱, docker, e2b, daytona, agentbay, 隔离, 生命周期]
 2. 环境变量（`E2B_API_KEY`、`DAYTONA_API_KEY`、`AGENTBAY_API_KEY`）
 3. `~/.leon/config.env`
 
-## 会话生命周期
+## 运行时生命周期
 
 ```
 空闲 → 激活 → 暂停 → 销毁
@@ -164,22 +164,22 @@ keywords: [沙箱, docker, e2b, daytona, agentbay, 隔离, 生命周期]
 
 默认为 `pause` — 跨重启保留所有状态。
 
-### 通过 Web UI 管理会话
+### 通过 Web UI 管理运行时
 
 在**资源**页面：
-- 统一网格展示所有提供商的所有会话
-- 点击会话卡片 → 详情面板（指标 + 文件浏览器）
+- 统一网格展示所有提供商的所有运行时
+- 点击运行时卡片 → 详情面板（指标 + 文件浏览器）
 - 通过 UI 或 API 暂停 / 恢复 / 销毁
 
 ### API 接口
 
 | 操作 | 接口 |
 |------|------|
-| 列出会话 | `GET /api/sandbox/sessions` |
-| 暂停 | `POST /api/sandbox/sessions/{id}/pause?provider={type}` |
-| 恢复 | `POST /api/sandbox/sessions/{id}/resume?provider={type}` |
-| 销毁 | `DELETE /api/sandbox/sessions/{id}?provider={type}` |
-| 获取指标 | `GET /api/sandbox/sessions/{id}/metrics` |
+| 列出运行时 | `GET /api/sandbox/runtimes` |
+| 暂停 | `POST /api/sandbox/runtimes/{id}/pause?provider={type}` |
+| 恢复 | `POST /api/sandbox/runtimes/{id}/resume?provider={type}` |
+| 销毁 | `DELETE /api/sandbox/runtimes/{id}?provider={type}` |
+| 获取指标 | `GET /api/sandbox/runtimes/{id}/metrics` |
 
 ## 架构
 
@@ -198,6 +198,6 @@ Agent
 | 表 | 用途 |
 |----|------|
 | `sandbox_leases` | 内部沙箱生命周期桥 — 提供商、期望状态/实际状态 |
-| `sandbox_instances` | 提供商侧的会话 ID |
+| `sandbox_instances` | 提供商侧的原生运行时 ID |
 | `abstract_terminals` | 绑定到 Thread + 沙箱生命周期桥的虚拟终端 |
 | `sandbox_resource_snapshots` | CPU、内存、磁盘指标 |

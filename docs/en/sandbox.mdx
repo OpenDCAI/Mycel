@@ -55,7 +55,7 @@ flowchart LR
     In the new conversation view, use the **sandbox dropdown** in the input area to select your provider. Send your first message — the Thread is now permanently bound to that sandbox.
   </Step>
   <Step title="Monitor resources">
-    Go to **Resources** (sidebar). Live CPU/RAM/disk metrics and a file browser per sandbox session.
+    Go to **Resources** (sidebar). Live CPU/RAM/disk metrics and a file browser per sandbox runtime.
   </Step>
 </Steps>
 
@@ -172,11 +172,11 @@ From **Resources**:
 
 | Action | Endpoint |
 |--------|----------|
-| List sessions | `GET /api/sandbox/sessions` |
-| Pause | `POST /api/sandbox/sessions/{id}/pause?provider={type}` |
-| Resume | `POST /api/sandbox/sessions/{id}/resume?provider={type}` |
-| Destroy | `DELETE /api/sandbox/sessions/{id}?provider={type}` |
-| Metrics | `GET /api/sandbox/sessions/{id}/metrics` |
+| List runtimes | `GET /api/sandbox/runtimes` |
+| Pause | `POST /api/sandbox/runtimes/{id}/pause?provider={type}` |
+| Resume | `POST /api/sandbox/runtimes/{id}/resume?provider={type}` |
+| Destroy | `DELETE /api/sandbox/runtimes/{id}?provider={type}` |
+| Metrics | `GET /api/sandbox/runtimes/{id}/metrics` |
 
 ## Architecture
 
