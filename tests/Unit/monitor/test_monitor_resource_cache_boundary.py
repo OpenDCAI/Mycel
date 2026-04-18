@@ -19,6 +19,13 @@ def test_resource_cache_does_not_import_monitor_sandbox_projection():
     assert "monitor_sandbox_projection_service" not in source
 
 
+def test_resource_cache_refresh_loop_uses_resource_io_port():
+    source = inspect.getsource(resource_cache)
+
+    assert "monitor_resource_io_service" in source
+    assert "resource_service" not in source
+
+
 def test_monitor_resource_service_owns_resource_triage_composition():
     source = inspect.getsource(monitor_resource_service)
 

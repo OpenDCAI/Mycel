@@ -10,7 +10,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services import resource_projection_service, resource_service
+from backend.web.services import monitor_resource_io_service, resource_projection_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 
@@ -113,7 +113,7 @@ async def resource_overview_refresh_loop() -> None:
         await asyncio.sleep(interval_sec)
         try:
             await asyncio.wait_for(
-                asyncio.to_thread(resource_service.refresh_resource_snapshots),
+                asyncio.to_thread(monitor_resource_io_service.refresh_resource_snapshots),
                 timeout=10.0,
             )
         except asyncio.CancelledError:
