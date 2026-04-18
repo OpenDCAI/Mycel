@@ -169,7 +169,7 @@ class SupabaseLeaseRepo:
                 "provider_env_id": None,
                 "sandbox_template_id": recipe_id,
                 "desired_state": "running",
-                "observed_state": "running",
+                "observed_state": "detached",
                 "status": "ready",
                 "observed_at": now,
                 "last_error": None,
