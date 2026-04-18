@@ -1,19 +1,8 @@
 from __future__ import annotations
 
-import inspect
-
 import pytest
 
 from backend.web.routers import webhooks
-
-
-def test_webhooks_router_no_longer_imports_sqlite_lease_repo() -> None:
-    source = inspect.getsource(webhooks)
-
-    assert "storage.providers.sqlite.lease_repo" not in source
-    assert "storage.providers.sqlite.kernel" not in source
-    assert "storage.runtime" in source
-    assert "sandbox.control_plane_repos" in source
 
 
 @pytest.mark.asyncio

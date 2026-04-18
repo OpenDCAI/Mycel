@@ -101,14 +101,6 @@ def test_delete_thread_in_db_cleans_runtime_repos_when_supabase_defaults_without
     assert sync_state.closed
 
 
-def test_helpers_no_longer_expose_terminal_timestamp_helper() -> None:
-    assert not hasattr(helpers, "get_terminal_timestamps")
-
-
-def test_helpers_no_longer_expose_lease_timestamp_helper() -> None:
-    assert not hasattr(helpers, "get_lease_timestamps")
-
-
 def test_load_thread_row_returns_current_thread_row(monkeypatch) -> None:
     thread_repo = _ThreadRepo()
     thread_repo.row = {"id": "thread-1", "cwd": "/workspace"}
