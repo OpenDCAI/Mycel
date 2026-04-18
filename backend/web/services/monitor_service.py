@@ -104,10 +104,10 @@ def _canonical_live_thread_refs(raw_thread_ids: list[str]) -> list[dict[str, Any
     return [{"thread_id": str(row.get("id") or "").strip()} for row in canonical if str(row.get("id") or "").strip()]
 
 
-def _derive_thread_summary_from_chat_sessions(chat_sessions: list[dict[str, Any]]) -> dict[str, Any] | None:
-    if not chat_sessions:
+def _derive_thread_summary_from_runtime_rows(runtime_rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not runtime_rows:
         return None
-    latest = chat_sessions[0]
+    latest = runtime_rows[0]
     summary = {
         "sandbox_id": latest.get("sandbox_id"),
         "provider_name": latest.get("provider_name"),
@@ -601,7 +601,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
     cleanup_target = repo.query_sandbox_cleanup_target(sandbox_id) or {}
 
     threads = repo.query_sandbox_threads(sandbox_id)
-    chat_sessions = repo.query_sandbox_runtime_rows(sandbox_id)
+    runtime_rows = repo.query_sandbox_runtime_rows(sandbox_id)
     runtime_session_id = repo.query_sandbox_instance_id(sandbox_id)
 
     raw_thread_ids = [str(item.get("thread_id") or "").strip() for item in threads if str(item.get("thread_id") or "").strip()]
@@ -644,7 +644,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
                 "ended_at": item.get("ended_at"),
                 "close_reason": item.get("close_reason"),
             }
-            for item in chat_sessions
+            for item in runtime_rows
         ],
         "cleanup": _sandbox_detail_cleanup_truth(
             sandbox_id=str(sandbox.get("sandbox_id") or "").strip(),
@@ -652,7 +652,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
             triage=triage,
             provider_name=provider_name,
             runtime_session_id=runtime_session_id,
-            chat_sessions=[
+            runtime_rows=[
                 {
                     "chat_session_id": item.get("chat_session_id"),
                     "thread_id": item.get("thread_id"),
@@ -661,7 +661,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
                     "ended_at": item.get("ended_at"),
                     "close_reason": item.get("close_reason"),
                 }
-                for item in chat_sessions
+                for item in runtime_rows
             ],
             threads=live_thread_refs,
         ),
@@ -675,7 +675,7 @@ def _sandbox_detail_cleanup_truth(
     triage: dict[str, Any],
     provider_name: str,
     runtime_session_id: str | None,
-    chat_sessions: list[dict[str, Any]],
+    runtime_rows: list[dict[str, Any]],
     threads: list[dict[str, Any]],
 ) -> dict[str, Any]:
     lower_runtime_handle = str(cleanup_target.get("lower_runtime_handle") or "").strip()
@@ -692,7 +692,7 @@ def _sandbox_detail_cleanup_truth(
         triage=triage,
         provider_name=provider_name,
         runtime_session_id=runtime_session_id,
-        chat_sessions=chat_sessions,
+        chat_sessions=runtime_rows,
         threads=threads,
     )
 
@@ -762,12 +762,12 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
         summary = repo.query_thread_summary(thread_id)
-        chat_sessions = repo.query_thread_runtime_rows(thread_id)
+        runtime_rows = repo.query_thread_runtime_rows(thread_id)
     finally:
         repo.close()
 
     if summary is None:
-        summary = _derive_thread_summary_from_chat_sessions(chat_sessions)
+        summary = _derive_thread_summary_from_runtime_rows(runtime_rows)
     summary = _normalize_thread_summary(summary)
 
     owners = _thread_owners(
@@ -780,7 +780,7 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         "thread": _normalize_monitor_thread(thread, thread_id),
         "owner": _normalize_thread_owner(owners.get(thread_id)),
         "summary": summary,
-        "sessions": chat_sessions,
+        "sessions": runtime_rows,
         "trajectory": await build_monitor_thread_trajectory(app, thread_id),
     }
 
@@ -791,7 +791,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
     provider = payload.get("provider") or {}
     runtime = payload.get("runtime") or {}
     threads = payload.get("threads") or []
-    chat_sessions = payload.get("sessions") or []
+    runtime_rows = payload.get("sessions") or []
 
     cleanup_target = _sandbox_cleanup_target(sandbox_id)
     lower_runtime_handle = str(cleanup_target.get("lower_runtime_handle") or "").strip()
@@ -802,13 +802,13 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
         "provider": provider,
         "runtime": runtime,
         "threads": threads,
-        "sessions": chat_sessions,
+        "sessions": runtime_rows,
         "cleanup": monitor_operation_service.build_sandbox_cleanup_truth(
             sandbox_id=sandbox_id,
             triage=payload.get("triage"),
             provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
             runtime_session_id=str(runtime.get("runtime_session_id") or ""),
-            chat_sessions=chat_sessions,
+            chat_sessions=runtime_rows,
             threads=threads,
         ),
     }
