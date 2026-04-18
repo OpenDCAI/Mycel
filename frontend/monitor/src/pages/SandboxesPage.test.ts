@@ -35,4 +35,24 @@ describe("sandboxes page shell", () => {
     expect(shell.sourceLabel).toBe("Source: sandbox_canonical");
     expect(shell.rows[0].href).toBe("/sandboxes/sandbox-1");
   });
+
+  it("does not expose lower local runtime ids in visible row data", () => {
+    const shell = buildSandboxWorkbenchShell({
+      title: "All Sandboxes",
+      count: 1,
+      source: "sandbox_canonical",
+      items: [
+        {
+          sandbox_id: "sandbox-local",
+          provider: "local",
+          instance_id: "leon-lease-abc123",
+          thread: {},
+          state_badge: { text: "running" },
+        },
+      ],
+    });
+
+    expect(JSON.stringify(shell.rows)).not.toContain("leon-lease");
+    expect(shell.rows[0].runtime).toEqual({ label: "local runtime", href: null });
+  });
 });

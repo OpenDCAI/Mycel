@@ -37,6 +37,12 @@ export type SandboxesPayload = {
 
 type TriageFilter = "all" | "active_drift" | "detached_residue" | "orphan_cleanup" | "healthy_capacity";
 
+function buildRuntimeDisplay(instanceId?: string | null) {
+  if (!instanceId) return { label: "-", href: null };
+  if (instanceId.startsWith("leon-lease-")) return { label: "local runtime", href: null };
+  return { label: instanceId.slice(0, 12), href: `/runtimes/${instanceId}` };
+}
+
 export function buildSandboxWorkbenchShell(data: SandboxesPayload) {
   const triage = data.triage?.summary ?? {};
   const triageCards = [
@@ -51,9 +57,10 @@ export function buildSandboxWorkbenchShell(data: SandboxesPayload) {
     workbenchTitle: "Sandbox Workbench",
     sourceLabel: `Source: ${data.source}`,
     triageCards,
-    rows: data.items.map((item) => ({
+    rows: data.items.map(({ instance_id, ...item }) => ({
       ...item,
       href: `/sandboxes/${item.sandbox_id}`,
+      runtime: buildRuntimeDisplay(instance_id),
     })),
   };
 }
@@ -135,12 +142,12 @@ export default function SandboxesPage() {
                   </div>
                   <div className="sandbox-topology__row">
                     <span className="sandbox-topology__label">runtime</span>
-                    {item.instance_id ? (
-                      <Link className="mono" to={`/runtimes/${item.instance_id}`}>
-                        {item.instance_id.slice(0, 12)}
+                    {item.runtime.href ? (
+                      <Link className="mono" to={item.runtime.href}>
+                        {item.runtime.label}
                       </Link>
                     ) : (
-                      <span>-</span>
+                      <span>{item.runtime.label}</span>
                     )}
                   </div>
                   <div className="sandbox-topology__row">
