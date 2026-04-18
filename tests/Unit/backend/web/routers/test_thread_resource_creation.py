@@ -39,7 +39,7 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
 
     monkeypatch.setattr(helpers, "_get_container", lambda: _Container())
     monkeypatch.setattr("storage.runtime.build_lease_repo", lambda: lease_repo)
-    monkeypatch.setattr("storage.runtime.build_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr("sandbox.control_plane_repos.make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(
         threads_router,
         "_materialize_workspace_for_sandbox",
@@ -75,7 +75,7 @@ def test_create_thread_sandbox_resources_returns_workspace_id(monkeypatch, tmp_p
 
     monkeypatch.setattr(helpers, "_get_container", lambda: _Container())
     monkeypatch.setattr("storage.runtime.build_lease_repo", lambda: lease_repo)
-    monkeypatch.setattr("storage.runtime.build_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr("sandbox.control_plane_repos.make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(threads_router, "_materialize_workspace_for_sandbox", lambda *args, **kwargs: "workspace-new")
 
     workspace_id = threads_router._create_thread_sandbox_resources(

@@ -5,19 +5,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from sandbox.control_plane_repos import resolve_sandbox_db_path
+from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
 from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
 from storage.container import StorageContainer
-from storage.runtime import (
-    build_chat_session_repo as make_chat_session_repo,
-)
 from storage.runtime import (
     build_storage_container,
     build_thread_repo,
     uses_supabase_runtime_defaults,
-)
-from storage.runtime import (
-    build_terminal_repo as make_terminal_repo,
 )
 
 _cached_container: StorageContainer | None = None

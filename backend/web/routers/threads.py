@@ -548,8 +548,8 @@ def _create_thread_sandbox_resources(
     owner_user_id: str,
 ) -> str:
     """Create lease and terminal resources without pre-provisioning file-channel storage."""
+    from sandbox.control_plane_repos import make_terminal_repo
     from storage.runtime import build_lease_repo as make_lease_repo
-    from storage.runtime import build_terminal_repo as make_terminal_repo
 
     lease_repo = make_lease_repo()
     try:
