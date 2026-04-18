@@ -12,6 +12,7 @@ from backend.web.services import (
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_service,
+    monitor_thread_service,
 )
 
 
@@ -139,9 +140,9 @@ class FakeSandboxMonitorRepo:
 
 
 def _use_monitor_repo(monkeypatch, repo):
-    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: repo)
     monkeypatch.setattr(monitor_sandbox_detail_service, "make_sandbox_monitor_repo", lambda: repo)
     monkeypatch.setattr(monitor_sandbox_projection_service, "make_sandbox_monitor_repo", lambda: repo)
+    monkeypatch.setattr(monitor_thread_service, "make_sandbox_monitor_repo", lambda: repo)
 
 
 def _detached_sandbox(**overrides):
@@ -207,7 +208,7 @@ class FakeMonitorThreadRepo:
 
 def _stub_thread_detail(monkeypatch, *, owner=None, trajectory=None):
     monkeypatch.setattr(
-        monitor_service,
+        monitor_thread_service,
         "_thread_owners",
         lambda *_args, **_kwargs: {"thread-1": owner},
     )

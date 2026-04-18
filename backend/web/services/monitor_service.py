@@ -11,9 +11,9 @@ from backend.web.services import (
     monitor_provider_runtime_service,
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
+    monitor_thread_service,
     sandbox_service,
 )
-from backend.web.services.resource_common import thread_owners as _thread_owners
 from eval.batch_executor import EvaluationBatchExecutor
 from eval.batch_service import EvaluationBatchService
 from eval.harness.client import EvalClient
@@ -22,7 +22,6 @@ from eval.harness.scenario import load_scenarios_from_dir
 from eval.models import EvalScenario
 from eval.storage import TrajectoryStore
 from storage.runtime import build_evaluation_batch_repo
-from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
@@ -35,9 +34,7 @@ def make_eval_batch_service() -> EvaluationBatchService:
 
 
 def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
-    from backend.web.routers.threads import build_owner_thread_workbench
-
-    return build_owner_thread_workbench(app, user_id)
+    return monitor_thread_service.list_monitor_threads(app, user_id)
 
 
 def get_monitor_sandbox_configs() -> dict[str, Any]:
@@ -93,58 +90,13 @@ def _thread_ref(thread_id: str | None) -> dict[str, Any]:
     }
 
 
-def _derive_thread_summary_from_runtime_rows(runtime_rows: list[dict[str, Any]]) -> dict[str, Any] | None:
-    if not runtime_rows:
-        return None
-    latest = runtime_rows[0]
-    summary = {
-        "sandbox_id": latest.get("sandbox_id"),
-        "provider_name": latest.get("provider_name"),
-        "current_instance_id": latest.get("current_instance_id"),
-        "desired_state": latest.get("desired_state"),
-        "observed_state": latest.get("observed_state"),
-    }
-    return summary if any(value is not None for value in summary.values()) else None
-
-
-def _normalize_thread_summary(summary: dict[str, Any] | None) -> dict[str, Any] | None:
-    if summary is None:
-        return None
-    payload = {
-        "sandbox_id": summary.get("sandbox_id"),
-        "provider_name": summary.get("provider_name"),
-        "current_instance_id": summary.get("current_instance_id"),
-        "desired_state": summary.get("desired_state"),
-        "observed_state": summary.get("observed_state"),
-    }
-    return payload if any(value is not None for value in payload.values()) else None
-
-
-def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
-    if owner is None:
-        return None
-    return {
-        "user_id": owner.get("user_id") or owner.get("agent_user_id"),
-        "display_name": owner.get("display_name") or owner.get("agent_name"),
-        "email": owner.get("email"),
-        "avatar_url": owner.get("avatar_url"),
-    }
-
-
-def _normalize_monitor_thread(thread: dict[str, Any], requested_thread_id: str) -> dict[str, Any]:
-    return {
-        **thread,
-        "thread_id": thread.get("thread_id") or thread.get("id") or requested_thread_id,
-    }
-
-
 def _live_thread_ids(thread_ids: list[str]) -> set[str]:
     unique = sorted({str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()})
     if not unique:
         return set()
     # @@@monitor-live-thread-state - monitor triage must validate terminal pointers against live
     # thread rows, otherwise stale abstract_terminals residue gets misclassified as healthy.
-    owners = _thread_owners(unique)
+    owners = monitor_thread_service._thread_owners(unique)
     return {thread_id for thread_id in unique if (owners.get(thread_id) or {}).get("agent_user_id")}
 
 
@@ -581,40 +533,7 @@ def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
 
 
 async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
-    from backend.web.services.monitor_trace_service import build_monitor_thread_trajectory
-
-    thread_repo = getattr(app.state, "thread_repo", None)
-    if thread_repo is None:
-        raise RuntimeError("thread_repo is required for monitor thread detail")
-
-    thread = thread_repo.get_by_id(thread_id)
-    if thread is None:
-        raise KeyError(f"Thread not found: {thread_id}")
-
-    repo = make_sandbox_monitor_repo()
-    try:
-        summary = repo.query_thread_summary(thread_id)
-        runtime_rows = repo.query_thread_runtime_rows(thread_id)
-    finally:
-        repo.close()
-
-    if summary is None:
-        summary = _derive_thread_summary_from_runtime_rows(runtime_rows)
-    summary = _normalize_thread_summary(summary)
-
-    owners = _thread_owners(
-        [thread_id],
-        user_repo=getattr(app.state, "user_repo", None),
-        thread_repo=thread_repo,
-    )
-
-    return {
-        "thread": _normalize_monitor_thread(thread, thread_id),
-        "owner": _normalize_thread_owner(owners.get(thread_id)),
-        "summary": summary,
-        "sessions": runtime_rows,
-        "trajectory": await build_monitor_thread_trajectory(app, thread_id),
-    }
+    return await monitor_thread_service.get_monitor_thread_detail(app, thread_id)
 
 
 def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:

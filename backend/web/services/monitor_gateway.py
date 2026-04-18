@@ -9,6 +9,7 @@ from backend.web.services import (
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_service,
+    monitor_thread_service,
     resource_projection_service,
     resource_service,
 )
@@ -24,7 +25,7 @@ def list_provider_orphan_runtimes() -> dict[str, Any]:
 
 
 def list_threads(app: Any, user_id: str) -> dict[str, Any]:
-    return monitor_service.list_monitor_threads(app, user_id)
+    return monitor_thread_service.list_monitor_threads(app, user_id)
 
 
 def get_provider_detail(provider_id: str) -> dict[str, Any]:
@@ -56,7 +57,7 @@ def get_sandbox_configs() -> dict[str, Any]:
 
 
 async def get_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
-    return await monitor_service.get_monitor_thread_detail(app, thread_id)
+    return await monitor_thread_service.get_monitor_thread_detail(app, thread_id)
 
 
 def get_dashboard() -> dict[str, Any]:
