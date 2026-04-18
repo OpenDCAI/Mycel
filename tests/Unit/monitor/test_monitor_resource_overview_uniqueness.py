@@ -1,6 +1,11 @@
 import inspect
 
-from backend.web.services import monitor_resource_runtime_service, resource_common, resource_projection_service
+from backend.web.services import (
+    monitor_resource_runtime_service,
+    resource_common,
+    resource_projection_service,
+    resource_provider_boundary_service,
+)
 from storage import runtime as storage_runtime
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
@@ -61,7 +66,7 @@ class _FakeUserRepo:
 def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: repo)
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "daytona_selfhost", "available": True}],
     )
@@ -140,7 +145,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
 
     monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "local", "available": True}],
     )
@@ -201,7 +206,7 @@ def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtim
 
     monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "local", "available": True}],
     )
@@ -241,7 +246,7 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
 
     monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "daytona", "available": True}],
     )
@@ -307,7 +312,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
 
     monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "daytona", "available": True}],
     )
@@ -352,7 +357,7 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
         lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
     )
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "daytona_selfhost", "available": True}],
     )
@@ -453,7 +458,7 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
         lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
     )
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "daytona_selfhost", "available": True}],
     )
@@ -509,7 +514,7 @@ def test_list_resource_providers_drops_subagent_rows_without_sandbox_id(monkeypa
         lambda: _FakeRepo(rows),
     )
     monkeypatch.setattr(
-        resource_projection_service,
+        resource_provider_boundary_service,
         "available_sandbox_types",
         lambda: [{"name": "daytona_selfhost", "available": True}],
     )

@@ -9,7 +9,12 @@ from fastapi.testclient import TestClient
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor as monitor_router
 from backend.web.routers import resources as resources_router
-from backend.web.services import monitor_resource_runtime_service, resource_common, resource_projection_service
+from backend.web.services import (
+    monitor_resource_runtime_service,
+    resource_common,
+    resource_projection_service,
+    resource_provider_boundary_service,
+)
 
 
 class _State:
@@ -36,7 +41,7 @@ class _FakeMonitorRepo:
 
 def _patch_provider_contracts(monkeypatch, *, description: str, vendor: str, type_: str, console_url: str | None) -> None:
     monkeypatch.setattr(
-        resource_projection_service.resource_service,
+        resource_provider_boundary_service,
         "get_provider_display_contract",
         lambda config_name, *_args, **_kwargs: {
             "provider_name": "local" if config_name == "local" else "daytona",
@@ -48,7 +53,7 @@ def _patch_provider_contracts(monkeypatch, *, description: str, vendor: str, typ
         raising=False,
     )
     monkeypatch.setattr(
-        resource_projection_service.resource_service,
+        resource_provider_boundary_service,
         "get_provider_capability_contract",
         lambda *_args, **_kwargs: (resource_common.empty_capabilities(), None),
         raising=False,
@@ -139,7 +144,7 @@ def test_monitor_resources_route_stays_global(monkeypatch) -> None:
 
 def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(monkeypatch) -> None:
     monkeypatch.setattr(
-        resource_projection_service.sandbox_service,
+        resource_provider_boundary_service,
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             _sandbox(
@@ -191,7 +196,7 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
 
 def test_user_resource_projection_omits_lower_runtime_identity(monkeypatch) -> None:
     monkeypatch.setattr(
-        resource_projection_service.sandbox_service,
+        resource_provider_boundary_service,
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             _lease(
@@ -223,7 +228,7 @@ def test_user_resource_projection_omits_lower_runtime_identity(monkeypatch) -> N
 
 def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
     monkeypatch.setattr(
-        resource_projection_service.sandbox_service,
+        resource_provider_boundary_service,
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             _sandbox(
@@ -246,7 +251,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
         console_url="https://example.com/daytona",
     )
     monkeypatch.setattr(
-        resource_projection_service.resource_service,
+        resource_provider_boundary_service,
         "get_provider_capability_contract",
         lambda *_args, **_kwargs: (resource_common.empty_capabilities(), "provider unavailable"),
         raising=False,
@@ -345,7 +350,9 @@ def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases,
     def _fake_list_user_sandboxes(owner_user_id: str, **kwargs):
         return leases
 
-    monkeypatch.setattr(resource_projection_service.sandbox_service, "list_user_sandboxes", _fake_list_user_sandboxes)
+    monkeypatch.setattr(
+        resource_provider_boundary_service, "load_user_sandboxes", lambda _app, _owner_user_id: _fake_list_user_sandboxes(_owner_user_id)
+    )
     monkeypatch.setattr(monitor_resource_runtime_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
     _patch_provider_contracts(
         monkeypatch,
@@ -372,7 +379,7 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
     test_app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
 
     monkeypatch.setattr(
-        resource_projection_service.sandbox_service,
+        resource_provider_boundary_service,
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             _sandbox(

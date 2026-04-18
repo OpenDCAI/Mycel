@@ -7,6 +7,7 @@ from backend.web.services import (
     monitor_resource_runtime_service,
     resource_common,
     resource_projection_service,
+    resource_provider_boundary_service,
     resource_service,
     sandbox_service,
 )
@@ -87,9 +88,9 @@ def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
         state = _State()
 
     monkeypatch.setattr(
-        resource_projection_service.sandbox_service,
-        "list_user_sandboxes",
-        lambda owner_user_id, **_kwargs: [
+        resource_provider_boundary_service,
+        "load_user_sandboxes",
+        lambda _app, _owner_user_id: [
             {
                 "sandbox_id": "sandbox-1",
                 "provider_name": "daytona_selfhost",
@@ -110,7 +111,7 @@ def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
         ],
     )
     monkeypatch.setattr(
-        resource_projection_service.resource_service,
+        resource_provider_boundary_service,
         "get_provider_display_contract",
         lambda *_args, **_kwargs: {
             "provider_name": "daytona",
@@ -122,7 +123,7 @@ def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
         raising=False,
     )
     monkeypatch.setattr(
-        resource_projection_service.resource_service,
+        resource_provider_boundary_service,
         "get_provider_capability_contract",
         lambda *_args, **_kwargs: (resource_common.empty_capabilities(), None),
         raising=False,

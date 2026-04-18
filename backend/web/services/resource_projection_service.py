@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services import monitor_resource_runtime_service, resource_service, sandbox_service
+from backend.web.services import monitor_resource_runtime_service, resource_provider_boundary_service
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
 from backend.web.services.resource_common import aggregate_provider_telemetry as _aggregate_provider_telemetry
@@ -19,7 +19,6 @@ from backend.web.services.resource_common import resolve_provider_type as _resol
 from backend.web.services.resource_common import thread_owners as _thread_owners
 from backend.web.services.resource_common import to_resource_metrics as _to_resource_metrics
 from backend.web.services.resource_common import to_resource_status as _to_resource_status
-from backend.web.services.sandbox_service import available_sandbox_types
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_sandbox_state_to_display_status
 
@@ -39,8 +38,8 @@ def _empty_metric(unit: str) -> dict[str, Any]:
 
 
 def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> dict[str, Any]:
-    display = resource_service.get_provider_display_contract(config_name)
-    capabilities, capability_error = resource_service.get_provider_capability_contract(config_name)
+    display = resource_provider_boundary_service.get_provider_display_contract(config_name)
+    capabilities, capability_error = resource_provider_boundary_service.get_provider_capability_contract(config_name)
     provider_type = str(display["type"])
 
     resource_rows: list[dict[str, Any]] = []
@@ -55,7 +54,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         secondary_identity = str(sandbox.get("runtime_id") or "sandbox").strip()
         resource_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{secondary_identity}:{thread_id}"
         resource_rows.append(
-            resource_service.build_resource_row_payload(
+            resource_provider_boundary_service.build_resource_row_payload(
                 resource_identity=resource_identity,
                 sandbox_id=sandbox_id,
                 thread_id=thread_id,
@@ -79,7 +78,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         "memory": _empty_metric("GB"),
         "disk": _empty_metric("GB"),
     }
-    availability = resource_service.build_provider_availability_payload(
+    availability = resource_provider_boundary_service.build_provider_availability_payload(
         available=capability_error is None,
         running_count=running_count,
         unavailable_reason=capability_error,
@@ -122,16 +121,7 @@ def _backfill_runtime_ids(sandboxes: list[dict[str, Any]]) -> None:
 
 
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
-    thread_repo = getattr(app.state, "thread_repo", None)
-    user_repo = getattr(app.state, "user_repo", None)
-    if thread_repo is None or user_repo is None:
-        raise RuntimeError("thread_repo and user_repo are required")
-
-    sandboxes = sandbox_service.list_user_sandboxes(
-        owner_user_id,
-        thread_repo=thread_repo,
-        user_repo=user_repo,
-    )
+    sandboxes = resource_provider_boundary_service.load_user_sandboxes(app, owner_user_id)
     _backfill_runtime_ids(sandboxes)
 
     sandboxes_by_provider: dict[str, list[dict[str, Any]]] = {}
@@ -249,7 +239,7 @@ def list_resource_providers() -> dict[str, Any]:
     owners = _thread_owners([str(resource_row["thread_id"]) for resource_row in resource_rows if resource_row.get("thread_id")])
 
     providers: list[dict[str, Any]] = []
-    for item in available_sandbox_types():
+    for item in resource_provider_boundary_service.available_sandbox_types():
         config_name = str(item["name"])
         available = bool(item.get("available"))
         provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
@@ -288,7 +278,7 @@ def list_resource_providers() -> dict[str, Any]:
                 continue
             seen_resource_ids.add(resource_identity)
             normalized_resource_rows.append(
-                resource_service.build_resource_row_payload(
+                resource_provider_boundary_service.build_resource_row_payload(
                     resource_identity=resource_identity,
                     sandbox_id=str(resource_row.get("sandbox_id") or "").strip() or None,
                     thread_id=thread_id,

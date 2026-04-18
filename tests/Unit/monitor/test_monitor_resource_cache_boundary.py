@@ -1,6 +1,12 @@
 import inspect
 
-from backend.web.services import monitor_gateway, monitor_resource_runtime_service, monitor_resource_service, resource_cache
+from backend.web.services import (
+    monitor_gateway,
+    monitor_resource_runtime_service,
+    monitor_resource_service,
+    resource_cache,
+    resource_projection_service,
+)
 
 
 def test_resource_cache_does_not_import_monitor_sandbox_projection():
@@ -18,8 +24,6 @@ def test_monitor_resource_service_owns_resource_triage_composition():
 
 
 def test_resource_projection_does_not_construct_monitor_runtime_repo():
-    from backend.web.services import resource_projection_service
-
     source = inspect.getsource(resource_projection_service)
     runtime_source = inspect.getsource(monitor_resource_runtime_service)
 
@@ -27,6 +31,13 @@ def test_resource_projection_does_not_construct_monitor_runtime_repo():
     assert "list_resource_snapshots_by_sandbox" not in source
     assert "make_sandbox_monitor_repo" in runtime_source
     assert "list_resource_snapshots_by_sandbox" in runtime_source
+
+
+def test_resource_projection_uses_product_resource_boundary():
+    source = inspect.getsource(resource_projection_service)
+
+    assert "sandbox_service" not in source
+    assert "resource_service" not in source
 
 
 def test_monitor_gateway_sandbox_list_uses_narrow_projection_service():
