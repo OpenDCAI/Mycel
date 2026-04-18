@@ -33,7 +33,6 @@ async def _verify_user_ownership(agent_user_id: str, user_id: str, user_repo: An
 
 @router.get("/items")
 async def list_marketplace_items(
-    request: Request,
     type: str | None = None,
     q: str | None = None,
     sort: str = "downloads",
@@ -51,17 +50,17 @@ async def list_marketplace_items(
 
 
 @router.get("/items/{item_id}")
-async def get_marketplace_item_detail(item_id: str, request: Request) -> dict[str, Any]:
+async def get_marketplace_item_detail(item_id: str) -> dict[str, Any]:
     return await asyncio.to_thread(marketplace_client.get_item_detail, item_id)
 
 
 @router.get("/items/{item_id}/lineage")
-async def get_marketplace_item_lineage(item_id: str, request: Request) -> dict[str, Any]:
+async def get_marketplace_item_lineage(item_id: str) -> dict[str, Any]:
     return await asyncio.to_thread(marketplace_client.get_item_lineage, item_id)
 
 
 @router.get("/items/{item_id}/versions/{version}")
-async def get_marketplace_item_version_snapshot(item_id: str, version: str, request: Request) -> dict[str, Any]:
+async def get_marketplace_item_version_snapshot(item_id: str, version: str) -> dict[str, Any]:
     return await asyncio.to_thread(marketplace_client.get_item_version_snapshot, item_id, version)
 
 
