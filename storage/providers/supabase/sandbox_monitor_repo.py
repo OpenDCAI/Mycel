@@ -62,7 +62,6 @@ class SupabaseSandboxMonitorRepo:
                     "session_count": 0,
                     "sandbox_id": lease.get("sandbox_id") if lease else None,
                     "last_active": thread.get("last_active_at") or thread.get("updated_at") or thread.get("created_at"),
-                    "lease_id": lease.get("lease_id") if lease else None,
                     "provider_name": lease.get("provider_name") if lease else None,
                     "desired_state": lease.get("desired_state") if lease else None,
                     "observed_state": lease.get("observed_state") if lease else None,
@@ -102,6 +101,19 @@ class SupabaseSandboxMonitorRepo:
         for sandbox in self._ordered_sandboxes("query_sandbox"):
             if str(sandbox.get("id") or "").strip() == sandbox_key:
                 return self._lease_row_from_sandbox(sandbox)
+        return None
+
+    def query_sandbox_cleanup_lease_id(self, sandbox_id: str) -> str | None:
+        sandbox_key = str(sandbox_id or "").strip()
+        if not sandbox_key:
+            return None
+        for sandbox in self._ordered_sandboxes("query_sandbox_cleanup_lease_id"):
+            if str(sandbox.get("id") or "").strip() != sandbox_key:
+                continue
+            config = sandbox.get("config")
+            if not isinstance(config, dict):
+                raise RuntimeError("sandbox.config must be an object")
+            return str(config.get("legacy_lease_id") or "").strip() or None
         return None
 
     def query_sandbox_sessions(self, sandbox_id: str) -> list[dict]:
@@ -301,16 +313,8 @@ class SupabaseSandboxMonitorRepo:
         return result
 
     def _lease_row_from_sandbox(self, sandbox: dict[str, Any]) -> dict[str, Any]:
-        # @@@sandbox-monitor-bridge - summary surfaces now use container.sandboxes as the
-        # object truth, but still expose the lower runtime bridge while cleanup/runtime
-        # residue remains lease-keyed.
-        config = sandbox.get("config")
-        if not isinstance(config, dict):
-            raise RuntimeError("sandbox.config must be an object")
-        bridge_lease_id = str(config.get("legacy_lease_id") or "").strip() or None
         return {
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
-            "lease_id": bridge_lease_id,
             "provider_name": sandbox.get("provider_name"),
             "recipe_id": sandbox.get("sandbox_template_id"),
             "recipe_json": None,

@@ -211,7 +211,6 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
             "session_count": 0,
             "sandbox_id": "sandbox-1",
             "last_active": "2026-04-05T10:06:00",
-            "lease_id": "lease-1",
             "provider_name": "local",
             "desired_state": "running",
             "observed_state": "running",
@@ -245,7 +244,6 @@ def test_query_threads_no_longer_roundtrips_through_lease_summary_shell() -> Non
             "session_count": 0,
             "sandbox_id": "sandbox-1",
             "last_active": "2026-04-05T10:01:00",
-            "lease_id": "lease-1",
             "provider_name": "local",
             "desired_state": "running",
             "observed_state": "running",
@@ -326,7 +324,6 @@ def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
 
     assert repo.query_sandbox("sandbox-1") == {
         "sandbox_id": "sandbox-1",
-        "lease_id": "lease-1",
         "provider_name": "daytona_selfhost",
         "recipe_id": "template-1",
         "recipe_json": None,
@@ -358,7 +355,6 @@ def test_query_sandbox_allows_missing_lower_lease_bridge() -> None:
 
     assert repo.query_sandbox("sandbox-1") == {
         "sandbox_id": "sandbox-1",
-        "lease_id": None,
         "provider_name": "local",
         "recipe_id": "local:default",
         "recipe_json": None,
@@ -513,7 +509,6 @@ def test_query_sandboxes_uses_latest_workspace_thread_binding() -> None:
     assert repo.query_sandboxes() == [
         {
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
             "desired_state": "paused",
             "observed_state": "paused",
@@ -555,7 +550,6 @@ def test_query_sandboxes_reads_container_sandboxes_with_workspace_binding() -> N
     assert repo.query_sandboxes() == [
         {
             "sandbox_id": "sandbox-1",
-            "lease_id": "lease-1",
             "provider_name": "daytona_selfhost",
             "recipe_id": None,
             "recipe_json": None,
@@ -613,7 +607,7 @@ def test_query_sandboxes_handles_many_workspace_thread_bindings() -> None:
     rows = repo.query_sandboxes()
 
     assert len(rows) == 175
-    assert next(row for row in rows if row["lease_id"] == "lease-174")["thread_id"] == "thread-174"
+    assert next(row for row in rows if row["sandbox_id"] == "sandbox-174")["thread_id"] == "thread-174"
 
 
 def test_lease_alias_summary_shells_are_removed() -> None:

@@ -75,7 +75,15 @@ class FakeSandboxMonitorRepo:
         sandbox = self.sandbox if self.sandbox is not None else _sandbox_row(sandbox_id=sandbox_id)
         if sandbox is _MISSING:
             return None
-        return {**sandbox, "sandbox_id": sandbox.get("sandbox_id") or sandbox_id}
+        result = {**sandbox, "sandbox_id": sandbox.get("sandbox_id") or sandbox_id}
+        result.pop("lease_id", None)
+        return result
+
+    def query_sandbox_cleanup_lease_id(self, sandbox_id):
+        sandbox = self.sandbox if self.sandbox is not None else _sandbox_row(sandbox_id=sandbox_id)
+        if sandbox is _MISSING:
+            return None
+        return str(sandbox.get("lease_id") or "").strip() or None
 
     def query_sandboxes(self):
         if self.sandboxes:

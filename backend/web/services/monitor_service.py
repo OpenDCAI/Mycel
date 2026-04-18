@@ -598,7 +598,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
     sandbox = repo.query_sandbox(sandbox_id)
     if sandbox is None:
         raise KeyError(f"Sandbox not found: {sandbox_id}")
-    lease_id = str(sandbox.get("lease_id") or "").strip()
+    cleanup_lease_id = str(repo.query_sandbox_cleanup_lease_id(sandbox_id) or "").strip()
 
     threads = repo.query_sandbox_threads(sandbox_id)
     sessions = repo.query_sandbox_sessions(sandbox_id)
@@ -648,7 +648,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
         ],
         "cleanup": _sandbox_detail_cleanup_truth(
             sandbox_id=str(sandbox.get("sandbox_id") or "").strip(),
-            lease_id=lease_id,
+            lease_id=cleanup_lease_id,
             triage=triage,
             provider_name=provider_name,
             runtime_session_id=runtime_session_id,
@@ -843,12 +843,12 @@ def _sandbox_cleanup_lease_id(sandbox_id: str) -> str:
     repo = make_sandbox_monitor_repo()
     try:
         sandbox = repo.query_sandbox(sandbox_id)
+        lease_id = str(repo.query_sandbox_cleanup_lease_id(sandbox_id) or "").strip()
     finally:
         repo.close()
     if sandbox is None:
         raise KeyError(f"Sandbox not found: {sandbox_id}")
 
-    lease_id = str(sandbox.get("lease_id") or "").strip()
     if not lease_id:
         raise RuntimeError("monitor sandbox cleanup target missing managed runtime bridge")
     return lease_id
