@@ -166,3 +166,31 @@ def test_dispatcher_fails_loudly_when_sender_identity_is_missing() -> None:
         dispatcher.dispatch("chat-1", "missing-user", "hello", [])
 
     assert delivered == []
+
+
+def test_dispatcher_fails_loudly_when_member_user_id_is_missing() -> None:
+    delivered: list[str] = []
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {}]),
+        user_repo=_user_repo(),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat delivery member row is missing user_id in chat chat-1"):
+        dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
+
+    assert delivered == []
+
+
+def test_dispatcher_fails_loudly_when_recipient_identity_is_missing() -> None:
+    delivered: list[str] = []
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=_member_repo(["human-user-1", "missing-recipient"]),
+        user_repo=_user_repo(),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat delivery recipient identity not found: missing-recipient"):
+        dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
+
+    assert delivered == []

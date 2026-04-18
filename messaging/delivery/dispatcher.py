@@ -72,11 +72,13 @@ class ChatDeliveryDispatcher:
 
         for member in members:
             uid = member.get("user_id")
-            if not uid or uid == sender_id:
+            if not uid:
+                raise RuntimeError(f"Chat delivery member row is missing user_id in chat {chat_id}")
+            if uid == sender_id:
                 continue
             recipient = self._resolve_display_user(uid)
             if not recipient:
-                continue
+                raise RuntimeError(f"Chat delivery recipient identity not found: {uid}")
             member_raw_type = getattr(recipient, "type", None)
             member_type = member_raw_type.value if isinstance(member_raw_type, Enum) else member_raw_type
             if member_type == "human":
