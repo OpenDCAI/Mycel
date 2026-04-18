@@ -1032,12 +1032,12 @@ async def send_message(
     user_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Send a message to agent — thin wrapper around route_message_to_brain."""
+    """Send a message to agent through the Agent Runtime Gateway."""
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-    from backend.web.services.message_routing import route_message_to_brain
+    from backend.web.services.agent_runtime_gateway import AgentThreadInputEnvelope, NativeAgentRuntimeGateway
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths
@@ -1052,13 +1052,14 @@ async def send_message(
             agent=agent,
         )
 
-    return await route_message_to_brain(
-        app,
-        thread_id,
-        message,
-        source="owner",
-        enable_trajectory=payload.enable_trajectory,
-        attachments=payload.attachments or None,
+    return await NativeAgentRuntimeGateway(app).dispatch_thread_input(
+        AgentThreadInputEnvelope(
+            thread_id=thread_id,
+            content=message,
+            source="owner",
+            enable_trajectory=payload.enable_trajectory,
+            attachments=payload.attachments or None,
+        )
     )
 
 
@@ -1171,7 +1172,7 @@ async def resolve_thread_permission_request(
 
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
-        from backend.web.services.message_routing import route_message_to_brain
+        from backend.web.services.agent_runtime_gateway import AgentThreadInputEnvelope, NativeAgentRuntimeGateway
 
         answered_payload = _build_ask_user_question_answered_payload(
             pending_request,
@@ -1179,16 +1180,17 @@ async def resolve_thread_permission_request(
             annotations=getattr(payload, "annotations", None),
         )
 
-        followup = await route_message_to_brain(
-            app,
-            thread_id,
-            _format_ask_user_question_followup(
-                pending_request,
-                answers=answers,
-                annotations=getattr(payload, "annotations", None),
+        followup = await NativeAgentRuntimeGateway(app).dispatch_thread_input(
+            AgentThreadInputEnvelope(
+                thread_id=thread_id,
+                content=_format_ask_user_question_followup(
+                    pending_request,
+                    answers=answers,
+                    annotations=getattr(payload, "annotations", None),
+                ),
+                source="internal",
+                message_metadata={"ask_user_question_answered": answered_payload},
             ),
-            source="internal",
-            message_metadata={"ask_user_question_answered": answered_payload},
         )
 
     response = {"ok": True, "thread_id": thread_id, "request_id": request_id}

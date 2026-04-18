@@ -163,10 +163,14 @@ class _FakeRecipeRepo:
 
 
 @pytest.mark.asyncio
-async def test_send_message_passes_enable_trajectory_to_message_routing() -> None:
-    route_message = AsyncMock(return_value={"status": "started", "thread_id": "thread-1"})
+async def test_send_message_passes_enable_trajectory_to_agent_runtime_gateway() -> None:
+    captured: list[Any] = []
 
-    with patch("backend.web.services.message_routing.route_message_to_brain", route_message):
+    async def dispatch_thread_input(_gateway: Any, envelope: Any) -> dict[str, str]:
+        captured.append(envelope)
+        return {"status": "started", "thread_id": "thread-1"}
+
+    with patch("backend.web.services.agent_runtime_gateway.NativeAgentRuntimeGateway.dispatch_thread_input", dispatch_thread_input):
         result = await threads_router.send_message(
             "thread-1",
             SendMessageRequest(message="hello", enable_trajectory=True),
@@ -175,7 +179,7 @@ async def test_send_message_passes_enable_trajectory_to_message_routing() -> Non
         )
 
     assert result == {"status": "started", "thread_id": "thread-1"}
-    assert route_message.await_args.kwargs["enable_trajectory"] is True
+    assert captured[0].enable_trajectory is True
 
 
 def _make_request(headers: dict[str, str] | None = None) -> Request:
@@ -204,18 +208,6 @@ def _require_app_state(loop: QueryLoop) -> AppState:
     app_state = loop._app_state
     assert app_state is not None
     return app_state
-
-
-def _require_await_kwargs(mock: AsyncMock) -> dict[str, Any]:
-    await_args = mock.await_args
-    assert await_args is not None
-    return cast(dict[str, Any], await_args.kwargs)
-
-
-def _require_await_args(mock: AsyncMock) -> tuple[Any, ...]:
-    await_args = mock.await_args
-    assert await_args is not None
-    return cast(tuple[Any, ...], await_args.args)
 
 
 class _FakePermissionAgent:
@@ -1252,10 +1244,13 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
         }
     )
 
-    with patch(
-        "backend.web.services.message_routing.route_message_to_brain",
-        AsyncMock(return_value={"status": "started", "routing": "direct", "thread_id": "thread-1"}),
-    ) as route_message:
+    captured: list[Any] = []
+
+    async def dispatch_thread_input(_gateway: Any, envelope: Any) -> dict[str, str]:
+        captured.append(envelope)
+        return {"status": "started", "routing": "direct", "thread_id": "thread-1"}
+
+    with patch("backend.web.services.agent_runtime_gateway.NativeAgentRuntimeGateway.dispatch_thread_input", dispatch_thread_input):
         result = await threads_router.resolve_thread_permission_request(
             "thread-1",
             "perm-ask",
@@ -1287,10 +1282,9 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             {"source": "ask-user-ui"},
         )
     ]
-    route_message.assert_awaited_once()
-    route_kwargs = _require_await_kwargs(route_message)
-    assert route_kwargs["source"] == "internal"
-    assert route_kwargs["message_metadata"] == {
+    assert len(captured) == 1
+    assert captured[0].source == "internal"
+    assert captured[0].message_metadata == {
         "ask_user_question_answered": {
             "questions": [
                 {
@@ -1312,7 +1306,7 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             "annotations": {"source": "ask-user-ui"},
         }
     }
-    followup_message = _require_await_args(route_message)[2]
+    followup_message = captured[0].content
     assert "AskUserQuestion" in followup_message
     assert "Minimal" in followup_message
     assert "Choose a style" in followup_message

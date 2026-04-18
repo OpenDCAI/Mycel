@@ -15,9 +15,9 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from backend.web.models.requests import SendMessageRequest
 from backend.web.routers import threads as threads_router
 from backend.web.routers.threads import get_thread_history, get_thread_messages
+from backend.web.services.agent_runtime_gateway import AgentThreadInputEnvelope, NativeAgentRuntimeGateway
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.message_routing import route_message_to_brain
 from backend.web.services.streaming_service import (
     _ensure_thread_handlers,
     _repair_incomplete_tool_calls,
@@ -1220,7 +1220,9 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda *_args, **_kwargs: "local")
     monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", fake_get_or_create_agent)
 
-    startup_task = asyncio.create_task(route_message_to_brain(app, thread_id, "start"))
+    startup_task = asyncio.create_task(
+        NativeAgentRuntimeGateway(app).dispatch_thread_input(AgentThreadInputEnvelope(thread_id=thread_id, content="start"))
+    )
     await asyncio.wait_for(agent_lookup_started.wait(), timeout=2)
     cancel_handle = app.state.thread_tasks[thread_id]
     assert cancel_handle is not startup_task
