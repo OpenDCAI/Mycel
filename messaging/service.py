@@ -399,9 +399,7 @@ class MessagingService:
             return users_future.result(), unread_future.result()
 
     def _project_chat_members(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
-        return [
-            self._project_known_user_member(str(member.get("user_id") or ""), users_by_id) for member in members if member.get("user_id")
-        ]
+        return [self._project_known_user_member(str(member.get("user_id") or ""), users_by_id) for member in members]
 
     def _chat_title_and_avatar(self, title: str | None, members: list[dict[str, Any]], viewer_id: str) -> tuple[str, str | None]:
         other_members = [member for member in members if member["id"] != viewer_id]
@@ -430,7 +428,7 @@ class MessagingService:
     def _project_known_user_member(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
         user = users_by_id.get(social_user_id)
         if user is None:
-            raise RuntimeError(f"Chat member {social_user_id} is not a resolvable user row")
+            raise RuntimeError(f"Chat member {social_user_id or '<missing>'} is not a resolvable user row")
         return {
             "id": social_user_id,
             "name": user.display_name,
