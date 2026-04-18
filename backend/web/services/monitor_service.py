@@ -598,7 +598,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
     sandbox = repo.query_sandbox(sandbox_id)
     if sandbox is None:
         raise KeyError(f"Sandbox not found: {sandbox_id}")
-    cleanup_lease_id = str(repo.query_sandbox_cleanup_lease_id(sandbox_id) or "").strip()
+    cleanup_target = repo.query_sandbox_cleanup_target(sandbox_id) or {}
 
     threads = repo.query_sandbox_threads(sandbox_id)
     sessions = repo.query_sandbox_sessions(sandbox_id)
@@ -648,7 +648,7 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
         ],
         "cleanup": _sandbox_detail_cleanup_truth(
             sandbox_id=str(sandbox.get("sandbox_id") or "").strip(),
-            lease_id=cleanup_lease_id,
+            cleanup_target=cleanup_target,
             triage=triage,
             provider_name=provider_name,
             runtime_session_id=runtime_session_id,
@@ -671,14 +671,15 @@ def _build_monitor_sandbox_detail(repo: Any, sandbox_id: str) -> dict[str, Any]:
 def _sandbox_detail_cleanup_truth(
     *,
     sandbox_id: str,
-    lease_id: str,
+    cleanup_target: dict[str, Any],
     triage: dict[str, Any],
     provider_name: str,
     runtime_session_id: str | None,
     sessions: list[dict[str, Any]],
     threads: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    if not lease_id:
+    cleanup_lease_id = str(cleanup_target.get("cleanup_lease_id") or "").strip()
+    if not cleanup_lease_id:
         return {
             "allowed": False,
             "recommended_action": None,
@@ -687,7 +688,7 @@ def _sandbox_detail_cleanup_truth(
             "recent_operations": [],
         }
     return monitor_operation_service.build_sandbox_cleanup_truth(
-        lease_id=lease_id,
+        lease_id=cleanup_lease_id,
         sandbox_id=sandbox_id,
         triage=triage,
         provider_name=provider_name,
@@ -792,11 +793,12 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
     runtime = payload.get("runtime") or {}
     threads = payload.get("threads") or []
 
-    lease_id = _sandbox_cleanup_lease_id(sandbox_id)
+    cleanup_target = _sandbox_cleanup_target(sandbox_id)
+    cleanup_lease_id = str(cleanup_target.get("cleanup_lease_id") or "").strip()
     lease_detail = {
         "lease": {
             **sandbox,
-            "lease_id": lease_id,
+            "lease_id": cleanup_lease_id,
         },
         "triage": payload.get("triage"),
         "provider": provider,
@@ -804,7 +806,7 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
         "threads": threads,
         "sessions": payload.get("sessions") or [],
         "cleanup": monitor_operation_service.build_sandbox_cleanup_truth(
-            lease_id=lease_id,
+            lease_id=cleanup_lease_id,
             sandbox_id=sandbox_id,
             triage=payload.get("triage"),
             provider_name=str(provider.get("id") or sandbox.get("provider_name") or ""),
@@ -839,19 +841,19 @@ def get_monitor_operation_detail(operation_id: str) -> dict[str, Any]:
     return payload
 
 
-def _sandbox_cleanup_lease_id(sandbox_id: str) -> str:
+def _sandbox_cleanup_target(sandbox_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
         sandbox = repo.query_sandbox(sandbox_id)
-        lease_id = str(repo.query_sandbox_cleanup_lease_id(sandbox_id) or "").strip()
+        cleanup_target = repo.query_sandbox_cleanup_target(sandbox_id) or {}
     finally:
         repo.close()
     if sandbox is None:
         raise KeyError(f"Sandbox not found: {sandbox_id}")
 
-    if not lease_id:
+    if not str(cleanup_target.get("cleanup_lease_id") or "").strip():
         raise RuntimeError("monitor sandbox cleanup target missing managed runtime bridge")
-    return lease_id
+    return cleanup_target
 
 
 # ---------------------------------------------------------------------------

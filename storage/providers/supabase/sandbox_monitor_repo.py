@@ -103,17 +103,22 @@ class SupabaseSandboxMonitorRepo:
                 return self._lease_row_from_sandbox(sandbox)
         return None
 
-    def query_sandbox_cleanup_lease_id(self, sandbox_id: str) -> str | None:
+    def query_sandbox_cleanup_target(self, sandbox_id: str) -> dict[str, Any] | None:
         sandbox_key = str(sandbox_id or "").strip()
         if not sandbox_key:
             return None
-        for sandbox in self._ordered_sandboxes("query_sandbox_cleanup_lease_id"):
+        for sandbox in self._ordered_sandboxes("query_sandbox_cleanup_target"):
             if str(sandbox.get("id") or "").strip() != sandbox_key:
                 continue
             config = sandbox.get("config")
             if not isinstance(config, dict):
                 raise RuntimeError("sandbox.config must be an object")
-            return str(config.get("legacy_lease_id") or "").strip() or None
+            return {
+                "sandbox_id": sandbox_key,
+                "provider_name": str(sandbox.get("provider_name") or "").strip(),
+                "provider_env_id": str(sandbox.get("provider_env_id") or "").strip() or None,
+                "cleanup_lease_id": str(config.get("legacy_lease_id") or "").strip() or None,
+            }
         return None
 
     def query_sandbox_sessions(self, sandbox_id: str) -> list[dict]:

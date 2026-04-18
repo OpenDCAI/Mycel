@@ -654,6 +654,29 @@ def test_query_sandbox_instance_id_uses_sandbox_provider_env_id() -> None:
     assert repo.query_sandbox_instance_id("sandbox-1") == "instance-sandbox"
 
 
+def test_query_sandbox_cleanup_target_reads_structured_sandbox_target() -> None:
+    repo = _repo(
+        {
+            "container.sandboxes": [
+                _sandbox(
+                    "sandbox-1",
+                    provider_name="daytona_selfhost",
+                    provider_env_id="instance-sandbox",
+                    observed_state="detached",
+                    historical_lease_id="lease-1",
+                )
+            ],
+        }
+    )
+
+    assert repo.query_sandbox_cleanup_target("sandbox-1") == {
+        "sandbox_id": "sandbox-1",
+        "provider_name": "daytona_selfhost",
+        "provider_env_id": "instance-sandbox",
+        "cleanup_lease_id": "lease-1",
+    }
+
+
 def test_query_sandbox_instance_id_falls_back_without_lower_lease_bridge() -> None:
     repo = _repo(
         {

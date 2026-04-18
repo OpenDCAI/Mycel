@@ -79,11 +79,16 @@ class FakeSandboxMonitorRepo:
         result.pop("lease_id", None)
         return result
 
-    def query_sandbox_cleanup_lease_id(self, sandbox_id):
+    def query_sandbox_cleanup_target(self, sandbox_id):
         sandbox = self.sandbox if self.sandbox is not None else _sandbox_row(sandbox_id=sandbox_id)
         if sandbox is _MISSING:
             return None
-        return str(sandbox.get("lease_id") or "").strip() or None
+        return {
+            "sandbox_id": sandbox.get("sandbox_id") or sandbox_id,
+            "provider_name": sandbox.get("provider_name"),
+            "provider_env_id": sandbox.get("current_instance_id"),
+            "cleanup_lease_id": str(sandbox.get("lease_id") or "").strip() or None,
+        }
 
     def query_sandboxes(self):
         if self.sandboxes:
@@ -125,6 +130,7 @@ def test_monitor_service_no_longer_exposes_lease_bridge_shell() -> None:
     assert not hasattr(monitor_service, "list_leases")
     assert not hasattr(monitor_service, "get_monitor_lease_detail")
     assert not hasattr(monitor_service, "request_monitor_lease_cleanup")
+    assert not hasattr(monitor_service, "_sandbox_cleanup_lease_id")
 
 
 def test_monitor_sandbox_read_surface_uses_sandbox_internal_names() -> None:
@@ -142,6 +148,7 @@ def test_monitor_sandbox_read_surface_uses_sandbox_internal_names() -> None:
         "_classify_lease_triage",
         "_lease_groups",
         "Sandbox has no lease bridge",
+        "query_sandbox_cleanup_lease_id",
     ]
     for token in forbidden_tokens:
         assert token not in text
