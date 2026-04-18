@@ -26,12 +26,6 @@ class _FakeMonitorRepo:
         self._runtime_session_ids = runtime_session_ids
         self.batch_calls: list[list[str]] = []
 
-    def query_lease_instance_id(self, lease_id: str) -> str | None:
-        raise AssertionError(f"unexpected per-lease runtime-session probe: {lease_id}")
-
-    def query_lease_instance_ids(self, lease_ids: list[str]) -> dict[str, str | None]:
-        raise AssertionError(f"unexpected lease batch runtime-session probe: {lease_ids}")
-
     def query_sandbox_instance_ids(self, sandbox_ids: list[str]) -> dict[str, str | None]:
         self.batch_calls.append(list(sandbox_ids))
         return {sandbox_id: self._runtime_session_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
