@@ -55,33 +55,7 @@ def _repo(tables: dict) -> SupabaseSandboxMonitorRepo:
     return SupabaseSandboxMonitorRepo(FakeSupabaseClient(tables))
 
 
-def _lease(
-    lease_id: str,
-    *,
-    provider_name: str = "local",
-    desired_state: str = "running",
-    observed_state: str = "running",
-    current_instance_id: str | None = None,
-    created_at: str | None = None,
-    updated_at: str | None = None,
-    **extra,
-) -> dict:
-    row = {
-        "lease_id": lease_id,
-        "provider_name": provider_name,
-        "desired_state": desired_state,
-        "observed_state": observed_state,
-        "current_instance_id": current_instance_id,
-    }
-    if created_at is not None:
-        row["created_at"] = created_at
-    if updated_at is not None:
-        row["updated_at"] = updated_at
-    row.update(extra)
-    return row
-
-
-def _session(
+def _chat_session(
     session_id: str,
     thread_id: str,
     lease_id: str,
@@ -363,7 +337,7 @@ def test_query_thread_sessions_ignores_removed_chat_sessions_rows() -> None:
             ],
             "chat_sessions": [
                 {
-                    **_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
+                    **_chat_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
                     "ended_at": None,
                     "close_reason": None,
                 }
@@ -374,7 +348,7 @@ def test_query_thread_sessions_ignores_removed_chat_sessions_rows() -> None:
     assert repo.query_thread_sessions("thread-1") == []
 
 
-def test_session_monitor_surfaces_do_not_read_removed_chat_sessions_table() -> None:
+def test_chat_session_monitor_surfaces_do_not_read_removed_chat_sessions_table() -> None:
     repo = SupabaseSandboxMonitorRepo(
         _BrokenChatSessionsClient(
             {
@@ -856,9 +830,9 @@ def test_query_resource_sessions_uses_sandbox_thread_rows_without_session_rows()
                 _thread("subagent-deadbeef", "workspace-subagent", updated_at="2026-04-05T11:06:00"),
             ],
             "chat_sessions": [
-                _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
-                _session("sess-recent-a", "thread-old", "lease-recent", status="closed", started_at="2026-04-05T12:01:00"),
-                _session("sess-recent-b", "thread-new", "lease-recent", status="closed", started_at="2026-04-05T12:02:00"),
+                _chat_session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
+                _chat_session("sess-recent-a", "thread-old", "lease-recent", status="closed", started_at="2026-04-05T12:01:00"),
+                _chat_session("sess-recent-b", "thread-new", "lease-recent", status="closed", started_at="2026-04-05T12:02:00"),
             ],
         }
     )
@@ -959,7 +933,7 @@ def test_query_resource_sessions_projects_sandbox_rows_without_session_rows() ->
                 _thread("thread-parent", "workspace-parent", updated_at="2026-04-05T11:05:00"),
             ],
             "chat_sessions": [
-                _session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
+                _chat_session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
             ],
         }
     )
