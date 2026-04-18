@@ -31,8 +31,8 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     try:
         lease_row = await asyncio.to_thread(lease_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
         lease = lease_from_row(lease_row, resolve_sandbox_db_path()) if lease_row else None
-        matched_lease_id = lease.lease_id if lease else None
         matched_sandbox_id = str((lease_row or {}).get("sandbox_id") or "").strip() or None
+        lower_runtime_handle = lease.lease_id if lease else None
 
         # @@@webhook-invalidation-only - Webhook is optimization only: persist event + mark lease stale.
         await asyncio.to_thread(
@@ -41,8 +41,8 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
             instance_id=instance_id,
             event_type=event_type,
             payload=payload,
-            matched_lease_id=matched_lease_id,
             matched_sandbox_id=matched_sandbox_id,
+            lower_runtime_handle=lower_runtime_handle,
         )
     finally:
         lease_repo.close()

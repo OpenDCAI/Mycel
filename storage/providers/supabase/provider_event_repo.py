@@ -31,8 +31,8 @@ class SupabaseProviderEventRepo:
         instance_id: str,
         event_type: str,
         payload: dict[str, Any],
-        matched_lease_id: str | None,
         matched_sandbox_id: str | None,
+        lower_runtime_handle: str | None,
     ) -> None:
         self._t().insert(
             {
@@ -40,8 +40,8 @@ class SupabaseProviderEventRepo:
                 "instance_id": instance_id,
                 "event_type": event_type,
                 "payload_json": json.dumps(payload, ensure_ascii=False),
-                "matched_lease_id": matched_lease_id,
                 "matched_sandbox_id": matched_sandbox_id,
+                "matched_lease_id": lower_runtime_handle,
                 "created_at": datetime.now().isoformat(),
             }
         ).execute()

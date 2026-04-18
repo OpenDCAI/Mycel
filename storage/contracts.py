@@ -83,8 +83,8 @@ class ProviderEventRepo(Protocol):
         instance_id: str,
         event_type: str,
         payload: dict[str, Any],
-        matched_lease_id: str | None,
         matched_sandbox_id: str | None,
+        lower_runtime_handle: str | None,
     ) -> None: ...
     def list_recent(self, limit: int = 100) -> list[dict[str, Any]]: ...
 

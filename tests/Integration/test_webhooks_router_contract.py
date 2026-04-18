@@ -57,8 +57,8 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
             "instance_id": "inst-1",
             "event_type": "provider.updated",
             "payload": {"instance_id": "inst-1", "event": "provider.updated"},
-            "matched_lease_id": None,
             "matched_sandbox_id": None,
+            "lower_runtime_handle": None,
         }
     ]
 
@@ -140,8 +140,8 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_le
             "instance_id": "inst-2",
             "event_type": "provider.running",
             "payload": {"instance_id": "inst-2", "event": "provider.running"},
-            "matched_lease_id": "lease-1",
             "matched_sandbox_id": "sandbox-1",
+            "lower_runtime_handle": "lease-1",
         }
     ]
     assert lease.applied == [
