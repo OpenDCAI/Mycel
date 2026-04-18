@@ -38,7 +38,7 @@ def make_chat_delivery_fn(app: Any):
             chat=AgentChatContext(chat_id=request.chat_id),
             sender=AgentRuntimeActor(
                 user_id=request.sender_id,
-                user_type="unknown",
+                user_type=request.sender_type,
                 display_name=request.sender_name,
                 avatar_url=request.sender_avatar_url,
                 source="chat",

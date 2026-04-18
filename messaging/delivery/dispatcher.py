@@ -20,6 +20,7 @@ class ChatDeliveryRequest:
     recipient_user: Any
     content: str
     sender_name: str
+    sender_type: str
     chat_id: str
     sender_id: str
     sender_avatar_url: str | None
@@ -64,8 +65,10 @@ class ChatDeliveryDispatcher:
         sender_name = sender_user.display_name
         sender_avatar_url = avatar_url(sender_user.id, bool(sender_user.avatar))
         sender_raw_type = getattr(sender_user, "type", None)
-        sender_type = sender_raw_type.value if isinstance(sender_raw_type, Enum) else sender_raw_type
-        sender_owner_id = sender_user.id if sender_user and sender_type == "human" else getattr(sender_user, "owner_user_id", None)
+        if sender_raw_type is None:
+            raise RuntimeError(f"Chat delivery sender type is missing: {sender_id}")
+        sender_type = sender_raw_type.value if isinstance(sender_raw_type, Enum) else str(sender_raw_type)
+        sender_owner_id = sender_user.id if sender_type == "human" else getattr(sender_user, "owner_user_id", None)
 
         for member in members:
             uid = member.get("user_id")
@@ -82,7 +85,7 @@ class ChatDeliveryDispatcher:
             # @@@same-owner-group-delivery - explicit group membership among the same owner
             # must reach sibling actors even when no relationship row exists yet.
             if sender_owner_id and getattr(recipient, "owner_user_id", None) == sender_owner_id:
-                self._deliver(uid, recipient, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+                self._deliver(uid, recipient, content, sender_name, sender_type, chat_id, sender_id, sender_avatar_url, signal=signal)
                 continue
 
             if self._delivery_resolver:
@@ -92,7 +95,7 @@ class ChatDeliveryDispatcher:
                     logger.info("[messaging] POLICY %s for %s", action.value, uid[:15])
                     continue
 
-            self._deliver(uid, recipient, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+            self._deliver(uid, recipient, content, sender_name, sender_type, chat_id, sender_id, sender_avatar_url, signal=signal)
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         return resolve_messaging_display_user(
@@ -106,6 +109,7 @@ class ChatDeliveryDispatcher:
         recipient: Any,
         content: str,
         sender_name: str,
+        sender_type: str,
         chat_id: str,
         sender_id: str,
         sender_avatar_url: str | None,
@@ -120,6 +124,7 @@ class ChatDeliveryDispatcher:
                 recipient_user=recipient,
                 content=content,
                 sender_name=sender_name,
+                sender_type=sender_type,
                 chat_id=chat_id,
                 sender_id=sender_id,
                 sender_avatar_url=sender_avatar_url,
