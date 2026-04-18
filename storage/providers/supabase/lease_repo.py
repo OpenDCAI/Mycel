@@ -39,7 +39,7 @@ def _config(row: dict[str, Any]) -> dict[str, Any]:
     return dict(value)
 
 
-def _compat(row: dict[str, Any]) -> dict[str, Any]:
+def _bridge_state(row: dict[str, Any]) -> dict[str, Any]:
     value = _config(row).get(_LEASE_COMPAT)
     if value is None:
         raise RuntimeError(f"container sandbox missing config.{_LEASE_COMPAT}: {row.get('id')}")
@@ -57,7 +57,7 @@ def _lease_id(row: dict[str, Any]) -> str:
     return str(value)
 
 
-def _has_lease_compat(row: dict[str, Any]) -> bool:
+def _has_lease_bridge_state(row: dict[str, Any]) -> bool:
     return _config(row).get(_LEASE_COMPAT) is not None
 
 
@@ -82,25 +82,25 @@ def _instance_from_lease(row: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _lease_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
-    compat = _compat(row)
+    bridge_state = _bridge_state(row)
     result = {
         "sandbox_id": row.get("id"),
         "lease_id": _lease_id(row),
         "provider_name": row.get("provider_name"),
-        "recipe_id": compat.get("recipe_id") or row.get("sandbox_template_id"),
-        "workspace_key": compat.get("workspace_key"),
-        "recipe_json": compat.get("recipe_json"),
+        "recipe_id": bridge_state.get("recipe_id") or row.get("sandbox_template_id"),
+        "workspace_key": bridge_state.get("workspace_key"),
+        "recipe_json": bridge_state.get("recipe_json"),
         "current_instance_id": row.get("provider_env_id"),
-        "instance_created_at": compat.get("instance_created_at"),
+        "instance_created_at": bridge_state.get("instance_created_at"),
         "desired_state": row.get("desired_state"),
         "observed_state": row.get("observed_state"),
         "instance_status": row.get("observed_state"),
-        "version": int(compat.get("version") or 0),
+        "version": int(bridge_state.get("version") or 0),
         "observed_at": row.get("observed_at"),
         "last_error": row.get("last_error"),
-        "needs_refresh": _int_flag(compat.get("needs_refresh")),
-        "refresh_hint_at": compat.get("refresh_hint_at"),
-        "status": compat.get("status") or "active",
+        "needs_refresh": _int_flag(bridge_state.get("needs_refresh")),
+        "refresh_hint_at": bridge_state.get("refresh_hint_at"),
+        "status": bridge_state.get("status") or "active",
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
@@ -110,9 +110,9 @@ def _lease_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
 
 def _patched_config(row: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
     config = _config(row)
-    compat = _compat(row)
-    compat.update(updates)
-    config[_LEASE_COMPAT] = compat
+    bridge_state = _bridge_state(row)
+    bridge_state.update(updates)
+    config[_LEASE_COMPAT] = bridge_state
     return config
 
 
@@ -352,7 +352,7 @@ class SupabaseLeaseRepo:
 
     def list_all(self) -> list[dict[str, Any]]:
         return sorted(
-            [_lease_from_sandbox(row) for row in self._sandbox_rows() if _has_lease_compat(row)],
+            [_lease_from_sandbox(row) for row in self._sandbox_rows() if _has_lease_bridge_state(row)],
             key=lambda row: row.get("created_at") or "",
             reverse=True,
         )
