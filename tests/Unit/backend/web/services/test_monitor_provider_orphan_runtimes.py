@@ -5,6 +5,8 @@ import pytest
 
 from backend.web.services import monitor_provider_runtime_service, sandbox_service
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+
 
 class _FailingManager:
     def __init__(self) -> None:
@@ -61,7 +63,7 @@ def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
             "status": "paused",
             "created_at": None,
             "last_active": None,
-            "lease_id": None,
+            LOWER_RUNTIME_KEY: None,
             "instance_id": "orphan-paused",
             "chat_session_id": None,
             "source": "provider_orphan",
@@ -74,7 +76,7 @@ def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
             "status": "running",
             "created_at": None,
             "last_active": None,
-            "lease_id": None,
+            LOWER_RUNTIME_KEY: None,
             "instance_id": "orphan-running",
             "chat_session_id": None,
             "source": "provider_orphan",

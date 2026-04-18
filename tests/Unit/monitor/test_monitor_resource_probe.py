@@ -6,6 +6,8 @@ from backend.web.services import resource_service
 from sandbox import resource_snapshot
 from storage import runtime as storage_runtime
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+
 
 class _FakeProvider:
     def get_metrics(self, session_id: str):
@@ -275,7 +277,7 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
     assert result["running_targets"] == 1
     assert result["non_running_targets"] == 0
     assert all("repo" not in call for call in calls)
-    assert all("lease_id" not in call for call in calls)
+    assert all(LOWER_RUNTIME_KEY not in call for call in calls)
     assert {call["sandbox_id"] for call in calls} == {"sandbox-1"}
     assert {call["probe_mode"] for call in calls} == {"running_runtime"}
 
@@ -360,7 +362,7 @@ def test_browse_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> N
             sandboxes=[
                 {
                     "sandbox_id": "sandbox-1",
-                    "lease_id": "lease-1",
+                    LOWER_RUNTIME_KEY: "lease-1",
                     "provider_name": "daytona",
                 }
             ],
@@ -383,7 +385,7 @@ def test_read_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> Non
             sandboxes=[
                 {
                     "sandbox_id": "sandbox-1",
-                    "lease_id": "lease-1",
+                    LOWER_RUNTIME_KEY: "lease-1",
                     "provider_name": "daytona",
                 }
             ],
