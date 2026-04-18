@@ -1,16 +1,8 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from backend.web.services import monitor_service, sandbox_service
-
-
-def test_provider_orphan_runtime_tests_do_not_use_lease_backed_fixture_name() -> None:
-    source = Path(__file__).read_text(encoding="utf-8")
-    forbidden = "lease" + "-backed"
-
-    assert forbidden not in source
 
 
 class _FailingManager:

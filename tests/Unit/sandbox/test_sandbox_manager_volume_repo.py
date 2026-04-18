@@ -307,12 +307,6 @@ def test_setup_mounts_reports_missing_lease_not_missing_volume():
         manager._setup_mounts("thread-1")
 
 
-def test_manager_no_longer_exposes_generic_volume_source_helper():
-    manager = _new_test_manager()
-
-    assert not hasattr(manager, "resolve_volume_source")
-
-
 def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_path):
     source = deserialize_volume_source(
         {

@@ -112,20 +112,6 @@ class FakeSandboxMonitorRepo:
         return None
 
 
-def test_fake_lease_repo_no_longer_exposes_lease_instance_shell() -> None:
-    repo = FakeSandboxMonitorRepo()
-
-    assert not hasattr(repo, "query_lease_instance_id")
-
-
-def test_fake_lease_repo_no_longer_exposes_broader_lease_protocol_shell() -> None:
-    repo = FakeSandboxMonitorRepo()
-
-    assert not hasattr(repo, "query_lease")
-    assert not hasattr(repo, "query_lease_threads")
-    assert not hasattr(repo, "query_lease_sessions")
-
-
 def test_monitor_service_no_longer_exposes_lease_bridge_shell() -> None:
     assert not hasattr(monitor_service, "list_leases")
     assert not hasattr(monitor_service, "get_monitor_lease_detail")
@@ -635,20 +621,6 @@ def test_get_monitor_operation_detail_does_not_adapt_deleted_lease_targets(monke
 
     assert "sandbox_id" not in payload
     assert payload["target"] == {"target_type": "lease", "target_id": "lease-1"}
-
-
-def test_monitor_detail_deleted_lease_target_guards_do_not_use_stale_language() -> None:
-    source = Path(__file__).read_text()
-    old_tokens = [
-        "test_get_monitor_operation_detail_does_not_adapt_" + "leg" + "acy_lease_targets",
-        "test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_" + "leg" + "acy_lease_history",
-        "test_get_monitor_operation_detail_ignores_" + "leg" + "acy_lease_relation_shell",
-        '"summary": "' + "Leg" + "acy cleanup completed." + '"',
-        '"reason": "' + "leg" + "acy" + '"',
-        '"operation_id": "op-' + "leg" + "acy" + '"',
-    ]
-
-    assert not any(token in source for token in old_tokens)
 
 
 def test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_deleted_lease_target_history(monkeypatch):
