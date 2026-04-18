@@ -582,7 +582,7 @@ def list_monitor_sandboxes() -> dict[str, Any]:
 def list_monitor_provider_orphan_runtimes() -> dict[str, Any]:
     _, managers = sandbox_service.init_providers_and_managers()
     runtimes = []
-    for item in sandbox_service.load_provider_orphan_sessions(managers):
+    for item in sandbox_service.load_provider_orphan_runtimes(managers):
         runtimes.append(
             {
                 "runtime_id": str(item.get("session_id") or ""),

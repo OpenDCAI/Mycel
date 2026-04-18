@@ -27,7 +27,7 @@ def test_monitor_provider_orphan_runtimes_do_not_refresh_all_managed_runtime_row
     assert monitor_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
 
 
-def test_load_provider_orphan_sessions_excludes_covered_provider_runtimes():
+def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
     manager = SimpleNamespace(
         provider=SimpleNamespace(
             name="daytona",
@@ -42,7 +42,7 @@ def test_load_provider_orphan_sessions_excludes_covered_provider_runtimes():
         provider_capability=SimpleNamespace(inspect_visible=False),
     )
 
-    assert sandbox_service.load_provider_orphan_sessions({"daytona": manager}) == [
+    assert sandbox_service.load_provider_orphan_runtimes({"daytona": manager}) == [
         {
             "session_id": "orphan-paused",
             "thread_id": "(orphan)",
@@ -72,7 +72,7 @@ def test_load_provider_orphan_sessions_excludes_covered_provider_runtimes():
     ]
 
 
-def test_load_provider_orphan_sessions_rejects_non_list_provider_result():
+def test_load_provider_orphan_runtimes_rejects_non_list_provider_result():
     manager = SimpleNamespace(
         provider=SimpleNamespace(name="daytona", list_provider_runtimes=lambda: (_provider_runtime("orphan"),)),
         lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: []),
@@ -80,4 +80,4 @@ def test_load_provider_orphan_sessions_rejects_non_list_provider_result():
     )
 
     with pytest.raises(TypeError, match="daytona.list_provider_runtimes must return list"):
-        sandbox_service.load_provider_orphan_sessions({"daytona": manager})
+        sandbox_service.load_provider_orphan_runtimes({"daytona": manager})

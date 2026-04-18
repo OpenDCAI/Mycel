@@ -743,7 +743,7 @@ def test_list_monitor_provider_orphan_runtimes_returns_provider_orphans(monkeypa
     monkeypatch.setattr(monitor_service.sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": object()}))
     monkeypatch.setattr(
         monitor_service.sandbox_service,
-        "load_provider_orphan_sessions",
+        "load_provider_orphan_runtimes",
         lambda _managers: [
             {"session_id": "orphan-1", "provider": "daytona", "source": "provider_orphan", "status": "running"},
         ],

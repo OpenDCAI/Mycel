@@ -394,9 +394,9 @@ def load_all_sessions(managers: dict) -> list[dict]:
     return sessions
 
 
-def load_provider_orphan_sessions(managers: dict) -> list[dict]:
+def load_provider_orphan_runtimes(managers: dict) -> list[dict]:
     """Load provider-visible runtimes that are not backed by a known managed runtime row."""
-    sessions: list[dict] = []
+    runtimes: list[dict] = []
     for provider_name, manager in managers.items():
         provider = getattr(manager, "provider", None)
         list_provider_runtimes = getattr(provider, "list_provider_runtimes", None)
@@ -420,7 +420,7 @@ def load_provider_orphan_sessions(managers: dict) -> list[dict]:
             status = getattr(ps, "status", None) or "unknown"
             if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
                 continue
-            sessions.append(
+            runtimes.append(
                 {
                     "session_id": instance_id,
                     "thread_id": "(orphan)",
@@ -435,7 +435,7 @@ def load_provider_orphan_sessions(managers: dict) -> list[dict]:
                     "inspect_visible": inspect_visible,
                 }
             )
-    return sessions
+    return runtimes
 
 
 def find_session_and_manager(
