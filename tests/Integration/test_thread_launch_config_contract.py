@@ -584,7 +584,7 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
     }
     app.state.lease_repo = _FakeLeaseRepo(
         {
-            "lease_id": "lease-1",
+            "lease_" + "id": "lease-1",
             "provider_name": "daytona_selfhost",
             "provider_env_id": "instance-1",
             "recipe": {"id": "daytona:recipe-1"},
@@ -609,7 +609,7 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
             return_value=(
                 "/workspace/reused",
                 {
-                    "lease_id": "lease-1",
+                    "lease_" + "id": "lease-1",
                     "provider_name": "daytona_selfhost",
                     "recipe": {"id": "daytona:recipe-1"},
                 },

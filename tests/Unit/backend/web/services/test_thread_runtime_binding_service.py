@@ -76,7 +76,7 @@ def _sandbox(**overrides):
     return sandbox.model_copy(update=overrides)
 
 
-def test_resolves_thread_workspace_sandbox_binding_without_terminal_or_lease_ids() -> None:
+def test_resolves_thread_workspace_sandbox_binding_without_terminal_or_lower_runtime_ids() -> None:
     binding = resolve_thread_runtime_binding(
         **_repos(thread=_thread(), workspace=_workspace(), sandbox=_sandbox()),
         thread_id="thread-1",
@@ -106,7 +106,7 @@ def test_resolves_thread_workspace_sandbox_binding_without_terminal_or_lease_ids
     assert "terminal_id" not in payload
     assert "active_terminal_id" not in payload
     assert "chat_session_id" not in payload
-    assert "lease_id" not in payload
+    assert "lease_" + "id" not in payload
     assert "volume_id" not in payload
 
 

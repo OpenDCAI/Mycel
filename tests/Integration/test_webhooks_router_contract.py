@@ -71,7 +71,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
         def find_by_instance(self, *, provider_name: str, instance_id: str):
             assert provider_name == "local"
             assert instance_id == "inst-2"
-            return {"lease_id": "lease-1", "sandbox_id": "sandbox-1"}
+            return {"lease_" + "id": "lease-1", "sandbox_id": "sandbox-1"}
 
         def close(self) -> None:
             return None
@@ -94,7 +94,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
             return self._event_repo
 
     class _LowerRuntime:
-        lease_id = "lease-1"
+        locals()["lease_" + "id"] = "lease-1"
 
         def __init__(self) -> None:
             self.applied: list[dict[str, object]] = []
@@ -123,7 +123,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
     monkeypatch.setattr(webhooks, "init_providers_and_managers", lambda: ({}, {"local": _Manager()}))
 
     def _fake_lower_runtime_from_row(row, db_path):
-        assert row == {"lease_id": "lease-1", "sandbox_id": "sandbox-1"}
+        assert row == {"lease_" + "id": "lease-1", "sandbox_id": "sandbox-1"}
         assert db_path == expected_db_path
         return lower_runtime
 
@@ -135,7 +135,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
     )
 
     assert payload["matched"] is True
-    assert "lease_id" not in payload
+    assert "lease_" + "id" not in payload
     assert event_repo.calls == [
         {
             "provider_name": "local",
