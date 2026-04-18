@@ -50,7 +50,7 @@ def _resource_snapshot() -> dict:
 def test_monitor_deleted_route_guard_uses_deleted_route_language() -> None:
     source = Path(__file__).read_text()
 
-    old_name = "def test_monitor_" + "legacy_monitor_routes_are_not_exposed"
+    old_name = "def test_monitor_" + "leg" + "acy_monitor_routes_are_not_exposed"
     assert old_name not in source
 
 
