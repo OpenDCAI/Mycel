@@ -23,7 +23,7 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
     monkeypatch.setattr(
         cache.resource_projection_service,
         "visible_resource_row_stats",
-        lambda: {"local": {"sessions": 0, "running": 0}},
+        lambda: {"local": {"resource_rows": 0, "running": 0}},
     )
     monkeypatch.setattr(
         cache.resource_projection_service,
@@ -62,7 +62,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
     monkeypatch.setattr(
         cache.resource_projection_service,
         "visible_resource_row_stats",
-        lambda: {"docker": {"sessions": 1, "running": 1}},
+        lambda: {"docker": {"resource_rows": 1, "running": 1}},
     )
     monkeypatch.setattr(
         cache.resource_projection_service,
@@ -100,7 +100,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
     monkeypatch.setattr(
         cache.resource_projection_service,
         "visible_resource_row_stats",
-        lambda: {"docker": {"sessions": 0, "running": 0}},
+        lambda: {"docker": {"resource_rows": 0, "running": 0}},
     )
     cached = cache.get_resource_overview_snapshot()
     assert cached["providers"][0]["id"] == "docker"
@@ -152,7 +152,7 @@ def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(m
     monkeypatch.setattr(
         cache.resource_projection_service,
         "visible_resource_row_stats",
-        lambda: {"local": {"sessions": 1, "running": 1}},
+        lambda: {"local": {"resource_rows": 1, "running": 1}},
     )
     monkeypatch.setattr(
         cache,

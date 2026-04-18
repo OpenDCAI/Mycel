@@ -703,7 +703,7 @@ def test_visible_resource_row_stats_uses_sandbox_keyed_runtime_lookup(monkeypatc
 
     stats = resource_projection_service.visible_resource_row_stats()
 
-    assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
+    assert stats == {"daytona_selfhost": {"resource_rows": 1, "running": 1}}
 
 
 def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runtime_residue_duplicates(monkeypatch):
@@ -735,7 +735,7 @@ def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runti
 
     stats = resource_projection_service.visible_resource_row_stats()
 
-    assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
+    assert stats == {"daytona_selfhost": {"resource_rows": 1, "running": 1}}
 
 
 def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeypatch):

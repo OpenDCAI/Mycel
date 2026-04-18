@@ -65,13 +65,13 @@ def _snapshot_drifted_from_live_resource_rows(snapshot: dict[str, Any]) -> bool:
     live_stats = resource_projection_service.visible_resource_row_stats()
     for provider in snapshot.get("providers") or []:
         provider_id = str(provider.get("id") or "")
-        current = live_stats.get(provider_id, {"sessions": 0, "running": 0})
+        current = live_stats.get(provider_id, {"resource_rows": 0, "running": 0})
         cached_running = int(((provider.get("telemetry") or {}).get("running") or {}).get("used") or 0)
         cached_resource_rows = len(provider.get("sessions") or [])
-        if cached_running != current["running"] or cached_resource_rows != current["sessions"]:
+        if cached_running != current["running"] or cached_resource_rows != current["resource_rows"]:
             return True
     for provider_id, current in live_stats.items():
-        if current["running"] or current["sessions"]:
+        if current["running"] or current["resource_rows"]:
             cached = next((item for item in snapshot.get("providers") or [] if str(item.get("id") or "") == provider_id), None)
             if cached is None:
                 return True

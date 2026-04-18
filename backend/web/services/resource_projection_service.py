@@ -395,11 +395,11 @@ def visible_resource_row_stats() -> dict[str, dict[str, int]]:
     seen_running_sandboxes: set[tuple[str, str]] = set()
     for resource_row in resource_rows:
         provider_instance = str(resource_row.get("provider") or "local")
-        provider_stats = stats.setdefault(provider_instance, {"sessions": 0, "running": 0})
+        provider_stats = stats.setdefault(provider_instance, {"resource_rows": 0, "running": 0})
         resource_identity = _resource_row_identity(resource_row)
         if resource_identity not in seen_resource_ids:
             seen_resource_ids.add(resource_identity)
-            provider_stats["sessions"] += 1
+            provider_stats["resource_rows"] += 1
 
         sandbox_id = str(resource_row.get("sandbox_id") or "").strip()
         runtime_session_id = runtime_session_ids.get(sandbox_id)
