@@ -10,14 +10,14 @@ const TYPE_COLORS: Record<string, { hex: string; tw: string }> = {
   openclaw_agent: { hex: "#fb923c", tw: "bg-orange-100 text-orange-700" },
 };
 
-const FALLBACK = { hex: "#a78bfa", tw: "bg-purple-100 text-purple-700" };
+const DEFAULT_TYPE_COLOR = { hex: "#a78bfa", tw: "bg-purple-100 text-purple-700" };
 
 /** Resolve color by actor type. Returns both hex (Canvas) and tw (DOM) variants. */
 export function colorForType(type?: string): { hex: string; tw: string } {
-  return (type && TYPE_COLORS[type]) || FALLBACK;
+  return (type && TYPE_COLORS[type]) || DEFAULT_TYPE_COLOR;
 }
 
-// ID-hash colors — fallback when type is unknown
+// ID-hash colors for actors without a known type.
 const ID_HASH_COLORS = [
   "bg-blue-100 text-blue-700",
   "bg-green-100 text-green-700",

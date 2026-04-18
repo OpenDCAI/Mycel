@@ -100,7 +100,7 @@ function ChatDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolea
   );
 }
 
-// --- Generic fallback divider (no notification_type) ---
+// --- Generic divider for notices without notification_type ---
 
 function GenericDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolean }) {
   if (!parsed.text) return null;
