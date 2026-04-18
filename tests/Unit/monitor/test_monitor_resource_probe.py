@@ -85,7 +85,7 @@ def test_upsert_resource_snapshot_for_sandbox_requires_repo_sandbox_wrapper(monk
         )
 
 
-def test_upsert_resource_snapshot_for_sandbox_no_longer_requires_legacy_lease_bridge(monkeypatch) -> None:
+def test_upsert_resource_snapshot_for_sandbox_uses_sandbox_write_without_lower_lease_bridge(monkeypatch) -> None:
     repo = _FakeSandboxSnapshotRepo()
     monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: repo)
 
@@ -123,10 +123,15 @@ def test_resource_snapshot_bridge_no_longer_exposes_lease_shaped_write_shell() -
 
 def test_resource_snapshot_write_bridge_is_not_named_as_adapter() -> None:
     source = inspect.getsource(resource_service)
+    guard_source = Path(__file__).read_text(encoding="utf-8")
+    stale_test_name = "no_longer_requires_" + "legacy" + "_lease_bridge"
+    stale_adapter_comment = "storage " + "compatibility inside this adapter"
 
     assert "_SandboxSnapshotRepoAdapter" not in source
-    assert "storage compatibility inside this adapter" not in source
+    assert stale_adapter_comment not in source
     assert "_SandboxSnapshotRepoBridge" in source
+    assert stale_test_name not in guard_source
+    assert stale_adapter_comment not in guard_source
 
 
 def test_resource_snapshot_module_no_longer_exposes_lease_shaped_write_helper() -> None:
