@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
+from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
 from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 from core.runtime.middleware.monitor import AgentState
 
@@ -63,7 +63,7 @@ async def test_gateway_thread_input_clears_resource_overview_cache_when_starting
     ):
         result = await NativeAgentRuntimeGateway(app).dispatch_thread_input(_thread_input())
 
-    assert result == {"status": "started", "routing": "direct", "run_id": "run-123", "thread_id": "thread-1"}
+    assert result == AgentThreadInputResult(status="started", routing="direct", run_id="run-123", thread_id="thread-1")
     clear_cache.assert_called_once_with()
 
 

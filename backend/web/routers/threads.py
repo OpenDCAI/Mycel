@@ -1053,7 +1053,7 @@ async def send_message(
             agent=agent,
         )
 
-    return await get_agent_runtime_gateway(app).dispatch_thread_input(
+    result = await get_agent_runtime_gateway(app).dispatch_thread_input(
         AgentThreadInputEnvelope(
             thread_id=thread_id,
             sender=AgentRuntimeActor(user_id=user_id, user_type="human", display_name="Owner", source="owner"),
@@ -1061,6 +1061,7 @@ async def send_message(
             enable_trajectory=payload.enable_trajectory,
         )
     )
+    return result.to_response()
 
 
 @router.post("/{thread_id}/queue")
@@ -1181,7 +1182,7 @@ async def resolve_thread_permission_request(
             annotations=getattr(payload, "annotations", None),
         )
 
-        followup = await get_agent_runtime_gateway(app).dispatch_thread_input(
+        followup_result = await get_agent_runtime_gateway(app).dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 sender=AgentRuntimeActor(
@@ -1200,6 +1201,7 @@ async def resolve_thread_permission_request(
                 ),
             ),
         )
+        followup = followup_result.to_response()
 
     response = {"ok": True, "thread_id": thread_id, "request_id": request_id}
     if followup is not None:

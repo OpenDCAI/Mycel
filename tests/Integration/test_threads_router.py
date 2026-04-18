@@ -167,10 +167,12 @@ class _FakeRecipeRepo:
 async def test_send_message_passes_enable_trajectory_to_agent_runtime_gateway() -> None:
     captured: list[Any] = []
 
+    from backend.protocols.agent_runtime import AgentThreadInputResult
+
     class _Gateway:
-        async def dispatch_thread_input(self, envelope: Any) -> dict[str, str]:
+        async def dispatch_thread_input(self, envelope: Any) -> AgentThreadInputResult:
             captured.append(envelope)
-            return {"status": "started", "thread_id": "thread-1"}
+            return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
 
     result = await threads_router.send_message(
         "thread-1",
@@ -179,7 +181,7 @@ async def test_send_message_passes_enable_trajectory_to_agent_runtime_gateway() 
         app=SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=_Gateway())),
     )
 
-    assert result == {"status": "started", "thread_id": "thread-1"}
+    assert result == {"status": "started", "routing": "direct", "thread_id": "thread-1"}
     assert captured[0].enable_trajectory is True
 
 
@@ -1242,10 +1244,12 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
 
     captured: list[Any] = []
 
+    from backend.protocols.agent_runtime import AgentThreadInputResult
+
     class _Gateway:
-        async def dispatch_thread_input(self, envelope: Any) -> dict[str, str]:
+        async def dispatch_thread_input(self, envelope: Any) -> AgentThreadInputResult:
             captured.append(envelope)
-            return {"status": "started", "routing": "direct", "thread_id": "thread-1"}
+            return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
 
     result = await threads_router.resolve_thread_permission_request(
         "thread-1",

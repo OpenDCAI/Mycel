@@ -4,13 +4,18 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from backend.protocols.agent_runtime import AgentChatDeliveryEnvelope, AgentGatewayDeliveryResult, AgentThreadInputEnvelope
+from backend.protocols.agent_runtime import (
+    AgentChatDeliveryEnvelope,
+    AgentGatewayDeliveryResult,
+    AgentThreadInputEnvelope,
+    AgentThreadInputResult,
+)
 
 
 class AgentRuntimeGatewayPort(Protocol):
     async def dispatch_chat(self, envelope: AgentChatDeliveryEnvelope) -> AgentGatewayDeliveryResult: ...
 
-    async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> dict[str, Any]: ...
+    async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult: ...
 
 
 def get_agent_runtime_gateway(app: Any) -> AgentRuntimeGatewayPort:

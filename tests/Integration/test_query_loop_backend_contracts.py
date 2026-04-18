@@ -1240,7 +1240,9 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     release_agent_lookup.set()
     result = await asyncio.wait_for(startup_task, timeout=2)
 
-    assert result == {"status": "cancelled", "routing": "cancelled", "thread_id": thread_id}
+    from backend.protocols.agent_runtime import AgentThreadInputResult
+
+    assert result == AgentThreadInputResult(status="cancelled", routing="cancelled", thread_id=thread_id)
     assert app.state.thread_tasks.get(thread_id) is None
     assert runtime.current_state == AgentState.IDLE
 

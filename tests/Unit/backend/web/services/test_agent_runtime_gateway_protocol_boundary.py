@@ -29,3 +29,16 @@ def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -
     assert "content" not in thread_fields
     assert "source" not in thread_fields
     assert "message_metadata" not in thread_fields
+
+
+def test_agent_runtime_thread_input_result_is_a_protocol_object() -> None:
+    protocol_module = importlib.import_module("backend.protocols.agent_runtime")
+    gateway_module = importlib.import_module("backend.web.services.agent_runtime_gateway")
+    port_module = importlib.import_module("backend.web.services.agent_runtime_port")
+
+    gateway_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.dispatch_thread_input)
+    port_hints = get_type_hints(port_module.AgentRuntimeGatewayPort.dispatch_thread_input)
+
+    assert protocol_module.AgentThreadInputResult.__module__ == "backend.protocols.agent_runtime"
+    assert gateway_hints["return"] is protocol_module.AgentThreadInputResult
+    assert port_hints["return"] is protocol_module.AgentThreadInputResult
