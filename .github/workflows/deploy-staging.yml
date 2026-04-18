@@ -20,6 +20,7 @@ on:
         default: "main"
 
 permissions:
+  contents: read
   pull-requests: write
 
 jobs:
@@ -114,23 +115,26 @@ jobs:
           printf '%s' "$body" | jq -e --arg volume "${STAGING_STACK_UUID}_leon-home:/root/.leon" '.docker_compose | contains($volume)' >/dev/null
           printf '%s' "$body" | jq -e --arg sha "${{ steps.target.outputs.sha }}" '.docker_compose | contains($sha)' >/dev/null
 
-      - name: Verify staging health contract
+      - name: Verify staging API contract
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
-            status="$(curl -sS -o /tmp/staging-health.json -w '%{http_code}' "https://app.staging.mycel.nextmind.space/api/monitor/health")"
-            echo "health attempt ${attempt}: status=${status}"
-            if [ "$status" = "200" ]; then
-              body="$(cat /tmp/staging-health.json)"
-              echo "$body"
-              printf '%s' "$body" | jq -e '.db.path == "/root/.leon/sandbox.db"' >/dev/null
-              printf '%s' "$body" | jq -e '.db.exists == true' >/dev/null
+            configs_status="$(curl -sS -o /tmp/staging-sandbox-configs.json -w '%{http_code}' "https://app.staging.mycel.nextmind.space/api/monitor/sandbox-configs")"
+            sandboxes_status="$(curl -sS -o /tmp/staging-sandboxes.json -w '%{http_code}' "https://app.staging.mycel.nextmind.space/api/monitor/sandboxes")"
+            echo "api attempt ${attempt}: sandbox-configs=${configs_status} sandboxes=${sandboxes_status}"
+            if [ "$configs_status" = "200" ] && [ "$sandboxes_status" = "200" ]; then
+              cat /tmp/staging-sandbox-configs.json
+              cat /tmp/staging-sandboxes.json
+              jq -e '.source == "runtime_sandbox_inventory" and (.count | type == "number")' /tmp/staging-sandbox-configs.json >/dev/null
+              jq -e '.source == "sandbox_canonical" and (.count | type == "number")' /tmp/staging-sandboxes.json >/dev/null
+              ! grep -E 'legacy_lease_id|lease_compat|matched_lease_id|manager_lease' /tmp/staging-sandbox-configs.json /tmp/staging-sandboxes.json
               exit 0
             fi
-            cat /tmp/staging-health.json || true
+            cat /tmp/staging-sandbox-configs.json || true
+            cat /tmp/staging-sandboxes.json || true
             sleep 10
           done
-          echo "Staging health contract did not become ready in time"
+          echo "Staging API contract did not become ready in time"
           exit 1
 
       - name: Comment on PR with staging URL
