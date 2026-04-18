@@ -7,7 +7,7 @@ from backend.web.services import monitor_service, sandbox_service
 
 class _FailingManager:
     def __init__(self) -> None:
-        self.provider = SimpleNamespace(name="daytona", list_provider_sessions=lambda: [])
+        self.provider = SimpleNamespace(name="daytona", list_provider_runtimes=lambda: [])
         self.lease_store = SimpleNamespace(list_by_provider=lambda _provider_name: [])
         self.provider_capability = SimpleNamespace(inspect_visible=True)
 
@@ -31,7 +31,7 @@ def test_load_provider_orphan_sessions_excludes_covered_provider_runtimes():
     manager = SimpleNamespace(
         provider=SimpleNamespace(
             name="daytona",
-            list_provider_sessions=lambda: [
+            list_provider_runtimes=lambda: [
                 _provider_runtime("covered-runtime"),
                 _provider_runtime("orphan-paused", "paused"),
                 _provider_runtime("orphan-running", "running"),
@@ -74,10 +74,10 @@ def test_load_provider_orphan_sessions_excludes_covered_provider_runtimes():
 
 def test_load_provider_orphan_sessions_rejects_non_list_provider_result():
     manager = SimpleNamespace(
-        provider=SimpleNamespace(name="daytona", list_provider_sessions=lambda: (_provider_runtime("orphan"),)),
+        provider=SimpleNamespace(name="daytona", list_provider_runtimes=lambda: (_provider_runtime("orphan"),)),
         lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: []),
         provider_capability=SimpleNamespace(inspect_visible=False),
     )
 
-    with pytest.raises(TypeError, match="daytona.list_provider_sessions must return list"):
+    with pytest.raises(TypeError, match="daytona.list_provider_runtimes must return list"):
         sandbox_service.load_provider_orphan_sessions({"daytona": manager})

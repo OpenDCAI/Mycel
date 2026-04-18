@@ -945,15 +945,15 @@ class SandboxManager:
                     }
                 )
 
-        list_provider_sessions = getattr(self.provider, "list_provider_sessions", None)
-        provider_sessions = []
-        if callable(list_provider_sessions):
-            raw_provider_sessions = list_provider_sessions()
-            if not isinstance(raw_provider_sessions, list):
-                raise TypeError(f"{self.provider.name}.list_provider_sessions must return list")
-            provider_sessions = raw_provider_sessions
+        list_provider_runtimes = getattr(self.provider, "list_provider_runtimes", None)
+        provider_runtimes = []
+        if callable(list_provider_runtimes):
+            raw_provider_runtimes = list_provider_runtimes()
+            if not isinstance(raw_provider_runtimes, list):
+                raise TypeError(f"{self.provider.name}.list_provider_runtimes must return list")
+            provider_runtimes = raw_provider_runtimes
 
-        for ps in provider_sessions:
+        for ps in provider_runtimes:
             instance_id = getattr(ps, "session_id", None)
             status = getattr(ps, "status", None) or "unknown"
             if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:

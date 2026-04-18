@@ -399,8 +399,8 @@ def load_provider_orphan_sessions(managers: dict) -> list[dict]:
     sessions: list[dict] = []
     for provider_name, manager in managers.items():
         provider = getattr(manager, "provider", None)
-        list_provider_sessions = getattr(provider, "list_provider_sessions", None)
-        if not callable(list_provider_sessions):
+        list_provider_runtimes = getattr(provider, "list_provider_runtimes", None)
+        if not callable(list_provider_runtimes):
             continue
         provider_slug = getattr(provider, "name", provider_name)
 
@@ -409,13 +409,13 @@ def load_provider_orphan_sessions(managers: dict) -> list[dict]:
             for row in manager.lease_store.list_by_provider(provider_slug)
             if str(row.get("current_instance_id") or "").strip()
         }
-        raw_provider_sessions = list_provider_sessions()
-        if not isinstance(raw_provider_sessions, list):
-            raise TypeError(f"{provider_slug}.list_provider_sessions must return list")
-        provider_sessions = raw_provider_sessions
+        raw_provider_runtimes = list_provider_runtimes()
+        if not isinstance(raw_provider_runtimes, list):
+            raise TypeError(f"{provider_slug}.list_provider_runtimes must return list")
+        provider_runtimes = raw_provider_runtimes
 
         inspect_visible = manager.provider_capability.inspect_visible
-        for ps in provider_sessions:
+        for ps in provider_runtimes:
             instance_id = getattr(ps, "session_id", None)
             status = getattr(ps, "status", None) or "unknown"
             if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:

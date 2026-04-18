@@ -322,7 +322,7 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Batch Status ====================
 
-    def list_provider_sessions(self) -> list[SessionInfo]:
+    def list_provider_runtimes(self) -> list[SessionInfo]:
         result = self.client.list()
         return [
             SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(_daytona_state_value(sb) or ""))
