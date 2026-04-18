@@ -45,7 +45,7 @@ class _FakeClient:
         return self.table_obj
 
 
-def test_supabase_resource_snapshot_repo_upserts_for_sandbox_without_lease_shaped_row_key() -> None:
+def test_supabase_resource_snapshot_repo_upserts_sandbox_snapshot_payload() -> None:
     client = _FakeClient()
     repo = SupabaseResourceSnapshotRepo(client)
 
@@ -112,7 +112,7 @@ def test_supabase_resource_snapshot_repo_write_fails_loudly_when_target_snapshot
     )
     repo = SupabaseResourceSnapshotRepo(client)
 
-    with pytest.raises(RuntimeError, match="stale lease_resource_snapshots residue is not a fallback"):
+    with pytest.raises(RuntimeError, match="container\\.resource_snapshots is missing"):
         repo.upsert_resource_snapshot_for_sandbox(
             sandbox_id="sandbox-1",
             provider_name="daytona",

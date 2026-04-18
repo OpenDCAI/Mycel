@@ -1395,7 +1395,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
 
 
 @pytest.mark.asyncio
-async def test_handle_agent_does_not_register_child_thread_when_parent_bridge_is_missing(monkeypatch, tmp_path):
+async def test_handle_agent_does_not_register_child_thread_when_parent_workspace_binding_is_missing(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
 
     thread_repo = _FakeThreadRepo(
@@ -1567,7 +1567,7 @@ async def test_agent_tool_blocking_result_preserves_child_identity_metadata(monk
 
 
 @pytest.mark.asyncio
-async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monkeypatch, tmp_path):
+async def test_run_agent_uses_live_child_thread_path_when_web_app_present(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
 
     async def fake_run_child_thread_live(agent, thread_id, prompt, app, *, input_messages):

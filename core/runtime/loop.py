@@ -715,7 +715,7 @@ class QueryLoop:
         }
 
     async def aget_state(self, config: dict | None = None) -> Any:
-        """Minimal graph-state bridge for backend/web callers."""
+        """Minimal graph-state view for backend/web callers."""
         config = config or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
         if self._is_runtime_active():
@@ -733,15 +733,15 @@ class QueryLoop:
         input_data: dict[str, Any] | None,
         as_node: str | None = None,
     ) -> Any:
-        """Minimal graph-state update bridge for resumed-thread callers."""
+        """Minimal graph-state update path for resumed-thread callers."""
         config = config or {}
         input_data = input_data or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
         messages = await self._load_messages(thread_id)
         raw_updates = input_data.get("messages", [])
 
-        # @@@ql-06-state-bridge - backend/web still speaks the old graph-state
-        # contract. Only the live caller shapes are supported here: append
+        # @@@ql-06-state-contract - backend/web still speaks graph-state here.
+        # Only the live caller shapes are supported here: append
         # resumed start messages, or apply RemoveMessage-based repairs before
         # appending replacement messages.
         if as_node == "__start__":
@@ -1789,7 +1789,7 @@ class QueryLoop:
             return None
 
     async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
-        """State snapshot helper for tests and bridge callers that still inspect channel_values."""
+        """State snapshot helper for tests and state callers that inspect channel_values."""
         state = await self._load_thread_checkpoint_state(thread_id)
         if state is None:
             return {}
@@ -1867,7 +1867,7 @@ class QueryLoop:
         if self._app_state is None:
             return
 
-        # @@@permission-checkpoint-bridge - pending/resolved permission requests
+        # @@@permission-checkpoint-state - pending/resolved permission requests
         # are thread-scoped runtime state, not display-only metadata. They must
         # survive checkpoint replay so backend/UI surfaces stay honest after an
         # idle reload or agent recreation.

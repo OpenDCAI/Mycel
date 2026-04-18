@@ -625,7 +625,7 @@ class FileSystemService:
             file_type = self._detect_file_type(resolved)
             download_bytes = getattr(self.backend, "download_bytes", None)
             if callable(download_bytes) and file_type in {FileType.BINARY, FileType.DOCUMENT}:
-                # @@@dt-02-remote-special-file-bridge
+                # @@@dt-02-remote-special-file-download
                 # Remote providers expose raw-byte download hooks. Reuse the
                 # same local dispatcher for binary/document reads instead of
                 # degrading special files into placeholder text.

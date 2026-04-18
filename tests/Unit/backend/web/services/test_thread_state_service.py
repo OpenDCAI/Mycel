@@ -57,7 +57,7 @@ def test_sandbox_info_does_not_expose_terminal_or_session_identity() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sandbox_status_resolves_lease_from_provider_env_not_config_bridge() -> None:
+async def test_sandbox_status_resolves_runtime_from_provider_env_not_config() -> None:
     thread_repo = SimpleNamespace(
         get_by_id=lambda thread_id: {
             "id": thread_id,

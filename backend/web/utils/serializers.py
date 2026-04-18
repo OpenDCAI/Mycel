@@ -50,7 +50,7 @@ def serialize_message(msg: Any) -> dict[str, Any]:
     metadata = dict(getattr(msg, "metadata", None) or {})
     additional_kwargs = getattr(msg, "additional_kwargs", None) or {}
     tool_result_meta = additional_kwargs.get("tool_result_meta")
-    # @@@tool-result-meta-bridge - LangChain ToolMessage keeps durable tool
+    # @@@tool-result-meta-merge - LangChain ToolMessage keeps durable tool
     # metadata in additional_kwargs, but Leon display rebuild consumes
     # serialized metadata. Merge the exact structured tool_result_meta here so
     # checkpoint rebuild can recover blocking subagent identity honestly.

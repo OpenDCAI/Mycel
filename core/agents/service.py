@@ -585,9 +585,9 @@ class AgentService:
         cwd = parent_thread.get("cwd")
         current_workspace_id = str(parent_thread.get("current_workspace_id") or "").strip()
         if not current_workspace_id:
-            # @@@subagent-thread-bridge-invariant - replay-17 treats a missing
-            # parent bridge as a hard contract failure for new runnable child
-            # thread metadata rather than silently minting a NULL bridge row.
+            # @@@subagent-thread-workspace-invariant - replay-17 treats a missing
+            # parent workspace binding as a hard contract failure for new runnable
+            # child thread metadata rather than silently minting a NULL workspace row.
             raise ValueError("parent thread current_workspace_id is required for child thread create")
         self._thread_repo.create(
             thread_id=thread_id,
@@ -1088,9 +1088,8 @@ class AgentService:
                         await agent._agent_service.cleanup_background_runs()
                     # @@@web-child-close-owner - web child threads stay visible
                     # via their persisted thread/task surface, not by keeping
-                    # this LeonAgent instance alive forever. The live bridge
-                    # owns the eventual close after it finishes harvesting the
-                    # child run result.
+                    # this LeonAgent instance alive forever. The live child-run
+                    # path owns the eventual close after it harvests the result.
                     if self._web_app is None:
                         # @@@subagent-sandbox-close-skip - Child agents can share the
                         # parent's lease; closing the child sandbox here can pause the

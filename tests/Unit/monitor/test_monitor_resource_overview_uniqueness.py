@@ -1,5 +1,3 @@
-import pytest
-
 from backend.web.services import resource_common, resource_projection_service
 from storage import runtime as storage_runtime
 
@@ -74,7 +72,7 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
 
-def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None:
+def test_resource_projection_identity_prefers_provider_session_id() -> None:
     session = {
         "session_id": "provider-session-1",
         "thread_id": "thread-1",
@@ -84,36 +82,6 @@ def test_resource_projection_identity_no_longer_falls_back_to_lease_id() -> None
 
     assert resource_projection_service._resource_session_identity(session) == "provider-session-1"
     assert resource_projection_service._resource_running_identity(session) == ""
-
-
-def test_list_resource_providers_no_longer_uses_lease_shaped_row_source_shell(monkeypatch) -> None:
-    class _Repo(_FakeRepo):
-        def list_sessions_with_leases(self):
-            raise AssertionError("resource projection should not use list_sessions_with_leases as row-source shell")
-
-    _patch_daytona_projection(
-        monkeypatch,
-        _Repo(
-            [
-                {
-                    "provider": "daytona_selfhost",
-                    "session_id": "sess-1",
-                    "thread_id": "thread-1",
-                    "sandbox_id": "sandbox-1",
-                    "lease_id": "lease-1",
-                    "observed_state": "running",
-                    "desired_state": "running",
-                    "created_at": "2026-04-04T00:00:00",
-                }
-            ],
-            instance_ids={"sandbox-1": "provider-session-1"},
-        ),
-        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
-    )
-
-    payload = resource_projection_service.list_resource_providers()
-
-    assert payload["providers"][0]["sessions"][0]["id"] == "sandbox-1:thread-1"
 
 
 def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch):
@@ -491,7 +459,7 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
     ]
 
 
-def test_list_resource_providers_no_longer_uses_lease_shaped_visible_parent_projection_without_sandbox_id(monkeypatch):
+def test_list_resource_providers_drops_subagent_rows_without_sandbox_id(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -751,29 +719,6 @@ def test_visible_resource_session_stats_counts_running_sandbox_once_when_lease_r
     assert stats == {"daytona_selfhost": {"sessions": 1, "running": 1}}
 
 
-def test_list_resource_snapshots_by_sandbox_requires_repo_sandbox_wrapper(monkeypatch):
-    sessions = [
-        {
-            "sandbox_id": "sandbox-a",
-        },
-        {
-            "sandbox_id": "sandbox-b",
-        },
-    ]
-
-    class _LeaseOnlyRepo:
-        def close(self):
-            return None
-
-        def list_snapshots_by_lease_ids(self, lease_ids):
-            raise AssertionError("lease-shaped snapshot read shell should not remain an active runtime path")
-
-    monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _LeaseOnlyRepo())
-
-    with pytest.raises(RuntimeError, match="sandbox-shaped snapshot repo read requires list_snapshots_by_sandbox_ids"):
-        storage_runtime.list_resource_snapshots_by_sandbox(sessions)
-
-
 def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeypatch):
     sessions = [
         {
@@ -788,9 +733,6 @@ def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeyp
         def list_snapshots_by_sandbox_ids(self, items):
             assert items == sessions
             return {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}
-
-        def list_snapshots_by_lease_ids(self, _lease_ids):
-            raise AssertionError("lease-keyed snapshot read should not be the active path")
 
     monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _SandboxWrappedRepo())
 

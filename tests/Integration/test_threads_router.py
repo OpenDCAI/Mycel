@@ -461,9 +461,6 @@ async def test_get_thread_sandbox_status_returns_null_when_thread_has_no_runtime
                     "config": {},
                 }
             ),
-            terminal_repo=SimpleNamespace(
-                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read terminal rows"))
-            ),
             lease_repo=SimpleNamespace(),
         )
     )
@@ -502,11 +499,7 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
                     "config": {},
                 }
             ),
-            terminal_repo=SimpleNamespace(
-                get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read terminal rows"))
-            ),
             lease_repo=SimpleNamespace(
-                get=lambda _lease_id: (_ for _ in ()).throw(AssertionError("sandbox status should not read removed lease id")),
                 find_by_instance=lambda *, provider_name, instance_id: {
                     "lease_id": "lease-1",
                     "provider_name": "daytona",
@@ -544,18 +537,6 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
         "created_at": "2026-04-12T00:00:00Z",
         "updated_at": "2026-04-12T00:01:00Z",
     }
-
-
-def test_threads_router_no_longer_exposes_session_status_route():
-    paths = {getattr(route, "path", "") for route in threads_router.router.routes}
-
-    assert "/api/threads/{thread_id}/session" not in paths
-
-
-def test_threads_router_no_longer_exposes_terminal_status_route():
-    paths = {getattr(route, "path", "") for route in threads_router.router.routes}
-
-    assert "/api/threads/{thread_id}/terminal" not in paths
 
 
 @pytest.mark.asyncio
@@ -616,31 +597,6 @@ async def test_create_thread_persists_agent_user_id():
 
     row = app.state.thread_repo.rows[created["thread_id"]]
     assert row["agent_user_id"] == "agent-user-1"
-
-
-@pytest.mark.asyncio
-async def test_create_thread_route_rejects_lease_shaped_existing_identity():
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
-    payload = CreateThreadRequest.model_validate(
-        {
-            "agent_user_id": "agent-user-1",
-            "existing_sandbox_id": "lease-1",
-            "cwd": "/workspace/reused",
-        }
-    )
-
-    with (
-        patch.object(
-            threads_router, "bind_thread_to_existing_sandbox", return_value=("/workspace/reused", {"lease_id": "lease-1"})
-        ) as bind_helper,
-        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
-    ):
-        with pytest.raises(threads_router.HTTPException) as excinfo:
-            await threads_router.create_thread(payload, "owner-1", app)
-
-    assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Sandbox not authorized"
-    bind_helper.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -796,47 +752,6 @@ async def test_create_thread_route_persists_current_workspace_id_for_new_sandbox
 
 
 @pytest.mark.asyncio
-async def test_create_thread_route_existing_sandbox_binds_without_launch_config_save() -> None:
-    workspace_repo = _FakeWorkspaceRepo()
-    sandbox_repo = _FakeSandboxRepo()
-    sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row()
-    app = _make_threads_app(
-        thread_sandbox={},
-        thread_cwd={},
-        workspace_repo=workspace_repo,
-        sandbox_repo=sandbox_repo,
-        lease_repo=_existing_sandbox_lease_repo(recipe={"id": "local:default"}),
-    )
-    payload = CreateThreadRequest.model_validate(
-        {
-            "agent_user_id": "agent-user-1",
-            "existing_sandbox_id": "sandbox-1",
-            "cwd": "/workspace/reused",
-        }
-    )
-    with (
-        patch.object(
-            threads_router,
-            "bind_thread_to_existing_sandbox",
-            return_value=(
-                "/workspace/reused",
-                {
-                    "lease_id": "lease-1",
-                    "sandbox_id": "sandbox-1",
-                    "provider_name": "local",
-                    "cwd": "/workspace/reused",
-                    "recipe": {"id": "local:default"},
-                },
-            ),
-        ),
-        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
-    ):
-        created = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
-
-    assert app.state.thread_repo.rows[created["thread_id"]]["current_workspace_id"] == workspace_repo.created[0].id
-
-
-@pytest.mark.asyncio
 async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() -> None:
     workspace_repo = _FakeWorkspaceRepo()
     sandbox_repo = _FakeSandboxRepo()
@@ -877,28 +792,6 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
 
     bind_helper.assert_called_once()
     assert app.state.thread_repo.rows[created["thread_id"]]["current_workspace_id"] == workspace_repo.created[0].id
-
-
-@pytest.mark.asyncio
-async def test_create_thread_route_new_sandbox_persists_workspace_without_launch_config_save() -> None:
-    workspace_repo = _FakeWorkspaceRepo()
-    app = _make_threads_app(thread_sandbox={}, thread_cwd={}, workspace_repo=workspace_repo)
-    payload = CreateThreadRequest.model_validate(
-        {
-            "agent_user_id": "agent-user-1",
-            "cwd": "/tmp/fresh-local-thread",
-        }
-    )
-    with (
-        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
-        patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
-        patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
-        patch.object(threads_router, "_create_thread_sandbox_resources", return_value="workspace-new"),
-        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
-    ):
-        created = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
-
-    assert app.state.thread_repo.rows[created["thread_id"]]["current_workspace_id"] == "workspace-new"
 
 
 @pytest.mark.asyncio
@@ -1031,70 +924,6 @@ async def test_list_threads_collapses_visible_threads_to_one_canonical_thread_pe
 
     assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
     assert payload["threads"][0]["sidebar_label"] is None
-
-
-@pytest.mark.asyncio
-async def test_list_threads_no_longer_requires_terminal_summary():
-    rows = {
-        "main-thread": {
-            "id": "main-thread",
-            "owner_user_id": "owner-1",
-            "current_workspace_id": "workspace-main",
-            "sandbox_type": "local",
-            "agent_name": "Toad",
-            "agent_user_id": "agent-user-1",
-            "branch_index": 0,
-            "is_main": True,
-            "agent_avatar": None,
-        },
-        "child-thread": {
-            "id": "child-thread",
-            "owner_user_id": "owner-1",
-            "current_workspace_id": "workspace-child",
-            "sandbox_type": "local",
-            "agent_name": "Toad",
-            "agent_user_id": "agent-user-1",
-            "branch_index": 1,
-            "is_main": False,
-            "agent_avatar": None,
-        },
-    }
-    summarize_calls: list[list[str]] = []
-    app = _make_threads_app(
-        thread_repo=SimpleNamespace(
-            list_by_owner_user_id=lambda _user_id: list(rows.values()),
-            get_by_id=lambda thread_id: rows.get(thread_id),
-        ),
-        workspace_repo=SimpleNamespace(
-            get_by_id=lambda workspace_id: (
-                summarize_calls.append([workspace_id])
-                or SimpleNamespace(
-                    id=workspace_id,
-                    owner_user_id="owner-1",
-                    sandbox_id=f"sandbox-{workspace_id}",
-                    workspace_path="/workspace",
-                )
-            )
-        ),
-        sandbox_repo=SimpleNamespace(
-            get_by_id=lambda sandbox_id: SimpleNamespace(
-                id=sandbox_id,
-                owner_user_id="owner-1",
-                provider_name="local",
-                config={},
-            )
-        ),
-        terminal_repo=SimpleNamespace(
-            summarize_threads=lambda _thread_ids: (_ for _ in ()).throw(AssertionError("terminal summary should not gate owner list")),
-        ),
-        agent_pool={},
-        thread_last_active={},
-    )
-
-    payload = await threads_router.list_threads("owner-1", app)
-
-    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
-    assert summarize_calls == [["workspace-main"], ["workspace-child"]]
 
 
 @pytest.mark.asyncio

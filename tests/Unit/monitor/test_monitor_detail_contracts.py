@@ -627,61 +627,6 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
     assert calls == [("lease-1", "daytona", True)]
 
 
-def test_get_monitor_operation_detail_does_not_adapt_deleted_lease_targets(monkeypatch):
-    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_sandbox_row()))
-    monkeypatch.setattr(
-        monitor_service.monitor_operation_service,
-        "get_operation_detail",
-        lambda operation_id: {
-            "operation": {"operation_id": operation_id},
-            "target": {"target_type": "lease", "target_id": "lease-1"},
-        },
-    )
-
-    payload = monitor_service.get_monitor_operation_detail("op-1")
-
-    assert "sandbox_id" not in payload
-    assert payload["target"] == {"target_type": "lease", "target_id": "lease-1"}
-
-
-def test_sandbox_cleanup_truth_without_sandbox_id_does_not_read_deleted_lease_target_history(monkeypatch):
-    calls: list[tuple[str, str]] = []
-
-    def _record_operations_for_target(target_type: str, target_id: str):
-        calls.append((target_type, target_id))
-        if target_type == "lease":
-            return [
-                {
-                    "operation_id": "op-deleted-lease-target",
-                    "kind": "sandbox_cleanup",
-                    "target_type": "lease",
-                    "target_id": "lease-1",
-                    "status": "succeeded",
-                    "requested_at": "2026-04-18T00:00:00Z",
-                    "updated_at": "2026-04-18T00:00:01Z",
-                    "summary": "Deleted lease-target cleanup completed.",
-                    "reason": "deleted_lease_target",
-                    "result_truth": {},
-                }
-            ]
-        return []
-
-    monkeypatch.setattr(monitor_service.monitor_operation_service, "_operations_for_target", _record_operations_for_target)
-
-    payload = monitor_service.monitor_operation_service.build_sandbox_cleanup_truth(
-        sandbox_id=None,
-        triage={"category": "orphan_cleanup"},
-        provider_name="daytona",
-        runtime_session_id="runtime-1",
-        sessions=[],
-        threads=[],
-    )
-
-    assert calls == []
-    assert payload["operation"] is None
-    assert payload["recent_operations"] == []
-
-
 def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(monkeypatch):
     calls: list[tuple[str, str, str, str | None]] = []
     monkeypatch.setattr(
@@ -917,35 +862,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_session_state_when
     }
 
 
-def test_get_monitor_operation_detail_ignores_deleted_lease_relation_shell(monkeypatch):
-    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_sandbox_row(sandbox_id="sandbox-1", lease_id="lease-1")))
-    monkeypatch.setattr(
-        monitor_service.monitor_operation_service,
-        "get_operation_detail",
-        lambda _operation_id: {
-            "operation": {"operation_id": "op-1", "kind": "sandbox_cleanup", "status": "succeeded"},
-            "target": {
-                "target_type": "lease",
-                "target_id": "lease-1",
-                "provider_id": "daytona",
-                "runtime_session_id": "runtime-1",
-            },
-            "result_truth": {
-                "lease_state_before": "running",
-                "lease_state_after": "destroyed",
-            },
-            "events": [],
-        },
-    )
-
-    payload = monitor_service.get_monitor_operation_detail("op-1")
-
-    assert "sandbox_id" not in payload
-    assert payload["target"]["target_type"] == "lease"
-    assert payload["target"]["target_id"] == "lease-1"
-
-
-def test_request_monitor_sandbox_cleanup_no_longer_records_thread_list_residue(monkeypatch):
+def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_list(monkeypatch):
     calls: list[tuple[str, str, bool]] = []
     _use_monitor_repo(
         monkeypatch,

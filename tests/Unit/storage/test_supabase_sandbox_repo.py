@@ -146,7 +146,7 @@ def test_supabase_sandbox_repo_update_runtime_binding_updates_only_binding_field
             "status": "ready",
             "observed_at": "2026-04-15T00:00:00+00:00",
             "last_error": None,
-            "config": {"legacy_lease_id": "lease-1"},
+            "config": {"opaque_runtime_note": "keep-me"},
             "created_at": "2026-04-15T00:00:00+00:00",
             "updated_at": "2026-04-15T00:01:00+00:00",
         }
@@ -164,7 +164,7 @@ def test_supabase_sandbox_repo_update_runtime_binding_updates_only_binding_field
     assert row["updated_at"] == "2026-04-17T00:00:00+00:00"
     assert row["observed_state"] == "running"
     assert row["status"] == "ready"
-    assert row["config"] == {"legacy_lease_id": "lease-1"}
+    assert row["config"] == {"opaque_runtime_note": "keep-me"}
 
 
 def test_supabase_sandbox_repo_update_observed_state_updates_only_state_fields() -> None:
@@ -183,7 +183,7 @@ def test_supabase_sandbox_repo_update_observed_state_updates_only_state_fields()
             "status": "ready",
             "observed_at": "2026-04-15T00:00:00+00:00",
             "last_error": None,
-            "config": {"legacy_lease_id": "lease-1"},
+            "config": {"opaque_runtime_note": "keep-me"},
             "created_at": "2026-04-15T00:00:00+00:00",
             "updated_at": "2026-04-15T00:01:00+00:00",
         }
@@ -201,4 +201,4 @@ def test_supabase_sandbox_repo_update_observed_state_updates_only_state_fields()
     assert row["observed_state"] == "detached"
     assert row["updated_at"] == "2026-04-17T00:00:00+00:00"
     assert row["status"] == "ready"
-    assert row["config"] == {"legacy_lease_id": "lease-1"}
+    assert row["config"] == {"opaque_runtime_note": "keep-me"}

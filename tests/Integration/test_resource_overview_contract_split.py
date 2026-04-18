@@ -185,7 +185,7 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
     assert "memberName" not in payload["providers"][0]["sessions"][0]
 
 
-def test_user_resource_projection_does_not_call_lease_summary_service(monkeypatch) -> None:
+def test_user_resource_projection_omits_lease_id(monkeypatch) -> None:
     monkeypatch.setattr(
         resource_projection_service.sandbox_service,
         "list_user_sandboxes",
