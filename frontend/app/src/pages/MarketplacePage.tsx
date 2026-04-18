@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Box, Search, Store, Package, TrendingUp, Clock, Star, RefreshCw, Zap, Users, Trash2, Plus, X } from "lucide-react";
+import { Box, Search, Store, Package, TrendingUp, Clock, RefreshCw, Zap, Users, Trash2, Plus, X } from "lucide-react";
 import { useMarketplaceStore } from "@/store/marketplace-store";
 import { useAppStore } from "@/store/app-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -38,7 +38,6 @@ const typeFilters: { id: TypeFilter; label: string }[] = [
 const sortOptions = [
   { id: "downloads", label: "Popular", icon: TrendingUp },
   { id: "newest", label: "Newest", icon: Clock },
-  { id: "featured", label: "Featured", icon: Star },
 ];
 
 export default function MarketplacePage() {

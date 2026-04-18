@@ -39,7 +39,6 @@ const marketplaceState = {
     parent_id: null,
     download_count: 0,
     visibility: "public",
-    featured: false,
     tags: [],
     created_at: "2026-04-01T00:00:00Z",
     updated_at: "2026-04-01T00:00:00Z",

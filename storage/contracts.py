@@ -89,6 +89,32 @@ class ProviderEventRepo(Protocol):
     def list_recent(self, limit: int = 100) -> list[dict[str, Any]]: ...
 
 
+class MarketplaceHubNotFoundError(KeyError):
+    """Marketplace Hub row was explicitly absent."""
+
+
+class MarketplaceHubUnsupportedSortError(ValueError):
+    """Marketplace Hub sort is not part of the current schema contract."""
+
+
+class MarketplaceHubRepo(Protocol):
+    """Read model for local Hub marketplace explore/detail surfaces."""
+
+    def close(self) -> None: ...
+    def list_items(
+        self,
+        *,
+        type: str | None = None,
+        q: str | None = None,
+        sort: str = "downloads",
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]: ...
+    def get_item_detail(self, item_id: str) -> dict[str, Any]: ...
+    def get_item_lineage(self, item_id: str) -> dict[str, Any]: ...
+    def get_item_version_snapshot(self, item_id: str, version: str) -> dict[str, Any]: ...
+
+
 class ChatSessionRepo(Protocol):
     """Chat session + terminal command persistence."""
 
