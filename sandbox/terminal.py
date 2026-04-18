@@ -18,7 +18,6 @@ from datetime import datetime
 from pathlib import Path
 
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
-from storage.runtime import build_terminal_repo, uses_supabase_runtime_defaults
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
@@ -41,10 +40,6 @@ REQUIRED_TERMINAL_POINTER_COLUMNS = {
 
 def _connect(db_path: Path) -> sqlite3.Connection:
     return connect_sqlite(db_path)
-
-
-def _use_strategy_terminal(db_path: Path) -> bool:
-    return uses_supabase_runtime_defaults() and db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 
 @dataclass
@@ -165,22 +160,6 @@ class SQLiteTerminal(AbstractTerminal):
             conn.commit()
 
 
-class RepoBackedTerminal(AbstractTerminal):
-    """Terminal implementation whose state writes go through TerminalRepo."""
-
-    def __init__(self, terminal_id: str, thread_id: str, lease_id: str, state: TerminalState, *, repo):
-        super().__init__(terminal_id, thread_id, lease_id, state)
-        self._repo = repo
-
-    def _persist_state(self) -> None:
-        self._repo.persist_state(
-            terminal_id=self.terminal_id,
-            cwd=self._state.cwd,
-            env_delta_json=json.dumps(self._state.env_delta),
-            state_version=self._state.state_version,
-        )
-
-
 def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
     """Construct a terminal domain object from a repo dict."""
     state = TerminalState(
@@ -188,16 +167,6 @@ def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
         env_delta=json.loads(row.get("env_delta_json", "{}")),
         state_version=int(row.get("state_version", 0)),
     )
-    if _use_strategy_terminal(db_path):
-        # @@@strategy-terminal-write-owner - strategy-backed control-plane rows must
-        # round-trip terminal state through TerminalRepo, not local sqlite side writes.
-        return RepoBackedTerminal(
-            terminal_id=row["terminal_id"],
-            thread_id=row["thread_id"],
-            lease_id=row["lease_id"],
-            state=state,
-            repo=build_terminal_repo(),
-        )
     return SQLiteTerminal(
         terminal_id=row["terminal_id"],
         thread_id=row["thread_id"],

@@ -21,7 +21,8 @@ from sandbox.runtime import (
     _normalize_pty_result,
     _RemoteRuntimeBase,
 )
-from sandbox.terminal import TerminalState, terminal_from_row
+from sandbox.terminal import SQLiteTerminal, TerminalState, terminal_from_row
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
@@ -128,6 +129,19 @@ def test_remote_runtime_treats_daytona_pty_1011_as_infra_error():
 
 def test_remote_runtime_treats_broken_pipe_as_infra_error():
     assert _RemoteRuntimeBase._looks_like_infra_error("[Errno 32] Broken pipe") is True
+
+
+def test_terminal_from_row_uses_sqlite_terminal_under_supabase_defaults(monkeypatch, tmp_path):
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
+    terminal_store = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
+    try:
+        row = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(row, terminal_store.db_path)
+    finally:
+        terminal_store.close()
+
+    assert isinstance(terminal, SQLiteTerminal)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
