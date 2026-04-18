@@ -13,6 +13,7 @@ def test_list_user_sandboxes_exposes_thread_identity_not_member_id(monkeypatch) 
             return [
                 {
                     "lease_id": "lease-1",
+                    "sandbox_id": "sandbox-1",
                     "provider_name": "daytona_selfhost",
                     "recipe_id": "daytona:default",
                     "recipe_json": None,

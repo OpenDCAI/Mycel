@@ -199,13 +199,6 @@ class SupabaseSandboxMonitorRepo:
         )
         return q.rows(query.execute(), _REPO, operation)
 
-    def _runtime_bridge_lease_id(self, sandbox: dict[str, Any]) -> str | None:
-        config = sandbox.get("config")
-        if not isinstance(config, dict):
-            raise RuntimeError("sandbox.config must be an object")
-        bridge_lease_id = str(config.get("legacy_lease_id") or "").strip()
-        return bridge_lease_id or None
-
     def _workspace_rows_by_id(self, workspace_ids: list[str]) -> dict[str, dict[str, Any]]:
         ordered_ids = [str(workspace_id or "").strip() for workspace_id in workspace_ids if str(workspace_id or "").strip()]
         if not ordered_ids:
@@ -311,7 +304,10 @@ class SupabaseSandboxMonitorRepo:
         # @@@sandbox-monitor-bridge - summary surfaces now use container.sandboxes as the
         # object truth, but still expose the lower runtime bridge while cleanup/runtime
         # residue remains lease-keyed.
-        bridge_lease_id = self._runtime_bridge_lease_id(sandbox)
+        config = sandbox.get("config")
+        if not isinstance(config, dict):
+            raise RuntimeError("sandbox.config must be an object")
+        bridge_lease_id = str(config.get("legacy_lease_id") or "").strip() or None
         return {
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
             "lease_id": bridge_lease_id,

@@ -91,21 +91,19 @@ def _list_user_runtime_rows(
         grouped: dict[str, dict[str, Any]] = {}
         runtime_session_ids: dict[str, str | None] = {}
         for row in rows:
-            lease_id = str(row.get("lease_id") or "").strip()
-            if not lease_id:
+            sandbox_id = str(row.get("sandbox_id") or "").strip()
+            if not sandbox_id:
                 continue
-            runtime_session_id = runtime_session_ids.get(lease_id)
-            if lease_id not in runtime_session_ids:
+            runtime_session_id = runtime_session_ids.get(sandbox_id)
+            if sandbox_id not in runtime_session_ids:
                 runtime_session_id = str(row.get("current_instance_id") or "").strip() or None
                 if include_runtime_session_id and runtime_session_id is None:
-                    sandbox_id = str(row.get("sandbox_id") or "").strip()
-                    runtime_session_id = monitor_repo.query_sandbox_instance_id(sandbox_id) if sandbox_id else None
-                runtime_session_ids[lease_id] = runtime_session_id
+                    runtime_session_id = monitor_repo.query_sandbox_instance_id(sandbox_id)
+                runtime_session_ids[sandbox_id] = runtime_session_id
             group = grouped.setdefault(
-                lease_id,
+                sandbox_id,
                 {
-                    "lease_id": lease_id,
-                    "sandbox_id": str(row.get("sandbox_id") or "").strip() or None,
+                    "sandbox_id": sandbox_id,
                     "provider_name": str(row.get("provider_name") or "local"),
                     "recipe_id": str(row.get("recipe_id") or "") or None,
                     "recipe": row.get("recipe_json"),
@@ -118,8 +116,6 @@ def _list_user_runtime_rows(
             )
             if include_runtime_session_id and runtime_session_id and not group.get("runtime_session_id"):
                 group["runtime_session_id"] = runtime_session_id
-            if not group.get("sandbox_id"):
-                group["sandbox_id"] = str(row.get("sandbox_id") or "").strip() or None
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_sandbox_thread(thread_id):
                 continue
@@ -198,10 +194,8 @@ def count_user_visible_sandboxes_by_provider(
         counts: Counter[str] = Counter()
         counted_sandbox_keys: set[str] = set()
         for row in monitor_repo.query_sandboxes():
-            lease_id = str(row.get("lease_id") or "").strip()
             sandbox_id = str(row.get("sandbox_id") or "").strip()
-            sandbox_key = sandbox_id or lease_id
-            if not sandbox_key or sandbox_key in counted_sandbox_keys:
+            if not sandbox_id or sandbox_id in counted_sandbox_keys:
                 continue
             thread_id = str(row.get("thread_id") or "").strip()
             if not _is_user_visible_sandbox_thread(thread_id) or thread_id not in owned_thread_ids:
@@ -209,7 +203,7 @@ def count_user_visible_sandboxes_by_provider(
             if not _is_user_visible_sandbox_state(row):
                 continue
             counts[str(row.get("provider_name") or "local")] += 1
-            counted_sandbox_keys.add(sandbox_key)
+            counted_sandbox_keys.add(sandbox_id)
         return dict(counts)
     finally:
         monitor_repo.close()

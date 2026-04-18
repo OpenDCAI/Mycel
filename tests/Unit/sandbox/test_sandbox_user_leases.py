@@ -199,19 +199,19 @@ def test_user_runtime_rows_visible_thread_contract(
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
 
-    leases = sandbox_service._list_user_runtime_rows(
+    sandboxes = sandbox_service._list_user_runtime_rows(
         "owner-1",
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
 
-    assert len(leases) == 1
-    lease = leases[0]
-    assert lease["lease_id"] == "lease-1"
-    assert lease["sandbox_id"] == "sandbox-1"
-    assert lease["thread_ids"] == expected_thread_ids
-    assert lease["agents"] == expected_agents
-    assert lease["recipe_id"] == expected_recipe_id
+    assert len(sandboxes) == 1
+    sandbox = sandboxes[0]
+    assert sandbox["sandbox_id"] == "sandbox-1"
+    assert "lease_id" not in sandbox
+    assert sandbox["thread_ids"] == expected_thread_ids
+    assert sandbox["agents"] == expected_agents
+    assert sandbox["recipe_id"] == expected_recipe_id
 
 
 def test_user_runtime_rows_uses_owner_bulk_repo_surfaces(monkeypatch):
@@ -243,13 +243,13 @@ def test_user_runtime_rows_uses_owner_bulk_repo_surfaces(monkeypatch):
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
 
-    leases = sandbox_service._list_user_runtime_rows(
+    sandboxes = sandbox_service._list_user_runtime_rows(
         "owner-1",
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
 
-    assert [lease["lease_id"] for lease in leases] == ["lease-1", "lease-2"]
+    assert [sandbox["sandbox_id"] for sandbox in sandboxes] == ["sandbox-1", "sandbox-2"]
     assert thread_repo.list_by_owner_calls == ["owner-1"]
     assert user_repo.list_by_owner_calls == ["owner-1"]
 
@@ -304,13 +304,14 @@ def test_user_runtime_rows_no_longer_roundtrips_through_lease_summary_shell(monk
     assert not hasattr(monitor_repo, "list_leases_with_threads")
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
 
-    leases = sandbox_service._list_user_runtime_rows(
+    sandboxes = sandbox_service._list_user_runtime_rows(
         "owner-1",
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
 
-    assert [lease["lease_id"] for lease in leases] == ["lease-1"]
+    assert [sandbox["sandbox_id"] for sandbox in sandboxes] == ["sandbox-1"]
+    assert "lease_id" not in sandboxes[0]
 
 
 def test_list_user_sandboxes_no_longer_calls_public_lease_bridge_reader(monkeypatch):
@@ -345,6 +346,23 @@ def test_list_user_sandboxes_no_longer_calls_public_lease_bridge_reader(monkeypa
     ]
 
 
+def test_list_user_sandboxes_does_not_require_lower_lease_identity(monkeypatch):
+    row = _lease_row("lease-1", "thread-a", sandbox_id="sandbox-1")
+    row.pop("lease_id")
+    thread_repo, user_repo = _single_agent_repos("thread-a")
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo([row]))
+
+    sandboxes = sandbox_service.list_user_sandboxes(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert len(sandboxes) == 1
+    assert sandboxes[0]["sandbox_id"] == "sandbox-1"
+    assert "lease_id" not in sandboxes[0]
+
+
 def test_count_user_visible_sandboxes_by_provider_no_longer_roundtrips_through_lease_summary_shell(monkeypatch):
     rows = [_lease_row("lease-1", "thread-a")]
     thread_repo = _FakeThreadRepo(
@@ -356,6 +374,24 @@ def test_count_user_visible_sandboxes_by_provider_no_longer_roundtrips_through_l
 
     assert not hasattr(monitor_repo, "list_leases_with_threads")
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda **kwargs: monitor_repo)
+
+    counts = sandbox_service.count_user_visible_sandboxes_by_provider(
+        "owner-1",
+        thread_repo=thread_repo,
+    )
+
+    assert counts == {"local": 1}
+
+
+def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_lease_identity(monkeypatch):
+    row = _lease_row("lease-1", "thread-a", sandbox_id="sandbox-1")
+    row.pop("lease_id")
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
+        }
+    )
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda **kwargs: _FakeMonitorRepo([row]))
 
     counts = sandbox_service.count_user_visible_sandboxes_by_provider(
         "owner-1",
@@ -450,18 +486,18 @@ def test_user_runtime_rows_runtime_session_id_contract(
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
 
-    leases = sandbox_service._list_user_runtime_rows(
+    sandboxes = sandbox_service._list_user_runtime_rows(
         "owner-1",
         thread_repo=thread_repo,
         user_repo=user_repo,
         include_runtime_session_id=include_runtime_session_id,
     )
 
-    lease = leases[0]
+    sandbox = sandboxes[0]
     if expected_runtime_session_id is None:
-        assert "runtime_session_id" not in lease
+        assert "runtime_session_id" not in sandbox
     else:
-        assert lease["runtime_session_id"] == expected_runtime_session_id
+        assert sandbox["runtime_session_id"] == expected_runtime_session_id
     assert monitor_repo.sandbox_instance_id_calls == expected_sandbox_calls
 
 
@@ -504,10 +540,10 @@ def test_user_runtime_rows_keeps_detached_but_hides_destroying_leases(monkeypatc
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
 
-    leases = sandbox_service._list_user_runtime_rows(
+    sandboxes = sandbox_service._list_user_runtime_rows(
         "owner-1",
         thread_repo=thread_repo,
         user_repo=user_repo,
     )
 
-    assert [lease["lease_id"] for lease in leases] == ["lease-running", "lease-paused", "lease-detached"]
+    assert [sandbox["sandbox_id"] for sandbox in sandboxes] == ["sandbox-running", "sandbox-paused", "sandbox-detached"]

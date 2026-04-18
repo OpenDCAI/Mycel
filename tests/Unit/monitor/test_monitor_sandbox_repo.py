@@ -61,11 +61,13 @@ def test_sandbox_monitor_repo_names_runtime_bridge_helpers_without_stale_label()
     source = Path("storage/providers/supabase/sandbox_monitor_repo.py").read_text()
     stale_helper = "_" + "legacy" + "_lease_id"
     stale_row_helper = "_sandbox_rows_by_" + "legacy" + "_lease_id"
+    stale_runtime_bridge_helper_def = "def _runtime_" + "bridge_lease_id"
     stale_runtime_bridge_map = "_sandbox_rows_by_" + "runtime_bridge" + "_lease_id"
     stale_comment = "# object truth, but still expose " + "legacy" + " lease_id"
 
     assert stale_helper not in source
     assert stale_row_helper not in source
+    assert stale_runtime_bridge_helper_def not in source
     assert stale_runtime_bridge_map not in source
     assert stale_comment not in source
 
