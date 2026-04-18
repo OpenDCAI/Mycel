@@ -339,6 +339,52 @@ def test_chat_tool_list_chats_requires_members_contract() -> None:
         list_chats.handler()
 
 
+def test_chat_tool_list_chats_requires_summary_rows_to_be_objects_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        list_chats.handler()
+
+    assert str(excinfo.value) == "Chat summary row is invalid"
+
+
+def test_chat_tool_list_chats_requires_member_rows_to_be_objects_contract() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-1",
+                    "title": "Solo Ops",
+                    "members": ["human-user-1"],
+                    "unread_count": 0,
+                    "last_message": None,
+                }
+            ],
+        ),
+    )
+
+    list_chats = registry.get("list_chats")
+    assert list_chats is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        list_chats.handler()
+
+    assert str(excinfo.value) == "Chat summary chat-1 member row is invalid"
+
+
 def test_chat_tool_list_chats_requires_member_ids_contract() -> None:
     registry = ToolRegistry()
     ChatToolService(
@@ -1417,6 +1463,28 @@ def test_read_messages_fails_before_mark_read_on_unknown_message_sender() -> Non
     assert marked == []
 
 
+def test_read_messages_fails_before_mark_read_on_invalid_message_row() -> None:
+    registry = ToolRegistry()
+    marked: list[tuple[str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: ["message-1"],
+            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+        ),
+    )
+
+    read_messages = registry.get("read_messages")
+    assert read_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        read_messages.handler(chat_id="chat-1", range="-1h:")
+
+    assert str(excinfo.value) == "Chat message row is invalid"
+    assert marked == []
+
+
 def test_read_messages_fails_before_mark_read_on_missing_message_content() -> None:
     registry = ToolRegistry()
     marked: list[tuple[str, str]] = []
@@ -1796,6 +1864,25 @@ def test_chat_tool_search_fails_on_unknown_message_sender() -> None:
         search_messages.handler(query="hello")
 
     assert str(excinfo.value) == "Chat message sender identity not found: missing-user"
+
+
+def test_chat_tool_search_fails_on_invalid_message_row() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        messaging_service=_messaging_display_service(
+            search_messages=lambda _query, *, chat_id=None: ["message-1"],
+        ),
+    )
+
+    search_messages = registry.get("search_messages")
+    assert search_messages is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        search_messages.handler(query="hello")
+
+    assert str(excinfo.value) == "Chat search message row is invalid"
 
 
 def test_chat_tool_search_fails_on_missing_message_content() -> None:
