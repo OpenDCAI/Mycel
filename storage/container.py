@@ -15,7 +15,6 @@ from .contracts import (
     FileOperationRepo,
     InviteCodeRepo,
     LeaseRepo,
-    MarketplaceHubRepo,
     ProviderEventRepo,
     QueueRepo,
     RecipeRepo,
@@ -53,7 +52,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "user_settings_repo": ("storage.providers.supabase.user_settings_repo", "SupabaseUserSettingsRepo"),
     "agent_config_repo": ("storage.providers.supabase.agent_config_repo", "SupabaseAgentConfigRepo"),
     "contact_repo": ("storage.providers.supabase.contact_repo", "SupabaseContactRepo"),
-    "marketplace_hub_repo": ("storage.providers.supabase.marketplace_hub_repo", "SupabaseMarketplaceHubRepo"),
 }
 
 
@@ -136,9 +134,6 @@ class StorageContainer:
 
     def contact_repo(self) -> ContactRepo:
         return self._build("contact_repo")
-
-    def marketplace_hub_repo(self) -> MarketplaceHubRepo:
-        return self._build("marketplace_hub_repo")
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""

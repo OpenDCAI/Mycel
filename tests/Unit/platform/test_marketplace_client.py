@@ -5,7 +5,9 @@ import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import httpx
 import pytest
+from fastapi import HTTPException
 
 import backend.web.services.library_service as _lib_svc
 from backend.web.utils.versioning import bump_semver
@@ -36,6 +38,36 @@ def test_hub_client_disables_env_proxy_trust():
     marketplace_client = importlib.reload(marketplace_client)
 
     assert marketplace_client._hub_client._trust_env is False
+
+
+def test_hub_client_defaults_to_public_mycel_hub(monkeypatch):
+    monkeypatch.delenv("MYCEL_HUB_URL", raising=False)
+
+    import backend.web.services.marketplace_client as marketplace_client
+
+    marketplace_client = importlib.reload(marketplace_client)
+
+    assert marketplace_client.HUB_URL == "https://hub.mycel.nextmind.space"
+
+
+def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
+    import backend.web.services.marketplace_client as marketplace_client
+
+    class _Response:
+        status_code = 400
+
+        def raise_for_status(self):
+            request = httpx.Request("GET", "http://hub/api/v1/items")
+            response = httpx.Response(400, json={"detail": "Unsupported sort: featured"}, request=request)
+            raise httpx.HTTPStatusError("bad request", request=request, response=response)
+
+    monkeypatch.setattr(marketplace_client._hub_client, "request", lambda *_args, **_kwargs: _Response())
+
+    with pytest.raises(HTTPException) as exc_info:
+        marketplace_client._hub_api("GET", "/items")
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Unsupported sort: featured"
 
 
 # ── Helpers ──

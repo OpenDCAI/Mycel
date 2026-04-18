@@ -139,15 +139,6 @@ def build_provider_event_repo(*, supabase_client: Any | None = None, supabase_cl
     return _build_storage_repo("provider_event_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
-def build_marketplace_hub_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
-    return _build_storage_repo(
-        "marketplace_hub_repo",
-        supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
-        default_supabase_client_factory=_WEB_SUPABASE_CLIENT_FACTORY,
-    )
-
-
 def build_checkpoint_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
     return _build_storage_repo("checkpoint_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 

@@ -69,7 +69,6 @@ async def lifespan(app: FastAPI):
     app.state.user_settings_repo = storage_container.user_settings_repo()
     app.state.agent_config_repo = storage_container.agent_config_repo()
     app.state.contact_repo = storage_container.contact_repo()
-    app.state.marketplace_hub_repo = storage_container.marketplace_hub_repo()
     app.state._supabase_client = _supabase_client
     app.state._public_supabase_client = _public_supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client

@@ -18,7 +18,7 @@ from config.types import AgentBundle
 
 logger = logging.getLogger(__name__)
 
-HUB_URL = os.environ.get("MYCEL_HUB_URL", "http://localhost:8090")
+HUB_URL = os.environ.get("MYCEL_HUB_URL", "https://hub.mycel.nextmind.space")
 # @@@hub-agent-user-item-type - Hub still names published Agent users "member";
 # local Mycel domain code must keep exposing them as Agent users.
 HUB_AGENT_USER_ITEM_TYPE = "member"
@@ -35,6 +35,9 @@ def _hub_api(method: str, path: str, **kwargs: Any) -> dict:
         return resp.json()
     except httpx.HTTPStatusError as e:
         status = e.response.status_code
+        detail = _hub_error_detail(e.response)
+        if status == 400:
+            raise HTTPException(status_code=400, detail=detail or "Marketplace Hub request rejected")
         if status == 404:
             raise HTTPException(status_code=404, detail="Marketplace item not found")
         if status == 409:
@@ -42,6 +45,15 @@ def _hub_api(method: str, path: str, **kwargs: Any) -> dict:
         raise HTTPException(status_code=502, detail=f"Hub API error: {status}")
     except (httpx.ConnectError, httpx.TimeoutException):
         raise HTTPException(status_code=503, detail="Marketplace Hub unavailable")
+
+
+def _hub_error_detail(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    detail = payload.get("detail") if isinstance(payload, dict) else None
+    return detail if isinstance(detail, str) and detail else None
 
 
 def list_items(
