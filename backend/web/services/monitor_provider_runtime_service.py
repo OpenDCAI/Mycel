@@ -30,7 +30,7 @@ def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
     if provider is None:
         raise KeyError(f"Provider not found: {provider_id}")
 
-    resource_rows = provider.get("sessions") or []
+    resource_rows = provider.get("resource_rows") or []
     return {
         "provider": provider,
         "sandbox_ids": _resource_row_values(resource_rows, "sandboxId"),
@@ -45,7 +45,7 @@ def _resource_row_values(resource_rows: list[dict[str, Any]], key: str) -> list[
 def get_monitor_runtime_detail(runtime_session_id: str) -> dict[str, Any]:
     snapshot = get_resource_overview_snapshot()
     for provider in snapshot.get("providers") or []:
-        for resource_row in provider.get("sessions") or []:
+        for resource_row in provider.get("resource_rows") or []:
             current = str(resource_row.get("runtimeSessionId") or "").strip()
             if current != runtime_session_id:
                 continue

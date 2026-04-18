@@ -166,23 +166,26 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     assert payload["summary"]["total_providers"] == 1
-    assert payload["summary"]["running_sessions"] == 1
+    assert payload["summary"]["running_resource_rows"] == 1
+    assert "running_" + "sessions" not in payload["summary"]
     assert payload["providers"][0]["id"] == "daytona_selfhost"
     assert payload["providers"][0]["description"] == "Daytona"
     assert payload["providers"][0]["vendor"] == "Daytona"
     assert payload["providers"][0]["type"] == "cloud"
     assert payload["providers"][0]["consoleUrl"] == "https://example.com/daytona"
-    assert "leaseId" not in payload["providers"][0]["sessions"][0]
-    assert payload["providers"][0]["sessions"][0]["sandboxId"] == "sandbox-1"
-    assert payload["providers"][0]["sessions"][0]["id"] == "sandbox-1:thread-1"
-    assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
-    assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
-    assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
-    assert payload["providers"][0]["sessions"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
-    assert payload["providers"][0]["sessions"][0]["runtimeSessionId"] == "provider-session-1"
-    assert payload["providers"][0]["sessions"][0]["startedAt"] == "2026-04-07T10:00:00Z"
-    assert "memberId" not in payload["providers"][0]["sessions"][0]
-    assert "memberName" not in payload["providers"][0]["sessions"][0]
+    assert "sessions" not in payload["providers"][0]
+    resource_row = payload["providers"][0]["resource_rows"][0]
+    assert "leaseId" not in resource_row
+    assert resource_row["sandboxId"] == "sandbox-1"
+    assert resource_row["id"] == "sandbox-1:thread-1"
+    assert resource_row["threadId"] == "thread-1"
+    assert resource_row["agentUserId"] == "agent-1"
+    assert resource_row["agentName"] == "Morel"
+    assert resource_row["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert resource_row["runtimeSessionId"] == "provider-session-1"
+    assert resource_row["startedAt"] == "2026-04-07T10:00:00Z"
+    assert "memberId" not in resource_row
+    assert "memberName" not in resource_row
 
 
 def test_user_resource_projection_omits_lease_id(monkeypatch) -> None:
@@ -214,7 +217,7 @@ def test_user_resource_projection_omits_lease_id(monkeypatch) -> None:
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     assert payload["summary"]["total_providers"] == 1
-    assert "leaseId" not in payload["providers"][0]["sessions"][0]
+    assert "leaseId" not in payload["providers"][0]["resource_rows"][0]
 
 
 def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
@@ -256,12 +259,12 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
         "code": "PROVIDER_UNAVAILABLE",
         "message": "provider unavailable",
     }
-    assert payload["providers"][0]["sessions"][0]["runtimeSessionId"] == "provider-session-1"
-    assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
-    assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
-    assert payload["providers"][0]["sessions"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
-    assert "memberId" not in payload["providers"][0]["sessions"][0]
-    assert "memberName" not in payload["providers"][0]["sessions"][0]
+    assert payload["providers"][0]["resource_rows"][0]["runtimeSessionId"] == "provider-session-1"
+    assert payload["providers"][0]["resource_rows"][0]["agentUserId"] == "agent-1"
+    assert payload["providers"][0]["resource_rows"][0]["agentName"] == "Morel"
+    assert payload["providers"][0]["resource_rows"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert "memberId" not in payload["providers"][0]["resource_rows"][0]
+    assert "memberName" not in payload["providers"][0]["resource_rows"][0]
 
 
 @pytest.mark.parametrize(
@@ -294,8 +297,8 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
             ],
             {"sandbox-local": None, "sandbox-remote": "provider-session-remote"},
             lambda payload: (
-                "runtimeSessionId" not in {item["id"]: item for item in payload["providers"]}["local"]["sessions"][0],
-                {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["sessions"][0]["runtimeSessionId"]
+                "runtimeSessionId" not in {item["id"]: item for item in payload["providers"]}["local"]["resource_rows"][0],
+                {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["resource_rows"][0]["runtimeSessionId"]
                 == "provider-session-remote",
             ),
         ),
@@ -325,7 +328,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
             ],
             {"sandbox-a": "provider-session-a", "sandbox-b": "provider-session-b"},
             lambda payload: (
-                [session["runtimeSessionId"] for session in payload["providers"][0]["sessions"]]
+                [resource_row["runtimeSessionId"] for resource_row in payload["providers"][0]["resource_rows"]]
                 == ["provider-session-a", "provider-session-b"],
             ),
         ),
@@ -394,12 +397,12 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
 
     assert response.status_code == 200
     payload = response.json()
-    session = payload["providers"][0]["sessions"][0]
+    resource_row = payload["providers"][0]["resource_rows"][0]
     assert payload["summary"]["scope"] == "user"
     assert payload["providers"][0]["id"] == "daytona_selfhost"
-    assert session["runtimeSessionId"] == "provider-session-1"
-    assert session["agentUserId"] == "agent-1"
-    assert session["agentName"] == "Morel"
-    assert session["avatarUrl"] == "/api/users/agent-1/avatar"
-    assert "memberId" not in session
-    assert "memberName" not in session
+    assert resource_row["runtimeSessionId"] == "provider-session-1"
+    assert resource_row["agentUserId"] == "agent-1"
+    assert resource_row["agentName"] == "Morel"
+    assert resource_row["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert "memberId" not in resource_row
+    assert "memberName" not in resource_row

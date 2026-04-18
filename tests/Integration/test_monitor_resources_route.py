@@ -27,11 +27,11 @@ def _resource_snapshot() -> dict:
             "snapshot_at": "2026-04-07T00:00:00Z",
             "last_refreshed_at": "2026-04-07T00:00:00Z",
             "refresh_status": "fresh",
-            "running_sessions": 1,
+            "running_resource_rows": 1,
             "active_providers": 1,
             "unavailable_providers": 0,
         },
-        "providers": [{"id": "local", "sessions": []}],
+        "providers": [{"id": "local", "resource_rows": []}],
         "triage": {
             "summary": {
                 "total": 0,
@@ -123,7 +123,7 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
             "sandboxes_diverged": 1,
             "sandboxes_orphan": 0,
         },
-        "workload": {"running_sessions": 1, "evaluations_running": 1},
+        "workload": {"running_resource_rows": 1, "evaluations_running": 1},
         "latest_evaluation": {
             "run_id": "run-1",
             "status": "running",

@@ -274,11 +274,11 @@ function countResourceRows(resourceRows: ResourceRow[], status: ResourceRow["sta
 }
 
 function countProviderResourceRows(providers: ProviderInfo[], status: ResourceRow["status"]): number {
-  return providers.reduce((total, provider) => total + countResourceRows(provider.sessions, status), 0);
+  return providers.reduce((total, provider) => total + countResourceRows(provider.resource_rows, status), 0);
 }
 
 function countRuntimeUnboundRunning(provider: ProviderInfo): number {
-  return provider.sessions.filter(
+  return provider.resource_rows.filter(
     (resourceRow) => provider.type !== "local" && resourceRow.status === "running" && !resourceRow.runtimeSessionId,
   ).length;
 }
@@ -444,7 +444,7 @@ export default function ResourcesPage() {
   const runningResourceRowCount = countProviderResourceRows(providers, "running");
   const pausedResourceRowCount = countProviderResourceRows(providers, "paused");
   const stoppedResourceRowCount = countProviderResourceRows(providers, "stopped");
-  const sandboxGroupCount = providers.reduce((total, provider) => total + groupResourceRows(provider.sessions).length, 0);
+  const sandboxGroupCount = providers.reduce((total, provider) => total + groupResourceRows(provider.resource_rows).length, 0);
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -550,11 +550,11 @@ function ProviderCard({
   orphanCount: number;
   onSelect: () => void;
 }) {
-  const runningCount = countResourceRows(provider.sessions, "running");
-  const pausedCount = countResourceRows(provider.sessions, "paused");
-  const stoppedCount = countResourceRows(provider.sessions, "stopped");
+  const runningCount = countResourceRows(provider.resource_rows, "running");
+  const pausedCount = countResourceRows(provider.resource_rows, "paused");
+  const stoppedCount = countResourceRows(provider.resource_rows, "stopped");
   const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
-  const detachedResidueCount = countDetachedResidue(provider.sessions);
+  const detachedResidueCount = countDetachedResidue(provider.resource_rows);
   const unavailableHint =
     provider.unavailableReason ||
     (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
@@ -565,7 +565,7 @@ function ProviderCard({
   ]
     .filter(Boolean)
     .join(" · ");
-  const resourceDots = [...provider.sessions]
+  const resourceDots = [...provider.resource_rows]
     .sort((left, right) => (RESOURCE_ROW_STATUS_ORDER[left.status] ?? 4) - (RESOURCE_ROW_STATUS_ORDER[right.status] ?? 4))
     .slice(0, 5);
 
@@ -611,7 +611,7 @@ function ProviderCard({
       )}
 
       <div className="provider-card__footer">
-        {provider.sessions.length > 0 && (
+        {provider.resource_rows.length > 0 && (
           <div className="provider-card__activity">
             <div className="provider-card__resource-dots" aria-hidden="true">
               {resourceDots.map((resourceRow) => (
@@ -653,7 +653,7 @@ function ProviderDetail({
 }) {
   const [selectedGroup, setSelectedGroup] = React.useState<SandboxGroup | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<SandboxGroup["status"] | "all">("all");
-  const groups = React.useMemo(() => groupResourceRows(provider.sessions), [provider.sessions]);
+  const groups = React.useMemo(() => groupResourceRows(provider.resource_rows), [provider.resource_rows]);
   const filteredGroups = React.useMemo(
     () => (statusFilter === "all" ? groups : groups.filter((group) => group.status === statusFilter)),
     [groups, statusFilter],
@@ -674,14 +674,14 @@ function ProviderDetail({
       ),
     [groups],
   );
-  const runningCount = countResourceRows(provider.sessions, "running");
-  const detachedResidueCount = countDetachedResidue(provider.sessions);
+  const runningCount = countResourceRows(provider.resource_rows, "running");
+  const detachedResidueCount = countDetachedResidue(provider.resource_rows);
   const runtimeUnboundRunningCount = countRuntimeUnboundRunning(provider);
-  const pausedCount = countResourceRows(provider.sessions, "paused");
-  const stoppedCount = countResourceRows(provider.sessions, "stopped");
+  const pausedCount = countResourceRows(provider.resource_rows, "paused");
+  const stoppedCount = countResourceRows(provider.resource_rows, "stopped");
   const isLocal = provider.type === "local";
   const showUnavailableBanner = provider.status === "unavailable";
-  const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
+  const hardUnavailable = provider.status === "unavailable" && provider.resource_rows.length === 0;
 
   React.useEffect(() => {
     setStatusFilter(defaultProviderStatusFilter(groups));
@@ -728,7 +728,7 @@ function ProviderDetail({
               // an unavailable provider can still carry historical/live sandbox rows, so keep the detail
               // surface inspectable instead of hard-disabling the whole card.
               <div className="provider-warning-banner">
-                {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条资源记录，可继续检查。
+                {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.resource_rows.length} 条资源记录，可继续检查。
               </div>
             )}
 

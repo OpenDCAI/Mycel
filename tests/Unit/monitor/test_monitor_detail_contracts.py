@@ -226,7 +226,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
                 {
                     "id": "daytona",
                     "name": "daytona",
-                    "sessions": [
+                    "resource_rows": [
                         {
                             "leaseId": "lease-1",
                             "sandboxId": "sandbox-1",
@@ -269,7 +269,7 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
                     "id": "daytona",
                     "name": "daytona",
                     "status": "active",
-                    "sessions": [
+                    "resource_rows": [
                         {
                             "runtimeSessionId": "runtime-1",
                             "leaseId": "lease-1",

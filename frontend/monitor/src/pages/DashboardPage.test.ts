@@ -12,7 +12,7 @@ const payload: DashboardPayload = {
     sandboxes_orphan: 0,
   },
   workload: {
-    running_sessions: 4,
+    running_resource_rows: 4,
     evaluations_running: 1,
   },
   latest_evaluation: {

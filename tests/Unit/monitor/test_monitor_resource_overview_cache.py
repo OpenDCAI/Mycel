@@ -34,7 +34,7 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
                 "total_providers": 1,
                 "active_providers": 1,
                 "unavailable_providers": 0,
-                "running_sessions": 2,
+                "running_resource_rows": 2,
             },
             "providers": [{"id": "local", "cardCpu": {}}],
         },
@@ -72,7 +72,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
                 "total_providers": 1,
                 "active_providers": 1,
                 "unavailable_providers": 0,
-                "running_sessions": 1,
+                "running_resource_rows": 1,
             },
             "providers": [{"id": "docker", "cardCpu": {}}],
         },
@@ -116,13 +116,13 @@ def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(m
             "total_providers": 1,
             "active_providers": 0,
             "unavailable_providers": 0,
-            "running_sessions": 0,
+            "running_resource_rows": 0,
         },
         "providers": [
             {
                 "id": "local",
                 "cardCpu": {},
-                "sessions": [],
+                "resource_rows": [],
                 "telemetry": {"running": {"used": 0}},
             }
         ],
@@ -133,13 +133,13 @@ def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(m
             "total_providers": 1,
             "active_providers": 1,
             "unavailable_providers": 0,
-            "running_sessions": 1,
+            "running_resource_rows": 1,
         },
         "providers": [
             {
                 "id": "local",
                 "cardCpu": {},
-                "sessions": [{"id": "lease-1:m_thread"}],
+                "resource_rows": [{"id": "lease-1:m_thread"}],
                 "telemetry": {"running": {"used": 1}},
             }
         ],
@@ -162,5 +162,5 @@ def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(m
     payload = cache.get_resource_overview_snapshot()
 
     assert payload["providers"][0]["telemetry"]["running"]["used"] == 1
-    assert len(payload["providers"][0]["sessions"]) == 1
+    assert len(payload["providers"][0]["resource_rows"]) == 1
     assert payload["triage"]["summary"]["healthy_capacity"] == 1

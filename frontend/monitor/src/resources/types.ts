@@ -56,7 +56,7 @@ export interface ProviderInfo {
   capabilities: ProviderCapabilities;
   consoleUrl?: string;
   latencyMs?: number;
-  sessions: ResourceRow[];
+  resource_rows: ResourceRow[];
 }
 
 export interface ResourceSummary {
@@ -68,7 +68,7 @@ export interface ResourceSummary {
   total_providers: number;
   active_providers: number;
   unavailable_providers: number;
-  running_sessions: number;
+  running_resource_rows: number;
 }
 
 export interface ResourceOverviewResponse {

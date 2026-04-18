@@ -70,7 +70,7 @@ def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
         lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(resource_projection_service, "_thread_owners", owners)
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
 
 def test_resource_projection_row_identity_prefers_unbound_provider_runtime_identity() -> None:
@@ -151,13 +151,13 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
     local = payload["providers"][0]
 
     assert local["telemetry"]["running"]["used"] == 1
-    assert local["sessions"] == [
+    assert local["resource_rows"] == [
         {
             "id": "sandbox-1:thread-1",
             "sandboxId": "sandbox-1",
@@ -212,14 +212,14 @@ def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtim
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
     local = payload["providers"][0]
 
     assert local["telemetry"]["running"]["used"] == 1
-    assert payload["summary"]["running_sessions"] == 1
-    assert [session["id"] for session in local["sessions"]] == ["sandbox-1:thread-1"]
+    assert payload["summary"]["running_resource_rows"] == 1
+    assert [resource_row["id"] for resource_row in local["resource_rows"]] == ["sandbox-1:thread-1"]
 
 
 def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(monkeypatch):
@@ -259,11 +259,11 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
         "build_user_repo",
         lambda **_kwargs: _FakeUserRepo([_FakeUser("agent-1", "Toad")]),
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
 
-    assert payload["providers"][0]["sessions"] == [
+    assert payload["providers"][0]["resource_rows"] == [
         {
             "id": "sandbox-1:thread-supabase",
             "sandboxId": "sandbox-1",
@@ -320,13 +320,13 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": tid, "agent_name": tid, "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
-    resource_rows = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["resource_rows"]
 
     assert [resource_row["threadId"] for resource_row in resource_rows] == ["thread-parent"]
-    assert payload["summary"]["running_sessions"] == 1
+    assert payload["summary"]["running_resource_rows"] == 1
 
 
 def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is_subagent(monkeypatch):
@@ -365,10 +365,10 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
-    resource_rows = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["resource_rows"]
 
     assert resource_rows == [
         {
@@ -422,7 +422,7 @@ def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monke
     )
 
     payload = resource_projection_service.list_resource_providers()
-    resource_rows = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["resource_rows"]
 
     assert [(resource_row["sandboxId"], resource_row["threadId"]) for resource_row in resource_rows] == [
         ("sandbox-a", "thread-parent-a"),
@@ -466,10 +466,10 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
         "_thread_owners",
         lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
-    resource_rows = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["resource_rows"]
 
     assert resource_rows == [
         {
@@ -518,12 +518,12 @@ def test_list_resource_providers_drops_subagent_rows_without_sandbox_id(monkeypa
         lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda _thread_ids: {})
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     payload = resource_projection_service.list_resource_providers()
 
-    assert payload["providers"][0]["sessions"] == []
-    assert payload["summary"]["running_sessions"] == 0
+    assert payload["providers"][0]["resource_rows"] == []
+    assert payload["summary"]["running_resource_rows"] == 0
 
 
 def test_list_resource_providers_drops_visible_lease_only_rows_without_sandbox_id(monkeypatch):
@@ -548,8 +548,8 @@ def test_list_resource_providers_drops_visible_lease_only_rows_without_sandbox_i
 
     payload = resource_projection_service.list_resource_providers()
 
-    assert payload["providers"][0]["sessions"] == []
-    assert payload["summary"]["running_sessions"] == 0
+    assert payload["providers"][0]["resource_rows"] == []
+    assert payload["summary"]["running_resource_rows"] == 0
 
 
 def test_list_resource_providers_deduplicates_same_lower_runtime_thread_even_with_distinct_provider_ids(monkeypatch):
@@ -583,7 +583,7 @@ def test_list_resource_providers_deduplicates_same_lower_runtime_thread_even_wit
     )
 
     payload = resource_projection_service.list_resource_providers()
-    resource_rows = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["resource_rows"]
 
     assert resource_rows == [
         {
@@ -630,7 +630,7 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
 
     payload = resource_projection_service.list_resource_providers()
     provider = payload["providers"][0]
-    resource_row = provider["sessions"][0]
+    resource_row = provider["resource_rows"][0]
 
     assert provider["consoleUrl"] == "https://example.com/daytona"
     assert resource_row["runtimeSessionId"] == "provider-session-1"
@@ -682,7 +682,7 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(
     )
 
     payload = resource_projection_service.list_resource_providers()
-    resource_rows = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["resource_rows"]
 
     assert [resource_row["runtimeSessionId"] for resource_row in resource_rows] == ["runtime-a", "runtime-b"]
     assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
@@ -707,7 +707,7 @@ def test_visible_resource_row_stats_uses_sandbox_keyed_runtime_lookup(monkeypatc
         "make_sandbox_monitor_repo",
         lambda: _FakeRepo(rows, instance_ids={"sandbox-a": "runtime-a"}),
     )
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     stats = resource_projection_service.visible_resource_row_stats()
 
@@ -739,7 +739,7 @@ def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runti
     ]
 
     monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
-    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 
     stats = resource_projection_service.visible_resource_row_stats()
 
@@ -790,7 +790,7 @@ def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_tele
     monkeypatch.setattr(
         resource_projection_service,
         "list_resource_snapshots_by_sandbox",
-        lambda _sessions: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
+        lambda _resource_rows: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
 
     captured: dict[str, object] = {}

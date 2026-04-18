@@ -98,7 +98,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         "telemetry": telemetry,
         "cardCpu": dict(telemetry["cpu"]),
         "consoleUrl": display["console_url"],
-        "sessions": resource_rows,
+        "resource_rows": resource_rows,
     }
 
 
@@ -184,7 +184,7 @@ def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]
             "total_providers": len(providers),
             "active_providers": len([item for item in providers if item["status"] == "active"]),
             "unavailable_providers": len([item for item in providers if item["status"] == "unavailable"]),
-            "running_sessions": sum(int(item["telemetry"]["running"]["used"] or 0) for item in providers),
+            "running_resource_rows": sum(int(item["telemetry"]["running"]["used"] or 0) for item in providers),
             "scope": "user",
             "sandbox_count": len(sandboxes),
         },
@@ -374,7 +374,7 @@ def list_resource_providers() -> dict[str, Any]:
                 "telemetry": telemetry,
                 "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),
                 "consoleUrl": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
-                "sessions": normalized_resource_rows,
+                "resource_rows": normalized_resource_rows,
             }
         )
 
@@ -383,7 +383,7 @@ def list_resource_providers() -> dict[str, Any]:
         "total_providers": len(providers),
         "active_providers": len([provider for provider in providers if provider.get("status") == "active"]),
         "unavailable_providers": len([provider for provider in providers if provider.get("status") == "unavailable"]),
-        "running_sessions": sum(int((provider.get("telemetry") or {}).get("running", {}).get("used") or 0) for provider in providers),
+        "running_resource_rows": sum(int((provider.get("telemetry") or {}).get("running", {}).get("used") or 0) for provider in providers),
     }
     return {"summary": summary, "providers": providers}
 

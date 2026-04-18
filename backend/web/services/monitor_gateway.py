@@ -79,7 +79,7 @@ def get_dashboard() -> dict[str, Any]:
             "sandboxes_orphan": int(sandbox_summary.get("orphan") or 0) + int(sandbox_summary.get("orphan_diverged") or 0),
         },
         "workload": {
-            "running_sessions": int(resource_summary.get("running_sessions") or 0),
+            "running_resource_rows": int(resource_summary.get("running_resource_rows") or 0),
             "evaluations_running": int(evaluation_overview.get("running_runs") or 0),
         },
         "latest_evaluation": {

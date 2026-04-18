@@ -13,7 +13,7 @@ export type DashboardPayload = {
     sandboxes_orphan: number;
   };
   workload: {
-    running_sessions: number;
+    running_resource_rows: number;
     evaluations_running: number;
   };
   latest_evaluation: {
@@ -23,7 +23,7 @@ export type DashboardPayload = {
 
 export function buildDashboardSurfaces(data: DashboardPayload) {
   return [
-    { label: "Running Sandboxes", value: data.workload.running_sessions, to: "/resources" },
+    { label: "Running Sandboxes", value: data.workload.running_resource_rows, to: "/resources" },
     { label: "Evaluations Running", value: data.workload.evaluations_running, to: "/evaluation" },
     { label: "Tracked Sandboxes", value: data.infra.sandboxes_total, to: "/sandboxes" },
   ];

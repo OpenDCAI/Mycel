@@ -67,7 +67,7 @@ def _snapshot_drifted_from_live_resource_rows(snapshot: dict[str, Any]) -> bool:
         provider_id = str(provider.get("id") or "")
         current = live_stats.get(provider_id, {"resource_rows": 0, "running": 0})
         cached_running = int(((provider.get("telemetry") or {}).get("running") or {}).get("used") or 0)
-        cached_resource_rows = len(provider.get("sessions") or [])
+        cached_resource_rows = len(provider.get("resource_rows") or [])
         if cached_running != current["running"] or cached_resource_rows != current["resource_rows"]:
             return True
     for provider_id, current in live_stats.items():
