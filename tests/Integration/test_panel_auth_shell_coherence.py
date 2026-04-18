@@ -311,7 +311,7 @@ def test_agent_config_exposes_and_persists_compaction_trigger_tokens():
     assert configs["cfg-1"]["runtime"] == {"tools:Bash": {"enabled": True, "desc": "shell"}}
 
 
-def test_get_agent_user_prefers_repo_skill_desc_over_library_fallback(monkeypatch: pytest.MonkeyPatch):
+def test_get_agent_user_prefers_repo_skill_desc_over_library_default(monkeypatch: pytest.MonkeyPatch):
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,

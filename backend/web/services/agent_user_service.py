@@ -66,7 +66,7 @@ def _skills_from_repo(agent_config_id: str, config: dict[str, Any], agent_config
             desc = str(override.get("desc") or "")
         else:
             # @@@skill-desc-precedence - repo skill meta is the stable slow-variable truth.
-            # Library desc is only a last fallback when neither runtime override nor repo meta carries one.
+            # Library desc is only the default when neither runtime override nor repo meta carries one.
             meta = row.get("meta_json") if isinstance(row.get("meta_json"), dict) else {}
             if "desc" in meta and meta.get("desc") is not None:
                 desc = str(meta.get("desc") or "")

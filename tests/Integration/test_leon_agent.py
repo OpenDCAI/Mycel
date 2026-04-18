@@ -700,7 +700,7 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell
 
 
 @_patch_env_api_key()
-def test_leon_agent_agent_config_id_missing_config_does_not_fallback_to_bundle_dir(tmp_path):
+def test_leon_agent_agent_config_id_missing_config_does_not_load_bundle_dir(tmp_path):
     from core.runtime.agent import LeonAgent
 
     bundle_dir = tmp_path / "agent-bundles" / "stale"

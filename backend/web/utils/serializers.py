@@ -45,7 +45,7 @@ def extract_text_content(raw_content: Any) -> str:
 
 
 def serialize_message(msg: Any) -> dict[str, Any]:
-    """Serialize a LangChain message to a JSON-compatible dict."""
+    """Serialize a LangChain message to a JSON-serializable dict."""
     content = getattr(msg, "content", "")
     metadata = dict(getattr(msg, "metadata", None) or {})
     additional_kwargs = getattr(msg, "additional_kwargs", None) or {}
