@@ -939,6 +939,73 @@ def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
     assert sync_calls == [("thread-1", "instance-1", expected_path)]
 
 
+def test_background_command_requires_default_terminal_without_active_terminal_substitute():
+    manager = _new_test_manager()
+
+    manager.terminal_store = SimpleNamespace(
+        get_default=lambda _thread_id: None,
+        get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("active terminal was queried unexpectedly")),
+    )
+
+    with pytest.raises(RuntimeError, match="Thread thread-1 has no default terminal"):
+        manager.create_background_command_session("thread-1", "/workspace")
+
+
+def test_background_command_inherits_default_terminal_environment(monkeypatch):
+    manager = _new_test_manager()
+    default_state = SimpleNamespace(cwd="/default", env_delta={"TOKEN": "value"}, state_version=7)
+    created_terminal = SimpleNamespace(updated_state=None)
+    default_terminal = SimpleNamespace(lease_id="lease-1", get_state=lambda: default_state)
+    created_rows: list[dict[str, str]] = []
+    created_sessions: list[dict[str, Any]] = []
+
+    def from_row(row, _db_path):
+        if row["terminal_id"] == "term-default":
+            return default_terminal
+        return created_terminal
+
+    def create_terminal(**kwargs):
+        created_rows.append(kwargs)
+        return {
+            "terminal_id": kwargs["terminal_id"],
+            "thread_id": kwargs["thread_id"],
+            "lease_id": kwargs["lease_id"],
+            "cwd": kwargs["initial_cwd"],
+            "env_delta_json": "{}",
+            "state_version": 0,
+        }
+
+    def update_state(state):
+        created_terminal.updated_state = state
+
+    created_terminal.update_state = update_state
+    manager.terminal_store = SimpleNamespace(
+        get_default=lambda _thread_id: {
+            "terminal_id": "term-default",
+            "thread_id": "thread-1",
+            "lease_id": "lease-1",
+            "cwd": "/default",
+            "env_delta_json": '{"TOKEN": "value"}',
+            "state_version": 7,
+        },
+        create=create_terminal,
+    )
+    manager._get_lease = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager.session_manager = SimpleNamespace(create=lambda **kwargs: created_sessions.append(kwargs) or kwargs)
+    monkeypatch.setattr(sandbox_manager_module, "terminal_from_row", from_row)
+
+    session = manager.create_background_command_session("thread-1", "/workspace/task")
+
+    assert created_rows[0]["thread_id"] == "thread-1"
+    assert created_rows[0]["lease_id"] == "lease-1"
+    assert created_rows[0]["initial_cwd"] == "/workspace/task"
+    assert created_terminal.updated_state.cwd == "/workspace/task"
+    assert created_terminal.updated_state.env_delta == {"TOKEN": "value"}
+    assert created_terminal.updated_state.state_version == 7
+    assert session is created_sessions[0]
+
+
 def test_resume_session_rebinds_live_session_lease_after_resume():
     manager = _new_test_manager()
     terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")

@@ -9,15 +9,13 @@ class SyncManager:
         self.strategy = self._select_strategy()
 
     def _select_strategy(self) -> SyncStrategy:
-        from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
+        from sandbox.sync.state import SyncState
         from sandbox.sync.strategy import IncrementalSyncStrategy, NoOpStrategy
 
         runtime_kind = self.provider_capability.runtime_kind
         if runtime_kind in ("local", "docker_pty"):
             return NoOpStrategy()
-        # @@@sync-process-local-first-cut - remote runtimes now get a process-local checksum backing
-        # so incremental sync no longer defaults to a persisted sync_files repo on the first cut.
-        state = SyncState(repo=ProcessLocalSyncFileBacking())
+        state = SyncState()
         return IncrementalSyncStrategy(state)
 
     def upload(
