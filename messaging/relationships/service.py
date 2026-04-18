@@ -90,4 +90,9 @@ class RelationshipService:
         existing = self._repo.get(user_a, user_b)
         if not existing:
             return "none"
-        return existing.get("state", "none")
+        try:
+            if "state" not in existing:
+                raise ValueError("missing relationship state")
+            return RelationshipRow.model_validate(existing).state
+        except Exception as exc:
+            raise RuntimeError(f"Invalid relationship row {existing.get('id') or '<missing>'}") from exc

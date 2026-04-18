@@ -208,6 +208,24 @@ def test_relationship_list_for_user_fails_on_invalid_row() -> None:
         service.list_for_user("human-user-1")
 
 
+def test_relationship_get_state_fails_on_invalid_existing_row() -> None:
+    service = RelationshipService(
+        SimpleNamespace(
+            get=lambda _user_a, _user_b: {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:01Z",
+            }
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="Invalid relationship row hire_visit:agent-user-1:human-user-1"):
+        service.get_state("human-user-1", "agent-user-1")
+
+
 def test_chat_tool_registry_exposes_final_contract_only() -> None:
     registry = ToolRegistry()
     ChatToolService(
