@@ -67,3 +67,58 @@ def test_split_handler_modules_are_the_behavior_owners() -> None:
 
     assert NativeAgentChatDeliveryHandler.__name__ == "NativeAgentChatDeliveryHandler"
     assert NativeAgentThreadInputHandler.__name__ == "NativeAgentThreadInputHandler"
+
+
+@pytest.mark.asyncio
+async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
+    from backend.protocols.agent_runtime import (
+        AgentChatActor,
+        AgentChatContext,
+        AgentChatDeliveryEnvelope,
+        AgentChatMessage,
+        AgentChatRecipient,
+    )
+
+    external_handler = _FakeChatHandler()
+    gateway = NativeAgentRuntimeGateway(
+        app=object(),
+        chat_handlers={"external-hook": external_handler},
+        thread_input_handler=_FakeThreadInputHandler(),
+    )
+    envelope = AgentChatDeliveryEnvelope(
+        chat=AgentChatContext(chat_id="chat-1"),
+        sender=AgentChatActor(user_id="human-1", user_type="human", display_name="Human"),
+        recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="external-hook"),
+        message=AgentChatMessage(content="hello"),
+    )
+
+    result = await gateway.dispatch_chat(envelope)
+
+    assert result == AgentGatewayDeliveryResult(status="accepted", thread_id="thread-1")
+    assert external_handler.called_with is envelope
+
+
+@pytest.mark.asyncio
+async def test_gateway_rejects_unregistered_chat_runtime_source() -> None:
+    from backend.protocols.agent_runtime import (
+        AgentChatActor,
+        AgentChatContext,
+        AgentChatDeliveryEnvelope,
+        AgentChatMessage,
+        AgentChatRecipient,
+    )
+
+    gateway = NativeAgentRuntimeGateway(
+        app=object(),
+        chat_handlers={"mycel": _FakeChatHandler()},
+        thread_input_handler=_FakeThreadInputHandler(),
+    )
+    envelope = AgentChatDeliveryEnvelope(
+        chat=AgentChatContext(chat_id="chat-1"),
+        sender=AgentChatActor(user_id="human-1", user_type="human", display_name="Human"),
+        recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="external-hook"),
+        message=AgentChatMessage(content="hello"),
+    )
+
+    with pytest.raises(ValueError, match="No Agent chat runtime handler registered for runtime_source='external-hook'"):
+        await gateway.dispatch_chat(envelope)
