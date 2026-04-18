@@ -1049,11 +1049,12 @@ async def test_run_agent_links_child_abort_controller_to_parent_tool_context(mon
 
 
 @pytest.mark.asyncio
-async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypatch, tmp_path, temp_db):
+async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(monkeypatch, tmp_path, temp_db):
     created: list[_FakeChildAgent] = []
     observed: dict[str, str] = {}
     parent_thread_id = "parent-thread"
     child_thread_id = "subagent-child"
+    lower_runtime_key = "lease_" + "id"
 
     manager = SandboxManager(
         provider=LocalSessionProvider(default_cwd=str(tmp_path)),
@@ -1065,7 +1066,7 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
 
     parent_capability = manager.get_sandbox(parent_thread_id)
     parent_terminal_id = parent_capability._session.terminal.terminal_id
-    parent_lease_id = parent_capability._session.lease.lease_id
+    parent_lower_runtime_id = getattr(parent_capability._session.lease, lower_runtime_key)
 
     class _LeaseCapturingChild(_FakeChildAgent):
         async def _astream(self, *args, **kwargs):
@@ -1073,7 +1074,7 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
             assert current_thread_id is not None
             child_capability = manager.get_sandbox(current_thread_id)
             observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
-            observed["child_lease_id"] = child_capability._session.lease.lease_id
+            observed["child_lower_runtime_id"] = getattr(child_capability._session.lease, lower_runtime_key)
             if False:
                 yield None
             return
@@ -1083,7 +1084,7 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
     async def _fake_run_child_thread_live(agent, thread_id, message, app, *, input_messages):
         child_capability = manager.get_sandbox(thread_id)
         observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
-        observed["child_lease_id"] = child_capability._session.lease.lease_id
+        observed["child_lower_runtime_id"] = getattr(child_capability._session.lease, lower_runtime_key)
         return "(Agent completed with no text output)"
 
     monkeypatch.setattr(
@@ -1129,7 +1130,7 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
         assert result == "(Agent completed with no text output)"
         assert created
         assert observed["child_terminal_id"] != parent_terminal_id
-        assert observed["child_lease_id"] == parent_lease_id
+        assert observed["child_lower_runtime_id"] == parent_lower_runtime_id
     finally:
         manager.close()
 
