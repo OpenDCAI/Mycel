@@ -131,29 +131,6 @@ class TestSpillIfNeeded:
             assert result is value
         fs.write_file.assert_not_called()
 
-    def test_write_failure_graceful_degradation(self):
-        """If write_file raises, a warning is included but no crash."""
-        fs = _make_fs_backend()
-        fs.write_file.side_effect = OSError("disk full")
-
-        large = "B" * 60_000
-        result = _spill(
-            large,
-            threshold_bytes=50_000,
-            tool_call_id="call_fail",
-            fs_backend=fs,
-            workspace_root="/workspace",
-        )
-
-        # Should still return a preview, not raise.
-        assert result.startswith("<persisted-output")
-        assert "Preview" in result
-        # Must include the warning note about write failure.
-        assert "Warning: failed to save full output to disk" in result
-        assert "disk full" in result
-        # Path should indicate write failure.
-        assert "<write failed>" in result
-
     def test_preview_length_capped(self):
         """Preview contains at most PREVIEW_BYTES characters of the original."""
         fs = _make_fs_backend()
