@@ -17,11 +17,11 @@ def _runtime_http_error(exc: RuntimeError) -> HTTPException:
     return HTTPException(status, message)
 
 
-async def _mutate_session_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
+async def _mutate_runtime_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
     try:
         result = await asyncio.to_thread(
-            sandbox_service.mutate_sandbox_session,
-            session_id=session_id,
+            sandbox_service.mutate_sandbox_runtime,
+            runtime_id=session_id,
             action=action,
             provider_hint=provider,
         )
@@ -45,7 +45,7 @@ async def list_sandbox_types() -> dict[str, Any]:
 async def list_sandbox_sessions() -> dict[str, Any]:
     """List all sandbox sessions across providers."""
     _, managers = await asyncio.to_thread(sandbox_service.init_providers_and_managers)
-    sessions = await asyncio.to_thread(sandbox_service.load_all_sessions, managers)
+    sessions = await asyncio.to_thread(sandbox_service.load_all_sandbox_runtimes, managers)
     return {"sessions": [_public_session_payload(session) for session in sessions]}
 
 
@@ -66,10 +66,10 @@ async def list_my_sandboxes(
 
 
 @router.get("/sessions/{session_id}/metrics")
-async def get_session_metrics(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+async def get_sandbox_runtime_metrics(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Get metrics for a specific sandbox session."""
     try:
-        return await asyncio.to_thread(sandbox_service.get_session_metrics, session_id, provider)
+        return await asyncio.to_thread(sandbox_service.get_runtime_metrics, session_id, provider)
     except RuntimeError as e:
         raise _runtime_http_error(e) from e
 
@@ -77,16 +77,16 @@ async def get_session_metrics(session_id: str, provider: str | None = Query(defa
 @router.post("/sessions/{session_id}/pause")
 async def pause_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Pause a sandbox session."""
-    return await _mutate_session_action(session_id, "pause", provider)
+    return await _mutate_runtime_action(session_id, "pause", provider)
 
 
 @router.post("/sessions/{session_id}/resume")
 async def resume_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Resume a paused sandbox session."""
-    return await _mutate_session_action(session_id, "resume", provider)
+    return await _mutate_runtime_action(session_id, "resume", provider)
 
 
 @router.delete("/sessions/{session_id}")
 async def destroy_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Destroy a sandbox session."""
-    return await _mutate_session_action(session_id, "destroy", provider)
+    return await _mutate_runtime_action(session_id, "destroy", provider)

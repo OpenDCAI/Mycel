@@ -1,6 +1,22 @@
+import inspect
 from pathlib import Path
 
-from backend.web.services import sandbox_service
+from backend.web.services import monitor_operation_service, sandbox_service
+
+
+def test_sandbox_service_runtime_helpers_do_not_keep_internal_session_names():
+    service_source = inspect.getsource(sandbox_service)
+    operation_source = inspect.getsource(monitor_operation_service)
+
+    for old_name in (
+        "def load_all_sessions",
+        "def find_session_and_manager",
+        "def mutate_sandbox_session",
+        "def get_session_metrics",
+        "mutate_sandbox_session(",
+    ):
+        assert old_name not in service_source
+        assert old_name not in operation_source
 
 
 class _FakeLeaseStore:
@@ -42,9 +58,9 @@ class _FakeManager:
         return self.lease if lease_id == "lease-1" else None
 
 
-def test_mutate_sandbox_session_destroys_provider_orphan_without_fake_lease(monkeypatch):
+def test_mutate_sandbox_runtime_destroys_provider_orphan_without_fake_lease(monkeypatch):
     manager = _FakeManager()
-    sessions = [
+    runtimes = [
         {
             "session_id": "sandbox-1",
             "provider": "daytona_selfhost",
@@ -55,10 +71,10 @@ def test_mutate_sandbox_session_destroys_provider_orphan_without_fake_lease(monk
     ]
 
     monkeypatch.setattr(sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona_selfhost": manager}))
-    monkeypatch.setattr(sandbox_service, "load_all_sessions", lambda _managers: sessions)
+    monkeypatch.setattr(sandbox_service, "load_all_sandbox_runtimes", lambda _managers: runtimes)
 
-    payload = sandbox_service.mutate_sandbox_session(
-        session_id="sandbox-1",
+    payload = sandbox_service.mutate_sandbox_runtime(
+        runtime_id="sandbox-1",
         action="destroy",
         provider_hint="daytona_selfhost",
     )
@@ -69,10 +85,10 @@ def test_mutate_sandbox_session_destroys_provider_orphan_without_fake_lease(monk
     assert manager.provider.destroyed == [("sandbox-1", True)]
 
 
-def test_mutate_sandbox_session_reports_manager_runtime_for_lower_runtime_handle(monkeypatch):
+def test_mutate_sandbox_runtime_reports_manager_runtime_for_lower_runtime_handle(monkeypatch):
     manager = _FakeManager()
     manager.lease = _FakeLease()
-    sessions = [
+    runtimes = [
         {
             "session_id": "sandbox-1",
             "provider": "daytona_selfhost",
@@ -83,10 +99,10 @@ def test_mutate_sandbox_session_reports_manager_runtime_for_lower_runtime_handle
     ]
 
     monkeypatch.setattr(sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona_selfhost": manager}))
-    monkeypatch.setattr(sandbox_service, "load_all_sessions", lambda _managers: sessions)
+    monkeypatch.setattr(sandbox_service, "load_all_sandbox_runtimes", lambda _managers: runtimes)
 
-    payload = sandbox_service.mutate_sandbox_session(
-        session_id="sandbox-1",
+    payload = sandbox_service.mutate_sandbox_runtime(
+        runtime_id="sandbox-1",
         action="pause",
         provider_hint="daytona_selfhost",
     )

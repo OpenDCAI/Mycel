@@ -349,15 +349,15 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
     return providers, managers
 
 
-def load_all_sessions(managers: dict) -> list[dict]:
-    """Load sessions from all managers in parallel."""
-    sessions: list[dict] = []
+def load_all_sandbox_runtimes(managers: dict) -> list[dict]:
+    """Load sandbox runtime rows from all managers in parallel."""
+    runtimes: list[dict] = []
     if not managers:
-        return sessions
+        return runtimes
     for provider_name, manager in managers.items():
         rows = manager.list_sessions()
         for row in rows:
-            sessions.append(
+            runtimes.append(
                 {
                     "session_id": row["session_id"],
                     "thread_id": row["thread_id"],
@@ -373,7 +373,7 @@ def load_all_sessions(managers: dict) -> list[dict]:
                 }
             )
 
-    # @@@stable-session-order - Keep deterministic ordering across refreshes/providers.
+    # @@@stable-runtime-order - Keep deterministic ordering across refreshes/providers.
     def _to_ts(value: Any) -> float:
         if not value or not isinstance(value, str):
             return 0.0
@@ -382,7 +382,7 @@ def load_all_sessions(managers: dict) -> list[dict]:
         except Exception:
             return 0.0
 
-    sessions.sort(
+    runtimes.sort(
         key=lambda row: (
             -_to_ts(row.get("created_at")),
             -_to_ts(row.get("last_active")),
@@ -391,7 +391,7 @@ def load_all_sessions(managers: dict) -> list[dict]:
             str(row.get("session_id") or ""),
         )
     )
-    return sessions
+    return runtimes
 
 
 def load_provider_orphan_runtimes(managers: dict) -> list[dict]:
@@ -438,52 +438,52 @@ def load_provider_orphan_runtimes(managers: dict) -> list[dict]:
     return runtimes
 
 
-def find_session_and_manager(
-    sessions: list[dict],
+def find_runtime_and_manager(
+    runtimes: list[dict],
     managers: dict,
-    session_id: str,
+    runtime_id: str,
     provider_name: str | None = None,
 ) -> tuple[dict | None, Any | None]:
-    """Find session by ID/prefix (+optional provider), return (session, manager)."""
+    """Find sandbox runtime by external ID/prefix (+optional provider), return (runtime, manager)."""
     candidates: list[dict] = []
-    for s in sessions:
-        if provider_name and s.get("provider") != provider_name:
+    for runtime in runtimes:
+        if provider_name and runtime.get("provider") != provider_name:
             continue
-        sid = str(s.get("session_id") or "")
-        if sid == session_id or sid.startswith(session_id):
-            candidates.append(s)
+        sid = str(runtime.get("session_id") or "")
+        if sid == runtime_id or sid.startswith(runtime_id):
+            candidates.append(runtime)
     if not candidates:
         return None, None
     if len(candidates) == 1:
         chosen = candidates[0]
         return chosen, managers.get(chosen["provider"])
-    exact = [s for s in candidates if str(s.get("session_id") or "") == session_id]
+    exact = [runtime for runtime in candidates if str(runtime.get("session_id") or "") == runtime_id]
     if len(exact) == 1:
         chosen = exact[0]
         return chosen, managers.get(chosen["provider"])
-    raise RuntimeError(f"Ambiguous session_id '{session_id}'. Specify provider query param.")
+    raise RuntimeError(f"Ambiguous runtime id '{runtime_id}'. Specify provider query param.")
 
 
-def mutate_sandbox_session(
+def mutate_sandbox_runtime(
     *,
-    session_id: str,
+    runtime_id: str,
     action: str,
     provider_hint: str | None = None,
 ) -> dict[str, Any]:
-    """Perform pause/resume/destroy action on a sandbox session."""
+    """Perform pause/resume/destroy action on a sandbox runtime."""
     _, managers = init_providers_and_managers()
-    sessions = load_all_sessions(managers)
-    session, manager = find_session_and_manager(sessions, managers, session_id, provider_name=provider_hint)
-    if not session:
-        raise RuntimeError(f"Session not found: {session_id}")
+    runtimes = load_all_sandbox_runtimes(managers)
+    runtime, manager = find_runtime_and_manager(runtimes, managers, runtime_id, provider_name=provider_hint)
+    if not runtime:
+        raise RuntimeError(f"Runtime not found: {runtime_id}")
 
-    provider_name = str(session.get("provider") or "")
+    provider_name = str(runtime.get("provider") or "")
     if not manager:
         raise RuntimeError(f"Provider manager unavailable: {provider_name}")
 
-    thread_id = str(session.get("thread_id") or "")
-    lease_id = session.get("lease_id")
-    target_session_id = str(session.get("session_id") or session_id)
+    thread_id = str(runtime.get("thread_id") or "")
+    lease_id = runtime.get("lease_id")
+    target_runtime_id = str(runtime.get("session_id") or runtime_id)
 
     ok = False
     mode = "lease_enforced"
@@ -503,11 +503,11 @@ def mutate_sandbox_session(
         if not lease:
             mode = "provider_orphan_direct"
             if action == "pause":
-                ok = manager.provider.pause_session(target_session_id)
+                ok = manager.provider.pause_session(target_runtime_id)
             elif action == "resume":
-                ok = manager.provider.resume_session(target_session_id)
+                ok = manager.provider.resume_session(target_runtime_id)
             elif action == "destroy":
-                ok = manager.provider.destroy_session(target_session_id)
+                ok = manager.provider.destroy_session(target_runtime_id)
             else:
                 raise RuntimeError(f"Unknown action: {action}")
         else:
@@ -523,12 +523,12 @@ def mutate_sandbox_session(
                 raise RuntimeError(f"Unknown action: {action}")
 
     if not ok:
-        raise RuntimeError(f"Failed to {action} session {target_session_id}")
+        raise RuntimeError(f"Failed to {action} runtime {target_runtime_id}")
 
     return {
         "ok": True,
         "action": action,
-        "session_id": target_session_id,
+        "session_id": target_runtime_id,
         "provider": provider_name,
         "thread_id": thread_id or None,
         "lease_id": lease_id,
@@ -598,23 +598,23 @@ def _prune_stale_runtime_terminals(manager: Any, lower_runtime_handle: str) -> N
         thread_repo.close()
 
 
-def get_session_metrics(session_id: str, provider_hint: str | None = None) -> dict[str, Any]:
-    """Load one session's provider metrics through the current manager inventory."""
+def get_runtime_metrics(runtime_id: str, provider_hint: str | None = None) -> dict[str, Any]:
+    """Load one sandbox runtime's provider metrics through the current manager inventory."""
     _, managers = init_providers_and_managers()
-    sessions = load_all_sessions(managers)
-    session, manager = find_session_and_manager(sessions, managers, session_id, provider_name=provider_hint)
-    if not session:
-        raise RuntimeError(f"Session not found: {session_id}")
+    runtimes = load_all_sandbox_runtimes(managers)
+    runtime, manager = find_runtime_and_manager(runtimes, managers, runtime_id, provider_name=provider_hint)
+    if not runtime:
+        raise RuntimeError(f"Runtime not found: {runtime_id}")
     if manager is None:
-        raise RuntimeError(f"Provider manager unavailable: {session.get('provider')}")
+        raise RuntimeError(f"Provider manager unavailable: {runtime.get('provider')}")
 
-    target_session_id = str(session.get("instance_id") or session.get("session_id") or session_id)
-    metrics = manager.provider.get_metrics(target_session_id)
+    target_runtime_id = str(runtime.get("instance_id") or runtime.get("session_id") or runtime_id)
+    metrics = manager.provider.get_metrics(target_runtime_id)
     if metrics is None:
-        return {"session_id": target_session_id, "provider": session.get("provider"), "metrics": None}
+        return {"session_id": target_runtime_id, "provider": runtime.get("provider"), "metrics": None}
     return {
-        "session_id": target_session_id,
-        "provider": session.get("provider"),
+        "session_id": target_runtime_id,
+        "provider": runtime.get("provider"),
         "metrics": {
             "cpu_percent": metrics.cpu_percent,
             "memory_used_mb": metrics.memory_used_mb,

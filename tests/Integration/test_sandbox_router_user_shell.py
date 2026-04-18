@@ -42,7 +42,7 @@ async def test_list_sandbox_sessions_strips_lower_runtime_identity(monkeypatch: 
     monkeypatch.setattr(sandbox_router.sandbox_service, "init_providers_and_managers", lambda: ({}, {"local": object()}))
     monkeypatch.setattr(
         sandbox_router.sandbox_service,
-        "load_all_sessions",
+        "load_all_sandbox_runtimes",
         lambda _managers: [
             {
                 "session_id": "session-1",
@@ -72,7 +72,7 @@ async def test_list_sandbox_sessions_strips_lower_runtime_identity(monkeypatch: 
 async def test_sandbox_session_mutation_response_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         sandbox_router.sandbox_service,
-        "mutate_sandbox_session",
+        "mutate_sandbox_runtime",
         lambda **_kwargs: {
             "ok": True,
             "action": "pause",

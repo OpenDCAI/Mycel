@@ -285,11 +285,11 @@ def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str,
     )
     _append_event(operation, status="running", message="Destroy flow started")
 
-    from backend.web.services.sandbox_service import mutate_sandbox_session
+    from backend.web.services.sandbox_service import mutate_sandbox_runtime
 
     try:
-        result = mutate_sandbox_session(
-            session_id=runtime,
+        result = mutate_sandbox_runtime(
+            runtime_id=runtime,
             action="destroy",
             provider_hint=provider,
         )

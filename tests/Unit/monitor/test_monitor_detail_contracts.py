@@ -665,20 +665,20 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
         },
     )
 
-    def _mutate_sandbox_session(*, session_id: str, action: str, provider_hint: str | None = None):
-        calls.append((session_id, action, provider_hint or "", provider_hint))
+    def _mutate_sandbox_runtime(*, runtime_id: str, action: str, provider_hint: str | None = None):
+        calls.append((runtime_id, action, provider_hint or "", provider_hint))
         return {
             "ok": True,
             "action": action,
-            "session_id": session_id,
+            "session_id": runtime_id,
             "provider": provider_hint,
             "lease_id": "lease-adopt-1",
             "mode": "manager_runtime",
         }
 
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.mutate_sandbox_session",
-        _mutate_sandbox_session,
+        "backend.web.services.sandbox_service.mutate_sandbox_runtime",
+        _mutate_sandbox_runtime,
         raising=False,
     )
 
@@ -729,13 +729,13 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
         },
     )
 
-    def _mutate_sandbox_session(*, session_id: str, action: str, provider_hint: str | None = None):
-        calls.append((session_id, action, provider_hint))
+    def _mutate_sandbox_runtime(*, runtime_id: str, action: str, provider_hint: str | None = None):
+        calls.append((runtime_id, action, provider_hint))
         return {"ok": True}
 
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.mutate_sandbox_session",
-        _mutate_sandbox_session,
+        "backend.web.services.sandbox_service.mutate_sandbox_runtime",
+        _mutate_sandbox_runtime,
         raising=False,
     )
 
