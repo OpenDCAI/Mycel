@@ -102,6 +102,8 @@ class ChatToolService:
         self._register_search_messages(registry)
 
     def _format_msgs(self, msgs: list[dict], eid: str) -> str:
+        if not isinstance(msgs, list):
+            raise RuntimeError("Chat message collection is invalid")
         lines = []
         for m in msgs:
             if not isinstance(m, dict):
@@ -139,6 +141,8 @@ class ChatToolService:
 
         def handle(unread_only: bool = False, limit: int = 20) -> str:
             chats = self._messaging.list_chats_for_user(eid)
+            if not isinstance(chats, list):
+                raise RuntimeError("Chat summary collection is invalid")
             for c in chats:
                 if not isinstance(c, dict):
                     raise RuntimeError("Chat summary row is invalid")
@@ -424,6 +428,8 @@ class ChatToolService:
                     name = target.display_name if target else participant_id
                     return f"No messages matching '{query}' with {name}."
             results = self._messaging.search_messages(query, chat_id=chat_id)
+            if not isinstance(results, list):
+                raise RuntimeError("Chat search result collection is invalid")
             if not results:
                 return f"No messages matching '{query}'."
             lines = []
