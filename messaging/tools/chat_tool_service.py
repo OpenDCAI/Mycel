@@ -104,6 +104,8 @@ class ChatToolService:
     def _format_msgs(self, msgs: list[dict], eid: str) -> str:
         lines = []
         for m in msgs:
+            if not isinstance(m, dict):
+                raise RuntimeError("Chat message row is invalid")
             sender_id = m.get("sender_id")
             name = self._message_sender_name(sender_id)
             tag = "you" if sender_id == eid else name
@@ -138,6 +140,8 @@ class ChatToolService:
         def handle(unread_only: bool = False, limit: int = 20) -> str:
             chats = self._messaging.list_chats_for_user(eid)
             for c in chats:
+                if not isinstance(c, dict):
+                    raise RuntimeError("Chat summary row is invalid")
                 if "unread_count" not in c:
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing unread_count")
                 if type(c["unread_count"]) is not int:
@@ -153,6 +157,8 @@ class ChatToolService:
                 if not isinstance(members, list):
                     raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} is missing members")
                 for member in members:
+                    if not isinstance(member, dict):
+                        raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} member row is invalid")
                     if "id" not in member:
                         raise RuntimeError(f"Chat summary {c.get('id') or '<missing>'} member row is missing id")
                     if not isinstance(member["id"], str):
@@ -418,6 +424,8 @@ class ChatToolService:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
+                if not isinstance(m, dict):
+                    raise RuntimeError("Chat search message row is invalid")
                 sender_id = m.get("sender_id")
                 name = self._message_sender_name(sender_id)
                 if "content" not in m:
