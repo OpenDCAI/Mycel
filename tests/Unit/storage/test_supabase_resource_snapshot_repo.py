@@ -72,8 +72,8 @@ def test_supabase_resource_snapshot_repo_lists_snapshots_by_sandbox_ids() -> Non
 
     rows = repo.list_snapshots_by_sandbox_ids(
         [
-            {"sandbox_id": "sandbox-1", "lease_id": "lease-1"},
-            {"sandbox_id": "sandbox-2", "lease_id": "lease-2"},
+            {"sandbox_id": "sandbox-1"},
+            {"sandbox_id": "sandbox-2"},
         ]
     )
 
@@ -88,7 +88,7 @@ def test_supabase_resource_snapshot_repo_chunks_large_snapshot_lookup() -> None:
     client.table_obj.max_in_values = 80
     repo = SupabaseResourceSnapshotRepo(client)
 
-    rows = repo.list_snapshots_by_sandbox_ids([{"sandbox_id": f"sandbox-{index}", "lease_id": f"lease-{index}"} for index in range(175)])
+    rows = repo.list_snapshots_by_sandbox_ids([{"sandbox_id": f"sandbox-{index}"} for index in range(175)])
 
     assert rows == {"sandbox-1": {"sandbox_id": "sandbox-1", "cpu_used": 1.0}}
     assert [len(values) for _, values in client.table_obj.in_calls] == [80, 80, 15]

@@ -227,7 +227,6 @@ def test_refresh_resource_snapshots_routes_successful_probe_through_snapshot_hel
                     "provider_name": "p1",
                     "instance_id": "s-1",
                     "sandbox_id": "sandbox-1",
-                    "legacy_lease_id": "l-1",
                     "observed_state": "detached",
                 },
             ]
@@ -275,14 +274,12 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
                     "provider_name": "p1",
                     "instance_id": "s-1",
                     "sandbox_id": "sandbox-1",
-                    "legacy_lease_id": "l-1",
                     "observed_state": "detached",
                 },
                 {
                     "provider_name": "p1",
                     "instance_id": "s-2",
                     "sandbox_id": "sandbox-2",
-                    "legacy_lease_id": "l-2",
                     "observed_state": "paused",
                 },
             ]
@@ -319,7 +316,6 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
                     "provider_name": "p-missing",
                     "instance_id": "s-1",
                     "sandbox_id": "sandbox-1",
-                    "legacy_lease_id": "l-1",
                     "observed_state": "detached",
                 },
             ]
@@ -359,7 +355,6 @@ def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatc
                     "provider_name": "p-missing",
                     "instance_id": "s-1",
                     "sandbox_id": "sandbox-1",
-                    "legacy_lease_id": "l-1",
                     "observed_state": "paused",
                 },
             ]
