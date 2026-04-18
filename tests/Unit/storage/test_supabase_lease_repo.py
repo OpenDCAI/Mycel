@@ -122,8 +122,11 @@ def test_supabase_lease_repo_create_writes_container_sandbox_bridge():
     assert row["owner_user_id"] == "owner-1"
     assert row["provider_name"] == "local"
     assert row["sandbox_template_id"] == "local:default"
-    assert row["observed_state"] == "running"
+    assert row["provider_env_id"] is None
+    assert row["observed_state"] == "detached"
     assert row["status"] == "ready"
+    assert created["current_instance_id"] is None
+    assert created["_instance"] is None
     assert row["config"]["legacy_lease_id"] == "lease-1"
     assert row["config"]["lease_compat"]["recipe_json"] == '{"id":"local:default"}'
     assert row["config"]["lease_compat"]["needs_refresh"] == 0
