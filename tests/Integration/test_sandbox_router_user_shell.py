@@ -92,7 +92,7 @@ async def test_sandbox_session_mutation_response_strips_lower_runtime_identity(m
         "session_id": "session-1",
         "provider": "local",
         "thread_id": None,
-        "mode": "manager_lease",
+        "mode": "manager_runtime",
     }
 
 
