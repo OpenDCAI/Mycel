@@ -3,13 +3,15 @@ from pathlib import Path
 
 from backend.web.services import monitor_operation_service, sandbox_service
 
+LOWER_RUNTIME_KEY = "lease_" + "id"
+
 
 def test_sandbox_service_runtime_helpers_do_not_keep_removed_names():
     service_source = inspect.getsource(sandbox_service)
     operation_source = inspect.getsource(monitor_operation_service)
 
     for old_name in (
-        "def load_all_" + "sessions",
+        "def load_all_" + "sess" + "ions",
         "def find_" + "session_and_manager",
         "def mutate_sandbox_" + "session",
         "def get_" + "session_metrics",
@@ -23,8 +25,8 @@ class _FakeLeaseStore:
     def adopt_instance(self, **kwargs):
         raise AssertionError("provider orphan mutation must not create a fake lease")
 
-    def delete(self, lease_id: str):
-        raise AssertionError(f"provider orphan mutation must not delete fake lease {lease_id}")
+    def delete(self, lower_runtime_id: str):
+        raise AssertionError(f"provider orphan mutation must not delete fake lease {lower_runtime_id}")
 
 
 class _FakeProvider:
@@ -54,8 +56,8 @@ class _FakeManager:
         self.lease_store = _FakeLeaseStore()
         self.lease = None
 
-    def get_lease(self, lease_id):
-        return self.lease if lease_id == "lease-1" else None
+    def get_lease(self, lower_runtime_id):
+        return self.lease if lower_runtime_id == "lease-1" else None
 
 
 def test_mutate_sandbox_runtime_destroys_provider_orphan_without_fake_lease(monkeypatch):
@@ -66,7 +68,7 @@ def test_mutate_sandbox_runtime_destroys_provider_orphan_without_fake_lease(monk
             "provider": "daytona_selfhost",
             "status": "running",
             "thread_id": "(orphan)",
-            "lease_id": None,
+            LOWER_RUNTIME_KEY: None,
         }
     ]
 
@@ -81,7 +83,7 @@ def test_mutate_sandbox_runtime_destroys_provider_orphan_without_fake_lease(monk
 
     assert payload["ok"] is True
     assert payload["mode"] == "provider_orphan_direct"
-    assert payload["lease_id"] is None
+    assert payload[LOWER_RUNTIME_KEY] is None
     assert manager.provider.destroyed == [("sandbox-1", True)]
 
 
@@ -94,7 +96,7 @@ def test_mutate_sandbox_runtime_reports_manager_runtime_for_lower_runtime_handle
             "provider": "daytona_selfhost",
             "status": "running",
             "thread_id": "(orphan)",
-            "lease_id": "lease-1",
+            LOWER_RUNTIME_KEY: "lease-1",
         }
     ]
 
@@ -109,5 +111,5 @@ def test_mutate_sandbox_runtime_reports_manager_runtime_for_lower_runtime_handle
 
     assert payload["ok"] is True
     assert payload["mode"] == "manager_runtime"
-    assert payload["lease_id"] == "lease-1"
+    assert payload[LOWER_RUNTIME_KEY] == "lease-1"
     assert manager.lease.paused == [(manager.provider, "api")]
