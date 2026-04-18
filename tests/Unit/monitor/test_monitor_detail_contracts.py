@@ -19,6 +19,7 @@ from backend.web.services import (
     monitor_sandbox_read_service,
     monitor_thread_read_service,
     monitor_thread_service,
+    monitor_thread_trajectory_service,
 )
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
@@ -218,7 +219,8 @@ def _stub_thread_detail(monkeypatch, *, owner=None, trajectory=None):
         lambda *_args, **_kwargs: {"thread-1": owner},
     )
     monkeypatch.setattr(
-        "backend.web.services.monitor_trace_service.build_monitor_thread_trajectory",
+        monitor_thread_trajectory_service,
+        "load_monitor_thread_trajectory",
         AsyncMock(return_value=trajectory or {"run_id": None, "conversation": [], "events": []}),
     )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import monitor_sandbox_read_service, monitor_thread_read_service
+from backend.web.services import monitor_sandbox_read_service, monitor_thread_read_service, monitor_thread_trajectory_service
 
 
 def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
@@ -59,8 +59,6 @@ def _normalize_monitor_thread(thread: dict[str, Any], requested_thread_id: str) 
 
 
 async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
-    from backend.web.services.monitor_trace_service import build_monitor_thread_trajectory
-
     thread_base = monitor_thread_read_service.load_monitor_thread_base(app, thread_id)
     rows = monitor_sandbox_read_service.load_thread_detail_rows(thread_id)
     summary = rows["summary"]
@@ -75,5 +73,5 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         "owner": _normalize_thread_owner(thread_base["owner"]),
         "summary": summary,
         "runtime_rows": runtime_rows,
-        "trajectory": await build_monitor_thread_trajectory(app, thread_id),
+        "trajectory": await monitor_thread_trajectory_service.load_monitor_thread_trajectory(app, thread_id),
     }
