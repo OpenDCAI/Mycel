@@ -5,9 +5,8 @@ from storage import runtime as storage_runtime
 
 
 class _FakeRepo:
-    def __init__(self, rows, lease_threads=None, sandbox_threads=None, instance_ids=None):
+    def __init__(self, rows, sandbox_threads=None, instance_ids=None):
         self._rows = rows
-        self._lease_threads = lease_threads or {}
         self._sandbox_threads = sandbox_threads or {}
         self._instance_ids = instance_ids or {}
 
@@ -173,7 +172,7 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
     ]
 
 
-def test_list_resource_providers_counts_running_sandboxes_once_when_lease_residue_duplicates(monkeypatch):
+def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtime_residue_duplicates(monkeypatch):
     rows = [
         {
             "provider": "local",
@@ -324,9 +323,9 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
     payload = resource_projection_service.list_resource_providers()
-    sessions = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["sessions"]
 
-    assert [session["threadId"] for session in sessions] == ["thread-parent"]
+    assert [resource_row["threadId"] for resource_row in resource_rows] == ["thread-parent"]
     assert payload["summary"]["running_sessions"] == 1
 
 
@@ -369,9 +368,9 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
     payload = resource_projection_service.list_resource_providers()
-    sessions = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["sessions"]
 
-    assert sessions == [
+    assert resource_rows == [
         {
             "id": "sandbox-1:thread-parent",
             "sandboxId": "sandbox-1",
@@ -423,9 +422,9 @@ def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monke
     )
 
     payload = resource_projection_service.list_resource_providers()
-    sessions = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["sessions"]
 
-    assert [(session["sandboxId"], session["threadId"]) for session in sessions] == [
+    assert [(resource_row["sandboxId"], resource_row["threadId"]) for resource_row in resource_rows] == [
         ("sandbox-a", "thread-parent-a"),
         ("sandbox-b", "thread-parent-b"),
     ]
@@ -470,9 +469,9 @@ def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projectio
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots_by_sandbox", lambda _sessions: {})
 
     payload = resource_projection_service.list_resource_providers()
-    sessions = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["sessions"]
 
-    assert sessions == [
+    assert resource_rows == [
         {
             "id": "sandbox-1:thread-parent",
             "sandboxId": "sandbox-1",
@@ -553,7 +552,7 @@ def test_list_resource_providers_drops_visible_lease_only_rows_without_sandbox_i
     assert payload["summary"]["running_sessions"] == 0
 
 
-def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distinct_session_ids(monkeypatch):
+def test_list_resource_providers_deduplicates_same_lower_runtime_thread_even_with_distinct_provider_ids(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -584,9 +583,9 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
     )
 
     payload = resource_projection_service.list_resource_providers()
-    sessions = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["sessions"]
 
-    assert sessions == [
+    assert resource_rows == [
         {
             "id": "sandbox-1:thread-parent",
             "sandboxId": "sandbox-1",
@@ -631,18 +630,18 @@ def test_list_resource_providers_keeps_remote_runtime_session_id_actor_first(mon
 
     payload = resource_projection_service.list_resource_providers()
     provider = payload["providers"][0]
-    session = provider["sessions"][0]
+    resource_row = provider["sessions"][0]
 
     assert provider["consoleUrl"] == "https://example.com/daytona"
-    assert session["runtimeSessionId"] == "provider-session-1"
-    assert session["agentUserId"] == "agent-remote"
-    assert session["agentName"] == "Remote Agent"
-    assert session["avatarUrl"] == "/api/users/agent-remote/avatar"
-    assert "memberId" not in session
-    assert "memberName" not in session
+    assert resource_row["runtimeSessionId"] == "provider-session-1"
+    assert resource_row["agentUserId"] == "agent-remote"
+    assert resource_row["agentName"] == "Remote Agent"
+    assert resource_row["avatarUrl"] == "/api/users/agent-remote/avatar"
+    assert "memberId" not in resource_row
+    assert "memberName" not in resource_row
 
 
-def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(monkeypatch):
+def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(monkeypatch):
     rows = [
         {
             "provider": "daytona_selfhost",
@@ -683,9 +682,9 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_leases(mon
     )
 
     payload = resource_projection_service.list_resource_providers()
-    sessions = payload["providers"][0]["sessions"]
+    resource_rows = payload["providers"][0]["sessions"]
 
-    assert [session["runtimeSessionId"] for session in sessions] == ["runtime-a", "runtime-b"]
+    assert [resource_row["runtimeSessionId"] for resource_row in resource_rows] == ["runtime-a", "runtime-b"]
     assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
 
 
@@ -748,7 +747,7 @@ def test_visible_resource_row_stats_counts_running_sandbox_once_when_lower_runti
 
 
 def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeypatch):
-    sessions = [
+    snapshot_input_rows = [
         {
             "sandbox_id": "sandbox-a",
         },
@@ -759,12 +758,12 @@ def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeyp
             return None
 
         def list_snapshots_by_sandbox_ids(self, items):
-            assert items == sessions
+            assert items == snapshot_input_rows
             return {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}
 
     monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _SandboxWrappedRepo())
 
-    snapshot_by_sandbox = storage_runtime.list_resource_snapshots_by_sandbox(sessions)
+    snapshot_by_sandbox = storage_runtime.list_resource_snapshots_by_sandbox(snapshot_input_rows)
 
     assert snapshot_by_sandbox == {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}
 
@@ -833,7 +832,7 @@ def test_load_visible_resource_runtime_returns_only_sandbox_keyed_snapshots(monk
     monkeypatch.setattr(
         resource_projection_service,
         "list_resource_snapshots_by_sandbox",
-        lambda sessions: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
+        lambda resource_rows: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
     )
 
     resource_rows, runtime_session_ids, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
