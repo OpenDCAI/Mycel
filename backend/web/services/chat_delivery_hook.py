@@ -15,7 +15,7 @@ from backend.protocols.agent_runtime import (
     AgentRuntimeMessage,
 )
 from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
-from storage.contracts import UserRow
+from messaging.delivery.dispatcher import ChatDeliveryRequest
 
 logger = logging.getLogger(__name__)
 
@@ -27,64 +27,37 @@ def make_chat_delivery_fn(app: Any):
     loop = asyncio.get_running_loop()
     logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
 
-    async def deliver_to_runtime_gateway(
-        recipient_id: str,
-        recipient_user: UserRow,
-        content: str,
-        sender_name: str,
-        chat_id: str,
-        sender_id: str,
-        sender_avatar_url: str | None = None,
-        signal: str | None = None,
-    ) -> None:
-        raw_recipient_type = getattr(recipient_user, "type", "agent")
+    async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
+        raw_recipient_type = getattr(request.recipient_user, "type", "agent")
         recipient_type = raw_recipient_type.value if isinstance(raw_recipient_type, Enum) else str(raw_recipient_type)
         envelope = AgentChatDeliveryEnvelope(
-            chat=AgentChatContext(chat_id=chat_id),
+            chat=AgentChatContext(chat_id=request.chat_id),
             sender=AgentRuntimeActor(
-                user_id=sender_id,
+                user_id=request.sender_id,
                 user_type="unknown",
-                display_name=sender_name,
-                avatar_url=sender_avatar_url,
+                display_name=request.sender_name,
+                avatar_url=request.sender_avatar_url,
                 source="chat",
             ),
-            recipient=AgentChatRecipient(agent_user_id=recipient_id, runtime_source="mycel"),
-            message=AgentRuntimeMessage(content=content, signal=signal),
+            recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source="mycel"),
+            message=AgentRuntimeMessage(content=request.content, signal=request.signal),
             extensions={
                 "mycel": {
-                    "recipient_user_id": getattr(recipient_user, "id", recipient_id),
+                    "recipient_user_id": getattr(request.recipient_user, "id", request.recipient_id),
                     "recipient_user_type": recipient_type,
                 }
             },
         )
         await get_agent_runtime_gateway(app).dispatch_chat(envelope)
 
-    def _deliver(
-        recipient_id: str,
-        recipient_user: UserRow,
-        content: str,
-        sender_name: str,
-        chat_id: str,
-        sender_id: str,
-        sender_avatar_url: str | None = None,
-        signal: str | None = None,
-    ) -> None:
-        logger.info("[delivery] _deliver called: recipient=%s user=%s", recipient_id, recipient_user.id)
+    def _deliver(request: ChatDeliveryRequest) -> None:
+        logger.info("[delivery] _deliver called: recipient=%s user=%s", request.recipient_id, request.recipient_user.id)
         future = asyncio.run_coroutine_threadsafe(
-            deliver_to_runtime_gateway(
-                recipient_id,
-                recipient_user,
-                content,
-                sender_name,
-                chat_id,
-                sender_id,
-                sender_avatar_url,
-                signal=signal,
-            ),
+            deliver_to_runtime_gateway(request),
             loop,
         )
 
-        future.add_done_callback(functools.partial(_log_delivery_result, recipient_id))
+        future.add_done_callback(functools.partial(_log_delivery_result, request.recipient_id))
 
     return _deliver
 

@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from messaging.delivery.actions import DeliveryAction
-from messaging.delivery.dispatcher import ChatDeliveryDispatcher
+from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryRequest
 
 
 def _user_repo() -> SimpleNamespace:
@@ -51,16 +51,29 @@ def _member_repo(user_ids: list[str]) -> SimpleNamespace:
 
 
 def test_dispatcher_delivers_to_agent_user_ids() -> None:
-    delivered: list[tuple[str, str]] = []
+    delivered: list[tuple[str, str, str, str, str, str | None]] = []
+
+    def deliver(request: ChatDeliveryRequest) -> None:
+        delivered.append(
+            (
+                request.recipient_id,
+                request.recipient_user.id,
+                request.content,
+                request.sender_name,
+                request.chat_id,
+                request.signal,
+            )
+        )
+
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1"]),
         user_repo=_user_repo(),
-        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+        delivery_fn=deliver,
     )
 
-    dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
+    dispatcher.dispatch("chat-1", "human-user-1", "hello", [], signal="urgent")
 
-    assert delivered == [("agent-user-1", "agent-user-1")]
+    assert delivered == [("agent-user-1", "agent-user-1", "hello", "Human", "chat-1", "urgent")]
 
 
 def test_dispatcher_same_owner_group_delivers_without_relationship() -> None:
@@ -71,7 +84,7 @@ def test_dispatcher_same_owner_group_delivers_without_relationship() -> None:
         delivery_resolver=SimpleNamespace(
             resolve=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("same-owner path must not call resolver"))
         ),
-        delivery_fn=lambda recipient_id, *_args, **_kwargs: delivered.append(recipient_id),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
@@ -87,7 +100,7 @@ def test_dispatcher_agent_turn_delivers_only_to_sibling_agent() -> None:
         delivery_resolver=SimpleNamespace(
             resolve=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("same-owner sibling path must not call resolver"))
         ),
-        delivery_fn=lambda recipient_id, *_args, **_kwargs: delivered.append(recipient_id),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
     dispatcher.dispatch("chat-1", "agent-user-1", "hello", [])
@@ -102,7 +115,7 @@ def test_dispatcher_respects_non_deliver_policy(action: DeliveryAction) -> None:
         chat_member_repo=_member_repo(["outside-human-user", "agent-user-1"]),
         user_repo=_user_repo(),
         delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: action),
-        delivery_fn=lambda recipient_id, *_args, **_kwargs: delivered.append(recipient_id),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
     dispatcher.dispatch("chat-1", "outside-human-user", "hello", [])
@@ -113,10 +126,10 @@ def test_dispatcher_respects_non_deliver_policy(action: DeliveryAction) -> None:
 def test_dispatcher_fails_loudly_when_delivery_function_fails() -> None:
     delivered: list[str] = []
 
-    def deliver(recipient_id: str, *_args: Any, **_kwargs: Any) -> None:
-        if recipient_id == "agent-user-1":
+    def deliver(request: ChatDeliveryRequest) -> None:
+        if request.recipient_id == "agent-user-1":
             raise RuntimeError("agent offline")
-        delivered.append(recipient_id)
+        delivered.append(request.recipient_id)
 
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),

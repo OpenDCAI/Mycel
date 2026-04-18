@@ -12,13 +12,12 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from backend.web.utils.serializers import avatar_url
 from messaging.contracts import ContentType, MessageType
-from messaging.delivery.dispatcher import ChatDeliveryDispatcher
+from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
 from messaging.display_user import resolve_messaging_display_user
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ class MessagingService:
         user_repo: Any,
         thread_repo: Any | None = None,
         delivery_resolver: Any | None = None,
-        delivery_fn: Callable | None = None,
+        delivery_fn: ChatDeliveryFn | None = None,
         delivery_dispatcher: ChatDeliveryDispatcher | None = None,
         event_bus: Any | None = None,
     ) -> None:
@@ -109,7 +108,7 @@ class MessagingService:
             )
         return member_info
 
-    def set_delivery_fn(self, fn: Callable) -> None:
+    def set_delivery_fn(self, fn: ChatDeliveryFn) -> None:
         self._delivery_dispatcher.set_delivery_fn(fn)
 
     # ------------------------------------------------------------------

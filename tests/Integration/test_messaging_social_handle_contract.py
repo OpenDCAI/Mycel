@@ -108,7 +108,7 @@ def test_deliver_to_agents_does_not_require_main_thread_id():
                 else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
             )
         ),
-        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+        delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
@@ -1060,7 +1060,7 @@ def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
                 else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
             )
         ),
-        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+        delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
@@ -1101,7 +1101,7 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
             )
         ),
         delivery_resolver=resolver,
-        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+        delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
@@ -1209,7 +1209,7 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
             )
         ),
         delivery_resolver=resolver,
-        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+        delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
 
     dispatcher.dispatch("chat-1", "agent-user-1", "hello", [])

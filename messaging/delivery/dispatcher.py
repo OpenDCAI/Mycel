@@ -3,15 +3,31 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Protocol
 
 from backend.web.utils.serializers import avatar_url
 from messaging.delivery.actions import DeliveryAction
 from messaging.display_user import resolve_messaging_display_user
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ChatDeliveryRequest:
+    recipient_id: str
+    recipient_user: Any
+    content: str
+    sender_name: str
+    chat_id: str
+    sender_id: str
+    sender_avatar_url: str | None
+    signal: str | None
+
+
+class ChatDeliveryFn(Protocol):
+    def __call__(self, request: ChatDeliveryRequest) -> None: ...
 
 
 class ChatDeliveryDispatcher:
@@ -22,14 +38,14 @@ class ChatDeliveryDispatcher:
         chat_member_repo: Any,
         user_repo: Any,
         delivery_resolver: Any | None = None,
-        delivery_fn: Callable | None = None,
+        delivery_fn: ChatDeliveryFn | None = None,
     ) -> None:
         self._chat_members_repo = chat_member_repo
         self._user_repo = user_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
 
-    def set_delivery_fn(self, fn: Callable) -> None:
+    def set_delivery_fn(self, fn: ChatDeliveryFn) -> None:
         self._delivery_fn = fn
 
     def dispatch(
@@ -96,4 +112,15 @@ class ChatDeliveryDispatcher:
     ) -> None:
         if not self._delivery_fn:
             return
-        self._delivery_fn(recipient_id, recipient, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+        self._delivery_fn(
+            ChatDeliveryRequest(
+                recipient_id=recipient_id,
+                recipient_user=recipient,
+                content=content,
+                sender_name=sender_name,
+                chat_id=chat_id,
+                sender_id=sender_id,
+                sender_avatar_url=sender_avatar_url,
+                signal=signal,
+            )
+        )
