@@ -5,7 +5,6 @@ import json
 import logging
 import random
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from typing import Any
 
 from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring
@@ -14,6 +13,7 @@ from backend.thread_runtime.run import entrypoints as _run_entrypoints
 from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
 from backend.thread_runtime.run import observer as _run_observer
+from backend.thread_runtime.run import trajectory as _run_trajectory
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
 from backend.web.utils.serializers import extract_text_content
@@ -263,7 +263,6 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     stream_gen = None
     pending_tool_calls: dict[str, dict] = {}
     output_parts: list[str] = []
-    store = None
     trajectory_status = "completed"
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
@@ -273,35 +272,15 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         # @@@web-run-context - web runs have no TUI checkpoint; use run_id to group file ops per run.
         set_current_run_id(run_id)
 
-        # Trajectory tracing (eval system)
-        tracer = None
-        if enable_trajectory:
-            try:
-                from eval.storage import TrajectoryStore
-                from eval.tracer import TrajectoryTracer
-
-                cost_calc = getattr(
-                    getattr(getattr(agent, "runtime", None), "token", None),
-                    "cost_calculator",
-                    None,
-                )
-                tracer = TrajectoryTracer(
-                    thread_id=thread_id,
-                    user_message=message,
-                    run_id=run_id,
-                    cost_calculator=cost_calc,
-                )
-                store = TrajectoryStore()
-                store.upsert_run_header(
-                    run_id=run_id,
-                    thread_id=thread_id,
-                    started_at=tracer._start_time.isoformat(),
-                    user_message=message,
-                    status="running",
-                )
-                config["callbacks"] = [tracer]
-            except ImportError:
-                pass
+        trajectory_scope = _run_trajectory.build_trajectory_scope(
+            agent=agent,
+            thread_id=thread_id,
+            run_id=run_id,
+            user_message=message,
+            enable_trajectory=enable_trajectory,
+        )
+        if trajectory_scope is not None:
+            trajectory_scope.inject_callback(config)
 
         # Observation provider: provider from thread config, credentials from global config
         obs_handler = None
@@ -317,8 +296,10 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                 obs_config = ObservationLoader().load()
 
                 if obs_provider == "langfuse":
-                    from langfuse import Langfuse  # pyright: ignore[reportMissingImports]
-                    from langfuse.langchain import CallbackHandler as LangfuseHandler  # pyright: ignore[reportMissingImports]
+                    from langfuse import Langfuse  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
+                    from langfuse.langchain import (
+                        CallbackHandler as LangfuseHandler,  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
+                    )
 
                     cfg = obs_config.langfuse
                     if cfg.secret_key and cfg.public_key:
@@ -330,11 +311,17 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                             host=cfg.host or "https://cloud.langfuse.com",
                         )
                         obs_handler = LangfuseHandler(public_key=cfg.public_key)
-                        config.setdefault("callbacks", []).append(obs_handler)
-                        config.setdefault("metadata", {})["langfuse_session_id"] = thread_id
+                        callbacks = config.setdefault("callbacks", [])
+                        if not isinstance(callbacks, list):
+                            raise RuntimeError("streaming observation callbacks must be a list")
+                        callbacks.append(obs_handler)
+                        metadata = config.setdefault("metadata", {})
+                        if not isinstance(metadata, dict):
+                            raise RuntimeError("streaming observation metadata must be an object")
+                        metadata["langfuse_session_id"] = thread_id
                 elif obs_provider == "langsmith":
-                    from langchain_core.tracers.langchain import LangChainTracer
-                    from langsmith import Client as LangSmithClient
+                    from langchain_core.tracers.langchain import LangChainTracer  # pyright: ignore[reportMissingImports]
+                    from langsmith import Client as LangSmithClient  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
 
                     cfg = obs_config.langsmith
                     if cfg.api_key:
@@ -347,8 +334,14 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                             client=ls_client,
                             project_name=cfg.project or "default",
                         )
-                        config.setdefault("callbacks", []).append(obs_handler)
-                        config.setdefault("metadata", {})["session_id"] = thread_id
+                        callbacks = config.setdefault("callbacks", [])
+                        if not isinstance(callbacks, list):
+                            raise RuntimeError("streaming observation callbacks must be a list")
+                        callbacks.append(obs_handler)
+                        metadata = config.setdefault("metadata", {})
+                        if not isinstance(metadata, dict):
+                            raise RuntimeError("streaming observation metadata must be an object")
+                        metadata["session_id"] = thread_id
         except ImportError as imp_err:
             logger.warning(
                 "Observation provider '%s' missing package: %s. Install: uv pip install 'leonai[%s]'",
@@ -827,26 +820,9 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             )
 
         # Persist trajectory
-        if tracer is not None and store is not None:
+        if trajectory_scope is not None:
             try:
-                from eval.collector import MetricsCollector
-
-                trajectory = tracer.to_trajectory()
-                runtime_status = agent.runtime.get_status_dict() if hasattr(agent, "runtime") else None
-                if hasattr(agent, "runtime"):
-                    tracer.enrich_from_runtime(trajectory, agent.runtime)
-                finalized = trajectory.model_copy(update={"status": trajectory_status})
-                system_metrics, objective_metrics = MetricsCollector().compute_all(finalized, runtime_status)
-                store.finalize_run(
-                    run_id=run_id,
-                    finished_at=trajectory.finished_at,
-                    final_response=trajectory.final_response,
-                    status=trajectory_status,
-                    run_tree_json=trajectory.run_tree_json,
-                    trajectory_json=finalized.model_dump_json(),
-                )
-                store.save_metrics(run_id, "system", system_metrics)
-                store.save_metrics(run_id, "objective", objective_metrics)
+                trajectory_scope.finalize_success(agent=agent, trajectory_status=trajectory_status)
             except Exception:
                 logger.error("Failed to persist trajectory for thread %s", thread_id, exc_info=True)
 
@@ -860,17 +836,9 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return "".join(output_parts).strip()
     except asyncio.CancelledError:
-        if tracer is not None and store is not None:
+        if trajectory_scope is not None:
             try:
-                trajectory = tracer.to_trajectory()
-                store.finalize_run(
-                    run_id=run_id,
-                    finished_at=datetime.now(UTC).isoformat(),
-                    final_response=trajectory.final_response,
-                    status="cancelled",
-                    run_tree_json=trajectory.run_tree_json,
-                    trajectory_json=trajectory.model_copy(update={"status": "cancelled"}).model_dump_json(),
-                )
+                trajectory_scope.finalize_cancelled()
             except Exception:
                 logger.error("Failed to finalize cancelled trajectory for thread %s", thread_id, exc_info=True)
         cancelled_tool_call_ids = await write_cancellation_markers(agent, config, pending_tool_calls)
@@ -901,17 +869,9 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return ""
     except Exception as e:
-        if tracer is not None and store is not None:
+        if trajectory_scope is not None:
             try:
-                trajectory = tracer.to_trajectory()
-                store.finalize_run(
-                    run_id=run_id,
-                    finished_at=datetime.now(UTC).isoformat(),
-                    final_response=trajectory.final_response,
-                    status="error",
-                    run_tree_json=trajectory.run_tree_json,
-                    trajectory_json=trajectory.model_copy(update={"status": "error"}).model_dump_json(),
-                )
+                trajectory_scope.finalize_error()
             except Exception:
                 logger.error("Failed to finalize errored trajectory for thread %s", thread_id, exc_info=True)
         _log_captured_exception(
@@ -935,7 +895,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         if obs_handler is not None:
             try:
                 if obs_active == "langfuse":
-                    from langfuse import get_client  # pyright: ignore[reportMissingImports]
+                    from langfuse import get_client  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
 
                     get_client().flush()
                 elif obs_active == "langsmith":
