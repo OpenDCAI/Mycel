@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 import { loadMonitorPorts } from "./dev-ports";
 
-const { backendPort, devPort, previewPort } = loadMonitorPorts();
+const { backendPort, monitorBackendPort, devPort, previewPort } = loadMonitorPorts();
 
 export default defineConfig({
   plugins: [react()],
@@ -12,6 +12,10 @@ export default defineConfig({
     port: devPort,
     strictPort: true,
     proxy: {
+      "/api/monitor": {
+        target: `http://127.0.0.1:${monitorBackendPort}`,
+        changeOrigin: true,
+      },
       "/api": {
         target: `http://127.0.0.1:${backendPort}`,
         changeOrigin: true,
