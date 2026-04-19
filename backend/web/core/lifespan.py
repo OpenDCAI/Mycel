@@ -40,10 +40,10 @@ async def lifespan(app: FastAPI):
     await _validate_web_checkpointer_contract()
 
     # ---- Chat repos + services ----
-    from backend.runtime_storage_bootstrap import build_runtime_storage_state
+    from backend.runtime_storage_bootstrap import attach_runtime_storage_state
     from backend.web.core.supabase_factory import create_supabase_auth_client
 
-    runtime_storage = build_runtime_storage_state()
+    runtime_storage = attach_runtime_storage_state(app)
     _supabase_client = runtime_storage.supabase_client
     storage_container = runtime_storage.storage_container
     from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore, agent_checkpoint_saver_from_conn_string
@@ -65,9 +65,7 @@ async def lifespan(app: FastAPI):
     app.state.user_settings_repo = storage_container.user_settings_repo()
     app.state.agent_config_repo = storage_container.agent_config_repo()
     app.state.contact_repo = storage_container.contact_repo()
-    app.state._supabase_client = _supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
-    app.state._storage_container = storage_container
 
     from backend.web.services.auth_service import AuthService
 

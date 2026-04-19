@@ -34,7 +34,7 @@ async def test_monitor_app_lifespan_starts_and_cancels_resource_refresh_loop(mon
             raise
 
     monkeypatch.setattr(monitor_app_lifespan, "resource_overview_refresh_loop", _loop)
-    monkeypatch.setattr(monitor_app_lifespan, "build_runtime_storage_state", lambda: object())
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: object())
 
     app = SimpleNamespace(state=SimpleNamespace())
 
@@ -48,10 +48,10 @@ async def test_monitor_app_lifespan_starts_and_cancels_resource_refresh_loop(mon
 
 @pytest.mark.asyncio
 async def test_monitor_app_lifespan_requires_storage_runtime_contract(monkeypatch: pytest.MonkeyPatch):
-    def _raise():
+    def _raise(_app):
         raise RuntimeError("Supabase storage requires runtime config.")
 
-    monkeypatch.setattr(monitor_app_lifespan, "build_runtime_storage_state", _raise)
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", _raise)
 
     app = SimpleNamespace(state=SimpleNamespace())
 

@@ -21,3 +21,10 @@ def build_runtime_storage_state() -> RuntimeStorageState:
         supabase_client=supabase_client,
         storage_container=storage_container,
     )
+
+
+def attach_runtime_storage_state(app) -> RuntimeStorageState:
+    state = build_runtime_storage_state()
+    app.state._supabase_client = state.supabase_client
+    app.state._storage_container = state.storage_container
+    return state

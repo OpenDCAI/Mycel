@@ -11,7 +11,7 @@ app = monitor_app_main.app
 
 
 def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(monitor_app_lifespan, "build_runtime_storage_state", lambda: object())
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: object())
     with TestClient(app) as client:
         response = client.get("/openapi.json")
 
