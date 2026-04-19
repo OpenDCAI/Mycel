@@ -435,9 +435,12 @@ class MessagingService:
             raise RuntimeError("Unread count collection is invalid")
         normalized_unread_by_chat: dict[str, int] = {}
         for chat_id, unread_count in unread_by_chat.items():
+            normalized_chat_id = str(chat_id)
+            if normalized_chat_id not in last_read_by_chat:
+                raise RuntimeError(f"Unread count row references unrequested chat {normalized_chat_id}")
             if not isinstance(unread_count, int):
-                raise RuntimeError(f"Unread count for chat {chat_id} is invalid")
-            normalized_unread_by_chat[str(chat_id)] = unread_count
+                raise RuntimeError(f"Unread count for chat {normalized_chat_id} is invalid")
+            normalized_unread_by_chat[normalized_chat_id] = unread_count
         return users_by_id, normalized_unread_by_chat
 
     def _project_chat_members(self, members: list[dict[str, Any]], users_by_id: dict[str, Any]) -> list[dict[str, Any]]:
