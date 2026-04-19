@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
+from messaging.actor_ownership import access_scope_targets, is_owned_by_viewer
 from messaging.social_access import ACTIVE_CHAT_RELATIONSHIP_STATES, has_active_contact
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
@@ -48,9 +49,7 @@ def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
     sender = _resolve_display_user(app, sender_id)
     if not sender:
         raise HTTPException(403, "User not found")
-    if sender.id == user_id:
-        return
-    if sender.owner_user_id == user_id:
+    if is_owned_by_viewer(user_id, sender):
         return
     raise HTTPException(403, "User does not belong to you")
 
@@ -95,14 +94,13 @@ def _is_owned_participant(app: Any, participant_id: str, requester_user_id: str)
     if user_repo is None:
         return False
     participant = user_repo.get_by_id(participant_id)
-    return getattr(participant, "owner_user_id", None) == requester_user_id
+    return is_owned_by_viewer(requester_user_id, participant)
 
 
 def _participant_access_targets(app: Any, participant_id: str) -> list[str]:
     user_repo = getattr(app.state, "user_repo", None)
     participant = user_repo.get_by_id(participant_id) if user_repo is not None else None
-    owner_user_id = getattr(participant, "owner_user_id", None)
-    return [participant_id, str(owner_user_id)] if owner_user_id else [participant_id]
+    return access_scope_targets(participant, fallback_actor_id=participant_id)
 
 
 def _validate_group_chat_relationships(app: Any, participant_ids: list[str], requester_user_id: str) -> None:
