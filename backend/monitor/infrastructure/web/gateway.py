@@ -7,10 +7,10 @@ from typing import Any
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtimes
 from backend.monitor.application.use_cases import resources as monitor_resources
 from backend.monitor.application.use_cases import sandbox_configs, sandbox_detail
+from backend.monitor.application.use_cases import threads as monitor_threads
 from backend.web.services import (
     monitor_evaluation_service,
     monitor_sandbox_projection_service,
-    monitor_thread_service,
 )
 
 
@@ -23,7 +23,7 @@ def list_provider_orphan_runtimes() -> dict[str, Any]:
 
 
 def list_threads(app: Any, user_id: str) -> dict[str, Any]:
-    return monitor_thread_service.list_monitor_threads(app, user_id)
+    return monitor_threads.list_monitor_threads(app, user_id)
 
 
 def get_provider_detail(provider_id: str) -> dict[str, Any]:
@@ -55,7 +55,7 @@ def get_sandbox_configs() -> dict[str, Any]:
 
 
 async def get_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
-    return await monitor_thread_service.get_monitor_thread_detail(app, thread_id)
+    return await monitor_threads.get_monitor_thread_detail(app, thread_id)
 
 
 def get_dashboard() -> dict[str, Any]:

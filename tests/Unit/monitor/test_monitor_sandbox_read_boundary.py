@@ -1,15 +1,15 @@
 import inspect
 
+from backend.monitor.application.use_cases import thread_workbench as owner_thread_workbench_service
+from backend.monitor.application.use_cases import threads as monitor_thread_service
+from backend.monitor.application.use_cases import trace as monitor_trace_service
+from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
+from backend.monitor.infrastructure.read_models import thread_workbench_read_service as owner_thread_workbench_read_service
+from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
 from backend.web.services import (
     monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_sandbox_read_service,
-    monitor_thread_read_service,
-    monitor_thread_service,
-    monitor_trace_read_service,
-    monitor_trace_service,
-    owner_thread_workbench_read_service,
-    owner_thread_workbench_service,
 )
 
 
@@ -61,9 +61,9 @@ def test_monitor_thread_detail_uses_trajectory_read_port():
     trace_source = inspect.getsource(monitor_trace_service)
 
     assert "monitor_thread_trajectory_service" not in thread_source
-    assert "monitor_trace_service" in thread_source
+    assert "monitor_trace" in thread_source
     assert "build_monitor_thread_trajectory" in thread_source
-    assert "monitor_trace_read_service" in trace_source
+    assert "trace_read_service" in trace_source
 
 
 def test_monitor_trace_uses_trace_read_source_port():
@@ -72,7 +72,7 @@ def test_monitor_trace_uses_trace_read_source_port():
 
     assert "thread_history_service" not in trace_source
     assert "build_storage_container" not in trace_source
-    assert "monitor_trace_read_service" in trace_source
+    assert "trace_read_service" in trace_source
     assert "get_thread_history_payload" in read_source
     assert "build_storage_container" in read_source
 
@@ -81,7 +81,7 @@ def test_monitor_thread_list_does_not_depend_on_threads_router():
     thread_source = inspect.getsource(monitor_thread_service)
 
     assert "backend.web.routers.threads" not in thread_source
-    assert "owner_thread_workbench_service" in thread_source
+    assert "thread_workbench" in thread_source
 
 
 def test_owner_thread_workbench_uses_app_state_read_source():
@@ -89,5 +89,5 @@ def test_owner_thread_workbench_uses_app_state_read_source():
     read_source = inspect.getsource(owner_thread_workbench_read_service)
 
     assert "app.state" not in workbench_source
-    assert "owner_thread_workbench_read_service" in workbench_source
+    assert "thread_workbench_read_service" in workbench_source
     assert "app.state" in read_source
