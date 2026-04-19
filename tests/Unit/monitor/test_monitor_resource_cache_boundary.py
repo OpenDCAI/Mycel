@@ -55,6 +55,7 @@ def test_monitor_resource_service_uses_resource_io_port():
     assert "refresh_resource_snapshots" in io_source
     assert "browse_sandbox" in io_source
     assert "read_sandbox" in io_source
+    assert "backend.web.services" not in io_source
 
 
 def test_resource_projection_does_not_construct_monitor_runtime_repo():
