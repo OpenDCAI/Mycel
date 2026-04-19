@@ -23,5 +23,6 @@ def test_monitor_provider_runtime_uses_inventory_read_port():
     assert "sandbox_service" not in source
     assert "init_providers_and_managers" not in source
     assert "load_provider_orphan_runtime_rows" in source
-    assert "init_providers_and_managers" in inventory_source
-    assert "load_provider_orphan_runtimes" in inventory_source
+    assert "init_providers_and_managers" not in inventory_source
+    assert "load_provider_orphan_runtimes(" not in inventory_source
+    assert "list_provider_orphan_runtimes(" in inventory_source

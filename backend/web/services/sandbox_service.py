@@ -438,6 +438,12 @@ def load_provider_orphan_runtimes(managers: dict) -> list[dict]:
     return runtimes
 
 
+def list_provider_orphan_runtimes() -> list[dict]:
+    """Load provider-orphan runtimes through the current manager inventory."""
+    _, managers = init_providers_and_managers()
+    return load_provider_orphan_runtimes(managers)
+
+
 def find_runtime_and_manager(
     runtimes: list[dict],
     managers: dict,

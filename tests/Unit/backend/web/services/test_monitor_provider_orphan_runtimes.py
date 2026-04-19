@@ -34,11 +34,19 @@ def test_provider_orphan_runtime_cleanup_uses_runtime_truth_name():
 
 
 def test_monitor_provider_orphan_runtimes_do_not_refresh_all_managed_runtime_rows(monkeypatch):
-    manager = _FailingManager()
-
-    monkeypatch.setattr(sandbox_service, "init_providers_and_managers", lambda: ({}, {"daytona": manager}))
+    monkeypatch.setattr(sandbox_service, "list_provider_orphan_runtimes", lambda: [])
 
     assert monitor_provider_runtime_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
+
+
+def test_monitor_provider_orphan_inventory_uses_sandbox_service_data_boundary():
+    from backend.monitor.infrastructure.providers import provider_runtime_inventory_service
+
+    source = inspect.getsource(provider_runtime_inventory_service)
+
+    assert "init_providers_and_managers" not in source
+    assert "load_provider_orphan_runtimes(" not in source
+    assert "list_provider_orphan_runtimes(" in source
 
 
 def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
