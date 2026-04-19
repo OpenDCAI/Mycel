@@ -12,19 +12,16 @@ from backend.web.utils.serializers import extract_text_content
 
 @dataclass(frozen=True)
 class ThreadHistoryTransport:
-    resolve_sandbox: Callable[[str], str]
-    load_live_messages: Callable[[str, str], Awaitable[list[Any] | None]]
+    load_live_messages: Callable[[str], Awaitable[list[Any] | None]]
     load_checkpoint_messages: Callable[[str], Awaitable[list[Any]]]
 
 
 def build_thread_history_transport(
     *,
-    resolve_sandbox: Callable[[str], str],
-    load_live_messages: Callable[[str, str], Awaitable[list[Any] | None]],
+    load_live_messages: Callable[[str], Awaitable[list[Any] | None]],
     load_checkpoint_messages: Callable[[str], Awaitable[list[Any]]],
 ) -> ThreadHistoryTransport:
     return ThreadHistoryTransport(
-        resolve_sandbox=resolve_sandbox,
         load_live_messages=load_live_messages,
         load_checkpoint_messages=load_checkpoint_messages,
     )
@@ -80,9 +77,8 @@ async def get_thread_history_payload(
 ) -> dict[str, Any]:
     from sandbox.thread_context import set_current_thread_id
 
-    sandbox_type = history_transport.resolve_sandbox(thread_id)
     set_current_thread_id(thread_id)
-    live_messages = await history_transport.load_live_messages(thread_id, sandbox_type)
+    live_messages = await history_transport.load_live_messages(thread_id)
     if live_messages is None:
         all_messages = await history_transport.load_checkpoint_messages(thread_id)
     else:

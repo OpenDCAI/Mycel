@@ -18,11 +18,12 @@ class MonitorTraceReader:
 
 
 def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
-    async def _load_live_messages(thread_id: str, sandbox_type: str) -> list[Any] | None:
+    async def _load_live_messages(thread_id: str) -> list[Any] | None:
         agent_pool = getattr(app.state, "agent_pool", None)
         if not isinstance(agent_pool, dict):
             raise RuntimeError("agent_pool is required for thread history reads")
 
+        sandbox_type = resolve_thread_sandbox(app, thread_id)
         agent = agent_pool.get(f"{thread_id}:{sandbox_type}")
         if agent is None:
             return None
@@ -40,7 +41,6 @@ def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
         return list(checkpoint_state.messages) if checkpoint_state is not None else []
 
     history_transport = build_thread_history_transport(
-        resolve_sandbox=lambda thread_id: resolve_thread_sandbox(app, thread_id),
         load_live_messages=_load_live_messages,
         load_checkpoint_messages=_load_checkpoint_messages,
     )
