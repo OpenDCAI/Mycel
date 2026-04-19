@@ -51,3 +51,19 @@ def test_agent_pool_uses_thread_runtime_pool_factory_owner() -> None:
     assert owner_module.create_agent_sync is agent_pool_module.create_agent_sync
     assert "from backend.thread_runtime.pool.factory import create_agent_sync" in source
     assert "def create_agent_sync(" not in source
+
+
+def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.pool.registry")
+    agent_pool_module = importlib.import_module("backend.web.services.agent_pool")
+    source = inspect.getsource(agent_pool_module)
+
+    assert hasattr(agent_pool_module, "get_or_create_agent")
+    assert hasattr(agent_pool_module, "update_agent_config")
+    assert "from backend.thread_runtime.pool import registry as _registry" in source
+    assert "async def get_or_create_agent(" in source
+    assert "async def update_agent_config(" in source
+    assert hasattr(agent_pool_module, "get_or_create_agent_id")
+    assert hasattr(agent_pool_module, "get_file_channel_binding")
+    assert owner_module.get_or_create_agent.__module__ == "backend.thread_runtime.pool.registry"
+    assert owner_module.update_agent_config.__module__ == "backend.thread_runtime.pool.registry"
