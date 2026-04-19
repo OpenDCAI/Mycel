@@ -25,7 +25,6 @@ def _resolve_run_event_repo(run_event_repo: RunEventRepo | None) -> RunEventRepo
     if _default_run_event_repo is not None:
         return _default_run_event_repo
 
-    # @@@event-store-single-path - keep one persistence boundary; when caller omits repo, resolve default repo from storage container.
     container = build_storage_container()
     _default_run_event_repo = container.run_event_repo()
     return _default_run_event_repo
