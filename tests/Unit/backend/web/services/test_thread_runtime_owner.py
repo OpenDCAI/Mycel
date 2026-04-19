@@ -157,3 +157,11 @@ def test_streaming_service_uses_thread_runtime_trajectory_owner() -> None:
 
     assert owner_module.build_trajectory_scope is not None
     assert "from backend.thread_runtime.run import trajectory as _run_trajectory" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_observation_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.observation")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.build_observation is not None
+    assert "from backend.thread_runtime.run import observation as _run_observation" in streaming_source

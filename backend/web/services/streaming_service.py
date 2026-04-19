@@ -12,6 +12,7 @@ from backend.thread_runtime.run import cancellation as _run_cancellation
 from backend.thread_runtime.run import entrypoints as _run_entrypoints
 from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
+from backend.thread_runtime.run import observation as _run_observation
 from backend.thread_runtime.run import observer as _run_observer
 from backend.thread_runtime.run import trajectory as _run_trajectory
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
@@ -282,75 +283,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         if trajectory_scope is not None:
             trajectory_scope.inject_callback(config)
 
-        # Observation provider: provider from thread config, credentials from global config
-        obs_handler = None
-        obs_active = None
-        obs_provider = None
-        try:
-            thread_data = app.state.thread_repo.get_by_id(thread_id) if hasattr(app.state, "thread_repo") else None
-            obs_provider = thread_data.get("observation_provider") if thread_data else None
-
-            if obs_provider:
-                from config.observation_loader import ObservationLoader
-
-                obs_config = ObservationLoader().load()
-
-                if obs_provider == "langfuse":
-                    from langfuse import Langfuse  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
-                    from langfuse.langchain import (
-                        CallbackHandler as LangfuseHandler,  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
-                    )
-
-                    cfg = obs_config.langfuse
-                    if cfg.secret_key and cfg.public_key:
-                        obs_active = "langfuse"
-                        # Initialize global Langfuse client (CallbackHandler uses it)
-                        Langfuse(
-                            public_key=cfg.public_key,
-                            secret_key=cfg.secret_key,
-                            host=cfg.host or "https://cloud.langfuse.com",
-                        )
-                        obs_handler = LangfuseHandler(public_key=cfg.public_key)
-                        callbacks = config.setdefault("callbacks", [])
-                        if not isinstance(callbacks, list):
-                            raise RuntimeError("streaming observation callbacks must be a list")
-                        callbacks.append(obs_handler)
-                        metadata = config.setdefault("metadata", {})
-                        if not isinstance(metadata, dict):
-                            raise RuntimeError("streaming observation metadata must be an object")
-                        metadata["langfuse_session_id"] = thread_id
-                elif obs_provider == "langsmith":
-                    from langchain_core.tracers.langchain import LangChainTracer  # pyright: ignore[reportMissingImports]
-                    from langsmith import Client as LangSmithClient  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
-
-                    cfg = obs_config.langsmith
-                    if cfg.api_key:
-                        obs_active = "langsmith"
-                        ls_client = LangSmithClient(
-                            api_key=cfg.api_key,
-                            api_url=cfg.endpoint or "https://api.smith.langchain.com",
-                        )
-                        obs_handler = LangChainTracer(
-                            client=ls_client,
-                            project_name=cfg.project or "default",
-                        )
-                        callbacks = config.setdefault("callbacks", [])
-                        if not isinstance(callbacks, list):
-                            raise RuntimeError("streaming observation callbacks must be a list")
-                        callbacks.append(obs_handler)
-                        metadata = config.setdefault("metadata", {})
-                        if not isinstance(metadata, dict):
-                            raise RuntimeError("streaming observation metadata must be an object")
-                        metadata["session_id"] = thread_id
-        except ImportError as imp_err:
-            logger.warning(
-                "Observation provider '%s' missing package: %s. Install: uv pip install 'leonai[%s]'",
-                obs_provider,
-                imp_err,
-                obs_provider,
-            )
-        except Exception as obs_err:
-            logger.warning("Observation handler error: %s", obs_err, exc_info=True)
+        _obs_handler, _obs_active, flush_observation = _run_observation.build_observation(app, thread_id, config)
 
         # Real-time activity event callback (replaces post-hoc batch drain)
         activity_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=1000)
@@ -892,16 +825,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         if hasattr(agent, "runtime"):
             agent.runtime.set_event_callback(None)
         # Flush observation handler
-        if obs_handler is not None:
-            try:
-                if obs_active == "langfuse":
-                    from langfuse import get_client  # pyright: ignore[reportMissingImports, reportAttributeAccessIssue]
-
-                    get_client().flush()
-                elif obs_active == "langsmith":
-                    obs_handler.wait_for_futures()
-            except Exception as flush_err:
-                logger.warning("Observation flush error: %s", flush_err)
+        flush_observation()
         # ThreadEventBuffer is persistent — do NOT mark_done or pop
         app.state.thread_tasks.pop(thread_id, None)
         if stream_gen is not None:
