@@ -9,8 +9,8 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
-from backend.web.services.event_store import cleanup_old_runs
+from backend.thread_runtime.event_buffer import RunEventBuffer, ThreadEventBuffer
+from backend.thread_runtime.event_store import cleanup_old_runs
 from backend.web.utils.serializers import extract_text_content
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.notifications import is_terminal_background_notification
@@ -306,7 +306,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     display_builder_ref = app.state.display_builder
 
     async def activity_sink(event: dict) -> None:
-        from backend.web.services.event_store import append_event as _append
+        from backend.thread_runtime.event_store import append_event as _append
 
         seq = await _append(thread_id, f"activity_{thread_id}", event)
         try:
@@ -653,7 +653,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     input_messages: list[Any] | None = None,
 ) -> str:
     """Run agent execution and write all SSE events into *thread_buf*."""
-    from backend.web.services.event_store import append_event
+    from backend.thread_runtime.event_store import append_event
 
     run_event_repo = _resolve_run_event_repo(agent)
 

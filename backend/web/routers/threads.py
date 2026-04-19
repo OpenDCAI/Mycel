@@ -18,6 +18,7 @@ from backend.monitor.application.use_cases.thread_workbench import (
 )
 from backend.monitor.infrastructure.read_models.thread_workbench_read_service import build_owner_thread_workbench_reader
 from backend.thread_history import build_thread_history_transport, get_thread_history_payload
+from backend.thread_runtime.event_buffer import ThreadEventBuffer
 from backend.web.core.dependencies import (
     get_app,
     get_current_user_id,
@@ -35,7 +36,6 @@ from backend.web.models.requests import (
 )
 from backend.web.services import account_resource_service, sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.resource_cache import clear_resource_overview_cache
@@ -500,7 +500,7 @@ async def _replay_latest_run_failure_events(
     thread_id: str,
     display_builder: Any,
 ) -> None:
-    from backend.web.services.event_store import get_latest_run_id, read_events_after
+    from backend.thread_runtime.event_store import get_latest_run_id, read_events_after
 
     run_id = await get_latest_run_id(thread_id)
     if not run_id or run_id.startswith("activity_"):
@@ -1236,7 +1236,7 @@ async def get_thread_runtime(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get runtime status for a thread."""
-    from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
+    from backend.thread_runtime.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
 
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
@@ -1323,7 +1323,7 @@ async def stream_thread_events(
 
     if after > 0:
         # Replay from SQLite for reconnection
-        from backend.web.services.event_store import get_latest_run_id, read_events_after
+        from backend.thread_runtime.event_store import get_latest_run_id, read_events_after
 
         run_id = await get_latest_run_id(thread_id)
         if run_id:

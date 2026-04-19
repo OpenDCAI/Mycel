@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib
+import inspect
+
 import pytest
 
 from backend.web.services import event_store
@@ -59,3 +62,18 @@ def test_build_run_event_read_transport_uses_repo_boundary() -> None:
         ("latest_run_id", ("thread-1",), {}),
         ("list_events", ("thread-1", "run-1"), {"after": 3, "limit": 50}),
     ]
+
+
+def test_run_event_store_owner_lives_under_backend_thread_runtime() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.event_store")
+    shell_module = importlib.import_module("backend.web.services.event_store")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    threads_source = inspect.getsource(importlib.import_module("backend.web.routers.threads"))
+
+    assert owner_module.build_run_event_read_transport is shell_module.build_run_event_read_transport
+    assert owner_module.__name__ == "backend.thread_runtime.event_store"
+    assert hasattr(shell_module, "append_event")
+    assert hasattr(shell_module, "read_events_after")
+    assert "backend.thread_runtime.event_store" in streaming_source
+    assert "backend.thread_runtime.event_store" in threads_source
+    assert "backend.web.services.event_store" not in streaming_source
