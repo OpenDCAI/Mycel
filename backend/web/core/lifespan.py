@@ -8,7 +8,6 @@ from fastapi import FastAPI
 from psycopg import AsyncConnection
 
 from backend.web.services.idle_reaper import idle_reaper_loop
-from backend.web.services.resource_cache import resource_overview_refresh_loop
 from core.runtime.middleware.queue import MessageQueueManager
 
 
@@ -142,19 +141,14 @@ async def lifespan(app: FastAPI):
     app.state.thread_last_active = {}  # thread_id → epoch timestamp
     app.state.idle_reaper_task = None
     app.state._event_loop = asyncio.get_running_loop()
-    app.state.monitor_resources_task = None
 
     try:
         # Start idle reaper background task
         app.state.idle_reaper_task = asyncio.create_task(idle_reaper_loop(app))
 
-        # Start resource overview refresh loop
-        app.state.monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())
-
         yield
     finally:
-        # @@@background-task-shutdown-order - cancel monitor/reaper before provider cleanup.
-        for task_name in ("monitor_resources_task", "idle_reaper_task"):
+        for task_name in ("idle_reaper_task",):
             task = getattr(app.state, task_name, None)
             if task:
                 task.cancel()
