@@ -1,6 +1,10 @@
+import inspect
+
 import pytest
 
-from backend.web.services import resource_common
+from backend import resource_common as neutral_resource_common
+from backend import resource_projection
+from backend.web.services import resource_common, resource_service
 
 
 class _FakeThreadRepo:
@@ -160,3 +164,18 @@ def test_resource_metrics_normalize_live_snapshot_values() -> None:
         "networkOut": 50.0,
         "probeError": None,
     }
+
+
+def test_shared_resource_consumers_use_neutral_resource_common_owner() -> None:
+    projection_source = inspect.getsource(resource_projection)
+    resource_service_source = inspect.getsource(resource_service)
+
+    assert "backend.web.services.resource_common" not in projection_source
+    assert "backend.web.services.resource_common" not in resource_service_source
+    assert "backend.resource_common" in projection_source
+    assert "backend.resource_common" in resource_service_source
+
+
+def test_web_resource_common_keeps_compat_surface() -> None:
+    assert resource_common.metric is neutral_resource_common.metric
+    assert resource_common.thread_owners is neutral_resource_common.thread_owners

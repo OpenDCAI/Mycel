@@ -6,21 +6,21 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.monitor.infrastructure.read_models import resource_runtime_service
+from backend.resource_common import CATALOG as _CATALOG
+from backend.resource_common import CatalogEntry as _CatalogEntry
+from backend.resource_common import aggregate_provider_telemetry as _aggregate_provider_telemetry
+from backend.resource_common import metric as _metric
+from backend.resource_common import resolve_card_cpu_metric as _resolve_card_cpu_metric
+from backend.resource_common import resolve_console_url as _resolve_console_url
+from backend.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
+from backend.resource_common import resolve_provider_name
+from backend.resource_common import resolve_provider_type as _resolve_provider_type
+from backend.resource_common import thread_owners as _thread_owners
+from backend.resource_common import to_resource_metrics as _to_resource_metrics
+from backend.resource_common import to_resource_status as _to_resource_status
 from backend.user_resource_projection import list_user_resource_providers as _list_user_resource_providers
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services import resource_provider_boundary_service
-from backend.web.services.resource_common import CATALOG as _CATALOG
-from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
-from backend.web.services.resource_common import aggregate_provider_telemetry as _aggregate_provider_telemetry
-from backend.web.services.resource_common import metric as _metric
-from backend.web.services.resource_common import resolve_card_cpu_metric as _resolve_card_cpu_metric
-from backend.web.services.resource_common import resolve_console_url as _resolve_console_url
-from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
-from backend.web.services.resource_common import resolve_provider_name
-from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
-from backend.web.services.resource_common import thread_owners as _thread_owners
-from backend.web.services.resource_common import to_resource_metrics as _to_resource_metrics
-from backend.web.services.resource_common import to_resource_status as _to_resource_status
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_sandbox_state_to_display_status
 

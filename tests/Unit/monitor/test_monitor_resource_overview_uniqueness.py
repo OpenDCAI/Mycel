@@ -1,5 +1,6 @@
 import inspect
 
+import backend.resource_common as neutral_resource_common
 import backend.resource_projection as resource_projection_service
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from backend.web.services import (
@@ -258,12 +259,12 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
         lambda _config_name: (resource_common.empty_capabilities(), None),
     )
     monkeypatch.setattr(
-        resource_common,
+        neutral_resource_common,
         "build_thread_repo",
         lambda **_kwargs: _FakeThreadRepo({"thread-supabase": {"agent_user_id": "agent-1"}}),
     )
     monkeypatch.setattr(
-        resource_common,
+        neutral_resource_common,
         "build_user_repo",
         lambda **_kwargs: _FakeUserRepo([_FakeUser("agent-1", "Toad")]),
     )

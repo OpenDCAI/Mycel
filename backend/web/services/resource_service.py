@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.resource_common import CATALOG as _CATALOG
+from backend.resource_common import CatalogEntry as _CatalogEntry
+from backend.resource_common import resolve_console_url as _resolve_console_url
+from backend.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
+from backend.resource_common import resolve_provider_name
+from backend.resource_common import resolve_provider_type as _resolve_provider_type
+from backend.resource_common import to_resource_status as _to_resource_status
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services.resource_common import CATALOG as _CATALOG
-from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
-from backend.web.services.resource_common import resolve_console_url as _resolve_console_url
-from backend.web.services.resource_common import resolve_instance_capabilities as _resolve_instance_capabilities
-from backend.web.services.resource_common import resolve_provider_name
-from backend.web.services.resource_common import resolve_provider_type as _resolve_provider_type
-from backend.web.services.resource_common import to_resource_status as _to_resource_status
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.resource_snapshot import probe_and_upsert_for_instance
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
