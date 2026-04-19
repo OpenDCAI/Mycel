@@ -103,3 +103,12 @@ def test_streaming_service_uses_thread_runtime_run_cancellation_owner() -> None:
     assert owner_module.flush_cancelled_owner_steers is not None
     assert owner_module.emit_queued_terminal_followups is not None
     assert "from backend.thread_runtime.run import cancellation as _run_cancellation" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_buffer_wiring_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.buffer_wiring")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.get_or_create_thread_buffer is not None
+    assert owner_module.ensure_thread_handlers is not None
+    assert "from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring" in streaming_source
