@@ -15,3 +15,4 @@ def test_monitor_app_mounts_only_global_monitor_routes():
     assert "/api/monitor/threads" not in paths
     assert "/api/monitor/threads/{thread_id}" not in paths
     assert "/api/monitor/evaluation/batches/{batch_id}/start" not in paths
+    assert set(paths["/api/monitor/evaluation/batches"]) == {"get"}
