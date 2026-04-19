@@ -74,6 +74,8 @@ def test_monitor_trace_uses_trace_read_source_port():
     assert "build_storage_container" not in trace_source
     assert "trace_read_service" in trace_source
     assert "get_thread_history_payload" in read_source
+    assert "get_thread_history_payload(app=" not in read_source
+    assert "build_thread_history_transport" in read_source
     assert "build_storage_container" in read_source
 
 

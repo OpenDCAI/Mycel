@@ -43,6 +43,7 @@ from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
     observe_thread_events,
 )
+from backend.web.services.thread_history_service import build_thread_history_transport, get_thread_history_payload
 from backend.web.services.thread_launch_config_service import resolve_default_config
 from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.services.thread_state_service import (
@@ -1037,11 +1038,14 @@ async def get_thread_history(
         limit: Max messages to return, from the end (default 20)
         truncate: Truncate content to this many chars (default 300, 0 = no limit)
     """
-    from backend.web.services.thread_history_service import get_thread_history_payload
-
+    history_transport = build_thread_history_transport(
+        resolve_sandbox=lambda current_thread_id: resolve_thread_sandbox(app, current_thread_id),
+        agent_pool=getattr(app.state, "agent_pool", None),
+        checkpoint_store=getattr(app.state, "thread_checkpoint_store", None),
+    )
     return await get_thread_history_payload(
-        app=app,
         thread_id=thread_id,
+        history_transport=history_transport,
         limit=limit,
         truncate=truncate,
     )

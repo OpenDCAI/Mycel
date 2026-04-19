@@ -2,10 +2,51 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.utils.serializers import extract_text_content
+
+
+@dataclass(frozen=True)
+class ThreadHistoryTransport:
+    resolve_sandbox: Callable[[str], str]
+    load_live_messages: Callable[[str, str], Awaitable[list[Any] | None]]
+    load_checkpoint_messages: Callable[[str], Awaitable[list[Any]]]
+
+
+def build_thread_history_transport(
+    *,
+    resolve_sandbox: Callable[[str], str],
+    agent_pool: Any,
+    checkpoint_store: Any,
+) -> ThreadHistoryTransport:
+    async def _load_live_messages(thread_id: str, sandbox_type: str) -> list[Any] | None:
+        if not isinstance(agent_pool, dict):
+            raise RuntimeError("agent_pool is required for thread history reads")
+
+        agent = agent_pool.get(f"{thread_id}:{sandbox_type}")
+        if agent is None:
+            return None
+
+        state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        values = getattr(state, "values", {}) if state else {}
+        messages = values.get("messages", []) if isinstance(values, dict) else []
+        return list(messages)
+
+    async def _load_checkpoint_messages(thread_id: str) -> list[Any]:
+        if checkpoint_store is None:
+            raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
+        checkpoint_state = await checkpoint_store.load(thread_id)
+        return list(checkpoint_state.messages) if checkpoint_state is not None else []
+
+    return ThreadHistoryTransport(
+        resolve_sandbox=resolve_sandbox,
+        load_live_messages=_load_live_messages,
+        load_checkpoint_messages=_load_checkpoint_messages,
+    )
 
 
 def _trunc(text: str, truncate: int) -> str:
@@ -51,31 +92,20 @@ def _expand_history_message(msg: Any, truncate: int) -> list[dict[str, Any]]:
 
 async def get_thread_history_payload(
     *,
-    app: Any,
     thread_id: str,
+    history_transport: ThreadHistoryTransport,
     limit: int = 20,
     truncate: int = 300,
 ) -> dict[str, Any]:
-    from backend.web.routers.threads import resolve_thread_sandbox
     from sandbox.thread_context import set_current_thread_id
 
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
+    sandbox_type = history_transport.resolve_sandbox(thread_id)
     set_current_thread_id(thread_id)
-    pool = getattr(app.state, "agent_pool", None)
-    if not isinstance(pool, dict):
-        raise RuntimeError("agent_pool is required for thread history reads")
-
-    agent = pool.get(f"{thread_id}:{sandbox_type}")
-    if agent is not None:
-        state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
-        values = getattr(state, "values", {}) if state else {}
+    live_messages = await history_transport.load_live_messages(thread_id, sandbox_type)
+    if live_messages is None:
+        all_messages = await history_transport.load_checkpoint_messages(thread_id)
     else:
-        checkpoint_store = getattr(app.state, "thread_checkpoint_store", None)
-        if checkpoint_store is None:
-            raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
-        checkpoint_state = await checkpoint_store.load(thread_id)
-        values = {"messages": list(checkpoint_state.messages) if checkpoint_state is not None else []}
-    all_messages = values.get("messages", []) if isinstance(values, dict) else []
+        all_messages = live_messages
     all_messages = repair_interrupted_tool_call_messages(list(all_messages))
     total = len(all_messages)
     messages = all_messages[-limit:] if limit > 0 else all_messages
