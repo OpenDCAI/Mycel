@@ -206,6 +206,10 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     pending_tool_calls: dict[str, dict] = {}
     output_parts: list[str] = []
     trajectory_status = "completed"
+
+    def prompt_restore() -> None:
+        return None
+
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
@@ -281,6 +285,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             agent=agent,
             app=app,
             thread_id=thread_id,
+            emit=emit,
             emit_queued_terminal_followups=_emit_queued_terminal_followups,
         )
 

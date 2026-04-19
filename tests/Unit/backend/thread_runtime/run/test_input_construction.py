@@ -18,6 +18,7 @@ def test_build_initial_input_prefers_explicit_input_messages() -> None:
             agent=SimpleNamespace(),
             app=SimpleNamespace(),
             thread_id="thread-1",
+            emit=None,
             emit_queued_terminal_followups=None,
         )
     )
@@ -37,6 +38,7 @@ def test_build_initial_input_wraps_message_metadata_when_present() -> None:
             agent=SimpleNamespace(),
             app=SimpleNamespace(),
             thread_id="thread-1",
+            emit=None,
             emit_queued_terminal_followups=None,
         )
     )
@@ -62,7 +64,7 @@ async def test_build_initial_input_adds_terminal_followthrough_system_note_and_q
     async def emit_queued_terminal_followups(*, app, thread_id, emit):
         assert app is not None
         assert thread_id == "thread-1"
-        assert emit is None
+        assert emit is not None
         return queued
 
     agent = SimpleNamespace(agent=SimpleNamespace(system_prompt=SimpleNamespace(content="base prompt")))
@@ -73,6 +75,7 @@ async def test_build_initial_input_adds_terminal_followthrough_system_note_and_q
         agent=agent,
         app=SimpleNamespace(),
         thread_id="thread-1",
+        emit=lambda *_args, **_kwargs: None,
         emit_queued_terminal_followups=emit_queued_terminal_followups,
     )
 

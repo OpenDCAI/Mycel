@@ -49,6 +49,7 @@ async def build_initial_input(
     agent: Any,
     app: Any,
     thread_id: str,
+    emit: Callable[[dict[str, str], str | None], Awaitable[None]] | None,
     emit_queued_terminal_followups: Callable[..., Awaitable[list[dict[str, str | None]]]] | None,
 ) -> tuple[dict[str, Any], Callable[[], None]]:
     meta = message_metadata or {}
@@ -79,7 +80,7 @@ async def build_initial_input(
             }
         ]
         if emit_queued_terminal_followups is not None:
-            terminal_followthrough_items.extend(await emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=None))
+            terminal_followthrough_items.extend(await emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=emit))
         if hasattr(agent, "agent") and hasattr(agent.agent, "system_prompt"):
             original_system_prompt = agent.agent.system_prompt
             agent.agent.system_prompt = augment_system_prompt_for_terminal_followthrough(original_system_prompt)
