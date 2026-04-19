@@ -34,3 +34,10 @@ def test_thread_runtime_history_uses_thread_runtime_message_repair_owner() -> No
     assert owner_module.repair_interrupted_tool_call_messages is shell_module.repair_interrupted_tool_call_messages
     assert "from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages" in history_source
     assert "backend.web.services.thread_message_interruption_service" not in history_source
+
+
+def test_thread_runtime_namespace_exports_owner_thread_reads() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.owner_reads")
+    shell_module = importlib.import_module("backend.web.services.owner_thread_read_service")
+
+    assert owner_module.list_owner_thread_rows_for_auth_burst is shell_module.list_owner_thread_rows_for_auth_burst
