@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
 from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
-from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 from core.runtime.middleware.monitor import AgentState
 
 

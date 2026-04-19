@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
+from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
 from backend.protocols.agent_runtime import AgentChatDeliveryResult, AgentThreadInputResult
-from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 
 
 @dataclass
@@ -67,8 +67,8 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
 
 
 def test_split_handler_modules_are_the_behavior_owners() -> None:
-    from backend.web.services.agent_runtime_chat_handler import NativeAgentChatDeliveryHandler
-    from backend.web.services.agent_runtime_thread_handler import NativeAgentThreadInputHandler
+    from backend.agent_runtime.chat_handler import NativeAgentChatDeliveryHandler
+    from backend.agent_runtime.thread_handler import NativeAgentThreadInputHandler
 
     assert NativeAgentChatDeliveryHandler.__name__ == "NativeAgentChatDeliveryHandler"
     assert NativeAgentThreadInputHandler.__name__ == "NativeAgentThreadInputHandler"
