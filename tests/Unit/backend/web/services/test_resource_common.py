@@ -195,3 +195,14 @@ def test_shared_resource_consumers_use_neutral_resource_provider_boundary_owner(
 def test_web_resource_provider_boundary_keeps_compat_surface() -> None:
     assert resource_provider_boundary_service.build_resource_row_payload is neutral_resource_provider_boundary.build_resource_row_payload
     assert resource_provider_boundary_service.load_user_sandboxes is neutral_resource_provider_boundary.load_user_sandboxes
+    assert resource_provider_boundary_service is neutral_resource_provider_boundary
+
+
+def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
+    common_source = inspect.getsource(neutral_resource_common)
+    projection_source = inspect.getsource(resource_projection)
+
+    assert "backend.web.core.config" not in common_source
+    assert "backend.web.core.config" not in projection_source
+    assert "backend.sandbox_paths" in common_source
+    assert "backend.sandbox_paths" in projection_source

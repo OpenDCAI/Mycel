@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from backend.web.core.config import SANDBOXES_DIR
+from backend.sandbox_paths import SANDBOXES_DIR
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.providers.agentbay import AgentBayProvider

@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from backend import resource_provider_boundary as _resource_provider_boundary
 
-available_sandbox_types = _resource_provider_boundary.available_sandbox_types
-build_provider_availability_payload = _resource_provider_boundary.build_provider_availability_payload
-build_resource_row_payload = _resource_provider_boundary.build_resource_row_payload
-get_provider_capability_contract = _resource_provider_boundary.get_provider_capability_contract
-get_provider_display_contract = _resource_provider_boundary.get_provider_display_contract
-list_user_sandboxes = _resource_provider_boundary.list_user_sandboxes
-load_user_sandboxes = _resource_provider_boundary.load_user_sandboxes
+sys.modules[__name__] = _resource_provider_boundary

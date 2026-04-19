@@ -19,8 +19,8 @@ from backend.resource_common import resolve_provider_type as _resolve_provider_t
 from backend.resource_common import thread_owners as _thread_owners
 from backend.resource_common import to_resource_metrics as _to_resource_metrics
 from backend.resource_common import to_resource_status as _to_resource_status
+from backend.sandbox_paths import SANDBOXES_DIR
 from backend.user_resource_projection import list_user_resource_providers as _list_user_resource_providers
-from backend.web.core.config import SANDBOXES_DIR
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_sandbox_state_to_display_status
 
