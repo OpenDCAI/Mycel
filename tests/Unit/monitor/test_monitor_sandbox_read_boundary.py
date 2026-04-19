@@ -86,6 +86,7 @@ def test_monitor_trace_uses_trace_read_source_port():
     assert "checkpoint_store" not in history_source
     assert "resolve_sandbox" not in history_source
     assert "sandbox_type" not in history_source
+    assert "set_current_thread_id" not in history_source
 
 
 def test_monitor_thread_list_does_not_depend_on_threads_router():

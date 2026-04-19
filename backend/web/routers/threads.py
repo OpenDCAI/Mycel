@@ -1065,6 +1065,7 @@ async def get_thread_history(
         load_live_messages=_load_live_messages,
         load_checkpoint_messages=_load_checkpoint_messages,
     )
+    set_current_thread_id(thread_id)
     return await get_thread_history_payload(
         thread_id=thread_id,
         history_transport=history_transport,

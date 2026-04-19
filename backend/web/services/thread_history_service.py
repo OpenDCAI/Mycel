@@ -75,9 +75,6 @@ async def get_thread_history_payload(
     limit: int = 20,
     truncate: int = 300,
 ) -> dict[str, Any]:
-    from sandbox.thread_context import set_current_thread_id
-
-    set_current_thread_id(thread_id)
     live_messages = await history_transport.load_live_messages(thread_id)
     if live_messages is None:
         all_messages = await history_transport.load_checkpoint_messages(thread_id)

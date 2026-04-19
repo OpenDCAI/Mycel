@@ -9,6 +9,7 @@ from typing import Any
 from backend.web.services.agent_pool import resolve_thread_sandbox
 from backend.web.services.event_store import build_run_event_read_transport
 from backend.web.services.thread_history_service import build_thread_history_transport, get_thread_history_payload
+from sandbox.thread_context import set_current_thread_id
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
 
 
 async def load_thread_history_payload(thread_id: str, *, history_transport) -> dict[str, Any]:
+    set_current_thread_id(thread_id)
     return await get_thread_history_payload(
         thread_id=thread_id,
         history_transport=history_transport,
