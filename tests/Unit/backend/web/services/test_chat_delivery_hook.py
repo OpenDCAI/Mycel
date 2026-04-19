@@ -6,16 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.agent_runtime import chat_inlet as owner_chat_inlet
 from backend.web.routers import threads as threads_router
 from backend.web.services import chat_delivery_hook
-from messaging.delivery import runtime_bridge as owner_runtime_bridge
 from messaging.delivery.dispatcher import ChatDeliveryRequest
 from messaging.realtime import events as owner_chat_events
 from messaging.realtime import typing as owner_typing
 
 
 def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> None:
-    delivery_source = inspect.getsource(owner_runtime_bridge)
+    delivery_source = inspect.getsource(owner_chat_inlet)
     threads_source = inspect.getsource(threads_router)
     from backend.web.core import lifespan as lifespan_module
     from backend.web.services import chat_events as shell_chat_events
@@ -23,7 +23,7 @@ def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> Non
 
     lifespan_source = inspect.getsource(lifespan_module)
 
-    assert owner_runtime_bridge.make_chat_delivery_fn is chat_delivery_hook.make_chat_delivery_fn
+    assert owner_chat_inlet.make_chat_delivery_fn is chat_delivery_hook.make_chat_delivery_fn
     assert owner_chat_events.ChatEventBus is shell_chat_events.ChatEventBus
     assert owner_typing.TypingTracker is shell_typing_tracker.TypingTracker
     assert "NativeAgentRuntimeGateway" not in delivery_source
@@ -32,13 +32,16 @@ def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> Non
     assert "get_agent_runtime_gateway" in threads_source
     assert "backend.agent_runtime.port" in delivery_source
     assert "backend.agent_runtime.port" in threads_source
+    assert "messaging.delivery.dispatcher" not in delivery_source
+    assert "messaging.delivery.contracts" in delivery_source
     assert "backend.web.services.agent_runtime_port" not in delivery_source
     assert "backend.web.services.agent_runtime_port" not in threads_source
     assert "backend.agent_runtime.bootstrap" in lifespan_source
+    assert "backend.agent_runtime.chat_inlet" in lifespan_source
     assert "build_agent_runtime_gateway" in lifespan_source
     assert "messaging.realtime.events" in lifespan_source
     assert "messaging.realtime.typing" in lifespan_source
-    assert "messaging.delivery.runtime_bridge" in lifespan_source
+    assert "messaging.delivery.runtime_bridge" not in lifespan_source
     assert "backend.web.services.agent_runtime_gateway" not in lifespan_source
     assert "backend.web.services.chat_events" not in lifespan_source
     assert "backend.web.services.typing_tracker" not in lifespan_source
