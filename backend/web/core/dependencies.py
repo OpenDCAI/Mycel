@@ -3,11 +3,12 @@
 import asyncio
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
 
 from backend.auth_dependencies import _get_auth_service as _get_auth_service
 from backend.auth_user_resolution import get_current_user as get_current_user
 from backend.auth_user_resolution import get_current_user_id as get_current_user_id
+from backend.request_app import get_app as get_app
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.thread_runtime_convergence import inspect_owner_thread_runtime
 from sandbox.thread_context import set_current_thread_id
@@ -22,11 +23,6 @@ __all__ = [
     "get_thread_lock",
     "get_thread_agent",
 ]
-
-
-async def get_app(request: Request) -> FastAPI:
-    """Get FastAPI app instance from request."""
-    return request.app
 
 
 async def verify_thread_owner(
