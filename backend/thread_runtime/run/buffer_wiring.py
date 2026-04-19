@@ -11,6 +11,8 @@ from core.runtime.middleware.monitor import AgentState
 
 logger = logging.getLogger(__name__)
 
+_start_agent_run = None
+
 
 def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
     """Get existing or create new ThreadEventBuffer for a thread."""
@@ -102,9 +104,9 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
 
         async def _start_run():
             try:
-                from backend.web.services.streaming_service import start_agent_run
-
-                start_agent_run(
+                if _start_agent_run is None:
+                    raise RuntimeError("thread_runtime.run.buffer_wiring requires _start_agent_run binding")
+                _start_agent_run(
                     agent,
                     thread_id,
                     item.content,

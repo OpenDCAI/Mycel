@@ -115,6 +115,7 @@ def test_streaming_service_uses_thread_runtime_buffer_wiring_owner() -> None:
     assert owner_module.ensure_thread_handlers is not None
     assert "from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring" in streaming_source
     assert "backend.web.services.event_buffer" not in owner_source
+    assert "backend.web.services.streaming_service" not in owner_source
 
 
 def test_streaming_service_uses_thread_runtime_run_lifecycle_owner() -> None:
