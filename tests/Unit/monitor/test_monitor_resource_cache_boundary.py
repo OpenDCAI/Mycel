@@ -1,7 +1,7 @@
 import inspect
 
+from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.services import (
-    monitor_gateway,
     monitor_resource_io_service,
     monitor_resource_read_service,
     monitor_resource_runtime_service,
@@ -64,8 +64,8 @@ def test_resource_projection_uses_product_resource_boundary():
 
 
 def test_monitor_gateway_sandbox_list_uses_narrow_projection_service():
-    source = inspect.getsource(monitor_gateway.list_sandboxes)
+    source = inspect.getsource(monitor_gateway_impl.list_sandboxes)
     broad_shell = "monitor" + "_service"
 
     assert f"{broad_shell}.list_monitor_sandboxes" not in source
-    assert "monitor_sandbox_projection_service" in inspect.getsource(monitor_gateway)
+    assert "monitor_sandbox_projection_service" in inspect.getsource(monitor_gateway_impl)

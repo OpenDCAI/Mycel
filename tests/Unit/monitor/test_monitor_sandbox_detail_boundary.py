@@ -1,10 +1,10 @@
 import inspect
 
-from backend.web.services import monitor_gateway
+from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 
 
 def test_monitor_gateway_sandbox_detail_uses_narrow_detail_service():
-    source = inspect.getsource(monitor_gateway)
+    source = inspect.getsource(monitor_gateway_impl)
     broad_shell = "monitor" + "_service"
 
     assert "monitor_sandbox_detail_service" in source

@@ -1,16 +1,16 @@
 import inspect
 
+from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.services import (
     monitor_evaluation_execution_service,
     monitor_evaluation_read_service,
     monitor_evaluation_service,
     monitor_evaluation_storage_service,
-    monitor_gateway,
 )
 
 
 def test_monitor_gateway_evaluation_surfaces_use_narrow_evaluation_service():
-    source = inspect.getsource(monitor_gateway)
+    source = inspect.getsource(monitor_gateway_impl)
     broad_shell = "monitor" + "_service"
 
     assert "monitor_evaluation_service" in source

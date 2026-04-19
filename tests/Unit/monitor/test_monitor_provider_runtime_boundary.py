@@ -1,10 +1,11 @@
 import inspect
 
-from backend.web.services import monitor_gateway, monitor_provider_runtime_inventory_service, monitor_provider_runtime_service
+from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
+from backend.web.services import monitor_provider_runtime_inventory_service, monitor_provider_runtime_service
 
 
 def test_monitor_gateway_provider_runtime_uses_narrow_service():
-    source = inspect.getsource(monitor_gateway)
+    source = inspect.getsource(monitor_gateway_impl)
     broad_shell = "monitor" + "_service"
 
     assert "monitor_provider_runtime_service" in source
