@@ -34,6 +34,7 @@ def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> Non
     assert "backend.agent_runtime.port" in threads_source
     assert "messaging.delivery.dispatcher" not in delivery_source
     assert "messaging.delivery.contracts" in delivery_source
+    assert "backend.agent_runtime.chat_notification_format" in delivery_source
     assert "backend.web.services.agent_runtime_port" not in delivery_source
     assert "backend.web.services.agent_runtime_port" not in threads_source
     assert "backend.agent_runtime.bootstrap" in lifespan_source
@@ -65,6 +66,7 @@ async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
         chat_id="chat-1",
         sender_id="human-user-1",
         sender_avatar_url=None,
+        unread_count=0,
         signal=None,
     )
 
@@ -92,6 +94,7 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
         chat_id="chat-1",
         sender_id="human-user-1",
         sender_avatar_url=None,
+        unread_count=3,
         signal=None,
     )
 
@@ -99,6 +102,9 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
 
     assert gateway.envelope is not None
     assert gateway.envelope.sender.user_type == "human"
+    assert "New message from Human in chat chat-1 (3 unread)." in gateway.envelope.message.content
+    assert 'read_messages(chat_id="chat-1")' in gateway.envelope.message.content
+    assert gateway.envelope.extensions["mycel"]["raw_content"] == "hello"
 
 
 @pytest.mark.asyncio
@@ -121,6 +127,7 @@ async def test_chat_delivery_hook_requires_recipient_user_type() -> None:
         chat_id="chat-1",
         sender_id="human-user-1",
         sender_avatar_url=None,
+        unread_count=0,
         signal=None,
     )
 
@@ -150,6 +157,7 @@ async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
         chat_id="chat-1",
         sender_id="human-user-1",
         sender_avatar_url=None,
+        unread_count=0,
         signal=None,
     )
 

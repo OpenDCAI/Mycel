@@ -16,6 +16,7 @@ class ChatDeliveryRequest:
     chat_id: str
     sender_id: str
     sender_avatar_url: str | None
+    unread_count: int
     signal: str | None
 
 

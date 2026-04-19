@@ -90,4 +90,7 @@ def test_chat_handler_depends_on_runtime_owned_services_not_web_imports() -> Non
     assert "backend.web.services.agent_pool" not in chat_handler_source
     assert "backend.web.services.streaming_service" not in chat_handler_source
     assert "self._app.state" not in chat_handler_source
+    assert "count_unread" not in chat_handler_source
+    assert "enqueue_chat_notification" not in chat_handler_source
+    assert "format_chat_notification" not in chat_handler_source
     assert "AppAgentChatRuntimeServices" in bootstrap_source

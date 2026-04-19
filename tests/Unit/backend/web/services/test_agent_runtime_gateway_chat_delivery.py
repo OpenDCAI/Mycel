@@ -20,7 +20,6 @@ def _app(
     *,
     threads: list[dict[str, Any]] | None = None,
     pool: dict[str, Any] | None = None,
-    unread_count: int = 7,
 ) -> tuple[SimpleNamespace, list[tuple[str, str, str]], list[tuple[str, str]], list[tuple[str, str, str | None, str | None]]]:
     started: list[tuple[str, str, str]] = []
     unread_calls: list[tuple[str, str]] = []
@@ -36,9 +35,6 @@ def _app(
             ),
             agent_pool=pool or {},
             typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
-            messaging_service=SimpleNamespace(
-                count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or unread_count
-            ),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
@@ -49,12 +45,12 @@ def _app(
     return app, started, unread_calls, enqueued
 
 
-def _envelope(*, chat_id: str = "chat-1", signal: str | None = "ping") -> AgentChatDeliveryEnvelope:
+def _envelope(*, chat_id: str = "chat-1", signal: str | None = "ping", content: str = "hello") -> AgentChatDeliveryEnvelope:
     return AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id=chat_id),
         sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human"),
         recipient=AgentChatRecipient(agent_user_id="agent-user-1", runtime_source="mycel"),
-        message=AgentRuntimeMessage(content="hello", signal=signal),
+        message=AgentRuntimeMessage(content=content, signal=signal),
     )
 
 
@@ -66,19 +62,15 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
     monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
     monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "core.runtime.middleware.queue.formatters.format_chat_notification",
-        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
-    )
-    app, started, unread_calls, enqueued = _app(unread_count=7)
+    app, started, unread_calls, enqueued = _app()
 
     result = await build_agent_runtime_gateway(app).dispatch_chat(_envelope())
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-1"
     assert started == [("thread-1", "chat-1", "agent-user-1")]
-    assert unread_calls == [("chat-1", "agent-user-1")]
-    assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
+    assert unread_calls == []
+    assert enqueued == [("hello", "thread-1", "human-user-1", "Human")]
 
 
 @pytest.mark.asyncio
@@ -105,10 +97,6 @@ async def test_gateway_prefers_latest_live_child_thread(monkeypatch: pytest.Monk
     monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
     monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "core.runtime.middleware.queue.formatters.format_chat_notification",
-        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
-    )
     app, started, _, enqueued = _app(
         threads=[
             {"id": "thread-main", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0},
@@ -120,7 +108,6 @@ async def test_gateway_prefers_latest_live_child_thread(monkeypatch: pytest.Monk
             "thread-child-old:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.IDLE)),
             "thread-child-fresh:local": SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.READY)),
         },
-        unread_count=1,
     )
 
     result = await build_agent_runtime_gateway(app).dispatch_chat(_envelope(chat_id="chat-5"))
@@ -128,7 +115,7 @@ async def test_gateway_prefers_latest_live_child_thread(monkeypatch: pytest.Monk
     assert result.status == "accepted"
     assert result.thread_id == "thread-child-fresh"
     assert started == [("thread-child-fresh", "chat-5", "agent-user-1")]
-    assert enqueued == [("Human|chat-5|1|ping", "thread-child-fresh", "human-user-1", "Human")]
+    assert enqueued == [("hello", "thread-child-fresh", "human-user-1", "Human")]
 
 
 @pytest.mark.asyncio
@@ -139,11 +126,7 @@ async def test_gateway_chat_delivery_uses_live_thread_repo_after_gateway_bootstr
     monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
     monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "core.runtime.middleware.queue.formatters.format_chat_notification",
-        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
-    )
-    app, started, unread_calls, enqueued = _app(unread_count=2)
+    app, started, unread_calls, enqueued = _app()
     gateway = build_agent_runtime_gateway(app)
 
     replacement_thread = {"id": "thread-replaced", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0}
@@ -157,5 +140,5 @@ async def test_gateway_chat_delivery_uses_live_thread_repo_after_gateway_bootstr
     assert result.status == "accepted"
     assert result.thread_id == "thread-replaced"
     assert started == [("thread-replaced", "chat-live", "agent-user-1")]
-    assert unread_calls == [("chat-live", "agent-user-1")]
-    assert enqueued == [("Human|chat-live|2|ping", "thread-replaced", "human-user-1", "Human")]
+    assert unread_calls == []
+    assert enqueued == [("hello", "thread-replaced", "human-user-1", "Human")]

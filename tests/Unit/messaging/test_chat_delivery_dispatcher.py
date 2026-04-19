@@ -69,6 +69,7 @@ def test_dispatcher_delivers_to_agent_user_ids() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 7,
         delivery_fn=deliver,
     )
 
@@ -82,6 +83,7 @@ def test_dispatcher_same_owner_group_delivers_without_relationship() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(
             resolve=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("same-owner path must not call resolver"))
         ),
@@ -98,6 +100,7 @@ def test_dispatcher_agent_turn_delivers_only_to_sibling_agent() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(
             resolve=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("same-owner sibling path must not call resolver"))
         ),
@@ -115,6 +118,7 @@ def test_dispatcher_respects_non_deliver_policy(action: DeliveryAction) -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["outside-human-user", "agent-user-1"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: action),
         delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
@@ -135,6 +139,7 @@ def test_dispatcher_fails_loudly_when_delivery_function_fails() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=deliver,
     )
 
@@ -148,6 +153,7 @@ def test_dispatcher_fails_loudly_when_delivery_function_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
     )
 
     with pytest.raises(RuntimeError, match="Chat delivery function is not configured"):
@@ -159,6 +165,7 @@ def test_dispatcher_fails_loudly_when_sender_identity_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["missing-user", "agent-user-1"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
@@ -173,6 +180,7 @@ def test_dispatcher_fails_loudly_when_member_user_id_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {}]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
@@ -187,6 +195,7 @@ def test_dispatcher_fails_loudly_when_recipient_identity_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "missing-recipient"]),
         user_repo=_user_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 

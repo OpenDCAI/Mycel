@@ -46,6 +46,7 @@ class MessagingService:
         self._delivery_dispatcher = delivery_dispatcher or ChatDeliveryDispatcher(
             chat_member_repo=chat_member_repo,
             user_repo=user_repo,
+            unread_counter=getattr(messages_repo, "count_unread", None),
             delivery_resolver=delivery_resolver,
             delivery_fn=delivery_fn,
         )

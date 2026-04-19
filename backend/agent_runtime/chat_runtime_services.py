@@ -17,17 +17,13 @@ class AgentChatRuntimeServices(Protocol):
 
     def start_chat(self, thread_id: str, chat_id: str, recipient_user_id: str) -> None: ...
 
-    def count_unread(self, chat_id: str, recipient_user_id: str) -> int: ...
-
-    def enqueue_chat_notification(
+    def enqueue_chat_message(
         self,
         *,
-        sender_name: str,
-        chat_id: str,
-        unread_count: int,
-        signal: str | None,
+        content: str,
         thread_id: str,
         sender_id: str,
+        sender_name: str,
         sender_avatar_url: str | None,
     ) -> None: ...
 
@@ -61,30 +57,17 @@ class AppAgentChatRuntimeServices:
         if typing_tracker is not None:
             typing_tracker.start_chat(thread_id, chat_id, recipient_user_id)
 
-    def count_unread(self, chat_id: str, recipient_user_id: str) -> int:
-        return self._app.state.messaging_service.count_unread(chat_id, recipient_user_id)
-
-    def enqueue_chat_notification(
+    def enqueue_chat_message(
         self,
         *,
-        sender_name: str,
-        chat_id: str,
-        unread_count: int,
-        signal: str | None,
+        content: str,
         thread_id: str,
         sender_id: str,
+        sender_name: str,
         sender_avatar_url: str | None,
     ) -> None:
-        from core.runtime.middleware.queue.formatters import format_chat_notification
-
-        formatted = format_chat_notification(
-            sender_name,
-            chat_id,
-            unread_count,
-            signal=signal,
-        )
         self._app.state.queue_manager.enqueue(
-            formatted,
+            content,
             thread_id,
             "chat",
             source="external",
