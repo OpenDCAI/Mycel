@@ -6,6 +6,7 @@ import logging
 from enum import Enum
 from typing import Any
 
+from backend.agent_runtime.chat_notification_format import format_chat_notification
 from backend.agent_runtime.port import get_agent_runtime_gateway
 from backend.protocols.agent_runtime import (
     AgentChatContext,
@@ -34,6 +35,14 @@ def make_chat_delivery_fn(app: Any):
         recipient_user_id = getattr(request.recipient_user, "id", None)
         if recipient_user_id is None:
             raise RuntimeError(f"Chat delivery recipient is missing user id: {request.recipient_id}")
+        # @@@chat-rendered-content - runtime handlers should enqueue the already rendered
+        # chat reminder content; chat-specific unread/rendering belongs on the upstream delivery path.
+        rendered_content = format_chat_notification(
+            request.sender_name,
+            request.chat_id,
+            request.unread_count,
+            signal=request.signal,
+        )
         envelope = AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=request.chat_id),
             sender=AgentRuntimeActor(
@@ -44,11 +53,12 @@ def make_chat_delivery_fn(app: Any):
                 source="chat",
             ),
             recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source="mycel"),
-            message=AgentRuntimeMessage(content=request.content, signal=request.signal),
+            message=AgentRuntimeMessage(content=rendered_content, signal=request.signal),
             extensions={
                 "mycel": {
                     "recipient_user_id": recipient_user_id,
                     "recipient_user_type": recipient_type,
+                    "raw_content": request.content,
                 }
             },
         )

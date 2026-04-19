@@ -108,6 +108,7 @@ def test_deliver_to_agents_does_not_require_main_thread_id():
                 else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
             )
         ),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
 
@@ -2349,6 +2350,7 @@ def test_deliver_to_agents_routes_delivery_by_agent_user_id() -> None:
                 else SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
             )
         ),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
 
@@ -2389,6 +2391,7 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
                 else None
             )
         ),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=resolver,
         delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
@@ -2539,6 +2542,7 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
                 else None
             )
         ),
+        unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=resolver,
         delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
     )
@@ -2549,14 +2553,14 @@ def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() 
 
 
 @pytest.mark.asyncio
-async def test_agent_runtime_gateway_uses_recipient_social_user_id_for_thread_lookup_and_unread(
+async def test_agent_runtime_gateway_uses_recipient_social_user_id_for_thread_lookup_and_passes_through_envelope_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     started, unread_calls, enqueued = await _run_chat_delivery(monkeypatch, chat_id="chat-1", unread_count=7)
 
     assert started == [("thread-1", "chat-1", "agent-user-1")]
-    assert unread_calls == [("chat-1", "agent-user-1")]
-    assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
+    assert unread_calls == []
+    assert enqueued == [("hello", "thread-1", "human-user-1", "Human")]
 
 
 @pytest.mark.asyncio
@@ -2602,7 +2606,7 @@ async def _run_chat_delivery(
     monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        "core.runtime.middleware.queue.formatters.format_chat_notification",
+        "backend.agent_runtime.chat_notification_format.format_chat_notification",
         lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
     )
 
@@ -2616,9 +2620,6 @@ async def _run_chat_delivery(
             ),
             agent_pool=pool or {},
             typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
-            messaging_service=SimpleNamespace(
-                count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or unread_count
-            ),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
@@ -2710,4 +2711,4 @@ async def test_agent_runtime_gateway_prefers_latest_live_child_thread_over_activ
     )
 
     assert started == [(expected_thread_id, chat_id, "agent-user-1")]
-    assert enqueued == [(f"Human|{chat_id}|{unread_count}|ping", expected_thread_id, "human-user-1", "Human")]
+    assert enqueued == [("hello", expected_thread_id, "human-user-1", "Human")]

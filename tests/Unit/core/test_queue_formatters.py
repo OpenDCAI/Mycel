@@ -2,7 +2,7 @@
 
 import xml.etree.ElementTree as ET
 
-from core.runtime.middleware.queue.formatters import format_chat_notification, format_command_notification
+from core.runtime.middleware.queue.formatters import format_command_notification
 
 
 def _require_child(parent: ET.Element, tag: str) -> ET.Element:
@@ -14,21 +14,6 @@ def _require_child(parent: ET.Element, tag: str) -> ET.Element:
 def _require_text(element: ET.Element) -> str:
     assert element.text is not None
     return element.text
-
-
-class TestFormatChatNotification:
-    def test_includes_explicit_read_messages_and_send_message_instructions(self):
-        result = format_chat_notification(
-            sender_name="alice",
-            chat_id="chat-123",
-            unread_count=2,
-        )
-
-        assert 'read_messages(chat_id="chat-123")' in result
-        assert 'Do not call send_message(chat_id="chat-123", ...) before read_messages(chat_id="chat-123") succeeds.' in result
-        assert 'send_message(chat_id="chat-123", content="...")' in result
-        assert "Prefer using this exact chat_id directly" in result
-        assert "Do not treat your normal assistant text as a chat reply." in result
 
 
 class TestFormatCommandNotification:

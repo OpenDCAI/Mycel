@@ -21,11 +21,13 @@ class ChatDeliveryDispatcher:
         self,
         chat_member_repo: Any,
         user_repo: Any,
+        unread_counter: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: ChatDeliveryFn | None = None,
     ) -> None:
         self._chat_members_repo = chat_member_repo
         self._user_repo = user_repo
+        self._unread_counter = unread_counter
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
 
@@ -70,7 +72,18 @@ class ChatDeliveryDispatcher:
             # @@@same-owner-group-delivery - explicit group membership among the same owner
             # must reach sibling actors even when no relationship row exists yet.
             if sender_owner_id and getattr(recipient, "owner_user_id", None) == sender_owner_id:
-                self._deliver(uid, recipient, content, sender_name, sender_type, chat_id, sender_id, sender_avatar_url, signal=signal)
+                self._deliver(
+                    uid,
+                    recipient,
+                    content,
+                    sender_name,
+                    sender_type,
+                    chat_id,
+                    sender_id,
+                    sender_avatar_url,
+                    unread_count=self._count_unread(chat_id, uid),
+                    signal=signal,
+                )
                 continue
 
             if self._delivery_resolver:
@@ -80,13 +93,32 @@ class ChatDeliveryDispatcher:
                     logger.info("[messaging] POLICY %s for %s", action.value, uid[:15])
                     continue
 
-            self._deliver(uid, recipient, content, sender_name, sender_type, chat_id, sender_id, sender_avatar_url, signal=signal)
+            self._deliver(
+                uid,
+                recipient,
+                content,
+                sender_name,
+                sender_type,
+                chat_id,
+                sender_id,
+                sender_avatar_url,
+                unread_count=self._count_unread(chat_id, uid),
+                signal=signal,
+            )
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         return resolve_messaging_display_user(
             user_repo=self._user_repo,
             social_user_id=social_user_id,
         )
+
+    def _count_unread(self, chat_id: str, recipient_id: str) -> int:
+        if self._unread_counter is None:
+            raise RuntimeError("Chat delivery unread counter is not configured")
+        unread_count = self._unread_counter(chat_id, recipient_id)
+        if type(unread_count) is not int:
+            raise RuntimeError(f"Chat delivery unread count is invalid for {recipient_id}: {unread_count!r}")
+        return unread_count
 
     def _deliver(
         self,
@@ -98,6 +130,7 @@ class ChatDeliveryDispatcher:
         chat_id: str,
         sender_id: str,
         sender_avatar_url: str | None,
+        unread_count: int,
         *,
         signal: str | None,
     ) -> None:
@@ -113,6 +146,7 @@ class ChatDeliveryDispatcher:
                 chat_id=chat_id,
                 sender_id=sender_id,
                 sender_avatar_url=sender_avatar_url,
+                unread_count=unread_count,
                 signal=signal,
             )
         )
