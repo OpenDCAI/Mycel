@@ -240,11 +240,14 @@ def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
 def test_resource_modules_use_neutral_sandbox_provider_factory_owner() -> None:
     common_source = inspect.getsource(neutral_resource_common)
     resource_service_source = inspect.getsource(resource_service)
+    sandbox_provider_factory_source = inspect.getsource(neutral_sandbox_provider_factory)
 
     assert "backend.web.services.sandbox_service" not in common_source
     assert "backend.web.services.sandbox_service" not in resource_service_source
+    assert "backend.web.services.sandbox_service" not in sandbox_provider_factory_source
     assert "backend.sandbox_provider_factory" in common_source
     assert "backend.sandbox_provider_factory" in resource_service_source
+    assert "backend.sandbox_inventory" in sandbox_provider_factory_source
 
 
 def test_web_sandbox_service_keeps_provider_factory_compat_surface() -> None:

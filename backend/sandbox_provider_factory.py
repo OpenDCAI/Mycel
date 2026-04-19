@@ -10,7 +10,7 @@ from backend.sandbox_paths import SANDBOXES_DIR
 
 def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = None) -> Any | None:
     """Build one provider instance from sandbox config name."""
-    from backend.web.services.sandbox_service import init_providers_and_managers
+    from backend.sandbox_inventory import init_providers_and_managers
 
     providers, _ = init_providers_and_managers()
     if name in providers:
