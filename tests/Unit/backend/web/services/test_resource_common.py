@@ -3,6 +3,7 @@ import inspect
 import pytest
 
 from backend import resource_common as neutral_resource_common
+from backend import resource_io as neutral_resource_io
 from backend import resource_projection, user_resource_projection
 from backend import resource_provider_boundary as neutral_resource_provider_boundary
 from backend import sandbox_provider_factory as neutral_sandbox_provider_factory
@@ -221,3 +222,11 @@ def test_resource_modules_use_neutral_sandbox_provider_factory_owner() -> None:
 
 def test_web_sandbox_service_keeps_provider_factory_compat_surface() -> None:
     assert sandbox_service.build_provider_from_config_name is neutral_sandbox_provider_factory.build_provider_from_config_name
+
+
+def test_resource_io_owner_moves_out_of_resource_service() -> None:
+    io_source = inspect.getsource(neutral_resource_io)
+    service_source = inspect.getsource(resource_service)
+
+    assert "backend.web.services import resource_service" not in io_source
+    assert "backend.resource_io" in service_source

@@ -11,6 +11,9 @@ from backend.resource_common import resolve_instance_capabilities as _resolve_in
 from backend.resource_common import resolve_provider_name
 from backend.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.resource_common import to_resource_status as _to_resource_status
+from backend.resource_io import browse_sandbox as run_browse_sandbox
+from backend.resource_io import read_sandbox as run_read_sandbox
+from backend.resource_io import refresh_resource_snapshots as run_refresh_resource_snapshots
 from backend.sandbox_provider_factory import build_provider_from_config_name
 from backend.web.core.config import SANDBOXES_DIR
 from sandbox.resource_snapshot import probe_and_upsert_for_instance
@@ -98,114 +101,30 @@ def _resolve_sandbox_provider(sandbox_id: str) -> tuple[Any, str]:
 
 
 def browse_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
-    """Browse the filesystem of a sandbox via its provider."""
-    from pathlib import PurePosixPath
-
-    provider, instance_id = _resolve_sandbox_provider(sandbox_id)
-
-    try:
-        entries = provider.list_dir(instance_id, path)
-    except Exception as exc:
-        raise RuntimeError(f"Failed to list directory: {exc}") from exc
-
-    norm_path = path or "/"
-
-    items = []
-    for entry in entries:
-        name = str(entry.get("name") or "").strip()
-        if not name or name.startswith("."):
-            continue
-        is_dir = entry.get("type") == "directory"
-        child_path = f"{norm_path.rstrip('/')}/{name}"
-        items.append({"name": name, "path": child_path, "is_dir": is_dir})
-
-    items.sort(key=lambda item: (not item["is_dir"], item["name"].lower()))
-
-    parent = str(PurePosixPath(norm_path).parent)
-    parent_path = parent if parent != norm_path else None
-
-    return {"current_path": norm_path, "parent_path": parent_path, "items": items}
+    return run_browse_sandbox(
+        sandbox_id,
+        path,
+        make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
+        build_provider_from_config_name_fn=build_provider_from_config_name,
+    )
 
 
 _READ_MAX_BYTES = 100 * 1024
 
 
 def read_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
-    """Read a file from a sandbox via its provider."""
-    provider, instance_id = _resolve_sandbox_provider(sandbox_id)
-
-    try:
-        content = provider.read_file(instance_id, path)
-    except Exception as exc:
-        raise RuntimeError(f"Failed to read file: {exc}") from exc
-
-    truncated = False
-    if len(content.encode()) > _READ_MAX_BYTES:
-        content = content.encode()[:_READ_MAX_BYTES].decode(errors="replace")
-        truncated = True
-
-    return {"path": path, "content": content, "truncated": truncated}
+    return run_read_sandbox(
+        sandbox_id,
+        path,
+        make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
+        build_provider_from_config_name_fn=build_provider_from_config_name,
+    )
 
 
 def refresh_resource_snapshots() -> dict[str, Any]:
-    """Probe active sandbox runtimes and upsert resource snapshots."""
-    repo = make_sandbox_monitor_repo()
-    try:
-        probe_targets = repo.list_probe_targets()
-    finally:
-        repo.close()
-
-    provider_cache: dict[str, Any] = {}
-    probed = 0
-    errors = 0
-    running_targets = 0
-    non_running_targets = 0
-
-    for item in probe_targets:
-        sandbox_id = item["sandbox_id"]
-        if not sandbox_id:
-            raise RuntimeError("Probe target missing sandbox_id")
-        provider_key = item["provider_name"]
-        instance_id = item["instance_id"]
-        status = item["observed_state"]
-        if status == "paused":
-            continue
-        probe_mode = "running_runtime" if status in ("running", "detached") else "non_running_sdk"
-        if probe_mode == "running_runtime":
-            running_targets += 1
-        else:
-            non_running_targets += 1
-
-        provider = provider_cache.get(provider_key)
-        if provider is None:
-            provider = build_provider_from_config_name(provider_key)
-            provider_cache[provider_key] = provider
-        if provider is None:
-            upsert_resource_snapshot_for_sandbox(
-                sandbox_id=sandbox_id,
-                provider_name=provider_key,
-                observed_state=status,
-                probe_mode=probe_mode,
-                probe_error=f"provider init failed: {provider_key}",
-            )
-            errors += 1
-            continue
-
-        result = probe_and_upsert_for_instance(
-            sandbox_id=sandbox_id,
-            provider_name=provider_key,
-            observed_state=status,
-            probe_mode=probe_mode,
-            provider=provider,
-            instance_id=instance_id,
-        )
-        probed += 1
-        if not result["ok"]:
-            errors += 1
-
-    return {
-        "probed": probed,
-        "errors": errors,
-        "running_targets": running_targets,
-        "non_running_targets": non_running_targets,
-    }
+    return run_refresh_resource_snapshots(
+        make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
+        build_provider_from_config_name_fn=build_provider_from_config_name,
+        probe_and_upsert_for_instance_fn=probe_and_upsert_for_instance,
+        upsert_resource_snapshot_for_sandbox_fn=upsert_resource_snapshot_for_sandbox,
+    )
