@@ -10,10 +10,10 @@ from backend import sandbox_recipe_catalog as _sandbox_recipe_catalog
 from backend import sandbox_runtime_mutations as _sandbox_runtime_mutations
 from backend import sandbox_runtime_reads as _sandbox_runtime_reads
 from backend import sandbox_thread_resources as _sandbox_thread_resources
+from backend.avatar_urls import avatar_url
+from backend.thread_projection import canonical_owner_threads
+from backend.virtual_threads import is_virtual_thread_id
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
-from backend.web.services.thread_visibility import canonical_owner_threads
-from backend.web.utils.helpers import is_virtual_thread_id
-from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
