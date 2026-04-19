@@ -197,3 +197,11 @@ def test_streaming_service_uses_thread_runtime_input_construction_owner() -> Non
 
     assert owner_module.build_initial_input is not None
     assert "from backend.thread_runtime.run import input_construction as _run_input_construction" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_tool_call_dedup_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.tool_call_dedup")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.ToolCallDedup is not None
+    assert "from backend.thread_runtime.run import tool_call_dedup as _run_tool_call_dedup" in streaming_source

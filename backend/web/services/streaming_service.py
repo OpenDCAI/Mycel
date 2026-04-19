@@ -18,6 +18,7 @@ from backend.thread_runtime.run import lifecycle as _run_lifecycle
 from backend.thread_runtime.run import observation as _run_observation
 from backend.thread_runtime.run import observer as _run_observer
 from backend.thread_runtime.run import prologue as _run_prologue
+from backend.thread_runtime.run import tool_call_dedup as _run_tool_call_dedup
 from backend.thread_runtime.run import trajectory as _run_trajectory
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
@@ -244,24 +245,17 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         if hasattr(agent, "_sandbox") and message_metadata and message_metadata.get("attachments"):
             await prime_sandbox(agent, thread_id)
 
-        emitted_tool_call_ids: set[str] = set()
-
-        # @@@checkpoint-dedup — pre-populate from checkpoint so replayed tool_calls
-        # and their ToolMessages from astream(None) are skipped.
-        checkpoint_tc_ids: set[str] = set()
+        dedup = _run_tool_call_dedup.ToolCallDedup()
         try:
-            pre_state = await agent.agent.aget_state(config)
-            if pre_state and pre_state.values:
-                for msg in pre_state.values.get("messages", []):
-                    if msg.__class__.__name__ == "AIMessage":
-                        for tc in getattr(msg, "tool_calls", []):
-                            tc_id = tc.get("id")
-                            if tc_id:
-                                checkpoint_tc_ids.add(tc_id)
+            # @@@checkpoint-dedup — pre-populate from checkpoint so replayed tool_calls
+            # and their ToolMessages from astream(None) are skipped.
+            await dedup.prepopulate_from_checkpoint(agent, config)
         except Exception:
             logger.warning("[stream:checkpoint] failed to pre-populate tc_ids for thread=%s", thread_id[:15], exc_info=True)
-        emitted_tool_call_ids.update(checkpoint_tc_ids)
-        logger.debug("[stream:checkpoint] thread=%s pre-populated %d tc_ids", thread_id[:15], len(checkpoint_tc_ids))
+        logger.debug(
+            "[stream:checkpoint] thread=%s pre-populated dedup state",
+            thread_id[:15],
+        )
 
         # Repair broken thread state: if last AIMessage has tool_calls without
         # matching ToolMessages, inject synthetic error ToolMessages so the LLM
@@ -386,8 +380,8 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                         for tc_chunk in getattr(msg_chunk, "tool_call_chunks", []):
                             tc_id = tc_chunk.get("id")
                             tc_name = tc_chunk.get("name", "")
-                            if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
-                                emitted_tool_call_ids.add(tc_id)
+                            if tc_id and tc_name and not dedup.already_emitted(tc_id):
+                                dedup.register(tc_id)
                                 pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
                                 tc_data: dict[str, Any] = {
                                     "id": tc_id,
@@ -461,16 +455,16 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                                         "[stream:update] tc=%s name=%s dup=%s chk=%s thread=%s",
                                         tc_id or "?",
                                         tc_name,
-                                        tc_id in emitted_tool_call_ids,
-                                        tc_id in checkpoint_tc_ids,
+                                        dedup.already_emitted(tc_id),
+                                        dedup.is_duplicate(tc_id),
                                         thread_id,
                                     )
                                     # @@@checkpoint-dedup — skip tool_calls from previous runs
                                     # but allow current run's updates (delivers full args after early emission)
-                                    if tc_id and tc_id in checkpoint_tc_ids:
+                                    if dedup.is_duplicate(tc_id):
                                         continue
-                                    if tc_id and tc_id not in emitted_tool_call_ids:
-                                        emitted_tool_call_ids.add(tc_id)
+                                    if tc_id and not dedup.already_emitted(tc_id):
+                                        dedup.register(tc_id)
                                         pending_tool_calls[tc_id] = {
                                             "name": tc_name,
                                             "args": full_args,
@@ -489,7 +483,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                                 tc_id = getattr(msg, "tool_call_id", None)
                                 tool_msg_id = getattr(msg, "id", None)
                                 # @@@checkpoint-dedup — skip replayed ToolMessages
-                                if tc_id and tc_id in checkpoint_tc_ids:
+                                if dedup.is_duplicate(tc_id):
                                     continue
                                 if tc_id:
                                     pending_tool_calls.pop(tc_id, None)
