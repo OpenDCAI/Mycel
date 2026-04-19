@@ -238,7 +238,7 @@ def _stub_thread_detail(monkeypatch, *, owner=None, trajectory=None):
 
 def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch):
     monkeypatch.setattr(
-        monitor_provider_runtime_service,
+        monitor_provider_runtime_service.monitor_resource_projection_service,
         "get_resource_overview_snapshot",
         lambda: {
             "providers": [
@@ -281,7 +281,7 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
 
 def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
     monkeypatch.setattr(
-        monitor_provider_runtime_service,
+        monitor_provider_runtime_service.monitor_resource_projection_service,
         "get_resource_overview_snapshot",
         lambda: {
             "providers": [
@@ -459,7 +459,11 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
 
 
 def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypatch):
-    monkeypatch.setattr(monitor_provider_runtime_service, "get_resource_overview_snapshot", lambda: {"providers": []})
+    monkeypatch.setattr(
+        monitor_provider_runtime_service.monitor_resource_projection_service,
+        "get_resource_overview_snapshot",
+        lambda: {"providers": []},
+    )
 
     with pytest.raises(KeyError, match="Provider not found: ghost"):
         monitor_provider_runtime_service.get_monitor_provider_detail("ghost")

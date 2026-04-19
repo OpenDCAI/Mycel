@@ -85,7 +85,7 @@ def test_monitor_resources_refresh_probes_before_rebuilding_snapshot(monkeypatch
         return _resource_snapshot()
 
     monkeypatch.setattr(monitor_resource_io_service, "refresh_resource_snapshots", _probe)
-    monkeypatch.setattr(monitor_resources_impl, "refresh_resource_overview_sync", _refresh)
+    monkeypatch.setattr(monitor_resources_impl.monitor_resource_projection_service, "refresh_resource_overview_sync", _refresh)
     monkeypatch.setattr(
         monitor_resources_impl.sandbox_projection,
         "list_monitor_sandboxes",

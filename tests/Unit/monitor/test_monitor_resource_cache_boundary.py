@@ -31,6 +31,9 @@ def test_monitor_resource_service_owns_resource_triage_composition():
     source = inspect.getsource(resources_impl)
 
     assert "sandbox_projection" in source
+    assert "backend.web.services.resource_cache" not in source
+    assert "backend.web.services.resource_projection_service" not in source
+    assert "monitor_resource_projection_service" in source
 
 
 def test_monitor_resource_service_uses_resource_io_port():
@@ -83,3 +86,5 @@ def test_monitor_provider_runtime_module_uses_inventory_port():
 
     assert "monitor_provider_runtime_inventory_service" not in source
     assert "provider_runtime_inventory_service" in source
+    assert "backend.web.services.resource_cache" not in source
+    assert "monitor_resource_projection_service" in source

@@ -6,8 +6,7 @@ from typing import Any
 
 from backend.monitor.application.use_cases import sandbox_projection
 from backend.monitor.infrastructure.io import resource_io_service
-from backend.web.services import resource_projection_service
-from backend.web.services.resource_cache import get_resource_overview_snapshot, refresh_resource_overview_sync
+from backend.monitor.infrastructure.resources import resource_projection_service as monitor_resource_projection_service
 
 
 def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
@@ -17,14 +16,14 @@ def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_monitor_resource_overview() -> dict[str, Any]:
-    return _attach_monitor_triage(get_resource_overview_snapshot())
+    return _attach_monitor_triage(monitor_resource_projection_service.get_resource_overview_snapshot())
 
 
 def refresh_monitor_resource_overview() -> dict[str, Any]:
     # @@@manual-resource-refresh-must-probe - the monitor refresh button must fetch new
     # sandbox metrics first; recomputing the overview alone just re-labels stale snapshots.
     resource_io_service.refresh_resource_snapshots()
-    return _attach_monitor_triage(refresh_resource_overview_sync())
+    return _attach_monitor_triage(monitor_resource_projection_service.refresh_resource_overview_sync())
 
 
 def browse_monitor_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
@@ -36,4 +35,4 @@ def read_monitor_sandbox(sandbox_id: str, path: str) -> dict[str, Any]:
 
 
 def list_user_resource_providers(app: Any, user_id: str) -> dict[str, Any]:
-    return resource_projection_service.list_user_resource_providers(app, user_id)
+    return monitor_resource_projection_service.list_user_resource_providers(app, user_id)

@@ -6,7 +6,7 @@ from typing import Any
 
 from backend.monitor.application.use_cases import operations
 from backend.monitor.infrastructure.providers import provider_runtime_inventory_service
-from backend.web.services.resource_cache import get_resource_overview_snapshot
+from backend.monitor.infrastructure.resources import resource_projection_service as monitor_resource_projection_service
 
 
 def list_monitor_provider_orphan_runtimes() -> dict[str, Any]:
@@ -24,7 +24,7 @@ def list_monitor_provider_orphan_runtimes() -> dict[str, Any]:
 
 
 def get_monitor_provider_detail(provider_id: str) -> dict[str, Any]:
-    snapshot = get_resource_overview_snapshot()
+    snapshot = monitor_resource_projection_service.get_resource_overview_snapshot()
     providers = snapshot.get("providers") or []
     provider = next((item for item in providers if str(item.get("id") or "") == provider_id), None)
     if provider is None:
@@ -43,7 +43,7 @@ def _resource_row_values(resource_rows: list[dict[str, Any]], key: str) -> list[
 
 
 def get_monitor_runtime_detail(runtime_id: str) -> dict[str, Any]:
-    snapshot = get_resource_overview_snapshot()
+    snapshot = monitor_resource_projection_service.get_resource_overview_snapshot()
     for provider in snapshot.get("providers") or []:
         for resource_row in provider.get("resource_rows") or []:
             current = str(resource_row.get("runtimeId") or "").strip()
