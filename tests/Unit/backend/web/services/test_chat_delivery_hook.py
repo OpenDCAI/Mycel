@@ -8,16 +8,24 @@ import pytest
 
 from backend.web.routers import threads as threads_router
 from backend.web.services import chat_delivery_hook
+from messaging.delivery import runtime_bridge as owner_runtime_bridge
 from messaging.delivery.dispatcher import ChatDeliveryRequest
+from messaging.realtime import events as owner_chat_events
+from messaging.realtime import typing as owner_typing
 
 
 def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> None:
-    delivery_source = inspect.getsource(chat_delivery_hook)
+    delivery_source = inspect.getsource(owner_runtime_bridge)
     threads_source = inspect.getsource(threads_router)
     from backend.web.core import lifespan as lifespan_module
+    from backend.web.services import chat_events as shell_chat_events
+    from backend.web.services import typing_tracker as shell_typing_tracker
 
     lifespan_source = inspect.getsource(lifespan_module)
 
+    assert owner_runtime_bridge.make_chat_delivery_fn is chat_delivery_hook.make_chat_delivery_fn
+    assert owner_chat_events.ChatEventBus is shell_chat_events.ChatEventBus
+    assert owner_typing.TypingTracker is shell_typing_tracker.TypingTracker
     assert "NativeAgentRuntimeGateway" not in delivery_source
     assert "NativeAgentRuntimeGateway" not in threads_source
     assert "get_agent_runtime_gateway" in delivery_source
@@ -28,7 +36,13 @@ def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> Non
     assert "backend.web.services.agent_runtime_port" not in threads_source
     assert "backend.agent_runtime.bootstrap" in lifespan_source
     assert "build_agent_runtime_gateway" in lifespan_source
+    assert "messaging.realtime.events" in lifespan_source
+    assert "messaging.realtime.typing" in lifespan_source
+    assert "messaging.delivery.runtime_bridge" in lifespan_source
     assert "backend.web.services.agent_runtime_gateway" not in lifespan_source
+    assert "backend.web.services.chat_events" not in lifespan_source
+    assert "backend.web.services.typing_tracker" not in lifespan_source
+    assert "backend.web.services.chat_delivery_hook" not in lifespan_source
 
 
 @pytest.mark.asyncio

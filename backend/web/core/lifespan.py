@@ -81,16 +81,16 @@ async def lifespan(app: FastAPI):
         recipe_repo=app.state.recipe_repo,
     )
 
-    from backend.web.services.chat_events import ChatEventBus
-    from backend.web.services.typing_tracker import TypingTracker
+    from messaging.realtime.events import ChatEventBus
+    from messaging.realtime.typing import TypingTracker
 
     app.state.chat_event_bus = ChatEventBus()
     app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
 
     # Wire chat delivery after event loop is available
     # ---- Messaging system (Supabase-backed, required) ----
-    from backend.web.services.chat_delivery_hook import make_chat_delivery_fn
     from messaging.delivery.resolver import HireVisitDeliveryResolver
+    from messaging.delivery.runtime_bridge import make_chat_delivery_fn
     from messaging.relationships.service import RelationshipService
     from messaging.service import MessagingService
 
