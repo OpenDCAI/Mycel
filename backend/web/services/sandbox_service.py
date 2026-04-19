@@ -8,6 +8,7 @@ from typing import Any
 import backend.user_sandbox_reads as user_sandbox_reads
 from backend import sandbox_inventory
 from backend import sandbox_provider_factory as _sandbox_provider_factory
+from backend import sandbox_recipe_catalog as _sandbox_recipe_catalog
 from backend import sandbox_runtime_mutations as _sandbox_runtime_mutations
 from backend import sandbox_runtime_reads as _sandbox_runtime_reads
 from backend import sandbox_thread_resources as _sandbox_thread_resources
@@ -17,7 +18,7 @@ from backend.web.utils.helpers import is_virtual_thread_id
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
-from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
+from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from storage.models import map_sandbox_state_to_display_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import build_storage_container
@@ -55,7 +56,7 @@ def _configured_api_key(name: str, configured: str | None, env_name: str) -> str
 
 
 def list_default_recipes() -> list[dict[str, Any]]:
-    return list_builtin_recipes(available_sandbox_types())
+    return _sandbox_recipe_catalog.list_default_recipes()
 
 
 def _list_user_runtime_rows(
