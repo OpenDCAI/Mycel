@@ -12,6 +12,7 @@ from core.runtime.middleware.monitor import AgentState
 logger = logging.getLogger(__name__)
 
 _start_agent_run = None
+_append_event = None
 
 
 def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
@@ -39,9 +40,9 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     display_builder_ref = app.state.display_builder
 
     async def activity_sink(event: dict) -> None:
-        from backend.web.services.event_store import append_event as _append
-
-        seq = await _append(thread_id, f"activity_{thread_id}", event)
+        if _append_event is None:
+            raise RuntimeError("thread_runtime.run.buffer_wiring requires _append_event binding")
+        seq = await _append_event(thread_id, f"activity_{thread_id}", event)
         try:
             data = json.loads(event.get("data", "{}")) if isinstance(event.get("data"), str) else event.get("data", {})
         except (json.JSONDecodeError, TypeError):
