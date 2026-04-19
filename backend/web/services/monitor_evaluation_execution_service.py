@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backend.web.services import monitor_evaluation_storage_service
 from eval.batch_executor import EvaluationBatchExecutor
 from eval.batch_service import EvaluationBatchService
 from eval.harness.client import EvalClient
 from eval.harness.runner import EvalRunner
 from eval.harness.scenario import load_scenarios_from_dir
 from eval.models import EvalScenario
-from eval.storage import TrajectoryStore
 
 EVAL_SCENARIO_DIR = Path(__file__).resolve().parents[3] / "eval" / "scenarios"
 
@@ -38,7 +38,11 @@ async def run_monitor_evaluation_batch(
 ) -> None:
     client = EvalClient(base_url=base_url, token=token)
     try:
-        runner = EvalRunner(client=client, agent_user_id=agent_user_id, store=TrajectoryStore())
+        runner = EvalRunner(
+            client=client,
+            agent_user_id=agent_user_id,
+            store=monitor_evaluation_storage_service.make_trajectory_store(),
+        )
         executor = EvaluationBatchExecutor(runner=runner, batch_service=batch_service)
         await executor.run_batch(batch_id, scenarios)
     finally:

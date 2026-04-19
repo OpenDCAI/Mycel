@@ -4,6 +4,7 @@ from backend.web.services import (
     monitor_evaluation_execution_service,
     monitor_evaluation_read_service,
     monitor_evaluation_service,
+    monitor_evaluation_storage_service,
     monitor_gateway,
 )
 
@@ -42,10 +43,23 @@ def test_monitor_evaluation_service_uses_execution_port_for_runtime_work():
 def test_monitor_evaluation_service_uses_read_source_for_store_and_batch_repo():
     service_source = inspect.getsource(monitor_evaluation_service)
     read_source = inspect.getsource(monitor_evaluation_read_service)
+    storage_source = inspect.getsource(monitor_evaluation_storage_service)
 
     assert "monitor_evaluation_read_service" in service_source
     assert "TrajectoryStore" not in service_source
     assert "build_evaluation_batch_repo" not in service_source
 
-    assert "TrajectoryStore" in read_source
-    assert "build_evaluation_batch_repo" in read_source
+    assert "monitor_evaluation_storage_service" in read_source
+    assert "TrajectoryStore" not in read_source
+    assert "build_evaluation_batch_repo" not in read_source
+    assert "TrajectoryStore" in storage_source
+    assert "build_evaluation_batch_repo" in storage_source
+
+
+def test_monitor_evaluation_execution_uses_storage_port_for_runner_store():
+    execution_source = inspect.getsource(monitor_evaluation_execution_service)
+    storage_source = inspect.getsource(monitor_evaluation_storage_service)
+
+    assert "monitor_evaluation_storage_service" in execution_source
+    assert "TrajectoryStore" not in execution_source
+    assert "make_trajectory_store" in storage_source
