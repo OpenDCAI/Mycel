@@ -41,7 +41,6 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
     chat_handler = _FakeChatHandler()
     thread_input_handler = _FakeThreadInputHandler()
     gateway = NativeAgentRuntimeGateway(
-        app=object(),
         chat_handlers={"mycel": chat_handler},
         thread_input_handler=thread_input_handler,
     )
@@ -78,7 +77,6 @@ def test_gateway_rejects_single_chat_handler_entrypoint() -> None:
     constructor: Any = NativeAgentRuntimeGateway
     with pytest.raises(TypeError, match="chat_handler"):
         constructor(
-            app=object(),
             chat_handler=_FakeChatHandler(),
             thread_input_handler=_FakeThreadInputHandler(),
         )
@@ -96,7 +94,6 @@ async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
 
     external_handler = _FakeChatHandler()
     gateway = NativeAgentRuntimeGateway(
-        app=object(),
         chat_handlers={"external-hook": external_handler},
         thread_input_handler=_FakeThreadInputHandler(),
     )
@@ -124,7 +121,6 @@ async def test_gateway_rejects_unregistered_chat_runtime_source() -> None:
     )
 
     gateway = NativeAgentRuntimeGateway(
-        app=object(),
         chat_handlers={"mycel": _FakeChatHandler()},
         thread_input_handler=_FakeThreadInputHandler(),
     )

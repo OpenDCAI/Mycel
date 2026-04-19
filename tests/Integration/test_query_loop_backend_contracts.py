@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
+from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
 from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 from backend.web.models.requests import SendMessageRequest
 from backend.web.routers import threads as threads_router
@@ -516,7 +516,7 @@ def _make_streaming_app(
         state.thread_locks = {}
         state.thread_locks_guard = asyncio.Lock()
     app = SimpleNamespace(state=state)
-    state.agent_runtime_gateway = NativeAgentRuntimeGateway(app)
+    state.agent_runtime_gateway = build_agent_runtime_gateway(app)
     return app, queue_manager
 
 
@@ -1224,7 +1224,7 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", fake_get_or_create_agent)
 
     startup_task = asyncio.create_task(
-        NativeAgentRuntimeGateway(app).dispatch_thread_input(
+        build_agent_runtime_gateway(app).dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="owner"),
