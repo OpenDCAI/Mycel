@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 
 
 def test_thread_runtime_namespace_exports_binding_and_state_helpers() -> None:
@@ -13,3 +14,13 @@ def test_thread_runtime_namespace_exports_binding_and_state_helpers() -> None:
     assert binding_owner.ThreadRuntimeBindingError is binding_shell.ThreadRuntimeBindingError
     assert state_owner.get_sandbox_info is state_shell.get_sandbox_info
     assert state_owner.get_sandbox_status_from_repos is state_shell.get_sandbox_status_from_repos
+
+
+def test_agent_pool_uses_thread_runtime_sandbox_owner() -> None:
+    sandbox_owner = importlib.import_module("backend.thread_runtime.sandbox")
+    agent_pool_module = importlib.import_module("backend.web.services.agent_pool")
+    source = inspect.getsource(agent_pool_module)
+
+    assert agent_pool_module.resolve_thread_sandbox is sandbox_owner.resolve_thread_sandbox
+    assert "from backend.thread_runtime.sandbox import resolve_thread_sandbox" in source
+    assert "def resolve_thread_sandbox(" not in source
