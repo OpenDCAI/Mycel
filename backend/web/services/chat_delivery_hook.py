@@ -6,6 +6,7 @@ import logging
 from enum import Enum
 from typing import Any
 
+from backend.agent_runtime.port import get_agent_runtime_gateway
 from backend.protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -13,7 +14,6 @@ from backend.protocols.agent_runtime import (
     AgentRuntimeActor,
     AgentRuntimeMessage,
 )
-from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 from messaging.delivery.dispatcher import ChatDeliveryRequest
 
 logger = logging.getLogger(__name__)
