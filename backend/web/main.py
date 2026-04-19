@@ -16,13 +16,13 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from backend.chat.api.http import conversations_router  # noqa: E402
 from backend.chat.api.http import router as messaging_router  # noqa: E402
+from backend.monitor.api.http import router as monitor_router  # noqa: E402
 from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
     contacts,
     invite_codes,
     marketplace,
-    monitor,
     panel,
     resources,
     sandbox,
@@ -62,7 +62,7 @@ app.include_router(thread_files.router)
 app.include_router(thread_files._public)
 app.include_router(settings.router)
 app.include_router(panel.router)
-app.include_router(monitor.router)
+app.include_router(monitor_router.router)
 app.include_router(resources.router)
 app.include_router(marketplace.router)
 app.include_router(conversations_router.router)
