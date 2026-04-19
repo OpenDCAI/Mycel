@@ -7,7 +7,7 @@ from typing import Any
 from backend.web.services import (
     monitor_sandbox_read_service,
     monitor_thread_read_service,
-    monitor_thread_trajectory_service,
+    monitor_trace_service,
     owner_thread_workbench_service,
 )
 
@@ -76,5 +76,5 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         "owner": _normalize_thread_owner(thread_base["owner"]),
         "summary": summary,
         "runtime_rows": runtime_rows,
-        "trajectory": await monitor_thread_trajectory_service.load_monitor_thread_trajectory(app, thread_id),
+        "trajectory": await monitor_trace_service.build_monitor_thread_trajectory(app, thread_id),
     }
