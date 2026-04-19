@@ -1,6 +1,6 @@
 import inspect
 
-from backend import auth_dependencies
+from backend import auth_dependencies, auth_user_resolution
 from backend.web.core import dependencies as web_dependencies
 from backend.web.routers import auth as auth_router
 
@@ -21,3 +21,16 @@ def test_auth_router_uses_neutral_auth_dependency_owner():
 
 def test_web_dependency_getter_is_compat_alias():
     assert web_dependencies._get_auth_service is auth_dependencies._get_auth_service
+
+
+def test_web_dependencies_import_current_user_resolution_from_neutral_owner():
+    source = inspect.getsource(web_dependencies)
+
+    assert "from backend.auth_user_resolution import get_current_user, get_current_user_id" in source
+    assert "async def get_current_user(" not in source
+    assert "async def get_current_user_id(" not in source
+
+
+def test_web_current_user_resolution_is_compat_alias():
+    assert web_dependencies.get_current_user is auth_user_resolution.get_current_user
+    assert web_dependencies.get_current_user_id is auth_user_resolution.get_current_user_id

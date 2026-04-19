@@ -5,82 +5,28 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 
-from backend.auth_dependencies import _get_auth_service
+from backend.auth_dependencies import _get_auth_service as _get_auth_service
+from backend.auth_user_resolution import get_current_user as get_current_user
+from backend.auth_user_resolution import get_current_user_id as get_current_user_id
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.thread_runtime_convergence import inspect_owner_thread_runtime
 from sandbox.thread_context import set_current_thread_id
+
+__all__ = [
+    "get_app",
+    "_get_auth_service",
+    "get_current_user",
+    "get_current_user_id",
+    "verify_thread_owner",
+    "verify_thread_row_owner",
+    "get_thread_lock",
+    "get_thread_agent",
+]
 
 
 async def get_app(request: Request) -> FastAPI:
     """Get FastAPI app instance from request."""
     return request.app
-
-
-def _extract_jwt_payload(request: Request) -> dict:
-    """Extract and verify JWT payload from Bearer token. Returns {user_id}."""
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(401, "Missing or invalid Authorization header")
-    token = auth_header[7:]
-    try:
-        return _get_auth_service(request.app).verify_token(token)
-    except ValueError as e:
-        raise HTTPException(401, str(e))
-
-
-async def _get_user_row_for_auth(request: Request, user_id: str, user_repo: Any) -> Any:
-    state = request.app.state
-    guard = getattr(state, "_auth_user_check_guard", None)
-    if guard is None:
-        guard = asyncio.Lock()
-        setattr(state, "_auth_user_check_guard", guard)
-    inflight = getattr(state, "_auth_user_check_inflight", None)
-    if inflight is None:
-        inflight = {}
-        setattr(state, "_auth_user_check_inflight", inflight)
-
-    async with guard:
-        task = inflight.get(user_id)
-        owns_task = task is None
-        if task is None:
-            # @@@auth-user-check-singleflight - Login fan-out starts many
-            # authenticated requests at once; coalesce the same user existence
-            # check without caching the result after this burst.
-            task = asyncio.create_task(asyncio.to_thread(user_repo.get_by_id, user_id))
-            inflight[user_id] = task
-
-    try:
-        return await task
-    finally:
-        if owns_task:
-            async with guard:
-                if inflight.get(user_id) is task:
-                    del inflight[user_id]
-
-
-async def _resolve_current_user(request: Request) -> tuple[str, Any | None]:
-    user_id = _extract_jwt_payload(request)["user_id"]
-    user_repo = getattr(request.app.state, "user_repo", None)
-    if user_repo is None:
-        return user_id, None
-    user = await _get_user_row_for_auth(request, user_id, user_repo)
-    if user is None:
-        raise HTTPException(401, "User no longer exists — please re-login")
-    return user_id, user
-
-
-async def get_current_user(request: Request) -> Any:
-    """Return the authenticated user row when a route needs user fields."""
-    _, user = await _resolve_current_user(request)
-    if user is None:
-        raise HTTPException(500, "User repo not initialized")
-    return user
-
-
-async def get_current_user_id(request: Request) -> str:
-    """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
-    user_id, _ = await _resolve_current_user(request)
-    return user_id
 
 
 async def verify_thread_owner(
