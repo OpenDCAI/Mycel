@@ -29,4 +29,20 @@ describe("resolveMonitorPorts", () => {
     expect(ports.backendPort).toBe("8010");
     expect(ports.monitorBackendPort).toBe("8010");
   });
+
+  it("uses the worktree monitor-backend port when no dedicated env port is provided", () => {
+    const ports = resolveMonitorPorts({
+      env: {
+        LEON_BACKEND_PORT: "8010",
+      },
+      getWorktreePort: (key, defaultPort) => {
+        if (key === "worktree.ports.monitor-backend") {
+          return "55419";
+        }
+        return defaultPort;
+      },
+    });
+
+    expect(ports.monitorBackendPort).toBe("55419");
+  });
 });
