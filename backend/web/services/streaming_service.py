@@ -16,6 +16,7 @@ from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
 from backend.thread_runtime.run import observation as _run_observation
 from backend.thread_runtime.run import observer as _run_observer
+from backend.thread_runtime.run import prologue as _run_prologue
 from backend.thread_runtime.run import trajectory as _run_trajectory
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
@@ -281,90 +282,15 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         # won't reject the message history.
         await _repair_incomplete_tool_calls(agent, config)
 
-        meta = message_metadata or {}
-        src = meta.get("source")
-
-        # @@@run-source-tracking — set on runtime for source tracking
-        if hasattr(agent, "runtime"):
-            agent.runtime.current_run_source = src or "owner"
-
-        # Track last-active for sidebar sorting
-        import time as _time
-
-        app.state.thread_last_active[thread_id] = _time.time()
-
-        # @@@user-entry — emit user_message so display_builder can add a UserMessage
-        # entry.  Skip for steers — wake_handler already emitted user_message at
-        # enqueue time (@@@steer-instant-feedback).
-        # Note: is_steer is NOT persisted in queue, so check notification_type too.
-        is_steer = meta.get("is_steer") or meta.get("notification_type") == "steer"
-        if meta.get("ask_user_question_answered"):
-            await emit(
-                {
-                    "event": "user_message",
-                    "data": json.dumps(
-                        {
-                            "content": "",
-                            "showing": False,
-                            "ask_user_question_answered": meta["ask_user_question_answered"],
-                        },
-                        ensure_ascii=False,
-                    ),
-                }
-            )
-        elif (not src or src == "owner") and not is_steer:
-            # @@@strip-for-display — agent sees full content (with system-reminder),
-            # frontend sees clean text (tags stripped)
-            from backend.web.utils.serializers import strip_system_tags
-
-            display_content = strip_system_tags(message) if "<system-reminder>" in message else message
-            await emit(
-                {
-                    "event": "user_message",
-                    "data": json.dumps(
-                        {
-                            "content": display_content,
-                            "showing": True,
-                            **({"attachments": meta["attachments"]} if meta.get("attachments") else {}),
-                        },
-                        ensure_ascii=False,
-                    ),
-                }
-            )
-
-        await emit(
-            {
-                "event": "run_start",
-                "data": json.dumps(
-                    {
-                        "thread_id": thread_id,
-                        "run_id": run_id,
-                        "source": src,
-                        "sender_name": meta.get("sender_name"),
-                        "showing": True,
-                    }
-                ),
-            }
+        src, ntype = await _run_prologue.emit_run_prologue(
+            agent=agent,
+            thread_id=thread_id,
+            message=message,
+            message_metadata=message_metadata,
+            run_id=run_id,
+            app=app,
+            emit=emit,
         )
-
-        # @@@run-notice — emit notice right after run_start so frontend folds it
-        # into the (re)opened turn. Mirror the cold-path DisplayBuilder rule:
-        # any source=system message is a notice; external notices stay chat-only.
-        ntype = meta.get("notification_type")
-        if src == "system" or (src == "external" and ntype == "chat"):
-            await emit(
-                {
-                    "event": "notice",
-                    "data": json.dumps(
-                        {
-                            "content": message,
-                            "source": src,
-                            "notification_type": ntype,
-                        },
-                        ensure_ascii=False,
-                    ),
-                }
-            )
 
         terminal_followthrough_items: list[dict[str, str | None]] | None = None
         # @@@terminal-followthrough-reentry - terminal background completions
