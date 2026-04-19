@@ -86,3 +86,10 @@ def test_thread_runtime_pool_exports_idle_reaper_owner() -> None:
     assert hasattr(shell_module, "run_idle_reaper_once")
     assert hasattr(shell_module, "idle_reaper_loop")
     assert owner_module.__name__ == "backend.thread_runtime.pool.idle_reaper"
+
+
+def test_thread_visibility_uses_thread_projection_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_projection")
+    shell_module = importlib.import_module("backend.web.services.thread_visibility")
+
+    assert owner_module.canonical_owner_threads is shell_module.canonical_owner_threads
