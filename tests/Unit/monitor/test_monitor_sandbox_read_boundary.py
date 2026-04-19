@@ -85,6 +85,7 @@ def test_monitor_trace_uses_trace_read_source_port():
     assert "build_storage_container" not in read_source
     assert "build_run_event_read_transport" in read_source
     assert "backend.web.services.thread_history_service" not in read_source
+    assert "backend.web.services.agent_pool" not in read_source
     assert "agent_pool" not in history_source
     assert "checkpoint_store" not in history_source
     assert "resolve_sandbox" not in history_source
