@@ -112,3 +112,13 @@ def test_streaming_service_uses_thread_runtime_buffer_wiring_owner() -> None:
     assert owner_module.get_or_create_thread_buffer is not None
     assert owner_module.ensure_thread_handlers is not None
     assert "from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_run_lifecycle_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.lifecycle")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.prime_sandbox is not None
+    assert owner_module.write_cancellation_markers is not None
+    assert owner_module.repair_incomplete_tool_calls is not None
+    assert "from backend.thread_runtime.run import lifecycle as _run_lifecycle" in streaming_source
