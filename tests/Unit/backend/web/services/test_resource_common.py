@@ -3,8 +3,9 @@ import inspect
 import pytest
 
 from backend import resource_common as neutral_resource_common
-from backend import resource_projection
-from backend.web.services import resource_common, resource_service
+from backend import resource_projection, user_resource_projection
+from backend import resource_provider_boundary as neutral_resource_provider_boundary
+from backend.web.services import resource_common, resource_provider_boundary_service, resource_service
 
 
 class _FakeThreadRepo:
@@ -179,3 +180,18 @@ def test_shared_resource_consumers_use_neutral_resource_common_owner() -> None:
 def test_web_resource_common_keeps_compat_surface() -> None:
     assert resource_common.metric is neutral_resource_common.metric
     assert resource_common.thread_owners is neutral_resource_common.thread_owners
+
+
+def test_shared_resource_consumers_use_neutral_resource_provider_boundary_owner() -> None:
+    projection_source = inspect.getsource(resource_projection)
+    user_projection_source = inspect.getsource(user_resource_projection)
+
+    assert "backend.web.services import resource_provider_boundary_service" not in projection_source
+    assert "backend.web.services import resource_provider_boundary_service" not in user_projection_source
+    assert "backend.resource_provider_boundary" in projection_source
+    assert "backend.resource_provider_boundary" in user_projection_source
+
+
+def test_web_resource_provider_boundary_keeps_compat_surface() -> None:
+    assert resource_provider_boundary_service.build_resource_row_payload is neutral_resource_provider_boundary.build_resource_row_payload
+    assert resource_provider_boundary_service.load_user_sandboxes is neutral_resource_provider_boundary.load_user_sandboxes

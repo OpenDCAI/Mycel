@@ -2,11 +2,9 @@ import inspect
 
 import backend.resource_common as neutral_resource_common
 import backend.resource_projection as resource_projection_service
+import backend.resource_provider_boundary as resource_provider_boundary_service
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
-from backend.web.services import (
-    resource_common,
-    resource_provider_boundary_service,
-)
+from backend.web.services import resource_common
 from storage import runtime as storage_runtime
 
 LOWER_RUNTIME_KEY = "lease_" + "id"

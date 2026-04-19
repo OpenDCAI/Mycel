@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+import backend.resource_provider_boundary as resource_provider_boundary
 from backend.monitor.infrastructure.read_models import resource_runtime_service
 from backend.resource_common import CATALOG as _CATALOG
 from backend.resource_common import CatalogEntry as _CatalogEntry
@@ -20,7 +21,6 @@ from backend.resource_common import to_resource_metrics as _to_resource_metrics
 from backend.resource_common import to_resource_status as _to_resource_status
 from backend.user_resource_projection import list_user_resource_providers as _list_user_resource_providers
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services import resource_provider_boundary_service
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_sandbox_state_to_display_status
 
@@ -133,7 +133,7 @@ def list_resource_providers() -> dict[str, Any]:
     owners = _thread_owners([str(resource_row["thread_id"]) for resource_row in resource_rows if resource_row.get("thread_id")])
 
     providers: list[dict[str, Any]] = []
-    for item in resource_provider_boundary_service.available_sandbox_types():
+    for item in resource_provider_boundary.available_sandbox_types():
         config_name = str(item["name"])
         available = bool(item.get("available"))
         provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
@@ -172,7 +172,7 @@ def list_resource_providers() -> dict[str, Any]:
                 continue
             seen_resource_ids.add(resource_identity)
             normalized_resource_rows.append(
-                resource_provider_boundary_service.build_resource_row_payload(
+                resource_provider_boundary.build_resource_row_payload(
                     resource_identity=resource_identity,
                     sandbox_id=str(resource_row.get("sandbox_id") or "").strip() or None,
                     thread_id=thread_id,

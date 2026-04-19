@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+import backend.resource_provider_boundary as resource_provider_boundary
 from backend.monitor.infrastructure.read_models import resource_runtime_service
-from backend.web.services import resource_provider_boundary_service
 from storage.models import map_sandbox_state_to_display_status
 
 
@@ -25,8 +25,8 @@ def _empty_metric(unit: str) -> dict[str, Any]:
 
 
 def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> dict[str, Any]:
-    display = resource_provider_boundary_service.get_provider_display_contract(config_name)
-    capabilities, capability_error = resource_provider_boundary_service.get_provider_capability_contract(config_name)
+    display = resource_provider_boundary.get_provider_display_contract(config_name)
+    capabilities, capability_error = resource_provider_boundary.get_provider_capability_contract(config_name)
     provider_type = str(display["type"])
 
     resource_rows: list[dict[str, Any]] = []
@@ -41,7 +41,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         secondary_identity = str(sandbox.get("runtime_id") or "sandbox").strip()
         resource_identity = f"{sandbox_id}:{thread_id}" if sandbox_id and thread_id else f"{secondary_identity}:{thread_id}"
         resource_rows.append(
-            resource_provider_boundary_service.build_resource_row_payload(
+            resource_provider_boundary.build_resource_row_payload(
                 resource_identity=resource_identity,
                 sandbox_id=sandbox_id,
                 thread_id=thread_id,
@@ -65,7 +65,7 @@ def _build_provider_card(config_name: str, sandboxes: list[dict[str, Any]]) -> d
         "memory": _empty_metric("GB"),
         "disk": _empty_metric("GB"),
     }
-    availability = resource_provider_boundary_service.build_provider_availability_payload(
+    availability = resource_provider_boundary.build_provider_availability_payload(
         available=capability_error is None,
         running_count=running_count,
         unavailable_reason=capability_error,
@@ -100,7 +100,7 @@ def _backfill_runtime_ids(sandboxes: list[dict[str, Any]]) -> None:
 
 
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
-    sandboxes = resource_provider_boundary_service.load_user_sandboxes(app, owner_user_id)
+    sandboxes = resource_provider_boundary.load_user_sandboxes(app, owner_user_id)
     _backfill_runtime_ids(sandboxes)
 
     sandboxes_by_provider: dict[str, list[dict[str, Any]]] = {}
