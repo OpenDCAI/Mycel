@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from backend.web.core.dependencies import get_app, get_current_user_id
+from messaging.actor_ownership import is_owned_by_viewer
 from messaging.contracts import RelationshipRow
 from messaging.relationships.state_machine import TransitionError
 
@@ -55,7 +56,7 @@ def _resolve_actor_user_id(app: Any, current_user_id: str, actor_user_id: str | 
     actor = user_repo.get_by_id(actor_user_id)
     if actor is None:
         raise HTTPException(404, "Actor user not found")
-    if getattr(actor, "owner_user_id", None) != current_user_id:
+    if not is_owned_by_viewer(current_user_id, actor):
         raise HTTPException(403, "Actor user does not belong to you")
     return actor_user_id
 

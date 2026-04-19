@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -23,6 +24,13 @@ def _row(*, state: str = "pending", initiator_user_id: str = "requester-user-1")
         created_at=now,
         updated_at=now,
     )
+
+
+def test_relationship_router_imports_actor_ownership_primitive() -> None:
+    source = inspect.getsource(relationship_router)
+
+    assert "from messaging.actor_ownership import" in source
+    assert "owner_user_id" not in source
 
 
 @pytest.mark.asyncio

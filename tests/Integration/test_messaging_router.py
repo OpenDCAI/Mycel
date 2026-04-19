@@ -121,6 +121,13 @@ def test_chat_router_imports_messaging_social_access_owner() -> None:
     assert "backend.web.services.social_access_service" not in source
 
 
+def test_chat_router_imports_actor_ownership_primitive() -> None:
+    source = inspect.getsource(chat_router)
+
+    assert "from messaging.actor_ownership import" in source
+    assert "owner_user_id ==" not in source
+
+
 def test_get_accessible_chat_or_404_returns_chat():
     chat = _chat("chat-1")
     app = SimpleNamespace(
