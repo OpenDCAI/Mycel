@@ -8,11 +8,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
+from backend.protocols.runtime_read import RuntimeThreadActivityReader
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.serializers import avatar_url
-from core.runtime.middleware.monitor import AgentState
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
@@ -51,16 +51,12 @@ async def list_conversations(
 def _list_hire_conversations_from_threads(app: Any, raw_thread_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     raw_threads = canonical_owner_threads(raw_thread_rows)
-    pool = app.state.agent_pool
+    activity_reader = getattr(app.state, "agent_runtime_thread_activity_reader", None)
     for t in raw_threads:
         tid = t["id"]
         if _is_internal_child_thread(tid):
             continue
-        sandbox_type = t.get("sandbox_type", "local")
-        running = False
-        agent = pool.get(f"{tid}:{sandbox_type}")
-        if agent and hasattr(agent, "runtime"):
-            running = agent.runtime.current_state == AgentState.ACTIVE
+        running = _thread_running(activity_reader, t.get("agent_user_id"), tid)
         last_active = app.state.thread_last_active.get(tid)
         updated_at = datetime.fromtimestamp(last_active, tz=UTC).isoformat() if last_active else None
         items.append(
@@ -75,6 +71,18 @@ def _list_hire_conversations_from_threads(app: Any, raw_thread_rows: list[dict[s
             }
         )
     return items
+
+
+def _thread_running(activity_reader: RuntimeThreadActivityReader | None, agent_user_id: Any, thread_id: str) -> bool:
+    if activity_reader is None:
+        return False
+    normalized_agent_user_id = str(agent_user_id or "").strip()
+    if not normalized_agent_user_id:
+        return False
+    return any(
+        activity.thread_id == thread_id and activity.state == "active"
+        for activity in activity_reader.list_active_threads_for_agent(normalized_agent_user_id)
+    )
 
 
 def _list_visit_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:

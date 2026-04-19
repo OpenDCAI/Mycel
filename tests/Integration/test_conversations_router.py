@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import threading
 from types import SimpleNamespace
 
@@ -14,6 +15,13 @@ def test_conversations_http_owner_module_lives_under_backend_chat() -> None:
     assert owner_conversations_router.__name__ == "backend.chat.api.http.conversations_router"
     assert owner_conversations_router.router is conversations_router.router
     assert owner_conversations_router.list_conversations is conversations_router.list_conversations
+
+
+def test_conversations_router_uses_runtime_activity_reader_for_running_state() -> None:
+    source = inspect.getsource(owner_conversations_router)
+
+    assert "AgentState" not in source
+    assert "agent_pool" not in source
 
 
 @pytest.mark.asyncio
@@ -170,6 +178,52 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
         }
     ]
     assert "member_id" not in result[0]
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_marks_hire_thread_running_from_runtime_activity_reader() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                list_by_owner_user_id=lambda _user_id: [
+                    {
+                        "id": "thread-1",
+                        "agent_user_id": "agent-user-1",
+                        "agent_name": "Morel",
+                        "agent_avatar": "avatars/morel.png",
+                        "sandbox_type": "local",
+                    }
+                ],
+                get_by_user_id=lambda _uid: None,
+            ),
+            agent_pool=SimpleNamespace(
+                get=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("conversations router should not read agent_pool directly for running state")
+                )
+            ),
+            agent_runtime_thread_activity_reader=SimpleNamespace(
+                list_active_threads_for_agent=lambda _agent_user_id: [
+                    SimpleNamespace(thread_id="thread-1", is_main=True, branch_index=0, state="active")
+                ]
+            ),
+            thread_last_active={},
+            messaging_service=None,
+        )
+    )
+
+    result = await conversations_router.list_conversations("human-user-1", app=app)
+
+    assert result == [
+        {
+            "id": "thread-1",
+            "type": "hire",
+            "title": "Morel",
+            "avatar_url": avatar_url("agent-user-1", True),
+            "updated_at": None,
+            "unread_count": 0,
+            "running": True,
+        }
+    ]
 
 
 @pytest.mark.asyncio
