@@ -3,11 +3,15 @@
 import re
 from typing import Any
 
-from backend.web.core.paths import avatars_dir
+from backend.avatar_urls import avatar_url as build_avatar_url
 
 # @@@strip-system-tags — remove injected system tags from user-visible content
 _SYSTEM_HINT_RE = re.compile(r"\s*<system-hint>.*?</system-hint>\s*", re.DOTALL)
 _SYSTEM_REMINDER_RE = re.compile(r"\s*<system-reminder>.*?</system-reminder>\s*", re.DOTALL)
+
+
+def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
+    return build_avatar_url(user_id, has_avatar)
 
 
 def strip_system_tags(content: str) -> str:
@@ -15,18 +19,6 @@ def strip_system_tags(content: str) -> str:
     content = _SYSTEM_HINT_RE.sub("", content)
     content = _SYSTEM_REMINDER_RE.sub("", content)
     return content.strip()
-
-
-def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
-    """Build avatar URL. Returns None if no avatar uploaded."""
-    # @@@avatar-truth-seam - current web avatar serving is file-backed; DB avatar
-    # rows may legitimately stay null on the Supabase path, so visibility truth
-    # must follow the actual served file surface instead of trusting the column alone.
-    if not user_id:
-        return None
-    if has_avatar or (avatars_dir() / f"{user_id}.png").exists():
-        return f"/api/users/{user_id}/avatar"
-    return None
 
 
 def extract_text_content(raw_content: Any) -> str:
