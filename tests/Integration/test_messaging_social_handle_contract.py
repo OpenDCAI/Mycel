@@ -1536,6 +1536,54 @@ def test_messaging_service_conversation_summaries_loads_users_and_unread_counts_
     assert summaries[0]["unread_count"] == 2
 
 
+def test_messaging_service_conversation_summaries_fail_on_invalid_unread_collection() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 4},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: ["chat-1"]),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda user_ids: [
+                SimpleNamespace(id=user_id, display_name=user_id, type="human", avatar=None) for user_id in user_ids
+            ]
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Unread count collection is invalid"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
+def test_messaging_service_conversation_summaries_fail_on_invalid_unread_value() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 4},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {"chat-1": None}),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda user_ids: [
+                SimpleNamespace(id=user_id, display_name=user_id, type="human", avatar=None) for user_id in user_ids
+            ]
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Unread count for chat chat-1 is invalid"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
 def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(),
