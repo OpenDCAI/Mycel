@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
-from backend.web.services.social_access_service import ACTIVE_CHAT_RELATIONSHIP_STATES, has_active_contact
+from messaging.social_access import ACTIVE_CHAT_RELATIONSHIP_STATES, has_active_contact
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 

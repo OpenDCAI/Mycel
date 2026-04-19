@@ -114,6 +114,13 @@ def test_chat_http_owner_module_lives_under_backend_chat() -> None:
     assert chat_router.__name__ == "backend.chat.api.http.router"
 
 
+def test_chat_router_imports_messaging_social_access_owner() -> None:
+    source = inspect.getsource(chat_router)
+
+    assert "from messaging.social_access import" in source
+    assert "backend.web.services.social_access_service" not in source
+
+
 def test_get_accessible_chat_or_404_returns_chat():
     chat = _chat("chat-1")
     app = SimpleNamespace(
