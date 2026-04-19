@@ -14,11 +14,12 @@ import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
+from backend.chat.api.http import conversations_router  # noqa: E402
+from backend.chat.api.http import router as messaging_router  # noqa: E402
 from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
     contacts,
-    conversations,  # noqa: E402
     invite_codes,
     marketplace,
     monitor,
@@ -31,7 +32,6 @@ from backend.web.routers import (  # noqa: E402
     users,
     webhooks,
 )
-from backend.web.routers import messaging as messaging_router  # noqa: E402
 from messaging.relationships.router import router as relationships_router  # noqa: E402
 
 # Create FastAPI app
@@ -65,7 +65,7 @@ app.include_router(panel.router)
 app.include_router(monitor.router)
 app.include_router(resources.router)
 app.include_router(marketplace.router)
-app.include_router(conversations.router)
+app.include_router(conversations_router.router)
 
 
 def _resolve_port() -> int:

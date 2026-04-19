@@ -7,8 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.chat.api.http import conversations_router as owner_conversations_router
 from backend.web.routers import conversations as conversations_router
 from backend.web.routers import threads as threads_router
+
+
+def test_first_screen_conversations_router_shell_points_at_chat_owner_module() -> None:
+    assert owner_conversations_router.list_conversations is conversations_router.list_conversations
 
 
 class _CountingOwnerThreadRepo:

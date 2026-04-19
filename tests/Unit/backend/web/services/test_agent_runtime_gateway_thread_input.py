@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
+from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
 from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
 from core.runtime.middleware.monitor import AgentState
 
@@ -61,7 +61,7 @@ async def test_gateway_thread_input_clears_resource_overview_cache_when_starting
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
         patch("backend.web.services.resource_cache.clear_resource_overview_cache") as clear_cache,
     ):
-        result = await NativeAgentRuntimeGateway(app).dispatch_thread_input(_thread_input())
+        result = await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input())
 
     assert result == AgentThreadInputResult(status="started", routing="direct", run_id="run-123", thread_id="thread-1")
     clear_cache.assert_called_once_with()
@@ -78,7 +78,7 @@ async def test_gateway_thread_input_requires_agent_runtime() -> None:
         patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
     ):
         with pytest.raises(AttributeError):
-            await NativeAgentRuntimeGateway(app).dispatch_thread_input(_thread_input())
+            await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input())
 
 
 @pytest.mark.asyncio
@@ -92,6 +92,6 @@ async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run(
         patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123") as start_run,
         patch("backend.web.services.resource_cache.clear_resource_overview_cache"),
     ):
-        await NativeAgentRuntimeGateway(app).dispatch_thread_input(_thread_input(enable_trajectory=True))
+        await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input(enable_trajectory=True))
 
     assert start_run.call_args.kwargs["enable_trajectory"] is True

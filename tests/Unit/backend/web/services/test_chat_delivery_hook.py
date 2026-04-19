@@ -26,7 +26,8 @@ def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> Non
     assert "backend.agent_runtime.port" in threads_source
     assert "backend.web.services.agent_runtime_port" not in delivery_source
     assert "backend.web.services.agent_runtime_port" not in threads_source
-    assert "backend.agent_runtime.gateway" in lifespan_source
+    assert "backend.agent_runtime.bootstrap" in lifespan_source
+    assert "build_agent_runtime_gateway" in lifespan_source
     assert "backend.web.services.agent_runtime_gateway" not in lifespan_source
 
 

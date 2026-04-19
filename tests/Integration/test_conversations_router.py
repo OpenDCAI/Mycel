@@ -5,8 +5,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.chat.api.http import conversations_router as owner_conversations_router
 from backend.web.routers import conversations as conversations_router
 from backend.web.utils.serializers import avatar_url
+
+
+def test_conversations_http_owner_module_lives_under_backend_chat() -> None:
+    assert owner_conversations_router.__name__ == "backend.chat.api.http.conversations_router"
+    assert owner_conversations_router.router is conversations_router.router
+    assert owner_conversations_router.list_conversations is conversations_router.list_conversations
 
 
 @pytest.mark.asyncio
