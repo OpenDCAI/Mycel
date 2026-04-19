@@ -63,6 +63,16 @@ def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> Non
     assert "backend.web.services.chat_delivery_hook" not in lifespan_source
 
 
+def test_lifespan_registers_runtime_activity_reader_before_chat_delivery_hook() -> None:
+    from backend.web.core import lifespan as lifespan_module
+
+    lifespan_source = inspect.getsource(lifespan_module)
+
+    assert lifespan_source.index("app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)") < lifespan_source.index(
+        "app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))"
+    )
+
+
 @pytest.mark.asyncio
 async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
     class FailingGateway:

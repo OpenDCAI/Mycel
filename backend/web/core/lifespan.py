@@ -119,7 +119,6 @@ async def lifespan(app: FastAPI):
         delivery_resolver=_msg_delivery_resolver,
         avatar_url_builder=avatar_url,
     )
-    app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
 
     # ---- Existing state ----
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
@@ -135,6 +134,7 @@ async def lifespan(app: FastAPI):
     from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
 
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
+    app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
 
     from backend.web.services.display_builder import DisplayBuilder
 
