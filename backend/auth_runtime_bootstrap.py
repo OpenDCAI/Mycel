@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from backend.auth_service import AuthService
 from backend.supabase_runtime import create_supabase_auth_client
-from backend.web.services.auth_service import AuthService
 
 
 @dataclass(frozen=True)
