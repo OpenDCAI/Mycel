@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
+from backend.web.services.thread_visibility import canonical_owner_threads
+from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 
 
@@ -18,6 +20,8 @@ class OwnerThreadWorkbenchReader:
     converge_runtime_state: Callable[[str], str]
     is_runtime_active: Callable[[str, str], bool]
     last_active_at: Callable[[str], str | None]
+    canonical_owner_threads: Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
+    avatar_url: Callable[[str | None, bool], str | None]
 
 
 def build_owner_thread_workbench_reader(app: Any) -> OwnerThreadWorkbenchReader:
@@ -27,6 +31,8 @@ def build_owner_thread_workbench_reader(app: Any) -> OwnerThreadWorkbenchReader:
         converge_runtime_state=lambda thread_id: converge_runtime_state(app, thread_id),
         is_runtime_active=lambda thread_id, sandbox_type: is_runtime_active(app, thread_id, sandbox_type),
         last_active_at=lambda thread_id: last_active_at(app, thread_id),
+        canonical_owner_threads=canonical_owner_threads,
+        avatar_url=avatar_url,
     )
 
 

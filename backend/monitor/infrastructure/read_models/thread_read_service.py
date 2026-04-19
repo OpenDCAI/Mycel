@@ -24,6 +24,14 @@ def load_canonical_live_thread_refs(raw_thread_ids: list[str], live_thread_ids: 
     return [{"thread_id": str(row.get("id") or "").strip()} for row in canonical if str(row.get("id") or "").strip()]
 
 
+def load_live_thread_ids(raw_thread_ids: list[str]) -> set[str]:
+    unique = sorted({str(thread_id or "").strip() for thread_id in raw_thread_ids if str(thread_id or "").strip()})
+    if not unique:
+        return set()
+    owners = thread_owners(unique)
+    return {thread_id for thread_id in unique if (owners.get(thread_id) or {}).get("agent_user_id")}
+
+
 def load_monitor_thread_base(app: Any, thread_id: str) -> dict[str, Any]:
     thread_repo = getattr(app.state, "thread_repo", None)
     if thread_repo is None:

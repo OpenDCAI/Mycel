@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from backend.monitor.infrastructure.read_models.thread_workbench_read_service import OwnerThreadWorkbenchReader
-from backend.web.services.thread_visibility import canonical_owner_threads
-from backend.web.utils.serializers import avatar_url
 
 
 def is_internal_child_thread(thread_id: str) -> bool:
@@ -39,7 +37,7 @@ def build_owner_thread_workbench_from_rows(raw: list[dict[str, object]], *, read
         visible_threads.append(thread)
 
     threads = []
-    for thread in canonical_owner_threads(visible_threads):
+    for thread in reader.canonical_owner_threads(visible_threads):
         thread_id = thread["id"]
         sandbox_type = thread.get("sandbox_type", "local")
         running = reader.is_runtime_active(thread_id, sandbox_type)
@@ -56,7 +54,7 @@ def build_owner_thread_workbench_from_rows(raw: list[dict[str, object]], *, read
                     is_main=bool(thread.get("is_main", False)),
                     branch_index=int(thread.get("branch_index", 0)),
                 ),
-                "avatar_url": avatar_url(thread.get("agent_user_id"), bool(thread.get("agent_avatar"))),
+                "avatar_url": reader.avatar_url(thread.get("agent_user_id"), bool(thread.get("agent_avatar"))),
                 "is_main": thread.get("is_main", False),
                 "running": running,
                 "updated_at": updated_at,

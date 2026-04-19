@@ -5,8 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from backend.monitor.infrastructure.read_models import sandbox_read_service
-from backend.web.services.resource_common import thread_owners as _thread_owners
+from backend.monitor.infrastructure.read_models import sandbox_read_service, thread_read_service
 
 SANDBOX_SEMANTIC_ORDER = [
     "orphan_diverged",
@@ -123,13 +122,9 @@ def _thread_ref(thread_id: str | None) -> dict[str, Any]:
 
 
 def _live_thread_ids(thread_ids: list[str]) -> set[str]:
-    unique = sorted({str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()})
-    if not unique:
-        return set()
     # @@@monitor-live-thread-state - monitor triage must validate terminal pointers against live
     # thread rows, otherwise stale abstract_terminals residue gets misclassified as healthy.
-    owners = _thread_owners(unique)
-    return {thread_id for thread_id in unique if (owners.get(thread_id) or {}).get("agent_user_id")}
+    return thread_read_service.load_live_thread_ids(thread_ids)
 
 
 def _hours_since(iso_timestamp: str | None) -> float | None:

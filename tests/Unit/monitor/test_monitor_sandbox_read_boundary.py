@@ -16,6 +16,8 @@ def test_monitor_sandbox_projection_does_not_construct_runtime_repo():
     read_source = inspect.getsource(monitor_sandbox_read_service)
 
     assert "make_sandbox_monitor_repo" not in projection_source
+    assert "backend.web.services.resource_common" not in projection_source
+    assert "load_live_thread_ids" in projection_source
     assert "make_sandbox_monitor_repo" in read_source
 
 
@@ -94,5 +96,9 @@ def test_owner_thread_workbench_uses_app_state_read_source():
 
     assert "app.state" not in workbench_source
     assert "def build_owner_thread_workbench(app" not in workbench_source
+    assert "backend.web.services.thread_visibility" not in workbench_source
+    assert "backend.web.utils.serializers" not in workbench_source
     assert "thread_workbench_read_service" in workbench_source
     assert "app.state" in read_source
+    assert "canonical_owner_threads" in read_source
+    assert "avatar_url" in read_source
