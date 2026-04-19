@@ -113,3 +113,4 @@ def test_owner_thread_workbench_uses_app_state_read_source():
     assert "avatar_url" in read_source
     assert "backend.web.services.thread_visibility" not in read_source
     assert "backend.web.utils.serializers" not in read_source
+    assert "backend.web.services.thread_runtime_convergence" not in read_source

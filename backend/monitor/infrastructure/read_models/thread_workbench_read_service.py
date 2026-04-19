@@ -9,7 +9,7 @@ from typing import Any
 
 from backend.avatar_urls import avatar_url
 from backend.thread_projection import canonical_owner_threads
-from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
+from backend.thread_runtime_convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from core.runtime.middleware.monitor import AgentState
 
 
