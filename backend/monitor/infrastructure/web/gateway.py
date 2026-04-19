@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.monitor.application.use_cases import operations, sandbox_configs, sandbox_detail
+from backend.monitor.application.use_cases import sandbox_configs, sandbox_detail
 from backend.web.services import (
     monitor_evaluation_service,
     monitor_provider_runtime_service,
