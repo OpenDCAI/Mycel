@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
 from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 from backend.web.models.requests import SendMessageRequest
 from backend.web.routers import threads as threads_router
 from backend.web.routers.threads import get_thread_history, get_thread_messages
-from backend.web.services.agent_runtime_gateway import NativeAgentRuntimeGateway
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.streaming_service import (
