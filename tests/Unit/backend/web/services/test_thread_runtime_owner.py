@@ -153,74 +153,74 @@ def test_streaming_service_uses_thread_runtime_sse_observer_owner() -> None:
 
 def test_streaming_service_uses_thread_runtime_trajectory_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.trajectory")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.build_trajectory_scope is not None
-    assert "from backend.thread_runtime.run import trajectory as _run_trajectory" in streaming_source
+    assert "from backend.thread_runtime.run import trajectory as _run_trajectory" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_observation_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.observation")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.build_observation is not None
-    assert "from backend.thread_runtime.run import observation as _run_observation" in streaming_source
+    assert "from backend.thread_runtime.run import observation as _run_observation" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_activity_bridge_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.activity_bridge")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.build_activity_bridge is not None
-    assert "from backend.thread_runtime.run import activity_bridge as _run_activity_bridge" in streaming_source
+    assert "from backend.thread_runtime.run import activity_bridge as _run_activity_bridge" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_emit_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.emit")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.build_emit is not None
-    assert "from backend.thread_runtime.run import emit as _run_emit" in streaming_source
+    assert "from backend.thread_runtime.run import emit as _run_emit" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_prologue_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.prologue")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.emit_run_prologue is not None
-    assert "from backend.thread_runtime.run import prologue as _run_prologue" in streaming_source
+    assert "from backend.thread_runtime.run import prologue as _run_prologue" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_input_construction_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.input_construction")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.build_initial_input is not None
-    assert "from backend.thread_runtime.run import input_construction as _run_input_construction" in streaming_source
+    assert "from backend.thread_runtime.run import input_construction as _run_input_construction" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_tool_call_dedup_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.tool_call_dedup")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.ToolCallDedup is not None
-    assert "from backend.thread_runtime.run import tool_call_dedup as _run_tool_call_dedup" in streaming_source
+    assert "from backend.thread_runtime.run import tool_call_dedup as _run_tool_call_dedup" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_stream_loop_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.stream_loop")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.run_stream_loop is not None
-    assert "from backend.thread_runtime.run import stream_loop as _run_stream_loop" in streaming_source
+    assert "from backend.thread_runtime.run import stream_loop as _run_stream_loop" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_epilogue_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.epilogue")
-    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
 
     assert owner_module.emit_run_epilogue is not None
-    assert "from backend.thread_runtime.run import epilogue as _run_epilogue" in streaming_source
+    assert "from backend.thread_runtime.run import epilogue as _run_epilogue" in execution_source
 
 
 def test_streaming_service_uses_thread_runtime_execution_owner() -> None:
