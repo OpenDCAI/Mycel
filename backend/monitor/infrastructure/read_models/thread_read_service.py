@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from backend.web.services.resource_common import thread_owners
@@ -41,3 +42,7 @@ def load_monitor_thread_base(app: Any, thread_id: str) -> dict[str, Any]:
         "thread": thread,
         "owner": owners.get(thread_id),
     }
+
+
+def build_monitor_thread_base_loader(app: Any) -> Callable[[str], dict[str, Any]]:
+    return lambda thread_id: load_monitor_thread_base(app, thread_id)

@@ -28,6 +28,7 @@ from backend.monitor.infrastructure.providers import (
 )
 from backend.monitor.infrastructure.read_models import sandbox_read_service as monitor_sandbox_read_service
 from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
+from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
 from backend.web.services import (
     monitor_operation_repo_service,
 )
@@ -896,7 +897,11 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
         )
     )
 
-    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(
+        "thread-1",
+        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
+    )
 
     assert payload["thread"]["thread_id"] == "thread-1"
     assert payload["owner"]["display_name"] == "Ada"
@@ -945,7 +950,11 @@ async def test_get_monitor_thread_detail_derives_summary_from_runtime_row_when_r
     _stub_thread_detail(monkeypatch, owner={"agent_user_id": "agent-1", "agent_name": "Toad"})
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo({"status": "active"}), user_repo=None))
 
-    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(
+        "thread-1",
+        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
+    )
 
     assert payload["summary"] == {
         "sandbox_id": "sandbox-1",
@@ -1016,7 +1025,11 @@ async def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(mon
     )
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo({"status": "active"}), user_repo=None))
 
-    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(
+        "thread-1",
+        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
+    )
 
     assert payload["owner"] == {
         "user_id": "agent-1",
@@ -1037,7 +1050,11 @@ async def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(mo
         )
     )
 
-    payload = await monitor_thread_service.get_monitor_thread_detail(app, "thread-1")
+    payload = await monitor_thread_service.get_monitor_thread_detail(
+        "thread-1",
+        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
+    )
 
     assert payload["thread"] == {
         "id": "thread-1",

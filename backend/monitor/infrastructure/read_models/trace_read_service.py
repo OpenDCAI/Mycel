@@ -2,10 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from backend.web.services.thread_history_service import get_thread_history_payload
 from storage.runtime import build_storage_container
+
+
+@dataclass(frozen=True)
+class MonitorTraceReader:
+    load_thread_history_payload: Callable[[str], Awaitable[dict[str, Any]]]
+    load_latest_run_events: Callable[[str], tuple[str | None, list[dict[str, Any]]]]
+
+
+def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
+    async def _load_thread_history_payload(thread_id: str) -> dict[str, Any]:
+        return await load_thread_history_payload(app, thread_id)
+
+    return MonitorTraceReader(
+        load_thread_history_payload=_load_thread_history_payload,
+        load_latest_run_events=load_latest_run_events,
+    )
 
 
 async def load_thread_history_payload(app: Any, thread_id: str) -> dict[str, Any]:

@@ -32,6 +32,7 @@ from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
+from backend.web.services.owner_thread_workbench_read_service import build_owner_thread_workbench_reader
 from backend.web.services.owner_thread_workbench_service import (
     build_owner_thread_workbench_from_rows,
     sidebar_label,
@@ -895,7 +896,8 @@ async def list_threads(
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
     raw = await list_owner_thread_rows_for_auth_burst(app, user_id)
-    return await asyncio.to_thread(build_owner_thread_workbench_from_rows, app, raw)
+    reader = build_owner_thread_workbench_reader(app)
+    return await asyncio.to_thread(build_owner_thread_workbench_from_rows, raw, reader=reader)
 
 
 @router.get("/{thread_id}")

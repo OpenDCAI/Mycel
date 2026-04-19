@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.monitor.infrastructure.read_models import trace_read_service
+from backend.monitor.infrastructure.read_models.trace_read_service import MonitorTraceReader
 
 
 def _summarize_trace_event(event_type: str, payload: dict[str, Any]) -> str:
@@ -83,9 +83,9 @@ def _merge_trace_events(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return merged
 
 
-async def build_monitor_thread_trajectory(app: Any, thread_id: str) -> dict[str, Any]:
-    history = await trace_read_service.load_thread_history_payload(app, thread_id)
-    run_id, rows = trace_read_service.load_latest_run_events(thread_id)
+async def build_monitor_thread_trajectory(thread_id: str, *, trace_reader: MonitorTraceReader) -> dict[str, Any]:
+    history = await trace_reader.load_thread_history_payload(thread_id)
+    run_id, rows = trace_reader.load_latest_run_events(thread_id)
     if run_id is None:
         return {
             "run_id": None,

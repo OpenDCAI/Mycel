@@ -49,8 +49,9 @@ def test_monitor_thread_detail_uses_thread_read_port():
     read_source = inspect.getsource(monitor_thread_read_service)
 
     assert 'getattr(app.state, "thread_repo"' not in thread_source
+    assert "def get_monitor_thread_detail(app" not in thread_source
     assert "_thread_owners" not in thread_source
-    assert "load_monitor_thread_base" in thread_source
+    assert "load_thread_base" in thread_source
     assert 'getattr(app.state, "thread_repo"' in read_source
 
 
@@ -61,6 +62,7 @@ def test_monitor_thread_detail_uses_trajectory_read_port():
     assert "monitor_thread_trajectory_service" not in thread_source
     assert "monitor_trace" in thread_source
     assert "build_monitor_thread_trajectory" in thread_source
+    assert "def build_monitor_thread_trajectory(app" not in trace_source
     assert "trace_read_service" in trace_source
 
 
@@ -80,6 +82,7 @@ def test_monitor_thread_list_does_not_depend_on_threads_router():
 
     assert "backend.web.routers.threads" not in thread_source
     assert "thread_workbench" in thread_source
+    assert "def list_monitor_threads(app" not in thread_source
 
 
 def test_owner_thread_workbench_uses_app_state_read_source():
@@ -87,5 +90,6 @@ def test_owner_thread_workbench_uses_app_state_read_source():
     read_source = inspect.getsource(owner_thread_workbench_read_service)
 
     assert "app.state" not in workbench_source
+    assert "def build_owner_thread_workbench(app" not in workbench_source
     assert "thread_workbench_read_service" in workbench_source
     assert "app.state" in read_source

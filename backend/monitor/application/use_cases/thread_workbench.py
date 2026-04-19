@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from backend.monitor.infrastructure.read_models import thread_workbench_read_service
+from backend.monitor.infrastructure.read_models.thread_workbench_read_service import OwnerThreadWorkbenchReader
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.serializers import avatar_url
 
@@ -23,17 +21,17 @@ def sidebar_label(*, is_main: bool, branch_index: int) -> str | None:
     return None
 
 
-def build_owner_thread_workbench(app: Any, user_id: str) -> dict[str, Any]:
-    raw = thread_workbench_read_service.list_owner_thread_rows(app, user_id)
-    return build_owner_thread_workbench_from_rows(app, raw)
+def build_owner_thread_workbench(user_id: str, *, reader: OwnerThreadWorkbenchReader) -> dict[str, object]:
+    raw = reader.list_owner_thread_rows(user_id)
+    return build_owner_thread_workbench_from_rows(raw, reader=reader)
 
 
-def build_owner_thread_workbench_from_rows(app: Any, raw: list[dict[str, Any]]) -> dict[str, Any]:
-    runtime_states = thread_workbench_read_service.summarize_runtime_states(app, raw)
+def build_owner_thread_workbench_from_rows(raw: list[dict[str, object]], *, reader: OwnerThreadWorkbenchReader) -> dict[str, object]:
+    runtime_states = reader.summarize_runtime_states(raw)
     visible_threads = []
     for thread in raw:
         thread_id = thread["id"]
-        runtime_state = runtime_states.get(thread_id) or thread_workbench_read_service.converge_runtime_state(app, thread_id)
+        runtime_state = runtime_states.get(thread_id) or reader.converge_runtime_state(thread_id)
         if runtime_state in {"missing", "purged"}:
             continue
         if is_internal_child_thread(thread_id):
@@ -44,8 +42,8 @@ def build_owner_thread_workbench_from_rows(app: Any, raw: list[dict[str, Any]]) 
     for thread in canonical_owner_threads(visible_threads):
         thread_id = thread["id"]
         sandbox_type = thread.get("sandbox_type", "local")
-        running = thread_workbench_read_service.is_runtime_active(app, thread_id, sandbox_type)
-        updated_at = thread_workbench_read_service.last_active_at(app, thread_id)
+        running = reader.is_runtime_active(thread_id, sandbox_type)
+        updated_at = reader.last_active_at(thread_id)
 
         threads.append(
             {

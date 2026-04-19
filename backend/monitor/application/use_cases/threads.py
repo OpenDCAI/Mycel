@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from backend.monitor.application.use_cases import thread_workbench
 from backend.monitor.application.use_cases import trace as monitor_trace
-from backend.monitor.infrastructure.read_models import sandbox_read_service, thread_read_service
+from backend.monitor.infrastructure.read_models import sandbox_read_service
+from backend.monitor.infrastructure.read_models.thread_workbench_read_service import OwnerThreadWorkbenchReader
+from backend.monitor.infrastructure.read_models.trace_read_service import MonitorTraceReader
 
 
-def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
-    return thread_workbench.build_owner_thread_workbench(app, user_id)
+def list_monitor_threads(user_id: str, *, workbench_reader: OwnerThreadWorkbenchReader) -> dict[str, object]:
+    return thread_workbench.build_owner_thread_workbench(user_id, reader=workbench_reader)
 
 
 def _derive_thread_summary_from_runtime_rows(runtime_rows: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -58,8 +61,13 @@ def _normalize_monitor_thread(thread: dict[str, Any], requested_thread_id: str) 
     }
 
 
-async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
-    thread_base = thread_read_service.load_monitor_thread_base(app, thread_id)
+async def get_monitor_thread_detail(
+    thread_id: str,
+    *,
+    load_thread_base: Callable[[str], dict[str, Any]],
+    trace_reader: MonitorTraceReader,
+) -> dict[str, Any]:
+    thread_base = load_thread_base(thread_id)
     rows = sandbox_read_service.load_thread_detail_rows(thread_id)
     summary = rows["summary"]
     runtime_rows = rows["runtime_rows"]
@@ -73,5 +81,5 @@ async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
         "owner": _normalize_thread_owner(thread_base["owner"]),
         "summary": summary,
         "runtime_rows": runtime_rows,
-        "trajectory": await monitor_trace.build_monitor_thread_trajectory(app, thread_id),
+        "trajectory": await monitor_trace.build_monitor_thread_trajectory(thread_id, trace_reader=trace_reader),
     }

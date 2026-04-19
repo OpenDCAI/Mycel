@@ -846,7 +846,8 @@ async def test_list_threads_runs_owner_workbench_off_event_loop_thread(monkeypat
     event_loop_thread_id = threading.get_ident()
     seen_thread_ids: list[int] = []
 
-    def _build_owner_thread_workbench_from_rows(_app, _raw):
+    def _build_owner_thread_workbench_from_rows(_raw, *, reader):
+        assert reader is not None
         seen_thread_ids.append(threading.get_ident())
         return {"threads": []}
 
