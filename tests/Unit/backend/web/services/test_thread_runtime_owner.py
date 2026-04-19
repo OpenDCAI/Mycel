@@ -189,3 +189,11 @@ def test_streaming_service_uses_thread_runtime_prologue_owner() -> None:
 
     assert owner_module.emit_run_prologue is not None
     assert "from backend.thread_runtime.run import prologue as _run_prologue" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_input_construction_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.input_construction")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.build_initial_input is not None
+    assert "from backend.thread_runtime.run import input_construction as _run_input_construction" in streaming_source
