@@ -68,6 +68,7 @@ async def run_stream_loop(
 
     stream_attempt = 0
     stream_gen = None
+    task = None
     trajectory_status = "completed"
     try:
         while True:
@@ -300,5 +301,12 @@ async def run_stream_loop(
                 break
         return trajectory_status
     finally:
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         if stream_gen is not None:
-            await stream_gen.aclose()
+            try:
+                await stream_gen.aclose()
+            except RuntimeError as err:
+                if "already running" not in str(err):
+                    raise
