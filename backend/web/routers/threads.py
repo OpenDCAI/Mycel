@@ -17,6 +17,7 @@ from backend.monitor.application.use_cases.thread_workbench import (
     sidebar_label,
 )
 from backend.monitor.infrastructure.read_models.thread_workbench_read_service import build_owner_thread_workbench_reader
+from backend.thread_history import build_thread_history_transport, get_thread_history_payload
 from backend.web.core.dependencies import (
     get_app,
     get_current_user_id,
@@ -43,7 +44,6 @@ from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
     observe_thread_events,
 )
-from backend.web.services.thread_history_service import build_thread_history_transport, get_thread_history_payload
 from backend.web.services.thread_launch_config_service import resolve_default_config
 from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages
 from backend.web.services.thread_state_service import (
