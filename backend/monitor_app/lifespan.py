@@ -6,10 +6,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend.monitor.infrastructure.resources.resource_overview_cache import resource_overview_refresh_loop
+from storage.runtime import build_storage_container
+
+
+def _require_monitor_runtime_contract() -> None:
+    build_storage_container()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _require_monitor_runtime_contract()
     app.state.monitor_resources_task = None
     try:
         app.state.monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())

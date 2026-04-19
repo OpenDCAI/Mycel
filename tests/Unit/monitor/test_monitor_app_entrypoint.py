@@ -4,12 +4,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import app_entrypoint
+from backend.monitor_app import lifespan as monitor_app_lifespan
 from backend.monitor_app import main as monitor_app_main
 
 app = monitor_app_main.app
 
 
-def test_monitor_app_mounts_only_global_monitor_routes():
+def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(monitor_app_lifespan, "build_storage_container", lambda: object())
     with TestClient(app) as client:
         response = client.get("/openapi.json")
 
