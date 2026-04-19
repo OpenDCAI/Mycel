@@ -16,6 +16,10 @@ Local ports resolve in this order:
   - `LEON_BACKEND_PORT`
   - `git config --worktree --get worktree.ports.backend`
   - default `8001`
+- monitor backend proxy target:
+  - `LEON_MONITOR_BACKEND_PORT`
+  - `git config --worktree --get worktree.ports.monitor-backend`
+  - fallback to the resolved main backend port
 - monitor dev server:
   - `LEON_MONITOR_PORT`
   - `git config --worktree --get worktree.ports.monitor-frontend`
@@ -25,7 +29,7 @@ Local ports resolve in this order:
   - `git config --worktree --get worktree.ports.monitor-preview`
   - default `4174`
 
-The Vite `/api` proxy still fails loudly if these ports are wrong. This only fixes local-dev honesty; it does not auto-detect or heal bad config.
+The Vite proxy splits `/api/monitor/*` and other `/api/*` traffic using those ports, and still fails loudly if they are wrong. This only fixes local-dev honesty; it does not auto-detect or heal bad config.
 
 Open: `http://localhost:5174`
 
