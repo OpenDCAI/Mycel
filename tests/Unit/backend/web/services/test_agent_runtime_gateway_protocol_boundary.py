@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 from typing import get_type_hints
 
 
@@ -77,3 +78,16 @@ def test_agent_runtime_implementation_lives_under_backend_agent_runtime() -> Non
     assert port_shell.get_agent_runtime_gateway is port_impl.get_agent_runtime_gateway
     assert chat_handler_shell.NativeAgentChatDeliveryHandler is chat_handler_impl.NativeAgentChatDeliveryHandler
     assert thread_handler_shell.NativeAgentThreadInputHandler is thread_handler_impl.NativeAgentThreadInputHandler
+
+
+def test_chat_handler_depends_on_runtime_owned_services_not_web_imports() -> None:
+    chat_handler_impl = importlib.import_module("backend.agent_runtime.chat_handler")
+    bootstrap_impl = importlib.import_module("backend.agent_runtime.bootstrap")
+
+    chat_handler_source = inspect.getsource(chat_handler_impl)
+    bootstrap_source = inspect.getsource(bootstrap_impl)
+
+    assert "backend.web.services.agent_pool" not in chat_handler_source
+    assert "backend.web.services.streaming_service" not in chat_handler_source
+    assert "self._app.state" not in chat_handler_source
+    assert "AppAgentChatRuntimeServices" in bootstrap_source

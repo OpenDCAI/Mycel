@@ -129,3 +129,33 @@ async def test_gateway_prefers_latest_live_child_thread(monkeypatch: pytest.Monk
     assert result.thread_id == "thread-child-fresh"
     assert started == [("thread-child-fresh", "chat-5", "agent-user-1")]
     assert enqueued == [("Human|chat-5|1|ping", "thread-child-fresh", "human-user-1", "Human")]
+
+
+@pytest.mark.asyncio
+async def test_gateway_chat_delivery_uses_live_thread_repo_after_gateway_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
+        return SimpleNamespace(id=f"agent-for-{thread_id}")
+
+    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "core.runtime.middleware.queue.formatters.format_chat_notification",
+        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
+    )
+    app, started, unread_calls, enqueued = _app(unread_count=2)
+    gateway = build_agent_runtime_gateway(app)
+
+    replacement_thread = {"id": "thread-replaced", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0}
+    app.state.thread_repo = SimpleNamespace(
+        get_by_user_id=lambda uid: replacement_thread if uid == "agent-user-1" else None,
+        list_by_agent_user=lambda uid: [replacement_thread] if uid == "agent-user-1" else [],
+    )
+
+    result = await gateway.dispatch_chat(_envelope(chat_id="chat-live"))
+
+    assert result.status == "accepted"
+    assert result.thread_id == "thread-replaced"
+    assert started == [("thread-replaced", "chat-live", "agent-user-1")]
+    assert unread_calls == [("chat-live", "agent-user-1")]
+    assert enqueued == [("Human|chat-live|2|ping", "thread-replaced", "human-user-1", "Human")]
