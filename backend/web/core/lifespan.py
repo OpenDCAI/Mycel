@@ -40,11 +40,12 @@ async def lifespan(app: FastAPI):
     await _validate_web_checkpointer_contract()
 
     # ---- Chat repos + services ----
-    from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
-    from storage.runtime import build_storage_container
+    from backend.runtime_storage_bootstrap import build_runtime_storage_state
+    from backend.web.core.supabase_factory import create_supabase_auth_client
 
-    _supabase_client = create_supabase_client()
-    storage_container = build_storage_container(supabase_client=_supabase_client)
+    runtime_storage = build_runtime_storage_state()
+    _supabase_client = runtime_storage.supabase_client
+    storage_container = runtime_storage.storage_container
     from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore, agent_checkpoint_saver_from_conn_string
 
     pg_url = os.environ["LEON_POSTGRES_URL"]

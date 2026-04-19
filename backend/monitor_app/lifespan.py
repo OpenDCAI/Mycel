@@ -6,11 +6,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend.monitor.infrastructure.resources.resource_overview_cache import resource_overview_refresh_loop
-from storage.runtime import build_storage_container
+from backend.runtime_storage_bootstrap import build_runtime_storage_state
 
 
 def _require_monitor_runtime_contract() -> None:
-    build_storage_container()
+    build_runtime_storage_state()
 
 
 @asynccontextmanager
