@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.web.core import config as web_config
+from backend.local_workspace import local_workspace_root as resolve_local_workspace_root
 
 
 def local_workspace_root() -> Path:
-    return web_config.LOCAL_WORKSPACE_ROOT
+    return resolve_local_workspace_root()
