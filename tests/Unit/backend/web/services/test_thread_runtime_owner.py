@@ -77,3 +77,12 @@ def test_thread_launch_config_uses_thread_runtime_launch_config_owner() -> None:
     assert hasattr(shell_module, "normalize_launch_config_payload")
     assert hasattr(shell_module, "build_new_launch_config")
     assert hasattr(shell_module, "resolve_default_config")
+
+
+def test_thread_runtime_pool_exports_idle_reaper_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.pool.idle_reaper")
+    shell_module = importlib.import_module("backend.web.services.idle_reaper")
+
+    assert hasattr(shell_module, "run_idle_reaper_once")
+    assert hasattr(shell_module, "idle_reaper_loop")
+    assert owner_module.__name__ == "backend.thread_runtime.pool.idle_reaper"
