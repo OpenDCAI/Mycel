@@ -76,7 +76,8 @@ def test_monitor_trace_uses_trace_read_source_port():
     assert "get_thread_history_payload" in read_source
     assert "get_thread_history_payload(app=" not in read_source
     assert "build_thread_history_transport" in read_source
-    assert "build_storage_container" in read_source
+    assert "build_storage_container" not in read_source
+    assert "build_run_event_read_transport" in read_source
 
 
 def test_monitor_thread_list_does_not_depend_on_threads_router():

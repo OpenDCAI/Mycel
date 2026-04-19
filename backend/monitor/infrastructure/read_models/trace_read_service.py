@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.web.services.agent_pool import resolve_thread_sandbox
+from backend.web.services.event_store import build_run_event_read_transport
 from backend.web.services.thread_history_service import build_thread_history_transport, get_thread_history_payload
-from storage.runtime import build_storage_container
 
 
 @dataclass(frozen=True)
@@ -43,12 +43,8 @@ async def load_thread_history_payload(thread_id: str, *, history_transport) -> d
 
 
 def load_latest_run_events(thread_id: str) -> tuple[str | None, list[dict[str, Any]]]:
-    container = build_storage_container()
-    repo = container.run_event_repo()
-    try:
-        run_id = repo.latest_run_id(thread_id)
-        if run_id is None:
-            return None, []
-        return run_id, repo.list_events(thread_id, run_id, after=0, limit=1000)
-    finally:
-        repo.close()
+    transport = build_run_event_read_transport()
+    run_id = transport.latest_run_id(thread_id)
+    if run_id is None:
+        return None, []
+    return run_id, transport.list_events(thread_id, run_id, after=0, limit=1000)
