@@ -9,6 +9,7 @@ from backend.monitor.infrastructure.read_models import sandbox_read_service as m
 from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
 from backend.monitor.infrastructure.read_models import thread_workbench_read_service as owner_thread_workbench_read_service
 from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
+from backend.web.services import thread_history_service
 
 
 def test_monitor_sandbox_projection_does_not_construct_runtime_repo():
@@ -71,6 +72,7 @@ def test_monitor_thread_detail_uses_trajectory_read_port():
 def test_monitor_trace_uses_trace_read_source_port():
     trace_source = inspect.getsource(monitor_trace_service)
     read_source = inspect.getsource(monitor_trace_read_service)
+    history_source = inspect.getsource(thread_history_service)
 
     assert "thread_history_service" not in trace_source
     assert "build_storage_container" not in trace_source
@@ -80,6 +82,8 @@ def test_monitor_trace_uses_trace_read_source_port():
     assert "build_thread_history_transport" in read_source
     assert "build_storage_container" not in read_source
     assert "build_run_event_read_transport" in read_source
+    assert "agent_pool" not in history_source
+    assert "checkpoint_store" not in history_source
 
 
 def test_monitor_thread_list_does_not_depend_on_threads_router():

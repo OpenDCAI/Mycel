@@ -20,32 +20,13 @@ class ThreadHistoryTransport:
 def build_thread_history_transport(
     *,
     resolve_sandbox: Callable[[str], str],
-    agent_pool: Any,
-    checkpoint_store: Any,
+    load_live_messages: Callable[[str, str], Awaitable[list[Any] | None]],
+    load_checkpoint_messages: Callable[[str], Awaitable[list[Any]]],
 ) -> ThreadHistoryTransport:
-    async def _load_live_messages(thread_id: str, sandbox_type: str) -> list[Any] | None:
-        if not isinstance(agent_pool, dict):
-            raise RuntimeError("agent_pool is required for thread history reads")
-
-        agent = agent_pool.get(f"{thread_id}:{sandbox_type}")
-        if agent is None:
-            return None
-
-        state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
-        values = getattr(state, "values", {}) if state else {}
-        messages = values.get("messages", []) if isinstance(values, dict) else []
-        return list(messages)
-
-    async def _load_checkpoint_messages(thread_id: str) -> list[Any]:
-        if checkpoint_store is None:
-            raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
-        checkpoint_state = await checkpoint_store.load(thread_id)
-        return list(checkpoint_state.messages) if checkpoint_state is not None else []
-
     return ThreadHistoryTransport(
         resolve_sandbox=resolve_sandbox,
-        load_live_messages=_load_live_messages,
-        load_checkpoint_messages=_load_checkpoint_messages,
+        load_live_messages=load_live_messages,
+        load_checkpoint_messages=load_checkpoint_messages,
     )
 
 

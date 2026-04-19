@@ -18,10 +18,31 @@ class MonitorTraceReader:
 
 
 def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
+    async def _load_live_messages(thread_id: str, sandbox_type: str) -> list[Any] | None:
+        agent_pool = getattr(app.state, "agent_pool", None)
+        if not isinstance(agent_pool, dict):
+            raise RuntimeError("agent_pool is required for thread history reads")
+
+        agent = agent_pool.get(f"{thread_id}:{sandbox_type}")
+        if agent is None:
+            return None
+
+        state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        values = getattr(state, "values", {}) if state else {}
+        messages = values.get("messages", []) if isinstance(values, dict) else []
+        return list(messages)
+
+    async def _load_checkpoint_messages(thread_id: str) -> list[Any]:
+        checkpoint_store = getattr(app.state, "thread_checkpoint_store", None)
+        if checkpoint_store is None:
+            raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
+        checkpoint_state = await checkpoint_store.load(thread_id)
+        return list(checkpoint_state.messages) if checkpoint_state is not None else []
+
     history_transport = build_thread_history_transport(
         resolve_sandbox=lambda thread_id: resolve_thread_sandbox(app, thread_id),
-        agent_pool=getattr(app.state, "agent_pool", None),
-        checkpoint_store=getattr(app.state, "thread_checkpoint_store", None),
+        load_live_messages=_load_live_messages,
+        load_checkpoint_messages=_load_checkpoint_messages,
     )
 
     async def _load_thread_history_payload(thread_id: str) -> dict[str, Any]:
