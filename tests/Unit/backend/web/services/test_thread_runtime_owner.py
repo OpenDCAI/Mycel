@@ -67,3 +67,13 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
     assert hasattr(agent_pool_module, "get_file_channel_binding")
     assert owner_module.get_or_create_agent.__module__ == "backend.thread_runtime.pool.registry"
     assert owner_module.update_agent_config.__module__ == "backend.thread_runtime.pool.registry"
+
+
+def test_thread_launch_config_uses_thread_runtime_launch_config_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.launch_config")
+    shell_module = importlib.import_module("backend.web.services.thread_launch_config_service")
+
+    assert owner_module.normalize_launch_config_payload is not None
+    assert hasattr(shell_module, "normalize_launch_config_payload")
+    assert hasattr(shell_module, "build_new_launch_config")
+    assert hasattr(shell_module, "resolve_default_config")
