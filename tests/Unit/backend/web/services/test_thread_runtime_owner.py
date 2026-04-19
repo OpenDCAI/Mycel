@@ -109,10 +109,12 @@ def test_streaming_service_uses_thread_runtime_run_cancellation_owner() -> None:
 def test_streaming_service_uses_thread_runtime_buffer_wiring_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.buffer_wiring")
     streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    owner_source = inspect.getsource(owner_module)
 
     assert owner_module.get_or_create_thread_buffer is not None
     assert owner_module.ensure_thread_handlers is not None
     assert "from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring" in streaming_source
+    assert "backend.web.services.event_buffer" not in owner_source
 
 
 def test_streaming_service_uses_thread_runtime_run_lifecycle_owner() -> None:
@@ -145,11 +147,13 @@ def test_streaming_service_uses_thread_runtime_run_followups_owner() -> None:
 def test_streaming_service_uses_thread_runtime_sse_observer_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.observer")
     streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+    owner_source = inspect.getsource(owner_module)
 
     assert owner_module.observe_thread_events is not None
     assert owner_module.observe_run_events is not None
     assert owner_module.observe_sse_buffer is not None
     assert "from backend.thread_runtime.run import observer as _run_observer" in streaming_source
+    assert "backend.web.services.event_buffer" not in owner_source
 
 
 def test_streaming_service_uses_thread_runtime_trajectory_owner() -> None:

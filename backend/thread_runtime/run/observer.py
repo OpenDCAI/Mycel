@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncGenerator
 
-from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
+from backend.thread_runtime.events.buffer import RunEventBuffer, ThreadEventBuffer
 
 type SSEEvent = dict[str, str | int]
 
