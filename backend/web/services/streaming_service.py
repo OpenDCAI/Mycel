@@ -1,7 +1,6 @@
 """SSE streaming service for agent execution."""
 
 import asyncio
-import json
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -11,6 +10,7 @@ from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring
 from backend.thread_runtime.run import cancellation as _run_cancellation
 from backend.thread_runtime.run import emit as _run_emit
 from backend.thread_runtime.run import entrypoints as _run_entrypoints
+from backend.thread_runtime.run import epilogue as _run_epilogue
 from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import input_construction as _run_input_construction
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
@@ -296,11 +296,12 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
 
         # Final status
         if hasattr(agent, "runtime"):
-            await emit(
-                {
-                    "event": "status",
-                    "data": json.dumps(agent.runtime.get_status_dict(), ensure_ascii=False),
-                }
+            await _run_epilogue.emit_run_epilogue(
+                emit=emit,
+                thread_id=thread_id,
+                run_id=run_id,
+                outcome="success",
+                payload={"status": agent.runtime.get_status_dict()},
             )
 
         # Persist trajectory
@@ -316,8 +317,6 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         # run_id is available from run_start SSE event; no need to patch checkpoint.
         # See: https://github.com/langchain-ai/langgraph/issues/XXX
 
-        # A5: emit run_done instead of done (persistent buffer — no mark_done)
-        await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return "".join(output_parts).strip()
     except asyncio.CancelledError:
         if trajectory_scope is not None:
@@ -338,19 +337,13 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             thread_id=thread_id,
             app=app,
         )
-        await emit(
-            {
-                "event": "cancelled",
-                "data": json.dumps(
-                    {
-                        "message": "Run cancelled by user",
-                        "cancelled_tool_call_ids": cancelled_tool_call_ids,
-                    }
-                ),
-            }
+        await _run_epilogue.emit_run_epilogue(
+            emit=emit,
+            thread_id=thread_id,
+            run_id=run_id,
+            outcome="cancelled",
+            payload={"cancelled_tool_call_ids": cancelled_tool_call_ids},
         )
-        # Also emit run_done so frontend knows the run ended
-        await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return ""
     except Exception as e:
         if trajectory_scope is not None:
@@ -362,8 +355,13 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             f"[streaming] run failed for thread {thread_id}",
             e,
         )
-        await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
-        await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
+        await _run_epilogue.emit_run_epilogue(
+            emit=emit,
+            thread_id=thread_id,
+            run_id=run_id,
+            outcome="error",
+            payload={"error": str(e)},
+        )
         return ""
     finally:
         prompt_restore()
