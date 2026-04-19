@@ -14,6 +14,20 @@ from messaging.realtime import events as owner_chat_events
 from messaging.realtime import typing as owner_typing
 
 
+def _hook_app(gateway: object) -> SimpleNamespace:
+    default_thread = {"id": "thread-1", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0}
+    return SimpleNamespace(
+        state=SimpleNamespace(
+            agent_runtime_gateway=gateway,
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: default_thread if uid == "agent-user-1" else None,
+                list_by_agent_user=lambda uid: [default_thread] if uid == "agent-user-1" else [],
+            ),
+            agent_runtime_thread_activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        )
+    )
+
+
 def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> None:
     delivery_source = inspect.getsource(owner_chat_inlet)
     threads_source = inspect.getsource(threads_router)
@@ -55,7 +69,7 @@ async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
         async def dispatch_chat(self, _envelope):
             raise RuntimeError("runtime gateway down")
 
-    app = SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=FailingGateway()))
+    app = _hook_app(FailingGateway())
     deliver = chat_delivery_hook.make_chat_delivery_fn(app)
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",
@@ -83,7 +97,7 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
             self.envelope = envelope
 
     gateway = RecordingGateway()
-    app = SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=gateway))
+    app = _hook_app(gateway)
     deliver = chat_delivery_hook.make_chat_delivery_fn(app)
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",
@@ -116,7 +130,7 @@ async def test_chat_delivery_hook_requires_recipient_user_type() -> None:
             self.called = True
 
     gateway = RecordingGateway()
-    app = SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=gateway))
+    app = _hook_app(gateway)
     deliver = chat_delivery_hook.make_chat_delivery_fn(app)
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",
@@ -146,7 +160,7 @@ async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
             self.called = True
 
     gateway = RecordingGateway()
-    app = SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=gateway))
+    app = _hook_app(gateway)
     deliver = chat_delivery_hook.make_chat_delivery_fn(app)
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",

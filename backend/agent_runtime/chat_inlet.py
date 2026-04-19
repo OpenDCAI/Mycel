@@ -16,6 +16,7 @@ from backend.protocols.agent_runtime import (
     AgentRuntimeMessage,
 )
 from messaging.delivery.contracts import ChatDeliveryRequest
+from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,9 @@ def make_chat_delivery_fn(app: Any):
 
     loop = asyncio.get_running_loop()
     logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
+    activity_reader = getattr(app.state, "agent_runtime_thread_activity_reader", None)
+    if activity_reader is None:
+        raise RuntimeError("Agent runtime thread activity reader is not configured")
 
     async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
         raw_recipient_type = getattr(request.recipient_user, "type", None)
@@ -43,6 +47,13 @@ def make_chat_delivery_fn(app: Any):
             request.unread_count,
             signal=request.signal,
         )
+        thread_id = select_runtime_thread_for_recipient(
+            request.recipient_id,
+            thread_repo=app.state.thread_repo,
+            activity_reader=activity_reader,
+        )
+        if thread_id is None:
+            raise RuntimeError(f"Agent chat recipient has no runtime thread: {request.recipient_id}")
         envelope = AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=request.chat_id),
             sender=AgentRuntimeActor(
@@ -52,7 +63,7 @@ def make_chat_delivery_fn(app: Any):
                 avatar_url=request.sender_avatar_url,
                 source="chat",
             ),
-            recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source="mycel"),
+            recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source="mycel", thread_id=thread_id),
             message=AgentRuntimeMessage(content=rendered_content, signal=request.signal),
             extensions={
                 "mycel": {

@@ -25,6 +25,7 @@ class AgentRuntimeActor:
 class AgentChatRecipient:
     agent_user_id: str
     runtime_source: str
+    thread_id: str | None = None
 
 
 @dataclass(frozen=True)
