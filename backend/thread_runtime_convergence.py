@@ -5,14 +5,23 @@ from __future__ import annotations
 from typing import Any
 
 from backend.web.services.thread_runtime_binding_service import ThreadRuntimeBindingError, resolve_thread_runtime_binding
-from backend.web.utils.helpers import delete_thread_in_db
+
+
+def _delete_thread_in_db(thread_id: str) -> None:
+    # @@@compat-delete-seam - existing web/auth tests monkeypatch
+    # backend.web.services.thread_runtime_convergence.delete_thread_in_db.
+    # Keep the shared convergence path routed through that symbol so the old
+    # patch seam still intercepts purges after this helper move.
+    from backend.web.services import thread_runtime_convergence as compatibility_shell
+
+    compatibility_shell.delete_thread_in_db(thread_id)
 
 
 def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
     # @@@incomplete-thread-purge - visible threads that cannot satisfy the
     # current thread->workspace->sandbox runtime binding should be removed once,
     # not kept alive behind endpoint-level repair guesses.
-    delete_thread_in_db(thread_id)
+    _delete_thread_in_db(thread_id)
     app.state.thread_repo.delete(thread_id)
 
     for attr in ("thread_sandbox", "thread_cwd", "thread_event_buffers", "thread_tasks", "thread_last_active"):
