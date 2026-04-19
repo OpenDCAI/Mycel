@@ -227,6 +227,7 @@ def test_user_sandbox_reads_uses_neutral_avatar_and_virtual_thread_helpers() -> 
     assert "backend.avatar_urls" in source
     assert "backend.virtual_threads" in source
     assert "backend.thread_projection" in source
+    assert "def count_user_visible_sandboxes_by_provider(" in source
 
 
 def test_resource_modules_use_neutral_sandbox_path_owner() -> None:

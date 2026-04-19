@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-from collections import Counter
 from typing import Any
 
 import backend.user_sandbox_reads as user_sandbox_reads
@@ -104,32 +103,13 @@ def count_user_visible_sandboxes_by_provider(
     thread_repo: Any = None,
     supabase_client: Any | None = None,
 ) -> dict[str, int]:
-    if thread_repo is None:
-        raise RuntimeError("thread_repo is required for count_user_visible_sandboxes_by_provider")
-    repo_kwargs = {"supabase_client": supabase_client} if supabase_client is not None else {}
-    monitor_repo = make_sandbox_monitor_repo(**repo_kwargs)
-    try:
-        owned_thread_ids = {
-            str(thread.get("id") or "").strip()
-            for thread in thread_repo.list_by_owner_user_id(user_id)
-            if str(thread.get("id") or "").strip()
-        }
-        counts: Counter[str] = Counter()
-        counted_sandbox_keys: set[str] = set()
-        for row in monitor_repo.query_sandboxes():
-            sandbox_id = str(row.get("sandbox_id") or "").strip()
-            if not sandbox_id or sandbox_id in counted_sandbox_keys:
-                continue
-            thread_id = str(row.get("thread_id") or "").strip()
-            if not _is_user_visible_sandbox_thread(thread_id) or thread_id not in owned_thread_ids:
-                continue
-            if not _is_user_visible_sandbox_state(row):
-                continue
-            counts[str(row.get("provider_name") or "local")] += 1
-            counted_sandbox_keys.add(sandbox_id)
-        return dict(counts)
-    finally:
-        monitor_repo.close()
+    return user_sandbox_reads.count_user_visible_sandboxes_by_provider(
+        user_id,
+        thread_repo=thread_repo,
+        supabase_client=supabase_client,
+        make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
+        is_virtual_thread_id_fn=is_virtual_thread_id,
+    )
 
 
 def _is_user_visible_sandbox_thread(thread_id: str | None) -> bool:

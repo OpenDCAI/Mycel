@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from typing import Any
 
 from backend.avatar_urls import avatar_url
@@ -176,3 +177,41 @@ def list_user_sandboxes(
         is_virtual_thread_id_fn=is_virtual_thread_id_fn,
     )
     return [_sandbox_summary(row) for row in rows]
+
+
+def count_user_visible_sandboxes_by_provider(
+    user_id: str,
+    *,
+    thread_repo: Any = None,
+    supabase_client: Any | None = None,
+    make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
+    is_virtual_thread_id_fn=is_virtual_thread_id,
+) -> dict[str, int]:
+    if thread_repo is None:
+        raise RuntimeError("thread_repo is required for count_user_visible_sandboxes_by_provider")
+    repo_kwargs = {"supabase_client": supabase_client} if supabase_client is not None else {}
+    monitor_repo = make_sandbox_monitor_repo_fn(**repo_kwargs)
+    try:
+        owned_thread_ids = {
+            str(thread.get("id") or "").strip()
+            for thread in thread_repo.list_by_owner_user_id(user_id)
+            if str(thread.get("id") or "").strip()
+        }
+        counts: Counter[str] = Counter()
+        counted_sandbox_keys: set[str] = set()
+        for row in monitor_repo.query_sandboxes():
+            sandbox_id = str(row.get("sandbox_id") or "").strip()
+            if not sandbox_id or sandbox_id in counted_sandbox_keys:
+                continue
+            thread_id = str(row.get("thread_id") or "").strip()
+            if not _is_user_visible_sandbox_thread(thread_id, is_virtual_thread_id_fn=is_virtual_thread_id_fn):
+                continue
+            if thread_id not in owned_thread_ids:
+                continue
+            if not _is_user_visible_sandbox_state(row):
+                continue
+            counts[str(row.get("provider_name") or "local")] += 1
+            counted_sandbox_keys.add(sandbox_id)
+        return dict(counts)
+    finally:
+        monitor_repo.close()
