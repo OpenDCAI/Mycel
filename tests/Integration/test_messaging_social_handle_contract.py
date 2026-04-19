@@ -1164,6 +1164,46 @@ def test_messaging_service_conversation_summaries_fail_on_unknown_member_identit
         service.list_conversation_summaries_for_user("human-user-1")
 
 
+def test_messaging_service_conversation_summaries_fail_on_invalid_user_row_collection() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        user_repo=SimpleNamespace(list_by_ids=lambda _user_ids: {"human-user-1": True}),
+    )
+
+    with pytest.raises(RuntimeError, match="User row collection is invalid"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
+def test_messaging_service_conversation_summaries_fail_on_invalid_user_row() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [
+                {"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0},
+                {"chat_id": "chat-1", "user_id": "agent-user-1", "last_read_seq": 0},
+            ],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        user_repo=SimpleNamespace(list_by_ids=lambda _user_ids: ["human-user-1"]),
+    )
+
+    with pytest.raises(RuntimeError, match="User row is invalid"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
 def test_messaging_service_conversation_summaries_fail_on_missing_member_user_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(

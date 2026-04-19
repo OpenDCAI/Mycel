@@ -467,7 +467,13 @@ class MessagingService:
     def _users_by_id(self, user_ids: list[str]) -> dict[str, Any]:
         if not user_ids:
             return {}
-        return {user.id: user for user in self._user_repo.list_by_ids(user_ids)}
+        rows = self._user_repo.list_by_ids(user_ids)
+        if not isinstance(rows, list):
+            raise RuntimeError("User row collection is invalid")
+        for user in rows:
+            if not hasattr(user, "id"):
+                raise RuntimeError("User row is invalid")
+        return {user.id: user for user in rows}
 
     def _project_known_user_member(self, social_user_id: str, users_by_id: dict[str, Any]) -> dict[str, Any]:
         user = users_by_id.get(social_user_id)
