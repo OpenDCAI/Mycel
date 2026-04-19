@@ -1,4 +1,5 @@
 import inspect
+from pathlib import Path
 
 from backend.monitor.application.use_cases import threads as monitor_threads_impl
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
@@ -14,4 +15,7 @@ def test_monitor_gateway_thread_surfaces_use_narrow_thread_service():
 
 
 def test_monitor_thread_use_case_lives_in_monitor_module():
-    assert "/backend/monitor/" in monitor_threads_impl.__file__
+    parts = Path(monitor_threads_impl.__file__).parts
+
+    assert "backend" in parts
+    assert "monitor" in parts
