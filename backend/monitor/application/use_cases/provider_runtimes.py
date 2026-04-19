@@ -63,11 +63,21 @@ def get_monitor_runtime_detail(runtime_id: str) -> dict[str, Any]:
     raise KeyError(f"Runtime not found: {runtime_id}")
 
 
-def request_monitor_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str) -> dict[str, Any]:
+def request_monitor_provider_orphan_runtime_cleanup(
+    provider_name: str,
+    runtime_id: str,
+    *,
+    runtime_mutation_executor,
+) -> dict[str, Any]:
     provider = str(provider_name or "").strip()
     runtime = str(runtime_id or "").strip()
     for item in list_monitor_provider_orphan_runtimes().get("runtimes", []):
         if str(item.get("provider") or "").strip() == provider and str(item.get("runtime_id") or "").strip() == runtime:
             runtime_truth = item
-            return operations.request_provider_orphan_runtime_cleanup(provider, runtime, runtime_truth)
+            return operations.request_provider_orphan_runtime_cleanup(
+                provider,
+                runtime,
+                runtime_truth,
+                runtime_mutation_executor=runtime_mutation_executor,
+            )
     raise KeyError(f"Provider orphan runtime not found: {provider}:{runtime}")

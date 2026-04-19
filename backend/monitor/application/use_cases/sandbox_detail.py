@@ -118,7 +118,11 @@ def _sandbox_cleanup_target(sandbox_id: str) -> dict[str, object]:
     return cleanup_target
 
 
-def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, object]:
+def request_monitor_sandbox_cleanup(
+    sandbox_id: str,
+    *,
+    runtime_mutation_executor,
+) -> dict[str, object]:
     payload = get_monitor_sandbox_detail(sandbox_id)
     sandbox = payload["sandbox"]
     provider = payload.get("provider") or {}
@@ -144,7 +148,10 @@ def request_monitor_sandbox_cleanup(sandbox_id: str) -> dict[str, object]:
             threads=threads,
         ),
     }
-    return operations.request_sandbox_cleanup(sandbox_detail)
+    return operations.request_sandbox_cleanup(
+        sandbox_detail,
+        runtime_mutation_executor=runtime_mutation_executor,
+    )
 
 
 def get_monitor_operation_detail(operation_id: str) -> dict[str, object]:

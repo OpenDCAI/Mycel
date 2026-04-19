@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +27,12 @@ class RuntimeMutationResult:
     destroy_result: Any
 
 
+@dataclass(frozen=True)
+class RuntimeMutationExecutor:
+    cleanup_sandbox: Callable[[SandboxCleanupRequest], RuntimeMutationResult]
+    cleanup_provider_orphan_runtime: Callable[[ProviderOrphanRuntimeCleanupRequest], RuntimeMutationResult]
+
+
 def _public_destroy_result(result: Any) -> Any:
     if not isinstance(result, dict):
         return result
@@ -48,3 +55,10 @@ def cleanup_provider_orphan_runtime(request: ProviderOrphanRuntimeCleanupRequest
         provider_hint=request.provider_name,
     )
     return RuntimeMutationResult(destroy_result=_public_destroy_result(result))
+
+
+def build_runtime_mutation_executor() -> RuntimeMutationExecutor:
+    return RuntimeMutationExecutor(
+        cleanup_sandbox=cleanup_sandbox,
+        cleanup_provider_orphan_runtime=cleanup_provider_orphan_runtime,
+    )

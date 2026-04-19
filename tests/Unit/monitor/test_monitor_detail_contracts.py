@@ -180,6 +180,17 @@ def _cleanup_state(reason: str):
     }
 
 
+def _runtime_mutation_executor(
+    *,
+    cleanup_sandbox=lambda request: SimpleNamespace(destroy_result={"ok": True}),
+    cleanup_provider_orphan_runtime=lambda request: SimpleNamespace(destroy_result={"ok": True}),
+):
+    return SimpleNamespace(
+        cleanup_sandbox=cleanup_sandbox,
+        cleanup_provider_orphan_runtime=cleanup_provider_orphan_runtime,
+    )
+
+
 def _blocked_cleanup_state(reason: str):
     return {
         "allowed": False,
@@ -632,7 +643,18 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         raising=False,
     )
 
-    payload = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1")
+    payload = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup(
+        "sandbox-1",
+        runtime_mutation_executor=_runtime_mutation_executor(
+            cleanup_sandbox=lambda request: SimpleNamespace(
+                destroy_result=_record_destroy(calls)(
+                    lower_runtime_handle=request.lower_runtime_handle,
+                    provider_name=request.provider_name,
+                    detach_thread_bindings=request.detach_thread_bindings,
+                )
+            )
+        ),
+    )
 
     assert payload["accepted"] is True
     assert payload["message"] == "Sandbox cleanup completed."
@@ -655,13 +677,16 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
     captured: dict[str, object] = {}
     _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox(), runtime_id="runtime-1"))
 
-    def _record_request(payload):
+    def _record_request(payload, **_kwargs):
         captured.update(payload)
         return {"accepted": True}
 
     monkeypatch.setattr(monitor_operation_service, "request_sandbox_cleanup", _record_request)
 
-    assert monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1") == {"accepted": True}
+    assert monitor_sandbox_detail_service.request_monitor_sandbox_cleanup(
+        "sandbox-1",
+        runtime_mutation_executor=_runtime_mutation_executor(),
+    ) == {"accepted": True}
 
     assert "lease" not in captured
     assert LOWER_RUNTIME_KEY not in captured["sandbox"]
@@ -686,7 +711,8 @@ def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypa
             "threads": [],
             "runtime_rows": [],
             "cleanup": _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup."),
-        }
+        },
+        runtime_mutation_executor=_runtime_mutation_executor(),
     )
 
     assert payload == {
@@ -715,7 +741,18 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
         raising=False,
     )
 
-    created = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1")
+    created = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup(
+        "sandbox-1",
+        runtime_mutation_executor=_runtime_mutation_executor(
+            cleanup_sandbox=lambda request: SimpleNamespace(
+                destroy_result=_record_destroy(calls)(
+                    lower_runtime_handle=request.lower_runtime_handle,
+                    provider_name=request.provider_name,
+                    detach_thread_bindings=request.detach_thread_bindings,
+                )
+            )
+        ),
+    )
     detail = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
 
     assert detail["cleanup"]["operation"]["operation_id"] == created["operation"]["operation_id"]
@@ -759,7 +796,23 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
         raising=False,
     )
 
-    payload = monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
+    payload = monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup(
+        "daytona_selfhost",
+        "sandbox-1",
+        runtime_mutation_executor=_runtime_mutation_executor(
+            cleanup_provider_orphan_runtime=lambda request: SimpleNamespace(
+                destroy_result={
+                    key: value
+                    for key, value in _mutate_sandbox_runtime(
+                        runtime_id=request.runtime_id,
+                        action="destroy",
+                        provider_hint=request.provider_name,
+                    ).items()
+                    if key != LOWER_RUNTIME_KEY
+                }
+            )
+        ),
+    )
 
     assert payload["accepted"] is True
     assert payload["message"] == "Provider orphan runtime cleanup completed."
@@ -816,7 +869,19 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
         raising=False,
     )
 
-    payload = monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup("daytona_selfhost", "sandbox-1")
+    payload = monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup(
+        "daytona_selfhost",
+        "sandbox-1",
+        runtime_mutation_executor=_runtime_mutation_executor(
+            cleanup_provider_orphan_runtime=lambda request: SimpleNamespace(
+                destroy_result=_mutate_sandbox_runtime(
+                    runtime_id=request.runtime_id,
+                    action="destroy",
+                    provider_hint=request.provider_name,
+                )
+            )
+        ),
+    )
 
     assert payload["accepted"] is False
     assert payload["operation"] is None
@@ -993,7 +1058,18 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
         raising=False,
     )
 
-    payload = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1")
+    payload = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup(
+        "sandbox-1",
+        runtime_mutation_executor=_runtime_mutation_executor(
+            cleanup_sandbox=lambda request: SimpleNamespace(
+                destroy_result=_record_destroy(calls)(
+                    lower_runtime_handle=request.lower_runtime_handle,
+                    provider_name=request.provider_name,
+                    detach_thread_bindings=request.detach_thread_bindings,
+                )
+            )
+        ),
+    )
 
     assert payload["accepted"] is True
     assert "thread_ids" not in (payload["operation"].get("target") or {})

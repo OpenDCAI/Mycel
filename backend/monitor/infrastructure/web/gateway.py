@@ -11,6 +11,7 @@ from backend.monitor.application.use_cases import sandbox_configs, sandbox_detai
 from backend.monitor.application.use_cases import threads as monitor_threads
 from backend.monitor.infrastructure.evaluation.background_task_scheduler import BackgroundTaskEvaluationScheduler
 from backend.monitor.infrastructure.read_models import thread_read_service, thread_workbench_read_service, trace_read_service
+from backend.monitor.mutations import sandbox_mutations
 
 
 def list_sandboxes() -> dict[str, Any]:
@@ -37,11 +38,18 @@ def get_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
 
 
 def request_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
-    return sandbox_detail.request_monitor_sandbox_cleanup(sandbox_id)
+    return sandbox_detail.request_monitor_sandbox_cleanup(
+        sandbox_id,
+        runtime_mutation_executor=sandbox_mutations.build_runtime_mutation_executor(),
+    )
 
 
 def request_provider_orphan_runtime_cleanup(provider_id: str, runtime_id: str) -> dict[str, Any]:
-    return monitor_provider_runtimes.request_monitor_provider_orphan_runtime_cleanup(provider_id, runtime_id)
+    return monitor_provider_runtimes.request_monitor_provider_orphan_runtime_cleanup(
+        provider_id,
+        runtime_id,
+        runtime_mutation_executor=sandbox_mutations.build_runtime_mutation_executor(),
+    )
 
 
 def get_operation_detail(operation_id: str) -> dict[str, Any]:

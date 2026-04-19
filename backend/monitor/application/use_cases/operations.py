@@ -2,15 +2,34 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 from backend.monitor.infrastructure.persistence import operation_repo
-from backend.monitor.mutations import sandbox_mutations as runtime_mutation
 
 _ALLOWED_SANDBOX_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
 _SANDBOX_CLEANUP_ACTION = "sandbox_cleanup"
+
+
+@dataclass(frozen=True)
+class SandboxCleanupCommand:
+    lower_runtime_handle: str
+    provider_name: str
+    detach_thread_bindings: bool
+
+
+@dataclass(frozen=True)
+class ProviderOrphanRuntimeCleanupCommand:
+    provider_name: str
+    runtime_id: str
+
+
+class RuntimeMutationExecutor(Protocol):
+    def cleanup_sandbox(self, request: Any) -> Any: ...
+
+    def cleanup_provider_orphan_runtime(self, request: Any) -> Any: ...
 
 
 def _now_iso() -> str:
@@ -139,7 +158,11 @@ def _cleanup_current_truth(*, sandbox_id: str, triage_category: str | None) -> d
     }
 
 
-def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
+def request_sandbox_cleanup(
+    sandbox_detail: dict[str, Any],
+    *,
+    runtime_mutation_executor: RuntimeMutationExecutor,
+) -> dict[str, Any]:
     sandbox = sandbox_detail["sandbox"]
     provider = sandbox_detail.get("provider") or {}
     runtime = sandbox_detail.get("runtime") or {}
@@ -198,8 +221,8 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
             runtime_rows=runtime_rows,
             threads=threads,
         )
-        result = runtime_mutation.cleanup_sandbox(
-            runtime_mutation.SandboxCleanupRequest(
+        result = runtime_mutation_executor.cleanup_sandbox(
+            SandboxCleanupCommand(
                 lower_runtime_handle=lower_runtime_handle,
                 provider_name=provider_name,
                 detach_thread_bindings=detach_before_cleanup,
@@ -234,7 +257,13 @@ def request_sandbox_cleanup(sandbox_detail: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str, runtime_truth: dict[str, Any]) -> dict[str, Any]:
+def request_provider_orphan_runtime_cleanup(
+    provider_name: str,
+    runtime_id: str,
+    runtime_truth: dict[str, Any],
+    *,
+    runtime_mutation_executor: RuntimeMutationExecutor,
+) -> dict[str, Any]:
     provider = str(provider_name or "").strip()
     runtime = str(runtime_id or "").strip()
     if not provider:
@@ -271,8 +300,8 @@ def request_provider_orphan_runtime_cleanup(provider_name: str, runtime_id: str,
     _append_event(operation, status="running", message="Destroy flow started")
 
     try:
-        result = runtime_mutation.cleanup_provider_orphan_runtime(
-            runtime_mutation.ProviderOrphanRuntimeCleanupRequest(
+        result = runtime_mutation_executor.cleanup_provider_orphan_runtime(
+            ProviderOrphanRuntimeCleanupCommand(
                 provider_name=provider,
                 runtime_id=runtime,
             )
