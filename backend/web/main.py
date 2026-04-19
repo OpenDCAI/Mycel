@@ -1,12 +1,11 @@
 """Leon Web Backend - FastAPI Application."""
 
-from backend.app_entrypoint import load_env_file_from_env, resolve_app_port
+from backend.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port
 
 load_env_file_from_env()
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from backend.chat.api.http import (  # noqa: E402
     conversations_router,  # noqa: E402
@@ -33,14 +32,7 @@ from backend.web.routers import (  # noqa: E402
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+add_permissive_cors(app)
 
 # Include routers
 app.include_router(auth.router)

@@ -1,6 +1,7 @@
 import subprocess
 
 import pytest
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from backend import app_entrypoint
@@ -48,3 +49,7 @@ def test_monitor_app_resolve_port_uses_worktree_config_when_env_missing(monkeypa
     monkeypatch.setattr(app_entrypoint.subprocess, "run", _run)
 
     assert monitor_app_main._resolve_port() == 55418
+
+
+def test_monitor_app_includes_permissive_cors_middleware():
+    assert any(middleware.cls is CORSMiddleware for middleware in app.user_middleware)

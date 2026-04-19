@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+from fastapi.middleware.cors import CORSMiddleware
+
 from backend import app_entrypoint
 
 
@@ -37,3 +39,27 @@ def test_load_env_file_from_env_loads_dotenv(monkeypatch, tmp_path):
     app_entrypoint.load_env_file_from_env()
 
     assert os.environ["HELLO_ENTRYPOINT"] == "world"
+
+
+def test_add_permissive_cors_registers_cors_middleware():
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    class _App:
+        def add_middleware(self, middleware_cls, **kwargs):
+            calls.append((middleware_cls, kwargs))
+
+    app = _App()
+
+    app_entrypoint.add_permissive_cors(app)
+
+    assert calls == [
+        (
+            CORSMiddleware,
+            {
+                "allow_origins": ["*"],
+                "allow_credentials": True,
+                "allow_methods": ["*"],
+                "allow_headers": ["*"],
+            },
+        )
+    ]

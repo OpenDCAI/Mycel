@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import subprocess
 
+from fastapi.middleware.cors import CORSMiddleware
+
 
 def load_env_file_from_env() -> None:
     env_file = os.getenv("ENV_FILE")
@@ -32,3 +34,13 @@ def resolve_app_port(env_key: str, worktree_key: str, default_port: int) -> int:
     except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
         pass
     return default_port
+
+
+def add_permissive_cors(app) -> None:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
