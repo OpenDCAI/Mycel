@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from backend.web.services.event_buffer import ThreadEventBuffer
+from backend.thread_runtime.events.buffer import ThreadEventBuffer
 from core.runtime.middleware.monitor import AgentState
 
 logger = logging.getLogger(__name__)
