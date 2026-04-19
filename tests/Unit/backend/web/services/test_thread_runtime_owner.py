@@ -41,3 +41,13 @@ def test_thread_runtime_namespace_exports_owner_thread_reads() -> None:
     shell_module = importlib.import_module("backend.web.services.owner_thread_read_service")
 
     assert owner_module.list_owner_thread_rows_for_auth_burst is shell_module.list_owner_thread_rows_for_auth_burst
+
+
+def test_agent_pool_uses_thread_runtime_pool_factory_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.pool.factory")
+    agent_pool_module = importlib.import_module("backend.web.services.agent_pool")
+    source = inspect.getsource(agent_pool_module)
+
+    assert owner_module.create_agent_sync is agent_pool_module.create_agent_sync
+    assert "from backend.thread_runtime.pool.factory import create_agent_sync" in source
+    assert "def create_agent_sync(" not in source
