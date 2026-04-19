@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -305,13 +306,20 @@ class MessagingService:
         chat_rows, members_by_chat, users_by_id, unread_by_chat = self._chat_projection_inputs(user_id)
         chat_ids = [chat.id for chat in chat_rows]
         latest_messages = self._messages.list_latest_by_chat_ids(chat_ids)
+        if not isinstance(latest_messages, Mapping):
+            raise RuntimeError("Latest message collection is invalid")
         chat_id_set = set(chat_ids)
         for latest_chat_id in latest_messages:
             if latest_chat_id not in chat_id_set:
                 raise RuntimeError(f"Latest message row references unrequested chat {latest_chat_id}")
+        latest_by_chat: dict[str, dict[str, Any]] = {}
         latest_sender_ids: set[str] = set()
-        for row in latest_messages.values():
-            sender_id = str(self._normalize_message_row(row).get("sender_id") or "")
+        for latest_chat_id, row in latest_messages.items():
+            if not isinstance(row, Mapping):
+                raise RuntimeError("Latest message row is invalid")
+            message_row = dict(row)
+            latest_by_chat[str(latest_chat_id)] = message_row
+            sender_id = str(self._normalize_message_row(message_row).get("sender_id") or "")
             if sender_id:
                 latest_sender_ids.add(sender_id)
         missing_sender_ids = sorted(latest_sender_ids - set(users_by_id))
@@ -330,7 +338,7 @@ class MessagingService:
                     "updated_at": getattr(chat, "updated_at", None) or getattr(chat, "created_at", None),
                     "avatar_url": chat_avatar_url,
                     "members": member_info,
-                    "last_message": self._project_latest_message(latest_messages.get(chat.id), users_by_id),
+                    "last_message": self._project_latest_message(latest_by_chat.get(chat.id), users_by_id),
                     "unread_count": int(unread_by_chat.get(chat.id, 0)),
                 }
             )
