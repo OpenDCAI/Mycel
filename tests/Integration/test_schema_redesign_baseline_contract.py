@@ -3,8 +3,8 @@ from __future__ import annotations
 import inspect
 from types import SimpleNamespace
 
+from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from backend.web.services import (
-    monitor_resource_read_service,
     resource_common,
     resource_projection_service,
     resource_provider_boundary_service,
