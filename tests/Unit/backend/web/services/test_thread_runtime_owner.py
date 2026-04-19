@@ -173,3 +173,11 @@ def test_streaming_service_uses_thread_runtime_activity_bridge_owner() -> None:
 
     assert owner_module.build_activity_bridge is not None
     assert "from backend.thread_runtime.run import activity_bridge as _run_activity_bridge" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_emit_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.emit")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.build_emit is not None
+    assert "from backend.thread_runtime.run import emit as _run_emit" in streaming_source

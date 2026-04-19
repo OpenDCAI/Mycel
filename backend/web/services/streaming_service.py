@@ -10,6 +10,7 @@ from typing import Any
 from backend.thread_runtime.run import activity_bridge as _run_activity_bridge
 from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring
 from backend.thread_runtime.run import cancellation as _run_cancellation
+from backend.thread_runtime.run import emit as _run_emit
 from backend.thread_runtime.run import entrypoints as _run_entrypoints
 from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
@@ -47,18 +48,7 @@ def _log_captured_exception(message: str, err: BaseException) -> None:
 
 
 def _resolve_run_event_repo(agent: Any) -> RunEventRepo:
-    storage_container = getattr(agent, "storage_container", None)
-    if storage_container is None:
-        raise RuntimeError("streaming_service requires agent.storage_container.run_event_repo()")
-
-    # @@@runtime-storage-consumer - runtime run lifecycle must consume injected storage container, not assignment-only wiring.
-    run_event_repo = getattr(storage_container, "run_event_repo", None)
-    if not callable(run_event_repo):
-        raise RuntimeError("streaming_service requires agent.storage_container.run_event_repo()")
-    repo = run_event_repo()
-    if not isinstance(repo, RunEventRepo):
-        raise RuntimeError("agent.storage_container.run_event_repo() returned an invalid repo")
-    return repo
+    return _run_emit.resolve_run_event_repo(agent)
 
 
 def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any:
@@ -217,55 +207,22 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     input_messages: list[Any] | None = None,
 ) -> str:
     """Run agent execution and write all SSE events into *thread_buf*."""
-    from backend.web.services.event_store import append_event
-
     run_event_repo = _resolve_run_event_repo(agent)
-
-    # @@@display-builder — compute display deltas alongside raw events
     display_builder = app.state.display_builder
-
-    async def emit(event: dict, message_id: str | None = None) -> None:
-        seq = await append_event(
-            thread_id,
-            run_id,
-            event,
-            message_id,
-            run_event_repo=run_event_repo,
-        )
-        try:
-            data = json.loads(event.get("data", "{}")) if isinstance(event.get("data"), str) else event.get("data", {})
-        except (json.JSONDecodeError, TypeError):
-            data = event.get("data", {})
-        if isinstance(data, dict):
-            data["_seq"] = seq
-            data["_run_id"] = run_id
-            if message_id:
-                data["message_id"] = message_id
-            event = {**event, "data": json.dumps(data, ensure_ascii=False)}
-        await thread_buf.put(event)
-
-        # Compute display delta and emit it alongside the raw event.
-        event_type = event.get("event", "")
-        if event_type and isinstance(data, dict):
-            delta = display_builder.apply_event(thread_id, event_type, data)
-            if delta:
-                # @@@display-delta-source-seq - replay after-filter only knows raw
-                # event seqs. Carry the source seq onto the derived delta so a
-                # reconnect after GET /thread can skip stale display_delta
-                # replays instead of rebuilding the same thread a second time.
-                delta["_seq"] = seq
-                await thread_buf.put(
-                    {
-                        "event": "display_delta",
-                        "data": json.dumps(delta, ensure_ascii=False),
-                    }
-                )
+    emit = _run_emit.build_emit(
+        thread_id=thread_id,
+        run_id=run_id,
+        thread_buf=thread_buf,
+        run_event_repo=run_event_repo,
+        display_builder=display_builder,
+    )
 
     task = None
     stream_gen = None
     pending_tool_calls: dict[str, dict] = {}
     output_parts: list[str] = []
     trajectory_status = "completed"
+    original_system_prompt = None
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
@@ -410,7 +367,6 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             )
 
         terminal_followthrough_items: list[dict[str, str | None]] | None = None
-        original_system_prompt = None
         # @@@terminal-followthrough-reentry - terminal background completions
         # still surface as durable notices first, but they must then re-enter the
         # model as a real followthrough turn instead of terminating at notice-only.
