@@ -8,6 +8,7 @@ from backend import resource_projection, user_resource_projection
 from backend import resource_provider_boundary as neutral_resource_provider_boundary
 from backend import resource_provider_contracts as neutral_resource_provider_contracts
 from backend import sandbox_provider_factory as neutral_sandbox_provider_factory
+from backend import user_sandbox_reads as neutral_user_sandbox_reads
 from backend.web.services import resource_common, resource_provider_boundary_service, resource_service, sandbox_service
 
 
@@ -215,6 +216,15 @@ def test_resource_provider_boundary_moves_user_sandbox_reads_out_of_sandbox_serv
     assert "backend.user_sandbox_reads" in boundary_source
     assert "user_sandbox_reads.list_user_sandboxes(" in sandbox_service_source
     assert "user_sandbox_reads._list_user_runtime_rows(" in sandbox_service_source
+
+
+def test_user_sandbox_reads_uses_neutral_avatar_and_virtual_thread_helpers() -> None:
+    source = inspect.getsource(neutral_user_sandbox_reads)
+
+    assert "backend.web.utils.serializers" not in source
+    assert "backend.web.utils.helpers" not in source
+    assert "backend.avatar_urls" in source
+    assert "backend.virtual_threads" in source
 
 
 def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
