@@ -2,10 +2,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.monitor.application.use_cases import resources as monitor_resources_impl
+from backend.monitor.infrastructure.io import resource_io_service as monitor_resource_io_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor, resources
-from backend.web.services import monitor_resource_io_service, monitor_resource_service
 
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
@@ -84,9 +85,9 @@ def test_monitor_resources_refresh_probes_before_rebuilding_snapshot(monkeypatch
         return _resource_snapshot()
 
     monkeypatch.setattr(monitor_resource_io_service, "refresh_resource_snapshots", _probe)
-    monkeypatch.setattr(monitor_resource_service, "refresh_resource_overview_sync", _refresh)
+    monkeypatch.setattr(monitor_resources_impl, "refresh_resource_overview_sync", _refresh)
     monkeypatch.setattr(
-        monitor_resource_service.monitor_sandbox_projection_service,
+        monitor_resources_impl.monitor_sandbox_projection_service,
         "list_monitor_sandboxes",
         lambda: {"triage": _resource_snapshot()["triage"]},
     )

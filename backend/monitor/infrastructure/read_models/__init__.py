@@ -1,0 +1,1 @@
+"""Monitor read-model adapters."""

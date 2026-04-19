@@ -6,19 +6,21 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.monitor.application.use_cases import operations as monitor_operations_impl
-from backend.monitor.application.use_cases import sandbox_configs as monitor_sandbox_configs_impl
-from backend.monitor.application.use_cases import sandbox_detail as monitor_sandbox_detail_impl
-from backend.monitor.infrastructure.providers import sandbox_config_provider_service as sandbox_config_provider_impl
+from backend.monitor.application.use_cases import operations as monitor_operation_service
+from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtime_service
+from backend.monitor.application.use_cases import sandbox_configs as monitor_sandbox_config_service
+from backend.monitor.application.use_cases import sandbox_detail as monitor_sandbox_detail_service
+from backend.monitor.infrastructure.providers import (
+    provider_runtime_inventory_service as monitor_provider_runtime_inventory_service,
+)
+from backend.monitor.infrastructure.providers import (
+    sandbox_config_provider_service as monitor_sandbox_config_provider_service,
+)
 from backend.web.services import (
     monitor_evaluation_execution_service,
     monitor_evaluation_read_service,
     monitor_evaluation_service,
     monitor_operation_repo_service,
-    monitor_operation_service,
-    monitor_provider_runtime_inventory_service,
-    monitor_provider_runtime_service,
-    monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_sandbox_read_service,
     monitor_thread_read_service,
@@ -312,9 +314,9 @@ def test_get_monitor_runtime_detail_uses_resource_row_local_naming():
 
 
 def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_path):
-    monkeypatch.setattr(monitor_sandbox_configs_impl.web_config, "LOCAL_WORKSPACE_ROOT", tmp_path)
+    monkeypatch.setattr(monitor_sandbox_config_service.web_config, "LOCAL_WORKSPACE_ROOT", tmp_path)
     monkeypatch.setattr(
-        sandbox_config_provider_impl,
+        monitor_sandbox_config_provider_service,
         "available_sandbox_types",
         lambda: [
             {"name": "local", "provider": "local", "available": True},
@@ -322,7 +324,7 @@ def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_pa
         ],
     )
 
-    payload = monitor_sandbox_configs_impl.get_monitor_sandbox_configs()
+    payload = monitor_sandbox_config_service.get_monitor_sandbox_configs()
 
     assert payload == {
         "source": "runtime_sandbox_inventory",
@@ -640,7 +642,7 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
         captured.update(payload)
         return {"accepted": True}
 
-    monkeypatch.setattr(monitor_operations_impl, "request_sandbox_cleanup", _record_request)
+    monkeypatch.setattr(monitor_operation_service, "request_sandbox_cleanup", _record_request)
 
     assert monitor_sandbox_detail_service.request_monitor_sandbox_cleanup("sandbox-1") == {"accepted": True}
 
@@ -976,7 +978,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
 
 def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeypatch):
     monkeypatch.setattr(
-        monitor_operations_impl,
+        monitor_operation_service,
         "get_operation_detail",
         lambda _operation_id: {
             "operation": {"operation_id": "op-1", "kind": "sandbox_cleanup", "status": "succeeded"},
@@ -994,7 +996,7 @@ def test_get_monitor_operation_detail_preserves_canonical_sandbox_target(monkeyp
         },
     )
 
-    payload = monitor_sandbox_detail_impl.get_monitor_operation_detail("op-1")
+    payload = monitor_sandbox_detail_service.get_monitor_operation_detail("op-1")
 
     assert payload["sandbox_id"] == "sandbox-1"
     assert payload["target"]["target_type"] == "sandbox"

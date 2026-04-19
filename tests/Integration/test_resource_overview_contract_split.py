@@ -6,11 +6,11 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor as monitor_router
 from backend.web.routers import resources as resources_router
 from backend.web.services import (
-    monitor_resource_read_service,
     resource_common,
     resource_projection_service,
     resource_provider_boundary_service,

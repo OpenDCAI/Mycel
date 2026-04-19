@@ -1,12 +1,3 @@
-"""Provider runtime inventory read port for Monitor."""
+"""Compatibility shell for Monitor provider runtime inventory."""
 
-from __future__ import annotations
-
-from typing import Any
-
-from backend.web.services import sandbox_service
-
-
-def load_provider_orphan_runtime_rows() -> list[dict[str, Any]]:
-    _, managers = sandbox_service.init_providers_and_managers()
-    return sandbox_service.load_provider_orphan_runtimes(managers)
+from backend.monitor.infrastructure.providers.provider_runtime_inventory_service import *  # noqa: F401,F403

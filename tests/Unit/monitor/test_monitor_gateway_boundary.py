@@ -52,7 +52,7 @@ def test_monitor_gateway_depends_on_resource_boundary_not_resource_internals():
     for token in forbidden:
         assert token not in source
 
-    assert "monitor_resource_service" in source
+    assert "monitor_resources" in source
 
 
 def test_monitor_gateway_web_shell_delegates_to_monitor_module():
