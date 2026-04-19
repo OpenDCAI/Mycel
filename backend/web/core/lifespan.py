@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
 
     # ---- Chat repos + services ----
     from backend.runtime_storage_bootstrap import attach_runtime_storage_state
-    from backend.web.core.supabase_factory import create_supabase_auth_client
+    from backend.supabase_runtime import create_supabase_auth_client
 
     runtime_storage = attach_runtime_storage_state(app)
     _supabase_client = runtime_storage.supabase_client

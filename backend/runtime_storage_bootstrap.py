@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.web.core.supabase_factory import create_supabase_client
+from backend.supabase_runtime import create_supabase_client
 from storage.runtime import build_storage_container
 
 

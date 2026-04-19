@@ -1,6 +1,14 @@
+import inspect
 from types import SimpleNamespace
 
 from backend import runtime_storage_bootstrap
+
+
+def test_runtime_storage_bootstrap_depends_on_neutral_supabase_runtime():
+    source = inspect.getsource(runtime_storage_bootstrap)
+
+    assert "backend.web.core.supabase_factory" not in source
+    assert "backend.supabase_runtime" in source
 
 
 def test_build_runtime_storage_state_uses_shared_supabase_client(monkeypatch):
