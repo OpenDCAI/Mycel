@@ -93,3 +93,13 @@ def test_thread_visibility_uses_thread_projection_owner() -> None:
     shell_module = importlib.import_module("backend.web.services.thread_visibility")
 
     assert owner_module.canonical_owner_threads is shell_module.canonical_owner_threads
+
+
+def test_streaming_service_uses_thread_runtime_run_cancellation_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.cancellation")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.persist_cancelled_run_input_if_missing is not None
+    assert owner_module.flush_cancelled_owner_steers is not None
+    assert owner_module.emit_queued_terminal_followups is not None
+    assert "from backend.thread_runtime.run import cancellation as _run_cancellation" in streaming_source
