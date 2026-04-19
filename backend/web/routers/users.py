@@ -11,8 +11,8 @@ from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.core.paths import avatars_dir
-from backend.web.services.social_access_service import active_contact_target_ids, can_chat_with_owner_scope
 from backend.web.utils.serializers import avatar_url
+from messaging.social_access import active_contact_target_ids, can_chat_with_owner_scope
 from storage.contracts import UserType
 
 logger = logging.getLogger(__name__)
