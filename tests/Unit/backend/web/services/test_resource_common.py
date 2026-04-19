@@ -6,6 +6,7 @@ from backend import resource_common as neutral_resource_common
 from backend import resource_io as neutral_resource_io
 from backend import resource_projection, user_resource_projection
 from backend import resource_provider_boundary as neutral_resource_provider_boundary
+from backend import resource_provider_contracts as neutral_resource_provider_contracts
 from backend import sandbox_provider_factory as neutral_sandbox_provider_factory
 from backend.web.services import resource_common, resource_provider_boundary_service, resource_service, sandbox_service
 
@@ -176,7 +177,6 @@ def test_shared_resource_consumers_use_neutral_resource_common_owner() -> None:
     assert "backend.web.services.resource_common" not in projection_source
     assert "backend.web.services.resource_common" not in resource_service_source
     assert "backend.resource_common" in projection_source
-    assert "backend.resource_common" in resource_service_source
 
 
 def test_web_resource_common_keeps_compat_surface() -> None:
@@ -230,3 +230,17 @@ def test_resource_io_owner_moves_out_of_resource_service() -> None:
 
     assert "backend.web.services import resource_service" not in io_source
     assert "backend.resource_io" in service_source
+
+
+def test_resource_provider_boundary_moves_display_contract_out_of_resource_service() -> None:
+    boundary_source = inspect.getsource(neutral_resource_provider_boundary)
+    service_source = inspect.getsource(resource_service)
+
+    assert "backend.web.services import resource_service" not in boundary_source
+    assert "resource_provider_contracts" in boundary_source
+    assert "resource_provider_contracts" in service_source
+
+
+def test_resource_service_keeps_provider_contract_compat_surface() -> None:
+    assert resource_service.get_provider_display_contract is neutral_resource_provider_contracts.get_provider_display_contract
+    assert resource_service.build_resource_row_payload is neutral_resource_provider_contracts.build_resource_row_payload

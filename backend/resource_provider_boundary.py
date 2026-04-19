@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import resource_service, sandbox_service
+from backend import resource_provider_contracts
+from backend.web.services import sandbox_service
 
 
 def load_user_sandboxes(app: Any, owner_user_id: str) -> list[dict[str, Any]]:
@@ -29,11 +30,11 @@ def available_sandbox_types() -> list[dict[str, Any]]:
 
 
 def get_provider_display_contract(config_name: str) -> dict[str, Any]:
-    return resource_service.get_provider_display_contract(config_name)
+    return resource_provider_contracts.get_provider_display_contract(config_name)
 
 
 def get_provider_capability_contract(config_name: str) -> tuple[dict[str, Any], str | None]:
-    return resource_service.get_provider_capability_contract(config_name)
+    return resource_provider_contracts.get_provider_capability_contract(config_name)
 
 
 def build_provider_availability_payload(
@@ -42,7 +43,7 @@ def build_provider_availability_payload(
     running_count: int,
     unavailable_reason: str | None,
 ) -> dict[str, Any]:
-    return resource_service.build_provider_availability_payload(
+    return resource_provider_contracts.build_provider_availability_payload(
         available=available,
         running_count=running_count,
         unavailable_reason=unavailable_reason,
@@ -60,7 +61,7 @@ def build_resource_row_payload(
     started_at: str,
     metrics: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    return resource_service.build_resource_row_payload(
+    return resource_provider_contracts.build_resource_row_payload(
         resource_identity=resource_identity,
         sandbox_id=sandbox_id,
         thread_id=thread_id,
