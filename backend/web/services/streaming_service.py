@@ -11,6 +11,7 @@ from backend.thread_runtime.run import cancellation as _run_cancellation
 from backend.thread_runtime.run import emit as _run_emit
 from backend.thread_runtime.run import entrypoints as _run_entrypoints
 from backend.thread_runtime.run import epilogue as _run_epilogue
+from backend.thread_runtime.run import execution as _run_execution
 from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import input_construction as _run_input_construction
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
@@ -191,6 +192,28 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     input_messages: list[Any] | None = None,
 ) -> str:
     """Run agent execution and write all SSE events into *thread_buf*."""
+    _run_execution.ensure_thread_handlers = _ensure_thread_handlers
+    _run_execution.prime_sandbox = prime_sandbox
+    _run_execution.repair_incomplete_tool_calls = _repair_incomplete_tool_calls
+    _run_execution.write_cancellation_markers = write_cancellation_markers
+    _run_execution.persist_cancelled_run_input_if_missing = _persist_cancelled_run_input_if_missing
+    _run_execution.flush_cancelled_owner_steers = _flush_cancelled_owner_steers
+    _run_execution.emit_queued_terminal_followups = _emit_queued_terminal_followups
+    _run_execution.consume_followup_queue = _consume_followup_queue
+    _run_execution.cleanup_old_runs = cleanup_old_runs
+    _run_execution.log_captured_exception = _log_captured_exception
+    return await _run_execution.run_agent_to_buffer(
+        agent=agent,
+        thread_id=thread_id,
+        message=message,
+        app=app,
+        enable_trajectory=enable_trajectory,
+        thread_buf=thread_buf,
+        run_id=run_id,
+        message_metadata=message_metadata,
+        input_messages=input_messages,
+    )
+
     run_event_repo = _resolve_run_event_repo(agent)
     display_builder = app.state.display_builder
     emit = _run_emit.build_emit(
