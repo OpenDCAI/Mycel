@@ -7,6 +7,7 @@ import random
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from backend.thread_runtime.run import activity_bridge as _run_activity_bridge
 from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring
 from backend.thread_runtime.run import cancellation as _run_cancellation
 from backend.thread_runtime.run import entrypoints as _run_entrypoints
@@ -285,26 +286,11 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
 
         _obs_handler, _obs_active, flush_observation = _run_observation.build_observation(app, thread_id, config)
 
-        # Real-time activity event callback (replaces post-hoc batch drain)
-        activity_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=1000)
-
-        def on_activity_event(event: dict) -> None:
-            try:
-                activity_queue.put_nowait(event)
-            except asyncio.QueueFull:
-                pass  # Backpressure: drop under overload
-
-        async def drain_activity_events() -> None:
-            while not activity_queue.empty():
-                try:
-                    act_event = activity_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-                logger.info("[stream:drain] emitting activity event: %s", act_event.get("event", "?"))
-                await emit(act_event)
-
-        if hasattr(agent, "runtime"):
-            agent.runtime.set_event_callback(on_activity_event)
+        drain_activity_events, attach_activity_bridge, detach_activity_bridge = _run_activity_bridge.build_activity_bridge(
+            runtime=getattr(agent, "runtime", None),
+            emit=emit,
+        )
+        attach_activity_bridge()
 
         # Bind per-thread handlers (idempotent — safe across runs)
         _ensure_thread_handlers(agent, thread_id, app)
@@ -822,8 +808,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         if typing_tracker is not None:
             typing_tracker.stop(thread_id)
         # Detach per-run event callback (per-thread handlers survive across runs)
-        if hasattr(agent, "runtime"):
-            agent.runtime.set_event_callback(None)
+        detach_activity_bridge()
         # Flush observation handler
         flush_observation()
         # ThreadEventBuffer is persistent — do NOT mark_done or pop
