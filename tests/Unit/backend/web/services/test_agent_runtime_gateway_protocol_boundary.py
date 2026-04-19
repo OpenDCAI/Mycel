@@ -35,6 +35,14 @@ def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -
     assert "message_metadata" not in thread_fields
 
 
+def test_agent_chat_recipient_supports_optional_preselected_thread_id() -> None:
+    protocol_module = importlib.import_module("backend.protocols.agent_runtime")
+
+    recipient_fields = get_type_hints(protocol_module.AgentChatRecipient)
+
+    assert recipient_fields["thread_id"] == str | None
+
+
 def test_agent_runtime_thread_input_result_is_a_protocol_object() -> None:
     protocol_module = importlib.import_module("backend.protocols.agent_runtime")
     gateway_module = importlib.import_module("backend.agent_runtime.gateway")
@@ -93,4 +101,7 @@ def test_chat_handler_depends_on_runtime_owned_services_not_web_imports() -> Non
     assert "count_unread" not in chat_handler_source
     assert "enqueue_chat_notification" not in chat_handler_source
     assert "format_chat_notification" not in chat_handler_source
+    assert "list_by_agent_user" not in chat_handler_source
+    assert "iter_agent_pool_items" not in chat_handler_source
+    assert "AgentState" not in chat_handler_source
     assert "AppAgentChatRuntimeServices" in bootstrap_source

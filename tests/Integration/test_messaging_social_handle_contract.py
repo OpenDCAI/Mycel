@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import threading
 from types import SimpleNamespace
 from typing import Any, cast
@@ -7,18 +8,13 @@ from typing import Any, cast
 import pytest
 
 from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
-from backend.protocols.agent_runtime import (
-    AgentChatContext,
-    AgentChatDeliveryEnvelope,
-    AgentChatRecipient,
-    AgentRuntimeActor,
-    AgentRuntimeMessage,
-)
+from backend.web.services import chat_delivery_hook
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope
 from messaging.delivery.actions import DeliveryAction
+from messaging.delivery.contracts import ChatDeliveryRequest
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.display_user import resolve_messaging_display_user
@@ -2560,7 +2556,7 @@ async def test_agent_runtime_gateway_uses_recipient_social_user_id_for_thread_lo
 
     assert started == [("thread-1", "chat-1", "agent-user-1")]
     assert unread_calls == []
-    assert enqueued == [("hello", "thread-1", "human-user-1", "Human")]
+    assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
 
 
 @pytest.mark.asyncio
@@ -2573,18 +2569,24 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
             agent_pool={},
         )
     )
+    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
 
     with pytest.raises(AttributeError):
-        await build_agent_runtime_gateway(app).dispatch_chat(_chat_delivery_envelope())
-
-
-def _chat_delivery_envelope(*, chat_id: str = "chat-1", signal: str | None = "ping") -> AgentChatDeliveryEnvelope:
-    return AgentChatDeliveryEnvelope(
-        chat=AgentChatContext(chat_id=chat_id),
-        sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human"),
-        recipient=AgentChatRecipient(agent_user_id="agent-user-1", runtime_source="mycel"),
-        message=AgentRuntimeMessage(content="hello", signal=signal),
-    )
+        await asyncio.to_thread(
+            chat_delivery_hook.make_chat_delivery_fn(app),
+            ChatDeliveryRequest(
+                recipient_id="agent-user-1",
+                recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
+                content="hello",
+                sender_name="Human",
+                sender_type="human",
+                chat_id="chat-1",
+                sender_id="human-user-1",
+                sender_avatar_url=None,
+                unread_count=1,
+                signal="ping",
+            ),
+        )
 
 
 async def _run_chat_delivery(
@@ -2606,7 +2608,7 @@ async def _run_chat_delivery(
     monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        "backend.agent_runtime.chat_notification_format.format_chat_notification",
+        "backend.agent_runtime.chat_inlet.format_chat_notification",
         lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
     )
 
@@ -2627,8 +2629,23 @@ async def _run_chat_delivery(
             ),
         )
     )
+    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
 
-    await build_agent_runtime_gateway(app).dispatch_chat(_chat_delivery_envelope(chat_id=chat_id))
+    await asyncio.to_thread(
+        chat_delivery_hook.make_chat_delivery_fn(app),
+        ChatDeliveryRequest(
+            recipient_id="agent-user-1",
+            recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
+            content="hello",
+            sender_name="Human",
+            sender_type="human",
+            chat_id=chat_id,
+            sender_id="human-user-1",
+            sender_avatar_url=None,
+            unread_count=unread_count,
+            signal="ping",
+        ),
+    )
 
     return started, unread_calls, enqueued
 
@@ -2711,4 +2728,4 @@ async def test_agent_runtime_gateway_prefers_latest_live_child_thread_over_activ
     )
 
     assert started == [(expected_thread_id, chat_id, "agent-user-1")]
-    assert enqueued == [("hello", expected_thread_id, "human-user-1", "Human")]
+    assert enqueued == [(f"Human|{chat_id}|{unread_count}|ping", expected_thread_id, "human-user-1", "Human")]
