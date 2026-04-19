@@ -367,6 +367,8 @@ class MessagingService:
         user_id: str,
     ) -> tuple[list[Any], dict[str, list[dict[str, Any]]], dict[str, Any], dict[str, int]]:
         chat_ids = self._chat_members_repo.list_chats_for_user(user_id)
+        if not isinstance(chat_ids, list):
+            raise RuntimeError("Chat id collection is invalid")
         if not chat_ids:
             return [], {}, {}, {}
 
@@ -384,12 +386,15 @@ class MessagingService:
         members_by_chat: dict[str, list[dict[str, Any]]] = {chat_id: [] for chat_id in active_chat_ids}
         last_read_by_chat: dict[str, int] = {}
         for member in self._chat_members_repo.list_members_for_chats(active_chat_ids):
-            chat_id = str(member.get("chat_id") or "")
+            if not isinstance(member, Mapping):
+                raise RuntimeError("Chat member row is invalid")
+            member_row = dict(member)
+            chat_id = str(member_row.get("chat_id") or "")
             if chat_id not in members_by_chat:
                 raise RuntimeError(f"Chat member row references unrequested chat {chat_id or '<missing>'}")
-            members_by_chat[chat_id].append(member)
-            if member.get("user_id") == user_id:
-                last_read_by_chat[chat_id] = int(member.get("last_read_seq") or 0)
+            members_by_chat[chat_id].append(member_row)
+            if member_row.get("user_id") == user_id:
+                last_read_by_chat[chat_id] = int(member_row.get("last_read_seq") or 0)
 
         for chat_id in active_chat_ids:
             if chat_id not in last_read_by_chat:
