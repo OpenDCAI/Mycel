@@ -11,8 +11,8 @@ from backend.resource_common import resolve_instance_capabilities as _resolve_in
 from backend.resource_common import resolve_provider_name
 from backend.resource_common import resolve_provider_type as _resolve_provider_type
 from backend.resource_common import to_resource_status as _to_resource_status
+from backend.sandbox_provider_factory import build_provider_from_config_name
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.resource_snapshot import probe_and_upsert_for_instance
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import upsert_resource_snapshot_for_sandbox

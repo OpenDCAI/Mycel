@@ -5,7 +5,8 @@ import pytest
 from backend import resource_common as neutral_resource_common
 from backend import resource_projection, user_resource_projection
 from backend import resource_provider_boundary as neutral_resource_provider_boundary
-from backend.web.services import resource_common, resource_provider_boundary_service, resource_service
+from backend import sandbox_provider_factory as neutral_sandbox_provider_factory
+from backend.web.services import resource_common, resource_provider_boundary_service, resource_service, sandbox_service
 
 
 class _FakeThreadRepo:
@@ -206,3 +207,17 @@ def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
     assert "backend.web.core.config" not in projection_source
     assert "backend.sandbox_paths" in common_source
     assert "backend.sandbox_paths" in projection_source
+
+
+def test_resource_modules_use_neutral_sandbox_provider_factory_owner() -> None:
+    common_source = inspect.getsource(neutral_resource_common)
+    resource_service_source = inspect.getsource(resource_service)
+
+    assert "backend.web.services.sandbox_service" not in common_source
+    assert "backend.web.services.sandbox_service" not in resource_service_source
+    assert "backend.sandbox_provider_factory" in common_source
+    assert "backend.sandbox_provider_factory" in resource_service_source
+
+
+def test_web_sandbox_service_keeps_provider_factory_compat_surface() -> None:
+    assert sandbox_service.build_provider_from_config_name is neutral_sandbox_provider_factory.build_provider_from_config_name

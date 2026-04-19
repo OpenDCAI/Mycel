@@ -6,9 +6,9 @@ import os
 import threading
 from collections import Counter
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
+from backend import sandbox_provider_factory as _sandbox_provider_factory
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import is_virtual_thread_id
@@ -633,17 +633,7 @@ def get_runtime_metrics(runtime_id: str, provider_hint: str | None = None) -> di
     }
 
 
-def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = None) -> Any | None:
-    """Build one provider instance from sandbox config name. Used by resource_service for per-runtime ops."""
-    providers, _ = init_providers_and_managers()
-    if name in providers:
-        return providers[name]
-    _sandboxes_dir = sandboxes_dir or SANDBOXES_DIR
-    config_path = _sandboxes_dir / f"{name}.json"
-    if not config_path.exists():
-        return None
-    logger.warning("[sandbox] provider %s is configured but unavailable in the current process", name)
-    return None
+build_provider_from_config_name = _sandbox_provider_factory.build_provider_from_config_name
 
 
 def destroy_thread_resources_sync(thread_id: str, sandbox_type: str, agent_pool: dict) -> bool:
