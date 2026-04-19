@@ -18,5 +18,7 @@ def test_monitor_sandbox_config_uses_provider_inventory_port():
     provider_source = inspect.getsource(sandbox_config_provider_impl)
 
     assert "sandbox_service" not in config_source
+    assert "backend.web.core" not in config_source
     assert "sandbox_config_provider_service" in config_source
+    assert "app_config_service" in config_source
     assert "available_sandbox_types" in provider_source

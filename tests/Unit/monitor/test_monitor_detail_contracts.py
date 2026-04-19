@@ -319,7 +319,7 @@ def test_get_monitor_runtime_detail_uses_resource_row_local_naming():
 
 
 def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_path):
-    monkeypatch.setattr(monitor_sandbox_config_service.web_config, "LOCAL_WORKSPACE_ROOT", tmp_path)
+    monkeypatch.setattr(monitor_sandbox_config_service.app_config_service, "local_workspace_root", lambda: tmp_path)
     monkeypatch.setattr(
         monitor_sandbox_config_provider_service,
         "available_sandbox_types",

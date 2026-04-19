@@ -1,0 +1,1 @@
+"""Monitor config adapters."""
