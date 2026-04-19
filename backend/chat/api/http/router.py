@@ -10,7 +10,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.chat.api.http.dependencies import get_app, get_current_user_id
 from messaging.actor_ownership import access_scope_targets, is_owned_by_viewer
 from messaging.social_access import can_group_chat_with_participant
 

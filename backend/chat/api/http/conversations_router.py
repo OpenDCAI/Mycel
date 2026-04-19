@@ -8,8 +8,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
+from backend.chat.api.http.dependencies import get_app, get_current_user_id
 from backend.protocols.runtime_read import RuntimeThreadActivityReader
-from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.serializers import avatar_url

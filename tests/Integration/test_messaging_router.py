@@ -118,6 +118,13 @@ def test_chat_router_imports_messaging_social_access_owner() -> None:
     source = inspect.getsource(chat_router)
 
     assert "from messaging.social_access import" in source
+
+
+def test_chat_router_uses_neutral_chat_dependency_owner() -> None:
+    source = inspect.getsource(chat_router)
+
+    assert "backend.web.core.dependencies" not in source
+    assert "backend.chat.api.http.dependencies" in source
     assert "backend.web.services.social_access_service" not in source
 
 

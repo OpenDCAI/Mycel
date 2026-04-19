@@ -24,6 +24,13 @@ def test_conversations_router_uses_runtime_activity_reader_for_running_state() -
     assert "agent_pool" not in source
 
 
+def test_conversations_router_uses_neutral_chat_dependency_owner() -> None:
+    source = inspect.getsource(owner_conversations_router)
+
+    assert "backend.web.core.dependencies" not in source
+    assert "backend.chat.api.http.dependencies" in source
+
+
 @pytest.mark.asyncio
 async def test_list_conversations_resolves_thread_user_participant_title_and_avatar() -> None:
     app = SimpleNamespace(

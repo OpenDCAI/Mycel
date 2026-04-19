@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.chat.api.http.dependencies import get_app, get_current_user_id
 from messaging.actor_ownership import is_owned_by_viewer
 from messaging.contracts import RelationshipRow
 from messaging.relationships.state_machine import TransitionError
