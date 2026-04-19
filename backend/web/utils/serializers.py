@@ -3,7 +3,7 @@
 import re
 from typing import Any
 
-from backend.web.core.paths import avatars_dir
+from backend.avatar_paths import avatars_dir
 
 # @@@strip-system-tags — remove injected system tags from user-visible content
 _SYSTEM_HINT_RE = re.compile(r"\s*<system-hint>.*?</system-hint>\s*", re.DOTALL)

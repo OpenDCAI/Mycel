@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backend.avatar_paths import avatars_dir as avatar_storage_dir
 from config.user_paths import preferred_user_home_dir
 
 
@@ -16,5 +17,4 @@ def library_dir() -> Path:
     return leon_home_dir() / "library"
 
 
-def avatars_dir() -> Path:
-    return leon_home_dir() / "avatars"
+avatars_dir = avatar_storage_dir

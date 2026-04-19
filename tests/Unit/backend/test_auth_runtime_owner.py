@@ -1,6 +1,6 @@
 import inspect
 
-from backend import auth_runtime_bootstrap, avatar_files, contact_bootstrap, recipe_bootstrap
+from backend import auth_runtime_bootstrap, avatar_files, avatar_urls, contact_bootstrap, recipe_bootstrap
 from backend import auth_service as neutral_auth_service
 from backend.web.routers import users as users_router
 from backend.web.services import agent_user_service, library_service
@@ -58,3 +58,20 @@ def test_neutral_auth_service_uses_neutral_recipe_bootstrap_owner():
 
 def test_web_library_service_keeps_recipe_bootstrap_compat_surface():
     assert library_service.seed_default_recipes is recipe_bootstrap.seed_default_recipes
+
+
+def test_neutral_avatar_helpers_use_neutral_avatar_path_owner():
+    avatar_file_source = inspect.getsource(avatar_files)
+    avatar_url_source = inspect.getsource(avatar_urls)
+
+    assert "backend.web.core.paths" not in avatar_file_source
+    assert "backend.web.core.paths" not in avatar_url_source
+    assert "backend.avatar_paths" in avatar_file_source
+    assert "backend.avatar_paths" in avatar_url_source
+
+
+def test_web_paths_keeps_avatar_path_compat_surface():
+    from backend import avatar_paths
+    from backend.web.core import paths
+
+    assert paths.avatars_dir is avatar_paths.avatars_dir

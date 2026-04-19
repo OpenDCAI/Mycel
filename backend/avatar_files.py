@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from backend.web.core.paths import avatars_dir
+from backend.avatar_paths import avatars_dir
 
 AVATAR_SIZE = 256
 AVATARS_DIR = avatars_dir()
