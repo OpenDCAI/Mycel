@@ -970,9 +970,9 @@ async def send_message(
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
+    from backend.agent_runtime.port import get_agent_runtime_gateway
     from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-    from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths
@@ -1107,8 +1107,8 @@ async def resolve_thread_permission_request(
 
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
+        from backend.agent_runtime.port import get_agent_runtime_gateway
         from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
-        from backend.web.services.agent_runtime_port import get_agent_runtime_gateway
 
         answered_payload = _build_ask_user_question_answered_payload(
             pending_request,

@@ -1,22 +1,5 @@
-"""Agent runtime port used by web routes and chat delivery."""
+"""Compatibility shell for the agent runtime port."""
 
-from __future__ import annotations
+from backend.agent_runtime.port import AgentRuntimeGatewayPort, get_agent_runtime_gateway
 
-from typing import Any, Protocol
-
-from backend.protocols.agent_runtime import (
-    AgentChatDeliveryEnvelope,
-    AgentChatDeliveryResult,
-    AgentThreadInputEnvelope,
-    AgentThreadInputResult,
-)
-
-
-class AgentRuntimeGatewayPort(Protocol):
-    async def dispatch_chat(self, envelope: AgentChatDeliveryEnvelope) -> AgentChatDeliveryResult: ...
-
-    async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult: ...
-
-
-def get_agent_runtime_gateway(app: Any) -> AgentRuntimeGatewayPort:
-    return app.state.agent_runtime_gateway
+__all__ = ["AgentRuntimeGatewayPort", "get_agent_runtime_gateway"]
