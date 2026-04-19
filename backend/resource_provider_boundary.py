@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import backend.user_sandbox_reads as user_sandbox_reads
 from backend import resource_provider_contracts
 from backend.sandbox_inventory import available_sandbox_types as list_available_sandbox_types
-from backend.web.services import sandbox_service
 
 
 def load_user_sandboxes(app: Any, owner_user_id: str) -> list[dict[str, Any]]:
@@ -23,7 +23,7 @@ def load_user_sandboxes(app: Any, owner_user_id: str) -> list[dict[str, Any]]:
 
 
 def list_user_sandboxes(owner_user_id: str, **kwargs: Any) -> list[dict[str, Any]]:
-    return sandbox_service.list_user_sandboxes(owner_user_id, **kwargs)
+    return user_sandbox_reads.list_user_sandboxes(owner_user_id, **kwargs)
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:

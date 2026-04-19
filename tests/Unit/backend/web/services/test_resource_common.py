@@ -207,6 +207,16 @@ def test_resource_provider_boundary_uses_neutral_sandbox_inventory_owner() -> No
     assert "backend.sandbox_inventory" in boundary_source
 
 
+def test_resource_provider_boundary_moves_user_sandbox_reads_out_of_sandbox_service() -> None:
+    boundary_source = inspect.getsource(neutral_resource_provider_boundary)
+    sandbox_service_source = inspect.getsource(sandbox_service)
+
+    assert "sandbox_service.list_user_sandboxes" not in boundary_source
+    assert "backend.user_sandbox_reads" in boundary_source
+    assert "user_sandbox_reads.list_user_sandboxes(" in sandbox_service_source
+    assert "user_sandbox_reads._list_user_runtime_rows(" in sandbox_service_source
+
+
 def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
     common_source = inspect.getsource(neutral_resource_common)
     projection_source = inspect.getsource(resource_projection)
