@@ -3,7 +3,7 @@
 import re
 from typing import Any
 
-from backend.avatar_urls import avatar_url as build_avatar_url
+from backend.web.core.paths import avatars_dir
 
 # @@@strip-system-tags — remove injected system tags from user-visible content
 _SYSTEM_HINT_RE = re.compile(r"\s*<system-hint>.*?</system-hint>\s*", re.DOTALL)
@@ -11,7 +11,11 @@ _SYSTEM_REMINDER_RE = re.compile(r"\s*<system-reminder>.*?</system-reminder>\s*"
 
 
 def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
-    return build_avatar_url(user_id, has_avatar)
+    if not user_id:
+        return None
+    if has_avatar or (avatars_dir() / f"{user_id}.png").exists():
+        return f"/api/users/{user_id}/avatar"
+    return None
 
 
 def strip_system_tags(content: str) -> str:
