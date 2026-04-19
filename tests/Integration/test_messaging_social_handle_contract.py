@@ -1242,6 +1242,42 @@ def test_messaging_service_conversation_summaries_fail_when_chat_row_is_missing(
         service.list_conversation_summaries_for_user("human-user-1")
 
 
+def test_messaging_service_conversation_summaries_fail_on_invalid_chat_id_collection() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda chat_ids: [
+                SimpleNamespace(id=chat_id, title=None, status="active", created_at=1.0, updated_at=2.0) for chat_id in chat_ids
+            ],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: {"chat-1": True},
+            list_members_for_chats=lambda _chat_ids: [],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        user_repo=SimpleNamespace(list_by_ids=lambda _user_ids: []),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat id collection is invalid"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
+def test_messaging_service_conversation_summaries_fail_on_invalid_member_row() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title=None, status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: ["chat-1"],
+        ),
+        messages_repo=SimpleNamespace(count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {}),
+        user_repo=SimpleNamespace(list_by_ids=lambda _user_ids: []),
+    )
+
+    with pytest.raises(RuntimeError, match="Chat member row is invalid"):
+        service.list_conversation_summaries_for_user("human-user-1")
+
+
 def test_messaging_service_list_chats_fail_on_unrequested_latest_message_chat_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
