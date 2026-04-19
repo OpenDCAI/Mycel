@@ -1,14 +1,8 @@
 """Leon Web Backend - FastAPI Application."""
 
-import os
-import subprocess
+from backend.app_entrypoint import load_env_file_from_env, resolve_app_port
 
-# Load .env file if ENV_FILE is specified (e.g. ENV_FILE=.env for local dev)
-_env_file = os.getenv("ENV_FILE")
-if _env_file:
-    from dotenv import load_dotenv
-
-    load_dotenv(_env_file, override=False)
+load_env_file_from_env()
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
@@ -72,21 +66,7 @@ app.include_router(conversations_router.router)
 
 def _resolve_port() -> int:
     """Resolve backend port: env var > git worktree config > default 8001."""
-    port = os.environ.get("LEON_BACKEND_PORT") or os.environ.get("PORT")
-    if port:
-        return int(port)
-    try:
-        result = subprocess.run(
-            ["git", "config", "--worktree", "--get", "worktree.ports.backend"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return int(result.stdout.strip())
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
-        pass
-    return 8001
+    return resolve_app_port("LEON_BACKEND_PORT", "worktree.ports.backend", 8001)
 
 
 if __name__ == "__main__":

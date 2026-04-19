@@ -3,6 +3,7 @@ import subprocess
 import pytest
 from fastapi.testclient import TestClient
 
+from backend import app_entrypoint
 from backend.monitor_app import main as monitor_app_main
 
 app = monitor_app_main.app
@@ -42,6 +43,6 @@ def test_monitor_app_resolve_port_uses_worktree_config_when_env_missing(monkeypa
             stderr="",
         )
 
-    monkeypatch.setattr(monitor_app_main.subprocess, "run", _run)
+    monkeypatch.setattr(app_entrypoint.subprocess, "run", _run)
 
     assert monitor_app_main._resolve_port() == 55418

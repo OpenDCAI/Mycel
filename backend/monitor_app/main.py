@@ -1,13 +1,13 @@
 """Separate-process Monitor app shell."""
 
-import os
-import subprocess
-
 import uvicorn
 from fastapi import FastAPI
 
+from backend.app_entrypoint import load_env_file_from_env, resolve_app_port
 from backend.monitor.api.http import global_router
 from backend.monitor_app.lifespan import lifespan
+
+load_env_file_from_env()
 
 app = FastAPI(title="Leon Monitor Backend", lifespan=lifespan)
 
@@ -16,21 +16,7 @@ app.include_router(global_router.router, prefix="/api/monitor")
 
 
 def _resolve_port() -> int:
-    port = os.environ.get("LEON_MONITOR_BACKEND_PORT") or os.environ.get("PORT")
-    if port:
-        return int(port)
-    try:
-        result = subprocess.run(
-            ["git", "config", "--worktree", "--get", "worktree.ports.monitor-backend"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return int(result.stdout.strip())
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
-        pass
-    return 8011
+    return resolve_app_port("LEON_MONITOR_BACKEND_PORT", "worktree.ports.monitor-backend", 8011)
 
 
 if __name__ == "__main__":
