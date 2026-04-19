@@ -34,6 +34,13 @@ def test_relationship_router_imports_actor_ownership_primitive() -> None:
     assert "owner_user_id" not in source
 
 
+def test_relationship_router_uses_neutral_chat_dependency_owner() -> None:
+    source = inspect.getsource(owner_relationship_router)
+
+    assert "backend.web.core.dependencies" not in source
+    assert "backend.chat.api.http.dependencies" in source
+
+
 def test_relationship_router_owner_module_lives_under_backend_chat() -> None:
     assert owner_relationship_router.__name__ == "backend.chat.api.http.relationships_router"
     main_source = inspect.getsource(web_main)
