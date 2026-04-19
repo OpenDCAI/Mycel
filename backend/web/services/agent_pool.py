@@ -7,10 +7,10 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from backend.thread_runtime.sandbox import resolve_thread_sandbox
 from backend.web.services.file_channel_service import get_file_channel_binding
 from core.identity.agent_registry import get_or_create_agent_id
 from core.runtime.agent import create_leon_agent
-from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id
 from storage.runtime import build_storage_container
 
@@ -235,24 +235,6 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 manager.set_thread_bind_mounts(thread_id, bind_mounts)
         pool[pool_key] = agent_obj
         return agent_obj
-
-
-def resolve_thread_sandbox(app_obj: FastAPI, thread_id: str) -> str:
-    """Look up sandbox type for a thread: memory cache → SQLite → sandbox DB → default 'local'."""
-    mapping = app_obj.state.thread_sandbox
-    if thread_id in mapping:
-        return mapping[thread_id]
-    thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
-    if thread_data:
-        mapping[thread_id] = thread_data.get("sandbox_type", "local")
-        if thread_data.get("cwd"):
-            app_obj.state.thread_cwd.setdefault(thread_id, thread_data["cwd"])
-        return thread_data.get("sandbox_type", "local")
-    detected = lookup_sandbox_for_thread(thread_id)
-    if detected:
-        mapping[thread_id] = detected
-        return detected
-    return "local"
 
 
 async def update_agent_config(app_obj: FastAPI, model: str, thread_id: str | None = None) -> dict[str, Any]:
