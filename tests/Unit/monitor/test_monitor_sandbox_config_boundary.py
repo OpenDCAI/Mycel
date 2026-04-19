@@ -25,3 +25,4 @@ def test_monitor_sandbox_config_uses_provider_inventory_port():
     assert "app_config_service" in config_source
     assert "available_sandbox_types" in provider_source
     assert "backend.web.core" not in app_config_source
+    assert "backend.web.services" not in provider_source

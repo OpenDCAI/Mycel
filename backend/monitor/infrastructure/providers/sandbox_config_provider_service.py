@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import sandbox_service
+from backend.sandbox_inventory import available_sandbox_types as load_available_sandbox_types
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:
-    return sandbox_service.available_sandbox_types()
+    return load_available_sandbox_types()

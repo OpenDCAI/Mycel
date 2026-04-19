@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.web.services import sandbox_service
+from backend.sandbox_inventory import list_provider_orphan_runtimes
 
 
 def load_provider_orphan_runtime_rows() -> list[dict[str, Any]]:
-    return sandbox_service.list_provider_orphan_runtimes()
+    return list_provider_orphan_runtimes()

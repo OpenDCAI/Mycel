@@ -26,3 +26,4 @@ def test_monitor_provider_runtime_uses_inventory_read_port():
     assert "init_providers_and_managers" not in inventory_source
     assert "load_provider_orphan_runtimes(" not in inventory_source
     assert "list_provider_orphan_runtimes(" in inventory_source
+    assert "backend.web.services" not in inventory_source
