@@ -1,10 +1,26 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
+from backend import sandbox_inventory as neutral_sandbox_inventory
 from backend.web.services import sandbox_service
 from sandbox.providers.local import LocalSessionProvider
+
+
+def test_sandbox_inventory_owner_moves_out_of_sandbox_service() -> None:
+    source = inspect.getsource(neutral_sandbox_inventory)
+
+    assert "backend.web.services import sandbox_service" not in source
+    assert "SandboxConfig" in source
+
+
+def test_sandbox_service_keeps_sandbox_inventory_compat_surface() -> None:
+    source = inspect.getsource(sandbox_service)
+
+    assert "sandbox_inventory.available_sandbox_types(" in source
+    assert "sandbox_inventory.init_providers_and_managers()" in source
 
 
 def test_available_sandbox_types_marks_configured_but_unavailable_provider(monkeypatch, tmp_path: Path) -> None:

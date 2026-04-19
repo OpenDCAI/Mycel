@@ -3,11 +3,11 @@
 import json
 import logging
 import os
-import threading
 from collections import Counter
 from datetime import datetime
 from typing import Any
 
+from backend import sandbox_inventory
 from backend import sandbox_provider_factory as _sandbox_provider_factory
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.services.thread_visibility import canonical_owner_threads
@@ -15,30 +15,12 @@ from backend.web.utils.helpers import is_virtual_thread_id
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
-from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.models import map_sandbox_state_to_display_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import build_storage_container
 
 logger = logging.getLogger(__name__)
-
-_SANDBOX_INVENTORY_LOCK = threading.Lock()
-_SANDBOX_INVENTORY: tuple[dict[str, Any], dict[str, Any]] | None = None
-
-
-def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
-    return {
-        "can_pause": capability.can_pause,
-        "can_resume": capability.can_resume,
-        "can_destroy": capability.can_destroy,
-        "supports_webhook": capability.supports_webhook,
-        "supports_status_probe": capability.supports_status_probe,
-        "eager_instance_binding": capability.eager_instance_binding,
-        "inspect_visible": capability.inspect_visible,
-        "runtime_kind": capability.runtime_kind,
-        "mount": capability.mount.to_dict(),
-    }
 
 
 def _sandbox_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) -> dict[str, Any]:
@@ -223,130 +205,24 @@ def _is_user_visible_sandbox_state(sandbox_row: dict[str, Any]) -> bool:
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:
-    """Scan ~/.leon/sandboxes/ for configured providers."""
-    providers, _ = init_providers_and_managers()
-    local_capability = providers["local"].get_capability()
-    types = [
-        {
-            "name": "local",
-            "provider": "local",
-            "available": True,
-            "capability": _capability_to_dict(local_capability),
-        }
-    ]
-    if not SANDBOXES_DIR.exists():
-        return types
-    for f in sorted(SANDBOXES_DIR.glob("*.json")):
-        name = f.stem
-        try:
-            config = SandboxConfig.load(name)
-            provider_obj = providers.get(name)
-            if provider_obj is None:
-                types.append(
-                    {
-                        "name": name,
-                        "provider": config.provider,
-                        "available": False,
-                        "reason": f"Provider {name} is configured but unavailable in the current process",
-                    }
-                )
-                continue
-            types.append(
-                {
-                    "name": name,
-                    "provider": config.provider,
-                    "available": True,
-                    "capability": _capability_to_dict(provider_obj.get_capability()),
-                }
-            )
-        except Exception as e:
-            types.append({"name": name, "available": False, "reason": str(e)})
-    return types
+    return sandbox_inventory.available_sandbox_types(
+        sandboxes_dir=SANDBOXES_DIR,
+        init_providers_and_managers_fn=init_providers_and_managers,
+        sandbox_config_cls=SandboxConfig,
+    )
 
 
 def init_providers_and_managers() -> tuple[dict, dict]:
-    """Load sandbox providers and managers from config files."""
-    global _SANDBOX_INVENTORY
-    with _SANDBOX_INVENTORY_LOCK:
-        if _SANDBOX_INVENTORY is None:
-            # @@@sandbox-inventory-singleton - provider configs are process-lifetime state in local dev.
-            # Build once and reuse so every API path does not rescan configs and re-instantiate failing providers.
-            _SANDBOX_INVENTORY = _build_providers_and_managers()
-        return _SANDBOX_INVENTORY
+    return sandbox_inventory.init_providers_and_managers()
 
 
 def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Build sandbox providers/managers exactly once per process."""
-    from sandbox.providers.local import LocalSessionProvider
-
-    providers: dict[str, Any] = {
-        "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
-    }
-    if not SANDBOXES_DIR.exists():
-        managers = {name: SandboxManager(provider=p) for name, p in providers.items()}
-        return providers, managers
-
-    for config_file in SANDBOXES_DIR.glob("*.json"):
-        name = config_file.stem
-        try:
-            config = SandboxConfig.load(name)
-            if config.provider == "agentbay":
-                from sandbox.providers.agentbay import AgentBayProvider
-
-                key = _configured_api_key(name, config.agentbay.api_key, "AGENTBAY_API_KEY")
-                if not key:
-                    continue
-                providers[name] = AgentBayProvider(
-                    api_key=key,
-                    region_id=config.agentbay.region_id,
-                    default_context_path=config.agentbay.context_path,
-                    image_id=config.agentbay.image_id,
-                    provider_name=name,
-                    supports_pause=config.agentbay.supports_pause,
-                    supports_resume=config.agentbay.supports_resume,
-                )
-            elif config.provider == "docker":
-                from sandbox.providers.docker import DockerProvider
-
-                providers[name] = DockerProvider(
-                    image=config.docker.image,
-                    mount_path=config.docker.mount_path,
-                    default_cwd=config.docker.cwd,
-                    bind_mounts=config.docker.bind_mounts,
-                    provider_name=name,
-                )
-            elif config.provider == "e2b":
-                from sandbox.providers.e2b import E2BProvider
-
-                key = _configured_api_key(name, config.e2b.api_key, "E2B_API_KEY")
-                if not key:
-                    continue
-                providers[name] = E2BProvider(
-                    api_key=key,
-                    template=config.e2b.template,
-                    default_cwd=config.e2b.cwd,
-                    timeout=config.e2b.timeout,
-                    provider_name=name,
-                )
-            elif config.provider == "daytona":
-                from sandbox.providers.daytona import DaytonaProvider
-
-                key = _configured_api_key(name, config.daytona.api_key, "DAYTONA_API_KEY")
-                if not key:
-                    continue
-                providers[name] = DaytonaProvider(
-                    api_key=key,
-                    api_url=config.daytona.api_url,
-                    target=config.daytona.target,
-                    default_cwd=config.daytona.cwd,
-                    bind_mounts=config.daytona.bind_mounts,
-                    provider_name=name,
-                )
-        except Exception:
-            logger.exception("[sandbox] Failed to load %s", name)
-
-    managers = {name: SandboxManager(provider=p) for name, p in providers.items()}
-    return providers, managers
+    return sandbox_inventory._build_providers_and_managers(
+        sandboxes_dir=SANDBOXES_DIR,
+        sandbox_manager_cls=SandboxManager,
+        sandbox_config_cls=SandboxConfig,
+        local_workspace_root_path=LOCAL_WORKSPACE_ROOT,
+    )
 
 
 def load_all_sandbox_runtimes(managers: dict) -> list[dict]:
@@ -395,53 +271,11 @@ def load_all_sandbox_runtimes(managers: dict) -> list[dict]:
 
 
 def load_provider_orphan_runtimes(managers: dict) -> list[dict]:
-    """Load provider-visible runtimes that are not backed by a known managed runtime row."""
-    runtimes: list[dict] = []
-    for provider_name, manager in managers.items():
-        provider = getattr(manager, "provider", None)
-        list_provider_runtimes = getattr(provider, "list_provider_runtimes", None)
-        if not callable(list_provider_runtimes):
-            continue
-        provider_slug = getattr(provider, "name", provider_name)
-
-        seen_instance_ids = {
-            str(row.get("current_instance_id") or "").strip()
-            for row in manager.lease_store.list_by_provider(provider_slug)
-            if str(row.get("current_instance_id") or "").strip()
-        }
-        raw_provider_runtimes = list_provider_runtimes()
-        if not isinstance(raw_provider_runtimes, list):
-            raise TypeError(f"{provider_slug}.list_provider_runtimes must return list")
-        provider_runtimes = raw_provider_runtimes
-
-        inspect_visible = manager.provider_capability.inspect_visible
-        for ps in provider_runtimes:
-            instance_id = getattr(ps, "session_id", None)
-            status = getattr(ps, "status", None) or "unknown"
-            if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
-                continue
-            runtimes.append(
-                {
-                    "session_id": instance_id,
-                    "thread_id": "(orphan)",
-                    "provider": provider_slug,
-                    "status": status,
-                    "created_at": None,
-                    "last_active": None,
-                    "lease_id": None,
-                    "instance_id": instance_id,
-                    "chat_session_id": None,
-                    "source": "provider_orphan",
-                    "inspect_visible": inspect_visible,
-                }
-            )
-    return runtimes
+    return sandbox_inventory.load_provider_orphan_runtimes(managers)
 
 
 def list_provider_orphan_runtimes() -> list[dict]:
-    """Load provider-orphan runtimes through the current manager inventory."""
-    _, managers = init_providers_and_managers()
-    return load_provider_orphan_runtimes(managers)
+    return sandbox_inventory.list_provider_orphan_runtimes(init_providers_and_managers_fn=init_providers_and_managers)
 
 
 def find_runtime_and_manager(

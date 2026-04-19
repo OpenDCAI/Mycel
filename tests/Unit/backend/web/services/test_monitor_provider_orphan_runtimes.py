@@ -49,6 +49,13 @@ def test_monitor_provider_orphan_inventory_uses_sandbox_service_data_boundary():
     assert "list_provider_orphan_runtimes(" in source
 
 
+def test_sandbox_service_keeps_provider_orphan_inventory_compat_surface():
+    source = inspect.getsource(sandbox_service)
+
+    assert "sandbox_inventory.load_provider_orphan_runtimes(" in source
+    assert "sandbox_inventory.list_provider_orphan_runtimes(" in source
+
+
 def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
     manager = SimpleNamespace(
         provider=SimpleNamespace(
