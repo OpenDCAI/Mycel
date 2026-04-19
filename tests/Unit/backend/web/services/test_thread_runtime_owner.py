@@ -131,3 +131,11 @@ def test_streaming_service_uses_thread_runtime_run_entrypoints_owner() -> None:
     assert owner_module.start_agent_run is not None
     assert owner_module.run_child_thread_live is not None
     assert "from backend.thread_runtime.run import entrypoints as _run_entrypoints" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_run_followups_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.followups")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.consume_followup_queue is not None
+    assert "from backend.thread_runtime.run import followups as _run_followups" in streaming_source
