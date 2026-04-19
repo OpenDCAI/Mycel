@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend import sandbox_runtime_mutations as neutral_sandbox_runtime_mutations
+from backend import sandbox_runtime_reads as neutral_sandbox_runtime_reads
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtime_service
 from backend.web.services import sandbox_service
 
@@ -62,6 +63,15 @@ def test_sandbox_runtime_mutations_owner_moves_out_of_sandbox_service():
 
     assert "backend.web.services import sandbox_service" not in source
     assert "backend.sandbox_inventory" in source
+
+
+def test_sandbox_runtime_reads_owner_moves_out_of_sandbox_service():
+    source = inspect.getsource(neutral_sandbox_runtime_reads)
+    service_source = inspect.getsource(sandbox_service)
+
+    assert "backend.web.services import sandbox_service" not in source
+    assert "_sandbox_runtime_reads.load_all_sandbox_runtimes(" in service_source
+    assert "_sandbox_runtime_reads.find_runtime_and_manager(" in service_source
 
 
 def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
