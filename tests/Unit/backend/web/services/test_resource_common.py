@@ -200,6 +200,13 @@ def test_web_resource_provider_boundary_keeps_compat_surface() -> None:
     assert resource_provider_boundary_service is neutral_resource_provider_boundary
 
 
+def test_resource_provider_boundary_uses_neutral_sandbox_inventory_owner() -> None:
+    boundary_source = inspect.getsource(neutral_resource_provider_boundary)
+
+    assert "sandbox_service.available_sandbox_types" not in boundary_source
+    assert "backend.sandbox_inventory" in boundary_source
+
+
 def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
     common_source = inspect.getsource(neutral_resource_common)
     projection_source = inspect.getsource(resource_projection)

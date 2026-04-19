@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend import resource_provider_contracts
+from backend.sandbox_inventory import available_sandbox_types as list_available_sandbox_types
 from backend.web.services import sandbox_service
 
 
@@ -26,7 +27,7 @@ def list_user_sandboxes(owner_user_id: str, **kwargs: Any) -> list[dict[str, Any
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:
-    return sandbox_service.available_sandbox_types()
+    return list_available_sandbox_types()
 
 
 def get_provider_display_contract(config_name: str) -> dict[str, Any]:
