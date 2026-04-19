@@ -9,7 +9,7 @@ from backend.monitor.mutations.contracts import (
     RuntimeMutationResult,
     SandboxCleanupRequest,
 )
-from backend.web.services import sandbox_service
+from backend.sandbox_runtime_mutations import destroy_sandbox_runtime, mutate_sandbox_runtime
 
 
 def _public_destroy_result(result: Any) -> Any:
@@ -19,7 +19,7 @@ def _public_destroy_result(result: Any) -> Any:
 
 
 def cleanup_sandbox(request: SandboxCleanupRequest) -> RuntimeMutationResult:
-    result = sandbox_service.destroy_sandbox_runtime(
+    result = destroy_sandbox_runtime(
         lower_runtime_handle=request.lower_runtime_handle,
         provider_name=request.provider_name,
         detach_thread_bindings=request.detach_thread_bindings,
@@ -28,7 +28,7 @@ def cleanup_sandbox(request: SandboxCleanupRequest) -> RuntimeMutationResult:
 
 
 def cleanup_provider_orphan_runtime(request: ProviderOrphanRuntimeCleanupRequest) -> RuntimeMutationResult:
-    result = sandbox_service.mutate_sandbox_runtime(
+    result = mutate_sandbox_runtime(
         runtime_id=request.runtime_id,
         action="destroy",
         provider_hint=request.provider_name,

@@ -34,6 +34,7 @@ def test_monitor_operation_service_uses_runtime_mutation_port():
     assert "def cleanup_sandbox(" in port_source
     assert "def cleanup_provider_orphan_runtime(" in port_source
     assert "def build_runtime_mutation_executor(" not in port_source
+    assert "backend.web.services" not in port_source
 
 
 def test_monitor_operation_service_uses_operation_repo_boundary():
