@@ -1272,6 +1272,65 @@ def test_messaging_service_list_chats_fail_on_unrequested_latest_message_chat_id
         service.list_chats_for_user("human-user-1")
 
 
+def test_messaging_service_list_chats_fails_on_latest_message_missing_content() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title="Team", status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [{"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0}],
+        ),
+        messages_repo=SimpleNamespace(
+            count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {},
+            list_latest_by_chat_ids=lambda _chat_ids: {
+                "chat-1": {
+                    "id": "msg-1",
+                    "chat_id": "chat-1",
+                    "sender_user_id": "human-user-1",
+                    "created_at": 3.0,
+                }
+            },
+        ),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Latest message msg-1 is missing content"):
+        service.list_chats_for_user("human-user-1")
+
+
+def test_messaging_service_list_chats_fails_on_latest_message_invalid_content() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            list_by_ids=lambda _chat_ids: [SimpleNamespace(id="chat-1", title="Team", status="active", created_at=1.0, updated_at=2.0)],
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members_for_chats=lambda _chat_ids: [{"chat_id": "chat-1", "user_id": "human-user-1", "last_read_seq": 0}],
+        ),
+        messages_repo=SimpleNamespace(
+            count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {},
+            list_latest_by_chat_ids=lambda _chat_ids: {
+                "chat-1": {
+                    "id": "msg-1",
+                    "chat_id": "chat-1",
+                    "sender_user_id": "human-user-1",
+                    "content": None,
+                    "created_at": 3.0,
+                }
+            },
+        ),
+        user_repo=SimpleNamespace(
+            list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Latest message msg-1 has invalid content"):
+        service.list_chats_for_user("human-user-1")
+
+
 def test_messaging_service_conversation_summaries_fail_without_projectable_title() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(

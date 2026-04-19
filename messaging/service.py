@@ -436,8 +436,12 @@ class MessagingService:
         sender = users_by_id.get(sender_id)
         if sender is None:
             raise RuntimeError(f"Chat message sender {sender_id} is not a resolvable user row")
+        if "content" not in message:
+            raise RuntimeError(f"Latest message {message.get('id') or '<missing>'} is missing content")
+        if not isinstance(message["content"], str):
+            raise RuntimeError(f"Latest message {message.get('id') or '<missing>'} has invalid content")
         return {
-            "content": message.get("content", ""),
+            "content": message["content"],
             "sender_name": sender.display_name,
             "created_at": message.get("created_at"),
         }
