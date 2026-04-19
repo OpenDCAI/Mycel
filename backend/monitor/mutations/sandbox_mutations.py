@@ -2,35 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
+from backend.monitor.mutations.contracts import (
+    ProviderOrphanRuntimeCleanupRequest,
+    RuntimeMutationResult,
+    SandboxCleanupRequest,
+)
 from backend.web.services import sandbox_service
-
-
-@dataclass(frozen=True)
-class SandboxCleanupRequest:
-    lower_runtime_handle: str
-    provider_name: str
-    detach_thread_bindings: bool
-
-
-@dataclass(frozen=True)
-class ProviderOrphanRuntimeCleanupRequest:
-    provider_name: str
-    runtime_id: str
-
-
-@dataclass(frozen=True)
-class RuntimeMutationResult:
-    destroy_result: Any
-
-
-@dataclass(frozen=True)
-class RuntimeMutationExecutor:
-    cleanup_sandbox: Callable[[SandboxCleanupRequest], RuntimeMutationResult]
-    cleanup_provider_orphan_runtime: Callable[[ProviderOrphanRuntimeCleanupRequest], RuntimeMutationResult]
 
 
 def _public_destroy_result(result: Any) -> Any:
@@ -55,10 +34,3 @@ def cleanup_provider_orphan_runtime(request: ProviderOrphanRuntimeCleanupRequest
         provider_hint=request.provider_name,
     )
     return RuntimeMutationResult(destroy_result=_public_destroy_result(result))
-
-
-def build_runtime_mutation_executor() -> RuntimeMutationExecutor:
-    return RuntimeMutationExecutor(
-        cleanup_sandbox=cleanup_sandbox,
-        cleanup_provider_orphan_runtime=cleanup_provider_orphan_runtime,
-    )

@@ -2,34 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import uuid4
 
 from backend.monitor.infrastructure.persistence import operation_repo
+from backend.monitor.mutations.contracts import (
+    ProviderOrphanRuntimeCleanupRequest,
+    RuntimeMutationResult,
+    SandboxCleanupRequest,
+)
 
 _ALLOWED_SANDBOX_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
 _SANDBOX_CLEANUP_ACTION = "sandbox_cleanup"
 
 
-@dataclass(frozen=True)
-class SandboxCleanupCommand:
-    lower_runtime_handle: str
-    provider_name: str
-    detach_thread_bindings: bool
-
-
-@dataclass(frozen=True)
-class ProviderOrphanRuntimeCleanupCommand:
-    provider_name: str
-    runtime_id: str
-
-
 class RuntimeMutationExecutor(Protocol):
-    def cleanup_sandbox(self, request: Any) -> Any: ...
+    def cleanup_sandbox(self, request: SandboxCleanupRequest) -> RuntimeMutationResult: ...
 
-    def cleanup_provider_orphan_runtime(self, request: Any) -> Any: ...
+    def cleanup_provider_orphan_runtime(self, request: ProviderOrphanRuntimeCleanupRequest) -> RuntimeMutationResult: ...
 
 
 def _now_iso() -> str:
@@ -222,7 +213,7 @@ def request_sandbox_cleanup(
             threads=threads,
         )
         result = runtime_mutation_executor.cleanup_sandbox(
-            SandboxCleanupCommand(
+            SandboxCleanupRequest(
                 lower_runtime_handle=lower_runtime_handle,
                 provider_name=provider_name,
                 detach_thread_bindings=detach_before_cleanup,
@@ -301,7 +292,7 @@ def request_provider_orphan_runtime_cleanup(
 
     try:
         result = runtime_mutation_executor.cleanup_provider_orphan_runtime(
-            ProviderOrphanRuntimeCleanupCommand(
+            ProviderOrphanRuntimeCleanupRequest(
                 provider_name=provider,
                 runtime_id=runtime,
             )

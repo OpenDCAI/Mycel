@@ -20,6 +20,7 @@ from backend.monitor.infrastructure.evaluation import (
 from backend.monitor.infrastructure.evaluation import (
     evaluation_read_service as monitor_evaluation_read_service,
 )
+from backend.monitor.infrastructure.persistence import operation_repo as monitor_operation_repo_service
 from backend.monitor.infrastructure.providers import (
     provider_runtime_inventory_service as monitor_provider_runtime_inventory_service,
 )
@@ -29,9 +30,6 @@ from backend.monitor.infrastructure.providers import (
 from backend.monitor.infrastructure.read_models import sandbox_read_service as monitor_sandbox_read_service
 from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
 from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
-from backend.web.services import (
-    monitor_operation_repo_service,
-)
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
 LOWER_RUNTIME_CAMEL_KEY = "lease" + "Id"

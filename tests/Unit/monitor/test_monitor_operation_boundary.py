@@ -25,13 +25,15 @@ def test_monitor_operation_service_uses_runtime_mutation_port():
     assert "execute_sandbox_cleanup" not in source
     assert "execute_provider_orphan_runtime_cleanup" not in source
     assert "sandbox_mutations" not in source
-    assert "build_runtime_mutation_executor" in gateway_source
+    assert "SandboxCleanupCommand" not in source
+    assert "ProviderOrphanRuntimeCleanupCommand" not in source
+    assert "build_runtime_mutation_executor" not in gateway_source
     assert "sandbox_mutations" in gateway_source
     assert "RuntimeMutationResult" in port_source
     assert "destroy_result" in port_source
     assert "def cleanup_sandbox(" in port_source
     assert "def cleanup_provider_orphan_runtime(" in port_source
-    assert "def build_runtime_mutation_executor(" in port_source
+    assert "def build_runtime_mutation_executor(" not in port_source
 
 
 def test_monitor_operation_service_uses_operation_repo_boundary():

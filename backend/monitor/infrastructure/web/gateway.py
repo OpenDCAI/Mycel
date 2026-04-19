@@ -40,7 +40,7 @@ def get_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
 def request_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
     return sandbox_detail.request_monitor_sandbox_cleanup(
         sandbox_id,
-        runtime_mutation_executor=sandbox_mutations.build_runtime_mutation_executor(),
+        runtime_mutation_executor=sandbox_mutations,
     )
 
 
@@ -48,7 +48,7 @@ def request_provider_orphan_runtime_cleanup(provider_id: str, runtime_id: str) -
     return monitor_provider_runtimes.request_monitor_provider_orphan_runtime_cleanup(
         provider_id,
         runtime_id,
-        runtime_mutation_executor=sandbox_mutations.build_runtime_mutation_executor(),
+        runtime_mutation_executor=sandbox_mutations,
     )
 
 
