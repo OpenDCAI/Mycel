@@ -105,3 +105,4 @@ def test_monitor_resource_projection_does_not_import_web_resource_cache():
     source = inspect.getsource(monitor_resource_projection_impl)
 
     assert "backend.web.services.resource_cache" not in source
+    assert "backend.web.services import resource_projection_service" not in source

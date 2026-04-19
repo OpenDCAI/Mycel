@@ -8,11 +8,11 @@ from backend.monitor.infrastructure.resources.resource_overview_cache import (
     get_resource_overview_snapshot,
     refresh_resource_overview_sync,
 )
-from backend.web.services import resource_projection_service
+from backend.user_resource_projection import list_user_resource_providers as build_user_resource_providers
 
 
 def list_user_resource_providers(app: Any, user_id: str) -> dict[str, Any]:
-    return resource_projection_service.list_user_resource_providers(app, user_id)
+    return build_user_resource_providers(app, user_id)
 
 
 __all__ = [
