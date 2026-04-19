@@ -13,6 +13,7 @@ from backend.thread_runtime.run import cancellation as _run_cancellation
 from backend.thread_runtime.run import emit as _run_emit
 from backend.thread_runtime.run import entrypoints as _run_entrypoints
 from backend.thread_runtime.run import followups as _run_followups
+from backend.thread_runtime.run import input_construction as _run_input_construction
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
 from backend.thread_runtime.run import observation as _run_observation
 from backend.thread_runtime.run import observer as _run_observer
@@ -30,16 +31,6 @@ logger = logging.getLogger(__name__)
 
 type SSEEvent = dict[str, str | int]
 
-_TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE = (
-    "Terminal background completion notifications require an explicit assistant followthrough. "
-    "Treat these notifications as fresh inputs that need a visible assistant reply. "
-    "You must produce at least one visible assistant message for them; "
-    "do not stay silent and do not end the run after only surfacing a notice. "
-    "Do not call TaskOutput or TaskStop for a terminal notification. "
-    "If no further tool is truly needed, answer directly in natural language "
-    "and briefly acknowledge the completion, failure, or cancellation honestly."
-)
-
 
 def _log_captured_exception(message: str, err: BaseException) -> None:
     logger.error(
@@ -53,15 +44,7 @@ def _resolve_run_event_repo(agent: Any) -> RunEventRepo:
 
 
 def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any:
-    content = getattr(system_prompt, "content", None)
-    if not isinstance(content, str):
-        return system_prompt
-    if _TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE in content:
-        return system_prompt
-    # @@@terminal-followthrough-system-note - live models can otherwise treat
-    # terminal background notifications as internal reminders and emit no
-    # assistant text, leaving caller surfaces notice-only.
-    return system_prompt.__class__(content=f"{content}\n\n{_TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE}")
+    return _run_input_construction.augment_system_prompt_for_terminal_followthrough(system_prompt)
 
 
 async def prime_sandbox(agent: Any, thread_id: str) -> None:
@@ -223,7 +206,6 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     pending_tool_calls: dict[str, dict] = {}
     output_parts: list[str] = []
     trajectory_status = "completed"
-    original_system_prompt = None
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
@@ -292,50 +274,15 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
             emit=emit,
         )
 
-        terminal_followthrough_items: list[dict[str, str | None]] | None = None
-        # @@@terminal-followthrough-reentry - terminal background completions
-        # still surface as durable notices first, but they must then re-enter the
-        # model as a real followthrough turn instead of terminating at notice-only.
-        if _is_terminal_background_notification_message(
-            message,
-            source=src,
-            notification_type=ntype,
-        ):
-            terminal_followthrough_items = [
-                {
-                    "content": message,
-                    "source": src or "system",
-                    "notification_type": ntype,
-                }
-            ]
-            terminal_followthrough_items.extend(await _emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=emit))
-            if hasattr(agent, "agent") and hasattr(agent.agent, "system_prompt"):
-                original_system_prompt = agent.agent.system_prompt
-                agent.agent.system_prompt = _augment_system_prompt_for_terminal_followthrough(original_system_prompt)
-
-        if terminal_followthrough_items:
-            from langchain_core.messages import HumanMessage
-
-            _initial_input = {
-                "messages": [
-                    HumanMessage(
-                        content=str(item["content"] or ""),
-                        metadata={
-                            "source": item["source"] or "system",
-                            "notification_type": item["notification_type"],
-                        },
-                    )
-                    for item in terminal_followthrough_items
-                ]
-            }
-        elif input_messages is not None:
-            _initial_input = {"messages": input_messages}
-        elif message_metadata:
-            from langchain_core.messages import HumanMessage
-
-            _initial_input: dict | None = {"messages": [HumanMessage(content=message, metadata=message_metadata)]}
-        else:
-            _initial_input = {"messages": [{"role": "user", "content": message}]}
+        _initial_input, prompt_restore = await _run_input_construction.build_initial_input(
+            message=message,
+            message_metadata=message_metadata,
+            input_messages=input_messages,
+            agent=agent,
+            app=app,
+            thread_id=thread_id,
+            emit_queued_terminal_followups=_emit_queued_terminal_followups,
+        )
 
         async def run_agent_stream(input_data: dict | None = _initial_input):
             chunk_count = 0
@@ -683,8 +630,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return ""
     finally:
-        if original_system_prompt is not None and hasattr(agent, "agent") and hasattr(agent.agent, "system_prompt"):
-            agent.agent.system_prompt = original_system_prompt
+        prompt_restore()
         # @@@typing-lifecycle-stop — guaranteed cleanup even on crash/cancel
         typing_tracker = getattr(app.state, "typing_tracker", None)
         if typing_tracker is not None:
