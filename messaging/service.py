@@ -373,6 +373,11 @@ class MessagingService:
             return [], {}, {}, {}
 
         loaded_chat_rows = self._chats.list_by_ids(chat_ids)
+        if not isinstance(loaded_chat_rows, list):
+            raise RuntimeError("Chat row collection is invalid")
+        for chat in loaded_chat_rows:
+            if not hasattr(chat, "id") or not hasattr(chat, "status"):
+                raise RuntimeError("Chat row is invalid")
         loaded_chat_ids = {str(chat.id) for chat in loaded_chat_rows}
         missing_chat_ids = [chat_id for chat_id in chat_ids if str(chat_id) not in loaded_chat_ids]
         if missing_chat_ids:
