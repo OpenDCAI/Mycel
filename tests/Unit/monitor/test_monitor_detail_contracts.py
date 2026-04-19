@@ -88,7 +88,11 @@ def _default_monitor_thread_repo(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _clear_monitor_cleanup_operations():
-    monitor_operation_repo_service.default_monitor_operation_repo().clear()
+    repo = monitor_operation_repo_service.InMemoryMonitorOperationRepo()
+    monitor_operation_repo_service.set_default_monitor_operation_repo(repo)
+    repo.clear()
+    yield
+    monitor_operation_repo_service.set_default_monitor_operation_repo(None)
 
 
 def _sandbox_row(**overrides):
