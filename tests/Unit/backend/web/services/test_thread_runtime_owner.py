@@ -24,3 +24,13 @@ def test_agent_pool_uses_thread_runtime_sandbox_owner() -> None:
     assert agent_pool_module.resolve_thread_sandbox is sandbox_owner.resolve_thread_sandbox
     assert "from backend.thread_runtime.sandbox import resolve_thread_sandbox" in source
     assert "def resolve_thread_sandbox(" not in source
+
+
+def test_thread_runtime_history_uses_thread_runtime_message_repair_owner() -> None:
+    history_source = inspect.getsource(importlib.import_module("backend.thread_runtime.history"))
+    owner_module = importlib.import_module("backend.thread_runtime.interruption")
+    shell_module = importlib.import_module("backend.web.services.thread_message_interruption_service")
+
+    assert owner_module.repair_interrupted_tool_call_messages is shell_module.repair_interrupted_tool_call_messages
+    assert "from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages" in history_source
+    assert "backend.web.services.thread_message_interruption_service" not in history_source
