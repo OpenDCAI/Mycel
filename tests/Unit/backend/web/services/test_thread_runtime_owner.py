@@ -205,3 +205,11 @@ def test_streaming_service_uses_thread_runtime_tool_call_dedup_owner() -> None:
 
     assert owner_module.ToolCallDedup is not None
     assert "from backend.thread_runtime.run import tool_call_dedup as _run_tool_call_dedup" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_stream_loop_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.stream_loop")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.run_stream_loop is not None
+    assert "from backend.thread_runtime.run import stream_loop as _run_stream_loop" in streaming_source
