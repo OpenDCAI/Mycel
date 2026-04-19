@@ -10,6 +10,7 @@ from typing import Any
 import backend.user_sandbox_reads as user_sandbox_reads
 from backend import sandbox_inventory
 from backend import sandbox_provider_factory as _sandbox_provider_factory
+from backend import sandbox_runtime_mutations as _sandbox_runtime_mutations
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import is_virtual_thread_id
@@ -250,97 +251,24 @@ def mutate_sandbox_runtime(
     action: str,
     provider_hint: str | None = None,
 ) -> dict[str, Any]:
-    """Perform pause/resume/destroy action on a sandbox runtime."""
-    _, managers = init_providers_and_managers()
-    runtimes = load_all_sandbox_runtimes(managers)
-    runtime, manager = find_runtime_and_manager(runtimes, managers, runtime_id, provider_name=provider_hint)
-    if not runtime:
-        raise RuntimeError(f"Runtime not found: {runtime_id}")
-
-    provider_name = str(runtime.get("provider") or "")
-    if not manager:
-        raise RuntimeError(f"Provider manager unavailable: {provider_name}")
-
-    thread_id = str(runtime.get("thread_id") or "")
-    lease_id = runtime.get("lease_id")
-    target_runtime_id = str(runtime.get("session_id") or runtime_id)
-
-    ok = False
-    mode = "lease_enforced"
-
-    if thread_id and not is_virtual_thread_id(thread_id):
-        mode = "manager_thread"
-        if action == "pause":
-            ok = manager.pause_session(thread_id)
-        elif action == "resume":
-            ok = manager.resume_session(thread_id)
-        elif action == "destroy":
-            ok = manager.destroy_session(thread_id)
-        else:
-            raise RuntimeError(f"Unknown action: {action}")
-    else:
-        lease = manager.get_lease(lease_id) if lease_id else None
-        if not lease:
-            mode = "provider_orphan_direct"
-            if action == "pause":
-                ok = manager.provider.pause_session(target_runtime_id)
-            elif action == "resume":
-                ok = manager.provider.resume_session(target_runtime_id)
-            elif action == "destroy":
-                ok = manager.provider.destroy_session(target_runtime_id)
-            else:
-                raise RuntimeError(f"Unknown action: {action}")
-        else:
-            mode = "manager_runtime"
-            if action == "pause":
-                ok = lease.pause_instance(manager.provider, source="api")
-            elif action == "resume":
-                ok = lease.resume_instance(manager.provider, source="api")
-            elif action == "destroy":
-                lease.destroy_instance(manager.provider, source="api")
-                ok = True
-            else:
-                raise RuntimeError(f"Unknown action: {action}")
-
-    if not ok:
-        raise RuntimeError(f"Failed to {action} runtime {target_runtime_id}")
-
-    return {
-        "ok": True,
-        "action": action,
-        "session_id": target_runtime_id,
-        "provider": provider_name,
-        "thread_id": thread_id or None,
-        "lease_id": lease_id,
-        "mode": mode,
-    }
+    return _sandbox_runtime_mutations.mutate_sandbox_runtime(
+        runtime_id=runtime_id,
+        action=action,
+        provider_hint=provider_hint,
+        init_providers_and_managers_fn=init_providers_and_managers,
+        load_all_sandbox_runtimes_fn=load_all_sandbox_runtimes,
+        find_runtime_and_manager_fn=find_runtime_and_manager,
+    )
 
 
 def destroy_sandbox_runtime(*, lower_runtime_handle: str, provider_name: str, detach_thread_bindings: bool = False) -> dict[str, Any]:
-    """Destroy lower sandbox runtime resources through the manager state machine."""
-    _, managers = init_providers_and_managers()
-    manager = managers.get(provider_name)
-    if manager is None:
-        raise RuntimeError(f"Provider manager unavailable: {provider_name}")
-
-    lease = manager.get_lease(lower_runtime_handle)
-    if lease is None:
-        raise RuntimeError(f"Lower runtime not found: {lower_runtime_handle}")
-
-    # @@@runtime-destroy-seam - detached residue may have no visible live session,
-    # so cleanup must target the lower runtime handle directly rather than session lookup.
-    _prune_stale_runtime_terminals(manager, lower_runtime_handle)
-    if detach_thread_bindings:
-        _detach_runtime_terminals(manager, lower_runtime_handle)
-    if not manager.destroy_lease_resources(lower_runtime_handle):
-        raise RuntimeError(f"Lower runtime not found: {lower_runtime_handle}")
-    return {
-        "ok": True,
-        "action": "destroy",
-        "lower_runtime_handle": lower_runtime_handle,
-        "provider": provider_name,
-        "mode": "manager_runtime",
-    }
+    return _sandbox_runtime_mutations.destroy_sandbox_runtime(
+        lower_runtime_handle=lower_runtime_handle,
+        provider_name=provider_name,
+        detach_thread_bindings=detach_thread_bindings,
+        init_providers_and_managers_fn=init_providers_and_managers,
+        build_storage_container_fn=build_storage_container,
+    )
 
 
 def _detach_runtime_terminals(manager: Any, lower_runtime_handle: str) -> None:
