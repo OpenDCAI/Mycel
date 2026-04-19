@@ -1,5 +1,6 @@
 import inspect
 
+from backend.monitor.application.use_cases import sandbox_detail as sandbox_detail_impl
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 
 
@@ -7,7 +8,14 @@ def test_monitor_gateway_sandbox_detail_uses_narrow_detail_service():
     source = inspect.getsource(monitor_gateway_impl)
     broad_shell = "monitor" + "_service"
 
-    assert "monitor_sandbox_detail_service" in source
+    assert "sandbox_detail" in source
     assert f"{broad_shell}.get_monitor_sandbox_detail" not in source
     assert f"{broad_shell}.request_monitor_sandbox_cleanup" not in source
     assert f"{broad_shell}.get_monitor_operation_detail" not in source
+
+
+def test_monitor_sandbox_detail_module_uses_operation_boundary():
+    source = inspect.getsource(sandbox_detail_impl)
+
+    assert "monitor_operation_service" not in source
+    assert "operations" in source

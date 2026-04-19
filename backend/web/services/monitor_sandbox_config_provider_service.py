@@ -1,11 +1,3 @@
-"""Sandbox provider inventory port for Monitor config projection."""
+"""Compatibility shell for Monitor sandbox config provider inventory."""
 
-from __future__ import annotations
-
-from typing import Any
-
-from backend.web.services import sandbox_service
-
-
-def available_sandbox_types() -> list[dict[str, Any]]:
-    return sandbox_service.available_sandbox_types()
+from backend.monitor.infrastructure.providers.sandbox_config_provider_service import *  # noqa: F401,F403

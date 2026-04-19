@@ -1,0 +1,1 @@
+"""Monitor persistence adapters."""

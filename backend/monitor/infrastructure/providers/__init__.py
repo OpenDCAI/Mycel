@@ -1,0 +1,1 @@
+"""Monitor provider/inventory adapters."""

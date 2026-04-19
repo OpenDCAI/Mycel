@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.monitor.application.use_cases import operations, sandbox_configs, sandbox_detail
 from backend.web.services import (
     monitor_evaluation_service,
     monitor_provider_runtime_service,
     monitor_resource_service,
-    monitor_sandbox_config_service,
-    monitor_sandbox_detail_service,
     monitor_sandbox_projection_service,
     monitor_thread_service,
 )
@@ -32,11 +31,11 @@ def get_provider_detail(provider_id: str) -> dict[str, Any]:
 
 
 def get_sandbox_detail(sandbox_id: str) -> dict[str, Any]:
-    return monitor_sandbox_detail_service.get_monitor_sandbox_detail(sandbox_id)
+    return sandbox_detail.get_monitor_sandbox_detail(sandbox_id)
 
 
 def request_sandbox_cleanup(sandbox_id: str) -> dict[str, Any]:
-    return monitor_sandbox_detail_service.request_monitor_sandbox_cleanup(sandbox_id)
+    return sandbox_detail.request_monitor_sandbox_cleanup(sandbox_id)
 
 
 def request_provider_orphan_runtime_cleanup(provider_id: str, runtime_id: str) -> dict[str, Any]:
@@ -44,7 +43,7 @@ def request_provider_orphan_runtime_cleanup(provider_id: str, runtime_id: str) -
 
 
 def get_operation_detail(operation_id: str) -> dict[str, Any]:
-    return monitor_sandbox_detail_service.get_monitor_operation_detail(operation_id)
+    return sandbox_detail.get_monitor_operation_detail(operation_id)
 
 
 def get_runtime_detail(runtime_id: str) -> dict[str, Any]:
@@ -52,7 +51,7 @@ def get_runtime_detail(runtime_id: str) -> dict[str, Any]:
 
 
 def get_sandbox_configs() -> dict[str, Any]:
-    return monitor_sandbox_config_service.get_monitor_sandbox_configs()
+    return sandbox_configs.get_monitor_sandbox_configs()
 
 
 async def get_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
