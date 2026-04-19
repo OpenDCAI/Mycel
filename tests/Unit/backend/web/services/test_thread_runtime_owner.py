@@ -139,3 +139,13 @@ def test_streaming_service_uses_thread_runtime_run_followups_owner() -> None:
 
     assert owner_module.consume_followup_queue is not None
     assert "from backend.thread_runtime.run import followups as _run_followups" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_sse_observer_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.observer")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.observe_thread_events is not None
+    assert owner_module.observe_run_events is not None
+    assert owner_module.observe_sse_buffer is not None
+    assert "from backend.thread_runtime.run import observer as _run_observer" in streaming_source
