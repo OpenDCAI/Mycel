@@ -45,6 +45,8 @@ def test_monitor_sandbox_detail_uses_thread_read_port():
     assert "build_thread_repo" not in detail_source
     assert "canonical_owner_threads" not in detail_source
     assert "build_thread_repo" in read_source
+    assert "backend.web.services.resource_common" not in read_source
+    assert "backend.web.services.thread_visibility" not in read_source
 
 
 def test_monitor_thread_detail_uses_thread_read_port():
@@ -109,3 +111,4 @@ def test_owner_thread_workbench_uses_app_state_read_source():
     assert "app.state" in read_source
     assert "canonical_owner_threads" in read_source
     assert "avatar_url" in read_source
+    assert "backend.web.services.thread_visibility" not in read_source

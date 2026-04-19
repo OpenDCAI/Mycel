@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from backend.web.services.resource_common import thread_owners
-from backend.web.services.thread_visibility import canonical_owner_threads
+from backend.thread_projection import canonical_owner_threads, thread_owners
 from storage.runtime import build_thread_repo
 
 
