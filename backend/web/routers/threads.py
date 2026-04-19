@@ -12,6 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
+from backend.monitor.application.use_cases.thread_workbench import (
+    build_owner_thread_workbench_from_rows,
+    sidebar_label,
+)
+from backend.monitor.infrastructure.read_models.thread_workbench_read_service import build_owner_thread_workbench_reader
 from backend.web.core.dependencies import (
     get_app,
     get_current_user_id,
@@ -32,11 +37,6 @@ from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
-from backend.web.services.owner_thread_workbench_read_service import build_owner_thread_workbench_reader
-from backend.web.services.owner_thread_workbench_service import (
-    build_owner_thread_workbench_from_rows,
-    sidebar_label,
-)
 from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
