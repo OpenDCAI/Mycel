@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
+from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
 from backend.protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -72,7 +72,7 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
     )
     app, started, unread_calls, enqueued = _app(unread_count=7)
 
-    result = await NativeAgentRuntimeGateway(app).dispatch_chat(_envelope())
+    result = await build_agent_runtime_gateway(app).dispatch_chat(_envelope())
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-1"
@@ -90,7 +90,7 @@ async def test_gateway_dispatch_chat_raises_for_missing_thread(monkeypatch: pyte
     app.state.thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: [])
 
     with pytest.raises(RuntimeError, match="Agent chat recipient has no runtime thread: agent-user-1"):
-        await NativeAgentRuntimeGateway(app).dispatch_chat(_envelope())
+        await build_agent_runtime_gateway(app).dispatch_chat(_envelope())
 
     assert started == []
     assert unread_calls == []
@@ -123,7 +123,7 @@ async def test_gateway_prefers_latest_live_child_thread(monkeypatch: pytest.Monk
         unread_count=1,
     )
 
-    result = await NativeAgentRuntimeGateway(app).dispatch_chat(_envelope(chat_id="chat-5"))
+    result = await build_agent_runtime_gateway(app).dispatch_chat(_envelope(chat_id="chat-5"))
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-child-fresh"

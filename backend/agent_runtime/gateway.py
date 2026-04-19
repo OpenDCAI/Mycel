@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Protocol
+from typing import Protocol
 
-from backend.agent_runtime.chat_handler import NativeAgentChatDeliveryHandler
-from backend.agent_runtime.thread_handler import NativeAgentThreadInputHandler
 from backend.protocols import agent_runtime as agent_runtime_protocol
 
 
@@ -27,13 +25,12 @@ class NativeAgentRuntimeGateway:
 
     def __init__(
         self,
-        app: Any,
         *,
         chat_handlers: Mapping[str, AgentChatRuntimeHandler] | None = None,
         thread_input_handler: AgentThreadInputRuntimeHandler | None = None,
     ) -> None:
-        self._chat_handlers = dict(chat_handlers or {"mycel": NativeAgentChatDeliveryHandler(app)})
-        self._thread_input_handler = thread_input_handler or NativeAgentThreadInputHandler(app)
+        self._chat_handlers = dict(chat_handlers or {})
+        self._thread_input_handler = thread_input_handler
 
     async def dispatch_chat(
         self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope
@@ -47,4 +44,6 @@ class NativeAgentRuntimeGateway:
         self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope
     ) -> agent_runtime_protocol.AgentThreadInputResult:
         """Route direct thread input through the Agent-side gateway."""
+        if self._thread_input_handler is None:
+            raise ValueError("No Agent thread input runtime handler configured")
         return await self._thread_input_handler.dispatch(envelope)

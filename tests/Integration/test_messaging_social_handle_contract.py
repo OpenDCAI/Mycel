@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
+from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
 from backend.protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -2571,7 +2571,7 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
     )
 
     with pytest.raises(AttributeError):
-        await NativeAgentRuntimeGateway(app).dispatch_chat(_chat_delivery_envelope())
+        await build_agent_runtime_gateway(app).dispatch_chat(_chat_delivery_envelope())
 
 
 def _chat_delivery_envelope(*, chat_id: str = "chat-1", signal: str | None = "ping") -> AgentChatDeliveryEnvelope:
@@ -2627,7 +2627,7 @@ async def _run_chat_delivery(
         )
     )
 
-    await NativeAgentRuntimeGateway(app).dispatch_chat(_chat_delivery_envelope(chat_id=chat_id))
+    await build_agent_runtime_gateway(app).dispatch_chat(_chat_delivery_envelope(chat_id=chat_id))
 
     return started, unread_calls, enqueued
 
