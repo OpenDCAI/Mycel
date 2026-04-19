@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import jwt
 
+from backend.avatar_files import process_and_save_avatar
 from backend.web.services import library_service
 from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
 from storage.providers.supabase import _query as q
@@ -280,8 +281,6 @@ class AuthService:
             src_avatar = assets_dir / agent_def["avatar"]
             if not src_avatar.exists():
                 raise RuntimeError(f"Default agent avatar missing: {src_avatar}")
-            from backend.web.routers.users import process_and_save_avatar
-
             avatar_path = process_and_save_avatar(src_avatar, agent_id)
             # @@@file-backed-avatar-shell - current web avatar truth is the served
             # file surface, not a path string stored in users.avatar. Keep the

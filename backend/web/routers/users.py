@@ -1,6 +1,5 @@
 """User-backed identity endpoints for discovery, avatars, and agent thread lookup."""
 
-import io
 import logging
 import time
 from pathlib import Path
@@ -9,6 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from backend.avatar_files import process_and_save_avatar
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.core.paths import avatars_dir
 from backend.web.utils.serializers import avatar_url
@@ -19,33 +19,7 @@ logger = logging.getLogger(__name__)
 
 AVATARS_DIR = avatars_dir()
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
-AVATAR_SIZE = 256
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
-
-
-def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
-    """Process image through PIL pipeline and save as 256x256 PNG.
-
-    Args:
-        source: Path to image file or raw bytes
-        user_id: used for filename
-
-    Returns:
-        Relative avatar path (e.g. "avatars/{user_id}.png")
-    """
-    from PIL import Image, ImageOps
-
-    if isinstance(source, (bytes, bytearray)):
-        img = Image.open(io.BytesIO(source))
-    else:
-        img = Image.open(source)
-    img = ImageOps.exif_transpose(img)
-    if img.mode not in ("RGB", "RGBA"):
-        img = img.convert("RGB")
-    img = ImageOps.fit(img, (AVATAR_SIZE, AVATAR_SIZE), method=Image.Resampling.LANCZOS)
-    AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-    img.save(AVATARS_DIR / f"{user_id}.png", format="PNG", optimize=True)
-    return f"avatars/{user_id}.png"
 
 
 users_router = APIRouter(prefix="/api/users", tags=["users"])
