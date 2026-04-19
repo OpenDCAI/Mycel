@@ -3,7 +3,7 @@
 import asyncio
 from typing import Any
 
-from backend.web.services.thread_runtime_binding_service import resolve_thread_runtime_binding
+from backend.thread_runtime.binding import resolve_thread_runtime_binding
 
 
 def _display_repo_sandbox_status(runtime_row: dict[str, Any], instance: dict[str, Any]) -> str:
