@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 
+from backend.auth_dependencies import _get_auth_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.thread_runtime_convergence import inspect_owner_thread_runtime
 from sandbox.thread_context import set_current_thread_id
@@ -13,14 +14,6 @@ from sandbox.thread_context import set_current_thread_id
 async def get_app(request: Request) -> FastAPI:
     """Get FastAPI app instance from request."""
     return request.app
-
-
-def _get_auth_service(app: FastAPI):
-    """Get auth service from app state, or raise 500."""
-    auth_service = getattr(app.state, "auth_service", None)
-    if auth_service is None:
-        raise HTTPException(500, "Auth service not initialized")
-    return auth_service
 
 
 def _extract_jwt_payload(request: Request) -> dict:
