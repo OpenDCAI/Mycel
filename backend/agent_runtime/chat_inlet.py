@@ -1,4 +1,4 @@
-"""Chat delivery bridge from messaging into Agent Runtime."""
+"""Chat delivery inlet from messaging into Agent Runtime."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from backend.protocols.agent_runtime import (
     AgentRuntimeActor,
     AgentRuntimeMessage,
 )
-from messaging.delivery.dispatcher import ChatDeliveryRequest
+from messaging.delivery.contracts import ChatDeliveryRequest
 
 logger = logging.getLogger(__name__)
 

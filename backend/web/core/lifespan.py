@@ -89,8 +89,8 @@ async def lifespan(app: FastAPI):
 
     # Wire chat delivery after event loop is available
     # ---- Messaging system (Supabase-backed, required) ----
+    from backend.agent_runtime.chat_inlet import make_chat_delivery_fn
     from messaging.delivery.resolver import HireVisitDeliveryResolver
-    from messaging.delivery.runtime_bridge import make_chat_delivery_fn
     from messaging.relationships.service import RelationshipService
     from messaging.service import MessagingService
 

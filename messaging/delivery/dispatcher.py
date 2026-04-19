@@ -3,32 +3,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Protocol
+from typing import Any
 
 from backend.web.utils.serializers import avatar_url
 from messaging.delivery.actions import DeliveryAction
+from messaging.delivery.contracts import ChatDeliveryFn, ChatDeliveryRequest
 from messaging.display_user import resolve_messaging_display_user
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class ChatDeliveryRequest:
-    recipient_id: str
-    recipient_user: Any
-    content: str
-    sender_name: str
-    sender_type: str
-    chat_id: str
-    sender_id: str
-    sender_avatar_url: str | None
-    signal: str | None
-
-
-class ChatDeliveryFn(Protocol):
-    def __call__(self, request: ChatDeliveryRequest) -> None: ...
 
 
 class ChatDeliveryDispatcher:
