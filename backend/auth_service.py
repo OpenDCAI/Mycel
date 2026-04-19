@@ -10,6 +10,7 @@ from collections.abc import Callable
 import jwt
 
 from backend.avatar_files import process_and_save_avatar
+from backend.contact_bootstrap import ensure_owner_agent_contact
 from backend.web.services import library_service
 from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
 from storage.providers.supabase import _query as q
@@ -242,7 +243,6 @@ class AuthService:
             raise RuntimeError("Agent config repo required for initial agent creation during schema cutover.")
         from pathlib import Path
 
-        from backend.web.services.contact_bootstrap_service import ensure_owner_agent_contact
         from storage.utils import generate_agent_config_id, generate_agent_user_id
 
         initial_agents = [

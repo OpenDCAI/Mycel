@@ -302,7 +302,7 @@ def create_agent_user(
     agent_config_repo: Any = None,
     contact_repo: Any = None,
 ) -> dict[str, Any]:
-    from backend.web.services.contact_bootstrap_service import ensure_owner_agent_contact
+    from backend.contact_bootstrap import ensure_owner_agent_contact
     from storage.contracts import UserRow, UserType
     from storage.utils import generate_agent_config_id, generate_agent_user_id
 
