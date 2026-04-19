@@ -122,3 +122,12 @@ def test_streaming_service_uses_thread_runtime_run_lifecycle_owner() -> None:
     assert owner_module.write_cancellation_markers is not None
     assert owner_module.repair_incomplete_tool_calls is not None
     assert "from backend.thread_runtime.run import lifecycle as _run_lifecycle" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_run_entrypoints_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.entrypoints")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.start_agent_run is not None
+    assert owner_module.run_child_thread_live is not None
+    assert "from backend.thread_runtime.run import entrypoints as _run_entrypoints" in streaming_source
