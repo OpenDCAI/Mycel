@@ -128,6 +128,15 @@ def test_chat_router_imports_actor_ownership_primitive() -> None:
     assert "owner_user_id ==" not in source
 
 
+def test_chat_router_imports_group_chat_social_access_primitive() -> None:
+    source = inspect.getsource(chat_router)
+
+    assert "can_group_chat_with_participant" in source
+    assert "ACTIVE_CHAT_RELATIONSHIP_STATES" not in source
+    assert "has_active_contact" not in source
+    assert ".get_state(" not in source
+
+
 def test_get_accessible_chat_or_404_returns_chat():
     chat = _chat("chat-1")
     app = SimpleNamespace(
