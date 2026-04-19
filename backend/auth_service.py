@@ -11,7 +11,7 @@ import jwt
 
 from backend.avatar_files import process_and_save_avatar
 from backend.contact_bootstrap import ensure_owner_agent_contact
-from backend.web.services import library_service
+from backend.recipe_bootstrap import seed_default_recipes
 from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
 from storage.providers.supabase import _query as q
 
@@ -235,7 +235,7 @@ class AuthService:
     def _seed_default_recipes(self, owner_user_id: str) -> None:
         if self._recipe_repo is None:
             raise RuntimeError("Recipe repo required for initial sandbox recipe creation during schema cutover.")
-        library_service.seed_default_recipes(owner_user_id, recipe_repo=self._recipe_repo)
+        seed_default_recipes(owner_user_id, recipe_repo=self._recipe_repo)
 
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
         """Create Toad and Morel agents for a new user. Returns first agent info."""

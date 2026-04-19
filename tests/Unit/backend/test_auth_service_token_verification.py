@@ -183,7 +183,7 @@ def test_login_uses_dedicated_auth_client_instead_of_storage_client():
 def test_login_repairs_existing_user_sandbox_recipes(monkeypatch: pytest.MonkeyPatch):
     auth_client = _FakeAuthClient()
     monkeypatch.setattr(
-        "backend.web.services.library_service.sandbox_service.available_sandbox_types",
+        "backend.recipe_bootstrap.available_sandbox_types",
         lambda: [{"name": "daytona_selfhost", "provider": "daytona", "available": True}],
     )
     recipe_rows: dict[tuple[str, str], dict] = {}
@@ -306,7 +306,7 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
     monkeypatch.setattr("backend.avatar_files.process_and_save_avatar", lambda _source, user_id: f"avatars/{user_id}.png")
     monkeypatch.setattr(
-        "backend.web.services.library_service.sandbox_service.available_sandbox_types",
+        "backend.recipe_bootstrap.available_sandbox_types",
         lambda: [
             {"name": "local", "provider": "local", "available": True},
             {"name": "daytona_selfhost", "provider": "daytona", "available": True},

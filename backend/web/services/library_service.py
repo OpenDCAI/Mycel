@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from backend.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from backend.web.core.paths import library_dir
 from backend.web.services import sandbox_service
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
@@ -128,46 +129,7 @@ def list_library(
     return results
 
 
-def seed_default_recipes(
-    owner_user_id: str,
-    *,
-    recipe_repo: RecipeRepo | None = None,
-    sandbox_types: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    owner_user_id = _require_recipe_owner(owner_user_id)
-    recipe_repo = _require_recipe_repo(recipe_repo)
-    now = int(time.time() * 1000)
-    items: list[dict[str, Any]] = []
-    source_sandboxes = sandbox_types if sandbox_types is not None else sandbox_service.available_sandbox_types()
-    for sandbox in source_sandboxes:
-        provider_name = str(sandbox.get("name") or "").strip()
-        if not provider_name:
-            continue
-        provider_type = str(sandbox.get("provider") or provider_type_from_name(provider_name)).strip()
-        recipe = {
-            **default_recipe_snapshot(provider_type, provider_name=provider_name),
-            "type": "sandbox-template",
-            "provider_name": provider_name,
-            "provider_type": provider_type,
-            "available": bool(sandbox.get("available", True)),
-            "created_at": now,
-            "updated_at": now,
-        }
-        existing = recipe_repo.get(owner_user_id, str(recipe["id"]))
-        if existing is None or _recipe_row_needs_repair(existing, provider_name=provider_name, provider_type=provider_type):
-            recipe_repo.upsert(
-                owner_user_id=owner_user_id,
-                recipe_id=str(recipe["id"]),
-                kind="custom",
-                provider_type=provider_type,
-                data=recipe,
-                created_at=now,
-            )
-        row = recipe_repo.get(owner_user_id, str(recipe["id"]))
-        if row is None:
-            raise RuntimeError(f"failed to seed recipe {recipe['id']}")
-        items.append(_normalize_recipe_item(row["data"], builtin=bool(row["data"].get("builtin"))))
-    return items
+seed_default_recipes = seed_builtin_recipes
 
 
 def _recipe_row_needs_repair(row: dict[str, Any], *, provider_name: str, provider_type: str) -> bool:
