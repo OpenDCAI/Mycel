@@ -1,4 +1,5 @@
 from backend.monitor.application.use_cases import resources as monitor_resource_service
+from backend.monitor.infrastructure.resources import resource_overview_cache as monitor_resource_cache
 from backend.web.services import resource_cache as cache
 
 
@@ -22,12 +23,12 @@ def _triage_payload(category: str) -> dict:
 def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
     cache.clear_resource_overview_cache()
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "visible_resource_row_stats",
         lambda: {"local": {"resource_rows": 0, "running": 0}},
     )
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "list_resource_providers",
         lambda: {
             "summary": {
@@ -54,12 +55,12 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
 def test_monitor_resource_overview_attaches_triage(monkeypatch):
     cache.clear_resource_overview_cache()
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "visible_resource_row_stats",
         lambda: {"local": {"resource_rows": 0, "running": 0}},
     )
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "list_resource_providers",
         lambda: {
             "summary": {
@@ -87,12 +88,12 @@ def test_monitor_resource_overview_attaches_triage(monkeypatch):
 def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypatch):
     cache.clear_resource_overview_cache()
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "visible_resource_row_stats",
         lambda: {"docker": {"resource_rows": 1, "running": 1}},
     )
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "list_resource_providers",
         lambda: {
             "summary": {
@@ -110,7 +111,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
     def _raise():
         raise RuntimeError("probe failed")
 
-    monkeypatch.setattr(cache.resource_projection_service, "list_resource_providers", _raise)
+    monkeypatch.setattr(monitor_resource_cache.resource_projection_service, "list_resource_providers", _raise)
     try:
         cache.refresh_resource_overview_sync()
     except RuntimeError as exc:
@@ -119,7 +120,7 @@ def test_resource_overview_cache_refresh_fails_loudly_on_refresh_error(monkeypat
         raise AssertionError("refresh_resource_overview_sync should fail loudly")
 
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "visible_resource_row_stats",
         lambda: {"docker": {"resource_rows": 0, "running": 0}},
     )
@@ -169,9 +170,9 @@ def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(m
     }
 
     calls = iter([stale_payload, fresh_payload])
-    monkeypatch.setattr(cache.resource_projection_service, "list_resource_providers", lambda: next(calls))
+    monkeypatch.setattr(monitor_resource_cache.resource_projection_service, "list_resource_providers", lambda: next(calls))
     monkeypatch.setattr(
-        cache.resource_projection_service,
+        monitor_resource_cache.resource_projection_service,
         "visible_resource_row_stats",
         lambda: {"local": {"resource_rows": 1, "running": 1}},
     )

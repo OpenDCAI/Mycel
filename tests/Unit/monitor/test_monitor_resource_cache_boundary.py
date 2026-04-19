@@ -5,6 +5,8 @@ from backend.monitor.application.use_cases import resources as resources_impl
 from backend.monitor.infrastructure.io import resource_io_service as resource_io_impl
 from backend.monitor.infrastructure.read_models import resource_read_service as resource_read_impl
 from backend.monitor.infrastructure.read_models import resource_runtime_service as resource_runtime_impl
+from backend.monitor.infrastructure.resources import resource_overview_cache as monitor_resource_cache_impl
+from backend.monitor.infrastructure.resources import resource_projection_service as monitor_resource_projection_impl
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.services import (
     resource_cache,
@@ -13,7 +15,7 @@ from backend.web.services import (
 
 
 def test_resource_cache_does_not_import_monitor_sandbox_projection():
-    source = inspect.getsource(resource_cache)
+    source = inspect.getsource(monitor_resource_cache_impl)
     broad_shell = "monitor" + "_service"
 
     assert broad_shell not in source
@@ -21,11 +23,18 @@ def test_resource_cache_does_not_import_monitor_sandbox_projection():
 
 
 def test_resource_cache_refresh_loop_uses_resource_io_port():
-    source = inspect.getsource(resource_cache)
+    source = inspect.getsource(monitor_resource_cache_impl)
 
     assert "resource_io_service" in source
     assert "monitor_resource_io_service" not in source
     assert "resource_service" not in source
+
+
+def test_web_resource_cache_is_only_a_compatibility_shell():
+    source = inspect.getsource(resource_cache)
+
+    assert "backend.monitor.infrastructure.resources.resource_overview_cache" in source
+    assert "resource_projection_service.list_resource_providers" not in source
 
 
 def test_monitor_resource_service_owns_resource_triage_composition():
@@ -90,3 +99,9 @@ def test_monitor_provider_runtime_module_uses_inventory_port():
     assert "provider_runtime_inventory_service" in source
     assert "backend.web.services.resource_cache" not in source
     assert "monitor_resource_projection_service" in source
+
+
+def test_monitor_resource_projection_does_not_import_web_resource_cache():
+    source = inspect.getsource(monitor_resource_projection_impl)
+
+    assert "backend.web.services.resource_cache" not in source
