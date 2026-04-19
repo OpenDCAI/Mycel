@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
     await _validate_web_checkpointer_contract()
 
     # ---- Chat repos + services ----
+    from backend.auth_runtime_bootstrap import attach_auth_runtime_state
     from backend.runtime_storage_bootstrap import attach_runtime_storage_state
-    from backend.supabase_runtime import create_supabase_auth_client
 
     runtime_storage = attach_runtime_storage_state(app)
     _supabase_client = runtime_storage.supabase_client
@@ -65,19 +65,7 @@ async def lifespan(app: FastAPI):
     app.state.user_settings_repo = storage_container.user_settings_repo()
     app.state.agent_config_repo = storage_container.agent_config_repo()
     app.state.contact_repo = storage_container.contact_repo()
-    app.state._supabase_auth_client_factory = create_supabase_auth_client
-
-    from backend.web.services.auth_service import AuthService
-
-    app.state.auth_service = AuthService(
-        users=app.state.user_repo,
-        agent_configs=app.state.agent_config_repo,
-        supabase_client=_supabase_client,
-        supabase_auth_client_factory=create_supabase_auth_client,
-        invite_codes=app.state.invite_code_repo,
-        contact_repo=app.state.contact_repo,
-        recipe_repo=app.state.recipe_repo,
-    )
+    attach_auth_runtime_state(app, storage_state=runtime_storage)
 
     from messaging.realtime.events import ChatEventBus
     from messaging.realtime.typing import TypingTracker
