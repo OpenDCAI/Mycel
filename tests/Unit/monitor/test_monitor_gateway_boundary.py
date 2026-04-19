@@ -3,7 +3,6 @@ import inspect
 from backend.monitor.api.http import router as monitor_router_impl
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.routers import monitor, resources
-from backend.web.services import monitor_gateway
 
 
 def test_monitor_router_depends_on_gateway_not_internal_services():
@@ -35,6 +34,8 @@ def test_product_resource_router_depends_on_gateway_not_projection_service():
 
     assert "resource_projection_service" not in source
     assert "monitor_gateway." in source
+    assert "backend.web.services import monitor_gateway" not in source
+    assert "backend.monitor.infrastructure.web import gateway as monitor_gateway" in source
 
 
 def test_monitor_gateway_depends_on_resource_boundary_not_resource_internals():
@@ -55,7 +56,7 @@ def test_monitor_gateway_depends_on_resource_boundary_not_resource_internals():
     assert "monitor_resources" in source
 
 
-def test_monitor_gateway_web_shell_delegates_to_monitor_module():
-    source = inspect.getsource(monitor_gateway)
+def test_product_resource_router_points_at_monitor_gateway_module():
+    source = inspect.getsource(resources)
 
     assert "backend.monitor.infrastructure.web" in source

@@ -7,8 +7,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.monitor.infrastructure.web import gateway as monitor_gateway
 from backend.web.core.dependencies import get_current_user_id
-from backend.web.services import monitor_gateway
 
 router = APIRouter(prefix="/api/resources", tags=["resources"])
 
