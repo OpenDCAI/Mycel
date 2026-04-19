@@ -49,6 +49,16 @@ def test_monitor_router_composes_global_and_web_local_buckets():
     assert '@router.get("/resources")' not in source
 
 
+def test_monitor_dependency_shell_uses_neutral_auth_and_app_owners():
+    from backend.monitor.api.http import dependencies as monitor_dependencies
+
+    source = inspect.getsource(monitor_dependencies)
+
+    assert "from backend.auth_user_resolution import get_current_user_id" in source
+    assert "from backend.request_app import get_app" in source
+    assert "backend.web.core.dependencies" not in source
+
+
 def test_product_resource_router_depends_on_gateway_not_projection_service():
     source = inspect.getsource(resources)
 
