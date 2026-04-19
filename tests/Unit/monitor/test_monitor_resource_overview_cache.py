@@ -1,4 +1,4 @@
-from backend.web.services import monitor_resource_service
+from backend.monitor.application.use_cases import resources as monitor_resource_service
 from backend.web.services import resource_cache as cache
 
 

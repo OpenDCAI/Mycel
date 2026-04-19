@@ -24,6 +24,7 @@ def test_resource_cache_refresh_loop_uses_resource_io_port():
     source = inspect.getsource(resource_cache)
 
     assert "resource_io_service" in source
+    assert "monitor_resource_io_service" not in source
     assert "resource_service" not in source
 
 
@@ -52,6 +53,7 @@ def test_resource_projection_does_not_construct_monitor_runtime_repo():
     runtime_source = inspect.getsource(resource_runtime_impl)
     read_source = inspect.getsource(resource_read_impl)
 
+    assert "monitor_resource_runtime_service" not in source
     assert "make_sandbox_monitor_repo" not in source
     assert "list_resource_snapshots_by_sandbox" not in source
     assert "make_sandbox_monitor_repo" not in runtime_source

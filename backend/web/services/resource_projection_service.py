@@ -5,8 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from backend.monitor.infrastructure.read_models import resource_runtime_service
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services import monitor_resource_runtime_service, resource_provider_boundary_service
+from backend.web.services import resource_provider_boundary_service
 from backend.web.services.resource_common import CATALOG as _CATALOG
 from backend.web.services.resource_common import CatalogEntry as _CatalogEntry
 from backend.web.services.resource_common import aggregate_provider_telemetry as _aggregate_provider_telemetry
@@ -104,7 +105,7 @@ def _load_visible_resource_runtime() -> tuple[
     dict[str, str | None],
     dict[str, dict[str, Any]],
 ]:
-    return monitor_resource_runtime_service.load_visible_resource_runtime(_project_user_visible_resource_rows)
+    return resource_runtime_service.load_visible_resource_runtime(_project_user_visible_resource_rows)
 
 
 def _backfill_runtime_ids(sandboxes: list[dict[str, Any]]) -> None:
@@ -112,7 +113,7 @@ def _backfill_runtime_ids(sandboxes: list[dict[str, Any]]) -> None:
     if not pending_sandboxes:
         return
 
-    runtime_ids = monitor_resource_runtime_service.load_runtime_ids([str(sandbox.get("sandbox_id") or "") for sandbox in pending_sandboxes])
+    runtime_ids = resource_runtime_service.load_runtime_ids([str(sandbox.get("sandbox_id") or "") for sandbox in pending_sandboxes])
     for sandbox in pending_sandboxes:
         sandbox_id = str(sandbox.get("sandbox_id") or "").strip()
         runtime_id = runtime_ids.get(sandbox_id)

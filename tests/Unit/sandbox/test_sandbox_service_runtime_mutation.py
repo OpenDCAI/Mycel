@@ -1,7 +1,8 @@
 import inspect
 from pathlib import Path
 
-from backend.web.services import monitor_operation_service, sandbox_service
+from backend.monitor.application.use_cases import operations as monitor_operation_service
+from backend.web.services import sandbox_service
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
 
