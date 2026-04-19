@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.monitor.infrastructure.evaluation import evaluation_execution_service, evaluation_read_service
+from backend.monitor.infrastructure.evaluation.evaluation_scheduler import EvaluationJobScheduler, EvaluationJobSpec
 
 
 def _build_monitor_evaluation_run_fact_rows(metrics_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -143,7 +144,7 @@ def start_monitor_evaluation_batch(
     *,
     base_url: str,
     token: str,
-    schedule_task,
+    scheduler: EvaluationJobScheduler,
 ) -> dict[str, Any]:
     batch_service = evaluation_read_service.make_eval_batch_service()
     detail = batch_service.get_batch_detail(batch_id)
@@ -163,14 +164,14 @@ def start_monitor_evaluation_batch(
         sandbox=str(sandbox),
     )
     updated = batch_service.update_batch_status(batch_id, "running")
-    schedule_task(
-        evaluation_execution_service.run_monitor_evaluation_batch,
-        batch_id=batch_id,
-        scenarios=scenarios,
-        base_url=base_url.rstrip("/"),
-        token=token,
-        agent_user_id=str(agent_user_id),
-        batch_service=batch_service,
+    scheduler.submit(
+        EvaluationJobSpec(
+            batch_id=batch_id,
+            scenarios=scenarios,
+            base_url=base_url.rstrip("/"),
+            token=token,
+            agent_user_id=str(agent_user_id),
+        )
     )
     return {"accepted": True, "batch": updated}
 

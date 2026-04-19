@@ -9,6 +9,7 @@ from backend.monitor.application.use_cases import provider_runtimes as monitor_p
 from backend.monitor.application.use_cases import resources as monitor_resources
 from backend.monitor.application.use_cases import sandbox_configs, sandbox_detail, sandbox_projection
 from backend.monitor.application.use_cases import threads as monitor_threads
+from backend.monitor.infrastructure.evaluation.background_task_scheduler import BackgroundTaskEvaluationScheduler
 from backend.monitor.infrastructure.read_models import thread_read_service, thread_workbench_read_service, trace_read_service
 
 
@@ -134,7 +135,7 @@ def start_evaluation_batch(
         batch_id=batch_id,
         base_url=base_url,
         token=token,
-        schedule_task=schedule_task,
+        scheduler=BackgroundTaskEvaluationScheduler(schedule_task),
     )
 
 

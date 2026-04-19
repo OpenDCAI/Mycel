@@ -442,20 +442,24 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
     monkeypatch.setattr(monitor_evaluation_execution_service, "EVAL_SCENARIO_DIR", scenario_dir)
     monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
 
+    class _Scheduler:
+        def submit(self, spec):
+            scheduled.append(spec)
+
     payload = monitor_evaluation_service.start_monitor_evaluation_batch(
         "batch-1",
         base_url="http://testserver",
         token="token-1",
-        schedule_task=lambda fn, **kwargs: scheduled.append((fn, kwargs)),
+        scheduler=_Scheduler(),
     )
 
     assert payload == {"accepted": True, "batch": {"batch_id": "batch-1", "status": "running"}}
     assert len(scheduled) == 1
-    assert scheduled[0][1]["base_url"] == "http://testserver"
-    assert scheduled[0][1]["token"] == "token-1"
-    assert scheduled[0][1]["agent_user_id"] == "agent-1"
-    assert scheduled[0][1]["scenarios"][0].id == "scenario-1"
-    assert scheduled[0][1]["scenarios"][0].sandbox == "daytona_selfhost"
+    assert scheduled[0].base_url == "http://testserver"
+    assert scheduled[0].token == "token-1"
+    assert scheduled[0].agent_user_id == "agent-1"
+    assert scheduled[0].scenarios[0].id == "scenario-1"
+    assert scheduled[0].scenarios[0].sandbox == "daytona_selfhost"
 
 
 def test_get_monitor_provider_detail_fails_loudly_when_provider_missing(monkeypatch):

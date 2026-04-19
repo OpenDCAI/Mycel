@@ -25,6 +25,7 @@ def test_monitor_evaluation_service_uses_execution_port_for_runtime_work():
     execution_source = inspect.getsource(monitor_evaluation_execution_service)
 
     assert "evaluation_execution_service" in service_source
+    assert "run_monitor_evaluation_batch" not in service_source
     assert "load_scenarios_from_dir" not in service_source
     assert "EVAL_SCENARIO_DIR" not in service_source
     assert "EvalClient" not in service_source
