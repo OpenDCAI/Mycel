@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from backend.web.utils.serializers import avatar_url
+from messaging.avatars import AvatarUrlBuilder
 from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
 from messaging.display_user import resolve_messaging_display_user
@@ -38,14 +38,18 @@ class MessagingService:
         delivery_fn: ChatDeliveryFn | None = None,
         delivery_dispatcher: ChatDeliveryDispatcher | None = None,
         event_bus: Any | None = None,
+        *,
+        avatar_url_builder: AvatarUrlBuilder | None = None,
     ) -> None:
         self._chats = chat_repo
         self._chat_members_repo = chat_member_repo
         self._messages = messages_repo
         self._user_repo = user_repo
+        self._avatar_url_builder = avatar_url_builder
         self._delivery_dispatcher = delivery_dispatcher or ChatDeliveryDispatcher(
             chat_member_repo=chat_member_repo,
             user_repo=user_repo,
+            avatar_url_builder=avatar_url_builder,
             unread_counter=getattr(messages_repo, "count_unread", None),
             delivery_resolver=delivery_resolver,
             delivery_fn=delivery_fn,
@@ -108,7 +112,7 @@ class MessagingService:
                     "id": social_user_id,
                     "name": user.display_name,
                     "type": user.type.value if hasattr(user.type, "value") else str(user.type),
-                    "avatar_url": avatar_url(user.id, bool(user.avatar)),
+                    "avatar_url": self._build_avatar_url(user.id, bool(user.avatar)),
                 }
             )
         return member_info
@@ -496,5 +500,10 @@ class MessagingService:
             "id": social_user_id,
             "name": user.display_name,
             "type": user.type.value if hasattr(user.type, "value") else str(user.type),
-            "avatar_url": avatar_url(user.id, bool(user.avatar)),
+            "avatar_url": self._build_avatar_url(user.id, bool(user.avatar)),
         }
+
+    def _build_avatar_url(self, user_id: str | None, has_avatar: bool) -> str | None:
+        if self._avatar_url_builder is None:
+            raise RuntimeError("Messaging avatar URL builder is not configured")
+        return self._avatar_url_builder(user_id, has_avatar)

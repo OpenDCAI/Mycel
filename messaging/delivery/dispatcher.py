@@ -6,7 +6,7 @@ import logging
 from enum import Enum
 from typing import Any
 
-from backend.web.utils.serializers import avatar_url
+from messaging.avatars import AvatarUrlBuilder
 from messaging.delivery.actions import DeliveryAction
 from messaging.delivery.contracts import ChatDeliveryFn, ChatDeliveryRequest
 from messaging.display_user import resolve_messaging_display_user
@@ -21,12 +21,15 @@ class ChatDeliveryDispatcher:
         self,
         chat_member_repo: Any,
         user_repo: Any,
+        *,
+        avatar_url_builder: AvatarUrlBuilder | None = None,
         unread_counter: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: ChatDeliveryFn | None = None,
     ) -> None:
         self._chat_members_repo = chat_member_repo
         self._user_repo = user_repo
+        self._avatar_url_builder = avatar_url_builder
         self._unread_counter = unread_counter
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
@@ -48,7 +51,7 @@ class ChatDeliveryDispatcher:
         if sender_user is None:
             raise RuntimeError(f"Chat delivery sender identity not found: {sender_id}")
         sender_name = sender_user.display_name
-        sender_avatar_url = avatar_url(sender_user.id, bool(sender_user.avatar))
+        sender_avatar_url = self._build_avatar_url(sender_user.id, bool(sender_user.avatar))
         sender_raw_type = getattr(sender_user, "type", None)
         if sender_raw_type is None:
             raise RuntimeError(f"Chat delivery sender type is missing: {sender_id}")
@@ -119,6 +122,11 @@ class ChatDeliveryDispatcher:
         if type(unread_count) is not int:
             raise RuntimeError(f"Chat delivery unread count is invalid for {recipient_id}: {unread_count!r}")
         return unread_count
+
+    def _build_avatar_url(self, user_id: str | None, has_avatar: bool) -> str | None:
+        if self._avatar_url_builder is None:
+            raise RuntimeError("Chat delivery avatar URL builder is not configured")
+        return self._avatar_url_builder(user_id, has_avatar)
 
     def _deliver(
         self,
