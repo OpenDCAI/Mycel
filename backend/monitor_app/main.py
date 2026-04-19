@@ -1,9 +1,8 @@
 """Separate-process Monitor app shell."""
 
-import uvicorn
 from fastapi import FastAPI
 
-from backend.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port
+from backend.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port, run_reloadable_app
 from backend.monitor.api.http import global_router
 from backend.monitor_app.lifespan import lifespan
 
@@ -21,10 +20,8 @@ def _resolve_port() -> int:
 
 
 if __name__ == "__main__":
-    uvicorn.run(
+    run_reloadable_app(
         "backend.monitor_app.main:app",
-        host="0.0.0.0",
         port=_resolve_port(),
-        reload=True,
         reload_dirs=["backend", "storage", "eval"],
     )

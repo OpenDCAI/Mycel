@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 
+import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -43,4 +44,14 @@ def add_permissive_cors(app) -> None:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+
+
+def run_reloadable_app(module_path: str, *, port: int, reload_dirs: list[str]) -> None:
+    uvicorn.run(
+        module_path,
+        host="0.0.0.0",
+        port=port,
+        reload=True,
+        reload_dirs=reload_dirs,
     )

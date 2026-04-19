@@ -63,3 +63,30 @@ def test_add_permissive_cors_registers_cors_middleware():
             },
         )
     ]
+
+
+def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
+    calls = []
+
+    def _run(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    monkeypatch.setattr(app_entrypoint.uvicorn, "run", _run)
+
+    app_entrypoint.run_reloadable_app(
+        "backend.monitor_app.main:app",
+        port=55417,
+        reload_dirs=["backend", "storage", "eval"],
+    )
+
+    assert calls == [
+        (
+            ("backend.monitor_app.main:app",),
+            {
+                "host": "0.0.0.0",
+                "port": 55417,
+                "reload": True,
+                "reload_dirs": ["backend", "storage", "eval"],
+            },
+        )
+    ]

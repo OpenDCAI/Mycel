@@ -1,10 +1,9 @@
 """Leon Web Backend - FastAPI Application."""
 
-from backend.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port
+from backend.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port, run_reloadable_app
 
 load_env_file_from_env()
 
-import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 
 from backend.chat.api.http import (  # noqa: E402
@@ -67,10 +66,8 @@ if __name__ == "__main__":
     # @@@module-launch-target - Package-qualified target keeps module launch (`python -m backend.web.main`) import-safe.
     # @@@reload-dirs - restrict file watching to backend + core + config + storage only.
     # Without this, StatReload scans .venv/, node_modules/, .git/ etc. and burns 50-80% CPU.
-    uvicorn.run(
+    run_reloadable_app(
         "backend.web.main:app",
-        host="0.0.0.0",
         port=port,
-        reload=True,
         reload_dirs=["backend", "core", "config", "storage", "sandbox", "messaging"],
     )
