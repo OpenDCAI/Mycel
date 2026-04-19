@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from messaging.actor_ownership import access_scope_targets, is_owned_by_viewer
-from messaging.social_access import ACTIVE_CHAT_RELATIONSHIP_STATES, has_active_contact
+from messaging.social_access import can_group_chat_with_participant
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -108,18 +108,23 @@ def _validate_group_chat_relationships(app: Any, participant_ids: list[str], req
     if svc is None:
         raise ValueError("Relationship service is required for group chat creation")
     contact_repo = getattr(app.state, "contact_repo", None)
+    user_repo = getattr(app.state, "user_repo", None)
     for participant_id in dict.fromkeys(participant_ids):
         if participant_id == requester_user_id or _is_owned_participant(app, participant_id, requester_user_id):
             continue
         try:
-            access_targets = _participant_access_targets(app, participant_id)
-            if any(has_active_contact(contact_repo, requester_user_id, target_id) for target_id in access_targets):
+            participant_user = user_repo.get_by_id(participant_id) if user_repo is not None else None
+            if can_group_chat_with_participant(
+                viewer_user_id=requester_user_id,
+                participant_user_id=participant_id,
+                participant_user=participant_user,
+                contact_repo=contact_repo,
+                relationship_service=svc,
+            ):
                 continue
         except RuntimeError as exc:
             raise ValueError(str(exc)) from exc
-        states = [svc.get_state(requester_user_id, target_id) for target_id in access_targets]
-        if not any(state in ACTIVE_CHAT_RELATIONSHIP_STATES for state in states):
-            raise ValueError(f"Active relationship required for group chat participant: {participant_id}")
+        raise ValueError(f"Active relationship required for group chat participant: {participant_id}")
 
 
 @router.get("")
