@@ -10,6 +10,7 @@ from backend.monitor.application.use_cases import operations as monitor_operatio
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtime_service
 from backend.monitor.application.use_cases import sandbox_configs as monitor_sandbox_config_service
 from backend.monitor.application.use_cases import sandbox_detail as monitor_sandbox_detail_service
+from backend.monitor.application.use_cases import sandbox_projection as monitor_sandbox_projection_service
 from backend.monitor.application.use_cases import threads as monitor_thread_service
 from backend.monitor.application.use_cases import trace as monitor_trace_service
 from backend.monitor.infrastructure.providers import (
@@ -18,14 +19,13 @@ from backend.monitor.infrastructure.providers import (
 from backend.monitor.infrastructure.providers import (
     sandbox_config_provider_service as monitor_sandbox_config_provider_service,
 )
+from backend.monitor.infrastructure.read_models import sandbox_read_service as monitor_sandbox_read_service
 from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
 from backend.web.services import (
     monitor_evaluation_execution_service,
     monitor_evaluation_read_service,
     monitor_evaluation_service,
     monitor_operation_repo_service,
-    monitor_sandbox_projection_service,
-    monitor_sandbox_read_service,
 )
 
 LOWER_RUNTIME_KEY = "lease_" + "id"

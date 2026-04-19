@@ -6,8 +6,7 @@ from typing import Any
 
 from backend.monitor.application.use_cases import thread_workbench
 from backend.monitor.application.use_cases import trace as monitor_trace
-from backend.monitor.infrastructure.read_models import thread_read_service
-from backend.web.services import monitor_sandbox_read_service
+from backend.monitor.infrastructure.read_models import sandbox_read_service, thread_read_service
 
 
 def list_monitor_threads(app: Any, user_id: str) -> dict[str, Any]:
@@ -61,7 +60,7 @@ def _normalize_monitor_thread(thread: dict[str, Any], requested_thread_id: str) 
 
 async def get_monitor_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
     thread_base = thread_read_service.load_monitor_thread_base(app, thread_id)
-    rows = monitor_sandbox_read_service.load_thread_detail_rows(thread_id)
+    rows = sandbox_read_service.load_thread_detail_rows(thread_id)
     summary = rows["summary"]
     runtime_rows = rows["runtime_rows"]
 

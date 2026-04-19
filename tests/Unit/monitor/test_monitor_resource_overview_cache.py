@@ -73,7 +73,7 @@ def test_monitor_resource_overview_attaches_triage(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        monitor_resource_service.monitor_sandbox_projection_service,
+        monitor_resource_service.sandbox_projection,
         "list_monitor_sandboxes",
         lambda: _triage_payload("detached_residue"),
     )

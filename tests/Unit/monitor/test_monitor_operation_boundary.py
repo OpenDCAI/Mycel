@@ -2,7 +2,7 @@ import inspect
 
 from backend.monitor.application.use_cases import operations as monitor_operations_impl
 from backend.monitor.infrastructure.persistence import operation_repo as monitor_operation_repo_impl
-from backend.web.services import monitor_runtime_mutation_service
+from backend.monitor.infrastructure.runtime import runtime_mutation_service as monitor_runtime_mutation_impl
 
 
 def test_monitor_operation_service_delegates_runtime_mutation_to_executor():
@@ -15,7 +15,7 @@ def test_monitor_operation_service_delegates_runtime_mutation_to_executor():
 
 def test_monitor_operation_service_uses_runtime_mutation_port():
     source = inspect.getsource(monitor_operations_impl)
-    port_source = inspect.getsource(monitor_runtime_mutation_service)
+    port_source = inspect.getsource(monitor_runtime_mutation_impl)
 
     assert "_sandbox_destroy_result" not in source
     assert "_provider_runtime_destroy_result" not in source

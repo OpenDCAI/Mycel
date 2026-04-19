@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from backend.monitor.application.use_cases import operations
-from backend.web.services import monitor_sandbox_projection_service as sandbox_projection
-from backend.web.services import monitor_sandbox_read_service, monitor_thread_read_service
+from backend.monitor.application.use_cases import operations, sandbox_projection
+from backend.monitor.infrastructure.read_models import sandbox_read_service, thread_read_service
 
 
 def _canonical_live_thread_refs(raw_thread_ids: list[str]) -> list[dict[str, str]]:
     live_threads = sandbox_projection._live_thread_ids(raw_thread_ids)
-    return monitor_thread_read_service.load_canonical_live_thread_refs(raw_thread_ids, live_threads)
+    return thread_read_service.load_canonical_live_thread_refs(raw_thread_ids, live_threads)
 
 
 def _runtime_row_projection(runtime_rows: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -105,7 +104,7 @@ def _build_monitor_sandbox_detail(rows: dict[str, object]) -> dict[str, object]:
 
 
 def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, object]:
-    rows = monitor_sandbox_read_service.load_sandbox_detail_rows(sandbox_id)
+    rows = sandbox_read_service.load_sandbox_detail_rows(sandbox_id)
     return {
         "source": "sandbox_canonical",
         **_build_monitor_sandbox_detail(rows),
@@ -113,7 +112,7 @@ def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, object]:
 
 
 def _sandbox_cleanup_target(sandbox_id: str) -> dict[str, object]:
-    cleanup_target = monitor_sandbox_read_service.load_sandbox_cleanup_target(sandbox_id)
+    cleanup_target = sandbox_read_service.load_sandbox_cleanup_target(sandbox_id)
     if not str(cleanup_target.get("lower_runtime_handle") or "").strip():
         raise RuntimeError("monitor sandbox cleanup target missing managed runtime handle")
     return cleanup_target

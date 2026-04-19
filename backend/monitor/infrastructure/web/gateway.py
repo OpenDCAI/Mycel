@@ -6,16 +6,13 @@ from typing import Any
 
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtimes
 from backend.monitor.application.use_cases import resources as monitor_resources
-from backend.monitor.application.use_cases import sandbox_configs, sandbox_detail
+from backend.monitor.application.use_cases import sandbox_configs, sandbox_detail, sandbox_projection
 from backend.monitor.application.use_cases import threads as monitor_threads
-from backend.web.services import (
-    monitor_evaluation_service,
-    monitor_sandbox_projection_service,
-)
+from backend.web.services import monitor_evaluation_service
 
 
 def list_sandboxes() -> dict[str, Any]:
-    return monitor_sandbox_projection_service.list_monitor_sandboxes()
+    return sandbox_projection.list_monitor_sandboxes()
 
 
 def list_provider_orphan_runtimes() -> dict[str, Any]:

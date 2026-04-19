@@ -30,7 +30,7 @@ def test_resource_cache_refresh_loop_uses_resource_io_port():
 def test_monitor_resource_service_owns_resource_triage_composition():
     source = inspect.getsource(resources_impl)
 
-    assert "monitor_sandbox_projection_service" in source
+    assert "sandbox_projection" in source
 
 
 def test_monitor_resource_service_uses_resource_io_port():
@@ -66,10 +66,9 @@ def test_resource_projection_uses_product_resource_boundary():
 
 def test_monitor_gateway_sandbox_list_uses_narrow_projection_service():
     source = inspect.getsource(monitor_gateway_impl.list_sandboxes)
-    broad_shell = "monitor" + "_service"
 
-    assert f"{broad_shell}.list_monitor_sandboxes" not in source
-    assert "monitor_sandbox_projection_service" in inspect.getsource(monitor_gateway_impl)
+    assert "monitor_sandbox_projection_service" not in source
+    assert "sandbox_projection" in inspect.getsource(monitor_gateway_impl)
 
 
 def test_monitor_gateway_resource_and_provider_runtime_use_cases_live_in_monitor_module():

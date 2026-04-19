@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.monitor.application.use_cases import sandbox_projection
 from backend.monitor.infrastructure.io import resource_io_service
-from backend.web.services import monitor_sandbox_projection_service, resource_projection_service
+from backend.web.services import resource_projection_service
 from backend.web.services.resource_cache import get_resource_overview_snapshot, refresh_resource_overview_sync
 
 
 def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
-    sandbox_payload = monitor_sandbox_projection_service.list_monitor_sandboxes()
+    sandbox_payload = sandbox_projection.list_monitor_sandboxes()
     payload["triage"] = sandbox_payload.get("triage") or {"summary": {}, "groups": []}
     return payload
 

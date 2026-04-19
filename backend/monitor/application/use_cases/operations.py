@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from backend.monitor.infrastructure.persistence import operation_repo
-from backend.web.services import monitor_runtime_mutation_service as runtime_mutation
+from backend.monitor.infrastructure.runtime import runtime_mutation_service as runtime_mutation
 
 _ALLOWED_SANDBOX_CLEANUP_TRIAGE = {"orphan_cleanup", "detached_residue"}
 _SANDBOX_CLEANUP_ACTION = "sandbox_cleanup"

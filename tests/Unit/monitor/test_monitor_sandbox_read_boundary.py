@@ -1,16 +1,14 @@
 import inspect
 
+from backend.monitor.application.use_cases import sandbox_detail as monitor_sandbox_detail_service
+from backend.monitor.application.use_cases import sandbox_projection as monitor_sandbox_projection_service
 from backend.monitor.application.use_cases import thread_workbench as owner_thread_workbench_service
 from backend.monitor.application.use_cases import threads as monitor_thread_service
 from backend.monitor.application.use_cases import trace as monitor_trace_service
+from backend.monitor.infrastructure.read_models import sandbox_read_service as monitor_sandbox_read_service
 from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
 from backend.monitor.infrastructure.read_models import thread_workbench_read_service as owner_thread_workbench_read_service
 from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
-from backend.web.services import (
-    monitor_sandbox_detail_service,
-    monitor_sandbox_projection_service,
-    monitor_sandbox_read_service,
-)
 
 
 def test_monitor_sandbox_projection_does_not_construct_runtime_repo():
