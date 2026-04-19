@@ -9,7 +9,13 @@ from backend import resource_provider_boundary as neutral_resource_provider_boun
 from backend import resource_provider_contracts as neutral_resource_provider_contracts
 from backend import sandbox_provider_factory as neutral_sandbox_provider_factory
 from backend import user_sandbox_reads as neutral_user_sandbox_reads
-from backend.web.services import resource_common, resource_provider_boundary_service, resource_service, sandbox_service
+from backend.web.services import (
+    account_resource_service,
+    resource_common,
+    resource_provider_boundary_service,
+    resource_service,
+    sandbox_service,
+)
 
 
 class _FakeThreadRepo:
@@ -228,6 +234,13 @@ def test_user_sandbox_reads_uses_neutral_avatar_and_virtual_thread_helpers() -> 
     assert "backend.virtual_threads" in source
     assert "backend.thread_projection" in source
     assert "def count_user_visible_sandboxes_by_provider(" in source
+
+
+def test_account_resource_service_uses_neutral_sandbox_count_owner() -> None:
+    source = inspect.getsource(account_resource_service)
+
+    assert "backend.web.services import sandbox_service" not in source
+    assert "user_sandbox_reads" in source
 
 
 def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
