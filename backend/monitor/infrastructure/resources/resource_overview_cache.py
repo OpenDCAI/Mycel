@@ -10,8 +10,8 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+import backend.resource_projection as resource_projection_service
 from backend.monitor.infrastructure.io import resource_io_service
-from backend.web.services import resource_projection_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 

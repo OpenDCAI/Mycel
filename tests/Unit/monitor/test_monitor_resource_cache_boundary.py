@@ -1,5 +1,6 @@
 import inspect
 
+import backend.resource_projection as shared_resource_projection_impl
 from backend.monitor.application.use_cases import provider_runtimes as provider_runtimes_impl
 from backend.monitor.application.use_cases import resources as resources_impl
 from backend.monitor.infrastructure.io import resource_io_service as resource_io_impl
@@ -10,7 +11,6 @@ from backend.monitor.infrastructure.resources import resource_projection_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.services import (
     resource_cache,
-    resource_projection_service,
 )
 
 
@@ -20,6 +20,8 @@ def test_resource_cache_does_not_import_monitor_sandbox_projection():
 
     assert broad_shell not in source
     assert "monitor_sandbox_projection_service" not in source
+    assert "backend.web.services import resource_projection_service" not in source
+    assert "backend.resource_projection" in source
 
 
 def test_resource_cache_refresh_loop_uses_resource_io_port():
@@ -59,7 +61,7 @@ def test_monitor_resource_service_uses_resource_io_port():
 
 
 def test_resource_projection_does_not_construct_monitor_runtime_repo():
-    source = inspect.getsource(resource_projection_service)
+    source = inspect.getsource(shared_resource_projection_impl)
     runtime_source = inspect.getsource(resource_runtime_impl)
     read_source = inspect.getsource(resource_read_impl)
 
@@ -73,7 +75,7 @@ def test_resource_projection_does_not_construct_monitor_runtime_repo():
 
 
 def test_resource_projection_uses_product_resource_boundary():
-    source = inspect.getsource(resource_projection_service)
+    source = inspect.getsource(shared_resource_projection_impl)
 
     assert "sandbox_service" not in source
     assert "resource_service" not in source

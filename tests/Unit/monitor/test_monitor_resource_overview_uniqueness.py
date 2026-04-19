@@ -1,9 +1,9 @@
 import inspect
 
+import backend.resource_projection as resource_projection_service
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from backend.web.services import (
     resource_common,
-    resource_projection_service,
     resource_provider_boundary_service,
 )
 from storage import runtime as storage_runtime
