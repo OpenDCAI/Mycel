@@ -213,3 +213,11 @@ def test_streaming_service_uses_thread_runtime_stream_loop_owner() -> None:
 
     assert owner_module.run_stream_loop is not None
     assert "from backend.thread_runtime.run import stream_loop as _run_stream_loop" in streaming_source
+
+
+def test_streaming_service_uses_thread_runtime_epilogue_owner() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.run.epilogue")
+    streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))
+
+    assert owner_module.emit_run_epilogue is not None
+    assert "from backend.thread_runtime.run import epilogue as _run_epilogue" in streaming_source
