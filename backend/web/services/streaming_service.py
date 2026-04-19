@@ -69,6 +69,7 @@ def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
 
 
 def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
+    _run_buffer_wiring._start_agent_run = start_agent_run
     _run_buffer_wiring.ensure_thread_handlers(agent, thread_id, app)
 
 
