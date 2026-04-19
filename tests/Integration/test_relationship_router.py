@@ -8,8 +8,9 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+import backend.web.main as web_main
+from backend.chat.api.http import relationships_router as owner_relationship_router
 from messaging.contracts import RelationshipRow
-from messaging.relationships import router as relationship_router
 
 
 def _row(*, state: str = "pending", initiator_user_id: str = "requester-user-1") -> RelationshipRow:
@@ -27,10 +28,17 @@ def _row(*, state: str = "pending", initiator_user_id: str = "requester-user-1")
 
 
 def test_relationship_router_imports_actor_ownership_primitive() -> None:
-    source = inspect.getsource(relationship_router)
+    source = inspect.getsource(owner_relationship_router)
 
     assert "from messaging.actor_ownership import" in source
     assert "owner_user_id" not in source
+
+
+def test_relationship_router_owner_module_lives_under_backend_chat() -> None:
+    assert owner_relationship_router.__name__ == "backend.chat.api.http.relationships_router"
+    main_source = inspect.getsource(web_main)
+    assert "relationships_router" in main_source
+    assert "messaging.relationships.router" not in main_source
 
 
 @pytest.mark.asyncio
@@ -47,8 +55,8 @@ async def test_request_relationship_accepts_owned_agent_actor_user_id() -> None:
         )
     )
 
-    result = await relationship_router.request_relationship(
-        relationship_router.RelationshipRequestBody(target_user_id="requester-user-1", actor_user_id="agent-user-1"),
+    result = await owner_relationship_router.request_relationship(
+        owner_relationship_router.RelationshipRequestBody(target_user_id="requester-user-1", actor_user_id="agent-user-1"),
         user_id="owner-user-1",
         app=app,
     )
@@ -84,9 +92,9 @@ async def test_approve_relationship_accepts_owned_agent_actor_user_id() -> None:
         )
     )
 
-    result = await relationship_router.approve_relationship(
+    result = await owner_relationship_router.approve_relationship(
         existing["id"],
-        relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
+        owner_relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
         user_id="owner-user-1",
         app=app,
     )
@@ -122,9 +130,9 @@ async def test_reject_relationship_accepts_owned_agent_actor_user_id() -> None:
         )
     )
 
-    result = await relationship_router.reject_relationship(
+    result = await owner_relationship_router.reject_relationship(
         existing["id"],
-        relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
+        owner_relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
         user_id="owner-user-1",
         app=app,
     )
@@ -158,9 +166,9 @@ async def test_downgrade_relationship_accepts_owned_agent_actor_user_id() -> Non
         )
     )
 
-    result = await relationship_router.downgrade_relationship(
+    result = await owner_relationship_router.downgrade_relationship(
         existing["id"],
-        relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
+        owner_relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
         user_id="owner-user-1",
         app=app,
     )
@@ -182,8 +190,8 @@ async def test_request_relationship_rejects_unowned_actor_user_id() -> None:
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await relationship_router.request_relationship(
-            relationship_router.RelationshipRequestBody(target_user_id="requester-user-1", actor_user_id="agent-user-1"),
+        await owner_relationship_router.request_relationship(
+            owner_relationship_router.RelationshipRequestBody(target_user_id="requester-user-1", actor_user_id="agent-user-1"),
             user_id="owner-user-1",
             app=app,
         )
@@ -193,4 +201,4 @@ async def test_request_relationship_rejects_unowned_actor_user_id() -> None:
 
 def test_relationship_action_body_rejects_removed_hire_snapshot_field() -> None:
     with pytest.raises(ValidationError):
-        relationship_router.RelationshipActionBody(actor_user_id="agent-user-1", hire_snapshot={"probe": "live"})
+        owner_relationship_router.RelationshipActionBody(actor_user_id="agent-user-1", hire_snapshot={"probe": "live"})

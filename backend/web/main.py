@@ -14,7 +14,10 @@ import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from backend.chat.api.http import conversations_router  # noqa: E402
+from backend.chat.api.http import (  # noqa: E402
+    conversations_router,  # noqa: E402
+    relationships_router,  # noqa: E402
+)
 from backend.chat.api.http import router as messaging_router  # noqa: E402
 from backend.monitor.api.http import router as monitor_router  # noqa: E402
 from backend.web.core.lifespan import lifespan  # noqa: E402
@@ -32,7 +35,6 @@ from backend.web.routers import (  # noqa: E402
     users,
     webhooks,
 )
-from messaging.relationships.router import router as relationships_router  # noqa: E402
 
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
@@ -54,7 +56,7 @@ app.include_router(threads.router)
 app.include_router(messaging_router.router)
 
 app.include_router(contacts.router)
-app.include_router(relationships_router)
+app.include_router(relationships_router.router)
 app.include_router(users.users_router)
 app.include_router(sandbox.router)
 app.include_router(webhooks.router)
