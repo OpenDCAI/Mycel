@@ -6,8 +6,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from backend.monitor.api.http.dependencies import get_app, get_current_user_id
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
-from backend.web.core.dependencies import get_app, get_current_user_id
 
 router = APIRouter(prefix="/api/monitor")
 

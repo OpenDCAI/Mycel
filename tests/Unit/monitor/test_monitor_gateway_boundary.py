@@ -22,6 +22,7 @@ def test_monitor_router_depends_on_gateway_not_internal_services():
         assert token not in source
 
     assert "monitor_gateway." in source
+    assert "backend.web.core.dependencies" not in source
 
 
 def test_web_backend_points_at_monitor_router_module():
