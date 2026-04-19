@@ -223,8 +223,10 @@ def test_user_sandbox_reads_uses_neutral_avatar_and_virtual_thread_helpers() -> 
 
     assert "backend.web.utils.serializers" not in source
     assert "backend.web.utils.helpers" not in source
+    assert "backend.web.services.thread_visibility" not in source
     assert "backend.avatar_urls" in source
     assert "backend.virtual_threads" in source
+    assert "backend.thread_projection" in source
 
 
 def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
