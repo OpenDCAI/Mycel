@@ -11,6 +11,7 @@ from typing import Any
 from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring
 from backend.thread_runtime.run import cancellation as _run_cancellation
 from backend.thread_runtime.run import entrypoints as _run_entrypoints
+from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
@@ -966,44 +967,8 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
 
 
 async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
-    """Dequeue a pending followup message and start a new run.
-
-    If starting the new run fails, re-enqueue the message so it is not lost.
-    """
-    item = None
-    try:
-        qm = app.state.queue_manager
-        if not qm.peek(thread_id) or not app:
-            return
-        if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
-            return
-        item = qm.dequeue(thread_id)
-        if item is None:
-            logger.warning("followup dequeue lost race for thread %s; reverting to IDLE", thread_id)
-            if hasattr(agent, "runtime"):
-                agent.runtime.transition(AgentState.IDLE)
-            return
-        start_agent_run(
-            agent,
-            thread_id,
-            item.content,
-            app,
-            message_metadata={
-                "source": item.source or "system",
-                "notification_type": item.notification_type,
-                "sender_name": item.sender_name,
-                "sender_avatar_url": item.sender_avatar_url,
-                "is_steer": getattr(item, "is_steer", False),
-            },
-        )
-    except Exception:
-        logger.exception("Failed to consume followup queue for thread %s", thread_id)
-        # Re-enqueue the message if it was already dequeued to prevent data loss
-        if item:
-            try:
-                app.state.queue_manager.enqueue(item.content, thread_id, notification_type=item.notification_type)
-            except Exception:
-                logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content)
+    _run_followups._start_agent_run = start_agent_run
+    await _run_followups.consume_followup_queue(agent, thread_id, app)
 
 
 # ---------------------------------------------------------------------------
