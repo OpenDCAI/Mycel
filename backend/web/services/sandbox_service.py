@@ -1,8 +1,6 @@
 """Sandbox management service."""
 
-import json
 import logging
-import os
 from typing import Any
 
 import backend.user_sandbox_reads as user_sandbox_reads
@@ -18,41 +16,10 @@ from backend.web.utils.helpers import is_virtual_thread_id
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
-from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
-from storage.models import map_sandbox_state_to_display_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import build_storage_container
 
 logger = logging.getLogger(__name__)
-
-
-def _sandbox_agent_payload(thread_id: str, agent_user_id: str, agent_user: Any) -> dict[str, Any]:
-    return {
-        "thread_id": thread_id,
-        "agent_user_id": agent_user_id,
-        "agent_name": agent_user.display_name,
-        "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
-    }
-
-
-def _apply_sandbox_recipe(sandbox_row: dict[str, Any], provider_name: str, raw_recipe: Any) -> None:
-    provider_type = provider_type_from_name(provider_name)
-    recipe_snapshot = (
-        normalize_recipe_snapshot(provider_type, json.loads(str(raw_recipe)), provider_name=provider_name)
-        if raw_recipe
-        else normalize_recipe_snapshot(provider_type, provider_name=provider_name)
-    )
-    sandbox_row["recipe_id"] = recipe_snapshot["id"] or sandbox_row.get("recipe_id") or default_recipe_id(provider_name)
-    sandbox_row["recipe"] = recipe_snapshot
-    sandbox_row["recipe_name"] = recipe_snapshot["name"]
-
-
-def _configured_api_key(name: str, configured: str | None, env_name: str) -> str | None:
-    key = configured or os.getenv(env_name)
-    if not key:
-        logger.warning("[sandbox] %s configured but no API key; skipping", name)
-        return None
-    return key
 
 
 def list_default_recipes() -> list[dict[str, Any]]:
@@ -112,19 +79,6 @@ def count_user_visible_sandboxes_by_provider(
         make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
         is_virtual_thread_id_fn=is_virtual_thread_id,
     )
-
-
-def _is_user_visible_sandbox_thread(thread_id: str | None) -> bool:
-    raw = str(thread_id or "").strip()
-    return bool(raw) and not raw.startswith("subagent-") and not is_virtual_thread_id(raw)
-
-
-def _is_user_visible_sandbox_state(sandbox_row: dict[str, Any]) -> bool:
-    # @@@user-visible-sandbox-scope - product-facing sandbox summaries should only
-    # expose sandboxes the user can still act on, not historical stopped/destroying
-    # residue from monitor storage.
-    status = map_sandbox_state_to_display_status(sandbox_row.get("observed_state"), sandbox_row.get("desired_state"))
-    return status in {"running", "paused"}
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:

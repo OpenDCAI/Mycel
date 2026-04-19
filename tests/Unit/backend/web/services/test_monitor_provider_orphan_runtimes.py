@@ -83,6 +83,16 @@ def test_sandbox_thread_resource_cleanup_owner_moves_out_of_sandbox_service():
     assert "_sandbox_thread_resources.destroy_thread_resources_sync(" in service_source
 
 
+def test_sandbox_service_drops_dead_helper_duplicates_after_owner_moves():
+    source = inspect.getsource(sandbox_service)
+
+    assert "def _sandbox_agent_payload(" not in source
+    assert "def _apply_sandbox_recipe(" not in source
+    assert "def _configured_api_key(" not in source
+    assert "def _is_user_visible_sandbox_thread(" not in source
+    assert "def _is_user_visible_sandbox_state(" not in source
+
+
 def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
     manager = SimpleNamespace(
         provider=SimpleNamespace(
