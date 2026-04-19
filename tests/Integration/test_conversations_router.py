@@ -31,6 +31,17 @@ def test_conversations_router_uses_neutral_chat_dependency_owner() -> None:
     assert "backend.chat.api.http.dependencies" in source
 
 
+def test_conversations_router_uses_neutral_read_and_avatar_helpers() -> None:
+    source = inspect.getsource(owner_conversations_router)
+
+    assert "backend.web.services.owner_thread_read_service" not in source
+    assert "backend.web.services.thread_visibility" not in source
+    assert "backend.web.utils.serializers" not in source
+    assert "backend.thread_runtime.owner_reads" in source
+    assert "backend.thread_projection" in source
+    assert "backend.avatar_urls" in source
+
+
 @pytest.mark.asyncio
 async def test_list_conversations_resolves_thread_user_participant_title_and_avatar() -> None:
     app = SimpleNamespace(
