@@ -4,7 +4,19 @@ from __future__ import annotations
 
 import copy
 from threading import Lock
-from typing import Any
+from typing import Any, Protocol
+
+
+class MonitorOperationRepo(Protocol):
+    def create(self, operation: dict[str, Any]) -> dict[str, Any]: ...
+
+    def save(self, operation: dict[str, Any]) -> None: ...
+
+    def list_for_target(self, target_type: str, target_id: str) -> list[dict[str, Any]]: ...
+
+    def get(self, operation_id: str) -> dict[str, Any] | None: ...
+
+    def clear(self) -> None: ...
 
 
 class InMemoryMonitorOperationRepo:
@@ -43,8 +55,8 @@ class InMemoryMonitorOperationRepo:
             self._target_index.clear()
 
 
-_DEFAULT_REPO = InMemoryMonitorOperationRepo()
+_DEFAULT_REPO: MonitorOperationRepo = InMemoryMonitorOperationRepo()
 
 
-def default_monitor_operation_repo() -> InMemoryMonitorOperationRepo:
+def default_monitor_operation_repo() -> MonitorOperationRepo:
     return _DEFAULT_REPO

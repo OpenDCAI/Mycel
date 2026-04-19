@@ -36,4 +36,6 @@ def test_monitor_operation_service_uses_operation_repo_boundary():
     assert "_OPERATIONS" not in source
     assert "_TARGET_INDEX" not in source
     assert "_LOCK" not in source
+    assert "MonitorOperationRepo(Protocol)" in repo_source
     assert "InMemoryMonitorOperationRepo" in repo_source
+    assert "def default_monitor_operation_repo() -> MonitorOperationRepo:" in repo_source
