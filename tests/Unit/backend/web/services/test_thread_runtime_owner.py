@@ -14,6 +14,7 @@ def test_thread_runtime_namespace_exports_binding_and_state_helpers() -> None:
     assert binding_owner.ThreadRuntimeBindingError is binding_shell.ThreadRuntimeBindingError
     assert state_owner.get_sandbox_info is state_shell.get_sandbox_info
     assert state_owner.get_sandbox_status_from_repos is state_shell.get_sandbox_status_from_repos
+    assert "backend.web.services.thread_runtime_binding_service" not in inspect.getsource(state_owner)
 
 
 def test_agent_pool_uses_thread_runtime_sandbox_owner() -> None:
