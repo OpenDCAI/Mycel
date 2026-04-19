@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+
 import pytest
 
 from backend.web.services import event_store
@@ -59,3 +61,16 @@ def test_build_run_event_read_transport_uses_repo_boundary() -> None:
         ("latest_run_id", ("thread-1",), {}),
         ("list_events", ("thread-1", "run-1"), {"after": 3, "limit": 50}),
     ]
+
+
+def test_run_event_store_write_owner_lives_under_backend_thread_runtime_events() -> None:
+    owner_module = importlib.import_module("backend.thread_runtime.events.store")
+    shell_module = importlib.import_module("backend.web.services.event_store")
+
+    assert owner_module.__name__ == "backend.thread_runtime.events.store"
+    assert hasattr(shell_module, "append_event")
+    assert hasattr(shell_module, "read_events_after")
+    assert hasattr(shell_module, "get_last_seq")
+    assert hasattr(shell_module, "get_run_start_seq")
+    assert hasattr(shell_module, "get_latest_run_id")
+    assert hasattr(shell_module, "cleanup_old_runs")
