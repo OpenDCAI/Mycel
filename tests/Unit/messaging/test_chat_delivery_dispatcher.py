@@ -69,6 +69,7 @@ def test_dispatcher_delivers_to_agent_user_ids() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 7,
         delivery_fn=deliver,
     )
@@ -83,6 +84,7 @@ def test_dispatcher_same_owner_group_delivers_without_relationship() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(
             resolve=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("same-owner path must not call resolver"))
@@ -100,6 +102,7 @@ def test_dispatcher_agent_turn_delivers_only_to_sibling_agent() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(
             resolve=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("same-owner sibling path must not call resolver"))
@@ -118,6 +121,7 @@ def test_dispatcher_respects_non_deliver_policy(action: DeliveryAction) -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["outside-human-user", "agent-user-1"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: action),
         delivery_fn=lambda request: delivered.append(request.recipient_id),
@@ -139,6 +143,7 @@ def test_dispatcher_fails_loudly_when_delivery_function_fails() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=deliver,
     )
@@ -153,6 +158,7 @@ def test_dispatcher_fails_loudly_when_delivery_function_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
     )
 
@@ -165,6 +171,7 @@ def test_dispatcher_fails_loudly_when_sender_identity_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["missing-user", "agent-user-1"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
@@ -180,6 +187,7 @@ def test_dispatcher_fails_loudly_when_member_user_id_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {}]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
@@ -195,6 +203,7 @@ def test_dispatcher_fails_loudly_when_recipient_identity_is_missing() -> None:
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "missing-recipient"]),
         user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
@@ -203,3 +212,32 @@ def test_dispatcher_fails_loudly_when_recipient_identity_is_missing() -> None:
         dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
 
     assert delivered == []
+
+
+def test_dispatcher_uses_injected_avatar_url_builder_for_sender() -> None:
+    built: list[tuple[str | None, bool]] = []
+    delivered: list[str | None] = []
+
+    def _user_with_avatar_repo() -> SimpleNamespace:
+        return SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar="avatars/human.png", owner_user_id=None)
+                if uid == "human-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "agent-user-1"
+                else None
+            )
+        )
+
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=_member_repo(["human-user-1", "agent-user-1"]),
+        user_repo=_user_with_avatar_repo(),
+        unread_counter=lambda _chat_id, _user_id: 0,
+        avatar_url_builder=lambda user_id, has_avatar: built.append((user_id, has_avatar)) or f"custom:{user_id}:{has_avatar}",
+        delivery_fn=lambda request: delivered.append(request.sender_avatar_url),
+    )
+
+    dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
+
+    assert built == [("human-user-1", True)]
+    assert delivered == ["custom:human-user-1:True"]

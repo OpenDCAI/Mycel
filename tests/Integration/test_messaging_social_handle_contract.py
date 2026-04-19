@@ -22,6 +22,19 @@ from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
 
+_MessagingService = MessagingService
+_ChatDeliveryDispatcher = ChatDeliveryDispatcher
+
+
+def MessagingService(*args, **kwargs):  # noqa: N802
+    kwargs.setdefault("avatar_url_builder", avatar_url)
+    return _MessagingService(*args, **kwargs)
+
+
+def ChatDeliveryDispatcher(*args, **kwargs):  # noqa: N802
+    kwargs.setdefault("avatar_url_builder", avatar_url)
+    return _ChatDeliveryDispatcher(*args, **kwargs)
+
 
 class _FakeRelationshipRepo:
     def __init__(self) -> None:
