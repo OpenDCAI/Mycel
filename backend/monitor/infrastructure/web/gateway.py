@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.monitor.application.use_cases import evaluation as monitor_evaluation
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtimes
 from backend.monitor.application.use_cases import resources as monitor_resources
 from backend.monitor.application.use_cases import sandbox_configs, sandbox_detail, sandbox_projection
 from backend.monitor.application.use_cases import threads as monitor_threads
-from backend.web.services import monitor_evaluation_service
 
 
 def list_sandboxes() -> dict[str, Any]:
@@ -87,11 +87,11 @@ def get_dashboard() -> dict[str, Any]:
 
 
 def get_evaluation_workbench() -> dict[str, Any]:
-    return monitor_evaluation_service.get_monitor_evaluation_workbench()
+    return monitor_evaluation.get_monitor_evaluation_workbench()
 
 
 def get_evaluation_batches(*, limit: int = 50) -> dict[str, Any]:
-    return monitor_evaluation_service.get_monitor_evaluation_batches(limit=limit)
+    return monitor_evaluation.get_monitor_evaluation_batches(limit=limit)
 
 
 def create_evaluation_batch(
@@ -102,7 +102,7 @@ def create_evaluation_batch(
     sandbox: str,
     max_concurrent: int,
 ) -> dict[str, Any]:
-    return monitor_evaluation_service.create_monitor_evaluation_batch(
+    return monitor_evaluation.create_monitor_evaluation_batch(
         submitted_by_user_id=submitted_by_user_id,
         agent_user_id=agent_user_id,
         scenario_ids=scenario_ids,
@@ -112,7 +112,7 @@ def create_evaluation_batch(
 
 
 def get_evaluation_scenarios() -> dict[str, Any]:
-    return monitor_evaluation_service.get_monitor_evaluation_scenarios()
+    return monitor_evaluation.get_monitor_evaluation_scenarios()
 
 
 def start_evaluation_batch(
@@ -122,7 +122,7 @@ def start_evaluation_batch(
     token: str,
     schedule_task,
 ) -> dict[str, Any]:
-    return monitor_evaluation_service.start_monitor_evaluation_batch(
+    return monitor_evaluation.start_monitor_evaluation_batch(
         batch_id=batch_id,
         base_url=base_url,
         token=token,
@@ -131,11 +131,11 @@ def start_evaluation_batch(
 
 
 def get_evaluation_batch_detail(batch_id: str) -> dict[str, Any]:
-    return monitor_evaluation_service.get_monitor_evaluation_batch_detail(batch_id)
+    return monitor_evaluation.get_monitor_evaluation_batch_detail(batch_id)
 
 
 def get_evaluation_run_detail(run_id: str) -> dict[str, Any]:
-    return monitor_evaluation_service.get_monitor_evaluation_run_detail(run_id)
+    return monitor_evaluation.get_monitor_evaluation_run_detail(run_id)
 
 
 def get_resource_overview() -> dict[str, Any]:
