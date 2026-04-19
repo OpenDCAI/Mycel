@@ -10,6 +10,7 @@ from backend import sandbox_inventory
 from backend import sandbox_provider_factory as _sandbox_provider_factory
 from backend import sandbox_runtime_mutations as _sandbox_runtime_mutations
 from backend import sandbox_runtime_reads as _sandbox_runtime_reads
+from backend import sandbox_thread_resources as _sandbox_thread_resources
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.services.thread_visibility import canonical_owner_threads
 from backend.web.utils.helpers import is_virtual_thread_id
@@ -266,14 +267,9 @@ build_provider_from_config_name = _sandbox_provider_factory.build_provider_from_
 
 
 def destroy_thread_resources_sync(thread_id: str, sandbox_type: str, agent_pool: dict) -> bool:
-    """Destroy sandbox resources for a thread."""
-    pool_key = f"{thread_id}:{sandbox_type}"
-    pooled_agent = agent_pool.get(pool_key)
-    if pooled_agent and hasattr(pooled_agent, "_sandbox"):
-        manager = pooled_agent._sandbox.manager
-    else:
-        _, managers = init_providers_and_managers()
-        manager = managers.get(sandbox_type)
-    if not manager:
-        raise RuntimeError(f"No sandbox manager found for provider {sandbox_type}")
-    return manager.destroy_thread_resources(thread_id)
+    return _sandbox_thread_resources.destroy_thread_resources_sync(
+        thread_id,
+        sandbox_type,
+        agent_pool,
+        init_providers_and_managers_fn=init_providers_and_managers,
+    )
