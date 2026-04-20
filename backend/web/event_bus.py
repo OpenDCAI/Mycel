@@ -10,4 +10,5 @@ Unsubscribe = _event_bus.Unsubscribe
 def get_event_bus() -> EventBus:
     return _event_bus.get_event_bus()
 
+
 __all__ = ["EventBus", "EventCallback", "Unsubscribe", "get_event_bus"]
