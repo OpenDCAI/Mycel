@@ -7,7 +7,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from backend.web.utils.serializers import strip_system_tags
+from backend.message_content import strip_system_tags
 
 
 async def emit_run_prologue(

@@ -8,7 +8,7 @@ import logging
 import random
 from typing import Any
 
-from backend.web.utils.serializers import extract_text_content
+from backend.message_content import extract_text_content
 
 logger = logging.getLogger(__name__)
 

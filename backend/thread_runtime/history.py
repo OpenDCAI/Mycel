@@ -6,8 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from backend.message_content import extract_text_content
 from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages
-from backend.web.utils.serializers import extract_text_content
 
 
 @dataclass(frozen=True)

@@ -262,3 +262,33 @@ def test_lifespan_uses_neutral_display_builder_owner() -> None:
     assert owner_module.DisplayBuilder is not None
     assert "from backend.web.services.display_builder import DisplayBuilder" not in lifespan_source
     assert "from backend.display_builder import DisplayBuilder" in lifespan_source
+
+
+def test_display_builder_uses_neutral_message_content_owner() -> None:
+    owner_module = importlib.import_module("backend.message_content")
+    source = inspect.getsource(importlib.import_module("backend.display_builder"))
+
+    assert owner_module.extract_text_content is not None
+    assert owner_module.strip_system_tags is not None
+    assert "from backend.message_content import extract_text_content as _extract_text_content" in source
+    assert "from backend.message_content import strip_system_tags as _strip_system_tags" in source
+    assert "backend.web.utils.serializers" not in source
+
+
+def test_thread_runtime_modules_use_neutral_message_content_owner() -> None:
+    owner_module = importlib.import_module("backend.message_content")
+    history_source = inspect.getsource(importlib.import_module("backend.thread_runtime.history"))
+    entrypoints_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.entrypoints"))
+    prologue_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.prologue"))
+    stream_loop_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.stream_loop"))
+
+    assert owner_module.extract_text_content is not None
+    assert owner_module.strip_system_tags is not None
+    assert "from backend.message_content import extract_text_content" in history_source
+    assert "from backend.message_content import extract_text_content" in entrypoints_source
+    assert "from backend.message_content import strip_system_tags" in prologue_source
+    assert "from backend.message_content import extract_text_content" in stream_loop_source
+    assert "backend.web.utils.serializers" not in history_source
+    assert "backend.web.utils.serializers" not in entrypoints_source
+    assert "backend.web.utils.serializers" not in prologue_source
+    assert "backend.web.utils.serializers" not in stream_loop_source
