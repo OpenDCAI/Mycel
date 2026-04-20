@@ -25,6 +25,9 @@ from backend.thread_runtime.events.buffer import ThreadEventBuffer
 from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages
 from backend.thread_runtime.launch_config import resolve_default_config
 from backend.thread_runtime.owner_reads import list_owner_thread_rows_for_auth_burst
+from backend.thread_runtime.run.buffer_wiring import get_or_create_thread_buffer
+from backend.thread_runtime.run.lifecycle import prime_sandbox
+from backend.thread_runtime.run.observer import observe_thread_events
 from backend.thread_runtime.state import get_sandbox_info, get_sandbox_status_from_repos
 from backend.web.core.dependencies import (
     get_app,
@@ -45,10 +48,6 @@ from backend.web.services import account_resource_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.resource_cache import clear_resource_overview_cache
-from backend.web.services.streaming_service import (
-    get_or_create_thread_buffer,
-    observe_thread_events,
-)
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
@@ -108,7 +107,6 @@ async def _prepare_attachment_message(
     When *agent* is supplied, uses its live manager and primes the sandbox
     (resume if paused) before syncing.
     """
-    from backend.web.services.streaming_service import prime_sandbox
 
     message_metadata: dict[str, Any] = {"attachments": attachments, "original_message": message}
     if agent is not None and getattr(agent, "_sandbox", None):
