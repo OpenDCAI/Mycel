@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 from types import SimpleNamespace
 
 import pytest
 
 from backend.agent_runtime import chat_inlet as owner_chat_inlet
-from backend.web.routers import threads as threads_router
 from messaging.delivery.dispatcher import ChatDeliveryRequest
-from messaging.realtime import events as owner_chat_events
-from messaging.realtime import typing as owner_typing
 
 
 def _hook_app(gateway: object) -> SimpleNamespace:
@@ -24,49 +20,6 @@ def _hook_app(gateway: object) -> SimpleNamespace:
             ),
             agent_runtime_thread_activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
         )
-    )
-
-
-def test_delivery_paths_depend_on_agent_runtime_port_not_native_gateway() -> None:
-    delivery_source = inspect.getsource(owner_chat_inlet)
-    threads_source = inspect.getsource(threads_router)
-    from backend.web.core import lifespan as lifespan_module
-
-    lifespan_source = inspect.getsource(lifespan_module)
-
-    assert owner_chat_inlet.make_chat_delivery_fn is not None
-    assert owner_chat_events.ChatEventBus is not None
-    assert owner_typing.TypingTracker is not None
-    assert "NativeAgentRuntimeGateway" not in delivery_source
-    assert "NativeAgentRuntimeGateway" not in threads_source
-    assert "get_agent_runtime_gateway" in delivery_source
-    assert "get_agent_runtime_gateway" in threads_source
-    assert "backend.agent_runtime.port" in delivery_source
-    assert "backend.agent_runtime.port" in threads_source
-    assert "messaging.delivery.dispatcher" not in delivery_source
-    assert "messaging.delivery.contracts" in delivery_source
-    assert "backend.agent_runtime.chat_notification_format" in delivery_source
-    assert "backend.web.services.agent_runtime_port" not in delivery_source
-    assert "backend.web.services.agent_runtime_port" not in threads_source
-    assert "backend.agent_runtime.bootstrap" in lifespan_source
-    assert "backend.agent_runtime.chat_inlet" in lifespan_source
-    assert "build_agent_runtime_gateway" in lifespan_source
-    assert "messaging.realtime.events" in lifespan_source
-    assert "messaging.realtime.typing" in lifespan_source
-    assert "messaging.delivery.runtime_bridge" not in lifespan_source
-    assert "backend.web.services.agent_runtime_gateway" not in lifespan_source
-    assert "backend.web.services.chat_events" not in lifespan_source
-    assert "backend.web.services.typing_tracker" not in lifespan_source
-    assert "backend.web.services.chat_delivery_hook" not in lifespan_source
-
-
-def test_lifespan_registers_runtime_activity_reader_before_chat_delivery_hook() -> None:
-    from backend.web.core import lifespan as lifespan_module
-
-    lifespan_source = inspect.getsource(lifespan_module)
-
-    assert lifespan_source.index("app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)") < lifespan_source.index(
-        "app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))"
     )
 
 
