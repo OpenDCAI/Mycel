@@ -9,9 +9,13 @@ from backend.auth_dependencies import _get_auth_service as _get_auth_service
 from backend.auth_user_resolution import get_current_user as get_current_user
 from backend.auth_user_resolution import get_current_user_id as get_current_user_id
 from backend.request_app import get_app as get_app
+from backend.thread_runtime import convergence as thread_runtime_convergence
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-from backend.web.services.thread_runtime_convergence import inspect_owner_thread_runtime
+from backend.web.utils.helpers import delete_thread_in_db
 from sandbox.thread_context import set_current_thread_id
+
+thread_runtime_convergence.delete_thread_in_db = delete_thread_in_db
+inspect_owner_thread_runtime = thread_runtime_convergence.inspect_owner_thread_runtime
 
 __all__ = [
     "get_app",
