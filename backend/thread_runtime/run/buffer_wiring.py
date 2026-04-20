@@ -138,7 +138,7 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     qm.register_wake(thread_id, wake_handler)
 
     try:
-        from backend.web.event_bus import get_event_bus
+        from backend.event_bus import get_event_bus
 
         unsubscribe = getattr(runtime, "_thread_event_unsubscribe", None)
         if callable(unsubscribe):

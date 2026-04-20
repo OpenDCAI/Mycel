@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
+import backend.event_bus as neutral_event_bus
+import backend.web.event_bus as web_event_bus
 from backend.web.event_bus import EventBus, get_event_bus
 
 
@@ -128,3 +131,10 @@ class TestEventBus:
         b1 = get_event_bus()
         b2 = get_event_bus()
         assert b1 is b2
+
+    def test_web_event_bus_get_event_bus_delegates_to_neutral_owner(self, monkeypatch):
+        sentinel = SimpleNamespace(name="patched-bus")
+
+        monkeypatch.setattr(neutral_event_bus, "get_event_bus", lambda: sentinel)
+
+        assert web_event_bus.get_event_bus() is sentinel
