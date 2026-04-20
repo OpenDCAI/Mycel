@@ -76,16 +76,13 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
 
 def test_thread_launch_config_uses_thread_runtime_launch_config_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.launch_config")
-    shell_module = importlib.import_module("backend.web.services.thread_launch_config_service")
     owner_source = inspect.getsource(owner_module)
-    shell_source = inspect.getsource(shell_module)
 
     assert owner_module.normalize_launch_config_payload is not None
-    assert hasattr(shell_module, "normalize_launch_config_payload")
-    assert hasattr(shell_module, "build_new_launch_config")
-    assert hasattr(shell_module, "resolve_default_config")
+    assert owner_module.build_new_launch_config is not None
+    assert owner_module.resolve_default_config is not None
     assert "sandbox_service.available_sandbox_types" not in owner_source
-    assert "_owner.available_sandbox_types = sandbox_service.available_sandbox_types" in shell_source
+    assert "available_sandbox_types is None or list_library is None" in owner_source
 
 
 def test_thread_runtime_pool_exports_idle_reaper_owner() -> None:

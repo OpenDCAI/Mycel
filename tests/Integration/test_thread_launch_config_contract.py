@@ -8,10 +8,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.thread_runtime import launch_config as thread_launch_config_service
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
-from backend.web.services import thread_launch_config_service
 from sandbox.recipes import default_recipe_snapshot, normalize_recipe_snapshot
 from storage.contracts import UserRow, UserType
 
@@ -241,7 +241,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
 
     with (
         patch.object(
-            thread_launch_config_service.sandbox_service,
+            thread_launch_config_service,
             "available_sandbox_types",
             return_value=[
                 {"name": "local", "available": True},
@@ -339,7 +339,7 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
 
     with (
         patch.object(
-            thread_launch_config_service.sandbox_service,
+            thread_launch_config_service,
             "available_sandbox_types",
             return_value=[{"name": "daytona_selfhost", "available": True}],
         ),
@@ -420,7 +420,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
 
     with (
         patch.object(
-            thread_launch_config_service.sandbox_service,
+            thread_launch_config_service,
             "available_sandbox_types",
             return_value=[{"name": "daytona_selfhost", "available": True}],
         ),
@@ -461,7 +461,7 @@ def test_resolve_default_config_fails_loudly_when_thread_workspace_binding_is_mi
 
     with (
         patch.object(
-            thread_launch_config_service.sandbox_service,
+            thread_launch_config_service,
             "available_sandbox_types",
             return_value=[
                 {"name": "local", "available": True},
@@ -502,7 +502,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_repo_cannot_read_bin
     )
 
     with (
-        patch.object(thread_launch_config_service.sandbox_service, "available_sandbox_types", return_value=[]),
+        patch.object(thread_launch_config_service, "available_sandbox_types", return_value=[]),
         patch.object(thread_launch_config_service, "list_library", return_value=[]),
         pytest.raises(RuntimeError, match="workspace_repo must support get_by_id"),
     ):
@@ -543,7 +543,7 @@ def test_resolve_default_config_fails_loudly_for_malformed_workspace_binding() -
     )
 
     with (
-        patch.object(thread_launch_config_service.sandbox_service, "available_sandbox_types", return_value=[]),
+        patch.object(thread_launch_config_service, "available_sandbox_types", return_value=[]),
         patch.object(thread_launch_config_service, "list_library", return_value=[]),
         pytest.raises(RuntimeError, match="workspace.sandbox_id is required"),
     ):
