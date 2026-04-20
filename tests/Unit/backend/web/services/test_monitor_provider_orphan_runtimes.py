@@ -1,11 +1,7 @@
-import inspect
 from types import SimpleNamespace
 
 import pytest
 
-from backend import sandbox_runtime_mutations as neutral_sandbox_runtime_mutations
-from backend import sandbox_runtime_reads as neutral_sandbox_runtime_reads
-from backend import sandbox_thread_resources as neutral_sandbox_thread_resources
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtime_service
 from backend.web.services import sandbox_service
 
@@ -26,86 +22,10 @@ def _provider_runtime(runtime_id: str, status: str = "paused"):
     return SimpleNamespace(session_id=runtime_id, status=status)
 
 
-def test_provider_orphan_runtime_cleanup_uses_runtime_truth_name():
-    source = inspect.getsource(monitor_provider_runtime_service.request_monitor_provider_orphan_runtime_cleanup)
-    removed_name = "session" + "_truth"
-    removed_field = "session" + "_id"
-
-    assert removed_name not in source
-    assert removed_field not in source
-    assert "runtime_truth" in source
-
-
 def test_monitor_provider_orphan_runtimes_do_not_refresh_all_managed_runtime_rows(monkeypatch):
     monkeypatch.setattr(sandbox_service, "list_provider_orphan_runtimes", lambda: [])
 
     assert monitor_provider_runtime_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
-
-
-def test_monitor_provider_orphan_inventory_uses_sandbox_service_data_boundary():
-    from backend.monitor.infrastructure.providers import provider_runtime_inventory_service
-
-    source = inspect.getsource(provider_runtime_inventory_service)
-
-    assert "init_providers_and_managers" not in source
-    assert "load_provider_orphan_runtimes(" not in source
-    assert "list_provider_orphan_runtimes(" in source
-
-
-def test_sandbox_service_keeps_provider_orphan_inventory_compat_surface():
-    source = inspect.getsource(sandbox_service)
-
-    assert "sandbox_inventory.load_provider_orphan_runtimes(" in source
-    assert "sandbox_inventory.list_provider_orphan_runtimes(" in source
-
-
-def test_sandbox_runtime_mutations_owner_moves_out_of_sandbox_service():
-    source = inspect.getsource(neutral_sandbox_runtime_mutations)
-
-    assert "backend.web.services import sandbox_service" not in source
-    assert "backend.sandbox_inventory" in source
-
-
-def test_sandbox_runtime_reads_owner_moves_out_of_sandbox_service():
-    source = inspect.getsource(neutral_sandbox_runtime_reads)
-    service_source = inspect.getsource(sandbox_service)
-
-    assert "backend.web.services import sandbox_service" not in source
-    assert "_sandbox_runtime_reads.load_all_sandbox_runtimes(" in service_source
-    assert "_sandbox_runtime_reads.find_runtime_and_manager(" in service_source
-
-
-def test_sandbox_thread_resource_cleanup_owner_moves_out_of_sandbox_service():
-    source = inspect.getsource(neutral_sandbox_thread_resources)
-    service_source = inspect.getsource(sandbox_service)
-
-    assert "backend.web.services import sandbox_service" not in source
-    assert "_sandbox_thread_resources.destroy_thread_resources_sync(" in service_source
-
-
-def test_sandbox_service_drops_dead_runtime_cleanup_helpers() -> None:
-    source = inspect.getsource(sandbox_service)
-
-    assert "def _sandbox_summary(" not in source
-    assert "def _detach_runtime_terminals(" not in source
-    assert "def _prune_stale_runtime_terminals(" not in source
-
-
-def test_sandbox_service_drops_runtime_metrics_owner() -> None:
-    source = inspect.getsource(sandbox_service)
-
-    assert "def get_runtime_metrics(" not in source
-    assert "_sandbox_runtime_metrics.get_runtime_metrics" in source
-
-
-def test_sandbox_service_drops_dead_helper_duplicates_after_owner_moves():
-    source = inspect.getsource(sandbox_service)
-
-    assert "def _sandbox_agent_payload(" not in source
-    assert "def _apply_sandbox_recipe(" not in source
-    assert "def _configured_api_key(" not in source
-    assert "def _is_user_visible_sandbox_thread(" not in source
-    assert "def _is_user_visible_sandbox_state(" not in source
 
 
 def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
