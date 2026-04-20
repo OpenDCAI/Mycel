@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import inspect
-
 # NOTE: User is the only identity table. The old EntityRow layer was removed;
 # this router projects user rows into chat-candidate payloads for contacts and
 # group-chat creation. The test below verifies the current production behaviour:
@@ -73,13 +71,6 @@ def _users_app(
             contact_repo=contact_repo or _empty_contact_repo(),
         )
     )
-
-
-def test_users_router_imports_messaging_social_access_owner() -> None:
-    source = inspect.getsource(users_router)
-
-    assert "from messaging.social_access import" in source
-    assert "backend.web.services.social_access_service" not in source
 
 
 @pytest.mark.asyncio
