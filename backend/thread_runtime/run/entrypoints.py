@@ -7,9 +7,9 @@ import json
 import uuid as _uuid
 from typing import Any
 
+from backend.message_content import extract_text_content
 from backend.thread_runtime.run.buffer_wiring import ensure_thread_handlers, get_or_create_thread_buffer
 from backend.thread_runtime.sandbox import resolve_thread_sandbox
-from backend.web.utils.serializers import extract_text_content
 from core.runtime.middleware.monitor import AgentState
 
 _ensure_thread_handlers = ensure_thread_handlers

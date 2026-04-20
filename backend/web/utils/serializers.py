@@ -1,13 +1,11 @@
 """Message serialization utilities."""
 
-import re
 from typing import Any
 
 from backend.avatar_paths import avatars_dir
+from backend.message_content import extract_text_content, strip_system_tags
 
-# @@@strip-system-tags — remove injected system tags from user-visible content
-_SYSTEM_HINT_RE = re.compile(r"\s*<system-hint>.*?</system-hint>\s*", re.DOTALL)
-_SYSTEM_REMINDER_RE = re.compile(r"\s*<system-reminder>.*?</system-reminder>\s*", re.DOTALL)
+__all__ = ["avatar_url", "strip_system_tags", "extract_text_content", "serialize_message"]
 
 
 def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
@@ -16,28 +14,6 @@ def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
     if has_avatar or (avatars_dir() / f"{user_id}.png").exists():
         return f"/api/users/{user_id}/avatar"
     return None
-
-
-def strip_system_tags(content: str) -> str:
-    """Remove <system-hint> and <system-reminder> tags from user-visible content."""
-    content = _SYSTEM_HINT_RE.sub("", content)
-    content = _SYSTEM_REMINDER_RE.sub("", content)
-    return content.strip()
-
-
-def extract_text_content(raw_content: Any) -> str:
-    """Extract text content from various message content formats."""
-    if isinstance(raw_content, str):
-        return raw_content
-    if isinstance(raw_content, list):
-        parts: list[str] = []
-        for block in raw_content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-            elif isinstance(block, str):
-                parts.append(block)
-        return "".join(parts)
-    return str(raw_content)
 
 
 def serialize_message(msg: Any) -> dict[str, Any]:
