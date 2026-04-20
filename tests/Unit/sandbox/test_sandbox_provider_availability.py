@@ -22,7 +22,8 @@ def test_sandbox_provider_availability_owner_moves_out_of_sandbox_service() -> N
     source = inspect.getsource(neutral_sandbox_provider_availability)
 
     assert "backend.web.services" not in source
-    assert "backend.web.core.config" in source
+    assert "backend.web.core.config" not in source
+    assert "backend.sandbox_paths" in source
 
 
 def test_sandbox_inventory_owner_moves_out_of_sandbox_service() -> None:
