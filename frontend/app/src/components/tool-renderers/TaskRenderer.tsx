@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { ToolRendererProps } from "./types";
+import { asRecord, recordString } from "@/lib/records";
 
 function parseArgs(args: unknown): {
   description?: string;
@@ -10,18 +11,16 @@ function parseArgs(args: unknown): {
   status?: string;
   subagent_type?: string;
 } {
-  if (args && typeof args === "object") {
-    const a = args as Record<string, unknown>;
-    return {
-      description: (a.Description ?? a.description) as string | undefined,
-      prompt: (a.Prompt ?? a.prompt) as string | undefined,
-      subject: (a.subject ?? a.Subject) as string | undefined,
-      taskId: (a.taskId ?? a.TaskId) as string | undefined,
-      status: (a.status ?? a.Status) as string | undefined,
-      subagent_type: (a.SubagentType ?? a.subagent_type) as string | undefined,
-    };
-  }
-  return {};
+  const a = asRecord(args);
+  if (!a) return {};
+  return {
+    description: recordString(a, "Description") ?? recordString(a, "description"),
+    prompt: recordString(a, "Prompt") ?? recordString(a, "prompt"),
+    subject: recordString(a, "subject") ?? recordString(a, "Subject"),
+    taskId: recordString(a, "taskId") ?? recordString(a, "TaskId"),
+    status: recordString(a, "status") ?? recordString(a, "Status"),
+    subagent_type: recordString(a, "SubagentType") ?? recordString(a, "subagent_type"),
+  };
 }
 
 function getTaskLabel(name: string, args: ReturnType<typeof parseArgs>): string {
@@ -41,6 +40,15 @@ function getTaskLabel(name: string, args: ReturnType<typeof parseArgs>): string 
   }
 }
 
+function taskOutputText(value: unknown): string {
+  const data = asRecord(value);
+  if (!data) return JSON.stringify(value, null, 2);
+  const result = data.result;
+  if (typeof result === "string") return result;
+  if (result !== undefined && result !== null) return JSON.stringify(result, null, 2);
+  return recordString(data, "text") ?? JSON.stringify(value, null, 2);
+}
+
 export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps) {
   const { threadId } = useParams<{ threadId?: string }>();
   const args = parseArgs(step.args);
@@ -54,8 +62,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
     setLoadingOutput(true);
     try {
       const res = await fetch(`/api/threads/${threadId}/tasks/${stream.task_id}`);
-      const data = await res.json();
-      setTaskOutput(data.result ?? data.text ?? JSON.stringify(data, null, 2));
+      setTaskOutput(taskOutputText(await res.json()));
     } catch {
       setTaskOutput("加载失败");
     } finally {

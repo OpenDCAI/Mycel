@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { useAuthStore } from "./auth-store";
 
-const HUB_URL = import.meta.env.VITE_MYCEL_HUB_URL || "http://localhost:8090";
 const API = "/api/marketplace";
 
 export interface MarketplaceItemSummary {
@@ -16,13 +15,12 @@ export interface MarketplaceItemSummary {
   parent_id: string | null;
   download_count: number;
   visibility: string;
-  featured: boolean;
   tags: string[];
   created_at: string;
   updated_at: string;
 }
 
-export interface VersionInfo {
+interface VersionInfo {
   id: string;
   version: string;
   release_notes: string | null;
@@ -48,6 +46,11 @@ export interface UpdateAvailable {
   release_notes: string;
 }
 
+interface MarketplaceVersionSnapshot {
+  content?: string;
+  meta?: Record<string, unknown>;
+}
+
 interface MarketplaceFilters {
   type: string | null;
   q: string;
@@ -62,8 +65,8 @@ interface MarketplaceState {
   loading: boolean;
   error: string | null;
   filters: MarketplaceFilters;
-  setFilter: (key: keyof MarketplaceFilters, value: any) => void;
-  fetchItems: () => Promise<void>;
+  setFilter: <K extends keyof MarketplaceFilters>(key: K, value: MarketplaceFilters[K]) => void;
+  fetchItems: (signal?: AbortSignal) => Promise<void>;
 
   // Detail
   detail: MarketplaceItemDetail | null;
@@ -80,30 +83,51 @@ interface MarketplaceState {
   checkUpdates: (installed: { marketplace_item_id: string; installed_version: string }[]) => Promise<void>;
 
   // Preview
-  versionSnapshot: { content?: string; meta?: any } | null;
+  versionSnapshot: MarketplaceVersionSnapshot | null;
   snapshotLoading: boolean;
   fetchVersionSnapshot: (itemId: string, version: string) => Promise<void>;
   clearSnapshot: () => void;
 
   // Actions (go through Mycel backend)
   downloading: boolean;
-  download: (itemId: string) => Promise<{ resource_id: string; type: string; version: string }>;
-  upgrade: (memberId: string, itemId: string) => Promise<void>;
-  publishToMarketplace: (memberId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<any>;
+  download: (itemId: string, agentUserId?: string) => Promise<{ resource_id: string; type: string; version: string; agent_user_id?: string }>;
+  upgrade: (userId: string, itemId: string) => Promise<void>;
+  publishAgentUserToMarketplace: (userId: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
 }
 
-async function hubApi<T = any>(path: string): Promise<T> {
-  const res = await fetch(`${HUB_URL}/api/v1${path}`);
-  if (!res.ok) throw new Error(`Hub API error: ${res.status}`);
-  return res.json();
+function isActiveMarketplaceRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/marketplace" || path.startsWith("/marketplace/");
 }
 
-async function backendApi<T = any>(path: string, opts?: RequestInit): Promise<T> {
+function isActiveMarketplaceDetailRoute(itemId: string): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === `/marketplace/${encodeURIComponent(itemId)}`;
+}
+
+function isMarketplaceUnavailableError(error: unknown): boolean {
+  return error instanceof Error && error.message === "Marketplace Hub unavailable";
+}
+async function backendApi<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
   const token = useAuthStore.getState().token;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API}${path}`, { headers, ...opts });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let payload: { detail?: string; message?: string } | null = null;
+    try {
+      payload = await res.json() as { detail?: string; message?: string };
+    } catch {
+      payload = null;
+    }
+    if (payload?.detail || payload?.message) {
+      throw new Error(payload.detail || payload.message);
+    }
+    if (res.status >= 502) {
+      throw new Error("Marketplace Hub unavailable");
+    }
+    throw new Error(`API error: ${res.status}`);
+  }
   return res.json();
 }
 
@@ -115,10 +139,14 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   filters: { type: null, q: "", sort: "downloads", page: 1 },
 
   setFilter: (key, value) => {
-    set((s) => ({ filters: { ...s.filters, [key]: value, ...(key !== "page" ? { page: 1 } : {}) } }));
+    set((s) => {
+      const nextPage = key === "page" ? s.filters.page : 1;
+      if (s.filters[key] === value && s.filters.page === nextPage) return s;
+      return { filters: { ...s.filters, [key]: value, page: nextPage } };
+    });
   },
 
-  fetchItems: async () => {
+  fetchItems: async (signal) => {
     set({ error: null, loading: true });
     try {
       const { type, q, sort, page } = get().filters;
@@ -128,10 +156,17 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       params.set("sort", sort);
       params.set("page", String(page));
       params.set("page_size", "20");
-      const data = await hubApi<{ items: MarketplaceItemSummary[]; total: number }>(`/items?${params}`);
+      const data = await backendApi<{ items: MarketplaceItemSummary[]; total: number }>(`/items?${params}`, { signal });
       set({ items: data.items, total: data.total });
     } catch (e) {
-      console.error("Failed to fetch marketplace items:", e);
+      if (signal?.aborted) return;
+      // @@@marketplace-route-teardown - explore fetches can resolve after the
+      // user already left /marketplace. Only log if the marketplace route is
+      // still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceRoute()) return;
+      if (!isMarketplaceUnavailableError(e)) {
+        console.error("Failed to fetch marketplace items:", e);
+      }
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       set({ loading: false });
@@ -144,10 +179,16 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   fetchDetail: async (id) => {
     set({ error: null, detailLoading: true, detail: null });
     try {
-      const data = await hubApi<MarketplaceItemDetail>(`/items/${id}`);
+      const data = await backendApi<MarketplaceItemDetail>(`/items/${id}`);
       set({ detail: data });
     } catch (e) {
-      console.error("Failed to fetch detail:", e);
+      // @@@marketplace-detail-route-teardown - detail fetches can resolve after
+      // the user already left this marketplace detail page. Only log if this
+      // item route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceDetailRoute(id)) return;
+      if (!isMarketplaceUnavailableError(e)) {
+        console.error("Failed to fetch detail:", e);
+      }
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       set({ detailLoading: false });
@@ -162,9 +203,13 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   fetchVersionSnapshot: async (itemId, version) => {
     set({ snapshotLoading: true, versionSnapshot: null });
     try {
-      const data = await hubApi<{ snapshot: any }>(`/items/${itemId}/versions/${version}`);
+      const data = await backendApi<{ snapshot: MarketplaceVersionSnapshot | null }>(`/items/${itemId}/versions/${version}`);
       set({ versionSnapshot: data.snapshot ?? null });
     } catch (e) {
+      // @@@marketplace-snapshot-route-teardown - snapshot fetches can resolve
+      // after the user already left this marketplace detail page. Only log if
+      // this item route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceDetailRoute(itemId)) return;
       console.error("Failed to fetch snapshot:", e);
     } finally {
       set({ snapshotLoading: false });
@@ -178,10 +223,16 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   fetchLineage: async (id) => {
     set({ error: null });
     try {
-      const data = await hubApi<{ ancestors: LineageNode[]; children: LineageNode[] }>(`/items/${id}/lineage`);
+      const data = await backendApi<{ ancestors: LineageNode[]; children: LineageNode[] }>(`/items/${id}/lineage`);
       set({ lineage: data });
     } catch (e) {
-      console.error("Failed to fetch lineage:", e);
+      // @@@marketplace-lineage-route-teardown - lineage fetches can resolve
+      // after the user already left this marketplace detail page. Only log if
+      // this item route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceDetailRoute(id)) return;
+      if (!isMarketplaceUnavailableError(e)) {
+        console.error("Failed to fetch lineage:", e);
+      }
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     }
   },
@@ -197,6 +248,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       });
       set({ updates: data.updates || [] });
     } catch (e) {
+      // @@@marketplace-updates-route-teardown - installed update checks can
+      // resolve after the user already left /marketplace. Only log if the
+      // marketplace route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceRoute()) return;
       console.error("Failed to check updates:", e);
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     }
@@ -204,12 +259,12 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
 
   downloading: false,
 
-  download: async (itemId) => {
+  download: async (itemId, agentUserId) => {
     set({ downloading: true });
     try {
-      const data = await backendApi<{ resource_id: string; type: string; version: string }>("/download", {
+      const data = await backendApi<{ resource_id: string; type: string; version: string; agent_user_id?: string }>("/download", {
         method: "POST",
-        body: JSON.stringify({ item_id: itemId }),
+        body: JSON.stringify({ item_id: itemId, ...(agentUserId ? { agent_user_id: agentUserId } : {}) }),
       });
       return data;
     } finally {
@@ -217,20 +272,18 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
     }
   },
 
-  upgrade: async (memberId, itemId) => {
-    const data = await backendApi("/upgrade", {
+  upgrade: async (userId, itemId) => {
+    await backendApi("/upgrade", {
       method: "POST",
-      body: JSON.stringify({ member_id: memberId, item_id: itemId }),
+      body: JSON.stringify({ user_id: userId, item_id: itemId }),
     });
-    return data;
   },
 
-  publishToMarketplace: async (memberId, type, bumpType, releaseNotes, tags, visibility) => {
-    return backendApi("/publish", {
+  publishAgentUserToMarketplace: async (userId, bumpType, releaseNotes, tags, visibility) => {
+    return backendApi("/publish-agent-user", {
       method: "POST",
       body: JSON.stringify({
-        member_id: memberId,
-        type,
+        user_id: userId,
         bump_type: bumpType,
         release_notes: releaseNotes,
         tags,

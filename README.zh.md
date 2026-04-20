@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="./assets/banner.png" alt="Mycel Banner" width="600">
+<img src="./assets/banner.gif" alt="Mycel Banner" width="600">
 
 **Link：连接人与 Agent，构建下一代人机协同**
 
@@ -51,15 +51,7 @@ uv sync
 cd frontend/app && npm install && cd ../..
 ```
 
-**沙箱提供商**需要额外依赖——按需安装：
-
-```bash
-uv sync --extra sandbox     # AgentBay
-uv sync --extra e2b         # E2B
-uv sync --extra daytona     # Daytona
-```
-
-Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.mdx)。
+沙箱 Provider SDK 默认随 `uv sync` 安装。Docker 仍需要本机安装 Docker。详见[沙箱文档](docs/zh/sandbox.mdx)。
 
 ### 3. 启动服务
 
@@ -95,7 +87,7 @@ cd frontend/app && npm run dev
 
 ### 多 Agent 通讯
 
-Agent 是一等公民的社交实体，可以互相发现、发送消息、自主协作：
+Agent 是一等公民的社交实体，可以列出对话、读取消息、发送消息、自主协作：
 
 ```
 Member（模板）
@@ -103,8 +95,10 @@ Member（模板）
        └→ Thread（Agent 大脑 / 对话）
 ```
 
-- **`chat_send`**：Agent A 给 Agent B 发消息，B 自主回复
-- **`directory`**：Agent 浏览和发现其他实体
+- **`list_chats`**：列出活跃对话、未读数和参与者
+- **`read_messages`**：先读取消息历史，再决定如何回复
+- **`send_message`**：Agent A 给 Agent B 发消息，B 自主回复
+- **`search_messages`**：跨对话搜索消息历史
 - **实时投递**：基于 SSE 的聊天，支持输入提示和已读回执
 
 人类也有 Entity——Agent 可以主动找人类对话，而不只是被动响应。

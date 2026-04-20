@@ -1,24 +1,23 @@
-"""User settings management endpoints.
+"""User settings management endpoints."""
 
-Model-related settings (providers, mapping, pool) are stored in ~/.leon/models.json.
-User preferences (workspace, default model) are stored in ~/.leon/preferences.json.
-"""
-
+import asyncio
+import copy
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from backend.web.core.dependencies import get_current_user_id
+from backend.web.services import account_resource_service
+from backend.web.utils.serializers import extract_text_content
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
-from config.user_paths import user_home_path, user_home_read_candidates
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
-
-SETTINGS_FILE = user_home_path("preferences.json")
-MODELS_FILE = user_home_path("models.json")
+CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 
 
 # ============================================================================
@@ -42,33 +41,36 @@ class DirectoryItem(BaseModel):
     is_dir: bool
 
 
-def load_settings() -> WorkspaceSettings:
-    try:
-        data = _load_user_json("preferences.json")
-        return WorkspaceSettings(**data)
-    except Exception:
-        return WorkspaceSettings()
-
-
-def save_settings(settings: WorkspaceSettings) -> None:
-    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(settings.model_dump(), f, indent=2, ensure_ascii=False)
+def _resolve_workspace_path_or_400(
+    workspace: str,
+    *,
+    missing_detail: str,
+    not_dir_detail: str,
+) -> str:
+    workspace_path = Path(workspace).expanduser().resolve()
+    if not workspace_path.exists():
+        raise HTTPException(status_code=400, detail=missing_detail)
+    if not workspace_path.is_dir():
+        raise HTTPException(status_code=400, detail=not_dir_detail)
+    return str(workspace_path)
 
 
 def _get_settings_repo(request: Request):
-    """Return the user_settings_repo wired by lifespan, or None in sqlite mode."""
-    return getattr(request.app.state, "user_settings_repo", None)
+    repo = getattr(request.app.state, "user_settings_repo", None)
+    if repo is None:
+        raise RuntimeError("user_settings_repo is required for backend web settings routes")
+    return repo
 
 
-def _try_get_user_id(request: Request) -> str | None:
-    """Extract user_id from JWT without raising; returns None if unavailable."""
-    try:
-        from backend.web.core.dependencies import _extract_jwt_payload
-
-        return _extract_jwt_payload(request)["user_id"]
-    except Exception:
-        return None
+def _load_workspace_settings(repo: Any, user_id: str) -> WorkspaceSettings:
+    row = repo.get(user_id)
+    if row is None:
+        return WorkspaceSettings()
+    return WorkspaceSettings(
+        default_workspace=row.get("default_workspace"),
+        recent_workspaces=row.get("recent_workspaces") or [],
+        default_model=row.get("default_model") or "leon:large",
+    )
 
 
 # ============================================================================
@@ -76,47 +78,68 @@ def _try_get_user_id(request: Request) -> str | None:
 # ============================================================================
 
 
-def load_models() -> dict[str, Any]:
-    """Load raw models.json from disk (user-level only)."""
-    return _load_user_json("models.json")
+def _load_merged_models_for_storage(repo: Any, user_id: str) -> ModelsConfig:
+    loader = ModelsLoader()
+    return loader.load_with_user_config(repo.get_models_config(user_id) or {})
 
 
-def save_models(data: dict[str, Any]) -> None:
-    """Save models.json to disk (user-level)."""
-    MODELS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(MODELS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+def _normalize_model_base_url(base_url: str, provider_name: str | None) -> str:
+    url = base_url.rstrip("/").removesuffix("/v1")
+    if provider_name != "anthropic":
+        url = f"{url}/v1"
+    return url
 
 
-def load_merged_models() -> ModelsConfig:
-    """Load fully merged ModelsConfig (system + user)."""
-    return ModelsLoader().load()
+def _build_model_http_client_kwargs(
+    provider_name: str | None,
+) -> tuple[dict[str, Any], tuple[httpx.AsyncClient | None, httpx.Client | None]]:
+    if provider_name != "openai":
+        return {}, (None, None)
+
+    async_client = httpx.AsyncClient(trust_env=False)
+    sync_client = httpx.Client(trust_env=False)
+    return {
+        "http_client": sync_client,
+        "http_async_client": async_client,
+    }, (async_client, sync_client)
 
 
-def _load_user_json(*parts: str) -> dict[str, Any]:
-    for path in reversed(user_home_read_candidates(*parts)):
-        if not path.exists():
-            continue
-        try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            continue
-    return {}
+def _is_visible_settings_pool_model(provider_name: str, model_id: str) -> bool:
+    if provider_name != "openai":
+        return True
+    return model_id.startswith("gpt-5.4")
+
+
+def _validate_openai_settings_probe_or_400(resolved_model: str, provider_name: str | None) -> None:
+    if provider_name != "openai":
+        return
+    if resolved_model.startswith("gpt-5.4"):
+        return
+    raise RuntimeError("settings model probe only supports openai gpt-5.4 streaming path; choose gpt-5.4")
+
+
+async def _run_streaming_model_probe(model: Any) -> str:
+    async for chunk in model.astream("hi"):
+        content = extract_text_content(getattr(chunk, "content", ""))
+        if content:
+            return content[:100]
+    raise RuntimeError("settings model probe produced no streaming content")
 
 
 # ============================================================================
-# Settings endpoint (returns workspace + models combined for frontend compat)
+# Settings endpoint (returns workspace + models as one frontend settings bundle)
 # ============================================================================
 
 
 class ProviderConfig(BaseModel):
     api_key: str | None = None
+    has_api_key: bool = False
+    credential_source: Literal["platform", "user"] = "platform"
     base_url: str | None = None
 
 
 class UserSettings(BaseModel):
-    """Combined settings for frontend compatibility."""
+    """Combined settings bundle for the app settings page."""
 
     default_workspace: str | None = None
     recent_workspaces: list[str] = []
@@ -129,27 +152,24 @@ class UserSettings(BaseModel):
 
 
 @router.get("")
-async def get_settings(request: Request) -> UserSettings:
-    """Get combined settings (workspace + default_model from Supabase or preferences.json, models from models.json)."""
+async def get_settings(request: Request, user_id: CurrentUserId) -> UserSettings:
+    """Get combined settings for the authenticated user."""
     repo = _get_settings_repo(request)
-    user_id = _try_get_user_id(request) if repo else None
+    ws = _load_workspace_settings(repo, user_id)
+    models = _load_merged_models_for_storage(repo, user_id)
 
-    if repo and user_id:
-        row = repo.get(user_id)
-        ws = WorkspaceSettings(
-            default_workspace=row.get("default_workspace"),
-            recent_workspaces=row.get("recent_workspaces") or [],
-            default_model=row.get("default_model") or "leon:large",
-        )
-    else:
-        ws = load_settings()
-
-    models = load_merged_models()
-
-    # Build compat view
+    # Build the app-facing settings bundle.
     mapping = {k: v.model for k, v in models.mapping.items()}
-    providers = {k: ProviderConfig(api_key=v.api_key, base_url=v.base_url) for k, v in models.providers.items()}
-    raw = load_models()
+    providers = {}
+    for name, provider in models.providers.items():
+        source = ModelsConfig.credential_source_for(provider)
+        providers[name] = ProviderConfig(
+            api_key=None,
+            has_api_key=bool(provider.api_key),
+            credential_source=source,
+            base_url=provider.base_url,
+        )
+    raw = repo.get_models_config(user_id) or {}
     custom_config = raw.get("pool", {}).get("custom_config", {})
 
     return UserSettings(
@@ -162,6 +182,11 @@ async def get_settings(request: Request) -> UserSettings:
         custom_config=custom_config,
         providers=providers,
     )
+
+
+@router.get("/account-resources")
+async def get_account_resources(request: Request, user_id: CurrentUserId) -> dict[str, list[dict[str, Any]]]:
+    return await asyncio.to_thread(account_resource_service.list_account_resource_limits, request.app, user_id)
 
 
 @router.get("/browse")
@@ -183,7 +208,7 @@ async def browse_filesystem(path: str = Query(default="~"), include_files: bool 
                 if item.is_dir() or include_files:
                     items.append(DirectoryItem(name=item.name, path=str(item), is_dir=item.is_dir()))
         except PermissionError:
-            pass
+            raise HTTPException(status_code=403, detail="Permission denied")
 
         return {"current_path": str(target_path), "parent_path": parent, "items": [item.model_dump() for item in items]}
     # @@@http_passthrough - preserve explicit user-facing status codes from validation branches
@@ -214,52 +239,39 @@ async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
 
 
 @router.post("/workspace")
-async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
+async def set_default_workspace(
+    request: WorkspaceRequest,
+    req: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
     """Set default workspace path."""
-    workspace_path = Path(request.workspace).expanduser().resolve()
-    if not workspace_path.exists():
-        raise HTTPException(status_code=400, detail="Workspace path does not exist")
-    if not workspace_path.is_dir():
-        raise HTTPException(status_code=400, detail="Workspace path is not a directory")
-
-    workspace_str = str(workspace_path)
+    workspace_str = _resolve_workspace_path_or_400(
+        request.workspace,
+        missing_detail="Workspace path does not exist",
+        not_dir_detail="Workspace path is not a directory",
+    )
 
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        repo.set_default_workspace(user_id, workspace_str)
-    else:
-        settings = load_settings()
-        settings.default_workspace = workspace_str
-        if workspace_str in settings.recent_workspaces:
-            settings.recent_workspaces.remove(workspace_str)
-        settings.recent_workspaces.insert(0, workspace_str)
-        settings.recent_workspaces = settings.recent_workspaces[:5]
-        save_settings(settings)
+    repo.set_default_workspace(user_id, workspace_str)
 
     return {"success": True, "workspace": workspace_str}
 
 
 @router.post("/workspace/recent")
-async def add_recent_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
+async def add_recent_workspace(
+    request: WorkspaceRequest,
+    req: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
     """Add a workspace to recent list."""
-    workspace_path = Path(request.workspace).expanduser().resolve()
-    if not workspace_path.exists() or not workspace_path.is_dir():
-        raise HTTPException(status_code=400, detail="Invalid workspace path")
-
-    workspace_str = str(workspace_path)
+    workspace_str = _resolve_workspace_path_or_400(
+        request.workspace,
+        missing_detail="Invalid workspace path",
+        not_dir_detail="Invalid workspace path",
+    )
 
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        repo.add_recent_workspace(user_id, workspace_str)
-    else:
-        settings = load_settings()
-        if workspace_str in settings.recent_workspaces:
-            settings.recent_workspaces.remove(workspace_str)
-        settings.recent_workspaces.insert(0, workspace_str)
-        settings.recent_workspaces = settings.recent_workspaces[:5]
-        save_settings(settings)
+    repo.add_recent_workspace(user_id, workspace_str)
 
     return {"success": True}
 
@@ -269,16 +281,14 @@ class DefaultModelRequest(BaseModel):
 
 
 @router.post("/default-model")
-async def set_default_model(request: DefaultModelRequest, req: Request) -> dict[str, Any]:
+async def set_default_model(
+    request: DefaultModelRequest,
+    req: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
     """Set default virtual model preference."""
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        repo.set_default_model(user_id, request.model)
-    else:
-        settings = load_settings()
-        settings.default_model = request.model
-        save_settings(settings)
+    repo.set_default_model(user_id, request.model)
     return {"success": True, "default_model": request.model}
 
 
@@ -320,7 +330,7 @@ async def update_model_config(request: ModelConfigRequest, req: Request) -> dict
 
 
 @router.get("/available-models")
-async def get_available_models() -> dict[str, Any]:
+async def get_available_models(req: Request, user_id: CurrentUserId) -> dict[str, Any]:
     """Get all available models and virtual models from models.json."""
     models_file = Path(__file__).parent.parent.parent.parent / "core" / "runtime" / "middleware" / "monitor" / "models.json"
 
@@ -340,6 +350,8 @@ async def get_available_models() -> dict[str, Any]:
             if "/" not in model_id:
                 continue
             provider, short_name = model_id.split("/", 1)
+            if not _is_visible_settings_pool_model(provider, short_name):
+                continue
             if short_name in seen:
                 continue
             seen.add(short_name)
@@ -355,8 +367,9 @@ async def get_available_models() -> dict[str, Any]:
         pricing_ids = seen
 
         # Merge custom + orphaned enabled models
-        mc = load_merged_models()
-        data = load_models()
+        repo = _get_settings_repo(req)
+        mc = _load_merged_models_for_storage(repo, user_id)
+        data = repo.get_models_config(user_id) or {}
         custom_providers = data.get("pool", {}).get("custom_providers", {})
         extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - pricing_ids)
         for mid in sorted(extra_ids):
@@ -387,9 +400,14 @@ class ModelMappingRequest(BaseModel):
 
 
 @router.post("/model-mapping")
-async def update_model_mapping(request: ModelMappingRequest) -> dict[str, Any]:
-    """Update virtual model mapping → models.json."""
-    data = load_models()
+async def update_model_mapping(
+    request: ModelMappingRequest,
+    req: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    """Update virtual model mapping → models config."""
+    repo = _get_settings_repo(req)
+    data = copy.deepcopy(repo.get_models_config(user_id) or {})
     mapping = data.get("mapping", {})
     for name, spec in request.mapping.items():
         if isinstance(spec, dict):
@@ -398,7 +416,7 @@ async def update_model_mapping(request: ModelMappingRequest) -> dict[str, Any]:
             else:
                 mapping[name] = spec
     data["mapping"] = mapping
-    save_models(data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "model_mapping": request.mapping}
 
 
@@ -413,9 +431,14 @@ class ModelToggleRequest(BaseModel):
 
 
 @router.post("/models/toggle")
-async def toggle_model(request: ModelToggleRequest) -> dict[str, Any]:
-    """Enable or disable a model → models.json pool.enabled."""
-    data = load_models()
+async def toggle_model(
+    request: ModelToggleRequest,
+    req: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    """Enable or disable a model."""
+    repo = _get_settings_repo(req)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     enabled = pool.setdefault("enabled", [])
 
@@ -426,7 +449,7 @@ async def toggle_model(request: ModelToggleRequest) -> dict[str, Any]:
         if request.model_id in enabled:
             enabled.remove(request.model_id)
 
-    save_models(data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "enabled_models": enabled}
 
 
@@ -438,9 +461,14 @@ class CustomModelRequest(BaseModel):
 
 
 @router.post("/models/custom")
-async def add_custom_model(request: CustomModelRequest) -> dict[str, Any]:
-    """Add a custom model → models.json pool.custom + auto-enable."""
-    data = load_models()
+async def add_custom_model(
+    request: CustomModelRequest,
+    req: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    """Add a custom model + auto-enable."""
+    repo = _get_settings_repo(req)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -463,7 +491,7 @@ async def add_custom_model(request: CustomModelRequest) -> dict[str, Any]:
             cfg["context_limit"] = request.context_limit
         custom_config[request.model_id] = cfg
 
-    save_models(data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "custom_models": custom, "enabled_models": enabled}
 
 
@@ -472,18 +500,17 @@ class ModelTestRequest(BaseModel):
 
 
 @router.post("/models/test")
-async def test_model(request: ModelTestRequest) -> dict[str, Any]:
+async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUserId) -> dict[str, Any]:
     """Test if a model is reachable by sending a minimal request."""
-    import asyncio
-
-    mc = load_merged_models()
+    repo = _get_settings_repo(req)
+    mc = _load_merged_models_for_storage(repo, user_id)
 
     # Resolve virtual model
     resolved, overrides = mc.resolve_model(request.model_id)
     provider_name = overrides.get("model_provider") or (mc.active.provider if mc.active else None)
 
     # Check custom_providers mapping
-    data = load_models()
+    data = repo.get_models_config(user_id) or {}
     custom_providers = data.get("pool", {}).get("custom_providers", {})
     if request.model_id in custom_providers:
         provider_name = custom_providers[request.model_id]
@@ -494,9 +521,8 @@ async def test_model(request: ModelTestRequest) -> dict[str, Any]:
 
         provider_name = _attempt_infer_model_provider(resolved)
 
-    # Get credentials from providers config
-    p = mc.get_provider(provider_name) if provider_name else None
-
+    async_client: httpx.AsyncClient | None = None
+    sync_client: httpx.Client | None = None
     try:
         from langchain.chat_models import init_chat_model
 
@@ -505,32 +531,36 @@ async def test_model(request: ModelTestRequest) -> dict[str, Any]:
         kwargs: dict[str, Any] = {}
         if provider_name:
             kwargs["model_provider"] = provider_name
-        if p and p.api_key:
-            kwargs["api_key"] = p.api_key
-        if p and p.base_url:
-            url = p.base_url.rstrip("/")
-            if url.endswith("/v1"):
-                url = url[:-3]
-            if provider_name != "anthropic":
-                url = f"{url}/v1"
-            kwargs["base_url"] = url
+        api_key = mc.resolve_api_key(provider_name)
+        if api_key:
+            kwargs["api_key"] = api_key
+        base_url = mc.resolve_base_url(provider_name)
+        if base_url:
+            kwargs["base_url"] = _normalize_model_base_url(base_url, provider_name)
+        client_kwargs, (async_client, sync_client) = _build_model_http_client_kwargs(provider_name)
+        kwargs.update(client_kwargs)
 
         kwargs = normalize_model_kwargs(resolved, kwargs)
+        _validate_openai_settings_probe_or_400(resolved, provider_name)
         model = init_chat_model(resolved, **kwargs)
-
-        response = await asyncio.wait_for(model.ainvoke("hi"), timeout=15)
-        content = response.content if hasattr(response, "content") else str(response)
-        return {"success": True, "model": resolved, "response": content[:100]}
+        content = await asyncio.wait_for(_run_streaming_model_probe(model), timeout=15)
+        return {"success": True, "model": resolved, "response": content}
     except TimeoutError:
         return {"success": False, "error": "Request timed out (15s)"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+    finally:
+        if async_client is not None:
+            await async_client.aclose()
+        if sync_client is not None:
+            await asyncio.to_thread(sync_client.close)
 
 
 @router.delete("/models/custom")
-async def remove_custom_model(model_id: str = Query(...)) -> dict[str, Any]:
-    """Remove a custom model from models.json pool.custom + pool.enabled."""
-    data = load_models()
+async def remove_custom_model(req: Request, user_id: CurrentUserId, model_id: str = Query(...)) -> dict[str, Any]:
+    """Remove a custom model."""
+    repo = _get_settings_repo(req)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -546,7 +576,7 @@ async def remove_custom_model(model_id: str = Query(...)) -> dict[str, Any]:
     custom_config = pool.get("custom_config", {})
     custom_config.pop(model_id, None)
 
-    save_models(data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "custom_models": custom}
 
 
@@ -558,9 +588,10 @@ class CustomModelConfigRequest(BaseModel):
 
 
 @router.post("/models/custom/config")
-async def update_custom_model_config(request: CustomModelConfigRequest) -> dict[str, Any]:
+async def update_custom_model_config(request: CustomModelConfigRequest, req: Request, user_id: CurrentUserId) -> dict[str, Any]:
     """Update based_on/context_limit/provider for a custom model."""
-    data = load_models()
+    repo = _get_settings_repo(req)
+    data = repo.get_models_config(user_id) or {}
     pool = data.setdefault("pool", {})
     custom_config = pool.setdefault("custom_config", {})
     cfg: dict[str, Any] = custom_config.get(request.model_id, {})
@@ -572,7 +603,7 @@ async def update_custom_model_config(request: CustomModelConfigRequest) -> dict[
     if request.provider:
         custom_providers = pool.setdefault("custom_providers", {})
         custom_providers[request.model_id] = request.provider
-    save_models(data)
+    repo.set_models_config(user_id, data)
     return {"success": True, "custom_config": custom_config}
 
 
@@ -583,190 +614,44 @@ async def update_custom_model_config(request: CustomModelConfigRequest) -> dict[
 
 class ProviderRequest(BaseModel):
     provider: str
+    credential_source: Literal["platform", "user"] | None = None
     api_key: str | None = None
     base_url: str | None = None
 
 
 @router.post("/providers")
-async def update_provider(request: ProviderRequest, req: Request) -> dict[str, Any]:
-    """Update provider config → models.json providers, then reload all agents."""
-    data = load_models()
+async def update_provider(
+    request: ProviderRequest,
+    req: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    """Update provider config, then reload all agents."""
+    repo = _get_settings_repo(req)
+    data = copy.deepcopy(repo.get_models_config(user_id) or {})
     providers = data.setdefault("providers", {})
-    provider_data: dict[str, Any] = {}
+    provider_data: dict[str, Any] = dict(providers.get(request.provider, {}))
+    if request.credential_source is not None:
+        provider_data["credential_source"] = request.credential_source
     if request.api_key is not None:
         provider_data["api_key"] = request.api_key
-    if request.base_url is not None:
+    if "base_url" in request.model_fields_set and request.base_url is None:
+        provider_data.pop("base_url", None)
+    elif request.base_url is not None:
         provider_data["base_url"] = request.base_url
+    source = provider_data.get("credential_source") or ("user" if provider_data.get("api_key") else "platform")
+    if source == "platform":
+        provider_data.pop("api_key", None)
+    if source == "user" and not provider_data.get("api_key"):
+        raise HTTPException(status_code=400, detail="User credential source requires an API key")
+    provider_data["credential_source"] = source
     providers[request.provider] = provider_data
-    save_models(data)
+    repo.set_models_config(user_id, data)
 
     # @@@reload-agents-on-key-change — hot-reload all cached agents so they pick up new API keys
     pool = getattr(req.app.state, "agent_pool", {})
     reloaded = 0
     for agent in pool.values():
-        try:
-            agent.update_config()
-            reloaded += 1
-        except Exception:
-            pass
+        agent.update_config()
+        reloaded += 1
 
     return {"success": True, "provider": request.provider, "agents_reloaded": reloaded}
-
-
-# ============================================================================
-# Sandboxes (unchanged)
-# ============================================================================
-
-SANDBOXES_DIR = user_home_path("sandboxes")
-OBSERVATION_FILE = user_home_path("observation.json")
-
-
-# ============================================================================
-# Observation provider (observation.json)
-# ============================================================================
-
-
-class ObservationRequest(BaseModel):
-    active: str | None = None
-    langfuse: dict | None = None
-    langsmith: dict | None = None
-
-
-@router.get("/observation")
-async def get_observation_settings() -> dict[str, Any]:
-    """Get observation provider configuration."""
-    from config.observation_loader import ObservationLoader
-
-    config = ObservationLoader().load()
-    return config.model_dump()
-
-
-@router.post("/observation")
-async def update_observation_settings(request: ObservationRequest) -> dict[str, Any]:
-    """Update observation provider config (persists to observation.json).
-
-    New threads will pick up the active provider at creation time.
-    Existing threads keep their locked provider — only credentials are read live.
-    """
-    data = _load_user_json("observation.json")
-
-    data["active"] = request.active
-    if request.langfuse is not None:
-        existing = data.get("langfuse", {})
-        existing.update(request.langfuse)
-        data["langfuse"] = existing
-    if request.langsmith is not None:
-        existing = data.get("langsmith", {})
-        existing.update(request.langsmith)
-        data["langsmith"] = existing
-
-    OBSERVATION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OBSERVATION_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-    return {"success": True, "active": data.get("active")}
-
-
-@router.get("/observation/verify")
-async def verify_observation() -> dict[str, Any]:
-    """Verify observation provider by querying recent traces via SDK."""
-    from config.observation_loader import ObservationLoader
-
-    config = ObservationLoader().load()
-
-    if not config.active:
-        return {"success": False, "error": "No active observation provider"}
-
-    if config.active == "langfuse":
-        cfg = config.langfuse
-        if not cfg.secret_key or not cfg.public_key:
-            return {"success": False, "error": "Langfuse keys not configured"}
-        try:
-            from langfuse.api.client import FernLangfuse
-
-            client = FernLangfuse(
-                username=cfg.public_key,
-                password=cfg.secret_key,
-                base_url=cfg.host or "https://cloud.langfuse.com",
-            )
-            traces = client.trace.list(limit=5)
-            trace_list = [
-                {"id": t.id, "name": t.name, "timestamp": str(t.timestamp)} for t in (traces.data if hasattr(traces, "data") else [])
-            ]
-            return {
-                "success": True,
-                "provider": "langfuse",
-                "record_type": "trace",
-                "records": trace_list,
-                "traces": trace_list,
-            }
-        except Exception as e:
-            return {"success": False, "provider": "langfuse", "error": str(e)}
-
-    if config.active == "langsmith":
-        cfg = config.langsmith
-        if not cfg.api_key:
-            return {"success": False, "error": "LangSmith API key not configured"}
-        try:
-            from langsmith import Client
-
-            client = Client(
-                api_key=cfg.api_key,
-                api_url=cfg.endpoint or "https://api.smith.langchain.com",
-            )
-            runs = list(
-                client.list_runs(
-                    project_name=cfg.project or "default",
-                    limit=5,
-                )
-            )
-            run_list = [{"id": str(r.id), "name": r.name, "start_time": str(r.start_time)} for r in runs]
-            return {
-                "success": True,
-                "provider": "langsmith",
-                "record_type": "run",
-                "records": run_list,
-                "traces": run_list,
-            }
-        except Exception as e:
-            return {"success": False, "provider": "langsmith", "error": str(e)}
-
-    return {"success": False, "error": f"Unknown provider: {config.active}"}
-
-
-class SandboxConfigRequest(BaseModel):
-    name: str
-    config: dict
-
-
-@router.get("/sandboxes")
-async def list_sandbox_configs() -> dict[str, Any]:
-    """List all sandbox configurations from ~/.leon/sandboxes/."""
-    sandboxes: dict[str, Any] = {}
-    seen: set[Path] = set()
-    for root in user_home_read_candidates("sandboxes"):
-        if not root.exists():
-            continue
-        for f in root.glob("*.json"):
-            if f.resolve() in seen:
-                continue
-            seen.add(f.resolve())
-            try:
-                with open(f, encoding="utf-8") as fh:
-                    sandboxes[f.stem] = json.load(fh)
-            except Exception:
-                sandboxes[f.stem] = {}
-    return {"sandboxes": sandboxes}
-
-
-@router.post("/sandboxes")
-async def save_sandbox_config(request: SandboxConfigRequest) -> dict[str, Any]:
-    """Save a sandbox configuration to ~/.leon/sandboxes/<name>.json."""
-    from sandbox.config import SandboxConfig
-
-    try:
-        cfg = SandboxConfig(**request.config)
-        path = cfg.save(request.name)
-        return {"success": True, "path": str(path)}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))

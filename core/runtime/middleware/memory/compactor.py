@@ -10,13 +10,22 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+# CC L4b compact: system prompt is simple (~200 tokens) — NOT inherited from parent.
+# Using a distinct simple system prompt prevents reusing the parent conversation's cache
+# (different system prompt → different prefix hash), and reduces input token cost.
+COMPACT_SYSTEM_PROMPT = "You are a helpful AI assistant tasked with summarizing conversations."
+
 SUMMARY_PROMPT = """\
-Provide a detailed summary for continuing our conversation. Include:
-1. Key decisions made and their rationale
-2. Files created, modified, or read and their current state
-3. Errors encountered and how they were resolved
-4. Outstanding tasks and current progress
-5. Important context that would be needed to continue the work
+Summarize this conversation in the following 9 sections:
+1. Request/Intent — what the user asked for
+2. Technical Concepts — key technologies and approaches discussed
+3. Files/Code — files created or modified and their current state
+4. Errors — errors encountered and how they were resolved
+5. Problem Solving — decisions made and rationale
+6. User Messages — key user inputs and feedback
+7. Pending Tasks — unfinished work
+8. Current Work — what was actively being done at the end
+9. Next Step — the immediate next action needed
 Be concise but retain all information needed to continue seamlessly."""
 
 SPLIT_TURN_PREFIX_PROMPT = """\
@@ -72,6 +81,11 @@ class ContextCompactor:
         else:
             return [], messages
 
+        # @@@keep-current-turn - compact may summarize history, but the active
+        # model call still needs the current user turn as real input.
+        if split_idx >= len(messages):
+            split_idx = len(messages) - 1
+
         # Adjust boundary to avoid splitting tool_calls from ToolMessages
         split_idx = self._adjust_boundary(messages, split_idx)
 
@@ -80,20 +94,64 @@ class ContextCompactor:
 
         return messages[:split_idx], messages[split_idx:]
 
-    async def compact(self, messages_to_summarize: list[Any], model: Any) -> str:
+    async def compact(
+        self,
+        messages_to_summarize: list[Any],
+        model: Any,
+        compact_boundary: int = 0,
+    ) -> str:
         """Generate a summary of the given messages using the LLM.
+
+        Aligned with CC L4b compact:
+        - Uses COMPACT_SYSTEM_PROMPT (simple, ~200 tokens — NOT parent system prompt)
+        - No tools passed (extended thinking disabled, tools=[])
+        - Slices from compact_boundary forward
+        - max_tokens capped at 20000 (CC max summary output)
 
         Returns plain text summary string.
         """
-        # Build the summarization request
+        # Slice from compact_boundary forward (CC: from last compact_boundary marker)
+        if compact_boundary > 0 and compact_boundary < len(messages_to_summarize):
+            messages_to_summarize = messages_to_summarize[compact_boundary:]
+
         formatted = self._format_messages_for_summary(messages_to_summarize)
+        # CC L4b: system prompt is simple — does NOT inherit parent's system prompt.
+        # No tools, no extended thinking.
         summary_messages = [
-            SystemMessage(content=SUMMARY_PROMPT),
-            HumanMessage(content=f"Here is the conversation to summarize:\n\n{formatted}"),
+            SystemMessage(content=COMPACT_SYSTEM_PROMPT),
+            HumanMessage(content=f"Summarize this conversation:\n\n{formatted}\n\n{SUMMARY_PROMPT}"),
         ]
 
-        response = await model.ainvoke(summary_messages)
-        return response.content if hasattr(response, "content") else str(response)
+        # Bind max_tokens=20000 (CC max summary output), no tools
+        try:
+            bound_model = model.bind(max_tokens=20000)
+        except Exception:
+            bound_model = model
+
+        response = await bound_model.ainvoke(summary_messages)
+        return self._extract_summary_text(response)
+
+    def _extract_summary_text(self, response: Any) -> str:
+        content = getattr(response, "content", None)
+        if isinstance(content, str):
+            summary = content.strip()
+        elif isinstance(content, list):
+            parts: list[str] = []
+            for block in content:
+                if isinstance(block, dict):
+                    text = block.get("text") or block.get("content") or ""
+                    if isinstance(text, str):
+                        parts.append(text)
+                elif isinstance(block, str):
+                    parts.append(block)
+            summary = "".join(parts).strip()
+        elif content is None:
+            summary = ""
+        else:
+            summary = str(content).strip()
+        if not summary:
+            raise RuntimeError("Compaction summary was empty")
+        return summary
 
     def _estimate_msg_tokens(self, msg: Any) -> int:
         """Estimate tokens for a single message (chars // 2)."""
@@ -192,7 +250,7 @@ class ContextCompactor:
             HumanMessage(content=f"Here is the turn prefix to summarize:\n\n{formatted_prefix}"),
         ]
         response = await model.ainvoke(prefix_messages)
-        prefix_summary = response.content if hasattr(response, "content") else str(response)
+        prefix_summary = self._extract_summary_text(response)
 
         combined = f"{history_summary}\n\n---\n\n**Turn Context (split turn):**\n\n{prefix_summary}"
         return combined, prefix_summary

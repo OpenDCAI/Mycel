@@ -13,7 +13,7 @@ _TABLE = "provider_events"
 
 
 class SupabaseProviderEventRepo:
-    """Provider event persistence backed by Supabase (table: provider_events, BIGSERIAL event_id)."""
+    """Provider event persistence backed by Supabase (table: observability.provider_events)."""
 
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
@@ -22,7 +22,7 @@ class SupabaseProviderEventRepo:
         return None
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "observability", _TABLE, _REPO)
 
     def record(
         self,
@@ -31,7 +31,8 @@ class SupabaseProviderEventRepo:
         instance_id: str,
         event_type: str,
         payload: dict[str, Any],
-        matched_lease_id: str | None,
+        matched_runtime_handle: str | None,
+        matched_sandbox_id: str | None,
     ) -> None:
         self._t().insert(
             {
@@ -39,7 +40,8 @@ class SupabaseProviderEventRepo:
                 "instance_id": instance_id,
                 "event_type": event_type,
                 "payload_json": json.dumps(payload, ensure_ascii=False),
-                "matched_lease_id": matched_lease_id,
+                "matched_runtime_handle": matched_runtime_handle,
+                "matched_sandbox_id": matched_sandbox_id,
                 "created_at": datetime.now().isoformat(),
             }
         ).execute()
@@ -48,7 +50,9 @@ class SupabaseProviderEventRepo:
         raw = q.rows(
             q.limit(
                 q.order(
-                    self._t().select("event_id,provider_name,instance_id,event_type,payload_json,matched_lease_id,created_at"),
+                    self._t().select(
+                        "event_id,provider_name,instance_id,event_type,payload_json,matched_runtime_handle,matched_sandbox_id,created_at"
+                    ),
                     "created_at",
                     desc=True,
                     repo=_REPO,

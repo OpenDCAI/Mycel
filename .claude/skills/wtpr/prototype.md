@@ -16,7 +16,7 @@ flowchart TD
     DASK -- commit 不满意 --> ANALYZE
     DASK -- stash --> STASH["git stash"] --> D
 
-    FETCH["git fetch origin"] --> REBASE["git rebase origin/main\n（patch-id 自动跳过已合并内容）"]
+    FETCH["git fetch origin"] --> REBASE["git rebase origin/<base-branch>\n（patch-id 自动跳过已合并内容）"]
 
     REBASE --> RC{"有冲突？"}
     RC -- 无 --> PUSH
@@ -42,4 +42,4 @@ flowchart TD
 - **单一出口**：所有路径收敛到 `✅ 完成`，Ctrl+C 是唯一退出方式
 - **只问"怎么做"**：交互节点不问"要不要做"，只问"怎么继续"
 - **所有循环有终点**：DIRTY 循环、冲突循环、message 确认循环均在用户操作后收敛
-- **无条件 rebase**：`git rebase origin/main` 内部通过 patch-id 处理所有情况，无需预判
+- **无条件 rebase**：`git rebase origin/<base-branch>` 内部通过 patch-id 处理所有情况，无需预判

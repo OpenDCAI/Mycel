@@ -26,7 +26,7 @@ class FakeSupabaseQuery:
         self._delete_requested = False
         self._auto_seq = False
 
-    def select(self, _columns: str):
+    def select(self, _columns: str, **_kwargs):
         return self
 
     def insert(self, payload: dict | list[dict]):
@@ -161,12 +161,18 @@ class FakeSupabaseClient:
         self,
         tables: dict[str, list[dict]] | None = None,
         auto_seq_tables: set[str] | None = None,
+        schema_name: str | None = None,
     ):
         self._tables = tables if tables is not None else {}
         self._auto_seq_tables = auto_seq_tables or set()
+        self._schema_name = schema_name
 
     def table(self, table_name: str) -> FakeSupabaseQuery:
-        query = FakeSupabaseQuery(table_name, self._tables)
-        if table_name in self._auto_seq_tables:
+        resolved_table = f"{self._schema_name}.{table_name}" if self._schema_name else table_name
+        query = FakeSupabaseQuery(resolved_table, self._tables)
+        if resolved_table in self._auto_seq_tables:
             query._auto_seq = True
         return query
+
+    def schema(self, schema_name: str) -> FakeSupabaseClient:
+        return FakeSupabaseClient(self._tables, self._auto_seq_tables, schema_name=schema_name)

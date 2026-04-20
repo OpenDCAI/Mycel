@@ -10,28 +10,26 @@ Usage:
     python analyze_onboarding_metrics.py --data analytics.json
 """
 
-import json
-import sys
-from typing import Dict, List, Any
+from typing import Any
 
 
-def analyze_completion_rates(data: Dict[str, Any]) -> Dict[str, float]:
+def analyze_completion_rates(data: dict[str, Any]) -> dict[str, float]:
     """Calculate tour completion rates."""
     # To be implemented
     return {
-        'started': 0.0,
-        'completed': 0.0,
-        'skipped': 0.0,
+        "started": 0.0,
+        "completed": 0.0,
+        "skipped": 0.0,
     }
 
 
-def identify_dropoff_points(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+def identify_dropoff_points(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Identify steps with high drop-off rates."""
     # To be implemented
     return []
 
 
-def generate_recommendations(metrics: Dict[str, Any]) -> List[str]:
+def generate_recommendations(metrics: dict[str, Any]) -> list[str]:
     """Generate optimization recommendations based on metrics."""
     recommendations = []
 
@@ -41,6 +39,6 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[str]:
     return recommendations
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("Onboarding metrics analyzer ready")
     # CLI implementation

@@ -4,11 +4,11 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { inspectAttr } from 'kimi-plugin-inspect-react'
 
-function getWorktreePort(key: string, fallback: string): string {
+function getWorktreePort(key: string, defaultPort: string): string {
   try {
     return execSync(`git config --worktree --get ${key}`, { encoding: "utf-8" }).trim()
   } catch {
-    return fallback
+    return defaultPort
   }
 }
 
@@ -17,7 +17,7 @@ const frontendPort = parseInt(process.env.LEON_FRONTEND_PORT || getWorktreePort(
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [inspectAttr(), react()],
   server: {
     host: "0.0.0.0",
@@ -28,7 +28,7 @@ export default defineConfig({
         changeOrigin: true,
         configure: (proxy) => {
           // Disable buffering for SSE responses
-          proxy.on("proxyRes", (proxyRes, _req, _res) => {
+          proxy.on("proxyRes", (proxyRes) => {
             if (proxyRes.headers["content-type"]?.includes("text/event-stream")) {
               // Ensure no compression/buffering on the proxy side
               proxyRes.headers["cache-control"] = "no-cache";

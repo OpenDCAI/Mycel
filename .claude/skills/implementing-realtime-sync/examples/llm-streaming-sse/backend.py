@@ -4,12 +4,13 @@ FastAPI SSE server for streaming LLM responses.
 Supports both OpenAI and Anthropic APIs.
 """
 
-from fastapi import FastAPI, Query
-from fastapi.responses import StreamingResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-import os
-from dotenv import load_dotenv
 import asyncio
+import os
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 # Load environment variables
 load_dotenv()
@@ -50,14 +51,12 @@ else:
 @app.get("/")
 async def root():
     """Serve frontend HTML."""
-    with open("frontend.html", "r") as f:
+    with open("frontend.html") as f:
         return HTMLResponse(content=f.read())
 
 
 @app.get("/chat/stream")
-async def stream_chat(
-    prompt: str = Query(..., description="User prompt to send to LLM")
-):
+async def stream_chat(prompt: str = Query(..., description="User prompt to send to LLM")):
     """
     Stream LLM response tokens via Server-Sent Events (SSE).
 
@@ -75,10 +74,7 @@ async def stream_chat(
             if PROVIDER == "openai":
                 # OpenAI streaming
                 stream = await client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[{"role": "user", "content": prompt}],
-                    stream=True,
-                    max_tokens=1024
+                    model="gpt-4", messages=[{"role": "user", "content": prompt}], stream=True, max_tokens=1024
                 )
 
                 async for chunk in stream:
@@ -86,18 +82,16 @@ async def stream_chat(
                         content = chunk.choices[0].delta.content
 
                         # SSE format
-                        yield f"event: token\n"
+                        yield "event: token\n"
                         yield f"data: {content}\n\n"
 
             elif PROVIDER == "anthropic":
                 # Anthropic streaming
                 async with client.messages.stream(
-                    model="claude-3-5-sonnet-20241022",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1024
+                    model="claude-3-5-sonnet-20241022", messages=[{"role": "user", "content": prompt}], max_tokens=1024
                 ) as stream:
                     async for text in stream.text_stream:
-                        yield f"event: token\n"
+                        yield "event: token\n"
                         yield f"data: {text}\n\n"
 
             else:
@@ -107,17 +101,17 @@ async def stream_chat(
                 mock_response += "Add your API key to .env to test real streaming."
 
                 for token in mock_response.split():
-                    yield f"event: token\n"
+                    yield "event: token\n"
                     yield f"data: {token} \n\n"
                     await asyncio.sleep(0.05)  # Simulate streaming delay
 
             # Done signal
-            yield f"event: done\n"
-            yield f"data: [DONE]\n\n"
+            yield "event: done\n"
+            yield "data: [DONE]\n\n"
 
         except Exception as e:
             # Error event
-            yield f"event: error\n"
+            yield "event: error\n"
             yield f"data: {str(e)}\n\n"
 
     return StreamingResponse(
@@ -127,29 +121,20 @@ async def stream_chat(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable Nginx buffering
-        }
+        },
     )
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "provider": PROVIDER,
-        "has_api_key": OPENAI_API_KEY is not None or ANTHROPIC_API_KEY is not None
-    }
+    return {"status": "healthy", "provider": PROVIDER, "has_api_key": OPENAI_API_KEY is not None or ANTHROPIC_API_KEY is not None}
 
 
 if __name__ == "__main__":
     import uvicorn
 
     print(f"🚀 Starting SSE server with {PROVIDER.upper()} provider...")
-    print(f"📡 Visit http://localhost:8000 to test")
+    print("📡 Visit http://localhost:8000 to test")
 
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        log_level="info"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

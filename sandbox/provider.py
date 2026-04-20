@@ -132,7 +132,6 @@ class SandboxProvider(ABC):
     @abstractmethod
     def get_capability(self) -> ProviderCapability:
         """Return lifecycle capability contract for this provider."""
-        pass
 
     @abstractmethod
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
@@ -197,7 +196,6 @@ class SandboxProvider(ABC):
     @abstractmethod
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         """Create the appropriate PhysicalTerminalRuntime for this provider."""
-        pass
 
     def get_metrics_via_commands(self, session_id: str) -> Metrics | None:
         """Get metrics by running Linux shell commands inside the sandbox."""
@@ -244,7 +242,7 @@ class SandboxProvider(ABC):
     def get_web_url(self, session_id: str) -> str | None:
         return None
 
-    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
         """Create provider-managed persistent volume. Returns backend_ref (volume name).
         Override in providers with managed volume support (Daytona, Docker).
         """
@@ -260,6 +258,12 @@ class SandboxProvider(ABC):
         """Delete provider-managed persistent volume."""
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
+    def wait_managed_volume_ready(self, backend_ref: str) -> None:
+        """Block until a previously created managed volume is reusable."""
+
     def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
         """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
-        pass
+
+    def list_provider_runtimes(self) -> list[SessionInfo]:
+        """List raw provider runtimes for monitor/orphan visibility. Empty by default."""
+        return []

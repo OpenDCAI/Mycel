@@ -1,0 +1,1108 @@
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
+
+import pytest
+
+import sandbox.manager as sandbox_manager_module
+from config.user_paths import user_home_path
+from sandbox.manager import SandboxManager
+from sandbox.providers.local import LocalSessionProvider
+from sandbox.volume_source import HostVolume, deserialize_volume_source
+
+
+class _FakeVolume:
+    def __init__(self) -> None:
+        self.mount_calls: list[tuple[str, str]] = []
+        self.mount_sources: list[Path | None] = []
+        self.upload_calls: list[tuple[str, str, Path, str]] = []
+        self.download_calls: list[tuple[str, str, Path, str]] = []
+        self.cleared: list[str] = []
+
+    def resolve_mount_path(self) -> str:
+        return "/workspace"
+
+    def mount(self, thread_id: str, source_path: Path | None, remote_path: str) -> None:
+        self.mount_calls.append((thread_id, remote_path))
+        self.mount_sources.append(source_path)
+
+    def mount_managed_volume(self, thread_id: str, volume_name: str, remote_path: str) -> None:
+        self.mount_calls.append((thread_id, remote_path))
+
+    def sync_upload(self, thread_id: str, session_id: str, source_path: Path, remote_path: str, files=None) -> None:
+        self.upload_calls.append((thread_id, session_id, source_path, remote_path))
+
+    def sync_download(self, thread_id: str, session_id: str, source_path: Path, remote_path: str) -> None:
+        self.download_calls.append((thread_id, session_id, source_path, remote_path))
+
+    def clear_sync_state(self, thread_id: str) -> None:
+        self.cleared.append(thread_id)
+
+
+class _FakeThreadRepo:
+    def __init__(self, row):
+        self._row = row
+        self.closed = False
+
+    def get_by_id(self, _thread_id: str):
+        return self._row
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeLeaseStore:
+    pass
+
+
+class _FakeTerminalRepo:
+    def __init__(self, row: dict[str, Any] | None = None) -> None:
+        self._row = row
+        self.closed = False
+        self.requested_lease_ids: list[str] = []
+
+    def get_latest_by_lease(self, lease_id: str):
+        self.requested_lease_ids.append(lease_id)
+        return self._row
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeBindTerminalRepo:
+    def __init__(self, latest_by_lease: dict[str, Any] | None = None, active_by_thread: dict[str, Any] | None = None) -> None:
+        self._latest_by_lease = latest_by_lease
+        self._active_by_thread = active_by_thread or {}
+        self.closed = False
+        self.requested_lease_ids: list[str] = []
+        self.requested_active_threads: list[str] = []
+        self.created: list[dict[str, Any]] = []
+
+    def get_latest_by_lease(self, lease_id: str):
+        self.requested_lease_ids.append(lease_id)
+        return self._latest_by_lease
+
+    def get_active(self, thread_id: str):
+        self.requested_active_threads.append(thread_id)
+        return self._active_by_thread.get(thread_id)
+
+    def create(self, *, terminal_id: str, thread_id: str, lease_id: str, initial_cwd: str) -> None:
+        self.created.append(
+            {
+                "terminal_id": terminal_id,
+                "thread_id": thread_id,
+                "lease_id": lease_id,
+                "initial_cwd": initial_cwd,
+            }
+        )
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeLeaseRepo:
+    def __init__(self, row: dict[str, Any] | None = None) -> None:
+        self._row = row
+        self.closed = False
+        self.requested_ids: list[str] = []
+        self.instance_queries: list[tuple[str, str]] = []
+
+    def get(self, lease_id: str):
+        self.requested_ids.append(lease_id)
+        return self._row
+
+    def find_by_instance(self, *, provider_name: str, instance_id: str):
+        self.instance_queries.append((provider_name, instance_id))
+        if self._row is None:
+            return None
+        row_provider = str(self._row.get("provider_name") or "").strip()
+        row_instance = str(
+            self._row.get("provider_env_id")
+            or self._row.get("current_instance_id")
+            or (self._row.get("_instance") or {}).get("instance_id")
+            or ""
+        ).strip()
+        return self._row if row_provider == provider_name and row_instance == instance_id else None
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeSessionManager:
+    def __init__(self, active_rows) -> None:
+        self._active_rows = active_rows
+        self.deleted: list[tuple[str, str]] = []
+
+    def list_active(self):
+        return list(self._active_rows)
+
+    def delete(self, session_id: str, reason: str) -> None:
+        self.deleted.append((session_id, reason))
+
+
+class _FakeDaytonaProvider:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self.ready_waits: list[str] = []
+        self.deleted_volumes: list[str] = []
+
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
+        self.calls.append((managed_ref, mount_path))
+        return f"leon-volume-{managed_ref}"
+
+    def wait_managed_volume_ready(self, volume_name: str) -> None:
+        self.ready_waits.append(volume_name)
+
+    def delete_managed_volume(self, volume_name: str) -> None:
+        self.deleted_volumes.append(volume_name)
+
+
+def _new_test_manager() -> Any:
+    # @@@nu59-sandbox-manager-harness - these tests intentionally bypass
+    # SandboxManager.__init__ and monkey-build partial instances. Treat that
+    # object as a test harness, not a fully typed production manager.
+    manager = cast(Any, object.__new__(SandboxManager))
+    manager.db_path = Path("/tmp/fake-sandbox.db")
+    return manager
+
+
+def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+
+    def build_provider(name: str):
+        return SimpleNamespace(default_cwd=f"/providers/{name}") if name == "local" else None
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        build_provider,
+    )
+
+    cwd = sandbox_manager_module.resolve_existing_lease_cwd(
+        "lease-1",
+        db_path=Path("/tmp/fake-sandbox.db"),
+        lease_repo=lease_repo,
+    )
+
+    assert cwd == "/providers/local"
+    assert lease_repo.requested_ids == ["lease-1"]
+    assert lease_repo.closed is False
+
+
+def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_provider_default(monkeypatch):
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda name: SimpleNamespace(default_cwd=f"/providers/{name}"),
+    )
+
+    cwd = sandbox_manager_module.resolve_existing_lease_cwd(
+        "lease-1",
+        db_path=Path("/tmp/fake-sandbox.db"),
+        lease_repo=lease_repo,
+    )
+
+    assert cwd == "/providers/local"
+    assert lease_repo.requested_ids == ["lease-1"]
+
+
+def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavailable(monkeypatch):
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "missing-provider"})
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda _name: None,
+    )
+
+    with pytest.raises(ValueError, match="provider default cwd is required"):
+        sandbox_manager_module.resolve_existing_lease_cwd(
+            "lease-1",
+            db_path=Path("/tmp/fake-sandbox.db"),
+            lease_repo=lease_repo,
+        )
+
+    assert lease_repo.requested_ids == ["lease-1"]
+
+
+def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider_default_exists(monkeypatch):
+    terminal_repo = _FakeBindTerminalRepo(latest_by_lease={"cwd": "/terminal/latest"})
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda name: SimpleNamespace(default_cwd=f"/providers/{name}"),
+    )
+
+    initial_cwd, lease = sandbox_manager_module.bind_thread_to_existing_sandbox(
+        "thread-1",
+        {
+            "provider_name": "local",
+            "provider_env_id": "env-1",
+            "config": {"runtime_handle": "stored-runtime"},
+        },
+        db_path=Path("/tmp/fake-sandbox.db"),
+        terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+    )
+
+    assert initial_cwd == "/providers/local"
+    assert lease["lease_id"] == "lease-1"
+    assert terminal_repo.created[0]["initial_cwd"] == "/providers/local"
+
+
+def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monkeypatch):
+    terminal_repo = _FakeBindTerminalRepo(
+        latest_by_lease={"cwd": "/terminal/latest"},
+        active_by_thread={"thread-parent": {"lease_id": "lease-1"}},
+    )
+    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "_build_provider_from_name",
+        lambda _name: (_ for _ in ()).throw(AssertionError("provider default should stay unused for continuity path")),
+    )
+
+    try:
+        sandbox_manager_module.bind_thread_to_existing_thread_lease(
+            "thread-child",
+            "thread-parent",
+            db_path=Path("/tmp/fake-sandbox.db"),
+            terminal_repo=terminal_repo,
+            lease_repo=lease_repo,
+        )
+    except ValueError as exc:
+        assert str(exc) == "thread reuse cwd is required"
+    else:
+        raise AssertionError("expected bind_thread_to_existing_thread_lease to fail loudly without cwd")
+
+
+def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_path):
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_lease = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
+    result = manager._setup_mounts("thread-1")
+
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
+    assert manager.volume.mount_calls == [("thread-1", "/workspace")]
+    assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
+
+
+def test_setup_mounts_reports_missing_lease_not_missing_volume():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_lease = lambda _lease_id: None
+
+    with pytest.raises(ValueError, match="No lease for thread thread-1"):
+        manager._setup_mounts("thread-1")
+
+
+def test_deserialize_historical_daytona_source_downgrades_to_host_volume(tmp_path):
+    source = deserialize_volume_source(
+        {
+            "type": "daytona",
+            "staging_path": str(tmp_path / "staging"),
+            "volume_name": "leon-volume-volume-1",
+        }
+    )
+
+    assert isinstance(source, HostVolume)
+    assert source.host_path == (tmp_path / "staging").resolve()
+
+
+def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monkeypatch, tmp_path):
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
+    lease = SimpleNamespace(lease_id="lease-1")
+    manager._get_lease = lambda _lease_id: lease
+    manager.lease_store = _FakeLeaseStore()
+
+    result = manager._setup_mounts("thread-1")
+
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
+    assert manager.volume.mount_sources == [Path(tmp_path) / "channel-root"]
+
+
+def test_setup_mounts_daytona_uses_lease_id_for_managed_volume(monkeypatch, tmp_path):
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = _FakeDaytonaProvider()
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
+    lease = SimpleNamespace(lease_id="lease-1")
+    manager._get_lease = lambda _lease_id: lease
+    manager.lease_store = _FakeLeaseStore()
+
+    result = manager._setup_mounts("thread-1")
+
+    assert result == {"source_path": Path(tmp_path) / "channel-root", "remote_path": "/workspace"}
+    assert manager.provider.calls == [("lease-1", "/workspace")]
+
+
+def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_thread_chats: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
+    assert deleted_terminals == ["term-1"]
+    assert deleted_thread_chats == [("thread-1", "thread_deleted")]
+    assert deleted_leases == ["lease-1"]
+    assert all_terminals == []
+
+
+def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
+    manager = _new_test_manager()
+    manager.provider = SimpleNamespace(
+        name="agentbay",
+        get_capability=lambda: SimpleNamespace(can_pause=False, can_destroy=True),
+    )
+    manager.terminal_store = SimpleNamespace(
+        db_path=Path("/tmp/fake-sandbox.db"),
+        get_by_id=lambda _terminal_id: {"terminal_id": "term-1", "lease_id": "lease-1"},
+    )
+    active_rows = [
+        {
+            "session_id": "sess-1",
+            "thread_id": "thread-1",
+            "terminal_id": "term-1",
+            "lease_id": "lease-1",
+            "started_at": "2026-04-04T00:00:00",
+            "last_active_at": "2026-04-04T00:00:00",
+            "idle_ttl_sec": 1,
+            "max_duration_sec": 3600,
+            "status": "active",
+        }
+    ]
+    manager.session_manager = _FakeSessionManager(active_rows)
+    fake_lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="agentbay",
+        refresh_instance_status=lambda _provider: "running",
+        pause_instance=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("pause should not be used")),
+        destroy_instance=lambda *_args, **_kwargs: destroy_calls.append(True),
+    )
+    destroy_calls: list[bool] = []
+    manager._get_lease = lambda _lease_id: fake_lease
+    manager._terminal_is_busy = lambda _terminal_id: False
+    manager._lease_is_busy = lambda _lease_id: False
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "terminal_from_row",
+        lambda _row, _db_path: SimpleNamespace(terminal_id="term-1", lease_id="lease-1"),
+    )
+
+    manager.enforce_idle_timeouts()
+
+    assert destroy_calls == [True]
+    assert manager.session_manager.deleted == [("sess-1", "idle_timeout")]
+
+
+def test_enforce_idle_timeouts_accepts_aware_supabase_timestamps():
+    manager = _new_test_manager()
+    manager.provider = SimpleNamespace(name="daytona_selfhost", get_capability=lambda: SimpleNamespace(can_pause=True, can_destroy=True))
+    manager.session_manager = SimpleNamespace(
+        list_active=lambda: [
+            {
+                "session_id": "sess-1",
+                "thread_id": "thread-1",
+                "started_at": "2099-04-04T00:00:00+00:00",
+                "last_active_at": "2099-04-04T00:00:00+00:00",
+                "idle_ttl_sec": 3600,
+                "max_duration_sec": 7200,
+                "status": "active",
+            }
+        ]
+    )
+
+    assert manager.enforce_idle_timeouts() == 0
+
+
+def test_destroy_thread_resources_skips_local_sync_without_volume_metadata():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.provider = SimpleNamespace(name="local")
+    manager.volume = _FakeVolume()
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}],
+        delete=lambda _terminal_id: deleted_terminals.append(_terminal_id),
+        list_all=lambda: [],
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: SimpleNamespace(session_id="sess-1"),
+        delete=lambda session_id, reason: deleted_thread_chats.append((session_id, reason)),
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
+    )
+    deleted_terminals: list[str] = []
+    deleted_thread_chats: list[tuple[str, str]] = []
+    destroy_calls: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "running"
+
+        def get_instance(self):
+            return SimpleNamespace(instance_id="instance-1")
+
+        def destroy_instance(self, _provider):
+            destroy_calls.append("lease-1")
+
+    lease = _Lease()
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+    deleted_leases: list[str] = []
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert manager.volume.download_calls == []
+    assert manager.volume.cleared == ["thread-1"]
+    assert deleted_thread_chats == [("thread-1", "thread_deleted")]
+    assert deleted_terminals == ["term-1"]
+    assert destroy_calls == ["lease-1"]
+    assert deleted_leases == ["lease-1"]
+
+
+def test_destroy_thread_resources_hard_deletes_thread_chat_sessions_before_terminal_delete():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.provider = SimpleNamespace(name="local")
+    manager.volume = _FakeVolume()
+    deleted_terminals: list[str] = []
+    delete_order: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "running"
+
+        def get_instance(self):
+            return SimpleNamespace(instance_id="instance-1")
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}],
+        delete=lambda terminal_id: (delete_order.append(f"terminal:{terminal_id}"), deleted_terminals.append(terminal_id)),
+        list_all=lambda: [],
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: SimpleNamespace(session_id="sess-1"),
+        delete=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("soft delete should not be used")),
+        delete_thread=lambda thread_id, reason="thread_deleted": delete_order.append(f"thread:{thread_id}:{reason}"),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert delete_order == ["thread:thread-1:thread_deleted", "terminal:term-1"]
+    assert deleted_terminals == ["term-1"]
+    assert destroyed_leases == ["lease-1"]
+    assert deleted_leases == ["lease-1"]
+
+
+def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.provider = SimpleNamespace(name="local")
+    manager.volume = _FakeVolume()
+    deleted_thread_chats: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+    all_terminals = [
+        {"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"},
+        {"terminal_id": "term-2", "lease_id": "lease-1", "thread_id": "thread-2"},
+    ]
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert deleted_thread_chats == [("thread-1", "thread_deleted")]
+    assert deleted_terminals == ["term-1"]
+    assert destroyed_leases == []
+    assert deleted_leases == []
+
+
+def test_destroy_thread_resources_deletes_daytona_managed_volume_from_lease_id(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_thread_chats: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
+    assert deleted_leases == ["lease-1"]
+    assert all_terminals == []
+
+
+def test_destroy_thread_resources_derives_daytona_volume_name_from_lease_id(tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = provider
+    manager.volume = _FakeVolume()
+    deleted_thread_chats: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    destroyed_leases: list[str] = []
+    deleted_leases: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "detached"
+
+        def get_instance(self):
+            return None
+
+        def destroy_instance(self, _provider):
+            destroyed_leases.append("lease-1")
+
+    lease = _Lease()
+    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
+    )
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert destroyed_leases == ["lease-1"]
+    assert provider.deleted_volumes == ["leon-volume-lease-1"]
+    assert deleted_leases == ["lease-1"]
+
+
+def test_sync_uploads_skips_local_volume_sync_without_volume_metadata():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    manager._get_lease = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: SimpleNamespace(
+            lease=SimpleNamespace(get_instance=lambda: SimpleNamespace(instance_id="instance-1"))
+        )
+    )
+
+    assert manager.sync_uploads("thread-1") is True
+    assert manager.volume.upload_calls == []
+
+
+def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(monkeypatch):
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager.resolve_volume_source = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume source should stay unused"))
+
+    class _ThreadRepo:
+        def get_by_id(self, _thread_id: str):
+            return {"current_workspace_id": "ws-1"}
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "build_storage_container",
+        lambda: SimpleNamespace(thread_repo=lambda: _ThreadRepo()),
+    )
+
+    manager._sync_to_sandbox("thread-1", "instance-1")
+    manager._sync_from_sandbox("thread-1", "instance-1")
+
+    expected_root = user_home_path("file_channels", "ws-1").expanduser().resolve()
+    assert manager.volume.upload_calls == [("thread-1", "instance-1", expected_root, "/workspace")]
+    assert manager.volume.download_calls == [("thread-1", "instance-1", expected_root, "/workspace")]
+
+
+def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path, monkeypatch):
+    manager = SandboxManager(
+        provider=LocalSessionProvider(default_cwd=str(tmp_path)),
+        db_path=tmp_path / "sandbox.db",
+    )
+
+    capability = manager.get_sandbox("thread-local")
+
+    assert capability.command.runtime_owns_cwd is True
+    session = manager.session_manager.get("thread-local")
+    assert session is not None
+    assert session.lease.provider_name == "local"
+
+
+def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
+    manager = _new_test_manager()
+    manager.provider = SimpleNamespace(name="local")
+    manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
+    manager.volume = _FakeVolume()
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+        update_state=lambda _state: None,
+    )
+    lease = SimpleNamespace(
+        provider_name="local",
+        observed_state="paused",
+        bind_mounts=None,
+        recipe=None,
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+    )
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager._get_lease = lambda _lease_id: lease
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    resume_calls: list[tuple[str, str]] = []
+    manager.resume_session = lambda thread_id, source="user_resume": resume_calls.append((thread_id, source)) or True
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: None,
+        create=lambda **_kwargs: SimpleNamespace(session_id="sess-1", terminal=terminal, lease=lease),
+    )
+
+    manager.get_sandbox("thread-1")
+
+    assert resume_calls == [("thread-1", "auto_resume")]
+
+
+def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
+    manager = _new_test_manager()
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+    )
+    paused_lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="local",
+        observed_state="paused",
+        bind_mounts=None,
+    )
+    resumed_lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="local",
+        observed_state="running",
+        bind_mounts=None,
+    )
+    live_session = SimpleNamespace(
+        terminal=terminal,
+        lease=paused_lease,
+        status="active",
+    )
+
+    manager.provider = SimpleNamespace(name="local")
+    manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
+    manager.volume = _FakeVolume()
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    resume_calls: list[tuple[str, str]] = []
+
+    def _get_session(_thread_id, _terminal_id):
+        if resume_calls:
+            return SimpleNamespace(terminal=terminal, lease=resumed_lease, status="active")
+        return live_session
+
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager.resume_session = lambda thread_id, source="user_resume": resume_calls.append((thread_id, source)) or True
+    manager.session_manager = SimpleNamespace(get=_get_session)
+
+    capability = manager.get_sandbox("thread-1")
+
+    assert resume_calls == [("thread-1", "auto_resume")]
+    assert capability._session.lease is resumed_lease
+
+
+def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
+    manager = _new_test_manager()
+    bind_mount_calls: list[tuple[str, list[dict[str, str]]]] = []
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+    )
+    lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="local",
+        observed_state="running",
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+    )
+    session = SimpleNamespace(terminal=terminal, lease=lease, status="active")
+
+    manager.provider = SimpleNamespace(
+        name="local",
+        set_thread_bind_mounts=lambda thread_id, mounts: bind_mount_calls.append((thread_id, mounts)),
+    )
+    manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    manager.session_manager = SimpleNamespace(get=lambda _thread_id, _terminal_id: session)
+
+    mounts = [{"source": "/tmp/a", "target": "/workspace/a"}]
+    capability = manager.get_sandbox("thread-1", bind_mounts=mounts)
+
+    assert bind_mount_calls == [("thread-1", mounts)]
+    assert capability._session is session
+
+
+def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
+    manager = _new_test_manager()
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+        update_state=lambda _state: None,
+    )
+    lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="agentbay",
+        observed_state="running",
+        recipe=None,
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+    )
+    sync_calls: list[tuple[str, str, Path | None]] = []
+    expected_path = Path("/tmp/workspace-files")
+
+    manager.provider = SimpleNamespace(name="agentbay")
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay", eager_instance_binding=False)
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager._get_lease = lambda _lease_id: lease
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    manager._setup_mounts = lambda _thread_id: {"source_path": expected_path, "remote_path": "/workspace"}
+    manager._sync_to_sandbox = lambda thread_id, instance_id, source=None, files=None: sync_calls.append((thread_id, instance_id, source))
+    manager._fire_session_ready = lambda *_args, **_kwargs: None
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: None,
+        create=lambda **_kwargs: SimpleNamespace(terminal=terminal, lease=lease, status="active"),
+    )
+
+    manager.get_sandbox("thread-1")
+
+    assert sync_calls == [("thread-1", "instance-1", expected_path)]
+
+
+def test_background_command_requires_default_terminal_without_active_terminal_substitute():
+    manager = _new_test_manager()
+
+    manager.terminal_store = SimpleNamespace(
+        get_default=lambda _thread_id: None,
+        get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("active terminal was queried unexpectedly")),
+    )
+
+    with pytest.raises(RuntimeError, match="Thread thread-1 has no default terminal"):
+        manager.create_background_command_session("thread-1", "/workspace")
+
+
+def test_background_command_inherits_default_terminal_environment(monkeypatch):
+    manager = _new_test_manager()
+    default_state = SimpleNamespace(cwd="/default", env_delta={"TOKEN": "value"}, state_version=7)
+    created_terminal = SimpleNamespace(updated_state=None)
+    default_terminal = SimpleNamespace(lease_id="lease-1", get_state=lambda: default_state)
+    created_rows: list[dict[str, str]] = []
+    created_background_commands: list[dict[str, Any]] = []
+
+    def from_row(row, _db_path):
+        if row["terminal_id"] == "term-default":
+            return default_terminal
+        return created_terminal
+
+    def create_terminal(**kwargs):
+        created_rows.append(kwargs)
+        return {
+            "terminal_id": kwargs["terminal_id"],
+            "thread_id": kwargs["thread_id"],
+            "lease_id": kwargs["lease_id"],
+            "cwd": kwargs["initial_cwd"],
+            "env_delta_json": "{}",
+            "state_version": 0,
+        }
+
+    def update_state(state):
+        created_terminal.updated_state = state
+
+    created_terminal.update_state = update_state
+    manager.terminal_store = SimpleNamespace(
+        get_default=lambda _thread_id: {
+            "terminal_id": "term-default",
+            "thread_id": "thread-1",
+            "lease_id": "lease-1",
+            "cwd": "/default",
+            "env_delta_json": '{"TOKEN": "value"}',
+            "state_version": 7,
+        },
+        create=create_terminal,
+    )
+    manager._get_lease = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager.session_manager = SimpleNamespace(create=lambda **kwargs: created_background_commands.append(kwargs) or kwargs)
+    monkeypatch.setattr(sandbox_manager_module, "terminal_from_row", from_row)
+
+    session = manager.create_background_command_session("thread-1", "/workspace/task")
+
+    assert created_rows[0]["thread_id"] == "thread-1"
+    assert created_rows[0]["lease_id"] == "lease-1"
+    assert created_rows[0]["initial_cwd"] == "/workspace/task"
+    assert created_terminal.updated_state.cwd == "/workspace/task"
+    assert created_terminal.updated_state.env_delta == {"TOKEN": "value"}
+    assert created_terminal.updated_state.state_version == 7
+    assert session is created_background_commands[0]
+
+
+def test_resume_session_rebinds_live_session_lease_after_resume():
+    manager = _new_test_manager()
+    terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    resumed_lease = SimpleNamespace(
+        lease_id="lease-1",
+        observed_state="running",
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+        resume_instance=lambda _provider, source="user_resume": True,
+    )
+    stale_lease = SimpleNamespace(lease_id="lease-1", observed_state="paused")
+    runtime = SimpleNamespace(lease=stale_lease)
+    live_session = SimpleNamespace(
+        session_id="sess-1",
+        terminal=terminal,
+        lease=stale_lease,
+        runtime=runtime,
+        status="paused",
+    )
+    manager.provider = SimpleNamespace(name="local")
+    manager._get_thread_terminals = lambda _thread_id: [terminal]
+    manager._get_thread_lease = lambda _thread_id: resumed_lease
+    manager._sync_to_sandbox = lambda *_args, **_kwargs: None
+    manager._ensure_chat_session = lambda _thread_id: None
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: live_session,
+        resume=lambda _session_id: setattr(live_session, "status", "active"),
+    )
+
+    ok = manager.resume_session("thread-1", source="auto_resume")
+
+    assert ok is True
+    assert live_session.lease is resumed_lease
+    assert runtime.lease is resumed_lease
+
+
+def test_upgrade_to_daytona_volume_uses_lease_id_for_provider_backend_ref(monkeypatch, tmp_path):
+    manager = _new_test_manager()
+    manager.provider = _FakeDaytonaProvider()
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+
+    volume_name = manager._upgrade_to_daytona_volume(
+        "thread-supabase",
+        "lease-1",
+        "/workspace",
+    )
+
+    assert manager.provider.calls == [("lease-1", "/workspace")]
+    assert volume_name == "leon-volume-lease-1"
+
+
+def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(monkeypatch, tmp_path):
+    manager = _new_test_manager()
+    provider = _FakeDaytonaProvider()
+    manager.provider = provider
+
+    def _already_exists(managed_ref: str, mount_path: str) -> str:
+        provider.calls.append((managed_ref, mount_path))
+        raise RuntimeError("volume already exists")
+
+    provider.create_managed_volume = _already_exists
+
+    volume_name = manager._upgrade_to_daytona_volume(
+        "thread-supabase",
+        "lease-1",
+        "/workspace",
+    )
+
+    assert volume_name == "leon-volume-lease-1"
+    assert provider.ready_waits == ["leon-volume-lease-1"]
+
+
+def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
+    from storage import runtime as storage_runtime
+
+    class _FakeSupabaseClient:
+        def table(self, _name: str):
+            return object()
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr(
+        "backend.web.core.supabase_factory.create_supabase_client",
+        lambda: _FakeSupabaseClient(),
+    )
+
+    repo = storage_runtime.build_sandbox_monitor_repo()
+    try:
+        assert repo.__class__.__name__ == "SupabaseSandboxMonitorRepo"
+    finally:
+        repo.close()
+
+
+def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
+    lease_repo = SimpleNamespace(
+        find_by_instance=lambda **kwargs: {
+            "lease_id": "lease-live",
+            "provider_name": kwargs["provider_name"],
+            "current_instance_id": kwargs["instance_id"],
+        },
+        close=lambda: None,
+    )
+
+    lease = sandbox_manager_module.resolve_existing_sandbox_lease(
+        {
+            "provider_name": "daytona",
+            "provider_env_id": "sandbox-env-1",
+            "config": {"runtime_handle": "stored-runtime"},
+        },
+        lease_repo=lease_repo,
+    )
+
+    assert lease == {
+        "lease_id": "lease-live",
+        "provider_name": "daytona",
+        "current_instance_id": "sandbox-env-1",
+    }
+
+
+def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> None:
+    lease_repo = SimpleNamespace(
+        find_by_instance=lambda **_kwargs: None,
+        close=lambda: None,
+    )
+
+    with pytest.raises(RuntimeError, match="sandbox provider_env_id did not resolve to a lease"):
+        sandbox_manager_module.resolve_existing_sandbox_lease(
+            {
+                "provider_name": "daytona",
+                "provider_env_id": "sandbox-env-1",
+                "config": {"runtime_handle": "stored-runtime"},
+            },
+            lease_repo=lease_repo,
+        )

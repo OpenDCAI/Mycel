@@ -1,4 +1,4 @@
-"""TaskService - SQLite-backed task management tools.
+"""TaskService - repository-backed task management tools.
 
 Provides TaskCreate/TaskGet/TaskList/TaskUpdate as DEFERRED tools.
 Tasks are partitioned by thread_id so all agents in the same thread share
@@ -9,121 +9,110 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
-from backend.web.core.storage_factory import make_tool_task_repo
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.tools.task.types import Task, TaskStatus
+from storage.runtime import build_tool_task_repo
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = Path.home() / ".leon" / "tasks.db"
-
-TASK_CREATE_SCHEMA = {
-    "name": "TaskCreate",
-    "description": ("Create a new task to track work progress. Tasks are created with status 'pending'."),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "subject": {
-                "type": "string",
-                "description": "Brief task title in imperative form",
-            },
-            "description": {
-                "type": "string",
-                "description": "Detailed description of what needs to be done",
-            },
-            "active_form": {
-                "type": "string",
-                "description": "Present continuous form for spinner display",
-            },
-            "metadata": {
-                "type": "object",
-                "description": "Optional metadata to attach to the task",
-            },
+TASK_CREATE_SCHEMA = make_tool_schema(
+    name="TaskCreate",
+    description=(
+        "Create a task to track multi-step work. "
+        "Use for complex tasks with 3+ steps or when managing multiple parallel workstreams. "
+        "Status starts as 'pending'."
+    ),
+    properties={
+        "subject": {
+            "type": "string",
+            "description": "Brief task title in imperative form",
         },
-        "required": ["subject", "description"],
-    },
-}
-
-TASK_GET_SCHEMA = {
-    "name": "TaskGet",
-    "description": "Get full details of a task including description and dependencies.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "string",
-                "description": "The task ID to retrieve",
-            },
+        "description": {
+            "type": "string",
+            "description": "Detailed description of what needs to be done",
         },
-        "required": ["task_id"],
+        "active_form": {
+            "type": "string",
+            "description": "Present continuous form for spinner display",
+        },
+        "metadata": {
+            "type": "object",
+            "description": "Optional metadata to attach to the task",
+        },
     },
-}
+    required=["subject", "description"],
+)
 
-TASK_LIST_SCHEMA = {
-    "name": "TaskList",
-    "description": ("List all tasks with summary info: id, subject, status, owner, blockedBy."),
-    "parameters": {
-        "type": "object",
-        "properties": {},
+TASK_GET_SCHEMA = make_tool_schema(
+    name="TaskGet",
+    description="Get full details of a task including description and dependencies.",
+    properties={
+        "task_id": {
+            "type": "string",
+            "description": "The task ID to retrieve",
+        },
     },
-}
+    required=["task_id"],
+)
 
-TASK_UPDATE_SCHEMA = {
-    "name": "TaskUpdate",
-    "description": (
+TASK_LIST_SCHEMA = make_tool_schema(
+    name="TaskList",
+    description="List all tasks with summary info: id, subject, status, owner, blockedBy.",
+    properties={},
+)
+
+TASK_UPDATE_SCHEMA = make_tool_schema(
+    name="TaskUpdate",
+    description=(
         "Update a task's status, dependencies, or other fields. "
         "Status flow: pending -> in_progress -> completed. "
         "Use status='deleted' to remove a task."
     ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "string",
-                "description": "The task ID to update",
-            },
-            "status": {
-                "type": "string",
-                "enum": ["pending", "in_progress", "completed", "deleted"],
-                "description": "New status for the task",
-            },
-            "subject": {
-                "type": "string",
-                "description": "New subject for the task",
-            },
-            "description": {
-                "type": "string",
-                "description": "New description for the task",
-            },
-            "active_form": {
-                "type": "string",
-                "description": "New activeForm for the task",
-            },
-            "owner": {
-                "type": "string",
-                "description": "Assign task to an agent",
-            },
-            "add_blocks": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Task IDs that this task blocks",
-            },
-            "add_blocked_by": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Task IDs that block this task",
-            },
-            "metadata": {
-                "type": "object",
-                "description": "Metadata keys to merge (set key to null to delete)",
-            },
+    properties={
+        "task_id": {
+            "type": "string",
+            "description": "The task ID to update",
         },
-        "required": ["task_id"],
+        "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "deleted"],
+            "description": "New status for the task",
+        },
+        "subject": {
+            "type": "string",
+            "description": "New subject for the task",
+        },
+        "description": {
+            "type": "string",
+            "description": "New description for the task",
+        },
+        "active_form": {
+            "type": "string",
+            "description": "New activeForm for the task",
+        },
+        "owner": {
+            "type": "string",
+            "description": "Assign task to an agent",
+        },
+        "add_blocks": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Task IDs that this task blocks",
+        },
+        "add_blocked_by": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Task IDs that block this task",
+        },
+        "metadata": {
+            "type": "object",
+            "description": "Metadata keys to merge (set key to null to delete)",
+        },
     },
-}
+    required=["task_id"],
+)
 
 
 class TaskService:
@@ -139,14 +128,13 @@ class TaskService:
     def __init__(
         self,
         registry: ToolRegistry,
-        workspace_root: str | None = None,
-        db_path: Path | None = None,
         thread_id: str | None = None,
+        repo: Any | None = None,
     ):
-        self._repo = make_tool_task_repo(db_path or DEFAULT_DB_PATH)
+        self._repo = repo or build_tool_task_repo()
         self._default_thread_id = thread_id  # override for tests / single-agent TUI
         self._register(registry)
-        logger.info("TaskService initialized (db=%s)", db_path or DEFAULT_DB_PATH)
+        logger.info("TaskService initialized")
 
     def _get_thread_id(self) -> str:
         if self._default_thread_id:
@@ -157,12 +145,14 @@ class TaskService:
         return tid or "default"
 
     def _register(self, registry: ToolRegistry) -> None:
+        read_only = {"TaskGet", "TaskList"}
         for name, schema, handler in [
             ("TaskCreate", TASK_CREATE_SCHEMA, self._create),
             ("TaskGet", TASK_GET_SCHEMA, self._get),
             ("TaskList", TASK_LIST_SCHEMA, self._list),
             ("TaskUpdate", TASK_UPDATE_SCHEMA, self._update),
         ]:
+            ro = name in read_only
             registry.register(
                 ToolEntry(
                     name=name,
@@ -170,6 +160,8 @@ class TaskService:
                     schema=schema,
                     handler=handler,
                     source="TaskService",
+                    is_concurrency_safe=ro,
+                    is_read_only=ro,
                 )
             )
 
@@ -298,16 +290,3 @@ class TaskService:
             ensure_ascii=False,
             indent=2,
         )
-
-    # ── compatibility helpers (used by agent.py runtime introspection) ────────
-
-    def get_tasks(self) -> dict[str, Task]:
-        thread_id = self._get_thread_id()
-        return {t.id: t for t in self._repo.list_all(thread_id)}
-
-    def get_active_task(self) -> Task | None:
-        thread_id = self._get_thread_id()
-        for task in self._repo.list_all(thread_id):
-            if task.status == TaskStatus.IN_PROGRESS:
-                return task
-        return None

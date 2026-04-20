@@ -1,8 +1,11 @@
 """Token 使用量监控（6 项分项追踪）"""
 
+from __future__ import annotations
+
 from typing import Any
 
 from .base import BaseMonitor
+from .cost import CostCalculator
 
 
 class TokenMonitor(BaseMonitor):
@@ -24,11 +27,10 @@ class TokenMonitor(BaseMonitor):
         self.total_tokens = 0  # 总计
 
         # 成本计算器（由 MonitorMiddleware 注入）
-        self.cost_calculator = None
+        self.cost_calculator: CostCalculator | None = None
 
     def on_request(self, request: dict[str, Any]) -> None:
         """请求前：无操作（call_count 在 on_response 中计数）"""
-        pass
 
     def on_response(self, request: dict[str, Any], response: dict[str, Any]) -> None:
         """响应后：从 usage_metadata 提取 token 统计，回退到 response_metadata"""

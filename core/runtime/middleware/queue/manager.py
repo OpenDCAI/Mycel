@@ -11,7 +11,8 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
-from storage.contracts import QueueItem, QueueRepo
+from storage.contracts import NotificationType, QueueItem, QueueRepo
+from storage.runtime import build_queue_repo, uses_supabase_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,8 @@ class MessageQueueManager:
     def __init__(self, repo: QueueRepo | None = None, *, db_path: str | None = None) -> None:
         if repo is not None:
             self._repo = repo
+        elif db_path is None and uses_supabase_runtime_defaults():
+            self._repo = build_queue_repo()
         else:
             from storage.providers.sqlite.queue_repo import SQLiteQueueRepo
 
@@ -40,7 +43,7 @@ class MessageQueueManager:
         self,
         content: str,
         thread_id: str,
-        notification_type: str = "steer",
+        notification_type: NotificationType = "steer",
         source: str | None = None,
         sender_id: str | None = None,
         sender_name: str | None = None,
@@ -121,14 +124,10 @@ class MessageQueueManager:
         self.clear_queue(thread_id)
         self.unregister_wake(thread_id)
 
-    def clear_thread(self, thread_id: str) -> None:
-        """Alias for clear_all (backward compat)."""
-        self.clear_all(thread_id)
-
     # ------------------------------------------------------------------
     # Diagnostics
     # ------------------------------------------------------------------
 
     def queue_sizes(self, thread_id: str) -> dict[str, int]:
-        """Return queue sizes. steer is always 0 (backward compat)."""
-        return {"steer": 0, "followup": self._repo.count(thread_id)}
+        """Return persisted queue sizes."""
+        return {"followup": self._repo.count(thread_id)}

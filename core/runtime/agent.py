@@ -12,23 +12,22 @@ Tools are registered via Services into ToolRegistry:
 - SkillsService: load_skill (dynamic schema)
 - TaskService: TaskCreate/Update/List/Get (deferred)
 - AgentService: Agent, TaskOutput, TaskStop
-- TaskBoardService: ListBoardTasks, ClaimTask, UpdateTaskProgress, CompleteTask, FailTask, CreateBoardTask
 - ToolSearchService: tool_search
 
 All paths must be absolute. Full security mechanisms and audit logging.
 """
 
+import asyncio
+import concurrent.futures
+import inspect
+import logging
 import os
-import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from langchain.agents import create_agent
+import httpx
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-from config.schema import DEFAULT_MODEL
 
 # Load .env file
 _env_file = Path(__file__).parent / ".env"
@@ -40,19 +39,23 @@ if _env_file.exists():
             os.environ[key] = value
 
 from config import LeonSettings  # noqa: E402
-from config.loader import AgentLoader  # noqa: E402
+from config.loader import AgentLoader, load_bundle_from_repo  # noqa: E402
 from config.models_loader import ModelsLoader  # noqa: E402
 from config.models_schema import ModelsConfig  # noqa: E402
 from config.observation_loader import ObservationLoader  # noqa: E402
 from config.observation_schema import ObservationConfig  # noqa: E402
 
 # Multi-agent services
-from core.agents.registry import AgentRegistry  # noqa: E402
 from core.agents.service import AgentService  # noqa: E402
 from core.model_params import normalize_model_kwargs  # noqa: E402
 
 # Import file operation recorder for time travel
 from core.operations import get_recorder  # noqa: E402
+
+# New architecture: ToolRegistry + ToolRunner + Services
+from core.runtime.cleanup import CleanupRegistry  # noqa: E402
+from core.runtime.loop import QueryLoop  # noqa: E402
+from core.runtime.middleware.mcp_instructions import McpInstructionsDeltaMiddleware  # noqa: E402
 from core.runtime.middleware.memory import MemoryMiddleware  # noqa: E402
 from core.runtime.middleware.monitor import MonitorMiddleware, apply_usage_patches  # noqa: E402
 from core.runtime.middleware.prompt_caching import PromptCachingMiddleware  # noqa: E402
@@ -60,10 +63,9 @@ from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddlewar
 
 # Middleware imports (migrated paths)
 from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: E402
-
-# New architecture: ToolRegistry + ToolRunner + Services
-from core.runtime.registry import ToolRegistry  # noqa: E402
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema  # noqa: E402
 from core.runtime.runner import ToolRunner  # noqa: E402
+from core.runtime.state import AppState, BootstrapConfig  # noqa: E402
 from core.runtime.validator import ToolValidator  # noqa: E402
 
 # Hooks (used by Services)
@@ -72,18 +74,50 @@ from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook  # 
 from core.tools.command.hooks.file_permission import FilePermissionHook  # noqa: E402
 from core.tools.command.service import CommandService  # noqa: E402
 from core.tools.filesystem.service import FileSystemService  # noqa: E402
+from core.tools.mcp_resources.service import McpResourceToolService  # noqa: E402
 from core.tools.search.service import SearchService  # noqa: E402
 from core.tools.skills.service import SkillsService  # noqa: E402
 from core.tools.task.service import TaskService  # noqa: E402
 from core.tools.tool_search.service import ToolSearchService  # noqa: E402
-
-# Multi-agent team coordination
-# from core.agents.teams.service import TeamService  # @@@teams-removed - module doesn't exist
 from core.tools.web.service import WebService  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from sandbox import Sandbox
+
 # @@@langchain-anthropic-streaming-usage-regression
 apply_usage_patches()
+
+
+def _make_mcp_tool_entry(tool) -> ToolEntry:
+    schema_model = getattr(tool, "tool_call_schema", None)
+    if schema_model is not None and hasattr(schema_model, "model_json_schema"):
+        parameters = schema_model.model_json_schema()
+    else:
+        parameters = {
+            "type": "object",
+            "properties": getattr(tool, "args", {}) or {},
+        }
+
+    async def mcp_handler(**kwargs):
+        if hasattr(tool, "ainvoke"):
+            return await tool.ainvoke(kwargs)
+        return await asyncio.to_thread(tool.invoke, kwargs)
+
+    return ToolEntry(
+        name=tool.name,
+        mode=ToolMode.INLINE,
+        schema=make_tool_schema(
+            name=tool.name,
+            description=getattr(tool, "description", "") or tool.name,
+            properties={},
+            parameter_overrides=parameters,
+        ),
+        handler=mcp_handler,
+        source="mcp",
+    )
 
 
 class LeonAgent:
@@ -108,6 +142,9 @@ class LeonAgent:
         workspace_root: str | Path | None = None,
         *,
         agent: str | None = None,
+        bundle_dir: str | Path | None = None,
+        agent_config_id: str | None = None,
+        agent_config_repo: Any = None,
         allowed_file_extensions: list[str] | None = None,
         block_dangerous_commands: bool | None = None,
         block_network_commands: bool | None = None,
@@ -119,9 +156,17 @@ class LeonAgent:
         jina_api_key: str | None = None,
         sandbox: Any = None,
         storage_container: StorageContainer | None = None,
+        thread_repo: Any = None,
+        user_repo: Any = None,
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
+        web_app: Any = None,
         extra_allowed_paths: list[str] | None = None,
+        extra_blocked_tools: set[str] | None = None,
+        allowed_tools: set[str] | None = None,
+        models_config_override: dict[str, Any] | None = None,
+        memory_config_override: dict[str, Any] | None = None,
+        permission_resolver_scope: str = "none",
         verbose: bool = False,
     ):
         """
@@ -138,19 +183,39 @@ class LeonAgent:
             enable_audit_log: Whether to enable audit logging
             enable_web_tools: Whether to enable web search and content fetching tools
             sandbox: Sandbox instance, name string, or None for local
+            thread_repo: Optional thread metadata repo for backend-integrated subagent registration
+            user_repo: Optional user repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
+            permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
             verbose: Whether to output detailed logs (default False)
         """
+        runtime_storage = storage_container
+
         self.agent_id: str | None = None
         self.verbose = verbose
         self.extra_allowed_paths = extra_allowed_paths
-        self.queue_manager = queue_manager or MessageQueueManager()
+        self.queue_manager = queue_manager or (
+            MessageQueueManager(repo=runtime_storage.queue_repo()) if runtime_storage is not None else MessageQueueManager()
+        )
         self._chat_repos: dict | None = chat_repos
+        self._thread_repo = thread_repo
+        self._user_repo = user_repo
+        self._web_app = web_app
+        self._session_started = False
+        self._session_ended = False
+        self._closing = False
+        self._closed = False
+        requested_sandbox_name = sandbox if isinstance(sandbox, str) else getattr(sandbox, "name", None)
+        self._explicit_model_name = model_name is not None
 
         # New config system mode
         self.config, self.models_config = self._load_config(
             agent_name=agent,
+            bundle_dir=bundle_dir,
+            agent_config_id=agent_config_id,
+            agent_config_repo=agent_config_repo,
             workspace_root=workspace_root,
+            sandbox_name=requested_sandbox_name,
             model_name=model_name,
             api_key=api_key,
             allowed_file_extensions=allowed_file_extensions,
@@ -158,6 +223,8 @@ class LeonAgent:
             block_network_commands=block_network_commands,
             enable_audit_log=enable_audit_log,
             enable_web_tools=enable_web_tools,
+            models_config_override=models_config_override,
+            memory_config_override=memory_config_override,
         )
         # Load observation config (langfuse / langsmith)
         self._observation_config = ObservationLoader(workspace_root=workspace_root).load()
@@ -167,8 +234,9 @@ class LeonAgent:
             from config.schema import DEFAULT_MODEL  # noqa: E402
 
             active_model = DEFAULT_MODEL
-        # Member model override: agent.md's model field takes precedence over global config
-        if hasattr(self, "_agent_override") and self._agent_override and self._agent_override.model:
+        # Agent frontmatter model applies only when the caller did not explicitly
+        # request a model at construction time.
+        if not self._explicit_model_name and hasattr(self, "_agent_override") and self._agent_override and self._agent_override.model:
             active_model = self._agent_override.model
         resolved_model, model_overrides = self.models_config.resolve_model(active_model)
         self.model_name = resolved_model
@@ -176,8 +244,8 @@ class LeonAgent:
 
         # Resolve API key (prefer resolved provider from mapping)
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
-        p = self.models_config.get_provider(provider_name) if provider_name else None
-        self.api_key = api_key or (p.api_key if p else None) or self.models_config.get_api_key()
+        self._explicit_api_key = api_key is not None
+        self.api_key = api_key or self.models_config.resolve_api_key(provider_name)
 
         if not self.api_key:
             raise ValueError(
@@ -191,7 +259,7 @@ class LeonAgent:
         # Initialize workspace and configuration
         self.workspace_root = self._resolve_workspace_root()
         self._init_config_attributes()
-        self.storage_container: StorageContainer | None = storage_container
+        self.storage_container: StorageContainer | None = runtime_storage
         self._sandbox = self._init_sandbox(sandbox)
 
         # Override workspace_root for sandbox mode
@@ -201,6 +269,8 @@ class LeonAgent:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
 
         # Initialize model
+        self._model_http_client: httpx.Client | None = None
+        self._model_http_async_client: httpx.AsyncClient | None = None
         self.model = self._create_model()
 
         # Store current model config for per-request override via configurable_fields
@@ -213,63 +283,70 @@ class LeonAgent:
         }
 
         # Initialize checkpointer and MCP tools
-        self._aiosqlite_conn, mcp_tools = self._init_async_components()
+        self.checkpointer = None
+        _conn, mcp_tools = self._init_async_components()
 
         # If in async context (running loop detected), _init_async_components
         # skips init and returns (None, []). Distinguish from Postgres path
         # which also returns conn=None but DID initialize successfully.
-        self._needs_async_init = self._aiosqlite_conn is None and self.checkpointer is None
+        self._needs_async_init = self.checkpointer is None
 
         # Set checkpointer to None if in async context (will be initialized later)
         if self._needs_async_init:
             self.checkpointer = None
 
         # Initialize ToolRegistry and Services (new architecture)
-        self._tool_registry = ToolRegistry(blocked_tools=self._get_member_blocked_tools())
+        blocked = self._get_agent_blocked_tools()
+        if extra_blocked_tools:
+            blocked = blocked | extra_blocked_tools
+        self._tool_registry = ToolRegistry(
+            blocked_tools=blocked,
+            allowed_tools=allowed_tools,
+        )
         self._init_services()
+        self._register_mcp_tools(mcp_tools)
 
         # Build middleware stack
         middleware = self._build_middleware_stack()
 
-        # Ensure ToolNode is created (middleware tools need at least one BaseTool)
-        if not mcp_tools and not self._has_middleware_tools(middleware):
-            mcp_tools = [self._create_placeholder_tool()]
+        self._system_prompt_section_cache: dict[str, str] = {}
+        self.system_prompt = self._compose_system_prompt()
 
-        # Build system prompt
-        self.system_prompt = self._build_system_prompt()
-        custom_prompt = self.config.system_prompt
-        if custom_prompt:
-            self.system_prompt += f"\n\n**Custom Instructions:**\n{custom_prompt}"
+        # Build BootstrapConfig for sub-agent forking
+        self._bootstrap = BootstrapConfig(
+            workspace_root=self.workspace_root,
+            original_cwd=Path.cwd(),
+            project_root=self.workspace_root,
+            cwd=self.workspace_root,
+            model_name=self.model_name,
+            api_key=self.api_key,
+            sandbox_type=self._sandbox.name,
+            permission_resolver_scope=permission_resolver_scope,
+            block_dangerous_commands=self.block_dangerous_commands,
+            block_network_commands=self.block_network_commands,
+            enable_audit_log=self.enable_audit_log,
+            enable_web_tools=self.enable_web_tools,
+            allowed_file_extensions=self.allowed_file_extensions,
+            extra_allowed_paths=self.extra_allowed_paths,
+            model_provider=self._current_model_config.get("model_provider"),
+            base_url=self._current_model_config.get("base_url"),
+        )
+        self._app_state = AppState()
+        self.app_state = self._app_state
+        # Inject bootstrap into AgentService so sub-agents can fork from it
+        if hasattr(self, "_agent_service"):
+            self._agent_service._parent_bootstrap = self._bootstrap
 
-        # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
-        if self._chat_repos:
-            repos = self._chat_repos
-            uid = repos.get("user_id")
-            owner_uid = repos.get("owner_user_id", "")
-            if uid:
-                entity_repo = repos.get("entity_repo")
-                entity = entity_repo.get_by_id(uid) if entity_repo else None
-                member_repo = repos.get("member_repo")
-                owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
-                name = entity.name if entity else uid
-                owner_name = owner_row.name if owner_row else "unknown"
-                self.system_prompt += (
-                    f"\n\n**Chat Identity:**\n"
-                    f"- Your name: {name}\n"
-                    f"- Your user_id: {uid}\n"
-                    f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
-                    f"- When you receive a chat notification, READ the message with chat_read(), "
-                    f"then REPLY with chat_send(). Your text output goes to your owner's thread, "
-                    f"not to the chat — only chat_send() delivers to the other party.\n"
-                )
-
-        # Create agent
-        self.agent = create_agent(
+        # Create agent via QueryLoop (replaces LangGraph create_agent)
+        self.agent = QueryLoop(
             model=self.model,
-            tools=mcp_tools,
             system_prompt=SystemMessage(content=[{"type": "text", "text": self.system_prompt}]),
             middleware=middleware,
-            checkpointer=self.checkpointer if not self._needs_async_init else None,
+            checkpointer=self.checkpointer,
+            registry=self._tool_registry,
+            app_state=self._app_state,
+            runtime=self._monitor_middleware.runtime,
+            bootstrap=self._bootstrap,
         )
 
         # Get runtime from MonitorMiddleware
@@ -286,12 +363,44 @@ class LeonAgent:
             print("[LeonAgent] Initialized successfully")
             print(f"[LeonAgent] Workspace: {self.workspace_root}")
             print(f"[LeonAgent] Audit log: {self.enable_audit_log}")
-            if self._needs_async_init:
+            if self.checkpointer is None:
                 print("[LeonAgent] Note: Async components need initialization via ainit()")
 
-        # Mark agent as ready (if not needing async init)
-        if not self._needs_async_init:
+        # Wire CleanupRegistry for priority-ordered resource teardown
+        self._cleanup_registry = CleanupRegistry()
+        self._cleanup_registry.register(self._cleanup_model_clients, priority=1)
+        self._cleanup_registry.register(self._cleanup_sandbox, priority=2)
+        self._cleanup_registry.register(self._mark_terminated, priority=3)
+        self._cleanup_registry.register(self._cleanup_mcp_client, priority=4)
+
+        # Mark agent as ready (checkpointer is None when async init still pending)
+        if self.checkpointer is not None:
             self._monitor_middleware.mark_ready()
+
+    @property
+    def sandbox(self) -> "Sandbox":
+        # @@@public-sandbox-surface - integration callers already drive fs/shell through
+        # agent.sandbox; make that contract explicit instead of relying on a private attr.
+        return self._sandbox
+
+    def apply_forked_child_context(
+        self,
+        bootstrap: BootstrapConfig,
+        *,
+        tool_context: Any | None = None,
+    ) -> None:
+        # @@@subagent-fork-wiring
+        # AgentService should not reach through LeonAgent and mutate QueryLoop
+        # internals directly. Keep the child bootstrap + abort-controller wiring
+        # behind one explicit LeonAgent seam.
+        self._bootstrap = bootstrap
+        self.agent._bootstrap = bootstrap
+        if hasattr(self, "_agent_service"):
+            self._agent_service._parent_bootstrap = bootstrap
+            if tool_context is not None:
+                self._agent_service._parent_tool_context = tool_context
+        if tool_context is not None:
+            self.agent._tool_abort_controller = tool_context.abort_controller
 
     async def ainit(self):
         """Complete async initialization (call this if initialized in async context).
@@ -300,22 +409,28 @@ class LeonAgent:
             agent = LeonAgent(sandbox=sandbox)
             await agent.ainit()
         """
-        if not self._needs_async_init:
-            return  # Already initialized
+        if self.checkpointer is None:
+            # Initialize async components
+            await self._init_checkpointer()
+            _mcp_tools = await self._init_mcp_tools()
+            self._register_mcp_tools(_mcp_tools)
 
-        # Initialize async components
-        self._aiosqlite_conn = await self._init_checkpointer()
-        _mcp_tools = await self._init_mcp_tools()
+            # Update agent with checkpointer
+            self.agent.checkpointer = self.checkpointer
+            if hasattr(self, "_memory_middleware"):
+                # @@@late-checkpointer-fanout - async bringup creates the saver after
+                # middleware construction, so QueryLoop and MemoryMiddleware must be
+                # rewired together or rebuild/persistence surfaces drift apart.
+                self._memory_middleware.checkpointer = self.checkpointer
 
-        # Update agent with checkpointer
-        self.agent.checkpointer = self.checkpointer
+            self._monitor_middleware.mark_ready()
 
-        # Mark as initialized
-        self._needs_async_init = False
-        self._monitor_middleware.mark_ready()
+            if self.verbose:
+                print("[LeonAgent] Async initialization completed")
 
-        if self.verbose:
-            print("[LeonAgent] Async initialization completed")
+        if not self._session_started:
+            await self._run_session_hooks("SessionStart")
+            self._session_started = True
 
     def _init_async_components(self) -> tuple[Any, list]:
         """Initialize async components (checkpointer and MCP tools).
@@ -339,29 +454,21 @@ class LeonAgent:
             self._event_loop = loop
 
             # Initialize components
-            conn = loop.run_until_complete(self._init_checkpointer())
+            loop.run_until_complete(self._init_checkpointer())
             mcp_tools = loop.run_until_complete(self._init_mcp_tools())
 
-            # DON'T close the loop - let it persist for aiosqlite
-            # The loop will be cleaned up when Python exits
-            return conn, mcp_tools
+            return None, mcp_tools
 
-    def _has_middleware_tools(self, middleware: list) -> bool:
-        """Check if any middleware has BaseTool instances."""
-        return any(getattr(m, "tools", None) for m in middleware)
+    def _register_mcp_tools(self, mcp_tools: list) -> None:
+        if not mcp_tools:
+            return
+        for tool in mcp_tools:
+            try:
+                self._tool_registry.register(_make_mcp_tool_entry(tool))
+            except Exception as exc:
+                logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
 
-    def _create_placeholder_tool(self):
-        """Create placeholder tool to ensure ToolNode is created."""
-        from langchain_core.tools import tool
-
-        @tool
-        def _placeholder() -> str:
-            """Internal placeholder - ensures ToolNode is created for middleware tools."""
-            return ""
-
-        return _placeholder
-
-    def _get_member_blocked_tools(self) -> set[str]:
+    def _get_agent_blocked_tools(self) -> set[str]:
         """Return disabled tool names, respecting catalog defaults.
 
         Logic:
@@ -391,10 +498,28 @@ class LeonAgent:
 
         return blocked
 
+    def _get_mcp_server_configs(self) -> dict[str, Any]:
+        if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
+            return {name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled}
+        return self.config.mcp.servers
+
+    def _get_mcp_instruction_blocks(self) -> dict[str, str]:
+        blocks: dict[str, str] = {}
+        for name, cfg in self._get_mcp_server_configs().items():
+            instructions = getattr(cfg, "instructions", None)
+            if not isinstance(instructions, str) or not instructions.strip():
+                continue
+            blocks[name] = instructions.strip()
+        return blocks
+
     def _load_config(
         self,
         agent_name: str | None,
+        bundle_dir: str | Path | None,
+        agent_config_id: str | None,
+        agent_config_repo: Any,
         workspace_root: str | Path | None,
+        sandbox_name: str | None,
         model_name: str | None,
         api_key: str | None,
         allowed_file_extensions: list[str] | None,
@@ -402,6 +527,8 @@ class LeonAgent:
         block_network_commands: bool | None,
         enable_audit_log: bool | None,
         enable_web_tools: bool | None,
+        models_config_override: dict[str, Any] | None,
+        memory_config_override: dict[str, Any] | None,
     ) -> tuple[LeonSettings, ModelsConfig]:
         """Load configuration using new config system.
 
@@ -410,8 +537,14 @@ class LeonAgent:
         """
         # Build CLI overrides for runtime config
         cli_overrides: dict = {}
+        use_workspace_override = sandbox_name in (None, "", "local")
 
-        if workspace_root is not None:
+        if workspace_root is not None and use_workspace_override:
+            # @@@remote-sandbox-config-root
+            # Remote child agents may inherit a sandbox cwd like /home/daytona,
+            # which is valid inside the sandbox but not on the host. Feeding that
+            # path into LeonSettings makes config validation fail before sandbox
+            # init ever runs, so only local sandboxes pin workspace_root here.
             cli_overrides["workspace_root"] = str(workspace_root)
 
         # Runtime overrides go into "runtime" section
@@ -432,23 +565,45 @@ class LeonAgent:
 
         # Load runtime config
         loader = AgentLoader(workspace_root=workspace_root)
-        config = loader.load(cli_overrides=cli_overrides if cli_overrides else None)
+        config = loader.load(cli_overrides=cli_overrides or None)
+        if memory_config_override is not None:
+            config = self._with_memory_config_override(config, memory_config_override)
 
         # Load models config
         models_cli: dict = {}
         if model_name is not None:
             models_cli["active"] = {"model": model_name}
         models_loader = ModelsLoader(workspace_root=workspace_root)
-        models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
+        if models_config_override is None:
+            models_config = models_loader.load(cli_overrides=models_cli or None)
+        else:
+            models_config = models_loader.load_with_user_config(
+                models_config_override,
+                cli_overrides=models_cli or None,
+            )
 
+        # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from
+        # the repo-rooted agent_config_id path, not stale local filesystem shells.
+        if agent_config_id is not None:
+            if agent_config_repo is None:
+                raise RuntimeError("agent_config_repo is required when agent_config_id is provided")
+            bundle = load_bundle_from_repo(agent_config_repo, agent_config_id)
+            if bundle is None:
+                raise RuntimeError(f"Agent config bundle not found: {agent_config_id}")
+            self._agent_bundle = bundle
+            self._agent_override = bundle.agent
+        elif bundle_dir is not None:
+            bundle_path = Path(bundle_dir).expanduser().resolve()
+            self._agent_bundle = loader.load_bundle(bundle_path)
+            self._agent_override = self._agent_bundle.agent.model_copy(update={"source_dir": bundle_path})
         # If agent specified, load agent definition to override system_prompt and tools
-        if agent_name:
-            all_agents = loader.load_all_agents()
+        elif agent_name:
+            all_agents = loader.load_runtime_agents()
             agent_def = all_agents.get(agent_name)
             if not agent_def:
                 available = ", ".join(sorted(all_agents.keys()))
                 raise ValueError(f"Unknown agent: {agent_name}. Available: {available}")
-            # If agent has source_dir (member), load full bundle
+            # If agent has source_dir, load the full bundle.
             if agent_def.source_dir:
                 self._agent_bundle = loader.load_bundle(agent_def.source_dir)
             else:
@@ -464,6 +619,23 @@ class LeonAgent:
 
         return config, models_config
 
+    @staticmethod
+    def _with_memory_config_override(config: LeonSettings, memory_config_override: dict[str, Any]) -> LeonSettings:
+        if not isinstance(memory_config_override, dict):
+            raise TypeError("memory_config_override must be a JSON object")
+
+        def merge_dict(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+            merged = dict(base)
+            for key, value in patch.items():
+                if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                    merged[key] = merge_dict(merged[key], value)
+                else:
+                    merged[key] = value
+            return merged
+
+        memory_data = merge_dict(config.memory.model_dump(), memory_config_override)
+        return config.model_copy(update={"memory": type(config.memory)(**memory_data)})
+
     def _resolve_workspace_root(self) -> Path:
         """Resolve workspace root from config or current directory."""
         if self.config.workspace_root:
@@ -477,7 +649,6 @@ class LeonAgent:
         self.block_network_commands = self.config.runtime.block_network_commands
         self.enable_audit_log = self.config.runtime.enable_audit_log
         self.enable_web_tools = self.config.tools.web.enabled
-        self.queue_mode = self.config.runtime.queue_mode
 
         self._session_pool: dict[str, Any] = {}
         env_db_path = os.getenv("LEON_DB_PATH")
@@ -507,7 +678,7 @@ class LeonAgent:
         raise TypeError(f"sandbox must be Sandbox, str, or None, got {type(sandbox)}")
 
     def _resolve_provider_name(self, model_name: str, overrides: dict | None = None) -> str | None:
-        """Resolve provider: overrides → custom_providers → infer from model name → env fallback."""
+        """Resolve provider: overrides → active config → infer from model name → configured default."""
         if overrides and overrides.get("model_provider"):
             return overrides["model_provider"]
         if self.models_config.active and self.models_config.active.provider:
@@ -518,14 +689,6 @@ class LeonAgent:
         if inferred and self.models_config.get_provider(inferred):
             return inferred
         return self.models_config.get_model_provider()
-
-    def _resolve_env_api_key(self) -> str | None:
-        """Resolve API key from environment variables based on model_provider."""
-        return self.models_config.get_api_key()
-
-    def _resolve_env_base_url(self) -> str | None:
-        """Resolve base URL from environment variables based on model_provider."""
-        return self.models_config.get_base_url()
 
     def _normalize_base_url(self, base_url: str, provider: str | None) -> str:
         """Normalize base_url based on provider requirements.
@@ -548,8 +711,7 @@ class LeonAgent:
         base_url = base_url.rstrip("/")
 
         # Remove /v1 suffix if present (we'll add it back if needed)
-        if base_url.endswith("/v1"):
-            base_url = base_url[:-3]
+        base_url = base_url.removesuffix("/v1")
 
         # Add /v1 for OpenAI-compatible providers
         if provider in ("openai", None):  # None defaults to OpenAI
@@ -568,7 +730,9 @@ class LeonAgent:
         Uses configurable_fields so model/provider/api_key/base_url can be
         overridden per-request via LangGraph config without rebuilding the graph.
         """
-        kwargs = normalize_model_kwargs(self.model_name, self._build_model_kwargs())
+        kwargs = self._build_model_kwargs()
+        kwargs.update(self._build_openai_http_clients(kwargs.get("model_provider")))
+        kwargs = normalize_model_kwargs(self.model_name, kwargs)
         return init_chat_model(
             self.model_name,
             api_key=self.api_key,
@@ -576,23 +740,41 @@ class LeonAgent:
             **kwargs,
         )
 
+    def _build_openai_http_clients(self, provider: str | None) -> dict[str, Any]:
+        if provider != "openai":
+            return {}
+
+        # @@@configurable-openai-client-reuse - LangChain's configurable model
+        # rebuilds the concrete ChatOpenAI on each invoke. Reuse explicit httpx
+        # clients so provider traffic does not inherit process proxies and does
+        # not churn a fresh transport pool per call.
+        if self._model_http_client is None:
+            self._model_http_client = httpx.Client(trust_env=False)
+        if self._model_http_async_client is None:
+            self._model_http_async_client = httpx.AsyncClient(trust_env=False)
+        return {
+            "http_client": self._model_http_client,
+            "http_async_client": self._model_http_async_client,
+        }
+
     def _create_extraction_model(self):
-        """Create a small model for Fetch AI extraction (leon:mini)."""
-        try:
-            model_name, overrides = self.models_config.resolve_model("leon:mini")
-            provider = self._resolve_provider_name(model_name, overrides)
-            kwargs: dict = {}
-            if provider:
-                kwargs["model_provider"] = provider
-            p = self.models_config.get_provider(provider) if provider else None
-            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
-            if base_url:
-                kwargs["base_url"] = self._normalize_base_url(base_url, provider)
-            return init_chat_model(model_name, **kwargs)
-        except Exception as e:
-            if self.verbose:
-                print(f"[LeonAgent] Failed to create extraction model: {e}, extraction will be unavailable")
-            return None
+        """Create a small model for WebFetch AI extraction (leon:mini)."""
+        model_name, overrides = self.models_config.resolve_model("leon:mini")
+        provider = self._resolve_provider_name(model_name, overrides)
+        kwargs: dict = {}
+        if provider:
+            kwargs["model_provider"] = provider
+
+        api_key = self.models_config.resolve_api_key(provider) or getattr(self, "api_key", None)
+        if not api_key:
+            raise RuntimeError("API key required for WebFetch extraction model")
+        kwargs["api_key"] = api_key
+
+        base_url = self.models_config.resolve_base_url(provider)
+        if base_url:
+            kwargs["base_url"] = self._normalize_base_url(base_url, provider)
+        kwargs.update(self._build_openai_http_clients(provider))
+        return init_chat_model(model_name, **kwargs)
 
     def _build_model_kwargs(self) -> dict:
         """Build model parameters for model initialization and sub-agents."""
@@ -603,13 +785,11 @@ class LeonAgent:
             kwargs.update({k: v for k, v in self._model_overrides.items() if k not in ("context_limit", "based_on")})
 
         # Use provider from model overrides (mapping) first, then infer
-        provider = self._resolve_provider_name(self.model_name, kwargs if kwargs else None)
+        provider = self._resolve_provider_name(self.model_name, kwargs or None)
         if provider:
             kwargs["model_provider"] = provider
 
-        # Get credentials from the resolved provider
-        p = self.models_config.get_provider(provider) if provider else None
-        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        base_url = self.models_config.resolve_base_url(provider)
         if base_url:
             kwargs["base_url"] = self._normalize_base_url(base_url, provider)
 
@@ -646,9 +826,8 @@ class LeonAgent:
         if model is None:
             # @@@api-key-reload — no model change, just refresh credentials from disk
             provider_name = self._resolve_provider_name(self.model_name, self._model_overrides)
-            p = self.models_config.get_provider(provider_name) if provider_name else None
-            self.api_key = (p.api_key if p else None) or self.models_config.get_api_key()
-            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+            self.api_key = self.models_config.resolve_api_key(provider_name)
+            base_url = self.models_config.resolve_base_url(provider_name)
             if base_url:
                 base_url = self._normalize_base_url(base_url, provider_name)
             self._current_model_config.update(
@@ -667,9 +846,8 @@ class LeonAgent:
 
         # Resolve provider credentials
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
-        p = self.models_config.get_provider(provider_name) if provider_name else None
-        self.api_key = (p.api_key if p else None) or self.models_config.get_api_key()
-        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        self.api_key = self.models_config.resolve_api_key(provider_name)
+        base_url = self.models_config.resolve_base_url(provider_name)
         if base_url:
             base_url = self._normalize_base_url(base_url, provider_name)
 
@@ -707,19 +885,86 @@ class LeonAgent:
         Args:
             **overrides: Fields to override (e.g. active="langfuse" or active=None)
         """
-        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(
-            cli_overrides=overrides if overrides else None
-        )
+        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
 
         if self.verbose:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
 
-    def close(self):
-        """Clean up resources."""
-        self._cleanup_sandbox()
-        self._mark_terminated()
-        self._cleanup_mcp_client()
-        self._cleanup_sqlite_connection()
+    def close(self, *, cleanup_sandbox: bool = True):
+        """Clean up resources via CleanupRegistry (priority-ordered).
+
+        Falls back to direct cleanup if CleanupRegistry is not initialized.
+        """
+        # @@@close-idempotent - child agents may explicitly skip sandbox cleanup
+        # and later still hit __del__ on GC; never let a second close silently
+        # re-enable default sandbox teardown on a shared lease.
+        if getattr(self, "_closed", False) or getattr(self, "_closing", False):
+            return
+
+        self._closing = True
+        session_end_error: Exception | None = None
+        try:
+            if getattr(self, "_session_started", False) and not getattr(self, "_session_ended", False):
+                try:
+                    self._run_async_cleanup(lambda: self._run_session_hooks("SessionEnd"), "SessionEnd hooks")
+                except Exception as exc:
+                    session_end_error = exc
+                finally:
+                    self._session_ended = True
+
+            if hasattr(self, "_cleanup_registry") and cleanup_sandbox:
+                self._run_async_cleanup(self._cleanup_registry.run_cleanup, "CleanupRegistry")
+            else:
+                # Fallback for edge cases where __init__ did not complete fully
+                cleanup_steps = [
+                    ("monitor", self._mark_terminated),
+                    ("MCP client", self._cleanup_mcp_client),
+                ]
+                if cleanup_sandbox:
+                    cleanup_steps.insert(0, ("sandbox", self._cleanup_sandbox))
+
+                for step_name, step_fn in cleanup_steps:
+                    try:
+                        step_fn()
+                    except Exception as e:
+                        print(f"[LeonAgent] {step_name} cleanup error: {e}")
+
+            if session_end_error is not None:
+                raise session_end_error
+        finally:
+            self._closed = True
+            self._closing = False
+
+    async def _cleanup_model_clients(self) -> None:
+        async_client = getattr(self, "_model_http_async_client", None)
+        sync_client = getattr(self, "_model_http_client", None)
+        self._model_http_async_client = None
+        self._model_http_client = None
+
+        if async_client is not None:
+            await async_client.aclose()
+        if sync_client is not None:
+            await asyncio.to_thread(sync_client.close)
+
+    def _build_session_hook_payload(self, event: str) -> dict[str, Any]:
+        return {
+            "event": event,
+            "session_id": self._bootstrap.session_id,
+            "workspace_root": str(self.workspace_root),
+            "cwd": str(self._bootstrap.cwd or self.workspace_root),
+            "sandbox": self._sandbox.name,
+        }
+
+    async def _run_session_hooks(self, event: str) -> None:
+        hooks = self._app_state.get_session_hooks(event)
+        if not hooks:
+            return
+
+        payload = self._build_session_hook_payload(event)
+        for hook in hooks:
+            result = hook(payload)
+            if inspect.isawaitable(result):
+                await result
 
     def _cleanup_sandbox(self) -> None:
         """Clean up sandbox resources."""
@@ -734,32 +979,29 @@ class LeonAgent:
         if hasattr(self, "_monitor_middleware"):
             self._monitor_middleware.mark_terminated()
 
+    _CLEANUP_TIMEOUT: float = 10.0  # seconds; prevents hanging on stuck I/O
+
     @staticmethod
     def _run_async_cleanup(coro_factory, label: str) -> None:
         import asyncio
 
         try:
-            running_loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
-            running_loop = None
-
-        if running_loop is None:
             asyncio.run(coro_factory())
             return
 
-        error: list[Exception] = []
-
-        def _runner() -> None:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro_factory())
             try:
-                asyncio.run(coro_factory())
+                future.result(timeout=LeonAgent._CLEANUP_TIMEOUT)
+            except concurrent.futures.TimeoutError:
+                raise RuntimeError(
+                    f"{label} cleanup timed out after {LeonAgent._CLEANUP_TIMEOUT}s — "
+                    f"possible stuck I/O; resource abandoned to prevent hang"
+                )
             except Exception as exc:
-                error.append(exc)
-
-        thread = threading.Thread(target=_runner, daemon=True)
-        thread.start()
-        thread.join()
-        if error:
-            raise RuntimeError(f"{label} cleanup failed: {error[0]}") from error[0]
+                raise RuntimeError(f"{label} cleanup failed: {exc}") from exc
 
     def _cleanup_mcp_client(self) -> None:
         """Clean up MCP client."""
@@ -767,35 +1009,12 @@ class LeonAgent:
             return
 
         try:
-            self._run_async_cleanup(lambda: self._mcp_client.close(), "MCP client")
+            close_fn = getattr(self._mcp_client, "close", None)
+            if callable(close_fn):
+                self._run_async_cleanup(close_fn, "MCP client")
         except Exception as e:
             print(f"[LeonAgent] MCP cleanup error: {e}")
         self._mcp_client = None
-
-    def _cleanup_sqlite_connection(self) -> None:
-        """Clean up SQLite connection.
-
-        Properly closes aiosqlite connection using asyncio.run() to avoid
-        hanging on process exit.
-        """
-        if not hasattr(self, "_aiosqlite_conn") or not self._aiosqlite_conn:
-            return
-
-        try:
-            import asyncio
-
-            # Close the connection asynchronously
-            async def _close():
-                if self._aiosqlite_conn:
-                    await self._aiosqlite_conn.close()
-
-            # Use asyncio.run() to properly close the connection
-            asyncio.run(_close())
-        except Exception:
-            # Ignore errors during cleanup
-            pass
-        finally:
-            self._aiosqlite_conn = None
 
     def __del__(self):
         self.close()
@@ -830,11 +1049,19 @@ class LeonAgent:
         if memory_enabled:
             self._add_memory_middleware(middleware)
 
-        # 4. Steering — injects queued messages before model call
+        # 4. MCP instructions delta — thread-scoped reminder when MCP guidance changes
+        middleware.append(
+            McpInstructionsDeltaMiddleware(
+                get_instruction_blocks=self._get_mcp_instruction_blocks,
+                get_app_state=lambda: self.app_state,
+            )
+        )
+
+        # 5. Steering — injects queued messages before model call
         self._steering_middleware = SteeringMiddleware(queue_manager=self.queue_manager)
         middleware.append(self._steering_middleware)
 
-        # 5. ToolRunner (innermost — routes all ToolRegistry-registered tool calls)
+        # 6. ToolRunner (innermost — routes all ToolRegistry-registered tool calls)
         self._tool_runner = ToolRunner(
             registry=self._tool_registry,
             validator=ToolValidator(),
@@ -843,7 +1070,7 @@ class LeonAgent:
 
         # 0. SpillBuffer (outermost — catches oversized tool outputs)
         # Must be inserted at index 0 AFTER building the list:
-        # LangChain wraps middlewares as "first = outermost".
+        # QueryLoop composes middleware so the first entry remains outermost.
         if self.config.tools.spill_buffer.enabled:
             spill_cfg = self.config.tools.spill_buffer
             middleware.insert(
@@ -860,8 +1087,8 @@ class LeonAgent:
 
     def _add_memory_middleware(self, middleware: list) -> None:
         """Add memory middleware to stack."""
-        # @@@context-limit-fallback — prefer mapping override (e.g. leon:tiny → 8000),
-        # then Monitor's resolved value (model API → 128000 fallback).
+        # @@@context-limit-default - prefer mapping override (e.g. leon:tiny -> 8000),
+        # then Monitor's resolved value (model API or its 128000 default).
         context_limit = self._model_overrides.get("context_limit") or self._monitor_middleware._context_monitor.context_limit
         pruning_config = self.config.memory.pruning
         compaction_config = self.config.memory.compaction
@@ -909,7 +1136,7 @@ class LeonAgent:
                         allowed_extensions=self.allowed_file_extensions,
                     )
                 )
-            max_file_size = self.config.tools.filesystem.tools.read_file.max_file_size
+            max_file_size = self.config.tools.filesystem.max_file_size
             self._filesystem_service = FileSystemService(
                 registry=self._tool_registry,
                 workspace_root=self.workspace_root,
@@ -935,7 +1162,7 @@ class LeonAgent:
             tavily_key = self.config.tools.web.tools.web_search.tavily_api_key or os.getenv("TAVILY_API_KEY")
             exa_key = self.config.tools.web.tools.web_search.exa_api_key or os.getenv("EXA_API_KEY")
             firecrawl_key = self.config.tools.web.tools.web_search.firecrawl_api_key or os.getenv("FIRECRAWL_API_KEY")
-            jina_key = self.config.tools.web.tools.fetch.jina_api_key or os.getenv("JINA_AI_API_KEY")
+            jina_key = self.config.tools.web.tools.web_fetch.jina_api_key or os.getenv("JINA_AI_API_KEY")
             extraction_model = self._create_extraction_model()
             self._web_service = WebService(
                 registry=self._tool_registry,
@@ -974,8 +1201,9 @@ class LeonAgent:
             )
 
         # Skills tools
-        if self.config.skills.enabled and self.config.skills.paths:
-            # Use member bundle's skills enabled/disabled state if available
+        bundle_skills = self._agent_bundle.skills if hasattr(self, "_agent_bundle") and self._agent_bundle else []
+        if self.config.skills.enabled and (self.config.skills.paths or bundle_skills):
+            # Use the agent bundle's skills enabled/disabled state if available.
             enabled_skills = self.config.skills.skills
             if hasattr(self, "_agent_bundle") and self._agent_bundle:
                 bundle_skill_entries = {k.split(":", 1)[1]: v for k, v in self._agent_bundle.runtime.items() if k.startswith("skills:")}
@@ -985,12 +1213,18 @@ class LeonAgent:
                 registry=self._tool_registry,
                 skill_paths=self.config.skills.paths,
                 enabled_skills=enabled_skills,
+                inline_skills=bundle_skills,
             )
 
         # Task tools (DEFERRED - discoverable via tool_search)
         self._task_service = TaskService(
             registry=self._tool_registry,
-            workspace_root=self.workspace_root,
+        )
+
+        self._mcp_resource_tool_service = McpResourceToolService(
+            registry=self._tool_registry,
+            client_fn=lambda: getattr(self, "_mcp_client", None),
+            server_configs_fn=self._get_mcp_server_configs,
         )
 
         # ToolSearch (INLINE - always available for discovering DEFERRED tools)
@@ -999,75 +1233,43 @@ class LeonAgent:
         )
 
         # Multi-agent tools (Agent/TaskOutput/TaskStop)
-        self._agent_registry = AgentRegistry()
+        self._agent_registry = None
         self._agent_service = AgentService(
             tool_registry=self._tool_registry,
-            agent_registry=self._agent_registry,
             workspace_root=self.workspace_root,
             model_name=self.model_name,
+            thread_repo=self._thread_repo,
+            user_repo=self._user_repo,
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
+            web_app=self._web_app,
+            child_agent_factory=create_leon_agent,
         )
 
-        # Team coordination (TeamCreate/TeamDelete — deferred mode)
-        # @@@teams-removed - TeamService module doesn't exist, feature not implemented
-        # self._team_service = TeamService(
-        #     tool_registry=self._tool_registry,
-        # )
-
-        # TaskBoard tools (board management — INLINE, blocked by default via catalog)
-        try:
-            from backend.taskboard.service import TaskBoardService
-
-            self._taskboard_service = TaskBoardService(registry=self._tool_registry)
-        except ImportError:
-            self._taskboard_service = None
-
-        # @@@chat-tools - register chat tools for agents with user identity
+        # @@@chat-tools - register chat tools for agents with user identity (v2 messaging)
         if self._chat_repos:
             repos = self._chat_repos
-            user_id = repos.get("user_id")
-            owner_user_id = repos.get("owner_user_id", "")
-            if user_id:
-                from core.agents.communication.chat_tool_service import ChatToolService
+            chat_identity_id = self._runtime_chat_identity_id()
+            if chat_identity_id:
+                from messaging.tools.chat_tool_service import ChatToolService
 
-                # @@@lazy-runtime — runtime isn't set yet at _init_services() time.
-                # Pass a callable that resolves runtime lazily at tool call time.
                 self._chat_tool_service = ChatToolService(
                     registry=self._tool_registry,
-                    user_id=user_id,
-                    owner_user_id=owner_user_id,
-                    entity_repo=repos.get("entity_repo"),
-                    chat_service=repos.get("chat_service"),
-                    chat_entity_repo=repos.get("chat_entity_repo"),
-                    chat_message_repo=repos.get("chat_message_repo"),
-                    member_repo=repos.get("member_repo"),
-                    chat_event_bus=repos.get("chat_event_bus"),
-                    runtime_fn=lambda: getattr(self, "runtime", None),
+                    chat_identity_id=chat_identity_id,
+                    messaging_service=repos.get("messaging_service"),
                 )
 
-        # @@@wechat-tools — register WeChat tools via lazy connection lookup
-        owner_uid = self._chat_repos.get("owner_user_id", "") if self._chat_repos else ""
-        if owner_uid:
-            try:
-                from core.tools.wechat.service import WeChatToolService
+        # LSP tools — DEFERRED, always registered, multilspy checked at call time
+        self._lsp_service = None
+        try:
+            from core.tools.lsp.service import LSPService
 
-                def _get_wechat_conn(uid=owner_uid):
-                    """Lazy lookup — returns None if registry not on app.state yet."""
-                    try:
-                        from backend.web.main import app
-
-                        registry = getattr(app.state, "wechat_registry", None)
-                        return registry.get(uid) if registry else None
-                    except Exception:
-                        return None
-
-                self._wechat_tool_service = WeChatToolService(
-                    registry=self._tool_registry,
-                    connection_fn=_get_wechat_conn,
-                )
-            except ImportError:
-                self._wechat_tool_service = None
+            self._lsp_service = LSPService(
+                registry=self._tool_registry,
+                workspace_root=self.workspace_root,
+            )
+        except Exception as e:
+            logger.debug("[LeonAgent] LSPService init skipped: %s", e)
 
         if self.verbose:
             all_tools = self._tool_registry.list_all()
@@ -1078,11 +1280,7 @@ class LeonAgent:
     async def _init_mcp_tools(self) -> list:
         mcp_enabled = self.config.mcp.enabled
 
-        # Use member bundle MCP config if available, else fall back to global config
-        if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
-            mcp_servers = {name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled}
-        else:
-            mcp_servers = self.config.mcp.servers
+        mcp_servers = self._get_mcp_server_configs()
 
         if not mcp_enabled or not mcp_servers:
             return []
@@ -1091,10 +1289,21 @@ class LeonAgent:
 
         configs = {}
         for name, cfg in mcp_servers.items():
+            transport = getattr(cfg, "transport", None)
             if cfg.url:
-                config = {"transport": "streamable_http", "url": cfg.url}
+                # @@@mcp-transport-honesty - api-04 requires explicit transport
+                # config to survive loader -> runtime. URL-based MCP is not
+                # always streamable_http; websocket/sse must stay explicit.
+                config = {
+                    "transport": transport or "streamable_http",
+                    "url": cfg.url,
+                }
             else:
-                config = {"transport": "stdio", "command": cfg.command, "args": cfg.args}
+                config = {
+                    "transport": transport or "stdio",
+                    "command": cfg.command,
+                    "args": cfg.args,
+                }
             if cfg.env:
                 config["env"] = cfg.env
             configs[name] = config
@@ -1108,7 +1317,7 @@ class LeonAgent:
             for tool in tools:
                 # Extract server name from tool metadata or connection
                 server_name = None
-                for name in configs.keys():
+                for name in configs:
                     if hasattr(tool, "metadata") and tool.metadata:
                         server_name = name
                         break
@@ -1129,31 +1338,19 @@ class LeonAgent:
     async def _init_checkpointer(self):
         """Initialize async checkpointer for conversation persistence.
 
-        Uses Postgres (via Supabase) when LEON_STORAGE_STRATEGY=supabase,
-        otherwise falls back to local SQLite.
+        Requires LEON_POSTGRES_URL to be set (Supabase Postgres).
         """
-        strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
         pg_url = os.getenv("LEON_POSTGRES_URL")
+        if not pg_url:
+            raise RuntimeError("LEON_POSTGRES_URL is required for checkpointer initialization")
 
-        if strategy == "supabase" and pg_url:
-            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        from core.runtime.langgraph_checkpoint_store import agent_checkpoint_saver_from_conn_string
 
-            # from_conn_string is an async context manager; enter it and keep
-            # the reference so the connection pool stays open for the agent's lifetime.
-            self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
-            self.checkpointer = await self._pg_saver_ctx.__aenter__()
-            await self.checkpointer.setup()
-            return None  # no SQLite conn to track
-        else:
-            from storage.providers.sqlite.kernel import connect_sqlite_async
-
-            db_path = self.db_path
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = await connect_sqlite_async(db_path)
-            self.checkpointer = AsyncSqliteSaver(conn)
-            await self.checkpointer.setup()
-            return conn
-            return conn
+        # from_conn_string is an async context manager; enter it and keep
+        # the reference so the connection pool stays open for the agent's lifetime.
+        self._pg_saver_ctx = agent_checkpoint_saver_from_conn_string(pg_url)
+        self.checkpointer = await self._pg_saver_ctx.__aenter__()
+        await self.checkpointer.setup()
 
     def _is_tool_allowed(self, tool) -> bool:
         # Extract original tool name without mcp__ prefix
@@ -1172,7 +1369,7 @@ class LeonAgent:
 
     def _build_system_prompt(self) -> str:
         """Build system prompt based on sandbox mode."""
-        # If agent override is set, use member's system_prompt + rules
+        # If agent override is set, use its system_prompt + rules.
         if hasattr(self, "_agent_override") and self._agent_override:
             prompt = self._agent_override.system_prompt
             # Append bundle rules (from rules/*.md) to system prompt
@@ -1190,155 +1387,116 @@ class LeonAgent:
 
         return prompt
 
+    def _runtime_chat_identity_id(self) -> str | None:
+        if not self._chat_repos:
+            return None
+        chat_identity_id = self._chat_repos.get("chat_identity_id")
+        if chat_identity_id:
+            return str(chat_identity_id)
+        if self._chat_repos.get("user_id"):
+            raise RuntimeError("chat_repos.user_id is no longer supported; use chat_identity_id")
+        return None
+
+    def _compose_system_prompt(self) -> str:
+        prompt = self._build_system_prompt()
+
+        custom_prompt = self.config.system_prompt
+        if custom_prompt:
+            prompt += f"\n\n**Custom Instructions:**\n{custom_prompt}"
+
+        # @@@chat-identity — inject chat identity so agent knows who it is in the social layer
+        if self._chat_repos:
+            repos = self._chat_repos
+            uid = self._runtime_chat_identity_id()
+            owner_uid = repos.get("owner_id", "")
+            if uid:
+                user_repo = repos.get("user_repo")
+                self_user = user_repo.get_by_id(uid) if user_repo else None
+                owner_row = user_repo.get_by_id(owner_uid) if user_repo and owner_uid else None
+                name = self_user.display_name if self_user else uid
+                owner_name = owner_row.display_name if owner_row else "unknown"
+                prompt += (
+                    f"\n\n**Chat Identity:**\n"
+                    f"- Your name: {name}\n"
+                    f"- Your chat identity id: {uid}\n"
+                    f"- Your owner: {owner_name} (human user_id: {owner_uid})\n"
+                    f"- For 1:1 chat tools, use participant_id for the other user's social id.\n"
+                    f"- When you receive a chat notification, you MUST read it with read_messages() before deciding what to do.\n"
+                    f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly.\n"
+                    f"- If you reply to the other party, you MUST call send_message(). "
+                    f"Never claim you replied unless send_message() succeeded.\n"
+                    f"- Your normal text output goes to your owner's thread, not to the chat — "
+                    f"only send_message() delivers to the other party.\n"
+                )
+        return prompt
+
+    def _invalidate_system_prompt_cache(self) -> None:
+        self._system_prompt_section_cache.clear()
+
+    def _get_cached_prompt_section(self, key: str, builder) -> str:
+        cached = self._system_prompt_section_cache.get(key)
+        if cached is not None:
+            return cached
+        value = builder()
+        self._system_prompt_section_cache[key] = value
+        return value
+
     def _build_context_section(self) -> str:
-        """Build the context section based on sandbox mode."""
-        if self._sandbox.name != "local":
-            env_label = self._sandbox.env_label
-            working_dir = self._sandbox.working_dir
-            if self._sandbox.name == "docker":
-                mode_label = "Sandbox (isolated local container)"
-            else:
-                mode_label = "Sandbox (isolated cloud environment)"
-            return f"""- Environment: {env_label}
-- Working Directory: {working_dir}
-- Mode: {mode_label}"""
-        else:
+        from core.runtime.prompts import build_context_section
+
+        def _build() -> str:
+            is_sandbox = self._sandbox.name != "local"
+            if is_sandbox:
+                return build_context_section(
+                    sandbox_name=self._sandbox.name,
+                    sandbox_env_label=self._sandbox.env_label,
+                    sandbox_working_dir=self._sandbox.working_dir,
+                )
             import platform
 
             os_name = platform.system()
-            if os_name == "Windows":
-                shell_name = "powershell"
-            else:
-                shell_name = os.environ.get("SHELL", "/bin/bash").split("/")[-1]
-            return f"""- Workspace: `{self.workspace_root}`
-- OS: {os_name}
-- Shell: {shell_name}
-- Mode: Local"""
+            shell_name = "powershell" if os_name == "Windows" else os.environ.get("SHELL", "/bin/bash").split("/")[-1]
+            return build_context_section(
+                sandbox_name="local",
+                workspace_root=str(self.workspace_root),
+                os_name=os_name,
+                shell_name=shell_name,
+            )
+
+        return self._get_cached_prompt_section("context", _build)
 
     def _build_rules_section(self) -> str:
-        """Build shared rules section for all modes."""
-        is_sandbox = self._sandbox.name != "local"
-        working_dir = self._sandbox.working_dir if is_sandbox else self.workspace_root
+        from core.runtime.prompts import build_rules_section
 
-        rules = []
+        def _build() -> str:
+            is_sandbox = self._sandbox.name != "local"
+            working_dir = self._sandbox.working_dir if is_sandbox else str(self.workspace_root)
+            return build_rules_section(
+                is_sandbox=is_sandbox,
+                sandbox_name=self._sandbox.name,
+                working_dir=working_dir,
+                workspace_root=str(self.workspace_root),
+                spill_buffer_enabled=self.config.tools.spill_buffer.enabled,
+                spill_keep_recent=self.config.memory.pruning.protect_recent,
+            )
 
-        # Rule 1: Environment-specific
-        if is_sandbox:
-            if self._sandbox.name == "docker":
-                location_rule = "All file and command operations run in a local Docker container, NOT on the user's host filesystem."
-            else:
-                location_rule = "All file and command operations run in a remote sandbox, NOT on the user's local machine."
-            rules.append(f"1. **Sandbox Environment**: {location_rule} The sandbox is an isolated Linux environment.")
-        else:
-            rules.append("1. **Workspace**: File operations are restricted to: " + str(self.workspace_root))
-
-        # Rule 2: Absolute paths
-        rules.append(f"""2. **Absolute Paths**: All file paths must be absolute paths.
-   - ✅ Correct: `{working_dir}/project/test.py`
-   - ❌ Wrong: `test.py` or `./test.py`""")
-
-        # Rule 3: Security
-        if is_sandbox:
-            rules.append("3. **Security**: The sandbox is isolated. You can install packages, run any commands, and modify files freely.")
-        else:
-            rules.append("3. **Security**: Dangerous commands are blocked. All operations are logged.")
-
-        # Rule 4: Tool priority
-        rules.append(
-            """4. **Tool Priority**: When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool."""
-        )
-
-        # Rule 5: Dedicated tools over shell
-        rules.append("""5. **Use Dedicated Tools Instead of Shell Commands**: Do NOT use `Bash` for tasks that have dedicated tools:
-   - File search → use `Grep` (NOT `rg`, `grep`, or `find` via Bash)
-   - File listing → use `Glob` (NOT `find` or `ls` via Bash)
-   - File reading → use `Read` (NOT `cat`, `head`, `tail` via Bash)
-   - File editing → use `Edit` (NOT `sed` or `awk` via Bash)
-   - Reserve `Bash` for: git, package managers, build tools, tests, and other system operations.""")
-
-        # Rule 6: Background task description
-        rules.append("""6. **Background Task Description**: When using `Bash` or `Agent` with `run_in_background: true`, always include a clear `description` parameter.  # noqa: E501
-   - The description is shown to the user in the background task indicator.
-   - Keep it concise (5–10 words), action-oriented, e.g. "Run test suite", "Analyze API codebase".
-   - Without a description, the raw command or agent name is shown, which is hard to read.""")
-
-        return "\n\n".join(rules)
+        return self._get_cached_prompt_section("rules", _build)
 
     def _build_base_prompt(self) -> str:
-        """Build the base system prompt (context + rules), shared by all modes."""
-        context = self._build_context_section()
-        rules = self._build_rules_section()
+        from core.runtime.prompts import build_base_prompt
 
-        return f"""You are a highly capable AI assistant with access to file and system tools.
-
-**Context:**
-{context}
-
-**Important Rules:**
-
-{rules}
-"""
+        return self._get_cached_prompt_section(
+            "base_prompt",
+            lambda: build_base_prompt(self._build_context_section(), self._build_rules_section()),
+        )
 
     def _build_common_prompt_sections(self) -> str:
-        """Build common prompt sections for both sandbox and local modes."""
-        prompt = """
-**Agent Tool (Sub-agent Orchestration):**
+        from core.runtime.prompts import build_common_sections
 
-Use the Agent tool to launch specialized sub-agents for complex tasks:
-- `explore`: Read-only codebase exploration. Use for: finding files, searching code, understanding implementations.
-- `plan`: Design implementation plans. Use for: architecture decisions, multi-step planning.
-- `bash`: Execute shell commands. Use for: git operations, running tests, system commands.
-- `general`: Full tool access. Use for: independent multi-step tasks requiring file modifications.
-
-When to use Agent:
-- Open-ended searches that may require multiple rounds of exploration
-- Tasks that can run independently while you continue other work
-- Complex operations that benefit from specialized focus
-
-When NOT to use Agent:
-- Simple file reads (use Read directly)
-- Specific searches with known patterns (use Grep directly)
-- Quick operations that don't need isolation
-
-**Todo Tools (Task Management):**
-
-Use Todo tools to track progress on complex, multi-step tasks:
-- `TaskCreate`: Create a new task with subject, description, and activeForm (present continuous for spinner)
-- `TaskList`: View all tasks and their status
-- `TaskGet`: Get full details of a specific task
-- `TaskUpdate`: Update task status (pending → in_progress → completed) or details
-
-When to use Todo:
-- Complex tasks with 3+ distinct steps
-- When the user provides multiple tasks to complete
-- To show progress on non-trivial work
-
-When NOT to use Todo:
-- Single, straightforward tasks
-- Trivial operations that don't need tracking
-"""
-
-        # Add Skills section if skills are enabled
-        skills_enabled = self.config.skills.enabled and self.config.skills.paths
-
-        if skills_enabled:
-            prompt += """
-**Skills (Specialized Knowledge):**
-
-Use the `load_skill` tool to access specialized domain knowledge and workflows:
-- Skills provide focused instructions for specific tasks (e.g., TDD, debugging, git workflows)
-- Call `load_skill(skill_name)` to load a skill's content into context
-- Available skills are listed in the load_skill tool description
-
-When to use load_skill:
-- When you need specialized guidance for a specific workflow
-- To access domain-specific best practices
-- When the user mentions a skill by name (e.g., "use TDD skill")
-
-Progressive disclosure: Skills are loaded on-demand to save tokens.
-"""
-
-        return prompt
+        return self._get_cached_prompt_section(
+            "common_sections",
+            lambda: build_common_sections(bool(self.config.skills.enabled and self.config.skills.paths)),
+        )
 
     def invoke(self, message: str, thread_id: str = "default") -> dict:
         """Invoke agent with a message (sync version).
@@ -1362,9 +1520,8 @@ Progressive disclosure: Skills are loaded on-demand to save tokens.
             # Reuse the event loop created during initialization
             if hasattr(self, "_event_loop") and self._event_loop:
                 return self._event_loop.run_until_complete(_ainvoke())
-            else:
-                # Fallback to asyncio.run() if no loop exists
-                return asyncio.run(_ainvoke())
+            # Fallback to asyncio.run() if no loop exists
+            return asyncio.run(_ainvoke())
         except Exception as e:
             self._monitor_middleware.mark_error(e)
             raise
@@ -1387,6 +1544,174 @@ Progressive disclosure: Skills are loaded on-demand to save tokens.
         except Exception as e:
             self._monitor_middleware.mark_error(e)
             raise
+
+    async def astream(
+        self,
+        message: str,
+        thread_id: str = "default",
+        stream_mode: str | list[str] = "updates",
+        max_budget_usd: float | None = None,
+    ):
+        """Stream agent output through a caller-owned LeonAgent surface."""
+        try:
+            async for chunk in self.agent.astream(
+                {"messages": [{"role": "user", "content": message}]},
+                config={"configurable": {"thread_id": thread_id}},
+                stream_mode=stream_mode,
+            ):
+                yield chunk
+                if max_budget_usd is not None and self.runtime.cost > max_budget_usd:
+                    raise RuntimeError(f"max_budget_usd exceeded: cost={self.runtime.cost:.6f} budget={max_budget_usd:.6f}")
+        except Exception as e:
+            self._monitor_middleware.mark_error(e)
+            raise
+
+    async def aclear_thread(self, thread_id: str = "default") -> None:
+        """Clear turn-scoped state for a thread while preserving session accumulators."""
+        try:
+            await self.agent.aclear(thread_id)
+            self._invalidate_system_prompt_cache()
+            self.system_prompt = self._compose_system_prompt()
+            self.agent.system_prompt = SystemMessage(content=[{"type": "text", "text": self.system_prompt}])
+        except Exception as e:
+            self._monitor_middleware.mark_error(e)
+            raise
+
+    def clear_thread(self, thread_id: str = "default") -> None:
+        """Sync wrapper for aclear_thread()."""
+        import asyncio
+
+        async def _aclear():
+            await self.aclear_thread(thread_id)
+
+        try:
+            if hasattr(self, "_event_loop") and self._event_loop:
+                self._event_loop.run_until_complete(_aclear())
+            else:
+                asyncio.run(_aclear())
+        except Exception as e:
+            self._monitor_middleware.mark_error(e)
+            raise
+
+    def get_pending_permission_requests(self, thread_id: str | None = None) -> list[dict]:
+        requests = list(self._app_state.pending_permission_requests.values())
+        if thread_id is not None:
+            requests = [item for item in requests if item.get("thread_id") == thread_id]
+        return requests
+
+    def get_thread_permission_rules(self, thread_id: str | None = None) -> dict[str, Any]:
+        state = self._app_state.tool_permission_context
+        return {
+            "thread_id": thread_id,
+            "scope": "session",
+            "managed_only": state.allowManagedPermissionRulesOnly,
+            "rules": {
+                "allow": list(state.alwaysAllowRules.get("session", [])),
+                "deny": list(state.alwaysDenyRules.get("session", [])),
+                "ask": list(state.alwaysAskRules.get("session", [])),
+            },
+        }
+
+    def add_thread_permission_rule(self, thread_id: str, *, behavior: str, tool_name: str) -> bool:
+        if self._app_state.tool_permission_context.allowManagedPermissionRulesOnly:
+            return False
+
+        def _update(state: AppState) -> AppState:
+            permission_state = state.tool_permission_context.model_copy(deep=True)
+            for bucket in (
+                permission_state.alwaysAllowRules.setdefault("session", []),
+                permission_state.alwaysDenyRules.setdefault("session", []),
+                permission_state.alwaysAskRules.setdefault("session", []),
+            ):
+                while tool_name in bucket:
+                    bucket.remove(tool_name)
+            target_bucket = {
+                "allow": permission_state.alwaysAllowRules.setdefault("session", []),
+                "deny": permission_state.alwaysDenyRules.setdefault("session", []),
+                "ask": permission_state.alwaysAskRules.setdefault("session", []),
+            }[behavior]
+            if tool_name not in target_bucket:
+                target_bucket.append(tool_name)
+            return state.model_copy(update={"tool_permission_context": permission_state})
+
+        self._app_state.set_state(_update)
+        return True
+
+    def remove_thread_permission_rule(self, thread_id: str, *, behavior: str, tool_name: str) -> bool:
+        removed = False
+
+        def _update(state: AppState) -> AppState:
+            nonlocal removed
+            permission_state = state.tool_permission_context.model_copy(deep=True)
+            bucket = {
+                "allow": permission_state.alwaysAllowRules.setdefault("session", []),
+                "deny": permission_state.alwaysDenyRules.setdefault("session", []),
+                "ask": permission_state.alwaysAskRules.setdefault("session", []),
+            }[behavior]
+            if tool_name in bucket:
+                bucket.remove(tool_name)
+                removed = True
+            return state.model_copy(update={"tool_permission_context": permission_state})
+
+        self._app_state.set_state(_update)
+        return removed
+
+    def resolve_permission_request(
+        self,
+        request_id: str,
+        *,
+        decision: str,
+        message: str | None = None,
+        answers: list[dict[str, Any]] | None = None,
+        annotations: dict[str, Any] | None = None,
+    ) -> bool:
+        pending = self._app_state.pending_permission_requests.get(request_id)
+        if pending is None:
+            return False
+
+        resolved = dict(self._app_state.resolved_permission_requests)
+        payload = {
+            **pending,
+            "decision": decision,
+            "message": message or pending.get("message"),
+        }
+        if answers is not None:
+            payload["answers"] = answers
+        if annotations is not None:
+            payload["annotations"] = annotations
+        resolved[request_id] = payload
+        still_pending = dict(self._app_state.pending_permission_requests)
+        still_pending.pop(request_id, None)
+        self._app_state.set_state(
+            lambda prev: prev.model_copy(
+                update={
+                    "pending_permission_requests": still_pending,
+                    "resolved_permission_requests": resolved,
+                }
+            )
+        )
+        return True
+
+    def drop_permission_request(self, request_id: str) -> bool:
+        had_pending = request_id in self._app_state.pending_permission_requests
+        had_resolved = request_id in self._app_state.resolved_permission_requests
+        if not had_pending and not had_resolved:
+            return False
+
+        def _drop(state: AppState) -> AppState:
+            pending = dict(state.pending_permission_requests)
+            resolved = dict(state.resolved_permission_requests)
+            pending.pop(request_id, None)
+            resolved.pop(request_id, None)
+            return state.model_copy(
+                update={
+                    "pending_permission_requests": pending,
+                    "resolved_permission_requests": resolved,
+                }
+            )
+
+        self._app_state.set_state(_drop)
+        return True
 
     def get_response(self, message: str, thread_id: str = "default", **kwargs) -> str:
         """Get agent's text response.
@@ -1411,7 +1736,7 @@ Progressive disclosure: Skills are loaded on-demand to save tokens.
 
 
 def create_leon_agent(
-    model_name: str = DEFAULT_MODEL,
+    model_name: str | None = None,
     api_key: str | None = None,
     workspace_root: str | Path | None = None,
     sandbox: Any = None,
@@ -1421,7 +1746,7 @@ def create_leon_agent(
     """Create Leon Agent.
 
     Args:
-        model_name: Model name
+        model_name: Model name. None means "let LeonAgent resolve defaults".
         api_key: API key
         workspace_root: Workspace directory
         sandbox: Sandbox instance, name string, or None for local
@@ -1443,6 +1768,11 @@ def create_leon_agent(
     """
     # Filter out kwargs that LeonAgent.__init__ doesn't accept (e.g. profile from CLI)
     import inspect as _inspect
+
+    from storage.runtime import build_storage_container, uses_supabase_storage
+
+    if storage_container is None and uses_supabase_storage():
+        storage_container = build_storage_container()
 
     _valid = set(_inspect.signature(LeonAgent.__init__).parameters) - {"self"}
     kwargs = {k: v for k, v in kwargs.items() if k in _valid}

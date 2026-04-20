@@ -15,7 +15,7 @@ class FirecrawlSearcher(BaseSearcher):
     Features:
     - Web crawling capabilities
     - Can search and extract content
-    - Good fallback option
+    - Crawler-backed secondary provider
     """
 
     API_URL = "https://api.firecrawl.dev/v1/search"

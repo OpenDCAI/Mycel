@@ -1,14 +1,24 @@
 """Authentication endpoints — 3-step registration + login."""
 
 import asyncio
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.web.core.dependencies import _get_auth_service, get_app
+from backend.auth_dependencies import _get_auth_service
+from backend.web.core.dependencies import get_app
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+async def _call_auth_service(app: Any, status_code: int, call: Callable[[Any], Any]) -> Any:
+    try:
+        service = _get_auth_service(app)
+        return await asyncio.to_thread(call, service)
+    except ValueError as e:
+        raise HTTPException(status_code, str(e))
 
 
 # ── Registration step 1: send OTP ──────────────────────────────────────────
@@ -22,11 +32,12 @@ class SendOtpRequest(BaseModel):
 
 @router.post("/send-otp")
 async def send_otp(payload: SendOtpRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    try:
-        await asyncio.to_thread(_get_auth_service(app).send_otp, payload.email, payload.password, payload.invite_code)
-        return {"ok": True}
-    except ValueError as e:
-        raise HTTPException(400, str(e))
+    await _call_auth_service(
+        app,
+        400,
+        lambda service: service.send_otp(payload.email, payload.password, payload.invite_code),
+    )
+    return {"ok": True}
 
 
 # ── Registration step 2: verify OTP ────────────────────────────────────────
@@ -39,10 +50,11 @@ class VerifyOtpRequest(BaseModel):
 
 @router.post("/verify-otp")
 async def verify_otp(payload: VerifyOtpRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    try:
-        return await asyncio.to_thread(_get_auth_service(app).verify_register_otp, payload.email, payload.token)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
+    return await _call_auth_service(
+        app,
+        400,
+        lambda service: service.verify_register_otp(payload.email, payload.token),
+    )
 
 
 # ── Registration step 3: set password + invite code ────────────────────────
@@ -55,10 +67,11 @@ class CompleteRegisterRequest(BaseModel):
 
 @router.post("/complete-register")
 async def complete_register(payload: CompleteRegisterRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    try:
-        return await asyncio.to_thread(_get_auth_service(app).complete_register, payload.temp_token, payload.invite_code)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
+    return await _call_auth_service(
+        app,
+        400,
+        lambda service: service.complete_register(payload.temp_token, payload.invite_code),
+    )
 
 
 # ── Login ───────────────────────────────────────────────────────────────────
@@ -71,7 +84,8 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 async def login(payload: LoginRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
-    try:
-        return await asyncio.to_thread(_get_auth_service(app).login, payload.identifier, payload.password)
-    except ValueError as e:
-        raise HTTPException(401, str(e))
+    return await _call_auth_service(
+        app,
+        401,
+        lambda service: service.login(payload.identifier, payload.password),
+    )

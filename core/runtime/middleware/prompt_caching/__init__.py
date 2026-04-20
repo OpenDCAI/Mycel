@@ -1,8 +1,8 @@
 """Anthropic prompt caching middleware.
 
 Requires:
-    - `langchain`: For agent middleware framework
-    - `langchain-anthropic`: For `ChatAnthropic` model (already a dependency)
+    - local `core.runtime.middleware` protocol types
+    - `langchain-anthropic`: For `ChatAnthropic` model
 """
 
 from collections.abc import Awaitable, Callable
@@ -10,9 +10,10 @@ from typing import Literal
 from warnings import warn
 
 from langchain_anthropic.chat_models import ChatAnthropic
+from langchain_core.messages import SystemMessage
 
 try:
-    from langchain.agents.middleware.types import (
+    from core.runtime.middleware import (
         AgentMiddleware,
         ModelCallResult,
         ModelRequest,
@@ -20,9 +21,9 @@ try:
     )
 except ImportError as e:
     msg = (
-        "AnthropicPromptCachingMiddleware requires 'langchain' to be installed. "
-        "This middleware is designed for use with LangChain agents. "
-        "Install it with: pip install langchain"
+        "AnthropicPromptCachingMiddleware requires the local "
+        "'core.runtime.middleware' protocol definitions and "
+        "'langchain-anthropic' to be importable."
     )
     raise ImportError(msg) from e
 
@@ -32,7 +33,7 @@ class PromptCachingMiddleware(AgentMiddleware):
 
     Optimizes API usage by caching conversation prefixes for Anthropic models.
 
-    Requires both `langchain` and `langchain-anthropic` packages to be installed.
+    Requires the local runtime middleware protocol plus `langchain-anthropic`.
 
     Learn more about Anthropic prompt caching
     [here](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
@@ -67,6 +68,26 @@ class PromptCachingMiddleware(AgentMiddleware):
         self.ttl = ttl
         self.min_messages_to_cache = min_messages_to_cache
         self.unsupported_model_behavior = unsupported_model_behavior
+
+    def _apply_system_cache(self, request: ModelRequest) -> ModelRequest:
+        """Add cache_control to the first (static) block of system_message.
+
+        Anthropic prompt caching requires cache_control on the system content
+        blocks, not on messages. Marking the first block caches the entire
+        static system prefix (identity + tool rules) across sessions.
+        """
+        sm = request.system_message
+        if sm is None:
+            return request
+        content = sm.content
+        if isinstance(content, str):
+            new_content: list = [{"type": "text", "text": content, "cache_control": {"type": self.type}}]
+        elif isinstance(content, list) and content:
+            first = {**content[0], "cache_control": {"type": self.type}}
+            new_content = [first, *content[1:]]
+        else:
+            return request
+        return request.override(system_message=SystemMessage(content=new_content))
 
     def _should_apply_caching(self, request: ModelRequest) -> bool:
         """Check if caching should be applied to the request.
@@ -112,12 +133,7 @@ class PromptCachingMiddleware(AgentMiddleware):
         """
         if not self._should_apply_caching(request):
             return handler(request)
-
-        new_model_settings = {
-            **request.model_settings,
-            "cache_control": {"type": self.type, "ttl": self.ttl},
-        }
-        return handler(request.override(model_settings=new_model_settings))
+        return handler(self._apply_system_cache(request))
 
     async def awrap_model_call(
         self,
@@ -135,12 +151,7 @@ class PromptCachingMiddleware(AgentMiddleware):
         """
         if not self._should_apply_caching(request):
             return await handler(request)
-
-        new_model_settings = {
-            **request.model_settings,
-            "cache_control": {"type": self.type, "ttl": self.ttl},
-        }
-        return await handler(request.override(model_settings=new_model_settings))
+        return await handler(self._apply_system_cache(request))
 
 
 __all__ = ["PromptCachingMiddleware"]

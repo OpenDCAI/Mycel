@@ -1,17 +1,19 @@
 """Sandbox ABC, LocalSandbox, and RemoteSandbox — unified interface for execution environments.
 
 A Sandbox bundles sub-capabilities by interaction surface:
-- fs()    → FileSystemBackend  (consumed by FileSystemMiddleware)
-- shell() → BaseExecutor       (consumed by CommandMiddleware)
+- fs()    → FileSystemBackend  (consumed by FileSystemService)
+- shell() → BaseExecutor       (consumed by CommandService)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from abc import ABC, abstractmethod
+from collections.abc import Coroutine
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +59,10 @@ class _LazyFSBackend:
 
 
 class _LazyExecutor:
-    # @@@lazy-remote-flag - CommandMiddleware probes is_remote during init; keep this side-effect free.
+    # @@@lazy-remote-flag - CommandService probes is_remote during init; keep this side-effect free.
     is_remote = True
     runtime_owns_cwd = True
-    # @@@lazy-shell-name - CommandMiddleware logs shell_name during init.
+    # @@@lazy-shell-name - CommandService reads shell_name during init.
     shell_name = "remote"
 
     def __init__(self, sandbox: RemoteSandbox):
@@ -68,6 +70,51 @@ class _LazyExecutor:
 
     def __getattr__(self, name: str):
         return getattr(self._remote._get_capability().command, name)
+
+
+def _cached_capability_is_stale(manager, thread_id: str, capability) -> bool:
+    session = getattr(capability, "_session", None)
+    if session is None:
+        return True
+    if getattr(session, "status", None) in {"closed", "failed", "paused"}:
+        return True
+    # @@@capability-cache-session-liveness - cached wrappers outlive session teardown;
+    # always confirm the cached session still exists as the current active session.
+    current = manager.session_manager.get(thread_id, session.terminal.terminal_id)
+    if current is None:
+        return True
+    return current.session_id != session.session_id
+
+
+def _run_coroutine_blocking[T](coro: Coroutine[Any, Any, T], *, timeout: float | None = None) -> T:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    result: dict[str, T] = {}
+    error: dict[str, BaseException] = {}
+    done = threading.Event()
+
+    # @@@same-loop-init-dispatch - init commands can run while the web request event loop is already active;
+    # running run_coroutine_threadsafe(...).result() on that same loop deadlocks, so dispatch through a helper thread.
+    def _runner() -> None:
+        try:
+            result["value"] = asyncio.run(coro)
+        except BaseException as exc:  # pragma: no cover - defensive relay
+            error["value"] = exc
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=_runner, daemon=True)
+    thread.start()
+    if not done.wait(timeout):
+        raise TimeoutError(f"Coroutine timed out after {timeout}s")
+    if "value" in error:
+        raise error["value"]
+    if "value" not in result:
+        raise RuntimeError("Coroutine helper thread finished without a result")
+    return result["value"]
 
 
 class RemoteSandbox(Sandbox):
@@ -103,26 +150,30 @@ class RemoteSandbox(Sandbox):
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
+        print(f"[RemoteSandbox._get_capability] provider={self._provider.name} thread_id={thread_id}", flush=True)
+        cached = self._capability_cache.get(thread_id)
+        if cached is not None and _cached_capability_is_stale(self._manager, thread_id, cached):
+            self._capability_cache.pop(thread_id, None)
         if thread_id not in self._capability_cache:
+            print(
+                f"[RemoteSandbox._get_capability] provider={self._provider.name} thread_id={thread_id} cache=miss",
+                flush=True,
+            )
             capability = self._manager.get_sandbox(thread_id)
             if self._config.init_commands and thread_id not in self._init_commands_run:
                 self._run_init_commands(capability)
                 self._init_commands_run.add(thread_id)
             self._capability_cache[thread_id] = capability
+        else:
+            print(
+                f"[RemoteSandbox._get_capability] provider={self._provider.name} thread_id={thread_id} cache=hit",
+                flush=True,
+            )
         return self._capability_cache[thread_id]
 
     def _run_init_commands(self, capability: SandboxCapability) -> None:
         for i, cmd in enumerate(self._config.init_commands, 1):
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-
-            if loop:
-                future = asyncio.run_coroutine_threadsafe(capability.command.execute(cmd), loop)
-                result = future.result(timeout=30)
-            else:
-                result = asyncio.run(capability.command.execute(cmd))
+            result = _run_coroutine_blocking(capability.command.execute(cmd), timeout=30)
 
             if result.exit_code != 0:
                 raise RuntimeError(
@@ -206,6 +257,7 @@ class LocalSandbox(Sandbox):
         self._provider = LocalSessionProvider(default_cwd=workspace_root)
         self._manager = SandboxManager(provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db"))
         self._capability_cache: dict[str, SandboxCapability] = {}
+        self._owned_thread_ids: set[str] = set()
 
     @property
     def name(self) -> str:
@@ -229,6 +281,10 @@ class LocalSandbox(Sandbox):
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
+        self._owned_thread_ids.add(thread_id)
+        cached = self._capability_cache.get(thread_id)
+        if cached is not None and _cached_capability_is_stale(self._manager, thread_id, cached):
+            self._capability_cache.pop(thread_id, None)
         if thread_id not in self._capability_cache:
             self._capability_cache[thread_id] = self._manager.get_sandbox(thread_id)
         return self._capability_cache[thread_id]
@@ -247,16 +303,21 @@ class LocalSandbox(Sandbox):
         self._get_capability()
 
     def pause_thread(self, thread_id: str) -> bool:
+        self._owned_thread_ids.add(thread_id)
         self._capability_cache.pop(thread_id, None)
         return self._manager.pause_session(thread_id)
 
     def resume_thread(self, thread_id: str) -> bool:
+        self._owned_thread_ids.add(thread_id)
         self._capability_cache.pop(thread_id, None)
         return self._manager.resume_session(thread_id)
 
     def close(self) -> None:
-        for session in self._manager.list_sessions():
+        # @@@local-close-owned-threads - backend shutdown must only clean
+        # threads this sandbox instance actually touched, not sweep the shared runtime universe.
+        for thread_id in sorted(self._owned_thread_ids):
             try:
-                self._manager.destroy_session(session["thread_id"])
+                self._manager.destroy_session(thread_id)
             except Exception:
-                logger.exception("[LocalSandbox] Failed to destroy session %s", session.get("thread_id"))
+                logger.exception("[LocalSandbox] Failed to destroy session %s", thread_id)
+        self._owned_thread_ids.clear()

@@ -1,6 +1,6 @@
 """Sandbox session manager.
 
-Orchestrates: Thread → ChatSession → Runtime → Terminal → Lease → Instance
+Orchestrates: Thread → ChatSession → Runtime with lower sandbox bindings.
 """
 
 import logging
@@ -10,17 +10,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
+from sandbox.clock import parse_runtime_datetime, utc_now
+from sandbox.control_plane_repos import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from sandbox.lease import lease_from_row
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
-from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+from storage.runtime import build_storage_container, uses_supabase_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -34,23 +34,207 @@ def resolve_provider_cwd(provider) -> str:
     return "/home/user"
 
 
-def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
+def _build_provider_from_name(name: str):
+    from backend.web.services.sandbox_service import build_provider_from_config_name
+
+    return build_provider_from_config_name(name)
+
+
+def lookup_sandbox_for_thread(
+    thread_id: str,
+    db_path: Path | None = None,
+    *,
+    terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
+) -> str | None:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    if not target_db.exists():
+    uses_strategy_default_sandbox = uses_supabase_runtime_defaults() and target_db == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    if terminal_repo is None and lease_repo is None and not target_db.exists() and not uses_strategy_default_sandbox:
         return None
 
-    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
-    lease_repo = SQLiteLeaseRepo(db_path=target_db)
+    _terminal_repo = terminal_repo
+    own_terminal_repo = _terminal_repo is None
+    if _terminal_repo is None:
+        _terminal_repo = make_terminal_repo(db_path=target_db)
+    _lease_repo = lease_repo
+    own_lease_repo = _lease_repo is None
+    if _lease_repo is None:
+        _lease_repo = make_lease_repo(db_path=target_db)
     try:
-        terminals = terminal_repo.list_by_thread(thread_id)
+        terminals = _terminal_repo.list_by_thread(thread_id)
         if not terminals:
             return None
         lease_id = str(terminals[0]["lease_id"])
-        lease = lease_repo.get(lease_id)
+        lease = _lease_repo.get(lease_id)
         return str(lease["provider_name"]) if lease else None
     finally:
-        terminal_repo.close()
-        lease_repo.close()
+        if own_terminal_repo:
+            _terminal_repo.close()
+        if own_lease_repo:
+            _lease_repo.close()
+
+
+def resolve_existing_lease_cwd(
+    lease_id: str,
+    requested_cwd: str | None = None,
+    db_path: Path | None = None,
+    *,
+    lease_repo: Any | None = None,
+) -> str:
+    if requested_cwd:
+        return requested_cwd
+
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    _lease_repo = lease_repo
+    own_lease_repo = _lease_repo is None
+    if _lease_repo is None:
+        _lease_repo = make_lease_repo(db_path=target_db)
+    try:
+        lease = _lease_repo.get(lease_id)
+    finally:
+        if own_lease_repo:
+            _lease_repo.close()
+    provider_name = str((lease or {}).get("provider_name") or "").strip()
+    provider = _build_provider_from_name(provider_name) if provider_name else None
+    if provider is not None:
+        return resolve_provider_cwd(provider)
+    raise ValueError("provider default cwd is required")
+
+
+def bind_thread_to_existing_lease(
+    thread_id: str,
+    lease_id: str,
+    *,
+    cwd: str | None = None,
+    db_path: Path | None = None,
+    terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
+) -> str:
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    _terminal_repo = terminal_repo
+    own_terminal_repo = _terminal_repo is None
+    if _terminal_repo is None:
+        _terminal_repo = make_terminal_repo(db_path=target_db)
+    try:
+        existing = _terminal_repo.get_active(thread_id)
+        if existing is not None:
+            return str(existing["cwd"])
+        initial_cwd = resolve_existing_lease_cwd(
+            lease_id,
+            cwd,
+            db_path=target_db,
+            lease_repo=lease_repo,
+        )
+        _terminal_repo.create(
+            terminal_id=f"term-{uuid.uuid4().hex[:12]}",
+            thread_id=thread_id,
+            lease_id=lease_id,
+            initial_cwd=initial_cwd,
+        )
+        return initial_cwd
+    finally:
+        if own_terminal_repo:
+            _terminal_repo.close()
+
+
+def resolve_existing_sandbox_lease(
+    sandbox: Any,
+    *,
+    db_path: Path | None = None,
+    lease_repo: Any | None = None,
+) -> dict[str, Any] | None:
+    provider_name = str(
+        (sandbox.get("provider_name") if isinstance(sandbox, dict) else getattr(sandbox, "provider_name", None)) or ""
+    ).strip()
+    provider_env_id = str(
+        (sandbox.get("provider_env_id") if isinstance(sandbox, dict) else getattr(sandbox, "provider_env_id", None)) or ""
+    ).strip()
+    if not provider_name:
+        raise RuntimeError("sandbox.provider_name is required")
+    if not provider_env_id:
+        raise RuntimeError("sandbox.provider_env_id is required")
+
+    # @@@existing-sandbox-runtime-identity - existing-sandbox reuse must bind
+    # through live runtime identity; stored runtime config is not a resolution source.
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    _lease_repo = lease_repo
+    own_lease_repo = _lease_repo is None
+    if _lease_repo is None:
+        _lease_repo = make_lease_repo(db_path=target_db)
+    try:
+        lease = _lease_repo.find_by_instance(provider_name=provider_name, instance_id=provider_env_id)
+        if lease is not None:
+            return lease
+    finally:
+        if own_lease_repo:
+            _lease_repo.close()
+    raise RuntimeError("sandbox provider_env_id did not resolve to a lease")
+
+
+def bind_thread_to_existing_sandbox(
+    thread_id: str,
+    sandbox: Any,
+    *,
+    cwd: str | None = None,
+    db_path: Path | None = None,
+    terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
+) -> tuple[str, dict[str, Any]]:
+    lease = resolve_existing_sandbox_lease(
+        sandbox,
+        db_path=db_path,
+        lease_repo=lease_repo,
+    )
+    if lease is None:
+        raise RuntimeError("sandbox provider_env_id did not resolve to a lease")
+    lease_id = str(lease.get("lease_id") or "").strip()
+    if not lease_id:
+        raise RuntimeError("lease.lease_id is required")
+    initial_cwd = bind_thread_to_existing_lease(
+        thread_id,
+        lease_id,
+        cwd=cwd,
+        db_path=db_path,
+        terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+    )
+    return initial_cwd, lease
+
+
+def bind_thread_to_existing_thread_lease(
+    thread_id: str,
+    source_thread_id: str,
+    *,
+    cwd: str | None = None,
+    db_path: Path | None = None,
+    terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
+) -> str | None:
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    if not cwd:
+        raise ValueError("thread reuse cwd is required")
+    _terminal_repo = terminal_repo
+    own_terminal_repo = _terminal_repo is None
+    if _terminal_repo is None:
+        _terminal_repo = make_terminal_repo(db_path=target_db)
+    try:
+        source_terminal = _terminal_repo.get_active(source_thread_id)
+    finally:
+        if own_terminal_repo:
+            _terminal_repo.close()
+    if source_terminal is None:
+        return None
+    # @@@subagent-lease-reuse
+    # Child threads need their own terminal/session state while reusing the
+    # parent's lower sandbox binding instead of silently provisioning a new one.
+    return bind_thread_to_existing_lease(
+        thread_id,
+        str(source_terminal["lease_id"]),
+        cwd=cwd,
+        db_path=target_db,
+        terminal_repo=terminal_repo,
+        lease_repo=lease_repo,
+    )
 
 
 class SandboxManager:
@@ -65,14 +249,16 @@ class SandboxManager:
         self._on_session_ready = on_session_ready
 
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-        self.terminal_store = SQLiteTerminalRepo(db_path=self.db_path)
-        self.lease_store = SQLiteLeaseRepo(db_path=self.db_path)
+        self.terminal_store = make_terminal_repo(db_path=self.db_path)
+        self.lease_store = make_lease_repo(db_path=self.db_path)
 
         self.session_manager = ChatSessionManager(
             provider=provider,
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
-            chat_session_repo=SQLiteChatSessionRepo(db_path=self.db_path),
+            chat_session_repo=make_chat_session_repo(db_path=self.db_path),
+            terminal_repo=self.terminal_store,
+            lease_repo=self.lease_store,
         )
 
         from sandbox.volume import SandboxVolume
@@ -87,12 +273,12 @@ class SandboxManager:
         row = self.lease_store.get(lease_id)
         if row is None:
             return None
-        return lease_from_row(row, self.lease_store.db_path)
+        return lease_from_row(row, self.db_path)
 
-    def _create_lease(self, lease_id: str, provider_name: str, volume_id: str | None = None):
+    def _create_lease(self, lease_id: str, provider_name: str):
         """Create lease and return as domain object."""
-        row = self.lease_store.create(lease_id, provider_name, volume_id=volume_id)
-        return lease_from_row(row, self.lease_store.db_path)
+        row = self.lease_store.create(lease_id, provider_name)
+        return lease_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
         """Public API: get active terminal as domain object."""
@@ -105,88 +291,56 @@ class SandboxManager:
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
 
+    def _requires_volume_bootstrap(self) -> bool:
+        # @@@local-shell-no-volume-gate - local runtimes execute directly on the host
+        # and should not fail to start a shell just because remote file-channel
+        # bootstrap is irrelevant for that runtime kind.
+        return self.provider_capability.runtime_kind != "local"
+
+    def _destroy_daytona_managed_volume(self, lease_id: str) -> None:
+        # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
+        # ref from lease identity directly, so cleanup no longer depends on dropped volume rows.
+        self.provider.delete_managed_volume(f"leon-volume-{lease_id}")
+
     def _setup_mounts(self, thread_id: str) -> dict:
-        """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
-        import json
-
-        from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
-        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
-
+        """Mount the workspace file channel into the sandbox."""
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
         lease = self._get_lease(terminal.lease_id)
-        if not lease or not lease.volume_id:
-            raise ValueError(f"No volume for thread {thread_id}")
-
-        repo = SQLiteSandboxVolumeRepo()
-        try:
-            entry = repo.get(lease.volume_id)
-        finally:
-            repo.close()
-        if not entry:
-            raise ValueError(f"Volume not found: {lease.volume_id}")
-
-        source = deserialize_volume_source(json.loads(entry["source"]))
-        volume_id = lease.volume_id
+        if not lease:
+            raise ValueError(f"No lease for thread {thread_id}")
         remote_path = self.volume.resolve_mount_path()
+        source_path = self._resolve_sync_source_path(thread_id)
+
+        if self.provider_capability.runtime_kind != "daytona_pty":
+            self.volume.mount(thread_id, source_path, remote_path)
+            return {"source_path": source_path, "remote_path": remote_path}
 
         # @@@daytona-upgrade - first startup creates managed volume
-        if self.provider_capability.runtime_kind == "daytona_pty" and not isinstance(source, DaytonaVolume):
-            source = self._upgrade_to_daytona_volume(
-                thread_id,
-                source,
-                volume_id,
-                remote_path,
-            )
+        volume_name = self._upgrade_to_daytona_volume(
+            thread_id,
+            lease.lease_id,
+            remote_path,
+        )
+        self.volume.mount_managed_volume(thread_id, volume_name, remote_path)
 
-        if isinstance(source, DaytonaVolume):
-            self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
-        else:
-            self.volume.mount(thread_id, source, remote_path)
+        return {"source_path": source_path, "remote_path": remote_path}
 
-        return {"source": source, "remote_path": remote_path}
-
-    def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
-        """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
-        import json
-
-        from sandbox.volume_source import DaytonaVolume
-        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
-
-        # @@@member-id-for-volume-naming - read from thread config in leon.db
-        member_id = "unknown"
-        thread_repo = SQLiteThreadRepo(resolve_role_db_path(SQLiteDBRole.MAIN))
-        try:
-            row = thread_repo.get_by_id(thread_id)
-            if row:
-                member_id = str(row["member_id"])
-        except Exception:
-            pass
-        finally:
-            thread_repo.close()
+    def _upgrade_to_daytona_volume(self, thread_id: str, lease_id: str, remote_path: str):
+        """Ensure Daytona managed volume exists and return provider backend ref."""
 
         try:
-            volume_name = self.provider.create_managed_volume(member_id, remote_path)
+            volume_name = self.provider.create_managed_volume(lease_id, remote_path)
         except Exception as e:
             if "already exists" in str(e):
-                volume_name = f"leon-volume-{member_id}"
+                volume_name = f"leon-volume-{lease_id}"
                 logger.info("Daytona volume already exists: %s, reusing", volume_name)
+                self.provider.wait_managed_volume_ready(volume_name)
             else:
                 raise
 
-        new_source = DaytonaVolume(
-            staging_path=current_source.host_path,
-            volume_name=volume_name,
-        )
-
-        repo = SQLiteSandboxVolumeRepo()
-        try:
-            repo.update_source(volume_id, json.dumps(new_source.serialize()))
-        finally:
-            repo.close()
-
-        return new_source
+        return volume_name
 
     def _fire_session_ready(self, session_id: str, reason: str) -> None:
         if self._on_session_ready:
@@ -207,22 +361,16 @@ class SandboxManager:
     def _get_active_terminal(self, thread_id: str):
         row = self.terminal_store.get_active(thread_id)
         if row:
-            return terminal_from_row(row, self.terminal_store.db_path)
+            return terminal_from_row(row, self.db_path)
         thread_terminals = self.terminal_store.list_by_thread(thread_id)
         # @@@thread-pointer-consistency - If terminals exist but no active pointer, DB is inconsistent and must fail loudly.
         if thread_terminals:
             raise RuntimeError(f"Thread {thread_id} has terminals but no active terminal pointer")
         return None
 
-    def _get_active_session(self, thread_id: str):
-        terminal = self._get_active_terminal(thread_id)
-        if not terminal:
-            return None
-        return self.session_manager.get(thread_id, terminal.terminal_id)
-
     def _get_thread_terminals(self, thread_id: str):
         rows = self.terminal_store.list_by_thread(thread_id)
-        return [terminal_from_row(row, self.terminal_store.db_path) for row in rows]
+        return [terminal_from_row(row, self.db_path) for row in rows]
 
     def _get_thread_lease(self, thread_id: str):
         terminals = self._get_thread_terminals(thread_id)
@@ -246,36 +394,45 @@ class SandboxManager:
         lease = self._get_lease(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
-    def resolve_volume_source(self, thread_id: str):
-        """Resolve VolumeSource for a thread via lease chain. Pure sandbox-layer lookup."""
-        import json
-
-        from sandbox.volume_source import deserialize_volume_source
-        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
-
-        terminal = self._get_active_terminal(thread_id)
-        if not terminal:
-            raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self._get_lease(terminal.lease_id)
-        if not lease or not lease.volume_id:
-            raise ValueError(f"No volume for thread {thread_id}")
-        repo = SQLiteSandboxVolumeRepo()
+    def _resolve_sync_source_path(self, thread_id: str) -> Path:
+        # @@@sync-source-truth - sync no longer needs dropped volume-row truth; it only needs
+        # the workspace-owned local file root that backs the current file channel.
+        container = build_storage_container()
+        thread_repo = container.thread_repo()
         try:
-            entry = repo.get(lease.volume_id)
+            thread_row = thread_repo.get_by_id(thread_id)
         finally:
-            repo.close()
-        if not entry:
-            raise ValueError(f"Volume not found: {lease.volume_id}")
-        return deserialize_volume_source(json.loads(entry["source"]))
+            close = getattr(thread_repo, "close", None)
+            if callable(close):
+                close()
+        if thread_row is None:
+            raise ValueError(f"Thread not found: {thread_id}")
+        workspace_id = (
+            thread_row.get("current_workspace_id") if isinstance(thread_row, dict) else getattr(thread_row, "current_workspace_id", None)
+        )
+        if not workspace_id:
+            raise ValueError("thread.current_workspace_id is required")
+        return user_home_path("file_channels", str(workspace_id)).expanduser().resolve()
+
+    def _skip_volume_sync_for_local_lease(self, lease) -> bool:
+        # @@@local-no-volume-sync - local sessions execute directly in host cwd, so upload/download
+        # must always no-op there rather than reactivating volume-backed sync.
+        return lease is not None and not self._requires_volume_bootstrap()
 
     def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
         if source is None:
-            source = self.resolve_volume_source(thread_id)
+            lease = self._get_thread_lease(thread_id)
+            if self._skip_volume_sync_for_local_lease(lease):
+                return
+            source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
 
     def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
         if source is None:
-            source = self.resolve_volume_source(thread_id)
+            lease = self._get_thread_lease(thread_id)
+            if self._skip_volume_sync_for_local_lease(lease):
+                return
+            source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_mount_path())
 
     def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
@@ -307,16 +464,16 @@ class SandboxManager:
         if session:
             self._assert_lease_provider(session.lease, thread_id)
             # @@@activity-resume - Any new activity against a paused thread must resume before command execution.
-            if session.status == "paused":
+            if session.status == "paused" or getattr(session.lease, "observed_state", None) == "paused":
                 if not self.resume_session(thread_id, source="auto_resume"):
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, session.terminal.terminal_id)
                 if not session:
                     raise RuntimeError(f"Session disappeared after resume for thread {thread_id}")
                 self._assert_lease_provider(session.lease, thread_id)
-            # Stamp bind_mounts on lease so lazy creation paths pick them up
+            # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
             if bind_mounts:
-                session.lease.bind_mounts = bind_mounts
+                self.provider.set_thread_bind_mounts(thread_id, bind_mounts)
             self._ensure_bound_instance(session.lease)
             return SandboxCapability(session, manager=self)
 
@@ -332,20 +489,36 @@ class SandboxManager:
                     lease_id=lease_id,
                     initial_cwd=initial_cwd,
                 ),
-                self.terminal_store.db_path,
+                self.db_path,
             )
         else:
             lease = self._get_lease(terminal.lease_id)
             if not lease:
                 lease = self._create_lease(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
+            if lease.observed_state == "paused":
+                # @@@paused-lease-rehydrate - a persisted thread can lose its in-memory chat session
+                # while the lease stays paused in storage; resume before reconstructing capability.
+                if not self.resume_session(thread_id, source="auto_resume"):
+                    raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
+                session = self.session_manager.get(thread_id, terminal.terminal_id)
+                if session:
+                    self._assert_lease_provider(session.lease, thread_id)
+                    self._ensure_bound_instance(session.lease)
+                    return SandboxCapability(session, manager=self)
+                lease = self._get_lease(terminal.lease_id)
+                if not lease:
+                    raise RuntimeError(f"Lease disappeared after resume for thread {thread_id}")
+                self._assert_lease_provider(lease, thread_id)
 
-        # Stamp bind_mounts on lease so lazy creation paths pick them up
+        # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
         if bind_mounts:
-            lease.bind_mounts = bind_mounts
+            self.provider.set_thread_bind_mounts(thread_id, bind_mounts)
 
-        # @@@volume-strategy-gate - mount volume into sandbox
-        storage = self._setup_mounts(thread_id)
+        storage = None
+        if self._requires_volume_bootstrap():
+            # @@@volume-strategy-gate - remote runtimes need volume mount/sync before first command.
+            storage = self._setup_mounts(thread_id)
 
         self._ensure_bound_instance(lease)
 
@@ -375,9 +548,9 @@ class SandboxManager:
             lease=lease,
         )
 
-        if instance:
+        if instance and storage is not None:
             # @@@workspace-upload - sync files to sandbox after creation
-            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
+            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source_path"])
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
@@ -385,11 +558,8 @@ class SandboxManager:
     def create_background_command_session(self, thread_id: str, initial_cwd: str) -> Any:
         default_row = self.terminal_store.get_default(thread_id)
         if default_row is None:
-            # Fallback: pointer row may predate default_terminal_id tracking; try active terminal
-            default_row = self.terminal_store.get_active(thread_id)
-        if default_row is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
-        default_terminal = terminal_from_row(default_row, self.terminal_store.db_path)
+        default_terminal = terminal_from_row(default_row, self.db_path)
         lease = self._get_lease(default_terminal.lease_id)
         if lease is None:
             raise RuntimeError(f"Missing lease {default_terminal.lease_id} for thread {thread_id}")
@@ -404,7 +574,7 @@ class SandboxManager:
                 lease_id=lease.lease_id,
                 initial_cwd=initial_cwd,
             ),
-            self.terminal_store.db_path,
+            self.db_path,
         )
         # @@@async-terminal-inherit-state - non-blocking commands fork from default terminal cwd/env snapshot.
         terminal.update_state(
@@ -414,13 +584,12 @@ class SandboxManager:
                 state_version=inherited.state_version,
             )
         )
-        session = self.session_manager.create(
+        return self.session_manager.create(
             session_id=f"sess-{uuid.uuid4().hex[:12]}",
             thread_id=thread_id,
             terminal=terminal,
             lease=lease,
         )
-        return session
 
     def _terminal_is_busy(self, terminal_id: str) -> bool:
         """Return True if this terminal has a running command."""
@@ -443,8 +612,8 @@ class SandboxManager:
         last_active_raw = session_row.get("last_active_at")
         if not started_at_raw or not last_active_raw:
             return False
-        started_at = datetime.fromisoformat(str(started_at_raw))
-        last_active_at = datetime.fromisoformat(str(last_active_raw))
+        started_at = parse_runtime_datetime(str(started_at_raw))
+        last_active_at = parse_runtime_datetime(str(last_active_raw))
         idle_ttl_sec = int(session_row.get("idle_ttl_sec") or 0)
         max_duration_sec = int(session_row.get("max_duration_sec") or 0)
         idle_elapsed = (now - last_active_at).total_seconds()
@@ -464,7 +633,7 @@ class SandboxManager:
         if self.provider.name == "local":
             return 0
 
-        now = datetime.now()
+        now = utc_now()
         count = 0
 
         active_rows = self.session_manager.list_active()
@@ -477,8 +646,8 @@ class SandboxManager:
             if not session_id or not thread_id or not started_at_raw or not last_active_raw:
                 continue
 
-            started_at = datetime.fromisoformat(str(started_at_raw))
-            last_active_at = datetime.fromisoformat(str(last_active_raw))
+            started_at = parse_runtime_datetime(str(started_at_raw))
+            last_active_at = parse_runtime_datetime(str(last_active_raw))
             idle_ttl_sec = int(row.get("idle_ttl_sec") or 0)
             max_duration_sec = int(row.get("max_duration_sec") or 0)
 
@@ -489,7 +658,7 @@ class SandboxManager:
 
             terminal_id = row.get("terminal_id")
             terminal_row = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
-            terminal = terminal_from_row(terminal_row, self.terminal_store.db_path) if terminal_row else None
+            terminal = terminal_from_row(terminal_row, self.db_path) if terminal_row else None
             lease = self._get_lease(terminal.lease_id) if terminal else None
             if lease and lease.provider_name != self.provider.name:
                 continue
@@ -518,15 +687,26 @@ class SandboxManager:
                     if self._lease_is_busy(lease.lease_id):
                         continue
                     status = lease.refresh_instance_status(self.provider)
-                    # Only pause remote providers (local sandbox doesn't need pause)
+                    capability = self.provider.get_capability()
+                    # @@@idle-reaper-reclaim-contract - idle timeout must reclaim remote resources; providers
+                    # that cannot pause should destroy instead of repeatedly throwing unsupported-operation noise.
                     if status == "running" and self.provider.name != "local":
                         try:
-                            paused = lease.pause_instance(self.provider, source="idle_reaper")
+                            if capability.can_pause:
+                                reclaimed = lease.pause_instance(self.provider, source="idle_reaper")
+                            elif capability.can_destroy:
+                                reclaimed = lease.destroy_instance(self.provider, source="idle_reaper") is None
+                            else:
+                                print(
+                                    f"[idle-reaper] provider {self.provider.name} cannot reclaim expired lease "
+                                    f"{lease.lease_id} for thread {thread_id}"
+                                )
+                                continue
                         except Exception as exc:
-                            print(f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}")
+                            print(f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} for thread {thread_id}: {exc}")
                             continue
-                        if not paused:
-                            print(f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}")
+                        if not reclaimed:
+                            print(f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} for thread {thread_id}")
                             continue
 
             self.session_manager.delete(session_id, reason="idle_timeout")
@@ -596,6 +776,10 @@ class SandboxManager:
         for terminal in terminals:
             session = self.session_manager.get(thread_id, terminal.terminal_id)
             if session:
+                session.lease = lease
+                runtime = getattr(session, "runtime", None)
+                if runtime is not None:
+                    runtime.lease = lease
                 self.session_manager.resume(session.session_id)
                 resumed_any = True
 
@@ -636,7 +820,7 @@ class SandboxManager:
     def destroy_thread_resources(self, thread_id: str) -> bool:
         """Destroy physical resources and detach thread from terminal/lease records."""
         terminal_rows = self.terminal_store.list_by_thread(thread_id)
-        terminals = [terminal_from_row(r, self.terminal_store.db_path) for r in terminal_rows]
+        terminals = [terminal_from_row(r, self.db_path) for r in terminal_rows]
         if not terminals:
             return False
 
@@ -654,22 +838,31 @@ class SandboxManager:
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 
-        for terminal in terminals:
-            session = self.session_manager.get(thread_id, terminal.terminal_id)
-            if session:
-                self.session_manager.delete(session.session_id, reason="thread_deleted")
+        self.session_manager.delete_thread(thread_id, reason="thread_deleted")
 
         for terminal in terminals:
             self.terminal_store.delete(terminal.terminal_id)
 
         for lease_id in lease_ids:
-            lease = self._get_lease(lease_id)
-            if not lease:
-                raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
-            lease.destroy_instance(self.provider)
+            # @@@shared-lease-destroy-boundary - destroying one thread must not tear down
+            # a lease that still has surviving terminals bound to it.
             lease_in_use = any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all())
-            if not lease_in_use:
-                self.lease_store.delete(lease_id)
+            if lease_in_use:
+                continue
+            if not self.destroy_lease_resources(lease_id):
+                raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
+        return True
+
+    def destroy_lease_resources(self, lease_id: str) -> bool:
+        lease = self._get_lease(lease_id)
+        if not lease:
+            return False
+        if any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all()):
+            raise RuntimeError(f"Lease {lease_id} still has bound terminals")
+        lease.destroy_instance(self.provider)
+        if self.provider_capability.runtime_kind == "daytona_pty":
+            self._destroy_daytona_managed_volume(lease_id)
+        self.lease_store.delete(lease_id)
         return True
 
     def list_sessions(self) -> list[dict]:
@@ -752,33 +945,34 @@ class SandboxManager:
                     }
                 )
 
-        if hasattr(self.provider, "list_provider_sessions"):
-            try:
-                provider_sessions = self.provider.list_provider_sessions() or []
-            except Exception:
-                logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
-                provider_sessions = []
+        list_provider_runtimes = getattr(self.provider, "list_provider_runtimes", None)
+        provider_runtimes = []
+        if callable(list_provider_runtimes):
+            raw_provider_runtimes = list_provider_runtimes()
+            if not isinstance(raw_provider_runtimes, list):
+                raise TypeError(f"{self.provider.name}.list_provider_runtimes must return list")
+            provider_runtimes = raw_provider_runtimes
 
-            for ps in provider_sessions:
-                instance_id = getattr(ps, "session_id", None)
-                status = getattr(ps, "status", None) or "unknown"
-                if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
-                    continue
+        for ps in provider_runtimes:
+            instance_id = getattr(ps, "session_id", None)
+            status = getattr(ps, "status", None) or "unknown"
+            if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
+                continue
 
-                sessions.append(
-                    {
-                        "session_id": instance_id,
-                        "thread_id": "(orphan)",
-                        "provider": self.provider.name,
-                        "status": status,
-                        "created_at": None,
-                        "last_active": None,
-                        "lease_id": None,
-                        "instance_id": instance_id,
-                        "chat_session_id": None,
-                        "source": "provider_orphan",
-                        "inspect_visible": inspect_visible,
-                    }
-                )
+            sessions.append(
+                {
+                    "session_id": instance_id,
+                    "thread_id": "(orphan)",
+                    "provider": self.provider.name,
+                    "status": status,
+                    "created_at": None,
+                    "last_active": None,
+                    "lease_id": None,
+                    "instance_id": instance_id,
+                    "chat_session_id": None,
+                    "source": "provider_orphan",
+                    "inspect_visible": inspect_visible,
+                }
+            )
 
         return sessions

@@ -9,7 +9,7 @@ from typing import Any
 from storage.providers.supabase import _query as q
 
 _REPO = "recipe repo"
-_TABLE = "library_recipes"
+_TABLE = "sandbox_recipes"
 
 
 class SupabaseRecipeRepo:
@@ -92,11 +92,6 @@ class SupabaseRecipeRepo:
         self._t().delete().eq("owner_user_id", owner_user_id).eq("recipe_id", recipe_id).execute()
         return True
 
-    def delete_thread_events(self, thread_id: str) -> int:
-        # RecipeRepo protocol requires this for parity; recipes are not keyed by thread_id,
-        # so this is a no-op that returns 0.
-        return 0
-
     def _hydrate(self, row: dict[str, Any]) -> dict[str, Any]:
         raw = row.get("data_json") or row.get("data") or "{}"
         if isinstance(raw, dict):
@@ -116,4 +111,4 @@ class SupabaseRecipeRepo:
         }
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "container", _TABLE, _REPO)

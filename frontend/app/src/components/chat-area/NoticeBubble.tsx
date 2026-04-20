@@ -6,7 +6,7 @@ interface NoticeBubbleProps {
   onTaskNoticeClick?: (taskId: string) => void;
 }
 
-export interface ParsedNotice {
+interface ParsedNotice {
   text: string;
   status?: "completed" | "error" | "pending";
   taskId?: string;
@@ -100,7 +100,7 @@ function ChatDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolea
   );
 }
 
-// --- Generic fallback divider (no notification_type) ---
+// --- Generic divider for notices without notification_type ---
 
 function GenericDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolean }) {
   if (!parsed.text) return null;
@@ -174,7 +174,7 @@ function normalizeStatus(raw: string): ParsedNotice["status"] {
   return "pending";
 }
 
-export function parseNoticeContent(raw: string, notificationType?: NotificationType): ParsedNotice {
+function parseNoticeContent(raw: string, notificationType?: NotificationType): ParsedNotice {
   switch (notificationType) {
     case "steer":
       return parseSteer(raw);

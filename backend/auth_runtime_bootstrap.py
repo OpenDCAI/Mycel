@@ -1,0 +1,40 @@
+"""Shared auth bootstrap helpers for backend app lifecycles."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from backend.auth_service import AuthService
+from backend.supabase_runtime import create_supabase_auth_client
+
+
+@dataclass(frozen=True)
+class AuthRuntimeState:
+    auth_service: object
+    supabase_auth_client_factory: object
+
+
+def build_auth_runtime_state(storage_state) -> AuthRuntimeState:
+    storage_container = storage_state.storage_container
+    supabase_client = storage_state.supabase_client
+    supabase_auth_client_factory = create_supabase_auth_client()
+    auth_service = AuthService(
+        users=storage_container.user_repo(),
+        agent_configs=storage_container.agent_config_repo(),
+        supabase_client=supabase_client,
+        supabase_auth_client_factory=supabase_auth_client_factory,
+        invite_codes=storage_container.invite_code_repo(),
+        contact_repo=storage_container.contact_repo(),
+        recipe_repo=storage_container.recipe_repo(),
+    )
+    return AuthRuntimeState(
+        auth_service=auth_service,
+        supabase_auth_client_factory=supabase_auth_client_factory,
+    )
+
+
+def attach_auth_runtime_state(app, *, storage_state) -> AuthRuntimeState:
+    state = build_auth_runtime_state(storage_state)
+    app.state.auth_service = state.auth_service
+    app.state._supabase_auth_client_factory = state.supabase_auth_client_factory
+    return state

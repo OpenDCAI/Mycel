@@ -3,56 +3,62 @@
 import asyncio
 import json
 import logging
+import time
 import uuid
-from datetime import UTC
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
+from backend import sandbox_provider_factory
+from backend.file_channel import get_file_channel_binding
+from backend.monitor.application.use_cases.thread_workbench import (
+    build_owner_thread_workbench_from_rows,
+    sidebar_label,
+)
+from backend.monitor.infrastructure.read_models.thread_workbench_read_service import build_owner_thread_workbench_reader
+from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
+from backend.sandbox_inventory import init_providers_and_managers
+from backend.sandbox_thread_resources import destroy_thread_resources_sync
+from backend.thread_runtime.events.buffer import ThreadEventBuffer
+from backend.thread_runtime.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
+from backend.thread_runtime.history import build_thread_history_transport, get_thread_history_payload
+from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages
+from backend.thread_runtime.launch_config import resolve_default_config
+from backend.thread_runtime.owner_reads import list_owner_thread_rows_for_auth_burst
+from backend.thread_runtime.run.buffer_wiring import get_or_create_thread_buffer
+from backend.thread_runtime.run.lifecycle import prime_sandbox
+from backend.thread_runtime.run.observer import observe_thread_events
+from backend.thread_runtime.sandbox import resolve_thread_sandbox
+from backend.thread_runtime.state import get_sandbox_info, get_sandbox_status_from_repos
 from backend.web.core.dependencies import (
     get_app,
     get_current_user_id,
     get_thread_agent,
     get_thread_lock,
     verify_thread_owner,
+    verify_thread_row_owner,
 )
 from backend.web.models.requests import (
     CreateThreadRequest,
     ResolveMainThreadRequest,
-    SaveThreadLaunchConfigRequest,
+    ResolvePermissionRequest,
     SendMessageRequest,
+    ThreadPermissionRuleRequest,
 )
-from backend.web.services import sandbox_service
-from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.file_channel_service import get_file_channel_source
-from backend.web.services.resource_cache import clear_resource_overview_cache
-from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
-from backend.web.services.streaming_service import (
-    get_or_create_thread_buffer,
-    observe_thread_events,
-)
-from backend.web.services.thread_launch_config_service import (
-    resolve_default_config,
-    save_last_confirmed_config,
-    save_last_successful_config,
-)
-from backend.web.services.thread_naming import canonical_entity_name, sidebar_label
-from backend.web.services.thread_state_service import (
-    get_lease_status,
-    get_sandbox_info,
-    get_session_status,
-    get_terminal_status,
-)
+from backend.web.services import account_resource_service
+from backend.web.services.agent_pool import get_or_create_agent
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
+from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
-from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
+from sandbox.manager import bind_thread_to_existing_sandbox, resolve_existing_sandbox_lease
+from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
-from storage.contracts import EntityRow
+from storage.contracts import WorkspaceRow
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +66,34 @@ router = APIRouter(prefix="/api/threads", tags=["threads"])
 
 
 def _invalidate_resource_overview_cache() -> None:
-    # @@@resource-overview-invalidation - thread/lease mutations change the monitor topology immediately.
+    # @@@monitor-resource-overview-invalidation - thread/sandbox mutations change the monitor topology immediately.
     # Clear the overview snapshot so the next /api/monitor/resources read reflects the fresh binding/state.
     clear_resource_overview_cache()
+
+
+def _find_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any | None:
+    agent = app.state.user_repo.get_by_id(agent_id)
+    if not agent or agent.owner_user_id != owner_user_id:
+        return None
+    return agent
+
+
+def _require_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any:
+    agent = _find_owned_agent(app, agent_id, owner_user_id)
+    if agent is None:
+        raise HTTPException(403, "Not authorized")
+    return agent
+
+
+def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
+    _require_owned_agent(app, agent_user_id, owner_user_id)
+    from backend.thread_runtime import launch_config as launch_config_owner
+    from backend.web.services import sandbox_service
+    from backend.web.services.library_service import list_library
+
+    launch_config_owner.available_sandbox_types = sandbox_service.available_sandbox_types
+    launch_config_owner.list_library = list_library
+    return resolve_default_config(app, owner_user_id, agent_user_id)
 
 
 async def _prepare_attachment_message(
@@ -78,7 +109,6 @@ async def _prepare_attachment_message(
     When *agent* is supplied, uses its live manager and primes the sandbox
     (resume if paused) before syncing.
     """
-    from backend.web.services.streaming_service import prime_sandbox
 
     message_metadata: dict[str, Any] = {"attachments": attachments, "original_message": message}
     if agent is not None and getattr(agent, "_sandbox", None):
@@ -91,8 +121,8 @@ async def _prepare_attachment_message(
     # For remote providers: container-side path
     if mgr and mgr.volume.capability.runtime_kind == "local":
         try:
-            source = get_file_channel_source(thread_id)
-            files_dir = str(source.host_path)
+            binding = get_file_channel_binding(thread_id)
+            files_dir = str(binding.local_staging_root) if binding.local_staging_root is not None else binding.workspace_path
         except ValueError:
             files_dir = "/workspace/files"
     else:
@@ -179,6 +209,146 @@ async def _validate_mount_capability_gate(
     )
 
 
+def _provider_unavailable_response(sandbox_type: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "sandbox_provider_unavailable",
+            "provider": sandbox_type,
+        },
+    )
+
+
+def _format_ask_user_question_followup(
+    pending_request: dict[str, Any],
+    *,
+    answers: list[dict[str, Any]],
+    annotations: dict[str, Any] | None,
+) -> str:
+    payload: dict[str, Any] = {
+        "questions": (pending_request.get("args") or {}).get("questions", []),
+        "answers": answers,
+    }
+    if annotations is not None:
+        payload["annotations"] = annotations
+    # @@@ask-user-followup-payload - keep this as one narrow, structured owner reply
+    # so the resumed run can continue from the user's choices without inventing
+    # a bespoke second continuation channel.
+    return (
+        "The user answered your AskUserQuestion prompt. Continue the task using these answers.\n"
+        "<ask_user_question_answers>\n"
+        f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n"
+        "</ask_user_question_answers>"
+    )
+
+
+def _build_ask_user_question_answered_payload(
+    pending_request: dict[str, Any],
+    *,
+    answers: list[dict[str, Any]],
+    annotations: dict[str, Any] | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "questions": (pending_request.get("args") or {}).get("questions", []),
+        "answers": answers,
+    }
+    if annotations is not None:
+        payload["annotations"] = annotations
+    return payload
+
+
+def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
+    raw_answers = getattr(payload, "answers", None)
+    if raw_answers is None:
+        return None
+    serialized: list[dict[str, Any]] = []
+    for item in raw_answers:
+        if hasattr(item, "model_dump"):
+            serialized.append(item.model_dump(exclude_none=True))
+        elif isinstance(item, dict):
+            serialized.append({key: value for key, value in item.items() if value is not None})
+        else:
+            serialized.append({key: value for key, value in vars(item).items() if value is not None})
+    return serialized
+
+
+def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
+    sandbox_type = payload.sandbox or "local"
+    if payload.existing_sandbox_id:
+        lower_runtime_row = _resolve_owned_existing_sandbox_request_lease(app, owner_user_id, payload.existing_sandbox_id)
+        if lower_runtime_row is not None:
+            sandbox_type = str(lower_runtime_row["provider_name"] or sandbox_type)
+    if sandbox_type == "local":
+        return None
+    provider = sandbox_provider_factory.build_provider_from_config_name(sandbox_type)
+    if provider is not None:
+        return None
+    return _provider_unavailable_response(sandbox_type)
+
+
+def _validate_sandbox_quota_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
+    if payload.existing_sandbox_id:
+        return None
+    sandbox_type = payload.sandbox or "local"
+    try:
+        account_resource_service.assert_can_create_sandbox(app, owner_user_id, sandbox_type)
+    except account_resource_service.AccountResourceLimitExceededError as exc:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "sandbox_quota_exceeded",
+                "message": str(exc),
+                "resource": exc.resource,
+            },
+        )
+    return None
+
+
+def _request_row_text(row: Any, key: str, *, label: str) -> str:
+    value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
+    if isinstance(value, str):
+        value = value.strip()
+    if value is None or value == "":
+        raise RuntimeError(f"{label}.{key} is required")
+    return str(value)
+
+
+@dataclass(frozen=True)
+class _ExistingSandboxThreadBinding:
+    sandbox_id: str
+    sandbox_type: str
+    workspace_path: str | None
+    thread_cwd: str
+
+
+def _resolve_owned_existing_sandbox_request_lease(
+    app: Any,
+    owner_user_id: str,
+    existing_sandbox_id: str,
+) -> dict[str, Any] | None:
+    normalized_id = str(existing_sandbox_id or "").strip()
+    if not normalized_id:
+        return None
+
+    sandbox_repo = getattr(app.state, "sandbox_repo", None)
+    sandbox_get_by_id = getattr(sandbox_repo, "get_by_id", None)
+    if not callable(sandbox_get_by_id):
+        return None
+    sandbox = sandbox_get_by_id(normalized_id)
+    if sandbox is None:
+        return None
+
+    # @@@existing-sandbox-request-cutover - incoming existing_sandbox_id is sandbox-shaped;
+    # lower runtime identity is resolved only behind the row.
+    sandbox_owner_user_id = _request_row_text(sandbox, "owner_user_id", label="sandbox")
+    if sandbox_owner_user_id != owner_user_id:
+        raise HTTPException(403, "Not authorized")
+    return resolve_existing_sandbox_lease(
+        sandbox,
+        lease_repo=getattr(app.state, "lease_repo", None),
+    )
+
+
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
     """Get agent instance for a thread from the agent pool."""
     pool = getattr(app.state, "agent_pool", None)
@@ -193,73 +363,218 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     thread = app.state.thread_repo.get_by_id(thread_id)
     if thread is None:
         raise HTTPException(404, "Thread not found")
-    member = app.state.member_repo.get_by_id(thread["member_id"])
-    entity = app.state.entity_repo.get_by_id(thread["member_id"])
-    if member is None or entity is None:
-        raise HTTPException(500, f"Thread {thread_id} missing member/entity")
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if agent_user is None:
+        raise HTTPException(500, f"Thread {thread_id} missing agent user")
     return {
         "thread_id": thread_id,
         "sandbox": sandbox_type,
-        "member_id": member.id,
-        "member_name": member.name,
-        "entity_name": entity.name,
+        "agent_user_id": agent_user.id,
+        "agent_name": agent_user.display_name,
         "branch_index": thread["branch_index"],
         "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
-        "avatar_url": avatar_url(member.id, bool(member.avatar)),
+        "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
         "is_main": thread["is_main"],
     }
 
 
-def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: dict[str, Any] | None) -> None:
-    """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
-    from datetime import datetime
+_IDLE_REPLAYABLE_RUN_EVENTS = frozenset({"error", "cancelled", "retry"})
 
-    from backend.web.core.config import SANDBOX_VOLUME_ROOT
-    from backend.web.utils.helpers import _get_container
-    from sandbox.volume_source import HostVolume
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
-    sandbox_db = resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    now_str = datetime.now().isoformat()
-    volume_id = str(uuid.uuid4())
-    vol_path = SANDBOX_VOLUME_ROOT / volume_id
-    source = HostVolume(vol_path)
+def _checkpoint_tail_is_pending_owner_turn(messages: list[dict[str, Any]]) -> bool:
+    if not messages:
+        return False
+    tail = messages[-1]
+    if tail.get("type") != "HumanMessage":
+        return False
+    meta = tail.get("metadata") or {}
+    return meta.get("source") not in {"system", "external"}
 
-    vol_repo = _get_container().sandbox_volume_repo()
-    try:
-        vol_repo.create(volume_id, json.dumps(source.serialize()), f"vol-{thread_id}", now_str)
-    finally:
-        vol_repo.close()
 
-    lease_repo = SQLiteLeaseRepo(db_path=sandbox_db)
+async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str, Any]]:
+    display_builder = app.state.display_builder
+    entries = display_builder.get_entries(thread_id)
+    if entries is not None:
+        _normalize_blocking_subagent_terminal_status(entries)
+    sandbox_type = resolve_thread_sandbox(app, thread_id)
+    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    if entries is not None and getattr(agent.runtime, "current_state", None) != AgentState.IDLE:
+        return entries
+
+    set_current_thread_id(thread_id)
+    config = {"configurable": {"thread_id": thread_id}}
+    state = await agent.agent.aget_state(config)
+    values = getattr(state, "values", {}) if state else {}
+    messages = values.get("messages", []) if isinstance(values, dict) else []
+    messages = repair_interrupted_tool_call_messages(list(messages))
+    serialized = [serialize_message(msg) for msg in messages]
+
+    from core.runtime.visibility import annotate_owner_visibility
+
+    annotated, _ = annotate_owner_visibility(serialized)
+    if entries is not None and not _display_entries_need_idle_rebuild(entries, annotated):
+        return entries
+    entries = display_builder.build_from_checkpoint(thread_id, annotated)
+    if _checkpoint_tail_is_pending_owner_turn(annotated):
+        await _replay_latest_run_failure_events(
+            thread_id=thread_id,
+            display_builder=display_builder,
+        )
+        entries = display_builder.get_entries(thread_id) or entries
+    _normalize_blocking_subagent_terminal_status(entries)
+    return entries
+
+
+def _display_entries_need_idle_rebuild(entries: list[dict[str, Any]], messages: list[dict[str, Any]]) -> bool:
+    if not messages:
+        return bool(entries)
+    if not entries:
+        return True
+    # @@@idle-cache-honesty - idle detail must not trust cached assistant shells after
+    # clear/restart. Rebuild only when cache is visibly impossible for the persisted checkpoint.
+    return any(entry.get("role") == "assistant" and not entry.get("segments") for entry in entries)
+
+
+def _normalize_blocking_subagent_terminal_status(entries: list[dict[str, Any]]) -> None:
+    for entry in entries:
+        if entry.get("role") != "assistant":
+            continue
+        for seg in entry.get("segments", []):
+            if seg.get("type") != "tool":
+                continue
+            step = seg.get("step") or {}
+            if step.get("name") != "Agent" or step.get("status") != "done":
+                continue
+            stream = step.get("subagent_stream")
+            if not isinstance(stream, dict):
+                continue
+            result_text = step.get("result")
+            existing_status = str(stream.get("status") or "").lower()
+            terminal_status = (
+                existing_status
+                if existing_status in {"completed", "error", "cancelled"}
+                else ("error" if isinstance(result_text, str) and result_text.startswith("<tool_use_error>") else "completed")
+            )
+            if stream.get("status") != terminal_status:
+                # @@@blocking-subagent-terminal-honesty - a finished blocking Agent tool
+                # must not keep exposing a stale running child status on refresh/detail/tasks.
+                stream["status"] = terminal_status
+            if terminal_status == "error" and not stream.get("error") and isinstance(result_text, str):
+                stream["error"] = result_text
+
+
+def _collect_display_subagent_tasks(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    tasks: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if entry.get("role") != "assistant":
+            continue
+        for seg in entry.get("segments", []):
+            if seg.get("type") != "tool":
+                continue
+            step = seg.get("step") or {}
+            if step.get("name") != "Agent":
+                continue
+            stream = step.get("subagent_stream")
+            if not isinstance(stream, dict) or not stream.get("task_id"):
+                continue
+            task_id = str(stream["task_id"])
+            raw_args = step.get("args")
+            args: dict[str, Any] = raw_args if isinstance(raw_args, dict) else {}
+            description = stream.get("description") or args.get("description") or args.get("prompt")
+            status = str(stream.get("status") or ("completed" if step.get("status") == "done" else "running"))
+            result_text = step.get("result") or stream.get("text")
+            # @@@dual-source-task-surface - blocking Agent subagents never enter parent _background_runs,
+            # so /tasks must also project persisted subagent_stream state from display history.
+            tasks[task_id] = {
+                "task_id": task_id,
+                "task_type": "agent",
+                "status": status,
+                "command_line": None,
+                "description": description,
+                "exit_code": None,
+                "error": stream.get("error"),
+                "result": result_text,
+                "text": result_text,
+                "thread_id": stream.get("thread_id"),
+            }
+    return tasks
+
+
+async def _replay_latest_run_failure_events(
+    *,
+    thread_id: str,
+    display_builder: Any,
+) -> None:
+    run_id = await get_latest_run_id(thread_id)
+    if not run_id or run_id.startswith("activity_"):
+        return
+
+    events = await read_events_after(thread_id, run_id, 0)
+    if not any(event.get("event") in _IDLE_REPLAYABLE_RUN_EVENTS for event in events):
+        return
+
+    # @@@idle-run-error-replay - checkpoint can stop at the owner's input when
+    # the run dies before first persisted AI/Tool message. Rebuild must replay
+    # the latest run-level failure events so refresh/detail stays honest.
+    for event in events:
+        event_type = event.get("event", "")
+        if event_type not in {"run_start", "run_done", *_IDLE_REPLAYABLE_RUN_EVENTS}:
+            continue
+        raw_data = event.get("data", "{}")
+        try:
+            payload = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+        except (json.JSONDecodeError, TypeError):
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        display_builder.apply_event(thread_id, event_type, payload)
+
+
+def _create_thread_sandbox_resources(
+    thread_id: str,
+    sandbox_type: str,
+    recipe: dict[str, Any] | None,
+    cwd: str | None = None,
+    *,
+    workspace_repo: Any,
+    owner_user_id: str,
+) -> str:
+    """Create lease and terminal resources without pre-provisioning file-channel storage."""
+    from sandbox.control_plane_repos import make_terminal_repo
+    from storage.runtime import build_lease_repo as make_lease_repo
+
+    lease_repo = make_lease_repo()
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-        normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe)
-        lease_repo.create(
+        normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
+        created_lease = lease_repo.create(
             lease_id,
             sandbox_type,
-            volume_id=volume_id,
             recipe_id=normalized_recipe["id"],
             recipe_json=json.dumps(normalized_recipe, ensure_ascii=False),
+            owner_user_id=owner_user_id,
         )
     finally:
         lease_repo.close()
 
-    terminal_repo = SQLiteTerminalRepo(db_path=sandbox_db)
+    sandbox_id = str((created_lease or {}).get("sandbox_id") or "").strip()
+    if not sandbox_id:
+        raise RuntimeError("lease_repo.create must return sandbox_id for thread sandbox resources")
+
+    terminal_repo = make_terminal_repo()
+    if terminal_repo is None:
+        raise RuntimeError("terminal_repo is required for thread sandbox resources")
     try:
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
-        # @@@initial-cwd - use project root for local, provider default for remote
+        # @@@initial-cwd - local threads own their requested cwd; remote threads start from provider defaults.
         from backend.web.core.config import LOCAL_WORKSPACE_ROOT
 
         if sandbox_type == "local":
-            initial_cwd = str(LOCAL_WORKSPACE_ROOT)
+            initial_cwd = cwd or str(LOCAL_WORKSPACE_ROOT)
         else:
-            from backend.web.services.sandbox_service import build_provider_from_config_name
             from sandbox.manager import resolve_provider_cwd
 
-            provider = build_provider_from_config_name(sandbox_type)
+            provider = sandbox_provider_factory.build_provider_from_config_name(sandbox_type)
             initial_cwd = resolve_provider_cwd(provider) if provider else "/home/user"
         terminal_repo.create(
             terminal_id=terminal_id,
@@ -269,43 +584,136 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: 
         )
     finally:
         terminal_repo.close()
+    return _materialize_workspace_for_sandbox(
+        workspace_repo,
+        sandbox_id=sandbox_id,
+        owner_user_id=owner_user_id,
+        workspace_path=initial_cwd,
+    )
 
 
-def _resolve_existing_lease_cwd(lease_id: str, fallback_cwd: str | None) -> str:
-    if fallback_cwd:
-        return fallback_cwd
+def _materialize_workspace_for_sandbox(
+    workspace_repo: Any,
+    *,
+    sandbox_id: str,
+    owner_user_id: str,
+    workspace_path: str | None,
+) -> str:
+    normalized_path = str(workspace_path or "").strip() or "/workspace"
+    for row in workspace_repo.list_by_sandbox_id(sandbox_id):
+        if row.owner_user_id == owner_user_id and row.workspace_path == normalized_path:
+            return row.id
 
-    from backend.web.core.config import LOCAL_WORKSPACE_ROOT
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-
-    terminal_repo = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-    try:
-        row = terminal_repo.get_latest_by_lease(lease_id)
-    finally:
-        terminal_repo.close()
-    if row and row.get("cwd"):
-        return str(row["cwd"])
-
-    return str(LOCAL_WORKSPACE_ROOT)
-
-
-def _bind_thread_to_existing_lease(thread_id: str, lease_id: str, *, cwd: str | None) -> str:
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-
-    initial_cwd = _resolve_existing_lease_cwd(lease_id, cwd)
-    terminal_repo = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-    try:
-        terminal_repo.create(
-            terminal_id=f"term-{uuid.uuid4().hex[:12]}",
-            thread_id=thread_id,
-            lease_id=lease_id,
-            initial_cwd=initial_cwd,
+    workspace_id = f"workspace-{uuid.uuid4().hex}"
+    now = time.time()
+    # @@@workspace-binding-write - Phase 2 cuts thread create writes to a real
+    # workspace row; lower lease_id remains terminal/runtime internals, not workspace authority.
+    workspace_repo.create(
+        WorkspaceRow(
+            id=workspace_id,
+            sandbox_id=sandbox_id,
+            owner_user_id=owner_user_id,
+            workspace_path=normalized_path,
+            name=None,
+            created_at=now,
+            updated_at=now,
         )
-    finally:
-        terminal_repo.close()
-    return initial_cwd
+    )
+    return workspace_id
+
+
+def _resolve_existing_sandbox_bind_cwd(
+    workspace_repo: Any,
+    *,
+    sandbox_id: str,
+    owner_user_id: str,
+    requested_cwd: str | None,
+) -> str | None:
+    normalized_requested = str(requested_cwd or "").strip()
+    if normalized_requested:
+        return normalized_requested
+
+    owned_rows = [row for row in workspace_repo.list_by_sandbox_id(sandbox_id) if row.owner_user_id == owner_user_id]
+    if len(owned_rows) != 1:
+        return None
+
+    # @@@existing-sandbox-workspace-cwd-candidate - only reuse workspace truth when
+    # caller side can point at one unambiguous owned workspace row for this sandbox.
+    return str(owned_rows[0].workspace_path or "").strip() or None
+
+
+def _bind_existing_sandbox_for_thread(
+    app: Any,
+    owner_user_id: str,
+    thread_id: str,
+    existing_sandbox_id: str,
+    requested_cwd: str | None,
+) -> _ExistingSandboxThreadBinding:
+    sandbox_id = str(existing_sandbox_id or "").strip()
+    sandbox = app.state.sandbox_repo.get_by_id(sandbox_id)
+    if sandbox is None:
+        raise HTTPException(403, "Sandbox not authorized")
+
+    resolved_lease = _resolve_owned_existing_sandbox_request_lease(
+        app,
+        owner_user_id,
+        sandbox_id,
+    )
+    if resolved_lease is None:
+        raise HTTPException(403, "Sandbox not authorized")
+
+    bind_cwd = _resolve_existing_sandbox_bind_cwd(
+        app.state.workspace_repo,
+        sandbox_id=sandbox_id,
+        owner_user_id=owner_user_id,
+        requested_cwd=requested_cwd,
+    )
+    bound_cwd, bound_lease = bind_thread_to_existing_sandbox(
+        thread_id,
+        sandbox,
+        cwd=bind_cwd,
+        lease_repo=getattr(app.state, "lease_repo", None),
+    )
+    if bound_lease is None:
+        raise HTTPException(403, "Sandbox not authorized")
+
+    # @@@existing-sandbox-binding-boundary - lower lease identity is only the
+    # mechanism used by sandbox.manager to attach a terminal; router control
+    # flow should stay sandbox/workspace-shaped after this point.
+    return _ExistingSandboxThreadBinding(
+        sandbox_id=sandbox_id,
+        sandbox_type=str(bound_lease["provider_name"] or ""),
+        workspace_path=bind_cwd or bound_cwd,
+        thread_cwd=bound_cwd,
+    )
+
+
+def _resolve_owned_recipe_snapshot(
+    app: Any,
+    owner_user_id: str,
+    sandbox_type: str,
+    recipe_id: str | None,
+) -> dict[str, Any]:
+    resolved_recipe_id = str(recipe_id or default_recipe_id(sandbox_type)).strip()
+    if not resolved_recipe_id:
+        raise HTTPException(400, "Recipe id is required")
+
+    recipe_repo = getattr(app.state, "recipe_repo", None)
+    if recipe_repo is None:
+        raise RuntimeError("recipe_repo is required for thread recipe resolution")
+
+    row = recipe_repo.get(owner_user_id, resolved_recipe_id)
+    if row is None:
+        raise HTTPException(400, "Recipe not found")
+
+    data = row.get("data")
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Recipe is malformed")
+
+    snapshot = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), data)
+    if snapshot.get("provider_name") != sandbox_type:
+        raise HTTPException(400, "Recipe provider mismatch")
+    return snapshot
 
 
 def _create_owned_thread(
@@ -318,125 +726,84 @@ def _create_owned_thread(
     import time
 
     sandbox_type = payload.sandbox or "local"
-    agent_member_id = payload.member_id
-    agent_member = app.state.member_repo.get_by_id(agent_member_id)
-    if not agent_member or agent_member.owner_user_id != owner_user_id:
+    agent_user_id = payload.agent_user_id
+    agent_user = app.state.user_repo.get_by_id(agent_user_id)
+    if not agent_user or agent_user.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
 
-    selected_lease_id = payload.lease_id
-    owned_lease: dict[str, Any] | None = None
-    if selected_lease_id:
-        owned_lease = next(
-            (
-                lease
-                for lease in sandbox_service.list_user_leases(
-                    owner_user_id,
-                    thread_repo=app.state.thread_repo,
-                    member_repo=app.state.member_repo,
-                )
-                if lease["lease_id"] == selected_lease_id
-            ),
-            None,
-        )
-        if owned_lease is None:
-            raise HTTPException(403, "Lease not authorized")
-        sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
-
-    # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
-    seq = app.state.member_repo.increment_entity_seq(agent_member_id)
-    new_thread_id = f"{agent_member_id}-{seq}"
-    has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
+    # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
+    # @@@user-owned-thread-seq - thread ids are now allocated from the unified
+    # user identity root, so create-path sequencing must fail loudly through
+    # user_repo instead of inventing a second agent identity source.
+    seq = app.state.user_repo.increment_thread_seq(agent_user_id)
+    new_thread_id = f"{agent_user_id}-{seq}"
+    has_main = app.state.thread_repo.get_default_thread(agent_user_id) is not None
     resolved_is_main = is_main or not has_main
-    branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
+    branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_user_id)
+
+    existing_binding: _ExistingSandboxThreadBinding | None = None
+    if payload.existing_sandbox_id:
+        existing_binding = _bind_existing_sandbox_for_thread(
+            app,
+            owner_user_id,
+            new_thread_id,
+            payload.existing_sandbox_id,
+            payload.cwd,
+        )
+        sandbox_type = existing_binding.sandbox_type or sandbox_type
+    selected_recipe = None
+    if existing_binding is None:
+        selected_recipe = _resolve_owned_recipe_snapshot(app, owner_user_id, sandbox_type, payload.sandbox_template_id)
+
+    if existing_binding is not None:
+        current_workspace_id = _materialize_workspace_for_sandbox(
+            app.state.workspace_repo,
+            sandbox_id=existing_binding.sandbox_id,
+            owner_user_id=owner_user_id,
+            workspace_path=existing_binding.workspace_path,
+        )
+    else:
+        # @@@create-write-workspace-first - replay-13 requires supported create paths
+        # to persist the concrete workspace row at thread-row creation time,
+        # not bind runtime truth after a workspace-blind row already exists.
+        current_workspace_id = _create_thread_sandbox_resources(
+            new_thread_id,
+            sandbox_type,
+            selected_recipe,
+            payload.cwd,
+            workspace_repo=app.state.workspace_repo,
+            owner_user_id=owner_user_id,
+        )
 
     app.state.thread_repo.create(
         thread_id=new_thread_id,
-        member_id=agent_member_id,
+        agent_user_id=agent_user_id,
         sandbox_type=sandbox_type,
         cwd=payload.cwd,
         created_at=time.time(),
         model=payload.model,
         is_main=resolved_is_main,
         branch_index=branch_index,
+        owner_user_id=owner_user_id,
+        current_workspace_id=current_workspace_id,
     )
-
-    # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
-    entity_name = canonical_entity_name(agent_member.name, is_main=resolved_is_main, branch_index=branch_index)
-
-    # @@@entity-id-is-member-id - agent entity id = member_id (per-agent, not per-thread).
-    # thread_id field on the entity points to the current main thread.
-    # If entity already exists, update thread_id (main thread changed); otherwise create.
-    existing_entity = app.state.entity_repo.get_by_id(agent_member_id)
-    if existing_entity is not None:
-        if resolved_is_main:
-            app.state.entity_repo.update(agent_member_id, thread_id=new_thread_id, name=entity_name)
-        # Branch threads don't update the entity — it represents the main identity
-    else:
-        app.state.entity_repo.create(
-            EntityRow(
-                id=agent_member_id,
-                type="agent",
-                member_id=agent_member_id,
-                name=entity_name,
-                thread_id=new_thread_id if resolved_is_main else None,
-                created_at=time.time(),
-            )
-        )
 
     # Set thread state
     app.state.thread_sandbox[new_thread_id] = sandbox_type
     if payload.cwd:
         app.state.thread_cwd[new_thread_id] = payload.cwd
 
-    if selected_lease_id:
-        # @@@reuse-lease-binding - Reuse an existing lease by attaching a fresh terminal for the new thread.
-        bound_cwd = _bind_thread_to_existing_lease(
-            new_thread_id,
-            selected_lease_id,
-            cwd=payload.cwd,
-        )
-        app.state.thread_cwd[new_thread_id] = bound_cwd
-    else:
-        # @@@lease-early-creation - Create volume + lease + terminal at thread creation
-        # so volume exists BEFORE any file uploads.
-        _create_thread_sandbox_resources(
-            new_thread_id,
-            sandbox_type,
-            payload.recipe.model_dump() if payload.recipe else None,
-        )
-
-    if selected_lease_id and owned_lease is not None:
-        successful_config = {
-            "create_mode": "existing",
-            "provider_config": sandbox_type,
-            "recipe": owned_lease.get("recipe"),
-            "lease_id": owned_lease["lease_id"],
-            "model": payload.model,
-            "workspace": app.state.thread_cwd.get(new_thread_id),
-        }
-    else:
-        successful_config = {
-            "create_mode": "new",
-            "provider_config": sandbox_type,
-            "recipe": normalize_recipe_snapshot(
-                provider_type_from_name(sandbox_type),
-                payload.recipe.model_dump() if payload.recipe else None,
-            ),
-            "lease_id": None,
-            "model": payload.model,
-            "workspace": app.state.thread_cwd.get(new_thread_id) or payload.cwd,
-        }
-    save_last_successful_config(app, owner_user_id, agent_member_id, successful_config)
+    if existing_binding is not None:
+        app.state.thread_cwd[new_thread_id] = existing_binding.thread_cwd
 
     return {
         "thread_id": new_thread_id,
         "sandbox": sandbox_type,
-        "member_id": agent_member_id,
-        "member_name": agent_member.name,
-        "entity_name": entity_name,
+        "agent_user_id": agent_user_id,
+        "agent_name": agent_user.display_name,
         "branch_index": branch_index,
         "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
-        "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
+        "avatar_url": avatar_url(agent_user_id, bool(agent_user.avatar)),
         "is_main": resolved_is_main,
     }
 
@@ -447,13 +814,19 @@ async def create_thread(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any] | JSONResponse:
-    """Create a new child thread for an agent member."""
+    """Create a new child thread for an agent user."""
+    provider_error = _validate_sandbox_provider_gate(app, user_id, payload)
+    if provider_error is not None:
+        return provider_error
     # Validate bind_mounts capability before creating thread
     sandbox_type = payload.sandbox or "local"
-    requested_mounts = payload.bind_mounts if payload.bind_mounts else []
+    requested_mounts = payload.bind_mounts or []
     capability_error = await _validate_mount_capability_gate(sandbox_type, requested_mounts)
     if capability_error is not None:
         return capability_error
+    quota_error = _validate_sandbox_quota_gate(app, user_id, payload)
+    if quota_error is not None:
+        return quota_error
 
     result = _create_owned_thread(app, user_id, payload, is_main=False)
     _invalidate_resource_overview_cache()
@@ -467,42 +840,56 @@ async def resolve_main_thread(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Return the main thread for a member, or null when none exists."""
-    agent_member = app.state.member_repo.get_by_id(payload.member_id)
-    if not agent_member or agent_member.owner_user_id != user_id:
-        # Return null instead of 403 — member may not exist yet (stale client state)
+    """Return the default representative thread for an agent user."""
+    agent_user_id = payload.agent_user_id
+    agent_user = _find_owned_agent(app, agent_user_id, user_id)
+    if agent_user is None:
+        # Return null instead of 403 — agent user may not exist yet (stale client state)
         # or belong to another user (harmless to reveal "no thread")
-        return {"thread": None}
+        return {
+            "agent_user_id": agent_user_id,
+            "default_thread_id": None,
+            "thread": None,
+        }
 
-    existing = app.state.thread_repo.get_main_thread(payload.member_id)
-    if existing is None:
-        return {"thread": None}
-    return {"thread": _thread_payload(app, existing["id"], existing.get("sandbox_type", "local"))}
+    default_thread = app.state.thread_repo.get_default_thread(agent_user_id)
+    if default_thread is None:
+        return {
+            "agent_user_id": agent_user_id,
+            "default_thread_id": None,
+            "thread": None,
+        }
+    try:
+        return {
+            "agent_user_id": agent_user_id,
+            "default_thread_id": default_thread["id"],
+            "thread": _thread_payload(app, default_thread["id"], default_thread.get("sandbox_type", "local")),
+        }
+    except HTTPException as exc:
+        # @@@orphan-default-thread - stale bootstrap data can leave the agent user pointing at a thread whose
+        # user rows are gone. Treat that as "no resolvable default thread" instead of surfacing a 500.
+        if exc.status_code == 500 and "missing agent user" in str(exc.detail):
+            logger.warning(
+                "resolve_main_thread ignored orphaned default thread %s for agent user %s",
+                default_thread["id"],
+                agent_user_id,
+            )
+            return {
+                "agent_user_id": agent_user_id,
+                "default_thread_id": None,
+                "thread": None,
+            }
+        raise
 
 
 @router.get("/default-config")
 async def get_default_thread_config(
-    member_id: str,
+    agent_user_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    agent_member = app.state.member_repo.get_by_id(member_id)
-    if not agent_member or agent_member.owner_user_id != user_id:
-        raise HTTPException(403, "Not authorized")
-    return resolve_default_config(app, user_id, member_id)
-
-
-@router.post("/default-config")
-async def save_default_thread_config(
-    payload: SaveThreadLaunchConfigRequest,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    agent_member = app.state.member_repo.get_by_id(payload.member_id)
-    if not agent_member or agent_member.owner_user_id != user_id:
-        raise HTTPException(403, "Not authorized")
-    save_last_confirmed_config(app, user_id, payload.member_id, payload.model_dump())
-    return {"ok": True}
+    config = await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
+    return config
 
 
 @router.get("")
@@ -511,44 +898,9 @@ async def list_threads(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
-    from core.runtime.middleware.monitor import AgentState
-
-    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
-    pool = app.state.agent_pool
-    threads = []
-    for t in raw:
-        tid = t["id"]
-        sandbox_type = t.get("sandbox_type", "local")
-        # Check if agent is currently running — pool key is "{thread_id}:{sandbox_type}"
-        running = False
-        agent = pool.get(f"{tid}:{sandbox_type}")
-        if agent and hasattr(agent, "runtime"):
-            running = agent.runtime.current_state == AgentState.ACTIVE
-        # last_active from in-memory tracking (run start/done)
-        last_active = app.state.thread_last_active.get(tid)
-        from datetime import datetime
-
-        updated_at = datetime.fromtimestamp(last_active, tz=UTC).isoformat() if last_active else None
-
-        threads.append(
-            {
-                "thread_id": tid,
-                "sandbox": t.get("sandbox_type", "local"),
-                "member_name": t.get("member_name"),
-                "member_id": t.get("member_id"),
-                "entity_name": t.get("entity_name"),
-                "branch_index": t.get("branch_index"),
-                "sidebar_label": sidebar_label(
-                    is_main=bool(t.get("is_main", False)),
-                    branch_index=int(t.get("branch_index", 0)),
-                ),
-                "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
-                "is_main": t.get("is_main", False),
-                "running": running,
-                "updated_at": updated_at,
-            }
-        )
-    return {"threads": threads}
+    raw = await list_owner_thread_rows_for_auth_burst(app, user_id)
+    reader = build_owner_thread_workbench_reader(app)
+    return await asyncio.to_thread(build_owner_thread_workbench_from_rows, raw, reader=reader)
 
 
 @router.get("/{thread_id}")
@@ -562,27 +914,10 @@ async def get_thread_messages(
     @@@display-builder — returns pre-computed ChatEntry[] from DisplayBuilder.
     Hot path: return in-memory state.  Cold path: rebuild from checkpoint.
     """
-    display_builder = app.state.display_builder
     sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-
-    # Hot path: return cached display entries
-    entries = display_builder.get_entries(thread_id)
-    if entries is None:
-        # Cold path: rebuild from checkpoint
-        set_current_thread_id(thread_id)
-        config = {"configurable": {"thread_id": thread_id}}
-        state = await agent.agent.aget_state(config)
-        values = getattr(state, "values", {}) if state else {}
-        messages = values.get("messages", []) if isinstance(values, dict) else []
-        serialized = [serialize_message(msg) for msg in messages]
-
-        from core.runtime.visibility import annotate_owner_visibility
-
-        annotated, _ = annotate_owner_visibility(serialized)
-        entries = display_builder.build_from_checkpoint(thread_id, annotated)
-
-    sandbox_info = get_sandbox_info(agent, thread_id, sandbox_type)
+    display_builder = app.state.display_builder
+    entries = await _get_thread_display_entries(app, thread_id)
+    sandbox_info = get_sandbox_info(app, thread_id, sandbox_type)
     return {
         "thread_id": thread_id,
         "entries": entries,
@@ -611,28 +946,10 @@ async def delete_thread(
             agent.runtime.unbind_thread()
         # Unregister wake handler
         app.state.queue_manager.unregister_wake(thread_id)
-        # Clean up volume BEFORE destroying lease/terminal (destroy deletes those records)
-        try:
-            source = get_file_channel_source(thread_id)
-            source.cleanup()
-        except ValueError:
-            pass  # No volume to clean up
-        try:
-            await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
-        except Exception as exc:
-            logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
+        await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
-        # Also delete from threads table (entity-chat addition)
-        thread_data = app.state.thread_repo.get_by_id(thread_id)
-        member_id = thread_data["member_id"] if thread_data else None
+        # Also delete from threads table.
         app.state.thread_repo.delete(thread_id)
-        # Entity is keyed by member_id (shared across threads) — update its thread_id
-        # to the next main thread, or clear it if no threads remain
-        if member_id:
-            entity = app.state.entity_repo.get_by_id(member_id)
-            if entity and entity.thread_id == thread_id:
-                next_main = app.state.thread_repo.get_main_thread(member_id)
-                app.state.entity_repo.update(member_id, thread_id=next_main["id"] if next_main else None)
 
     # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)
@@ -654,12 +971,13 @@ async def send_message(
     user_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Send a message to agent — thin wrapper around route_message_to_brain."""
+    """Send a message to agent through the Agent Runtime Gateway."""
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
-    from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-    from backend.web.services.message_routing import route_message_to_brain
+    from backend.agent_runtime.port import get_agent_runtime_gateway
+    from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
+    from backend.web.services.agent_pool import get_or_create_agent
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths
@@ -674,7 +992,15 @@ async def send_message(
             agent=agent,
         )
 
-    return await route_message_to_brain(app, thread_id, message, source="owner", attachments=payload.attachments or None)
+    result = await get_agent_runtime_gateway(app).dispatch_thread_input(
+        AgentThreadInputEnvelope(
+            thread_id=thread_id,
+            sender=AgentRuntimeActor(user_id=user_id, user_type="human", display_name="Owner", source="owner"),
+            message=AgentRuntimeMessage(content=message, attachments=payload.attachments or None),
+            enable_trajectory=payload.enable_trajectory,
+        )
+    )
+    return result.to_response()
 
 
 @router.post("/{thread_id}/queue")
@@ -705,7 +1031,7 @@ async def get_thread_history(
     thread_id: str,
     limit: int = 20,
     truncate: int = 300,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Compact conversation history for debugging — no raw LangChain noise.
@@ -714,71 +1040,193 @@ async def get_thread_history(
         limit: Max messages to return, from the end (default 20)
         truncate: Truncate content to this many chars (default 300, 0 = no limit)
     """
-    from backend.web.utils.serializers import extract_text_content
 
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    async def _load_live_messages(current_thread_id: str) -> list[Any] | None:
+        agent_pool = getattr(app.state, "agent_pool", None)
+        if not isinstance(agent_pool, dict):
+            raise RuntimeError("agent_pool is required for thread history reads")
+
+        sandbox_type = resolve_thread_sandbox(app, current_thread_id)
+        agent = agent_pool.get(f"{current_thread_id}:{sandbox_type}")
+        if agent is None:
+            return None
+
+        state = await agent.agent.aget_state({"configurable": {"thread_id": current_thread_id}})
+        values = getattr(state, "values", {}) if state else {}
+        messages = values.get("messages", []) if isinstance(values, dict) else []
+        return list(messages)
+
+    async def _load_checkpoint_messages(current_thread_id: str) -> list[Any]:
+        checkpoint_store = getattr(app.state, "thread_checkpoint_store", None)
+        if checkpoint_store is None:
+            raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
+        checkpoint_state = await checkpoint_store.load(current_thread_id)
+        return list(checkpoint_state.messages) if checkpoint_state is not None else []
+
+    history_transport = build_thread_history_transport(
+        load_live_messages=_load_live_messages,
+        load_checkpoint_messages=_load_checkpoint_messages,
+    )
     set_current_thread_id(thread_id)
-    config = {"configurable": {"thread_id": thread_id}}
-    state = await agent.agent.aget_state(config)
+    return await get_thread_history_payload(
+        thread_id=thread_id,
+        history_transport=history_transport,
+        limit=limit,
+        truncate=truncate,
+    )
 
-    values = getattr(state, "values", {}) if state else {}
-    all_messages = values.get("messages", []) if isinstance(values, dict) else []
-    total = len(all_messages)
-    messages = all_messages[-limit:] if limit > 0 else all_messages
 
-    def _trunc(text: str) -> str:
-        if truncate > 0 and len(text) > truncate:
-            return text[:truncate] + f"…[+{len(text) - truncate}]"
-        return text
+@router.get("/{thread_id}/permissions")
+async def get_thread_permissions(
+    thread_id: str,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)],
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+) -> dict[str, Any]:
+    # @@@permission-state-lock - owner polling and resolve can race on idle
+    # threads. Serialize the lightweight /permissions read with resolve/persist
+    # so stale checkpoint hydration cannot resurrect an already-resolved request.
+    async with thread_lock:
+        await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        rule_state = agent.get_thread_permission_rules(thread_id)
+        return {
+            "thread_id": thread_id,
+            "requests": agent.get_pending_permission_requests(thread_id),
+            "session_rules": rule_state["rules"],
+            "managed_only": rule_state["managed_only"],
+        }
 
-    def _expand(msg: Any) -> list[dict[str, Any]]:
-        """Expand one LangChain message into 1-N flat entries.
 
-        AIMessage with tool_calls → N tool_call entries (one per call),
-        then the text content (if any) as an assistant entry.
-        ToolMessage → one tool_result entry.
-        HumanMessage → one human entry.
-        """
-        cls = msg.__class__.__name__
-        if cls == "HumanMessage":
-            metadata = getattr(msg, "metadata", {}) or {}
-            if metadata.get("source") == "system":
-                return [{"role": "notification", "text": _trunc(extract_text_content(msg.content))}]
-            return [{"role": "human", "text": _trunc(extract_text_content(msg.content))}]
-        if cls == "AIMessage":
-            entries: list[dict] = []
-            for c in getattr(msg, "tool_calls", []):
-                entries.append(
-                    {
-                        "role": "tool_call",
-                        "tool": c["name"],
-                        "args": str(c.get("args", {}))[:200],
-                    }
-                )
-            text = extract_text_content(msg.content)
-            if text:
-                entries.append({"role": "assistant", "text": _trunc(text)})
-            return entries or [{"role": "assistant", "text": ""}]
-        if cls == "ToolMessage":
-            return [
-                {
-                    "role": "tool_result",
-                    "tool": getattr(msg, "name", "?"),
-                    "text": _trunc(extract_text_content(msg.content)),
-                }
-            ]
-        return [{"role": "system", "text": _trunc(extract_text_content(msg.content))}]
+@router.post("/{thread_id}/permissions/{request_id}/resolve")
+async def resolve_thread_permission_request(
+    thread_id: str,
+    request_id: str,
+    payload: ResolvePermissionRequest,
+    thread_lock: Annotated[asyncio.Lock, Depends(get_thread_lock)],
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    async with thread_lock:
+        await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        pending_requests = {
+            item.get("request_id"): item
+            for item in agent.get_pending_permission_requests(thread_id)
+            if isinstance(item, dict) and item.get("request_id")
+        }
+        pending_request = pending_requests.get(request_id)
+        is_ask_user_question = bool(pending_request and pending_request.get("tool_name") == "AskUserQuestion")
+        answers = _serialize_permission_answers(payload)
+        if is_ask_user_question and payload.decision == "allow" and not answers:
+            raise HTTPException(status_code=400, detail="AskUserQuestion answers are required when approving the request")
+        ok = agent.resolve_permission_request(
+            request_id,
+            decision=payload.decision,
+            message=payload.message,
+            answers=answers,
+            annotations=getattr(payload, "annotations", None),
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="Permission request not found")
+        await agent.agent.apersist_state(thread_id)
+        if is_ask_user_question and payload.decision == "allow" and answers is not None:
+            # @@@ask-user-lifecycle - the owner's answer is about to become a
+            # real follow-up user message. Clear the old request before that
+            # run starts so checkpoint replay cannot resurrect the popup.
+            agent.drop_permission_request(request_id)
+            await agent.agent.apersist_state(thread_id)
 
-    flat: list[dict] = []
-    for m in messages:
-        flat.extend(_expand(m))
+    followup: dict[str, Any] | None = None
+    if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
+        from backend.agent_runtime.port import get_agent_runtime_gateway
+        from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 
+        answered_payload = _build_ask_user_question_answered_payload(
+            pending_request,
+            answers=answers,
+            annotations=getattr(payload, "annotations", None),
+        )
+
+        followup_result = await get_agent_runtime_gateway(app).dispatch_thread_input(
+            AgentThreadInputEnvelope(
+                thread_id=thread_id,
+                sender=AgentRuntimeActor(
+                    user_id=user_id or "internal",
+                    user_type="system",
+                    display_name="Internal",
+                    source="internal",
+                ),
+                message=AgentRuntimeMessage(
+                    content=_format_ask_user_question_followup(
+                        pending_request,
+                        answers=answers,
+                        annotations=getattr(payload, "annotations", None),
+                    ),
+                    metadata={"ask_user_question_answered": answered_payload},
+                ),
+            ),
+        )
+        followup = followup_result.to_response()
+
+    response = {"ok": True, "thread_id": thread_id, "request_id": request_id}
+    if followup is not None:
+        response["followup"] = followup
+    return response
+
+
+@router.post("/{thread_id}/permissions/rules")
+async def add_thread_permission_rule(
+    thread_id: str,
+    payload: ThreadPermissionRuleRequest,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+) -> dict[str, Any]:
+    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    rule_state = agent.get_thread_permission_rules(thread_id)
+    if rule_state["managed_only"]:
+        raise HTTPException(status_code=409, detail="Managed permission rules only; session overrides are disabled")
+    ok = agent.add_thread_permission_rule(
+        thread_id,
+        behavior=payload.behavior,
+        tool_name=payload.tool_name,
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="Could not add thread permission rule")
+    await agent.agent.apersist_state(thread_id)
+    updated = agent.get_thread_permission_rules(thread_id)
     return {
+        "ok": True,
         "thread_id": thread_id,
-        "total": total,
-        "showing": len(messages),
-        "messages": flat,
+        "scope": "session",
+        "rules": updated["rules"],
+        "managed_only": updated["managed_only"],
+    }
+
+
+@router.delete("/{thread_id}/permissions/rules/{behavior}/{tool_name}")
+async def delete_thread_permission_rule(
+    thread_id: str,
+    behavior: str,
+    tool_name: str,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+) -> dict[str, Any]:
+    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    ok = agent.remove_thread_permission_rule(
+        thread_id,
+        behavior=behavior,
+        tool_name=tool_name,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Thread permission rule not found")
+    await agent.agent.apersist_state(thread_id)
+    updated = agent.get_thread_permission_rules(thread_id)
+    return {
+        "ok": True,
+        "thread_id": thread_id,
+        "scope": "session",
+        "rules": updated["rules"],
+        "managed_only": updated["managed_only"],
     }
 
 
@@ -786,12 +1234,10 @@ async def get_thread_history(
 async def get_thread_runtime(
     thread_id: str,
     stream: bool = False,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get runtime status for a thread."""
-    from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
-
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     if not hasattr(agent, "runtime"):
@@ -801,20 +1247,9 @@ async def get_thread_runtime(
     thread_data = app.state.thread_repo.get_by_id(thread_id)
     model = thread_data["model"] if thread_data and thread_data.get("model") else None
 
-    if not stream:
-        status = agent.runtime.get_compact_dict()
-        state_str = status.pop("state", "idle")
-        status["state"] = {"state": state_str, "flags": {}}
-        status["model"] = model
-        status["last_seq"] = last_seq
-        if state_str == "active":
-            run_id = await get_latest_run_id(thread_id)
-            if run_id:
-                status["run_start_seq"] = await get_run_start_seq(thread_id, run_id)
-        return status
-
     status = agent.runtime.get_status_dict()
-    status["model"] = model
+    if model is not None:
+        status["model"] = model
     status["last_seq"] = last_seq
     if status.get("state", {}).get("state") == "active":
         run_id = await get_latest_run_id(thread_id)
@@ -823,91 +1258,21 @@ async def get_thread_runtime(
     return status
 
 
-# Sandbox control endpoints for threads
-@router.post("/{thread_id}/sandbox/pause")
-async def pause_thread_sandbox(
+# Sandbox status endpoint
+@router.get("/{thread_id}/sandbox")
+async def get_thread_sandbox_status(
     thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Pause sandbox for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.pause_thread, thread_id)
-        if not ok:
-            raise HTTPException(409, f"Failed to pause sandbox for thread {thread_id}")
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
-
-
-@router.post("/{thread_id}/sandbox/resume")
-async def resume_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Resume paused sandbox for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.resume_thread, thread_id)
-        if not ok:
-            raise HTTPException(409, f"Failed to resume sandbox for thread {thread_id}")
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
-
-
-@router.delete("/{thread_id}/sandbox")
-async def destroy_thread_sandbox(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Destroy sandbox session for a thread."""
-    try:
-        ok = await asyncio.to_thread(agent._sandbox.manager.destroy_session, thread_id)
-        if not ok:
-            raise HTTPException(404, f"No sandbox session found for thread {thread_id}")
-        agent._sandbox._capability_cache.pop(thread_id, None)
-        _invalidate_resource_overview_cache()
-        return {"ok": ok, "thread_id": thread_id}
-    except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
-
-
-# Session/terminal/lease status endpoints
-@router.get("/{thread_id}/session")
-async def get_thread_session_status(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Get ChatSession status for a thread."""
-    try:
-        return await get_session_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
-
-
-@router.get("/{thread_id}/terminal")
-async def get_thread_terminal_status(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Get AbstractTerminal state for a thread."""
-    try:
-        return await get_terminal_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
-
-
-@router.get("/{thread_id}/lease")
-async def get_thread_lease_status(
-    thread_id: str,
-    agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
-    """Get SandboxLease status for a thread."""
-    try:
-        return await get_lease_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
+    user_id: Annotated[str | None, Depends(verify_thread_row_owner)] = None,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any] | None:
+    """Get sandbox status for a thread."""
+    return await get_sandbox_status_from_repos(
+        app.state.thread_repo,
+        app.state.workspace_repo,
+        app.state.sandbox_repo,
+        app.state.lease_repo,
+        thread_id,
+    )
 
 
 # SSE response headers: disable proxy buffering for real-time streaming
@@ -926,27 +1291,16 @@ SSE_HEADERS = {
 async def stream_thread_events(
     thread_id: str,
     request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
     after: int = 0,
-    token: str | None = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> EventSourceResponse:
-    """Persistent SSE event stream — uses ?token= for auth (EventSource can't set headers)."""
-    from backend.web.core.dependencies import _DEV_PAYLOAD, _DEV_SKIP_AUTH
-
-    if _DEV_SKIP_AUTH:
-        sse_user_id = _DEV_PAYLOAD["user_id"]
-    else:
-        if not token:
-            raise HTTPException(401, "Missing token")
-        try:
-            sse_user_id = app.state.auth_service.verify_token(token)["user_id"]
-        except ValueError as e:
-            raise HTTPException(401, str(e))
+    """Persistent SSE event stream over the standard Authorization header."""
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
-    agent_member = app.state.member_repo.get_by_id(thread["member_id"])
-    if not agent_member or agent_member.owner_user_id != sse_user_id:
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if not agent_user or agent_user.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
 
     last_id = request.headers.get("Last-Event-ID")
@@ -969,8 +1323,6 @@ async def stream_thread_events(
 
     if after > 0:
         # Replay from SQLite for reconnection
-        from backend.web.services.event_store import get_latest_run_id, read_events_after
-
         run_id = await get_latest_run_id(thread_id)
         if run_id:
             events = await read_events_after(thread_id, run_id, after)
@@ -995,7 +1347,7 @@ async def stream_thread_events(
 @router.post("/{thread_id}/runs/cancel")
 async def cancel_run(
     thread_id: str,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ):
     """Cancel an active run for the given thread."""
@@ -1007,13 +1359,44 @@ async def cancel_run(
 
 
 # ---------------------------------------------------------------------------
-# Background Run API — bridges frontend to agent._background_runs
+# Background Run API - exposes agent._background_runs to the frontend
 # ---------------------------------------------------------------------------
 
 
 def _get_background_runs(app: Any, thread_id: str) -> dict:
     agent = _get_agent_for_thread(app, thread_id)
     return getattr(agent, "_background_runs", {}) if agent else {}
+
+
+def _background_run_type(run: Any) -> str:
+    return "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
+
+
+def _serialize_background_run(task_id: str, run: Any, *, include_result: bool) -> dict[str, Any]:
+    run_type = _background_run_type(run)
+    result_text = _background_run_result(run) if include_result and run.is_done else None
+    if _background_run_cancelled(run):
+        status = "cancelled"
+    else:
+        status = "completed" if run.is_done else "running"
+    payload = {
+        "task_id": task_id,
+        "task_type": run_type,
+        "status": status,
+        "command_line": getattr(run, "command", None) if run_type == "bash" else None,
+    }
+    if include_result:
+        payload["result"] = result_text
+        payload["text"] = result_text
+        return payload
+    payload["description"] = getattr(run, "description", None)
+    payload["exit_code"] = getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None
+    payload["error"] = None
+    return payload
+
+
+async def _get_display_task_map(app: Any, thread_id: str) -> dict[str, dict[str, Any]]:
+    return _collect_display_subagent_tasks(await _get_thread_display_entries(app, thread_id))
 
 
 @router.get("/{thread_id}/tasks")
@@ -1023,18 +1406,20 @@ async def list_tasks(
 ) -> list[dict]:
     """列出线程的所有后台 run（bash + agent）"""
     runs = _get_background_runs(request.app, thread_id)
-    result = []
-    for task_id, run in runs.items():
-        run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
+    result = [_serialize_background_run(task_id, run, include_result=False) for task_id, run in runs.items()]
+    seen_task_ids = set(runs)
+    for task_id, task in (await _get_display_task_map(request.app, thread_id)).items():
+        if task_id in seen_task_ids:
+            continue
         result.append(
             {
-                "task_id": task_id,
-                "task_type": run_type,
-                "status": "completed" if run.is_done else "running",
-                "command_line": getattr(run, "command", None) if run_type == "bash" else None,
-                "description": getattr(run, "description", None),
-                "exit_code": getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None,
-                "error": None,
+                "task_id": task["task_id"],
+                "task_type": task["task_type"],
+                "status": task["status"],
+                "command_line": task["command_line"],
+                "description": task["description"],
+                "exit_code": task["exit_code"],
+                "error": task["error"],
             }
         )
     return result
@@ -1050,18 +1435,19 @@ async def get_task(
     runs = _get_background_runs(request.app, thread_id)
     run = runs.get(task_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Task not found")
+        task = (await _get_display_task_map(request.app, thread_id)).get(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {
+            "task_id": task["task_id"],
+            "task_type": task["task_type"],
+            "status": task["status"],
+            "command_line": task["command_line"],
+            "result": task["result"],
+            "text": task["text"],
+        }
 
-    run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
-    result_text = run.get_result() if run.is_done else None
-    return {
-        "task_id": task_id,
-        "task_type": run_type,
-        "status": "completed" if run.is_done else "running",
-        "command_line": getattr(run, "command", None) if run_type == "bash" else None,
-        "result": result_text,
-        "text": result_text,
-    }
+    return _serialize_background_run(task_id, run, include_result=True)
 
 
 @router.post("/{thread_id}/tasks/{task_id}/cancel")
@@ -1074,19 +1460,20 @@ async def cancel_task(
     runs = _get_background_runs(request.app, thread_id)
     run = runs.get(task_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Task not found")
+        task = (await _get_display_task_map(request.app, thread_id)).get(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task["status"] != "running":
+            raise HTTPException(status_code=400, detail="Task is not running")
+        thread_task = request.app.state.thread_tasks.get(thread_id)
+        if thread_task is None or thread_task.done():
+            raise HTTPException(status_code=400, detail="Task is not independently cancellable")
+        thread_task.cancel()
+        return {"ok": True, "message": "Run cancellation requested", "task_id": task_id}
     if run.is_done:
         raise HTTPException(status_code=400, detail="Task is not running")
 
-    if run.__class__.__name__ == "_RunningTask":
-        run.task.cancel()
-    elif run.__class__.__name__ == "_BashBackgroundRun":
-        process = getattr(run._cmd, "process", None)
-        if process:
-            try:
-                process.terminate()
-            except ProcessLookupError:
-                pass
+    await request_background_run_stop(run)
 
     # Emit task_done SSE and notify main agent once cancellation completes
     asyncio.create_task(_notify_task_cancelled(request.app, thread_id, task_id, run))
@@ -1102,6 +1489,10 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
             break
         await asyncio.sleep(0.1)
 
+    if not run.is_done:
+        logger.warning("Cancelled task %s never reached a terminal state; skipping cancellation surface", task_id)
+        return
+
     # Emit task_done so the frontend indicator updates
     try:
         from backend.web.event_bus import get_event_bus
@@ -1112,7 +1503,7 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
             agent_id=task_id,
             agent_name=f"cancel-{task_id[:8]}",
         )
-        await emit_fn(
+        emission = emit_fn(
             {
                 "event": "task_done",
                 "data": json.dumps(
@@ -1125,6 +1516,8 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
                 ),
             }
         )
+        if asyncio.iscoroutine(emission):
+            await emission
     except Exception:
         logger.warning("Failed to emit task_done for cancelled task %s", task_id, exc_info=True)
 

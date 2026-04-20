@@ -1,11 +1,12 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
+import { asRecord } from "@/lib/records";
 
 function summarizeArgs(args: unknown): string {
   if (!args) return "";
   if (typeof args === "string") return args.slice(0, 80);
-  if (typeof args === "object") {
-    const obj = args as Record<string, unknown>;
+  const obj = asRecord(args);
+  if (obj) {
     const keys = Object.keys(obj);
     if (keys.length === 0) return "";
     // Show first meaningful value

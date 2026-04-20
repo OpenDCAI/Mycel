@@ -11,12 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from sandbox.lifecycle import parse_lease_instance_state
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 
 class SQLiteLeaseRepo:
-    """Sandbox lease CRUD backed by SQLite.
+    """Lower sandbox runtime persistence backed by SQLite.
 
     Thread-safe: all connection access is serialized via a lock.
     Returns raw dicts — domain object construction is the consumer's job.
@@ -33,7 +32,7 @@ class SQLiteLeaseRepo:
                 db_path = resolve_role_db_path(SQLiteDBRole.SANDBOX)
             self._db_path = Path(db_path)
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = create_connection(db_path)
+            self._conn = connect_sqlite(db_path, check_same_thread=False)
         self._ensure_tables()
 
     @property
@@ -43,6 +42,11 @@ class SQLiteLeaseRepo:
     def close(self) -> None:
         if self._own_conn:
             self._conn.close()
+
+    def _require_lease(self, row: dict[str, Any] | None, *, lease_id: str, operation: str) -> dict[str, Any]:
+        if row is None:
+            raise RuntimeError(f"SQLite lease repo failed to load lease after {operation}: {lease_id}")
+        return row
 
     def get(self, lease_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -54,7 +58,7 @@ class SQLiteLeaseRepo:
                        current_instance_id, instance_created_at,
                        desired_state, observed_state, version,
                        observed_at, last_error, needs_refresh,
-                       refresh_hint_at, status, volume_id,
+                       refresh_hint_at, status,
                        created_at, updated_at
                 FROM sandbox_leases
                 WHERE lease_id = ?
@@ -91,7 +95,6 @@ class SQLiteLeaseRepo:
         self,
         lease_id: str,
         provider_name: str,
-        volume_id: str | None = None,
         recipe_id: str | None = None,
         recipe_json: str | None = None,
     ) -> dict[str, Any]:
@@ -102,10 +105,9 @@ class SQLiteLeaseRepo:
                 INSERT INTO sandbox_leases (
                     lease_id, provider_name, recipe_id, recipe_json, desired_state, observed_state,
                     instance_status, version, observed_at, last_error,
-                    needs_refresh, refresh_hint_at, status, volume_id,
-                    created_at, updated_at
+                    needs_refresh, refresh_hint_at, status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     lease_id,
@@ -121,13 +123,12 @@ class SQLiteLeaseRepo:
                     0,
                     None,
                     "active",
-                    volume_id,
                     now,
                     now,
                 ),
             )
             self._conn.commit()
-        return self.get(lease_id)  # type: ignore[return-value]
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="create")
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -157,7 +158,11 @@ class SQLiteLeaseRepo:
         existing = self.get(lease_id)
         if existing is None:
             self.create(lease_id=lease_id, provider_name=provider_name)
-            existing = self.get(lease_id)
+            existing = self._require_lease(
+                self.get(lease_id),
+                lease_id=lease_id,
+                operation="adopt_instance bootstrap",
+            )
         if existing["provider_name"] != provider_name:
             raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
 
@@ -233,6 +238,126 @@ class SQLiteLeaseRepo:
             raise RuntimeError(f"Failed to load adopted lease: {lease_id}")
         return adopted
 
+    def observe_status(
+        self,
+        *,
+        lease_id: str,
+        status: str,
+        observed_at: Any = None,
+    ) -> dict[str, Any]:
+        existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+        now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or datetime.now().isoformat())
+        normalized = parse_lease_instance_state(status).value
+        current_instance_id = existing.get("current_instance_id")
+
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE sandbox_leases
+                SET current_instance_id = ?,
+                    instance_created_at = ?,
+                    observed_state = ?,
+                    instance_status = ?,
+                    version = ?,
+                    observed_at = ?,
+                    last_error = ?,
+                    needs_refresh = ?,
+                    refresh_hint_at = ?,
+                    status = ?,
+                    updated_at = ?
+                WHERE lease_id = ?
+                """,
+                (
+                    None if normalized == "detached" else existing.get("current_instance_id"),
+                    None if normalized == "detached" else existing.get("instance_created_at"),
+                    normalized,
+                    normalized,
+                    int(existing.get("version") or 0) + 1,
+                    now,
+                    None,
+                    0,
+                    None,
+                    "expired" if normalized == "detached" else "active",
+                    datetime.now().isoformat(),
+                    lease_id,
+                ),
+            )
+            if current_instance_id:
+                if normalized == "detached":
+                    self._conn.execute(
+                        """
+                        UPDATE sandbox_instances
+                        SET status = ?, last_seen_at = ?
+                        WHERE instance_id = ?
+                        """,
+                        ("stopped", now, current_instance_id),
+                    )
+                else:
+                    self._conn.execute(
+                        """
+                        UPDATE sandbox_instances
+                        SET status = ?, last_seen_at = ?
+                        WHERE instance_id = ?
+                        """,
+                        (normalized, now, current_instance_id),
+                    )
+            self._conn.commit()
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+
+    def persist_metadata(
+        self,
+        *,
+        lease_id: str,
+        recipe_id: str | None,
+        recipe_json: str | None,
+        desired_state: str,
+        observed_state: str,
+        version: int,
+        observed_at: Any,
+        last_error: str | None,
+        needs_refresh: bool,
+        refresh_hint_at: Any = None,
+        status: str,
+    ) -> dict[str, Any]:
+        observed_at_value = observed_at.isoformat() if isinstance(observed_at, datetime) else observed_at
+        refresh_hint_value = refresh_hint_at.isoformat() if isinstance(refresh_hint_at, datetime) else refresh_hint_at
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE sandbox_leases
+                SET recipe_id = ?,
+                    recipe_json = ?,
+                    desired_state = ?,
+                    observed_state = ?,
+                    instance_status = ?,
+                    version = ?,
+                    observed_at = ?,
+                    last_error = ?,
+                    needs_refresh = ?,
+                    refresh_hint_at = ?,
+                    status = ?,
+                    updated_at = ?
+                WHERE lease_id = ?
+                """,
+                (
+                    recipe_id,
+                    recipe_json,
+                    desired_state,
+                    observed_state,
+                    observed_state,
+                    version,
+                    observed_at_value,
+                    last_error,
+                    1 if needs_refresh else 0,
+                    refresh_hint_value,
+                    status,
+                    datetime.now().isoformat(),
+                    lease_id,
+                ),
+            )
+            self._conn.commit()
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="persist_metadata")
+
     def mark_needs_refresh(self, lease_id: str, hint_at: datetime | None = None) -> bool:
         hinted_at = (hint_at or datetime.now()).isoformat()
         with self._lock:
@@ -254,11 +379,6 @@ class SQLiteLeaseRepo:
         with self._lock:
             self._conn.execute("DELETE FROM sandbox_instances WHERE lease_id = ?", (lease_id,))
             self._conn.execute("DELETE FROM lease_events WHERE lease_id = ?", (lease_id,))
-            # lease_resource_snapshots may not exist yet — guard with try
-            try:
-                self._conn.execute("DELETE FROM lease_resource_snapshots WHERE lease_id = ?", (lease_id,))
-            except sqlite3.OperationalError:
-                pass
             self._conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
             self._conn.commit()
 
@@ -321,7 +441,6 @@ class SQLiteLeaseRepo:
                 needs_refresh INTEGER NOT NULL DEFAULT 0,
                 refresh_hint_at TIMESTAMP,
                 status TEXT DEFAULT 'active',
-                volume_id TEXT,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL
             )
@@ -360,28 +479,9 @@ class SQLiteLeaseRepo:
         )
         self._conn.commit()
 
-        # Schema migration: add columns if missing
         from sandbox.lease import REQUIRED_EVENT_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_LEASE_COLUMNS
 
         lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "instance_status" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN instance_status TEXT NOT NULL DEFAULT 'detached'")
-            self._conn.execute("UPDATE sandbox_leases SET instance_status = observed_state")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "recipe_id" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN recipe_id TEXT")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "recipe_json" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN recipe_json TEXT")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-        if "volume_id" not in lease_cols:
-            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN volume_id TEXT")
-            self._conn.commit()
-            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-
         instance_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
         event_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(lease_events)").fetchall()}
 

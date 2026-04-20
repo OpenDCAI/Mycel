@@ -8,19 +8,19 @@ Usage:
 Load tests API endpoints and reports performance metrics.
 """
 
-import sys
-import time
+import argparse
 import asyncio
 import statistics
-from urllib.parse import urljoin
+import sys
+import time
 from dataclasses import dataclass
-from typing import List, Dict
-import argparse
+from urllib.parse import urljoin
 
 
 @dataclass
 class RequestResult:
     """Result of a single request"""
+
     status_code: int
     duration_ms: float
     error: str | None = None
@@ -29,6 +29,7 @@ class RequestResult:
 @dataclass
 class EndpointStats:
     """Statistics for an endpoint"""
+
     endpoint: str
     method: str
     total_requests: int
@@ -52,25 +53,14 @@ async def make_request(session, method: str, url: str) -> RequestResult:
             await response.read()
             duration_ms = (time.time() - start_time) * 1000
 
-            return RequestResult(
-                status_code=response.status,
-                duration_ms=duration_ms
-            )
+            return RequestResult(status_code=response.status, duration_ms=duration_ms)
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        return RequestResult(
-            status_code=0,
-            duration_ms=duration_ms,
-            error=str(e)
-        )
+        return RequestResult(status_code=0, duration_ms=duration_ms, error=str(e))
 
 
 async def benchmark_endpoint(
-    base_url: str,
-    endpoint: str,
-    method: str = "GET",
-    num_requests: int = 100,
-    concurrency: int = 10
+    base_url: str, endpoint: str, method: str = "GET", num_requests: int = 100, concurrency: int = 10
 ) -> EndpointStats:
     """Benchmark a single endpoint"""
     try:
@@ -84,7 +74,7 @@ async def benchmark_endpoint(
     print(f"\nBenchmarking {method} {endpoint}")
     print(f"  Requests: {num_requests}, Concurrency: {concurrency}")
 
-    results: List[RequestResult] = []
+    results: list[RequestResult] = []
 
     start_time = time.time()
 
@@ -92,10 +82,7 @@ async def benchmark_endpoint(
         # Run requests in batches (concurrency)
         for i in range(0, num_requests, concurrency):
             batch_size = min(concurrency, num_requests - i)
-            tasks = [
-                make_request(session, method, url)
-                for _ in range(batch_size)
-            ]
+            tasks = [make_request(session, method, url) for _ in range(batch_size)]
 
             batch_results = await asyncio.gather(*tasks)
             results.extend(batch_results)
@@ -128,7 +115,7 @@ async def benchmark_endpoint(
             p50_duration_ms=0,
             p95_duration_ms=0,
             p99_duration_ms=0,
-            requests_per_second=0
+            requests_per_second=0,
         )
 
     avg_duration = statistics.mean(durations)
@@ -155,21 +142,21 @@ async def benchmark_endpoint(
         p50_duration_ms=p50,
         p95_duration_ms=p95,
         p99_duration_ms=p99,
-        requests_per_second=requests_per_second
+        requests_per_second=requests_per_second,
     )
 
 
-def print_stats(stats: List[EndpointStats]):
+def print_stats(stats: list[EndpointStats]):
     """Print benchmark results"""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("Benchmark Results")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
     for stat in stats:
         print(f"{stat.method} {stat.endpoint}")
         print(f"  Total Requests:     {stat.total_requests}")
-        print(f"  Successful:         {stat.successful_requests} ({stat.successful_requests/stat.total_requests*100:.1f}%)")
-        print(f"  Failed:             {stat.failed_requests} ({stat.failed_requests/stat.total_requests*100:.1f}%)")
+        print(f"  Successful:         {stat.successful_requests} ({stat.successful_requests / stat.total_requests * 100:.1f}%)")
+        print(f"  Failed:             {stat.failed_requests} ({stat.failed_requests / stat.total_requests * 100:.1f}%)")
         print(f"  Requests/sec:       {stat.requests_per_second:.2f}")
         print(f"  Latency (avg):      {stat.avg_duration_ms:.2f} ms")
         print(f"  Latency (min):      {stat.min_duration_ms:.2f} ms")
@@ -179,34 +166,16 @@ def print_stats(stats: List[EndpointStats]):
         print(f"  Latency (p99):      {stat.p99_duration_ms:.2f} ms")
         print()
 
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
 
 async def main():
-    parser = argparse.ArgumentParser(
-        description="Benchmark API endpoints"
-    )
+    parser = argparse.ArgumentParser(description="Benchmark API endpoints")
+    parser.add_argument("base_url", help="Base URL of API (e.g., http://localhost:8000)")
+    parser.add_argument("-r", "--requests", type=int, default=1000, help="Total number of requests per endpoint (default: 1000)")
+    parser.add_argument("-c", "--concurrency", type=int, default=10, help="Number of concurrent requests (default: 10)")
     parser.add_argument(
-        "base_url",
-        help="Base URL of API (e.g., http://localhost:8000)"
-    )
-    parser.add_argument(
-        "-r", "--requests",
-        type=int,
-        default=1000,
-        help="Total number of requests per endpoint (default: 1000)"
-    )
-    parser.add_argument(
-        "-c", "--concurrency",
-        type=int,
-        default=10,
-        help="Number of concurrent requests (default: 10)"
-    )
-    parser.add_argument(
-        "-e", "--endpoints",
-        nargs="+",
-        default=["/health", "/items"],
-        help="Endpoints to benchmark (default: /health /items)"
+        "-e", "--endpoints", nargs="+", default=["/health", "/items"], help="Endpoints to benchmark (default: /health /items)"
     )
 
     args = parser.parse_args()
@@ -217,13 +186,7 @@ async def main():
 
     stats = []
     for endpoint in args.endpoints:
-        stat = await benchmark_endpoint(
-            args.base_url,
-            endpoint,
-            "GET",
-            args.requests,
-            args.concurrency
-        )
+        stat = await benchmark_endpoint(args.base_url, endpoint, "GET", args.requests, args.concurrency)
         stats.append(stat)
 
     print_stats(stats)

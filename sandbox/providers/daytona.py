@@ -14,7 +14,8 @@ import shlex
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 
@@ -40,7 +41,19 @@ def _daytona_state_to_status(state: str) -> str:
 
 logger = logging.getLogger(__name__)
 
+
+def _daytona_state_value(sandbox: Any) -> str | None:
+    state = getattr(sandbox, "state", None)
+    return getattr(state, "value", None)
+
+
+def _is_daytona_not_found_error(exc: Exception) -> bool:
+    return exc.__class__.__name__ == "NotFoundException" or getattr(exc, "status", None) == 404
+
+
 if TYPE_CHECKING:
+    from daytona_sdk._sync.sandbox import Sandbox as DaytonaSandbox
+
     from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
@@ -94,7 +107,7 @@ class DaytonaProvider(SandboxProvider):
         bind_mounts: list[MountSpec] | None = None,
         provider_name: str | None = None,
     ):
-        from daytona_sdk import Daytona
+        from daytona_sdk import Daytona, DaytonaConfig
 
         if provider_name:
             self.name = provider_name
@@ -106,10 +119,18 @@ class DaytonaProvider(SandboxProvider):
 
         os.environ["DAYTONA_API_KEY"] = api_key
         os.environ["DAYTONA_API_URL"] = api_url
-        self.client = Daytona()
+        os.environ["DAYTONA_TARGET"] = target
+        self.client = Daytona(DaytonaConfig(api_key=api_key, api_url=api_url, target=target))
+        original_get_proxy_toolbox_url = self.client._get_proxy_toolbox_url
+
+        def _wrapped_get_proxy_toolbox_url(sandbox_id: str, region_id: str) -> str:
+            raw_url = original_get_proxy_toolbox_url(sandbox_id, region_id)
+            return self._normalize_toolbox_proxy_url(raw_url)
+
+        self.client._get_proxy_toolbox_url = _wrapped_get_proxy_toolbox_url
         self._sandboxes: dict[str, Any] = {}
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
-        self._volume_mounts: dict[str, tuple[str, str]] = {}  # thread_id -> (volume_id, mount_path)
+        self._managed_mounts: dict[str, tuple[str, str]] = {}  # thread_id -> (backend_ref, mount_path)
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
@@ -117,27 +138,38 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Managed Volume ====================
 
-    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
         """Create a Daytona managed volume. Returns volume name as backend_ref."""
-        volume_name = f"leon-volume-{member_id}"
+        volume_name = f"leon-volume-{managed_ref}"
         logger.info("Creating managed volume: %s", volume_name)
         # @@@volume-ready - volume transitions pending_create → ready (~6s)
         self.client.volume.create(volume_name)
+        self.wait_managed_volume_ready(volume_name)
+        return volume_name
+
+    def wait_managed_volume_ready(self, backend_ref: str) -> None:
         for _ in range(30):
-            vol = self.client.volume.get(volume_name)
+            vol = self.client.volume.get(backend_ref)
             if vol.state == "ready":
-                logger.info("Managed volume ready: %s (id=%s)", volume_name, vol.id)
-                return volume_name
+                logger.info("Managed volume ready: %s (id=%s)", backend_ref, vol.id)
+                return
             time.sleep(1)
-        raise RuntimeError(f"Volume {volume_name} did not become ready within 30s")
+        raise RuntimeError(f"Volume {backend_ref} did not become ready within 30s")
 
     def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        self._volume_mounts[thread_id] = (backend_ref, mount_path)
+        self._managed_mounts[thread_id] = (backend_ref, mount_path)
 
     def delete_managed_volume(self, backend_ref: str) -> None:
         """Delete provider-managed volume. backend_ref is the volume name."""
         logger.info("Deleting managed volume: %s", backend_ref)
-        vol = self.client.volume.get(backend_ref)
+        try:
+            vol = self.client.volume.get(backend_ref)
+        except Exception as exc:
+            # @@@daytona-volume-delete-idempotent - thread cleanup may retry after provider volume was already removed.
+            if _is_daytona_not_found_error(exc):
+                logger.info("Managed volume already absent: %s", backend_ref)
+                return
+            raise
         self.client.volume.delete(vol)
 
     # ==================== Session Lifecycle ====================
@@ -146,11 +178,10 @@ class DaytonaProvider(SandboxProvider):
         from daytona_sdk import CreateSandboxFromSnapshotParams, VolumeMount
 
         # @@@volume-mount - use SDK VolumeMount instead of bind mount HTTP workaround
-        if thread_id and thread_id in self._volume_mounts:
-            volume_name, vol_mount_path = self._volume_mounts.pop(thread_id)
+        if thread_id and thread_id in self._managed_mounts:
+            volume_name, vol_mount_path = self._managed_mounts.pop(thread_id)
             vol = self.client.volume.get(volume_name)
             params = CreateSandboxFromSnapshotParams(
-                target=self.target,
                 auto_stop_interval=0,
                 volumes=[VolumeMount(volume_id=vol.id, mount_path=vol_mount_path)],
             )
@@ -179,7 +210,7 @@ class DaytonaProvider(SandboxProvider):
             self._wait_until_started(sandbox_id)
             sb = self.client.find_one(sandbox_id)
         else:
-            params = CreateSandboxFromSnapshotParams(target=self.target, auto_stop_interval=0)
+            params = CreateSandboxFromSnapshotParams(auto_stop_interval=0)
             sb = self.client.create(params)
 
         for source, target in copy_mounts:
@@ -242,7 +273,7 @@ class DaytonaProvider(SandboxProvider):
             # @@@status-refresh - Always refetch sandbox before reading state to avoid stale cached status.
             sb = self.client.find_one(session_id)
             self._sandboxes[session_id] = sb
-            return _daytona_state_to_status(sb.state.value)
+            return _daytona_state_to_status(_daytona_state_value(sb) or "")
         except Exception:
             logger.exception("[DaytonaProvider] get_session_status failed for %s", session_id)
             return "unknown"
@@ -291,9 +322,12 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Batch Status ====================
 
-    def list_provider_sessions(self) -> list[SessionInfo]:
+    def list_provider_runtimes(self) -> list[SessionInfo]:
         result = self.client.list()
-        return [SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(sb.state.value)) for sb in result.items]
+        return [
+            SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(_daytona_state_value(sb) or ""))
+            for sb in result.items
+        ]
 
     # ==================== Inspection ====================
 
@@ -313,7 +347,7 @@ class DaytonaProvider(SandboxProvider):
         memory_total_mb = float(memory_gib) * 1024.0 if memory_gib else None
         disk_total_gb = float(disk_gib) if disk_gib else None
 
-        is_running = getattr(sb, "state", None) and sb.state.value == "started"
+        is_running = _daytona_state_value(sb) == "started"
         if not is_running:
             return Metrics(memory_total_mb=memory_total_mb, disk_total_gb=disk_total_gb)
 
@@ -389,6 +423,19 @@ class DaytonaProvider(SandboxProvider):
         if session_id not in self._sandboxes:
             self._sandboxes[session_id] = self.client.find_one(session_id)
         return self._sandboxes[session_id]
+
+    def _normalize_toolbox_proxy_url(self, raw_url: str) -> str:
+        api_host = (urlparse(self.api_url).hostname or "").lower()
+        if api_host not in {"localhost", "127.0.0.1"}:
+            return raw_url
+
+        parsed = urlparse(raw_url)
+        if (parsed.hostname or "").lower() != "172.18.0.1":
+            return raw_url
+
+        # @@@local-toolbox-loopback - self-host Daytona local dev reaches toolbox through
+        # the SSH-forwarded loopback proxy on :4000, not the server-side docker bridge gateway.
+        return urlunparse(parsed._replace(netloc=f"127.0.0.1:{parsed.port or 4000}"))
 
     def get_runtime_sandbox(self, session_id: str):
         """Expose native SDK sandbox for runtime-level persistent terminal handling."""
@@ -519,7 +566,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
         if cleaned_cwd != state.cwd or cleaned_env != state.env_delta:
             from sandbox.terminal import TerminalState
 
-            # @@@daytona-state-sanitize - Legacy prompt noise can corrupt persisted cwd/env_delta and break PTY creation.
+            # @@@daytona-state-sanitize - stale prompt noise can corrupt persisted cwd/env_delta and break PTY creation.
             # Normalize once here so new abstract terminals inherit only valid state.
             self.update_terminal_state(TerminalState(cwd=cleaned_cwd, env_delta=cleaned_env))
         return cleaned_cwd, cleaned_env
@@ -535,10 +582,13 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
         if not self._bound_instance_id:
             return
         try:
-            sandbox = self._provider_sandbox(self._bound_instance_id)
+            sandbox = self._runtime_sandbox(self._bound_instance_id)
             sandbox.process.kill_pty_session(self._pty_session_id)
         except Exception:
             pass
+
+    def _runtime_sandbox(self, instance_id: str) -> DaytonaSandbox:
+        return cast("DaytonaSandbox", self._provider_sandbox(instance_id))
 
     @staticmethod
     def _read_pty_chunk_sync(handle, wait_sec: float) -> bytes | None:
@@ -615,7 +665,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             self._baseline_env = None
             self._hydrated = False
 
-        sandbox = self._provider_sandbox(instance.instance_id)
+        sandbox = self._runtime_sandbox(instance.instance_id)
         effective_cwd, effective_env = self._sanitize_terminal_snapshot()
         if self._pty_handle is None:
             from daytona_sdk.common.pty import PtySize
@@ -637,8 +687,8 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                     if "fork/exec" in message and "no such file" in message:
                         # Diagnose: check if working directory exists
                         try:
-                            result = sandbox.process.exec_sync(f"test -d {effective_cwd} && echo y || echo n", timeout=5)
-                            if "n" in result.stdout:
+                            result = sandbox.process.exec(f"test -d {effective_cwd} && echo y || echo n", timeout=5)
+                            if "n" in result.result:
                                 raise RuntimeError(
                                     f"PTY bootstrap failed: working directory '{effective_cwd}' does not exist. "
                                     f"Update config 'cwd' to an existing directory (e.g., /home/daytona)."
@@ -691,8 +741,8 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             snapshot_out,
             start_marker,
             end_marker,
-            cwd_fallback=state.cwd,
-            env_fallback=state.env_delta,
+            previous_cwd=state.cwd,
+            previous_env=state.env_delta,
         )
         env_delta = _compute_env_delta(env_map, self._baseline_env or {}, state.env_delta)
         from sandbox.terminal import TerminalState
@@ -779,6 +829,10 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
         snapshot_timeout = None if timeout is None else max(float(timeout), 10.0)
         self._schedule_snapshot(generation, snapshot_timeout)
         return first
+
+    async def _cancel_running_command(self) -> bool:
+        await asyncio.to_thread(self._close_shell_sync)
+        return True
 
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
         return await self._execute_background_command(command, timeout=timeout)

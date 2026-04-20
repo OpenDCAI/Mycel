@@ -1,0 +1,57 @@
+"""Shared helpers for Python app entrypoints."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+
+import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
+
+
+def load_env_file_from_env() -> None:
+    env_file = os.getenv("ENV_FILE")
+    if not env_file:
+        return
+
+    from dotenv import load_dotenv
+
+    load_dotenv(env_file, override=False)
+
+
+def resolve_app_port(env_key: str, worktree_key: str, default_port: int) -> int:
+    port = os.environ.get(env_key) or os.environ.get("PORT")
+    if port:
+        return int(port)
+    try:
+        result = subprocess.run(
+            ["git", "config", "--worktree", "--get", worktree_key],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return int(result.stdout.strip())
+    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+        pass
+    return default_port
+
+
+def add_permissive_cors(app) -> None:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+def run_reloadable_app(module_path: str, *, port: int, reload_dirs: list[str]) -> None:
+    uvicorn.run(
+        module_path,
+        host="0.0.0.0",
+        port=port,
+        reload=True,
+        reload_dirs=reload_dirs,
+    )

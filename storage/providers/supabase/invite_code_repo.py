@@ -25,7 +25,7 @@ def _is_expired(row: dict) -> bool:
     try:
         exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
         return datetime.now(UTC) > exp
-    except Exception:
+    except ValueError:
         return False
 
 
@@ -37,7 +37,7 @@ class SupabaseInviteCodeRepo:
         return None
 
     def _table(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "identity", _TABLE, _REPO)
 
     def generate(
         self,
@@ -88,7 +88,7 @@ class SupabaseInviteCodeRepo:
             .is_("used_by", None)  # atomic: only update if not already used
             .execute()
         )
-        updated = resp.data if resp.data else []
+        updated = resp.data or []
         if not updated:
             # Either code doesn't exist, already used, or expired — check which
             existing = self.get(code)

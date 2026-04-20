@@ -103,9 +103,12 @@ async def test_model(session, model):
         tok_s = output_tokens / gen_time if gen_time > 0 else 0
 
         return {
-            "model": model, "status": "✓",
-            "ttfb": ttfb, "total_time": total_time,
-            "tokens": output_tokens, "chars": content_length,
+            "model": model,
+            "status": "✓",
+            "ttfb": ttfb,
+            "total_time": total_time,
+            "tokens": output_tokens,
+            "chars": content_length,
             "tokens_per_sec": tok_s,
         }
 

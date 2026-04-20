@@ -2,8 +2,8 @@
 
 Combines:
 - Three-tier runtime config merge (system > user > project) — for default agent
-- Agent .md parsing (YAML frontmatter + system prompt) — from old core/task/loader
-- Bundle discovery (meta.json, rules/, agents/, skills/, .mcp.json, runtime.json) — for members
+- Agent .md parsing (YAML frontmatter + system prompt)
+- Bundle discovery (meta.json, rules/, agents/, skills/, .mcp.json, runtime.json)
 
 Configuration priority (highest to lowest):
 1. CLI overrides
@@ -11,7 +11,7 @@ Configuration priority (highest to lowest):
 3. User config (~/.leon/runtime.json)
 4. System defaults (config/defaults/runtime.json)
 
-Member loading: system defaults + member bundle (no user/project inheritance).
+Bundle loading: explicit bundle path or repo-backed agent_config_id only.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from config.types import (
     McpServerConfig,
     RuntimeResourceConfig,
 )
-from config.user_paths import remap_legacy_user_home_string, user_home_path, user_home_read_candidates
+from config.user_paths import remap_default_user_home_string, user_home_path, user_home_read_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -57,22 +57,6 @@ class AgentLoader:
             user_config.get("runtime", {}),
             project_config.get("runtime", {}),
         )
-
-        # Backward compat: old-style top-level keys fold into runtime
-        for cfg in (system_config, user_config, project_config):
-            for key in (
-                "context_limit",
-                "enable_audit_log",
-                "allowed_extensions",
-                "block_dangerous_commands",
-                "block_network_commands",
-                "queue_mode",
-                "temperature",
-                "max_tokens",
-                "model_kwargs",
-            ):
-                if key in cfg and key not in merged_runtime:
-                    merged_runtime[key] = cfg[key]
 
         merged_memory = self._deep_merge(
             system_config.get("memory", {}),
@@ -111,8 +95,12 @@ class AgentLoader:
 
     # ── Agent .md parsing (merged from core/task/loader) ──
 
-    def load_all_agents(self) -> dict[str, AgentConfig]:
-        """Load all agents by priority (low -> high, later overrides earlier)."""
+    def load_runtime_agents(self) -> dict[str, AgentConfig]:
+        """Load runtime-facing agent definitions."""
+        self._load_agent_layers()
+        return self._agents
+
+    def _load_agent_layers(self) -> None:
         self._agents = {}
 
         # 1. Built-in agents (lowest priority)
@@ -126,12 +114,6 @@ class AgentLoader:
         if self.workspace_root:
             self._load_agents_from_dir(self.workspace_root / ".leon" / "agents")
 
-        # 4. Members (~/.leon/members/<id>/agent.md) — highest priority
-        for path in user_home_read_candidates("members"):
-            self._load_agents_from_members(path)
-
-        return self._agents
-
     def _load_agents_from_dir(self, dir_path: Path) -> None:
         """Load all .md files from a directory."""
         if not dir_path.exists():
@@ -139,21 +121,6 @@ class AgentLoader:
         for md_file in dir_path.glob("*.md"):
             config = self.parse_agent_file(md_file)
             if config:
-                self._agents[config.name] = config
-
-    def _load_agents_from_members(self, members_dir: Path) -> None:
-        """Load members as agents — each member lives in members/<id>/agent.md."""
-        if not members_dir.exists():
-            return
-        for member_dir in sorted(members_dir.iterdir()):
-            if not member_dir.is_dir():
-                continue
-            agent_md = member_dir / "agent.md"
-            if not agent_md.exists():
-                continue
-            config = self.parse_agent_file(agent_md)
-            if config:
-                # source_dir is already set to member_dir by parse_agent_file
                 self._agents[config.name] = config
 
     @staticmethod
@@ -184,7 +151,7 @@ class AgentLoader:
             tools=fm.get("tools", ["*"]),
             system_prompt=parts[2].strip(),
             model=fm.get("model"),
-            source_dir=path.resolve().parent,
+            source_dir=None,
         )
 
     def get_agent(self, name: str) -> AgentConfig | None:
@@ -195,13 +162,13 @@ class AgentLoader:
         """List all available agent names."""
         return list(self._agents.keys())
 
-    # ── Bundle discovery (for members / standalone agents) ──
+    # ── Bundle discovery ──
 
     def load_bundle(self, agent_dir: Path) -> AgentBundle:
         """Load a complete agent bundle from a directory.
 
-        Used for members: system defaults + member bundle (no user/project inheritance).
-        Sub-agents use two-layer merge: system defaults → member-specific (override by name).
+        Used by explicit bundle_dir startup and repo-backed agent_config snapshots.
+        Sub-agents use two-layer merge: system defaults → bundle-specific (override by name).
         """
         agent_dir = agent_dir.resolve()
         agent = self.parse_agent_file(agent_dir / "agent.md")
@@ -261,14 +228,14 @@ class AgentLoader:
         return rules
 
     def _merge_agents(self, agent_dir: Path) -> list[AgentConfig]:
-        """Two-layer merge: system defaults → member-specific (override by name)."""
+        """Two-layer merge: system defaults → repo/user agent configs (override by name)."""
         merged: dict[str, AgentConfig] = {}
 
         # Layer 1: system built-in agents
         for agent in self._discover_agents(self._system_defaults_dir):
             merged[agent.name] = agent
 
-        # Layer 2: member-specific agents (override by name)
+        # Layer 2: repo/user agent configs (override by name)
         for agent in self._discover_agents(agent_dir):
             merged[agent.name] = agent
 
@@ -383,7 +350,7 @@ class AgentLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return remap_legacy_user_home_string(obj)
+            return remap_default_user_home_string(obj)
         return obj
 
     def _remove_none_values(self, obj: Any) -> Any:
@@ -412,13 +379,90 @@ class AgentLoader:
                 path.mkdir(parents=True, exist_ok=True)
 
 
-# Backward compat alias
-ConfigLoader = AgentLoader
-
-
 def load_config(
     workspace_root: str | None = None,
     cli_overrides: dict[str, Any] | None = None,
 ) -> LeonSettings:
     """Convenience function to load runtime configuration."""
     return AgentLoader(workspace_root=workspace_root).load(cli_overrides=cli_overrides)
+
+
+def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> AgentBundle | None:
+    """Load agent bundle from Supabase agent_config tables keyed by agent_config_id."""
+    config = agent_config_repo.get_config(agent_config_id)
+    if not config:
+        return None
+
+    # Parse agent identity from config
+    agent = AgentConfig(
+        name=config.get("name", ""),
+        description=config.get("description", ""),
+        tools=config.get("tools", ["*"]),
+        system_prompt=config.get("system_prompt", ""),
+        model=config.get("model"),
+        source_dir=None,
+    )
+
+    meta = dict(config.get("meta") if isinstance(config.get("meta"), dict) else {})
+    meta.update(
+        {
+            "status": config.get("status", "draft"),
+            "version": config.get("version", "0.1.0"),
+            "created_at": config.get("created_at", 0),
+            "updated_at": config.get("updated_at", 0),
+        }
+    )
+
+    # Runtime from config
+    runtime_data = config.get("runtime") or {}
+    runtime = {}
+    for rname, rcfg in runtime_data.items():
+        if isinstance(rcfg, dict):
+            runtime[rname] = RuntimeResourceConfig(**rcfg)
+
+    # Rules from agent_rules table
+    rule_rows = agent_config_repo.list_rules(agent_config_id)
+    rules = [{"name": r.get("filename", "").replace(".md", ""), "content": r.get("content", "")} for r in rule_rows]
+
+    # Sub-agents use the same default layer as filesystem bundles, then repo rows override by name.
+    loader = AgentLoader()
+    agents_by_name = {agent.name: agent for agent in loader._discover_agents(loader._system_defaults_dir)}
+    sub_agent_rows = agent_config_repo.list_sub_agents(agent_config_id)
+    for sa in sub_agent_rows:
+        tools = sa.get("tools_json") if "tools_json" in sa and sa.get("tools_json") is not None else sa.get("tools", ["*"])
+        sub_agent = AgentConfig(
+            name=sa.get("name", ""),
+            description=sa.get("description", ""),
+            tools=tools,
+            system_prompt=sa.get("system_prompt", ""),
+            model=sa.get("model"),
+            source_dir=None,
+        )
+        if sub_agent.name:
+            agents_by_name[sub_agent.name] = sub_agent
+
+    # Skills from agent_skills table
+    skill_rows = agent_config_repo.list_skills(agent_config_id)
+    skills = []
+    for s in skill_rows:
+        item = {"name": s.get("name", ""), "content": s.get("content", "")}
+        if isinstance(s.get("meta_json"), dict):
+            item["meta"] = s.get("meta_json")
+        skills.append(item)
+
+    # MCP from config
+    mcp_data = config.get("mcp") or {}
+    mcp = {}
+    for mname, mcfg in mcp_data.items():
+        if isinstance(mcfg, dict):
+            mcp[mname] = McpServerConfig(**{k: v for k, v in mcfg.items() if k in McpServerConfig.model_fields})
+
+    return AgentBundle(
+        agent=agent,
+        meta=meta,
+        runtime=runtime,
+        rules=rules,
+        agents=list(agents_by_name.values()),
+        skills=skills,
+        mcp=mcp,
+    )

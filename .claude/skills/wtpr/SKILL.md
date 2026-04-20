@@ -1,11 +1,11 @@
 ---
 name: wtpr
-description: 在 git worktree 分支上执行完整的 PR 提交流程：自动识别当前 worktree、处理未提交改动、rebase 到最新 origin/main、force push、创建或更新 GitHub PR。当用户在 worktree 中想提交 PR、追加新 commit 到已有 PR、或执行 wtpr 命令时使用。
+description: 在 git worktree 分支上执行完整的 PR 提交流程：自动识别当前 worktree、处理未提交改动、rebase 到最新 origin/<base-branch>、force push、创建或更新 GitHub PR。当用户在 worktree 中想提交 PR、追加新 commit 到已有 PR、或执行 wtpr 命令时使用。
 ---
 
 # wtpr — Worktree PR 提交流程
 
-base 分支固定为 `main`，合并策略默认 **rebase and merge**。
+`<base-branch>` = 从对话上下文确定的项目默认开发分支。合并策略默认 **rebase and merge**。
 
 ## Phase 1：Gather（批量采集，无副作用）
 
@@ -13,7 +13,7 @@ base 分支固定为 `main`，合并策略默认 **rebase and merge**。
 git worktree list                              # 确定 WORKTREE 上下文
 git status --short                             # DIRTY 检查
 git fetch origin                               # 同步远端（只读）
-git rev-list origin/main..HEAD --count          # UNPUSHED 数量
+git rev-list origin/<base-branch>..HEAD --count          # UNPUSHED 数量
 gh pr view --json state,url,title,number 2>/dev/null  # PR_STATE
 ```
 
@@ -25,7 +25,7 @@ gh pr view --json state,url,title,number 2>/dev/null  # PR_STATE
 |------|------|
 | `WORKTREE` | 当前目录 / 命令参数 / 对话上下文，三者任一可确定目标 |
 | `DIRTY` | git status 非空 |
-| `UNPUSHED` | HEAD 超出 origin/main 的 commit 数 |
+| `UNPUSHED` | HEAD 超出 origin/<base-branch> 的 commit 数 |
 | `PR_STATE` | none / open / merged / closed |
 
 **PR_STATE 判断优先级**：
@@ -54,7 +54,7 @@ DIRTY = true：
 ### Step 3：Rebase（无条件执行）
 
 ```bash
-git rebase origin/main
+git rebase origin/<base-branch>
 ```
 
 `git rebase` 通过 **patch-id**（diff 内容哈希）自动识别并跳过内容相同但 SHA 不同的 commit（rebase-and-merge 副产品），无需预先判断是否需要 rebase。

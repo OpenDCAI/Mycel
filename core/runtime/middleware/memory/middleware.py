@@ -7,19 +7,22 @@ does NOT modify LangGraph state. TUI sees full history, agent sees compressed.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from langchain.agents.middleware.types import (
+from langchain_core.messages import SystemMessage
+
+from core.runtime.checkpoint_store import CheckpointStore
+from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore
+from core.runtime.middleware import (
     AgentMiddleware,
     ModelCallResult,
     ModelRequest,
     ModelResponse,
 )
-from langchain_core.messages import SystemMessage
-
 from storage.contracts import SummaryRepo
 
 from .compactor import ContextCompactor
@@ -27,6 +30,7 @@ from .pruner import SessionPruner
 from .summary_store import SummaryStore
 
 logger = logging.getLogger(__name__)
+_COMPACTION_BREAKER_THRESHOLD = 3
 
 
 class MemoryMiddleware(AgentMiddleware):
@@ -36,7 +40,7 @@ class MemoryMiddleware(AgentMiddleware):
     Layer 2 (Compaction): LLM summarization when context exceeds threshold
     """
 
-    tools = []  # no tools injected
+    tools = ()  # no tools injected
 
     def __init__(
         self,
@@ -52,6 +56,8 @@ class MemoryMiddleware(AgentMiddleware):
         self.verbose = verbose
         self._context_limit = context_limit
         self._compaction_threshold = compaction_threshold
+        trigger_tokens = getattr(compaction_config, "trigger_tokens", None)
+        self._compaction_trigger_tokens = int(trigger_tokens) if trigger_tokens else None
 
         # Layer 1: Pruner
         if pruning_config:
@@ -75,6 +81,8 @@ class MemoryMiddleware(AgentMiddleware):
         # Persistent storage
         summary_db_path = db_path or Path.home() / ".leon" / "leon.db"
         self.summary_store = SummaryStore(summary_db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
+        self._checkpointer: Any = None
+        self._checkpoint_store: CheckpointStore | None = None
         self.checkpointer = checkpointer
 
         # Injected references (set by agent.py after construction)
@@ -86,6 +94,10 @@ class MemoryMiddleware(AgentMiddleware):
         self._cached_summary: str | None = None
         self._compact_up_to_index: int = 0
         self._summary_restored: bool = False
+        self._summary_thread_id: str | None = None
+        self._pending_owner_notices: list[dict[str, Any]] = []
+        self._compaction_failure_counts_by_thread: dict[str, int] = {}
+        self._compaction_breaker_open_by_thread: dict[str, bool] = {}
 
         if verbose:
             print("[MemoryMiddleware] Initialized")
@@ -100,6 +112,15 @@ class MemoryMiddleware(AgentMiddleware):
         """
         self._model = model
         self._model_config = model_config
+
+    @property
+    def checkpointer(self) -> Any:
+        return self._checkpointer
+
+    @checkpointer.setter
+    def checkpointer(self, value: Any) -> None:
+        self._checkpointer = value
+        self._checkpoint_store = LangGraphCheckpointStore(value) if value is not None else None
 
     @property
     def _resolved_model(self) -> Any:
@@ -125,6 +146,16 @@ class MemoryMiddleware(AgentMiddleware):
         """Inject AgentRuntime reference (called by agent.py)."""
         self._runtime = runtime
 
+    @property
+    def compact_boundary_index(self) -> int:
+        return self._compact_up_to_index
+
+    def _compaction_threshold_tokens(self) -> int:
+        return self._compaction_trigger_tokens or int(self._context_limit * self._compaction_threshold)
+
+    def _should_compact(self, estimated_tokens: int) -> bool:
+        return estimated_tokens > self._compaction_threshold_tokens()
+
     # ========== AgentMiddleware interface ==========
 
     async def awrap_model_call(
@@ -134,13 +165,18 @@ class MemoryMiddleware(AgentMiddleware):
     ) -> ModelCallResult:
         messages = list(request.messages)
         original_count = len(messages)
+        thread_id = self._extract_thread_id(request)
 
         # Restore summary from store if not already done
         if not self._summary_restored and self.summary_store:
-            thread_id = self._extract_thread_id(request)
             if thread_id:
                 await self._restore_summary_from_store(thread_id)
                 self._summary_restored = True
+                self._summary_thread_id = thread_id
+        elif self.summary_store and thread_id and self._summary_thread_id != thread_id:
+            await self._restore_summary_from_store(thread_id)
+            self._summary_restored = True
+            self._summary_thread_id = thread_id
 
         sys_tokens = self._estimate_system_tokens(request)
 
@@ -161,10 +197,12 @@ class MemoryMiddleware(AgentMiddleware):
                     print(f"[Memory]   msg[{i}] ToolMessage: {orig_len} → {new_len} chars ({action})")
 
         # Layer 2: Compaction
-        estimated = self._estimate_tokens(messages) + sys_tokens
+        summarized_messages = self._messages_with_cached_summary(messages)
+        estimate_source = summarized_messages if summarized_messages is not None else messages
+        estimated = self._estimate_tokens(estimate_source) + sys_tokens
         if self.verbose:
-            threshold = int(self._context_limit * self._compaction_threshold)
-            should_compact = self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold)
+            threshold = self._compaction_threshold_tokens()
+            should_compact = self._should_compact(estimated)
             print(
                 f"[Memory] Context: ~{estimated} tokens "
                 f"(sys={sys_tokens}, msgs={estimated - sys_tokens}), "
@@ -172,25 +210,25 @@ class MemoryMiddleware(AgentMiddleware):
                 f"compact={'YES' if should_compact else 'no'}"
             )
 
-        if self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold) and self._model:
-            thread_id = self._extract_thread_id(request)
-            messages = await self._do_compact(messages, thread_id)
-        elif self._cached_summary and self._compact_up_to_index > 0:
-            if self._compact_up_to_index <= len(messages):
-                summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
-                messages = [summary_msg] + messages[self._compact_up_to_index :]
-                if self.verbose:
-                    print(
-                        f"[Memory] Using cached summary: "
-                        f"{self._compact_up_to_index} old msgs replaced, "
-                        f"{len(messages) - 1} msgs sent to LLM"
-                    )
+        if self._should_compact(estimated) and self._model:
+            compacted = await self._attempt_compaction(messages, thread_id=thread_id)
+            if compacted is not None:
+                messages = compacted
+        elif summarized_messages is not None:
+            messages = summarized_messages
 
         if self.verbose:
             final_tokens = self._estimate_tokens(messages) + sys_tokens
             print(f"[Memory] Final: {len(messages)} msgs (~{final_tokens} tokens) sent to LLM (original: {original_count} msgs)")
 
-        return await handler(request.override(messages=messages))
+        response = await handler(request.override(messages=messages))
+        if response.request_messages is None:
+            return ModelResponse(
+                result=response.result,
+                request_messages=list(messages),
+                prepared_request=response.prepared_request,
+            )
+        return response
 
     async def _do_compact(self, messages: list[Any], thread_id: str | None = None) -> list[Any]:
         """Execute compaction: summarize old messages, return compacted list."""
@@ -201,6 +239,7 @@ class MemoryMiddleware(AgentMiddleware):
             if len(to_summarize) < 2:
                 return messages
 
+            self._emit_compaction_start_notice()
             is_split_turn, turn_prefix = self.compactor.detect_split_turn(messages, to_keep, self._context_limit)
 
             if is_split_turn:
@@ -219,6 +258,9 @@ class MemoryMiddleware(AgentMiddleware):
 
             self._cached_summary = summary_text
             self._compact_up_to_index = len(messages) - len(to_keep)
+            self._summary_restored = True
+            self._summary_thread_id = thread_id
+            self._record_compaction_notice()
 
             if self.summary_store and thread_id:
                 try:
@@ -254,9 +296,11 @@ class MemoryMiddleware(AgentMiddleware):
         if self._runtime:
             self._runtime.set_flag("is_compacting", True)
         try:
+            self._emit_compaction_start_notice()
             summary_text = await self.compactor.compact(to_summarize, self._resolved_model)
             self._cached_summary = summary_text
             self._compact_up_to_index = len(messages) - len(to_keep)
+            self._record_compaction_notice()
             return {
                 "stats": {
                     "summarized": len(to_summarize),
@@ -266,6 +310,24 @@ class MemoryMiddleware(AgentMiddleware):
         finally:
             if self._runtime:
                 self._runtime.set_flag("is_compacting", False)
+
+    async def compact_messages_for_recovery(self, messages: list[Any], thread_id: str | None = None) -> list[Any] | None:
+        """Force a compaction pass and return the compacted message list."""
+        if not self._model:
+            return None
+
+        pruned = self.pruner.prune(messages)
+        to_summarize, to_keep = self.compactor.split_messages(pruned)
+        if len(to_summarize) < 2:
+            return None
+
+        return await self._attempt_compaction(
+            pruned,
+            thread_id=thread_id or self._current_thread_id(),
+            respect_breaker=False,
+            record_failures=False,
+            clear_breaker_on_success=True,
+        )
 
     def _estimate_tokens(self, messages: list[Any]) -> int:
         """Estimate total tokens for messages (chars // 2)."""
@@ -306,6 +368,134 @@ class MemoryMiddleware(AgentMiddleware):
             return configurable.get("thread_id")
         return getattr(configurable, "thread_id", None) if configurable else None
 
+    def consume_pending_notices(self) -> list[dict[str, Any]]:
+        notices = list(self._pending_owner_notices)
+        self._pending_owner_notices.clear()
+        return notices
+
+    def _messages_with_cached_summary(self, messages: list[Any]) -> list[Any] | None:
+        if not self._cached_summary or self._compact_up_to_index <= 0 or self._compact_up_to_index > len(messages):
+            return None
+        summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
+        summarized = [summary_msg] + messages[self._compact_up_to_index :]
+        if self.verbose:
+            print(f"[Memory] Using cached summary: {self._compact_up_to_index} old msgs replaced, {len(summarized) - 1} msgs sent to LLM")
+        return summarized
+
+    def snapshot_thread_state(self, thread_id: str) -> dict[str, Any]:
+        return {
+            "failure_count": int(self._compaction_failure_counts_by_thread.get(thread_id, 0)),
+            "breaker_open": bool(self._compaction_breaker_open_by_thread.get(thread_id, False)),
+        }
+
+    def restore_thread_state(self, thread_id: str, state: dict[str, Any] | None) -> None:
+        payload = dict(state or {})
+        failure_count = int(payload.get("failure_count") or 0)
+        breaker_open = bool(payload.get("breaker_open", False))
+        if failure_count > 0:
+            self._compaction_failure_counts_by_thread[thread_id] = failure_count
+        else:
+            self._compaction_failure_counts_by_thread.pop(thread_id, None)
+        if breaker_open:
+            self._compaction_breaker_open_by_thread[thread_id] = True
+        else:
+            self._compaction_breaker_open_by_thread.pop(thread_id, None)
+
+    def clear_thread_state(self, thread_id: str) -> None:
+        self._compaction_failure_counts_by_thread.pop(thread_id, None)
+        self._compaction_breaker_open_by_thread.pop(thread_id, None)
+
+    def _record_compaction_notice(self) -> None:
+        content = f"Conversation compacted. Earlier {self._compact_up_to_index} message(s) are now represented by a summary."
+        self._queue_owner_notice(
+            {
+                "content": content,
+                "notification_type": "compact",
+                "compact_boundary_index": self._compact_up_to_index,
+            }
+        )
+
+    def _emit_compaction_start_notice(self) -> None:
+        if not self._runtime or not hasattr(self._runtime, "emit_activity_event"):
+            return
+        notice = {
+            "content": "Compacting conversation. A summary is being prepared.",
+            "notification_type": "compact_start",
+            "compact_boundary_index": self._compact_up_to_index,
+        }
+        self._runtime.emit_activity_event(
+            {
+                "event": "notice",
+                "data": json.dumps(notice, ensure_ascii=False),
+            }
+        )
+
+    def _current_thread_id(self) -> str | None:
+        from sandbox.thread_context import get_current_thread_id
+
+        return get_current_thread_id()
+
+    async def _attempt_compaction(
+        self,
+        messages: list[Any],
+        *,
+        thread_id: str | None,
+        respect_breaker: bool = True,
+        record_failures: bool = True,
+        clear_breaker_on_success: bool = False,
+    ) -> list[Any] | None:
+        # @@@compaction-breaker-scope - match cc-src's narrower boundary:
+        # the breaker blocks later automatic compaction attempts, but reactive
+        # recovery may still try once and clear the breaker on success.
+        if respect_breaker and thread_id and self._compaction_breaker_open_by_thread.get(thread_id, False):
+            return None
+        try:
+            compacted = await self._do_compact(messages, thread_id)
+        except Exception as exc:
+            logger.error("[Memory] Compaction failed for thread %s: %s", thread_id or "<unknown>", exc)
+            if record_failures:
+                self._record_compaction_failure(thread_id, exc)
+            return None
+        self._record_compaction_success(thread_id, clear_breaker=clear_breaker_on_success)
+        return compacted
+
+    def _record_compaction_success(self, thread_id: str | None, *, clear_breaker: bool = False) -> None:
+        if not thread_id:
+            return
+        self._compaction_failure_counts_by_thread.pop(thread_id, None)
+        if clear_breaker:
+            self._compaction_breaker_open_by_thread.pop(thread_id, None)
+
+    def _record_compaction_failure(self, thread_id: str | None, exc: Exception) -> None:
+        if not thread_id:
+            return
+        failures = int(self._compaction_failure_counts_by_thread.get(thread_id, 0)) + 1
+        self._compaction_failure_counts_by_thread[thread_id] = failures
+        if failures < _COMPACTION_BREAKER_THRESHOLD or self._compaction_breaker_open_by_thread.get(thread_id, False):
+            return
+        self._compaction_breaker_open_by_thread[thread_id] = True
+        self._queue_owner_notice(
+            {
+                "content": "Automatic compaction disabled for this thread after repeated failures. Clear the thread or start a new one.",
+                "notification_type": "compact_breaker",
+                "failure_count": failures,
+                "error": str(exc),
+            }
+        )
+
+    def _queue_owner_notice(self, notice: dict[str, Any]) -> None:
+        self._pending_owner_notices.append(dict(notice))
+        if self._runtime and hasattr(self._runtime, "emit_activity_event"):
+            # @@@memory-owner-notices - compaction boundary and breaker state are
+            # owner-facing runtime facts, so stream and cold rebuild must share
+            # the same notice payload instead of inventing separate surfaces.
+            self._runtime.emit_activity_event(
+                {
+                    "event": "notice",
+                    "data": json.dumps(notice, ensure_ascii=False),
+                }
+            )
+
     async def _restore_summary_from_store(self, thread_id: str) -> None:
         """Restore summary from SummaryStore."""
         if not thread_id:
@@ -314,6 +504,10 @@ class MemoryMiddleware(AgentMiddleware):
             )
 
         try:
+            if self.summary_store is None:
+                return
+            self._cached_summary = None
+            self._compact_up_to_index = 0
             summary_data = self.summary_store.get_latest_summary(thread_id)
 
             if not summary_data:
@@ -332,6 +526,7 @@ class MemoryMiddleware(AgentMiddleware):
 
             self._cached_summary = summary_data.summary_text
             self._compact_up_to_index = summary_data.compact_up_to_index
+            self._summary_thread_id = thread_id
 
             if self.verbose:
                 print(
@@ -342,28 +537,32 @@ class MemoryMiddleware(AgentMiddleware):
                 )
 
         except Exception as e:
+            self._cached_summary = None
+            self._compact_up_to_index = 0
             logger.error(f"[Memory] Failed to restore summary: {e}")
 
     async def _rebuild_summary_from_checkpointer(self, thread_id: str) -> None:
         """Rebuild summary from checkpointer when store data is corrupted."""
         try:
+            if self.summary_store is None or self._checkpoint_store is None:
+                return
             if self.verbose:
                 print(f"[Memory] Rebuilding summary from checkpointer for thread {thread_id}...")
 
-            checkpoint = self.checkpointer.get({"configurable": {"thread_id": thread_id}})
-            if not checkpoint:
+            checkpoint_state = await self._checkpoint_store.load(thread_id)
+            if checkpoint_state is None:
                 if self.verbose:
                     print("[Memory] No checkpoint found, skipping rebuild")
                 return
 
-            messages = checkpoint.get("channel_values", {}).get("messages", [])
+            messages = list(checkpoint_state.messages)
             if not messages:
                 if self.verbose:
                     print("[Memory] No messages in checkpoint, skipping rebuild")
                 return
 
             estimated = self._estimate_tokens(messages)
-            if not self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold):
+            if not self._should_compact(estimated):
                 if self.verbose:
                     print("[Memory] Context below threshold, no rebuild needed")
                 return

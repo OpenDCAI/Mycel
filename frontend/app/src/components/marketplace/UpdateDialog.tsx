@@ -11,22 +11,22 @@ import { useState } from "react";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  memberId: string;
+  agentId: string;
   update: UpdateAvailable;
-  memberName: string;
+  agentName: string;
 }
 
-export default function UpdateDialog({ open, onOpenChange, memberId, update, memberName }: Props) {
+export default function UpdateDialog({ open, onOpenChange, agentId, update, agentName }: Props) {
   const upgrade = useMarketplaceStore((s) => s.upgrade);
-  const fetchMembers = useAppStore((s) => s.fetchMembers);
+  const fetchAgents = useAppStore((s) => s.fetchAgents);
   const [upgrading, setUpgrading] = useState(false);
 
   const handleUpgrade = async () => {
     try {
       setUpgrading(true);
-      await upgrade(memberId, update.marketplace_item_id);
-      await fetchMembers();
-      toast.success(`${memberName} updated to v${update.latest_version}`);
+      await upgrade(agentId, update.marketplace_item_id);
+      await fetchAgents();
+      toast.success(`${agentName} updated to v${update.latest_version}`);
       onOpenChange(false);
     } catch (e) {
       toast.error(`Update failed: ${e instanceof Error ? e.message : "unknown error"}`);
@@ -44,7 +44,7 @@ export default function UpdateDialog({ open, onOpenChange, memberId, update, mem
               <RefreshCw className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">更新 {memberName}</DialogTitle>
+              <DialogTitle className="text-base">更新 {agentName}</DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
                 <span className="font-mono text-foreground">v{update.installed_version}</span> → <span className="font-mono text-primary">v{update.latest_version}</span>
               </DialogDescription>

@@ -161,7 +161,7 @@ class SQLiteTerminal(AbstractTerminal):
 
 
 def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
-    """Construct SQLiteTerminal from a repo dict."""
+    """Construct a terminal domain object from a repo dict."""
     state = TerminalState(
         cwd=row.get("cwd", "/root"),
         env_delta=json.loads(row.get("env_delta_json", "{}")),

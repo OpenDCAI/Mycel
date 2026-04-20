@@ -12,9 +12,11 @@ Defines the unified models.json structure:
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+CredentialSource = Literal["platform", "user"]
 
 
 class ProviderConfig(BaseModel):
@@ -22,6 +24,7 @@ class ProviderConfig(BaseModel):
 
     api_key: str | None = None
     base_url: str | None = None
+    credential_source: CredentialSource | None = None
 
 
 class ModelSpec(BaseModel):
@@ -104,6 +107,10 @@ class ModelsConfig(BaseModel):
             ValueError: If virtual model name not found in mapping
         """
         if not name.startswith("leon:"):
+            if ":" in name:
+                provider, model_name = name.split(":", 1)
+                if provider and model_name:
+                    return model_name, {"model_provider": provider}
             overrides: dict[str, Any] = {}
             # From active model config
             if self.active:
@@ -151,6 +158,72 @@ class ModelsConfig(BaseModel):
         """Get provider credentials by name."""
         return self.providers.get(name)
 
+    @staticmethod
+    def _platform_api_key(provider_name: str | None) -> str | None:
+        if provider_name == "anthropic":
+            return os.getenv("ANTHROPIC_API_KEY")
+        if provider_name == "openai":
+            return os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+        if provider_name == "openrouter":
+            return os.getenv("OPENROUTER_API_KEY")
+        if provider_name:
+            return os.getenv(f"{provider_name.upper()}_API_KEY")
+        return os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+
+    @staticmethod
+    def _platform_base_url(provider_name: str | None) -> str | None:
+        if provider_name == "anthropic":
+            return os.getenv("ANTHROPIC_BASE_URL")
+        if provider_name == "openai":
+            return os.getenv("OPENAI_BASE_URL")
+        if provider_name == "openrouter":
+            return os.getenv("OPENROUTER_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        if provider_name:
+            return os.getenv(f"{provider_name.upper()}_BASE_URL")
+        return os.getenv("ANTHROPIC_BASE_URL") or os.getenv("OPENAI_BASE_URL") or os.getenv("OPENROUTER_BASE_URL")
+
+    @staticmethod
+    def credential_source_for(provider: ProviderConfig | None) -> CredentialSource:
+        if provider is None:
+            return "platform"
+        credential_source = getattr(provider, "credential_source", None)
+        if credential_source:
+            return credential_source
+        return "user" if getattr(provider, "api_key", None) else "platform"
+
+    def resolve_api_key(self, provider_name: str | None = None) -> str | None:
+        """Resolve an API key for a provider without crossing credential-source boundaries."""
+        if provider_name:
+            provider = self.providers.get(provider_name)
+            if self.credential_source_for(provider) == "user":
+                return provider.api_key if provider else None
+            return self._platform_api_key(provider_name)
+
+        if self.active and self.active.provider:
+            return self.resolve_api_key(self.active.provider)
+
+        for name, provider in self.providers.items():
+            if self.credential_source_for(provider) == "user" and provider.api_key:
+                return provider.api_key
+            if self.credential_source_for(provider) == "platform":
+                key = self._platform_api_key(name)
+                if key:
+                    return key
+        return self._platform_api_key(None)
+
+    def resolve_base_url(self, provider_name: str | None = None) -> str | None:
+        """Resolve a base URL without crossing provider boundaries."""
+        if provider_name:
+            provider = self.providers.get(provider_name)
+            if provider and provider.base_url:
+                return provider.base_url
+            return self._platform_base_url(provider_name)
+
+        if self.active and self.active.provider:
+            return self.resolve_base_url(self.active.provider)
+
+        return self._platform_base_url(None)
+
     def get_active_provider(self) -> ProviderConfig | None:
         """Get provider credentials for the active model's provider."""
         if self.active and self.active.provider:
@@ -159,27 +232,11 @@ class ModelsConfig(BaseModel):
 
     def get_api_key(self) -> str | None:
         """Get API key: active provider → any provider → env vars."""
-        # From active provider
-        p = self.get_active_provider()
-        if p and p.api_key:
-            return p.api_key
-
-        # From any provider with a key
-        for pc in self.providers.values():
-            if pc.api_key:
-                return pc.api_key
-
-        # From environment variables
-        return os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+        return self.resolve_api_key()
 
     def get_base_url(self) -> str | None:
         """Get base URL: active provider → env vars."""
-        p = self.get_active_provider()
-        if p and p.base_url:
-            return p.base_url
-
-        # From environment
-        return os.getenv("ANTHROPIC_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        return self.resolve_base_url()
 
     def get_model_provider(self) -> str | None:
         """Get model provider: active.provider → auto-detect from env."""

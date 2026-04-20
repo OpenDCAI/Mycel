@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from storage.contracts import QueueItem
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 
 class SQLiteQueueRepo:
@@ -29,7 +28,7 @@ class SQLiteQueueRepo:
                 db_path = resolve_role_db_path(SQLiteDBRole.QUEUE)
             self._db_path = str(db_path)
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-            self._conn = create_connection(db_path)
+            self._conn = connect_sqlite(db_path, check_same_thread=False)
         self._ensure_table()
 
     def close(self) -> None:
@@ -134,20 +133,4 @@ class SQLiteQueueRepo:
             ")"
         )
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_mq_thread ON message_queue (thread_id, id)")
-        # Migration: add columns to existing tables
-        for col, col_type in [
-            ("notification_type", "TEXT NOT NULL DEFAULT 'steer'"),
-            ("source", "TEXT"),
-            ("sender_id", "TEXT"),
-            ("sender_name", "TEXT"),
-        ]:
-            try:
-                self._conn.execute(f"ALTER TABLE message_queue ADD COLUMN {col} {col_type}")
-            except sqlite3.OperationalError:
-                pass
-        # @@@entity-id-to-user-id-migration — rename column for existing databases
-        try:
-            self._conn.execute("ALTER TABLE message_queue RENAME COLUMN sender_entity_id TO sender_id")
-        except sqlite3.OperationalError:
-            pass
         self._conn.commit()

@@ -3,290 +3,145 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI
+from psycopg import AsyncConnection
 
-from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
-from backend.web.services.idle_reaper import idle_reaper_loop
-from backend.web.services.resource_cache import resource_overview_refresh_loop
-from config.env_manager import ConfigManager
+from backend.thread_runtime.pool import idle_reaper as idle_reaper_owner
 from core.runtime.middleware.queue import MessageQueueManager
 
 
-def _seed_dev_user(app: FastAPI) -> None:
-    """Create dev-user human member + initial agents if not yet seeded.
+def _require_web_runtime_contract() -> None:
+    # @@@web-checkpointer-contract - web routes can create LeonAgent on first
+    # message, so missing Postgres checkpointer config is a startup contract
+    # violation, not a late per-request error.
+    if not os.getenv("LEON_POSTGRES_URL"):
+        raise RuntimeError("LEON_POSTGRES_URL is required for backend web runtime")
 
-    Mirrors AuthService.register() but uses the fixed 'dev-user' ID that
-    matches _DEV_PAYLOAD, so list_members('dev-user') returns results.
-    """
-    import logging
-    import time
-    from pathlib import Path
 
-    from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
-    from storage.contracts import MemberRow, MemberType
-    from storage.providers.sqlite.member_repo import generate_member_id
+async def _validate_web_checkpointer_contract() -> None:
+    pg_url = os.getenv("LEON_POSTGRES_URL")
+    if not pg_url:
+        raise RuntimeError("LEON_POSTGRES_URL is required for backend web runtime")
 
-    log = logging.getLogger(__name__)
-    member_repo = app.state.member_repo
-
-    dev_user_id = "dev-user"
-
-    if member_repo.get_by_id(dev_user_id) is not None:
-        return  # already seeded
-
-    log.info("DEV: seeding dev-user member + initial agents")
-    now = time.time()
-
-    # Human member row
-    member_repo.create(
-        MemberRow(
-            id=dev_user_id,
-            name="Dev",
-            type=MemberType.HUMAN,
-            created_at=now,
-        )
-    )
-
-    # Initial agents (same as register())
-    initial_agents = [
-        {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
-        {"name": "Morel", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
-    ]
-    assets_dir = Path(__file__).resolve().parents[3] / "assets"
-
-    for agent_def in initial_agents:
-        agent_id = generate_member_id()
-        agent_dir = MEMBERS_DIR / agent_id
-        agent_dir.mkdir(parents=True, exist_ok=True)
-        _write_agent_md(agent_dir / "agent.md", name=agent_def["name"], description=agent_def["description"])
-        _write_json(
-            agent_dir / "meta.json",
-            {
-                "status": "active",
-                "version": "1.0.0",
-                "created_at": int(now * 1000),
-                "updated_at": int(now * 1000),
-            },
-        )
-        member_repo.create(
-            MemberRow(
-                id=agent_id,
-                name=agent_def["name"],
-                type=MemberType.MYCEL_AGENT,
-                description=agent_def["description"],
-                config_dir=str(agent_dir),
-                owner_user_id=dev_user_id,
-                created_at=now,
-            )
-        )
-        src_avatar = assets_dir / agent_def["avatar"]
-        if src_avatar.exists():
-            try:
-                from backend.web.routers.entities import process_and_save_avatar
-
-                avatar_path = process_and_save_avatar(src_avatar, agent_id)
-                member_repo.update(agent_id, avatar=avatar_path, updated_at=now)
-            except Exception as e:
-                log.warning("DEV: avatar copy failed for %s: %s", agent_def["name"], e)
+    conn = await AsyncConnection.connect(pg_url)
+    try:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT 1")
+            await cursor.fetchone()
+    finally:
+        await conn.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown."""
-    # Load configuration
-    config_manager = ConfigManager()
-    config_manager.load_to_env()
+    _require_web_runtime_contract()
+    await _validate_web_checkpointer_contract()
 
-    # Ensure event store table exists (lazy init, not at module import)
-    from backend.web.services.event_store import init_event_store
+    # ---- Chat repos + services ----
+    from backend.auth_runtime_bootstrap import attach_auth_runtime_state
+    from backend.runtime_storage_bootstrap import attach_runtime_storage_state
 
-    init_event_store()
+    runtime_storage = attach_runtime_storage_state(app)
+    _supabase_client = runtime_storage.supabase_client
+    storage_container = runtime_storage.storage_container
+    from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore, agent_checkpoint_saver_from_conn_string
 
-    from backend.web.services.library_service import ensure_library_dir
-    from backend.web.services.member_service import ensure_members_dir
+    pg_url = os.environ["LEON_POSTGRES_URL"]
+    app.state._thread_checkpoint_saver_ctx = agent_checkpoint_saver_from_conn_string(pg_url)
+    app.state._thread_checkpoint_saver = await app.state._thread_checkpoint_saver_ctx.__aenter__()
+    await app.state._thread_checkpoint_saver.setup()
+    app.state.thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
 
-    ensure_members_dir()
-    ensure_library_dir()
+    app.state.user_repo = storage_container.user_repo()
+    app.state.thread_repo = storage_container.thread_repo()
+    app.state.lease_repo = storage_container.lease_repo()
+    app.state.recipe_repo = storage_container.recipe_repo()
+    app.state.workspace_repo = storage_container.workspace_repo()
+    app.state.sandbox_repo = storage_container.sandbox_repo()
+    app.state.chat_repo = storage_container.chat_repo()
+    app.state.invite_code_repo = storage_container.invite_code_repo()
+    app.state.user_settings_repo = storage_container.user_settings_repo()
+    app.state.agent_config_repo = storage_container.agent_config_repo()
+    app.state.contact_repo = storage_container.contact_repo()
+    attach_auth_runtime_state(app, storage_state=runtime_storage)
 
-    # ---- Entity-Chat repos + services ----
-    _storage_strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
-
-    if _storage_strategy == "supabase":
-        from backend.web.core.supabase_factory import create_supabase_client
-        from storage.container import StorageContainer
-        from storage.providers.supabase import (
-            SupabaseAccountRepo,
-            SupabaseChatEntityRepo,
-            SupabaseChatMessageRepo,
-            SupabaseChatRepo,
-            SupabaseContactRepo,
-            SupabaseEntityRepo,
-            SupabaseInviteCodeRepo,
-            SupabaseMemberRepo,
-            SupabaseRecipeRepo,
-            SupabaseThreadLaunchPrefRepo,
-            SupabaseThreadRepo,
-            SupabaseUserSettingsRepo,
-        )
-
-        _supabase_client = create_supabase_client()
-        app.state.member_repo = SupabaseMemberRepo(_supabase_client)
-        app.state.account_repo = SupabaseAccountRepo(_supabase_client)
-        app.state.entity_repo = SupabaseEntityRepo(_supabase_client)
-        app.state.thread_repo = SupabaseThreadRepo(_supabase_client)
-        app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(_supabase_client)
-        app.state.recipe_repo = SupabaseRecipeRepo(_supabase_client)
-        app.state.chat_repo = SupabaseChatRepo(_supabase_client)
-        app.state.chat_entity_repo = SupabaseChatEntityRepo(_supabase_client)
-        app.state.chat_message_repo = SupabaseChatMessageRepo(_supabase_client)
-        app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
-        app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
-        app.state._supabase_client = _supabase_client
-        app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
-    else:
-        from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
-        from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
-        from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-        from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
-        from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
-        from storage.providers.sqlite.thread_launch_pref_repo import SQLiteThreadLaunchPrefRepo
-        from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-
-        db = resolve_role_db_path(SQLiteDBRole.MAIN)
-        chat_db = resolve_role_db_path(SQLiteDBRole.CHAT)
-
-        app.state.member_repo = SQLiteMemberRepo(db)
-        app.state.account_repo = SQLiteAccountRepo(db)
-        app.state.entity_repo = SQLiteEntityRepo(db)
-        app.state.thread_repo = SQLiteThreadRepo(db)
-        app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
-        app.state.recipe_repo = SQLiteRecipeRepo(db)
-        app.state.chat_repo = SQLiteChatRepo(chat_db)
-        app.state.chat_entity_repo = SQLiteChatEntityRepo(chat_db)
-        app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
-
-    from backend.web.services.auth_service import AuthService
-
-    if _storage_strategy == "supabase":
-        app.state.auth_service = AuthService(
-            members=app.state.member_repo,
-            accounts=app.state.account_repo,
-            entities=app.state.entity_repo,
-            supabase_client=_supabase_client,
-            invite_codes=app.state.invite_code_repo,
-        )
-    else:
-        app.state.auth_service = AuthService(
-            members=app.state.member_repo,
-            accounts=app.state.account_repo,
-            entities=app.state.entity_repo,
-            supabase_client=None,
-        )
-
-    # Dev bypass: seed dev-user + initial agents on first startup
-    from backend.web.core.dependencies import _DEV_SKIP_AUTH
-
-    if _DEV_SKIP_AUTH:
-        _seed_dev_user(app)
-
-    from backend.web.services.chat_events import ChatEventBus
-    from backend.web.services.typing_tracker import TypingTracker
+    from messaging.realtime.events import ChatEventBus
+    from messaging.realtime.typing import TypingTracker
 
     app.state.chat_event_bus = ChatEventBus()
     app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
 
-    from backend.web.services.delivery_resolver import DefaultDeliveryResolver
+    # Wire chat delivery after event loop is available
+    # ---- Messaging system (Supabase-backed, required) ----
+    from backend.agent_runtime.chat_inlet import make_chat_delivery_fn
+    from backend.web.utils.serializers import avatar_url
+    from messaging.delivery.resolver import HireVisitDeliveryResolver
+    from messaging.relationships.service import RelationshipService
+    from messaging.service import MessagingService
 
-    if _storage_strategy == "supabase":
-        app.state.contact_repo = SupabaseContactRepo(_supabase_client)
-    else:
-        from storage.providers.sqlite.contact_repo import SQLiteContactRepo
+    _chat_member_repo = storage_container.chat_member_repo()
+    _messages_repo = storage_container.messages_repo()
+    app.state.relationship_repo = storage_container.relationship_repo()
+    app.state.chat_member_repo = _chat_member_repo
+    app.state.messages_repo = _messages_repo
 
-        app.state.contact_repo = SQLiteContactRepo(chat_db)
+    app.state.relationship_service = RelationshipService(app.state.relationship_repo)
 
-    delivery_resolver = DefaultDeliveryResolver(app.state.contact_repo, app.state.chat_entity_repo)
-
-    from backend.web.services.chat_service import ChatService
-
-    app.state.chat_service = ChatService(
-        chat_repo=app.state.chat_repo,
-        chat_entity_repo=app.state.chat_entity_repo,
-        chat_message_repo=app.state.chat_message_repo,
-        entity_repo=app.state.entity_repo,
-        member_repo=app.state.member_repo,
-        event_bus=app.state.chat_event_bus,
-        delivery_resolver=delivery_resolver,
+    _msg_delivery_resolver = HireVisitDeliveryResolver(
+        contact_repo=app.state.contact_repo,
+        chat_member_repo=_chat_member_repo,
+        relationship_repo=app.state.relationship_repo,
     )
 
-    # Wire chat delivery after event loop is available
-    from core.agents.communication.delivery import make_chat_delivery_fn
-
-    app.state.chat_service.set_delivery_fn(make_chat_delivery_fn(app))
+    app.state.messaging_service = MessagingService(
+        chat_repo=app.state.chat_repo,
+        chat_member_repo=_chat_member_repo,
+        messages_repo=_messages_repo,
+        user_repo=app.state.user_repo,
+        thread_repo=app.state.thread_repo,
+        event_bus=app.state.chat_event_bus,
+        delivery_resolver=_msg_delivery_resolver,
+        avatar_url_builder=avatar_url,
+    )
 
     # ---- Existing state ----
-    app.state.queue_manager = MessageQueueManager()
-    app.state.agent_pool: dict[str, Any] = {}
-    app.state.thread_sandbox: dict[str, str] = {}
-    app.state.thread_cwd: dict[str, str] = {}
-    app.state.thread_locks: dict[str, asyncio.Lock] = {}
+    app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
+    app.state.agent_pool = {}
+    app.state.thread_sandbox = {}
+    app.state.thread_cwd = {}
+    app.state.thread_locks = {}
     app.state.thread_locks_guard = asyncio.Lock()
-    app.state.thread_tasks: dict[str, asyncio.Task] = {}
-    app.state.thread_event_buffers: dict[str, ThreadEventBuffer] = {}
-    app.state.subagent_buffers: dict[str, RunEventBuffer] = {}
+    app.state.thread_tasks = {}
+    app.state.thread_event_buffers = {}
+    app.state.subagent_buffers = {}
 
-    from backend.web.services.display_builder import DisplayBuilder
+    from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
+
+    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
+    app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
+
+    from backend.display_builder import DisplayBuilder
 
     app.state.display_builder = DisplayBuilder()
-    app.state.thread_last_active: dict[str, float] = {}  # thread_id → epoch timestamp
-    app.state.idle_reaper_task: asyncio.Task | None = None
-    app.state.cron_service = None
+    app.state.thread_last_active = {}  # thread_id → epoch timestamp
+    app.state.idle_reaper_task = None
     app.state._event_loop = asyncio.get_running_loop()
-    app.state.monitor_resources_task: asyncio.Task | None = None
 
     try:
+        from backend.web.core.config import IDLE_REAPER_INTERVAL_SEC
+        from backend.web.services.sandbox_service import init_providers_and_managers
+
+        idle_reaper_owner.init_providers_and_managers = init_providers_and_managers
+        idle_reaper_owner.IDLE_REAPER_INTERVAL_SEC = IDLE_REAPER_INTERVAL_SEC
+
         # Start idle reaper background task
-        app.state.idle_reaper_task = asyncio.create_task(idle_reaper_loop(app))
-
-        # Start resource overview refresh loop
-        app.state.monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())
-
-        # Start cron scheduler
-        from backend.web.services.cron_service import CronService
-
-        cron_svc = CronService()
-        await cron_svc.start()
-        app.state.cron_service = cron_svc
-
-        # @@@wechat-registry — create registry with delivery callback, auto-start all
-        from backend.web.services.wechat_service import WeChatConnectionRegistry, migrate_entity_id_dirs
-        from core.runtime.middleware.queue.formatters import format_wechat_message
-
-        migrate_entity_id_dirs()
-
-        async def _wechat_deliver(conn, msg):
-            """Delivery callback — routes WeChat messages to configured thread/chat."""
-            routing = conn.routing
-            if not routing.type or not routing.id:
-                return
-            sender_name = msg.from_user_id.split("@")[0] or msg.from_user_id
-            if routing.type == "thread":
-                from backend.web.services.message_routing import route_message_to_brain
-
-                content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
-                await route_message_to_brain(app, routing.id, content, source="owner", sender_name=sender_name)
-            elif routing.type == "chat":
-                content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
-                app.state.chat_service.send_message(routing.id, conn.user_id, content)
-
-        app.state.wechat_registry = WeChatConnectionRegistry(delivery_fn=_wechat_deliver)
-        app.state.wechat_registry.auto_start_all()
+        app.state.idle_reaper_task = asyncio.create_task(idle_reaper_owner.idle_reaper_loop(app))
 
         yield
     finally:
-        # @@@background-task-shutdown-order - cancel monitor/reaper before provider cleanup.
-        for task_name in ("monitor_resources_task", "idle_reaper_task"):
+        for task_name in ("idle_reaper_task",):
             task = getattr(app.state, task_name, None)
             if task:
                 task.cancel()
@@ -295,20 +150,21 @@ async def lifespan(app: FastAPI):
                 except asyncio.CancelledError:
                     pass
 
-        # Cleanup: stop WeChat connections
-        if hasattr(app.state, "wechat_registry"):
-            await app.state.wechat_registry.shutdown()
-
-        # Cleanup: stop cron scheduler
-        if app.state.cron_service:
-            await app.state.cron_service.stop()
-
         if hasattr(app.state, "recipe_repo"):
             app.state.recipe_repo.close()
+
+        checkpoint_saver_ctx = getattr(app.state, "_thread_checkpoint_saver_ctx", None)
+        if checkpoint_saver_ctx is not None:
+            await checkpoint_saver_ctx.__aexit__(None, None, None)
 
         # Cleanup: close all agents
         for agent in app.state.agent_pool.values():
             try:
-                agent.close()
+                agent.close(cleanup_sandbox=False)
             except Exception as e:
                 print(f"[web] Agent cleanup error: {e}")
+
+        # Cleanup: stop LSP language servers
+        from core.tools.lsp.service import lsp_pool
+
+        await lsp_pool.close_all()

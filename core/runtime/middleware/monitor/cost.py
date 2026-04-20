@@ -8,12 +8,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from config.user_paths import preferred_existing_user_home_path, user_home_path
+
+logger = logging.getLogger(__name__)
 
 # 定价数据（运行时填充）
 _pricing_data: dict[str, dict[str, Decimal]] = {}
@@ -112,7 +115,7 @@ def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, 
     if not cache_path.exists():
         return None
     try:
-        data = json.loads(cache_path.read_text())
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
         if time.time() - data.get("timestamp", 0) > _CACHE_TTL:
             return None
         models = data.get("models", {})
@@ -120,6 +123,7 @@ def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, 
         provs = data.get("providers", {})
         return models, ctx, provs
     except Exception:
+        logger.warning("Failed to load pricing cache from %s", cache_path, exc_info=True)
         return None
 
 
@@ -128,9 +132,9 @@ def _save_cache(models: dict[str, dict[str, str]], context_limits: dict[str, int
     try:
         _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         data = {"timestamp": time.time(), "models": models, "context_limits": context_limits, "providers": providers}
-        _CACHE_PATH.write_text(json.dumps(data))
+        _CACHE_PATH.write_text(json.dumps(data), encoding="utf-8")
     except Exception:
-        pass
+        logger.warning("Failed to save pricing cache to %s", _CACHE_PATH, exc_info=True)
 
 
 def _deserialize_costs(raw: dict[str, dict[str, str]]) -> dict[str, dict[str, Decimal]]:
@@ -163,11 +167,17 @@ def fetch_openrouter_pricing() -> dict[str, dict[str, Decimal]]:
     cached = _load_cache()
     if cached:
         models_raw, ctx, provs = cached
-        _pricing_data = _deserialize_costs(models_raw)
-        _context_limits = ctx
-        _model_providers = provs
-        _initialized = True
-        return _pricing_data
+        cached_costs = _deserialize_costs(models_raw)
+        # @@@pricing-cache-integrity - older CI caches can carry context/provider
+        # metadata with an empty model-pricing payload, which makes cost
+        # calculation silently degrade while context-limit tests still pass.
+        # Treat that cache as invalid and fall through to bundled/API reload.
+        if cached_costs:
+            _pricing_data = cached_costs
+            _context_limits = ctx
+            _model_providers = provs
+            _initialized = True
+            return _pricing_data
 
     _pricing_data = _fetch_from_openrouter() or _load_bundled()
     _initialized = True
@@ -208,7 +218,7 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
             _save_cache(_serialize_costs(result), ctx_result, prov_result)
             return result
     except Exception:
-        pass
+        logger.warning("Failed to fetch OpenRouter pricing; bundled pricing will be used", exc_info=True)
 
     return None
 
@@ -219,7 +229,10 @@ def _load_bundled() -> dict[str, dict[str, Decimal]]:
     if not _BUNDLED_PATH.exists():
         return {}
     try:
-        data = json.loads(_BUNDLED_PATH.read_text())
+        # @@@bundled-models-utf8 - Windows runners do not default to UTF-8.
+        # The bundled OpenRouter snapshot contains non-ASCII descriptions, so
+        # implicit decoding can fail and silently collapse pricing/context data.
+        data = json.loads(_BUNDLED_PATH.read_text(encoding="utf-8"))
         result: dict[str, dict[str, Decimal]] = {}
         ctx_result: dict[str, int] = {}
         prov_result: dict[str, str] = {}
@@ -301,8 +314,7 @@ class CostCalculator:
         import re
 
         name = re.sub(r"-\d{8}$", "", name)
-        name = re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", name)
-        return name
+        return re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", name)
 
     def calculate(self, tokens: dict) -> dict:
         """返回各项成本（USD）

@@ -24,7 +24,8 @@ if TYPE_CHECKING:
 
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
 from sandbox.shell_output import normalize_pty_result
-from storage.providers.sqlite.kernel import connect_sqlite
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.runtime import uses_supabase_runtime_defaults
 
 if platform.system() == "Windows":
     pty = None
@@ -34,6 +35,16 @@ else:
     import select
 
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _uses_strategy_command_registry(db_path: Path | None) -> bool:
+    return db_path is not None and uses_supabase_runtime_defaults() and db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+
+
+def _require_select_module():
+    if select is None:
+        raise RuntimeError("PTY sessions are not supported on Windows")
+    return select
 
 
 def _parse_env_output(raw: str) -> dict[str, str]:
@@ -58,8 +69,7 @@ def _sanitize_shell_output(raw: str) -> str:
             break
         cleaned = next_cleaned
     cleaned = cleaned.replace("\x08", "")
-    cleaned = "".join(ch for ch in cleaned if ch in "\n\t" or 32 <= ord(ch))
-    return cleaned
+    return "".join(ch for ch in cleaned if ch in "\n\t" or ord(ch) >= 32)
 
 
 def _normalize_pty_result(output: str, command: str | None = None) -> str:
@@ -71,16 +81,16 @@ def _extract_state_from_output(
     start_marker: str,
     end_marker: str,
     *,
-    cwd_fallback: str,
-    env_fallback: dict[str, str],
+    previous_cwd: str,
+    previous_env: dict[str, str],
 ) -> tuple[str, dict[str, str], str]:
-    pattern = re.compile(rf"{re.escape(start_marker)}(.*?){re.escape(end_marker)}", re.S)
+    pattern = re.compile(rf"{re.escape(start_marker)}(.*?){re.escape(end_marker)}", re.DOTALL)
     matches = list(pattern.finditer(raw_output))
     if not matches:
-        # @@@markerless-empty-output-fallback - Some lightweight providers/tests return empty stdout on successful exec.
+        # @@@markerless-empty-output-preserve-state - Some lightweight providers/tests return empty stdout on successful exec.
         # Keep previous terminal snapshot only for truly-empty output; any non-empty markerless output still fails loudly.
         if not _sanitize_shell_output(raw_output).strip():
-            return cwd_fallback, dict(env_fallback), ""
+            return previous_cwd, dict(previous_env), ""
         raise RuntimeError("Failed to parse terminal state: state markers not found")
 
     match = matches[-1]
@@ -123,10 +133,14 @@ def _build_export_block(env_delta: dict[str, str]) -> str:
     return "\n".join(f"export {k}={shlex.quote(str(v))}" for k, v in env_delta.items())
 
 
-def _build_state_snapshot_cmd() -> tuple[str, str, str]:
-    """Returns (start_marker, end_marker, full_cmd)."""
+def _build_state_markers() -> tuple[str, str]:
     start = f"__LEON_STATE_START_{uuid.uuid4().hex[:8]}__"
     end = f"__LEON_STATE_END_{uuid.uuid4().hex[:8]}__"
+    return start, end
+
+
+def _build_state_snapshot_cmd() -> tuple[str, str, str]:
+    start, end = _build_state_markers()
     cmd = "\n".join([f"echo {shlex.quote(start)}", "pwd", "env", f"echo {shlex.quote(end)}"])
     return start, end, cmd
 
@@ -199,7 +213,7 @@ class _SubprocessPtySession:
             if deadline is not None and time.monotonic() > deadline:
                 raise TimeoutError(f"Command timed out after {timeout}s")
             wait_sec = 0.1 if deadline is None else max(0.0, min(0.1, deadline - time.monotonic()))
-            readable, _, _ = select.select([self._master_fd], [], [], wait_sec)
+            readable, _, _ = _require_select_module().select([self._master_fd], [], [], wait_sec)
             if not readable:
                 continue
             chunk = os.read(self._master_fd, 4096)
@@ -210,13 +224,12 @@ class _SubprocessPtySession:
             if marker_done_re.search(decoded):
                 cleaned, exit_code = _extract_marker_exit(decoded, marker, command)
                 return cleaned, "", exit_code
-            if on_stdout_chunk is not None:
-                if len(decoded) > emitted_raw_len:
-                    delta_raw = decoded[emitted_raw_len:]
-                    emitted_raw_len = len(decoded)
-                    delta = _sanitize_shell_output(delta_raw)
-                    if delta:
-                        on_stdout_chunk(delta)
+            if on_stdout_chunk is not None and len(decoded) > emitted_raw_len:
+                delta_raw = decoded[emitted_raw_len:]
+                emitted_raw_len = len(decoded)
+                delta = _sanitize_shell_output(delta_raw)
+                if delta:
+                    on_stdout_chunk(delta)
 
     def interrupt_and_recover(self, recover_timeout: float = 3.0) -> bool:
         """Send Ctrl+C to interrupt the current command and recover the session.
@@ -241,7 +254,7 @@ class _SubprocessPtySession:
         drain_deadline = time.monotonic() + 1.0
         while time.monotonic() < drain_deadline:
             remaining = max(0.0, drain_deadline - time.monotonic())
-            readable, _, _ = select.select([self._master_fd], [], [], min(0.1, remaining))
+            readable, _, _ = _require_select_module().select([self._master_fd], [], [], min(0.1, remaining))
             if not readable:
                 continue
             try:
@@ -264,7 +277,7 @@ class _SubprocessPtySession:
         probe_buf = bytearray()
         while time.monotonic() < probe_deadline:
             wait_sec = max(0.0, min(0.1, probe_deadline - time.monotonic()))
-            readable, _, _ = select.select([self._master_fd], [], [], wait_sec)
+            readable, _, _ = _require_select_module().select([self._master_fd], [], [], wait_sec)
             if not readable:
                 continue
             try:
@@ -333,9 +346,21 @@ class PhysicalTerminalRuntime(ABC):
         self._persisted_stderr_chunk_count: dict[str, int] = {}
         self._chunk_table_available: bool | None = None
         self._running_output_tail_limit = 4096
+        self._command_repo = None
 
     def bind_session(self, session_id: str) -> None:
         self.chat_session_id = session_id
+
+    def bind_command_repo(self, command_repo) -> None:
+        self._command_repo = command_repo
+
+    def _require_command_repo(self):
+        if self._command_repo is not None:
+            return self._command_repo
+        db_path = getattr(self.terminal, "db_path", None)
+        if db_path and _uses_strategy_command_registry(Path(db_path)):
+            raise RuntimeError("strategy-backed terminal command registry requires a bound command repo")
+        return None
 
     def _db_path(self) -> Path:
         db_path = getattr(self.terminal, "db_path", None)
@@ -372,13 +397,11 @@ class PhysicalTerminalRuntime(ABC):
 
     def _append_unflushed_chunks(
         self,
-        conn: sqlite3.Connection,
+        conn: sqlite3.Connection | None,
         *,
         command_id: str,
         async_cmd: AsyncCommand,
     ) -> None:
-        if not self._has_chunk_table(conn):
-            return
         stdout_start = self._persisted_stdout_chunk_count.get(command_id, 0)
         stderr_start = self._persisted_stderr_chunk_count.get(command_id, 0)
         stdout_chunks = async_cmd.stdout_buffer[stdout_start:]
@@ -386,6 +409,21 @@ class PhysicalTerminalRuntime(ABC):
         if not stdout_chunks and not stderr_chunks:
             return
         created_at = datetime.now().isoformat()
+        command_repo = self._require_command_repo()
+        if command_repo is not None:
+            command_repo.append_command_chunks(
+                command_id=command_id,
+                stdout_chunks=stdout_chunks,
+                stderr_chunks=stderr_chunks,
+                created_at=created_at,
+            )
+            if stdout_chunks:
+                self._persisted_stdout_chunk_count[command_id] = stdout_start + len(stdout_chunks)
+            if stderr_chunks:
+                self._persisted_stderr_chunk_count[command_id] = stderr_start + len(stderr_chunks)
+            return
+        if conn is None or not self._has_chunk_table(conn):
+            return
         if stdout_chunks:
             conn.executemany(
                 """
@@ -418,6 +456,24 @@ class PhysicalTerminalRuntime(ABC):
         conn: sqlite3.Connection | None = None,
     ) -> None:
         now = datetime.now().isoformat()
+        finished_at = now if status in {"done", "cancelled", "failed"} else None
+        command_repo = self._require_command_repo()
+        if command_repo is not None:
+            command_repo.upsert_command(
+                command_id=command_id,
+                terminal_id=self.terminal.terminal_id,
+                chat_session_id=self.chat_session_id,
+                command_line=command_line,
+                cwd=cwd,
+                status=status,
+                stdout=stdout or "",
+                stderr=stderr or "",
+                exit_code=exit_code,
+                updated_at=now,
+                finished_at=finished_at,
+                created_at=now,
+            )
+            return
         should_commit = conn is None
         target = conn or self._connect()
         try:
@@ -460,7 +516,7 @@ class PhysicalTerminalRuntime(ABC):
                         exit_code,
                         now,
                         now,
-                        now if status in {"done", "cancelled", "failed"} else None,
+                        finished_at,
                     ),
                 )
             if should_commit:
@@ -478,6 +534,17 @@ class PhysicalTerminalRuntime(ABC):
         if not force and now - last < self._stream_flush_interval_sec:
             return
         self._last_stream_flush_at[command_id] = now
+        if self._require_command_repo() is not None:
+            self._append_unflushed_chunks(None, command_id=command_id, async_cmd=async_cmd)
+            self._upsert_command_row(
+                command_id=command_id,
+                command_line=async_cmd.command_line,
+                cwd=async_cmd.cwd,
+                status="running",
+                stdout=self._tail_output(async_cmd.stdout_buffer, max_chars=self._running_output_tail_limit),
+                stderr=self._tail_output(async_cmd.stderr_buffer, max_chars=self._running_output_tail_limit),
+            )
+            return
         with self._connect() as conn:
             self._append_unflushed_chunks(conn, command_id=command_id, async_cmd=async_cmd)
             self._upsert_command_row(
@@ -492,6 +559,41 @@ class PhysicalTerminalRuntime(ABC):
             conn.commit()
 
     def _load_command_from_db(self, command_id: str) -> AsyncCommand | None:
+        command_repo = self._require_command_repo()
+        if command_repo is not None:
+            row = command_repo.get_command(command_id=command_id, terminal_id=self.terminal.terminal_id)
+            stdout_text = ""
+            stderr_text = ""
+            if row:
+                stdout_text = str(row.get("stdout") or "")
+                stderr_text = str(row.get("stderr") or "")
+                chunk_rows = command_repo.list_command_chunks(command_id=command_id)
+                if chunk_rows:
+                    stdout_chunks = [str(chunk.get("content") or "") for chunk in chunk_rows if chunk.get("stream") == "stdout"]
+                    stderr_chunks = [str(chunk.get("content") or "") for chunk in chunk_rows if chunk.get("stream") == "stderr"]
+                    chunk_stdout = "".join(stdout_chunks)
+                    chunk_stderr = "".join(stderr_chunks)
+                    if row["status"] in {"done", "cancelled", "failed"}:
+                        if len(chunk_stdout) >= len(stdout_text):
+                            stdout_text = chunk_stdout
+                        if len(chunk_stderr) >= len(stderr_text):
+                            stderr_text = chunk_stderr
+                    else:
+                        stdout_text = chunk_stdout
+                        stderr_text = chunk_stderr
+            if not row:
+                return None
+            async_cmd = AsyncCommand(
+                command_id=row["command_id"],
+                command_line=row["command_line"],
+                cwd=row["cwd"],
+                stdout_buffer=[stdout_text],
+                stderr_buffer=[stderr_text],
+                exit_code=row["exit_code"],
+                done=row["status"] in {"done", "cancelled", "failed"},
+            )
+            self._commands[command_id] = async_cmd
+            return async_cmd
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -573,6 +675,19 @@ class PhysicalTerminalRuntime(ABC):
             except Exception as exc:
                 result = ExecuteResult(exit_code=1, stdout="", stderr=f"Error: {exc}")
                 status = "failed"
+            # @@@cancelled-terminal-truth - Runtime-level cancel may tear down the active PTY/session from another task.
+            # When that happens, this background runner must not overwrite the authoritative cancelled state with a late
+            # success/failure finalizer.
+            if async_cmd.cancelled:
+                self._last_stream_flush_at.pop(command_id, None)
+                self._persisted_stdout_chunk_count.pop(command_id, None)
+                self._persisted_stderr_chunk_count.pop(command_id, None)
+                return ExecuteResult(
+                    exit_code=130,
+                    stdout="".join(async_cmd.stdout_buffer),
+                    stderr="Command cancelled",
+                    command_id=command_id,
+                )
             self._flush_running_output_if_needed(command_id, force=True)
             async_cmd.stdout_buffer = [result.stdout]
             async_cmd.stderr_buffer = [result.stderr]
@@ -594,6 +709,9 @@ class PhysicalTerminalRuntime(ABC):
 
         self._tasks[command_id] = asyncio.create_task(_run())
         return async_cmd
+
+    async def _cancel_running_command(self) -> bool:
+        return False
 
     async def _execute_background_command(
         self,
@@ -669,8 +787,17 @@ class PhysicalTerminalRuntime(ABC):
             return False
         if task.done():
             return False
-        task.cancel()
-        self._flush_running_output_if_needed(command_id, force=True)
+        # @@@runtime-owned-cancel - Async task cancellation is not sufficient for PTY/session runtimes.
+        # The runtime must stop the live command source, then this method records the single terminal truth.
+        cmd.cancelled = True
+        stopped = await self._cancel_running_command()
+        if stopped:
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+            except (TimeoutError, asyncio.CancelledError):
+                task.cancel()
+        else:
+            task.cancel()
         cmd.done = True
         cmd.exit_code = 130
         cmd.stderr_buffer = ["Command cancelled"]
@@ -687,30 +814,6 @@ class PhysicalTerminalRuntime(ABC):
         self._persisted_stdout_chunk_count.pop(command_id, None)
         self._persisted_stderr_chunk_count.pop(command_id, None)
         return True
-
-    def store_completed_result(self, command_id: str, command_line: str, cwd: str, result: ExecuteResult) -> None:
-        cmd = AsyncCommand(
-            command_id=command_id,
-            command_line=command_line,
-            cwd=cwd,
-            stdout_buffer=[result.stdout],
-            stderr_buffer=[result.stderr],
-            exit_code=result.exit_code,
-            done=True,
-        )
-        self._commands[command_id] = cmd
-        self._upsert_command_row(
-            command_id=command_id,
-            command_line=command_line,
-            cwd=cwd,
-            status="done",
-            stdout=result.stdout,
-            stderr=result.stderr,
-            exit_code=result.exit_code,
-        )
-        self._last_stream_flush_at.pop(command_id, None)
-        self._persisted_stdout_chunk_count.pop(command_id, None)
-        self._persisted_stderr_chunk_count.pop(command_id, None)
 
     @abstractmethod
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
@@ -749,6 +852,8 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
             "no such session",
             "session does not exist",
             "failed to create pty session",
+            "failed to send input to pty",
+            "pty control error",
             "no ip address found",
             "is the sandbox started",
             "is paused",
@@ -758,6 +863,9 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
             "websocket",
             "close frame",
             "no close frame",
+            "internal error",
+            "1011",
+            "broken pipe",
             "transport",
             "unreachable",
             "timed out",
@@ -806,9 +914,18 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
         instance = self.lease.ensure_active_instance(self.provider)
         state = self.terminal.get_state()
         timeout_ms = int(timeout * 1000) if timeout else 30000
-        # @@@ _build_state_snapshot_cmd returns (start, end, cmd) but RemoteWrappedRuntime
-        # builds its own inline block to interleave cd/exports/command, so the pre-built cmd is unused.
-        start_marker, end_marker, _ = _build_state_snapshot_cmd()
+        print(
+            "[RemoteWrappedRuntime._execute_once] "
+            f"thread_id={self.terminal.thread_id} "
+            f"lease_id={self.lease.lease_id} "
+            f"instance_id={instance.instance_id} "
+            f"provider={getattr(self.provider, 'name', '?')} "
+            f"cwd={state.cwd!r} "
+            f"timeout_ms={timeout_ms} "
+            f"command={command[:200]!r}",
+            flush=True,
+        )
+        start_marker, end_marker = _build_state_markers()
         exports = _build_export_block(state.env_delta)
         wrapped = "\n".join(
             part
@@ -832,14 +949,32 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
             cwd=state.cwd,
         )
         raw_output = result.output or ""
-
-        new_cwd, env_map, raw_output = _extract_state_from_output(
-            raw_output,
-            start_marker,
-            end_marker,
-            cwd_fallback=state.cwd,
-            env_fallback=state.env_delta,
+        print(
+            "[RemoteWrappedRuntime._execute_once] "
+            f"thread_id={self.terminal.thread_id} "
+            f"provider_exit={result.exit_code} "
+            f"provider_error={result.error!r} "
+            f"output_len={len(raw_output)}",
+            flush=True,
         )
+
+        try:
+            new_cwd, env_map, raw_output = _extract_state_from_output(
+                raw_output,
+                start_marker,
+                end_marker,
+                previous_cwd=state.cwd,
+                previous_env=state.env_delta,
+            )
+        except Exception as exc:
+            print(
+                "[RemoteWrappedRuntime._execute_once] "
+                f"thread_id={self.terminal.thread_id} "
+                f"state_parse_failed={exc.__class__.__name__}: {exc} "
+                f"raw_output_preview={raw_output[:400]!r}",
+                flush=True,
+            )
+            raise
         from sandbox.terminal import TerminalState
 
         self.update_terminal_state(TerminalState(cwd=new_cwd, env_delta=env_map))
@@ -872,25 +1007,3 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
 
     async def close(self) -> None:
         """No-op for remote runtime - instance lifecycle managed by lease."""
-        pass
-
-
-# Re-exports for backwards compatibility and test imports
-def __getattr__(name: str):
-    if name == "DockerPtyRuntime":
-        from sandbox.providers.docker import DockerPtyRuntime
-
-        return DockerPtyRuntime
-    if name == "LocalPersistentShellRuntime":
-        from sandbox.providers.local import LocalPersistentShellRuntime
-
-        return LocalPersistentShellRuntime
-    if name == "DaytonaSessionRuntime":
-        from sandbox.providers.daytona import DaytonaSessionRuntime
-
-        return DaytonaSessionRuntime
-    if name == "E2BPtyRuntime":
-        from sandbox.providers.e2b import E2BPtyRuntime
-
-        return E2BPtyRuntime
-    raise AttributeError(f"module 'sandbox.runtime' has no attribute {name!r}")

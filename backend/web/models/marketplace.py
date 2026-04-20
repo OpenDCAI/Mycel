@@ -5,9 +5,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class PublishToMarketplaceRequest(BaseModel):
-    member_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$")
-    type: Literal["member", "agent", "skill", "env"] = "member"
+class PublishAgentUserToMarketplaceRequest(BaseModel):
+    user_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$")
     bump_type: Literal["major", "minor", "patch"] = "patch"
     release_notes: str = ""
     tags: list[str] = []
@@ -16,10 +15,11 @@ class PublishToMarketplaceRequest(BaseModel):
 
 class InstallFromMarketplaceRequest(BaseModel):
     item_id: str
+    agent_user_id: str | None = None
 
 
 class UpgradeFromMarketplaceRequest(BaseModel):
-    member_id: str  # local member id
+    user_id: str  # local agent user id
     item_id: str  # marketplace item id
 
 

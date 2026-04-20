@@ -83,7 +83,7 @@ class SandboxConfig(BaseModel):
         path = Path.home() / ".leon" / "sandboxes" / f"{name}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        data = {"provider": self.provider, "on_exit": self.on_exit}
+        data: dict[str, object] = {"provider": self.provider, "on_exit": self.on_exit}
         if self.console_url:
             data["console_url"] = self.console_url
         if self.init_commands:

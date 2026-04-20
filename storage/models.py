@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
 
 # ============================================================================
@@ -10,8 +9,8 @@ from enum import Enum
 # ============================================================================
 
 
-class LeaseObservedState(Enum):
-    """Sandbox lease actual state (from provider).
+class SandboxObservedState(Enum):
+    """Sandbox actual state reported by the provider.
 
     These are the actual states reported by sandbox providers.
     """
@@ -22,16 +21,16 @@ class LeaseObservedState(Enum):
     # None means destroyed
 
 
-class LeaseDesiredState(Enum):
-    """Sandbox lease desired state (set by user/system)."""
+class SandboxDesiredState(Enum):
+    """Sandbox desired state set by user or system."""
 
     RUNNING = "running"
     PAUSED = "paused"
     DESTROYED = "destroyed"
 
 
-class SessionDisplayStatus(Enum):
-    """Frontend display status (unified contract).
+class SandboxDisplayStatus(Enum):
+    """Frontend sandbox display status.
 
     These are the status values that frontend expects and displays.
     """
@@ -42,11 +41,13 @@ class SessionDisplayStatus(Enum):
     DESTROYING = "destroying"  # Being destroyed
 
 
-def map_lease_to_session_status(observed_state: str | None, desired_state: str | None) -> str:
-    """Map sandbox lease state to frontend display status.
+def map_sandbox_state_to_display_status(observed_state: str | None, desired_state: str | None) -> str:
+    """Map sandbox state to frontend display status.
 
     Mapping rules:
-    - observed="detached" → "stopped" (instance destroyed/no longer current)
+    - observed="detached" + desired="running" → "running"
+    - observed="detached" + desired="paused" → "paused"
+    - observed="detached" + desired missing/other → "stopped"
     - observed="running" → "running"
     - observed="paused" → "paused"
     - observed=None → "stopped"
@@ -60,46 +61,32 @@ def map_lease_to_session_status(observed_state: str | None, desired_state: str |
         Display status string ("running", "paused", "stopped", or "destroying")
     """
     if not observed_state:
-        return SessionDisplayStatus.STOPPED.value
+        return SandboxDisplayStatus.STOPPED.value
 
     observed = observed_state.strip().lower()
     desired = (desired_state or "").strip().lower()
 
     # Being destroyed
-    if desired == LeaseDesiredState.DESTROYED.value:
-        return SessionDisplayStatus.DESTROYING.value
+    if desired == SandboxDesiredState.DESTROYED.value:
+        return SandboxDisplayStatus.DESTROYING.value
 
-    # @@@detached-is-stopped - detached means instance is destroyed/stopped (current_instance_id=NULL)
-    # parse_lease_instance_state() maps {"deleted", "dead", "stopped"} → DETACHED
-    if observed == LeaseObservedState.DETACHED.value:
-        return SessionDisplayStatus.STOPPED.value
+    if observed == SandboxObservedState.DETACHED.value:
+        # @@@detached-inherits-desired-state - detached is a provider-side loss of binding, not
+        # automatically a user-visible stop. Resource cards should keep showing intent until
+        # the sandbox is actually destroyed.
+        if desired == SandboxDesiredState.RUNNING.value:
+            return SandboxDisplayStatus.RUNNING.value
+        if desired == SandboxDesiredState.PAUSED.value:
+            return SandboxDisplayStatus.PAUSED.value
+        return SandboxDisplayStatus.STOPPED.value
 
     # Running — only "running" means the sandbox is up with bound instance
-    if observed == LeaseObservedState.RUNNING.value:
-        return SessionDisplayStatus.RUNNING.value
+    if observed == SandboxObservedState.RUNNING.value:
+        return SandboxDisplayStatus.RUNNING.value
 
     # Paused
-    if observed == LeaseObservedState.PAUSED.value:
-        return SessionDisplayStatus.PAUSED.value
+    if observed == SandboxObservedState.PAUSED.value:
+        return SandboxDisplayStatus.PAUSED.value
 
     # Unknown state, treat as stopped
-    return SessionDisplayStatus.STOPPED.value
-
-
-# ============================================================================
-# File Operation Models
-# ============================================================================
-
-
-@dataclass
-class FileOperationRow:
-    id: str
-    thread_id: str
-    checkpoint_id: str
-    timestamp: float
-    operation_type: str
-    file_path: str
-    before_content: str | None
-    after_content: str
-    changes: list[dict] | None
-    status: str = "applied"
+    return SandboxDisplayStatus.STOPPED.value

@@ -1,4 +1,4 @@
-"""Library CRUD for file-backed assets and DB-backed recipes."""
+"""Library CRUD for file-backed assets and DB-backed sandbox templates."""
 
 import json
 import shutil
@@ -7,25 +7,11 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from backend.web.core.paths import library_dir
-from backend.web.services import sandbox_service
-from sandbox.recipes import FEATURE_CATALOG, normalize_recipe_snapshot
+from backend import sandbox_provider_availability
+from backend.library_paths import LIBRARY_DIR
+from backend.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
+from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
-
-LIBRARY_DIR = library_dir()
-
-
-def ensure_library_dir() -> None:
-    LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
-    (LIBRARY_DIR / "skills").mkdir(exist_ok=True)
-    (LIBRARY_DIR / "agents").mkdir(exist_ok=True)
-    legacy_recipe_dir = LIBRARY_DIR / "recipes"
-    # @@@recipe-storage-cutover - recipes now live in SQLite only; delete the dead file tree so it cannot masquerade as live state.
-    if legacy_recipe_dir.exists():
-        if legacy_recipe_dir.is_dir():
-            shutil.rmtree(legacy_recipe_dir)
-        else:
-            legacy_recipe_dir.unlink()
 
 
 def _read_json(path: Path, default: Any = None) -> Any:
@@ -43,8 +29,8 @@ def _write_json(path: Path, data: Any) -> None:
 
 
 def _require_recipe_owner(owner_user_id: str | None) -> str:
-    # @@@recipe-user-scope - custom recipes and builtin overrides are account-scoped resources.
-    # Callers must pass owner_user_id for recipe operations so one user's edits never leak into another's library.
+    # @@@sandbox-template-user-scope - custom sandbox templates and builtin overrides are account-scoped resources.
+    # Callers must pass owner_user_id so one user's template edits never leak into another user's library.
     if not owner_user_id:
         raise ValueError("owner_user_id is required for recipe operations")
     return str(owner_user_id or "")
@@ -54,10 +40,12 @@ def _normalize_recipe_item(data: dict[str, Any], *, builtin: bool) -> dict[str, 
     provider_type = str(data.get("provider_type") or "").strip()
     if not provider_type:
         raise ValueError("recipe.provider_type is required")
-    snapshot = normalize_recipe_snapshot(provider_type, data)
+    provider_name = str(data.get("provider_name") or data.get("id", "").split(":")[0] or provider_type).strip()
+    snapshot = normalize_recipe_snapshot(provider_type, {**data, "provider_name": provider_name})
     return {
         **snapshot,
-        "type": "recipe",
+        "type": "sandbox-template",
+        "provider_name": provider_name,
         "provider_type": provider_type,
         "created_at": int(data.get("created_at") or 0),
         "updated_at": int(data.get("updated_at") or 0),
@@ -66,28 +54,44 @@ def _normalize_recipe_item(data: dict[str, Any], *, builtin: bool) -> dict[str, 
     }
 
 
-def _merge_recipe_override(base: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
-    if not override:
-        return base
-    return _normalize_recipe_item(
-        {
-            **base,
-            **override,
-            "features": {
-                **(base.get("features") or {}),
-                **(override.get("features") or {}),
-            },
-            "created_at": base.get("created_at", 0),
-            "updated_at": override.get("updated_at", base.get("updated_at", 0)),
-        },
-        builtin=True,
-    )
-
-
 def _require_recipe_repo(recipe_repo: RecipeRepo | None) -> RecipeRepo:
     if recipe_repo is None:
         raise ValueError("recipe_repo is required for recipe operations")
     return recipe_repo
+
+
+def _file_resource_content_path(resource_type: str, resource_id: str) -> Path | None:
+    if resource_type == "skill":
+        return LIBRARY_DIR / "skills" / resource_id / "SKILL.md"
+    if resource_type == "agent":
+        return LIBRARY_DIR / "agents" / f"{resource_id}.md"
+    return None
+
+
+def _file_resource_meta_path(resource_type: str, resource_id: str) -> Path | None:
+    if resource_type == "skill":
+        return LIBRARY_DIR / "skills" / resource_id / "meta.json"
+    if resource_type == "agent":
+        return LIBRARY_DIR / "agents" / f"{resource_id}.json"
+    return None
+
+
+def _library_resource_item(
+    resource_type: str,
+    resource_id: str,
+    meta: dict[str, Any],
+    *,
+    name: str | None = None,
+    updated_at: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": resource_id,
+        "type": resource_type,
+        "name": name if name is not None else meta.get("name", resource_id),
+        "desc": meta.get("desc", ""),
+        "created_at": meta.get("created_at", 0),
+        "updated_at": updated_at if updated_at is not None else meta.get("updated_at", 0),
+    }
 
 
 def list_library(
@@ -96,74 +100,60 @@ def list_library(
     recipe_repo: RecipeRepo | None = None,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        stored_rows = {row["recipe_id"]: row for row in recipe_repo.list_by_owner(owner_user_id)}
-        items = []
-        builtin_ids: set[str] = set()
-        for recipe in list_default_recipes():
-            builtin_ids.add(str(recipe["id"]))
-            override_row = stored_rows.get(str(recipe["id"]))
-            override = override_row["data"] if override_row and override_row["kind"] == "override" else None
-            items.append(_merge_recipe_override(recipe, override))
-        for row in stored_rows.values():
-            if row["kind"] != "custom":
-                continue
-            recipe_id = str(row["recipe_id"]).strip()
-            if not recipe_id or recipe_id in builtin_ids:
-                continue
-            items.append(_normalize_recipe_item(row["data"], builtin=False))
-        return items
+        return [
+            _normalize_recipe_item(row["data"], builtin=bool(row["data"].get("builtin")))
+            for row in sorted(recipe_repo.list_by_owner(owner_user_id), key=lambda item: str(item["recipe_id"]))
+        ]
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():
             for d in sorted(skills_dir.iterdir()):
                 if d.is_dir():
                     meta = _read_json(d / "meta.json", {})
-                    results.append(
-                        {
-                            "id": d.name,
-                            "type": "skill",
-                            "name": meta.get("name", d.name),
-                            "desc": meta.get("desc", ""),
-                            "created_at": meta.get("created_at", 0),
-                            "updated_at": meta.get("updated_at", 0),
-                        }
-                    )
+                    results.append(_library_resource_item("skill", d.name, meta))
     elif resource_type == "agent":
         agents_dir = LIBRARY_DIR / "agents"
         if agents_dir.exists():
             for f in sorted(agents_dir.glob("*.md")):
                 meta = _read_json(f.with_suffix(".json"), {})
-                results.append(
-                    {
-                        "id": f.stem,
-                        "type": "agent",
-                        "name": meta.get("name", f.stem),
-                        "desc": meta.get("desc", ""),
-                        "created_at": meta.get("created_at", 0),
-                        "updated_at": meta.get("updated_at", 0),
-                    }
-                )
+                results.append(_library_resource_item("agent", f.stem, meta))
     elif resource_type == "mcp":
         mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
         for name, cfg in mcp_data.get("mcpServers", {}).items():
-            results.append(
-                {
-                    "id": name,
-                    "type": "mcp",
-                    "name": name,
-                    "desc": cfg.get("desc", ""),
-                    "created_at": cfg.get("created_at", 0),
-                    "updated_at": cfg.get("updated_at", 0),
-                }
-            )
+            results.append(_library_resource_item("mcp", name, cfg, name=name))
     return results
 
 
-def list_default_recipes() -> list[dict[str, Any]]:
-    return sandbox_service.list_default_recipes()
+seed_default_recipes = seed_builtin_recipes
+
+
+def _recipe_row_needs_repair(row: dict[str, Any], *, provider_name: str, provider_type: str) -> bool:
+    data = row.get("data")
+    if not isinstance(data, dict):
+        return True
+    return (
+        data.get("id") != f"{provider_name}:default"
+        or data.get("provider_name") != provider_name
+        or data.get("provider_type") != provider_type
+        or not isinstance(data.get("features"), dict)
+    )
+
+
+def _resolve_recipe_provider(provider_name: str | None) -> tuple[str, str]:
+    name = str(provider_name or "").strip()
+    if not name:
+        raise ValueError("Recipe provider_name is required")
+    for sandbox in sandbox_provider_availability.available_sandbox_types():
+        if str(sandbox.get("name") or "").strip() != name:
+            continue
+        provider_type = str(sandbox.get("provider") or "").strip()
+        if not provider_type:
+            raise ValueError(f"Sandbox provider {name!r} is missing provider type")
+        return name, provider_type
+    raise ValueError(f"Unknown sandbox provider: {name}")
 
 
 def create_resource(
@@ -172,25 +162,25 @@ def create_resource(
     desc: str = "",
     category: str = "",
     features: dict[str, bool] | None = None,
+    provider_name: str | None = None,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
 ) -> dict[str, Any]:
     now = int(time.time() * 1000)
     cat = category or "未分类"
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        provider_type = cat.strip()
-        if not provider_type:
-            raise ValueError("Recipe provider_type is required")
+        provider_name, provider_type = _resolve_recipe_provider(provider_name)
         feature_source = features if isinstance(features, dict) else {}
         feature_values = {key: bool(feature_source.get(key, False)) for key in FEATURE_CATALOG}
-        recipe_id = f"{provider_type}:custom:{uuid.uuid4().hex[:8]}"
+        recipe_id = f"{provider_name}:custom:{uuid.uuid4().hex[:8]}"
         item = _normalize_recipe_item(
             {
                 "id": recipe_id,
                 "name": name,
                 "desc": desc,
+                "provider_name": provider_name,
                 "provider_type": provider_type,
                 "features": feature_values,
                 "created_at": now,
@@ -207,49 +197,30 @@ def create_resource(
             created_at=now,
         )
         return item
-    if resource_type == "skill":
+    if resource_type in {"skill", "agent"}:
         rid = name.lower().replace(" ", "-")
-        skill_dir = LIBRARY_DIR / "skills" / rid
-        skill_dir.mkdir(parents=True, exist_ok=True)
-        _write_json(
-            skill_dir / "meta.json",
-            {
-                "name": name,
-                "desc": desc,
-                "category": cat,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        (skill_dir / "SKILL.md").write_text(f"# {name}\n\n{desc}\n", encoding="utf-8")
-        return {"id": rid, "type": "skill", "name": name, "desc": desc, "created_at": now, "updated_at": now}
-    elif resource_type == "agent":
-        rid = name.lower().replace(" ", "-")
-        agents_dir = LIBRARY_DIR / "agents"
-        agents_dir.mkdir(parents=True, exist_ok=True)
-        _write_json(
-            agents_dir / f"{rid}.json",
-            {
-                "name": name,
-                "desc": desc,
-                "category": cat,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        (agents_dir / f"{rid}.md").write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
-        return {"id": rid, "type": "agent", "name": name, "desc": desc, "created_at": now, "updated_at": now}
-    elif resource_type == "mcp":
+        content_path = _file_resource_content_path(resource_type, rid)
+        meta_path = _file_resource_meta_path(resource_type, rid)
+        if content_path is None or meta_path is None:
+            raise ValueError(f"Unknown resource type: {resource_type}")
+        content_path.parent.mkdir(parents=True, exist_ok=True)
+        meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
+        _write_json(meta_path, meta)
+        content = f"# {name}\n\n{desc}\n" if resource_type == "skill" else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
+        content_path.write_text(content, encoding="utf-8")
+        return _library_resource_item(resource_type, rid, meta)
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
-        mcp_data["mcpServers"][name] = {
+        meta = {
             "desc": desc,
             "category": cat,
             "created_at": now,
             "updated_at": now,
         }
+        mcp_data["mcpServers"][name] = meta
         _write_json(mcp_path, mcp_data)
-        return {"id": name, "type": "mcp", "name": name, "desc": desc, "created_at": now, "updated_at": now}
+        return _library_resource_item("mcp", name, meta, name=name)
     raise ValueError(f"Unknown resource type: {resource_type}")
 
 
@@ -258,77 +229,41 @@ def update_resource(
     resource_id: str,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
-    **fields: Any,
+    *,
+    name: str | None = None,
+    desc: str | None = None,
+    features: dict[str, bool] | None = None,
 ) -> dict[str, Any] | None:
-    allowed = {"name", "desc", "features"}
-    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    updates = {key: value for key, value in {"name": name, "desc": desc, "features": features}.items() if value is not None}
     now = int(time.time() * 1000)
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
-        if base is not None:
-            row = recipe_repo.get(owner_user_id, resource_id)
-            override = row["data"] if row and row["kind"] == "override" else {}
-            override.update(updates)
-            override["updated_at"] = now
-            recipe_repo.upsert(
-                owner_user_id=owner_user_id,
-                recipe_id=resource_id,
-                kind="override",
-                provider_type=str(base["provider_type"]),
-                data=override,
-                created_at=int(base.get("created_at", now)),
-            )
-            return _merge_recipe_override(base, override)
         row = recipe_repo.get(owner_user_id, resource_id)
-        if row is None or row["kind"] != "custom":
+        if row is None:
             return None
-        current = row["data"]
+        current = dict(row["data"])
         current.update(updates)
         current["updated_at"] = now
         recipe_repo.upsert(
             owner_user_id=owner_user_id,
             recipe_id=resource_id,
-            kind="custom",
+            kind=str(row["kind"]),
             provider_type=str(current["provider_type"]),
             data=current,
             created_at=int(row["created_at"]),
         )
         return _normalize_recipe_item(current, builtin=False)
-    if resource_type == "skill":
-        meta_path = LIBRARY_DIR / "skills" / resource_id / "meta.json"
-        if not meta_path.exists():
+    if resource_type in {"skill", "agent"}:
+        meta_path = _file_resource_meta_path(resource_type, resource_id)
+        if meta_path is None or not meta_path.exists():
             return None
         meta = _read_json(meta_path, {})
         meta.update(updates)
         meta["updated_at"] = now
         _write_json(meta_path, meta)
-        return {
-            "id": resource_id,
-            "type": "skill",
-            "name": meta.get("name", resource_id),
-            "desc": meta.get("desc", ""),
-            "created_at": meta.get("created_at", 0),
-            "updated_at": now,
-        }
-    elif resource_type == "agent":
-        meta_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
-        if not meta_path.exists():
-            return None
-        meta = _read_json(meta_path, {})
-        meta.update(updates)
-        meta["updated_at"] = now
-        _write_json(meta_path, meta)
-        return {
-            "id": resource_id,
-            "type": "agent",
-            "name": meta.get("name", resource_id),
-            "desc": meta.get("desc", ""),
-            "created_at": meta.get("created_at", 0),
-            "updated_at": now,
-        }
-    elif resource_type == "mcp":
+        return _library_resource_item(resource_type, resource_id, meta, updated_at=now)
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         if resource_id not in mcp_data.get("mcpServers", {}):
@@ -337,14 +272,7 @@ def update_resource(
         mcp_data["mcpServers"][resource_id]["updated_at"] = now
         _write_json(mcp_path, mcp_data)
         entry = mcp_data["mcpServers"][resource_id]
-        return {
-            "id": resource_id,
-            "type": "mcp",
-            "name": entry.get("name", resource_id),
-            "desc": entry.get("desc", ""),
-            "created_at": entry.get("created_at", 0),
-            "updated_at": now,
-        }
+        return _library_resource_item("mcp", resource_id, entry, name=entry.get("name", resource_id), updated_at=now)
     return None
 
 
@@ -354,16 +282,35 @@ def delete_resource(
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
 ) -> bool:
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
-        base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
-        if base is not None:
-            recipe_repo.delete(owner_user_id, resource_id)
-            return True
         row = recipe_repo.get(owner_user_id, resource_id)
-        if row is None or row["kind"] != "custom":
+        if row is None:
             return False
+        data = row["data"]
+        if data.get("builtin"):
+            provider_name = str(data.get("provider_name") or resource_id.split(":")[0]).strip()
+            provider_type = str(data.get("provider_type") or provider_type_from_name(provider_name)).strip()
+            now = int(time.time() * 1000)
+            reset = {
+                **default_recipe_snapshot(provider_type, provider_name=provider_name),
+                "type": "sandbox-template",
+                "provider_name": provider_name,
+                "provider_type": provider_type,
+                "available": bool(data.get("available", True)),
+                "created_at": int(row["created_at"]),
+                "updated_at": now,
+            }
+            recipe_repo.upsert(
+                owner_user_id=owner_user_id,
+                recipe_id=resource_id,
+                kind=str(row["kind"]),
+                provider_type=provider_type,
+                data=reset,
+                created_at=int(row["created_at"]),
+            )
+            return True
         recipe_repo.delete(owner_user_id, resource_id)
         return True
     if resource_type == "skill":
@@ -372,7 +319,7 @@ def delete_resource(
             return False
         shutil.rmtree(target)
         return True
-    elif resource_type == "agent":
+    if resource_type == "agent":
         md_path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
         json_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
         found = False
@@ -383,7 +330,7 @@ def delete_resource(
             json_path.unlink()
             found = True
         return found
-    elif resource_type == "mcp":
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         if resource_id not in mcp_data.get("mcpServers", {}):
@@ -400,82 +347,36 @@ def list_library_names(
     recipe_repo: RecipeRepo | None = None,
 ) -> list[dict[str, str]]:
     """Lightweight name+desc list for Picker UI."""
-    results: list[dict[str, str]] = []
-    if resource_type == "recipe":
-        owner_user_id = _require_recipe_owner(owner_user_id)
-        return [
-            {"name": item["name"], "desc": item["desc"]}
-            for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo)
-        ]
-    if resource_type == "skill":
-        skills_dir = LIBRARY_DIR / "skills"
-        if skills_dir.exists():
-            for d in sorted(skills_dir.iterdir()):
-                if d.is_dir():
-                    meta = _read_json(d / "meta.json", {})
-                    results.append({"name": meta.get("name", d.name), "desc": meta.get("desc", "")})
-    elif resource_type == "agent":
-        agents_dir = LIBRARY_DIR / "agents"
-        if agents_dir.exists():
-            for f in sorted(agents_dir.glob("*.md")):
-                meta = _read_json(f.with_suffix(".json"), {})
-                results.append({"name": meta.get("name", f.stem), "desc": meta.get("desc", "")})
-    elif resource_type == "mcp":
-        mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
-        for name, cfg in mcp_data.get("mcpServers", {}).items():
-            results.append({"name": name, "desc": cfg.get("desc", "")})
-    return results
-
-
-def get_mcp_server_config(name: str) -> dict[str, Any] | None:
-    """Get a single MCP server config from Library .mcp.json."""
-    mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
-    return mcp_data.get("mcpServers", {}).get(name)
+    return [
+        {"name": item["name"], "desc": item["desc"]}
+        for item in list_library(resource_type, owner_user_id=owner_user_id, recipe_repo=recipe_repo)
+    ]
 
 
 def get_library_skill_desc(name: str) -> str:
     """Get skill description from Library by name."""
-    skills_dir = LIBRARY_DIR / "skills"
-    if not skills_dir.exists():
-        return ""
-    for d in skills_dir.iterdir():
-        if d.is_dir():
-            meta = _read_json(d / "meta.json", {})
-            if meta.get("name") == name:
-                return meta.get("desc", "")
-    return ""
+    return next((item["desc"] for item in list_library("skill") if item["name"] == name), "")
 
 
-def get_library_agent_desc(name: str) -> str:
-    """Get agent description from Library by name."""
-    agents_dir = LIBRARY_DIR / "agents"
-    if not agents_dir.exists():
-        return ""
-    # Try exact match on filename stem
-    json_path = agents_dir / f"{name}.json"
-    if json_path.exists():
-        meta = _read_json(json_path, {})
-        return meta.get("desc", "")
-    # Try matching by name field
-    for f in agents_dir.glob("*.json"):
-        meta = _read_json(f, {})
-        if meta.get("name") == name:
-            return meta.get("desc", "")
-    return ""
-
-
-def get_resource_used_by(resource_type: str, resource_name: str) -> list[str]:
-    """Return member names that use a given resource."""
-    from backend.web.services.member_service import list_members
+def get_resource_used_by(
+    resource_type: str,
+    resource_name: str,
+    owner_user_id: str,
+    *,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+) -> list[str]:
+    """Return agent user names under the owner that use a given resource."""
+    from backend.web.services.agent_user_service import list_agent_users
 
     config_key = {"skill": "skills", "mcp": "mcps", "agent": "subAgents"}.get(resource_type, "")
     if not config_key:
         return []
     names: list[str] = []
-    for member in list_members():
-        items = member.get("config", {}).get(config_key, [])
+    for agent in list_agent_users(owner_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo):
+        items = agent.get("config", {}).get(config_key, [])
         if any(i.get("name") == resource_name for i in items):
-            names.append(member.get("name", member.get("id", "unknown")))
+            names.append(agent.get("name", agent.get("id", "unknown")))
     return names
 
 
@@ -486,23 +387,18 @@ def get_resource_content(
     recipe_repo: RecipeRepo | None = None,
 ) -> str | None:
     """Read the .md content file for a skill or agent resource."""
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
-        for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
+        for item in list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
             if item["id"] == resource_id:
                 return json.dumps(item, ensure_ascii=False, indent=2)
         return None
-    if resource_type == "skill":
-        path = LIBRARY_DIR / "skills" / resource_id / "SKILL.md"
-        if path.exists():
-            return path.read_text(encoding="utf-8")
+    content_path = _file_resource_content_path(resource_type, resource_id)
+    if content_path is not None:
+        if content_path.exists():
+            return content_path.read_text(encoding="utf-8")
         return ""
-    elif resource_type == "agent":
-        path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
-        if path.exists():
-            return path.read_text(encoding="utf-8")
-        return ""
-    elif resource_type == "mcp":
+    if resource_type == "mcp":
         mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
         cfg = mcp_data.get("mcpServers", {}).get(resource_id)
         if cfg is None:
@@ -520,29 +416,21 @@ def get_resource_content(
 def update_resource_content(resource_type: str, resource_id: str, content: str) -> bool:
     """Write the .md content file for a skill or agent resource."""
     now = int(time.time() * 1000)
-    if resource_type == "recipe":
+    if resource_type == "sandbox-template":
         return False
-    if resource_type == "skill":
-        skill_dir = LIBRARY_DIR / "skills" / resource_id
-        if not skill_dir.is_dir():
+    content_path = _file_resource_content_path(resource_type, resource_id)
+    meta_path = _file_resource_meta_path(resource_type, resource_id)
+    if content_path is not None and meta_path is not None:
+        if resource_type == "skill" and not content_path.parent.is_dir():
             return False
-        (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
-        meta_path = skill_dir / "meta.json"
+        if resource_type == "agent" and not meta_path.exists():
+            return False
+        content_path.write_text(content, encoding="utf-8")
         meta = _read_json(meta_path, {})
         meta["updated_at"] = now
         _write_json(meta_path, meta)
         return True
-    elif resource_type == "agent":
-        md_path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
-        json_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
-        if not json_path.exists():
-            return False
-        md_path.write_text(content, encoding="utf-8")
-        meta = _read_json(json_path, {})
-        meta["updated_at"] = now
-        _write_json(json_path, meta)
-        return True
-    elif resource_type == "mcp":
+    if resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         if resource_id not in mcp_data.get("mcpServers", {}):

@@ -22,6 +22,7 @@ def read_file(
     limits: ReadLimits | None = None,
     offset: int | None = None,
     limit: int | None = None,
+    pages: str | None = None,
 ) -> ReadResult:
     """
     Read file with type-specific handling.
@@ -29,15 +30,16 @@ def read_file(
     Dispatches to appropriate reader based on file type:
     - TEXT: read_text with triple limits
     - BINARY: read_binary (metadata only)
-    - DOCUMENT: placeholder (PDF/DOCX support planned)
-    - NOTEBOOK: placeholder (.ipynb support planned)
-    - ARCHIVE: placeholder (list contents planned)
+    - DOCUMENT: PDF/PPTX readers, unsupported summary for other documents
+    - NOTEBOOK: notebook reader
+    - ARCHIVE: unsupported summary
 
     Args:
         path: Absolute path to file
         limits: ReadLimits configuration (uses defaults if None)
         offset: Start line for text files (1-indexed)
         limit: Number of lines for text files
+        pages: Optional page range for document files, e.g. "1" or "3-5"
 
     Returns:
         ReadResult with content and metadata
@@ -68,15 +70,55 @@ def read_file(
         return read_binary(path)
 
     if file_type == FileType.DOCUMENT:
-        return _read_document(path, limits, offset, limit)
+        start_page, limit_pages = _parse_pages_arg(pages, offset, limit)
+        return _read_document(path, limits, start_page, limit_pages)
 
     if file_type == FileType.NOTEBOOK:
         return read_notebook(path, limits, start_cell=offset, limit_cells=limit)
 
     if file_type == FileType.ARCHIVE:
-        return _read_archive_placeholder(path)
+        stat = path.stat()
+        ext = path.suffix.lstrip(".").lower()
+        content = (
+            f"Archive file: {path.name}\n"
+            f"  Type: {ext.upper()}\n"
+            f"  Size: {stat.st_size:,} bytes\n\n"
+            f"Archive content listing not yet implemented."
+        )
+        return ReadResult(
+            file_path=str(path),
+            file_type=FileType.ARCHIVE,
+            content=content,
+            total_size=stat.st_size,
+        )
 
     return read_text(path, limits, offset, limit)
+
+
+def _parse_pages_arg(
+    pages: str | None,
+    offset: int | None,
+    limit: int | None,
+) -> tuple[int | None, int | None]:
+    if pages is None:
+        return offset, limit
+
+    raw = pages.strip()
+    if not raw:
+        raise ValueError("pages must not be empty")
+
+    if "-" in raw:
+        start_raw, end_raw = raw.split("-", 1)
+        start_page = int(start_raw)
+        end_page = int(end_raw)
+        if start_page <= 0 or end_page < start_page:
+            raise ValueError(f"Invalid pages range: {pages}")
+        return start_page, end_page - start_page + 1
+
+    start_page = int(raw)
+    if start_page <= 0:
+        raise ValueError(f"Invalid page number: {pages}")
+    return start_page, 1
 
 
 def _read_document(
@@ -106,23 +148,6 @@ def _read_document(
     return ReadResult(
         file_path=str(path),
         file_type=FileType.DOCUMENT,
-        content=content,
-        total_size=stat.st_size,
-    )
-
-
-def _read_archive_placeholder(path: Path) -> ReadResult:
-    """Placeholder for archive reading."""
-    ext = path.suffix.lstrip(".").lower()
-    stat = path.stat()
-
-    content = (
-        f"Archive file: {path.name}\n  Type: {ext.upper()}\n  Size: {stat.st_size:,} bytes\n\nArchive content listing not yet implemented."
-    )
-
-    return ReadResult(
-        file_path=str(path),
-        file_type=FileType.ARCHIVE,
         content=content,
         total_size=stat.st_size,
     )

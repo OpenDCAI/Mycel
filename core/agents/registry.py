@@ -1,16 +1,8 @@
-"""Agent Registry — SQLite-backed agent_id -> thread_id mapping.
-
-@@@id-based — all lookups use agent_id, never name.
-Name is stored for display only.
-"""
+"""Agent registry shared row types."""
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
-from pathlib import Path
-
-from backend.web.core.storage_factory import make_agent_registry_repo
 
 
 @dataclass
@@ -21,58 +13,3 @@ class AgentEntry:
     status: str
     parent_agent_id: str | None = None
     subagent_type: str | None = None
-
-
-class AgentRegistry:
-    """SQLite-backed registry mapping agent_ids to thread IDs.
-
-    Persisted at ~/.leon/agent_registry.db
-    """
-
-    DEFAULT_DB_PATH = None  # resolved by storage_factory
-
-    def __init__(self, db_path: Path | None = None):
-        self._lock = asyncio.Lock()
-        self._repo = make_agent_registry_repo()
-
-    async def register(self, entry: AgentEntry) -> None:
-        async with self._lock:
-            self._repo.register(
-                agent_id=entry.agent_id,
-                name=entry.name,
-                thread_id=entry.thread_id,
-                status=entry.status,
-                parent_agent_id=entry.parent_agent_id,
-                subagent_type=entry.subagent_type,
-            )
-
-    async def get_by_id(self, agent_id: str) -> AgentEntry | None:
-        row = self._repo.get_by_id(agent_id)
-        if row is None:
-            return None
-        return AgentEntry(
-            agent_id=row[0],
-            name=row[1],
-            thread_id=row[2],
-            status=row[3],
-            parent_agent_id=row[4],
-            subagent_type=row[5],
-        )
-
-    async def update_status(self, agent_id: str, status: str) -> None:
-        async with self._lock:
-            self._repo.update_status(agent_id, status)
-
-    async def list_running(self) -> list[AgentEntry]:
-        rows = self._repo.list_running()
-        return [
-            AgentEntry(
-                agent_id=r[0],
-                name=r[1],
-                thread_id=r[2],
-                status=r[3],
-                parent_agent_id=r[4],
-                subagent_type=r[5],
-            )
-            for r in rows
-        ]

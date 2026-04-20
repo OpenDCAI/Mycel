@@ -1,20 +1,21 @@
-"""SandboxCapability - Wrapper that hides new architecture from agents.
+"""SandboxCapability - Agent-facing sandbox binding surface.
 
 This module provides the capability object that agents interact with.
-It wraps the new architecture (ChatSession → Runtime → Terminal → Lease)
-while maintaining the same interface as before.
+It wraps the agent-facing thread/runtime/sandbox binding surface while
+keeping lower runtime identity details behind the capability interface.
 """
 
 from __future__ import annotations
 
 import shlex
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from sandbox.interfaces.executor import BaseExecutor
 from sandbox.interfaces.filesystem import FileSystemBackend
-from storage.providers.sqlite.kernel import connect_sqlite
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.runtime import uses_supabase_runtime_defaults
 
 if TYPE_CHECKING:
     from sandbox.chat_session import ChatSession
@@ -25,7 +26,8 @@ class SandboxCapability:
     """Agent-facing capability object.
 
     Wraps ChatSession and provides access to command execution and filesystem.
-    Agents see the same interface as before - all complexity is hidden.
+    Agents interact through command and filesystem handles; lower runtime
+    binding details stay behind this capability object.
 
     Usage:
         sandbox = sandbox_manager.get_sandbox(thread_id)
@@ -36,7 +38,7 @@ class SandboxCapability:
     def __init__(self, session: ChatSession, manager: SandboxManager | None = None):
         self._session = session
         self._command_wrapper = _CommandWrapper(session, manager=manager)
-        self._fs_wrapper = _FileSystemWrapper(session)
+        self._fs_wrapper = _FileSystemWrapper(session, manager=manager)
 
     @property
     def command(self) -> BaseExecutor:
@@ -93,8 +95,16 @@ class _CommandWrapper(BaseExecutor):
     async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env: dict[str, str] | None = None):
         """Execute command via runtime."""
         self._session.touch()
-        # @@@command-context - CommandMiddleware passes Cwd/env; preserve that context for remote runtimes.
+        # @@@command-context - CommandService passes env; preserve that context for remote runtimes.
         wrapped, _ = self._wrap_command(command, cwd, env)
+        print(
+            "[_CommandWrapper.execute] "
+            f"thread_id={self._session.thread_id} "
+            f"terminal_id={self._session.terminal.terminal_id} "
+            f"command={command[:200]!r} "
+            f"cwd={cwd!r} timeout={timeout}",
+            flush=True,
+        )
         return await self._session.runtime.execute(wrapped, timeout)
 
     async def execute_async(self, command: str, cwd: str | None = None, env: dict[str, str] | None = None):
@@ -110,6 +120,17 @@ class _CommandWrapper(BaseExecutor):
         return await bg_session.runtime.start_command(wrapped, work_dir)
 
     def _lookup_command_terminal_id(self, command_id: str) -> str | None:
+        command_repo = getattr(self._session, "_session_repo", None)
+        if command_repo is not None:
+            terminal_id = command_repo.find_command_terminal_id(
+                command_id=command_id,
+                thread_id=self._session.thread_id,
+            )
+            if terminal_id is not None:
+                return terminal_id
+            return None
+        if self._db_path is not None and uses_supabase_runtime_defaults() and self._db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX):
+            raise RuntimeError("strategy-backed command lookup requires a bound command repo")
         if self._db_path is None:
             return None
         with connect_sqlite(self._db_path) as conn:
@@ -137,7 +158,7 @@ class _CommandWrapper(BaseExecutor):
             raise RuntimeError(f"Terminal {terminal_id} not found")
         from sandbox.terminal import terminal_from_row
 
-        terminal = terminal_from_row(terminal_row, self._manager.terminal_store.db_path)
+        terminal = terminal_from_row(terminal_row, self._manager.db_path)
         if terminal.thread_id != self._session.thread_id:
             raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}")
         lease = self._manager.get_lease(terminal.lease_id)
@@ -168,18 +189,15 @@ class _CommandWrapper(BaseExecutor):
         session = self._resolve_session_for_command(command_id)
         return await session.runtime.wait_for_command(command_id, timeout=timeout)
 
-    def store_completed_result(self, command_id: str, command_line: str, cwd: str, result):
-        """Store completed result for command_status lookup."""
-        self._session.runtime.store_completed_result(command_id, command_line, cwd, result)
-
 
 class _FileSystemWrapper(FileSystemBackend):
     """Wrapper that delegates to provider via lease."""
 
     is_remote = True
 
-    def __init__(self, session: ChatSession):
+    def __init__(self, session: ChatSession, manager: SandboxManager | None = None):
         self._session = session
+        self._manager = manager
 
     def _get_provider(self):
         """Get provider from session's lease."""
@@ -193,7 +211,14 @@ class _FileSystemWrapper(FileSystemBackend):
         # @@@lease-convergence - File operations can also wake paused instances; always converge through lease.
         provider = getattr(self._session.runtime, "provider", None)
         if provider is not None:
-            instance = self._session.lease.ensure_active_instance(provider)
+            try:
+                instance = self._session.lease.ensure_active_instance(provider)
+            except RuntimeError:
+                if self._manager is None or getattr(self._session.lease, "observed_state", None) != "paused":
+                    raise
+                if not self._manager.resume_session(self._session.thread_id, source="auto_resume"):
+                    raise
+                instance = self._session.lease.ensure_active_instance(provider)
         else:
             instance = self._session.lease.get_instance()
             if not instance:
@@ -242,7 +267,30 @@ class _FileSystemWrapper(FileSystemBackend):
         return None
 
     def file_size(self, path: str) -> int | None:
-        """Not available for remote sandbox."""
+        """Best-effort size lookup via parent directory listing."""
+        self._session.touch()
+        provider = self._get_provider()
+        instance_id = self._get_instance_id()
+
+        target = PurePosixPath(path)
+        if not target.name:
+            return None
+
+        parent = str(target.parent) or "/"
+        try:
+            entries = provider.list_dir(instance_id, parent)
+        except Exception:
+            return None
+
+        for entry in entries or []:
+            if entry.get("name") != target.name:
+                continue
+            size = entry.get("size")
+            if isinstance(size, int):
+                return size
+            if isinstance(size, float):
+                return int(size)
+            return None
         return None
 
     def is_dir(self, path: str) -> bool:

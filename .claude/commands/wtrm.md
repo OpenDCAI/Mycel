@@ -10,6 +10,8 @@
 
 优先级：命令参数 → 当前所在 worktree → 列出所有 worktree 询问用户
 
+`<base-branch>` = 从对话上下文确定的项目默认开发分支。
+
 ```bash
 MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
 PROJECT_NAME=$(basename "$MAIN_REPO")
@@ -61,11 +63,11 @@ git worktree prune
 
 ## Step 4：询问是否删除本地分支
 
-先 fetch 远程 main，确保合并判断基于最新状态：
+先 fetch 远程 base 分支，确保合并判断基于最新状态：
 
 ```bash
-git fetch origin main
-git branch -d <分支名>   # 基于最新 origin/main 判断是否已合并
+git fetch origin <base-branch>
+git branch -d <分支名>   # 基于最新 origin/<base-branch> 判断是否已合并
 ```
 
 如果 `-d` 报"未合并"：用 `gh` 查该分支是否有已合并的 PR（squash/rebase merge 会改变 hash，`git branch -d` 检测不到）：

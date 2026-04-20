@@ -44,24 +44,27 @@ dependencies = [
     "croniter>=6.0.0",
     "uvicorn>=0.30.0",
     "sse-starlette>=1.6.0",
+    "multilspy>=0.0.15",
+    "pyright>=1.1.0",
     "supabase>=2.28.3",
     "fastapi>=0.118.0",
     "langgraph-checkpoint-postgres>=3.0.5",
     "psycopg[binary]>=3.3.3",
+    "wuying-agentbay-sdk>=0.10.0",
+    "e2b>=2.13.0",
+    "daytona-sdk>=0.139.0,<0.140.0",
+    "python-socks>=2.7.0",
 ]
 
 [project.optional-dependencies]
 pdf = ["pymupdf>=1.24.0"]
 pptx = ["python-pptx>=1.0.0"]
 docs = ["pymupdf>=1.24.0", "python-pptx>=1.0.0"]
-sandbox = ["wuying-agentbay-sdk>=0.10.0"]
-e2b = ["e2b>=2.13.0"]
-daytona = ["daytona-sdk>=0.139.0,<0.140.0", "python-socks>=2.7.0"]
 eval = ["httpx-sse>=0.4.0"]
 langfuse = ["langfuse>=3.0.0"]
 langsmith = ["langsmith>=0.1.0"]
 otel = ["opentelemetry-api>=1.20.0", "opentelemetry-sdk>=1.20.0", "opentelemetry-exporter-otlp>=1.20.0"]
-all = ["pymupdf>=1.24.0", "python-pptx>=1.0.0", "wuying-agentbay-sdk>=0.10.0", "e2b>=2.13.0", "daytona-sdk>=0.139.0,<0.140.0", "python-socks>=2.7.0", "httpx-sse>=0.4.0", "langfuse>=3.0.0", "langsmith>=0.1.0"]
+all = ["pymupdf>=1.24.0", "python-pptx>=1.0.0", "httpx-sse>=0.4.0", "langfuse>=3.0.0", "langsmith>=0.1.0"]
 
 [project.urls]
 Homepage = "https://github.com/Ju-Yi-AI-Lab/leonai"
@@ -91,6 +94,7 @@ packages = [
     "core.tools.filesystem",
     "core.tools.filesystem.read",
     "core.tools.filesystem.read.readers",
+    "core.tools.lsp",
     "core.tools.search",
     "core.tools.skills",
     "core.tools.task",
@@ -109,9 +113,7 @@ packages = [
     "storage.providers.supabase",
     "eval",
     "eval.harness",
-    "backend.taskboard",
 ]
-py-modules = ["agent"]
 
 [tool.setuptools.package-data]
 "config.defaults.agents" = ["*.md"]
@@ -122,6 +124,12 @@ py-modules = ["agent"]
 markers = [
     "e2e: marks tests as end-to-end (require provider secrets; skipped in unit CI)",
 ]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+stubPath = "typings"
+reportMissingModuleSource = "none"
 
 [tool.ruff]
 line-length = 140
@@ -137,13 +145,10 @@ known-third-party = ["httpx", "supabase", "supabase_auth"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["E402", "E501"]
 "examples/*.py" = ["E402", "N806"]
-# Tool parameter names follow PascalCase convention (see conventions.md)
-"backend/taskboard/service.py" = ["N803"]
-"core/tools/command/middleware.py" = ["N803"]
-"core/tools/web/middleware.py" = ["N803"]
 # Long lines inside string literals (SQL / markdown rules) that cannot be broken
-"core/runtime/agent.py" = ["E501"]
 "storage/providers/sqlite/terminal_repo.py" = ["E501"]
+# Marketplace skills are third-party code; suppress unfixable lint errors
+".claude/skills/**/*.py" = ["E402", "E712", "E721", "F821", "F841", "N805", "UP042"]
 
 [dependency-groups]
 dev = [

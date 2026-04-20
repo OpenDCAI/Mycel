@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useOutletContext } from "react-router-dom";
 import { PanelLeft, Send } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
+import { parseChatMessageEventData, parseChatTypingUserId, streamChatEvents } from "../api/chat-events";
 import { UserBubble } from "../components/chat-area/UserBubble";
 import { ChatBubble } from "../components/chat-area/ChatBubble";
-import type { ChatEntity, ChatMessage, ChatDetail } from "../api/types";
+import type { ChatMember, ChatMessage, ChatDetail } from "../api/types";
 
 // @@@time-gap — only show timestamp when gap >= 5 minutes
 function shouldShowTime(prev: ChatMessage | null, curr: ChatMessage): boolean {
@@ -17,6 +18,10 @@ function formatMessageTime(ts: number): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function chatMemberDisplayName(member: ChatMember | undefined, defaultName: string): string {
+  return member?.name || defaultName;
+}
+
 export default function ChatConversationPage() {
   const { chatId } = useParams<{ chatId: string }>();
   if (!chatId) return null;
@@ -25,7 +30,6 @@ export default function ChatConversationPage() {
 
 function ChatConversationInner({ chatId }: { chatId: string }) {
   const { setSidebarCollapsed, refreshChatList: _refreshRaw } = useOutletContext<{
-    sidebarCollapsed: boolean;
     setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
     refreshChatList: () => void;
   }>();
@@ -38,7 +42,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   }, [_refreshRaw]);
   useEffect(() => () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); }, []);
 
-  const myEntityId = useAuthStore(s => s.entityId);
+  const myUserId = useAuthStore(s => s.userId);
   const myName = useAuthStore(s => s.user?.name) || "You";
   const [chat, setChat] = useState<ChatDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -46,16 +50,16 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [typingEntities, setTypingEntities] = useState<Set<string>>(new Set());
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
-  const entityMap = useMemo(() => {
-    const m = new Map<string, ChatEntity>();
-    chat?.entities.forEach(e => m.set(e.id, e));
+  const memberMap = useMemo(() => {
+    const m = new Map<string, ChatMember>();
+    chat?.members.forEach(member => m.set(member.id, member));
     return m;
-  }, [chat?.entities]);
+  }, [chat?.members]);
   // Track if user is at bottom for sticky scroll
   const onScroll = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -111,66 +115,61 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
 
   // SSE for real-time messages
   useEffect(() => {
-    const token = useAuthStore.getState().token;
-    if (!token) return;
+    const ac = new AbortController();
+    // @@@pagehide-abort — browser-level navigation can destroy the page before React unmount finishes
+    const handlePageHide = () => ac.abort();
+    window.addEventListener("pagehide", handlePageHide);
 
-    const es = new EventSource(`/api/chats/${chatId}/events?token=${encodeURIComponent(token)}`);
-
-    // @@@sse-dedup — SSE message dedup: skip if real id exists, replace optimistic if content matches
-    es.addEventListener("message", (e) => {
-      try {
-        const msg: ChatMessage = JSON.parse(e.data);
-        setMessages(prev => {
-          // Skip if we already have this exact message id
-          if (prev.some(m => m.id === msg.id)) return prev;
-          // Replace optimistic message if sender+content matches
-          const optimisticIdx = prev.findIndex(
-            m => m.id.startsWith("optimistic-") && m.sender_id === msg.sender_id && m.content === msg.content,
-          );
-          if (optimisticIdx >= 0) {
-            const next = [...prev];
-            next[optimisticIdx] = msg;
-            return next;
+    void streamChatEvents(
+      chatId,
+      (event) => {
+        if (event.type === "message") {
+          const msg = parseChatMessageEventData(event.data);
+          setMessages(prev => {
+            // Skip if we already have this exact message id
+            if (prev.some(m => m.id === msg.id)) return prev;
+            // Replace optimistic message if sender+content matches
+            const optimisticIdx = prev.findIndex(
+              m => m.id.startsWith("optimistic-") && m.sender_id === msg.sender_id && m.content === msg.content,
+            );
+            if (optimisticIdx >= 0) {
+              const next = [...prev];
+              next[optimisticIdx] = msg;
+              return next;
+            }
+            return [...prev, msg];
+          });
+          if (isAtBottomRef.current) {
+            setTimeout(scrollToBottom, 50);
+            // User is viewing → mark read + refresh sidebar
+            authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(err => console.warn("[mark_read] failed:", err));
+            refreshChatList();
           }
-          return [...prev, msg];
-        });
-        if (isAtBottomRef.current) {
-          setTimeout(scrollToBottom, 50);
-          // User is viewing → mark read + refresh sidebar
-          authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(err => console.warn("[mark_read] failed:", err));
-          refreshChatList();
+          return;
         }
-      } catch (err) {
-        console.error("[ChatSSE] parse error:", err);
-      }
+        if (event.type === "typing_start") {
+          const userId = parseChatTypingUserId(event.data);
+          if (userId) setTypingUsers(prev => new Set([...prev, userId]));
+          return;
+        }
+        if (event.type === "typing_stop") {
+          const userId = parseChatTypingUserId(event.data);
+          if (!userId) return;
+          setTypingUsers(prev => {
+            const next = new Set(prev);
+            next.delete(userId);
+            return next;
+          });
+        }
+      },
+      ac.signal,
+    ).catch((err) => {
+      if (!ac.signal.aborted) console.error("[ChatSSE] connection failed:", err);
     });
-
-    es.addEventListener("typing_start", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setTypingEntities(prev => new Set([...prev, data.user_id]));
-      } catch (err) { console.warn("[ChatSSE] typing_start parse error:", err); }
-    });
-
-    es.addEventListener("typing_stop", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setTypingEntities(prev => {
-          const next = new Set(prev);
-          next.delete(data.user_id);
-          return next;
-        });
-      } catch (err) { console.warn("[ChatSSE] typing_stop parse error:", err); }
-    });
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        console.error("[ChatSSE] connection permanently closed");
-      }
-    };
 
     return () => {
-      es.close();
+      window.removeEventListener("pagehide", handlePageHide);
+      ac.abort();
       refreshChatList(); // refresh sidebar on leave
     };
   }, [chatId, scrollToBottom, refreshChatList]);
@@ -178,7 +177,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   // Send message
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || !myEntityId || sending) return;
+    if (!text || !myUserId || sending) return;
 
     setInput("");
     setSending(true);
@@ -187,7 +186,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     const optimisticMsg: ChatMessage = {
       id: `optimistic-${Date.now()}`,
       chat_id: chatId,
-      sender_id: myEntityId,
+      sender_id: myUserId,
       sender_name: useAuthStore.getState().user?.name || "me",
       content: text,
       mentioned_ids: [],
@@ -201,7 +200,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         method: "POST",
         body: JSON.stringify({
           content: text,
-          sender_id: myEntityId,
+          sender_id: myUserId,
         }),
       });
       if (!res.ok) {
@@ -226,7 +225,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       setSending(false);
       refreshChatList(); // update last_message in sidebar
     }
-  }, [input, myEntityId, sending, chatId, scrollToBottom, refreshChatList]);
+  }, [input, myUserId, sending, chatId, scrollToBottom, refreshChatList]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -236,10 +235,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   };
 
   // Typing indicator display — works for both 1:1 and group
-  const typingNames = [...typingEntities]
-    .map(id => entityMap.get(id)?.name)
+  const typingNames = [...typingUsers]
+    .map(id => memberMap.get(id)?.name)
     .filter(Boolean);
-  const typingDisplay = typingEntities.size > 0 ? (
+  const typingDisplay = typingUsers.size > 0 ? (
     <div className="flex items-center gap-2 px-4 py-1">
       <div className="flex gap-1">
         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -254,7 +253,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
 
   // Display name for header
   const chatName = chat
-    ? chat.title || chat.entities.filter(e => e.id !== myEntityId).map(e => e.name).join(", ") || "聊天"
+    ? chat.title || chat.members.filter(member => member.id !== myUserId).map(member => member.name).join(", ") || "聊天"
     : "聊天";
 
   if (loading) {
@@ -269,7 +268,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-2">
         <p className="text-sm text-destructive">{error}</p>
-        <Link to="/chats" className="text-xs text-primary hover:underline">返回对话列表</Link>
+        <Link to="/chat" className="text-xs text-primary hover:underline">返回对话列表</Link>
       </div>
     );
   }
@@ -290,7 +289,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           </span>
           {chat && (
             <span className="text-2xs px-1.5 py-0.5 rounded-md font-medium border border-border text-muted-foreground bg-muted">
-              {chat.entities.length} 位成员
+              {chat.members.length} 位成员
             </span>
           )}
         </div>
@@ -309,10 +308,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         ) : (
           <div className="max-w-3xl mx-auto space-y-3.5">
             {messages.map((msg, i) => {
-              const isMine = msg.sender_id === myEntityId;
+              const isMine = msg.sender_id === myUserId;
               const prev = i > 0 ? messages[i - 1] : null;
               const showTime = shouldShowTime(prev, msg);
-              const entity = entityMap.get(msg.sender_id);
+              const member = memberMap.get(msg.sender_id);
               const ts = msg.created_at * 1000;
 
               return (
@@ -325,13 +324,13 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                     </div>
                   )}
                   {isMine ? (
-                    <UserBubble content={msg.content} timestamp={ts} userName={myName} avatarUrl={entityMap.get(myEntityId!)?.avatar_url} />
+                    <UserBubble content={msg.content} timestamp={ts} userName={myName} avatarUrl={memberMap.get(myUserId!)?.avatar_url} />
                   ) : (
                     <ChatBubble
                       content={msg.content}
-                      senderName={msg.sender_name}
-                      avatarUrl={entity?.avatar_url}
-                      entityType={entity?.type}
+                      senderName={chatMemberDisplayName(member, msg.sender_name)}
+                      avatarUrl={member?.avatar_url}
+                      actorType={member?.type}
                       timestamp={ts}
                       showName
                     />

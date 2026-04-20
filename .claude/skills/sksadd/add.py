@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """sksadd - Install skill from last search results into a group."""
+
 import json
 import re
 import shutil
@@ -8,21 +9,18 @@ import sys
 from pathlib import Path
 
 # ANSI colors
-BOLD  = "\033[1m"
-CYAN  = "\033[36m"
+BOLD = "\033[1m"
+CYAN = "\033[36m"
 GREEN = "\033[32m"
-GRAY  = "\033[90m"
-RED   = "\033[31m"
+GRAY = "\033[90m"
+RED = "\033[31m"
 RESET = "\033[0m"
 
 
 def get_paths() -> tuple[Path, Path, Path]:
     """Return (claude_dir, skills_dir, groups_dir)."""
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
         claude_dir = Path(result.stdout.strip()) / ".claude"
     except subprocess.CalledProcessError:
         claude_dir = Path.cwd() / ".claude"
@@ -52,42 +50,43 @@ def extract_error_reason(stdout: str, stderr: str) -> str:
     return "未知错误（运行 npx skills add <cmd> 查看详情）"
 
 
-def install_one(index: int, data: list, group: str,
-                skills_dir: Path, group_dir: Path) -> bool:
+def install_one(index: int, data: list, group: str, skills_dir: Path, group_dir: Path) -> bool:
     """Install a single skill. Returns True on success."""
     skill = data[index]
     install_cmd = skill.get("installCmd", "")
-    skill_name = (install_cmd.split("@")[-1].split("/")[-1]
-                  if "@" in install_cmd else install_cmd.split("/")[-1])
+    skill_name = install_cmd.split("@")[-1].split("/")[-1] if "@" in install_cmd else install_cmd.split("/")[-1]
 
-    print(f"{GRAY}[#{index+1}] 正在安装 {skill_name}...{RESET}")
+    print(f"{GRAY}[#{index + 1}] 正在安装 {skill_name}...{RESET}")
 
     if not install_cmd:
-        print(f"{RED}[#{index+1}] ❌ {skill_name} — 无安装命令（AI 搜索结果数据不完整）{RESET}")
+        print(f"{RED}[#{index + 1}] ❌ {skill_name} — 无安装命令（AI 搜索结果数据不完整）{RESET}")
         return False
 
     try:
         result = subprocess.run(
             ["npx", "skills", "add", install_cmd, "--agent", "claude-code", "--copy", "-y"],
-            capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=30
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=30,
         )
     except subprocess.TimeoutExpired:
-        print(f"{RED}[#{index+1}] ❌ {skill_name} — 超时（30s）{RESET}")
+        print(f"{RED}[#{index + 1}] ❌ {skill_name} — 超时（30s）{RESET}")
         return False
 
     if result.returncode != 0:
         reason = extract_error_reason(result.stdout, result.stderr)
-        print(f"{RED}[#{index+1}] ❌ {skill_name} — {reason}{RESET}")
+        print(f"{RED}[#{index + 1}] ❌ {skill_name} — {reason}{RESET}")
         return False
 
     installed = skills_dir / skill_name
     if not installed.exists():
-        print(f"{RED}[#{index+1}] ❌ {skill_name} — 安装后找不到文件（skill 名与目录名不匹配）{RESET}")
+        print(f"{RED}[#{index + 1}] ❌ {skill_name} — 安装后找不到文件（skill 名与目录名不匹配）{RESET}")
         return False
 
     dest = group_dir / skill_name
     shutil.move(str(installed), str(dest))
-    print(f"[#{index+1}] ✅ {BOLD}{skill_name}{RESET} → {group}")
+    print(f"[#{index + 1}] ✅ {BOLD}{skill_name}{RESET} → {group}")
     return True
 
 
@@ -101,7 +100,7 @@ def main() -> None:
     try:
         indices = [int(x) - 1 for x in sys.argv[2:]]
     except ValueError:
-        print(f"❌ 编号必须是整数")
+        print("❌ 编号必须是整数")
         sys.exit(1)
 
     claude_dir, skills_dir, groups_dir = get_paths()
@@ -119,7 +118,7 @@ def main() -> None:
     data = json.loads(last_search.read_text())
     for i in indices:
         if i < 0 or i >= len(data):
-            print(f"❌ 编号 {i+1} 超出范围（共 {len(data)} 条结果）")
+            print(f"❌ 编号 {i + 1} 超出范围（共 {len(data)} 条结果）")
             sys.exit(1)
 
     results = [None] * len(indices)

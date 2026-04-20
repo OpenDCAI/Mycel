@@ -11,7 +11,7 @@ Model identity (model name, provider, API keys) lives in ModelsConfig (models_sc
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,15 +26,16 @@ DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 class RuntimeConfig(BaseModel):
     """Runtime behavior configuration (non-model identity)."""
 
-    temperature: float | None = Field(None, ge=0.0, le=2.0, description="Temperature")
-    max_tokens: int | None = Field(None, gt=0, description="Max tokens")
-    model_kwargs: dict[str, Any] = Field(default_factory=dict, description="Extra kwargs for init_chat_model")
-    context_limit: int = Field(0, ge=0, description="Context window limit in tokens (0 = auto-detect from model)")
-    enable_audit_log: bool = Field(True, description="Enable audit logging")
-    allowed_extensions: list[str] | None = Field(None, description="Allowed extensions (None = all)")
-    block_dangerous_commands: bool = Field(True, description="Block dangerous commands")
-    block_network_commands: bool = Field(False, description="Block network commands")
-    queue_mode: str = Field("steer", deprecated=True, description="Deprecated. Queue mode is now determined by message timing.")
+    temperature: Annotated[float | None, Field(ge=0.0, le=2.0, description="Temperature")] = None
+    max_tokens: Annotated[int | None, Field(gt=0, description="Max tokens")] = None
+    model_kwargs: Annotated[dict[str, Any], Field(default_factory=dict, description="Extra kwargs for init_chat_model")] = Field(
+        default_factory=dict
+    )
+    context_limit: Annotated[int, Field(ge=0, description="Context window limit in tokens (0 = auto-detect from model)")] = 0
+    enable_audit_log: Annotated[bool, Field(description="Enable audit logging")] = True
+    allowed_extensions: Annotated[list[str] | None, Field(description="Allowed extensions (None = all)")] = None
+    block_dangerous_commands: Annotated[bool, Field(description="Block dangerous commands")] = True
+    block_network_commands: Annotated[bool, Field(description="Block network commands")] = False
 
 
 # ============================================================================
@@ -48,11 +49,11 @@ class PruningConfig(BaseModel):
     Field names match SessionPruner constructor for direct passthrough.
     """
 
-    enabled: bool = Field(True, description="Enable message pruning")
-    soft_trim_chars: int = Field(3000, gt=0, description="Soft-trim tool results longer than this")
-    hard_clear_threshold: int = Field(10000, gt=0, description="Hard-clear tool results longer than this")
-    protect_recent: int = Field(3, gt=0, description="Keep last N tool messages untrimmed")
-    trim_tool_results: bool = Field(True, description="Trim large tool results")
+    enabled: Annotated[bool, Field(description="Enable message pruning")] = True
+    soft_trim_chars: Annotated[int, Field(gt=0, description="Soft-trim tool results longer than this")] = 3000
+    hard_clear_threshold: Annotated[int, Field(gt=0, description="Hard-clear tool results longer than this")] = 10000
+    protect_recent: Annotated[int, Field(gt=0, description="Keep last N tool messages untrimmed")] = 3
+    trim_tool_results: Annotated[bool, Field(description="Trim large tool results")] = True
 
 
 class CompactionConfig(BaseModel):
@@ -61,17 +62,18 @@ class CompactionConfig(BaseModel):
     Field names match ContextCompactor constructor for direct passthrough.
     """
 
-    enabled: bool = Field(True, description="Enable context compaction")
-    reserve_tokens: int = Field(16384, gt=0, description="Reserve space for new messages")
-    keep_recent_tokens: int = Field(20000, gt=0, description="Keep recent messages verbatim")
-    min_messages: int = Field(20, gt=0, description="Minimum messages before compaction")
+    enabled: Annotated[bool, Field(description="Enable context compaction")] = True
+    reserve_tokens: Annotated[int, Field(gt=0, description="Reserve space for new messages")] = 16384
+    keep_recent_tokens: Annotated[int, Field(gt=0, description="Keep recent messages verbatim")] = 20000
+    min_messages: Annotated[int, Field(gt=0, description="Minimum messages before compaction")] = 20
+    trigger_tokens: Annotated[int | None, Field(gt=0, description="Absolute token count that triggers compaction")] = None
 
 
 class MemoryConfig(BaseModel):
     """Memory management configuration."""
 
-    pruning: PruningConfig = Field(default_factory=PruningConfig)
-    compaction: CompactionConfig = Field(default_factory=CompactionConfig)
+    pruning: PruningConfig = Field(default_factory=lambda: PruningConfig())
+    compaction: CompactionConfig = Field(default_factory=lambda: CompactionConfig())
 
 
 # ============================================================================
@@ -79,115 +81,83 @@ class MemoryConfig(BaseModel):
 # ============================================================================
 
 
-class ReadFileConfig(BaseModel):
-    """Configuration for read_file tool."""
-
-    enabled: bool = True
-    max_file_size: int = Field(10485760, gt=0, description="Max file size in bytes (10MB)")
-
-
-class FileSystemToolsConfig(BaseModel):
+class FileSystemConfig(BaseModel):
     """Configuration for filesystem tools."""
 
-    read_file: ReadFileConfig = Field(default_factory=ReadFileConfig)
-    write_file: bool = True
-    edit_file: bool = True
-    list_dir: bool = True
-
-
-class FileSystemConfig(BaseModel):
-    """Configuration for filesystem middleware."""
-
     enabled: bool = True
-    tools: FileSystemToolsConfig = Field(default_factory=FileSystemToolsConfig)
+    max_file_size: Annotated[int, Field(gt=0, description="Max file size in bytes (10MB)")] = 10485760
 
 
 class GrepConfig(BaseModel):
     """Configuration for Grep tool."""
 
     enabled: bool = True
-    max_file_size: int = Field(10485760, gt=0, description="Max file size in bytes (10MB)")
+    max_file_size: Annotated[int, Field(gt=0, description="Max file size in bytes (10MB)")] = 10485760
 
 
 class SearchToolsConfig(BaseModel):
     """Configuration for search tools."""
 
-    grep: GrepConfig = Field(default_factory=GrepConfig)
+    grep: GrepConfig = Field(default_factory=lambda: GrepConfig())
     glob: bool = True
 
 
 class SearchConfig(BaseModel):
-    """Configuration for search middleware."""
+    """Configuration for search tools."""
 
     enabled: bool = True
-    tools: SearchToolsConfig = Field(default_factory=SearchToolsConfig)
+    tools: SearchToolsConfig = Field(default_factory=lambda: SearchToolsConfig())
 
 
 class WebSearchConfig(BaseModel):
-    """Configuration for web_search tool."""
+    """Configuration for the WebSearch tool."""
 
     enabled: bool = True
-    max_results: int = Field(5, gt=0, description="Max search results")
-    tavily_api_key: str | None = Field(None, description="Tavily API key")
-    exa_api_key: str | None = Field(None, description="Exa API key")
-    firecrawl_api_key: str | None = Field(None, description="Firecrawl API key")
+    max_results: Annotated[int, Field(gt=0, description="Max search results")] = 5
+    tavily_api_key: Annotated[str | None, Field(description="Tavily API key")] = None
+    exa_api_key: Annotated[str | None, Field(description="Exa API key")] = None
+    firecrawl_api_key: Annotated[str | None, Field(description="Firecrawl API key")] = None
 
 
-class FetchConfig(BaseModel):
-    """Configuration for Fetch tool (AI extraction mode)."""
+class WebFetchConfig(BaseModel):
+    """Configuration for the WebFetch tool."""
 
     enabled: bool = True
-    jina_api_key: str | None = Field(None, description="Jina AI API key")
+    jina_api_key: Annotated[str | None, Field(description="Jina AI API key")] = None
 
 
 class WebToolsConfig(BaseModel):
     """Configuration for web tools."""
 
-    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
-    fetch: FetchConfig = Field(default_factory=FetchConfig)
+    web_search: WebSearchConfig = Field(default_factory=lambda: WebSearchConfig())
+    web_fetch: WebFetchConfig = Field(default_factory=lambda: WebFetchConfig())
 
 
 class WebConfig(BaseModel):
-    """Configuration for web middleware."""
+    """Configuration for web tools."""
 
     enabled: bool = True
-    timeout: int = Field(15, gt=0, description="Request timeout in seconds")
-    tools: WebToolsConfig = Field(default_factory=WebToolsConfig)
-
-
-class RunCommandConfig(BaseModel):
-    """Configuration for run_command tool."""
-
-    enabled: bool = True
-    default_timeout: int = Field(120, gt=0, description="Default timeout in seconds")
-
-
-class CommandToolsConfig(BaseModel):
-    """Configuration for command tools."""
-
-    run_command: RunCommandConfig = Field(default_factory=RunCommandConfig)
-    command_status: bool = True
+    timeout: Annotated[int, Field(gt=0, description="Request timeout in seconds")] = 15
+    tools: WebToolsConfig = Field(default_factory=lambda: WebToolsConfig())
 
 
 class CommandConfig(BaseModel):
-    """Configuration for command middleware."""
+    """Configuration for command tools."""
 
     enabled: bool = True
-    tools: CommandToolsConfig = Field(default_factory=CommandToolsConfig)
 
 
 class SpillBufferConfig(BaseModel):
     """Configuration for SpillBuffer middleware."""
 
     enabled: bool = True
-    default_threshold: int = Field(50_000, gt=0, description="Default spill threshold in bytes")
+    default_threshold: Annotated[int, Field(gt=0, description="Default spill threshold in bytes")] = 50_000
     thresholds: dict[str, int] = Field(
         default_factory=lambda: {
             "Grep": 20_000,
             "Glob": 20_000,
-            "run_command": 50_000,
-            "command_status": 50_000,
-            "Fetch": 50_000,
+            "Bash": 50_000,
+            "WebFetch": 50_000,
         },
         description="Per-tool spill thresholds in bytes",
     )
@@ -196,15 +166,11 @@ class SpillBufferConfig(BaseModel):
 class ToolsConfig(BaseModel):
     """Tools configuration."""
 
-    filesystem: FileSystemConfig = Field(default_factory=FileSystemConfig)
-    search: SearchConfig = Field(default_factory=SearchConfig)
-    web: WebConfig = Field(default_factory=WebConfig)
-    command: CommandConfig = Field(default_factory=CommandConfig)
-    spill_buffer: SpillBufferConfig = Field(default_factory=SpillBufferConfig)
-    tool_modes: dict[str, str] = Field(
-        default_factory=dict,
-        description="Per-tool mode overrides: tool_name -> 'inline' | 'deferred'",
-    )
+    filesystem: FileSystemConfig = Field(default_factory=lambda: FileSystemConfig())
+    search: SearchConfig = Field(default_factory=lambda: SearchConfig())
+    web: WebConfig = Field(default_factory=lambda: WebConfig())
+    command: CommandConfig = Field(default_factory=lambda: CommandConfig())
+    spill_buffer: SpillBufferConfig = Field(default_factory=lambda: SpillBufferConfig())
 
 
 # ============================================================================
@@ -215,6 +181,10 @@ class ToolsConfig(BaseModel):
 class MCPServerConfig(BaseModel):
     """Configuration for a single MCP server."""
 
+    transport: str | None = Field(
+        None,
+        description="MCP transport type: stdio | streamable_http | sse | websocket",
+    )
     command: str | None = Field(None, description="Command to run the MCP server")
     args: list[str] = Field(default_factory=list, description="Command arguments")
     env: dict[str, str] = Field(default_factory=dict, description="Environment variables")
@@ -271,13 +241,13 @@ class LeonSettings(BaseModel):
     """
 
     # Runtime behavior (replaces APIConfig model-identity fields)
-    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig, description="Runtime behavior config")
+    runtime: RuntimeConfig = Field(default_factory=lambda: RuntimeConfig(), description="Runtime behavior config")
 
     # Core configuration groups
-    memory: MemoryConfig = Field(default_factory=MemoryConfig, description="Memory management")
-    tools: ToolsConfig = Field(default_factory=ToolsConfig, description="Tools configuration")
-    mcp: MCPConfig = Field(default_factory=MCPConfig, description="MCP configuration")
-    skills: SkillsConfig = Field(default_factory=SkillsConfig, description="Skills configuration")
+    memory: MemoryConfig = Field(default_factory=lambda: MemoryConfig(), description="Memory management")
+    tools: ToolsConfig = Field(default_factory=lambda: ToolsConfig(), description="Tools configuration")
+    mcp: MCPConfig = Field(default_factory=lambda: MCPConfig(), description="MCP configuration")
+    skills: SkillsConfig = Field(default_factory=lambda: SkillsConfig(), description="Skills configuration")
 
     # Agent configuration
     system_prompt: str | None = Field(None, description="Custom system prompt")

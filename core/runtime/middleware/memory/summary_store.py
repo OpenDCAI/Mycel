@@ -24,6 +24,7 @@ from typing import Any
 from storage.contracts import SummaryRepo, SummaryRow
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
+from storage.runtime import build_summary_repo, uses_supabase_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +64,14 @@ class SummaryStore:
         self._repo: SummaryRepo
         if summary_repo is not None:
             self._repo = summary_repo
+        elif db_path is None and uses_supabase_runtime_defaults():
+            # @@@explicit-db-path-wins - an explicit local path is an operator choice,
+            # so only path-less construction is allowed to switch to runtime storage.
+            self._repo = build_summary_repo()
         else:
+            resolved_db_path = self.db_path
             # @@@connect_injection - keep _connect as an indirection point so existing retry/rollback tests can patch it.
-            self._repo = SQLiteSummaryRepo(db_path, connect_fn=lambda p: _connect(p))
+            self._repo = SQLiteSummaryRepo(resolved_db_path, connect_fn=lambda p: _connect(Path(p)))
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
@@ -125,6 +131,8 @@ class SummaryStore:
                 else:
                     logger.error(f"[SummaryStore] Save failed after {max_retries} attempts: {e}")
                     raise
+
+        raise RuntimeError("Summary save loop exited without returning or raising")
 
     def get_latest_summary(
         self,

@@ -1,63 +1,32 @@
 """FastAPI dependency injection functions."""
 
 import asyncio
-import os
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
 
+from backend.auth_dependencies import _get_auth_service as _get_auth_service
+from backend.auth_user_resolution import get_current_user as get_current_user
+from backend.auth_user_resolution import get_current_user_id as get_current_user_id
+from backend.request_app import get_app as get_app
+from backend.thread_runtime import convergence as thread_runtime_convergence
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
+from backend.web.utils.helpers import delete_thread_in_db
 from sandbox.thread_context import set_current_thread_id
 
-# Dev bypass: set LEON_DEV_SKIP_AUTH=1 to skip JWT verification and inject a mock identity.
-# WARNING: this bypasses ALL auth — never set in production.
-_DEV_SKIP_AUTH = os.environ.get("LEON_DEV_SKIP_AUTH", "").lower() in ("1", "true", "yes")
-_DEV_PAYLOAD = {"user_id": "dev-user"}
+thread_runtime_convergence.delete_thread_in_db = delete_thread_in_db
+inspect_owner_thread_runtime = thread_runtime_convergence.inspect_owner_thread_runtime
 
-if _DEV_SKIP_AUTH:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning(
-        "LEON_DEV_SKIP_AUTH is active — JWT auth is BYPASSED for all requests. This must never be enabled in production."
-    )
-
-
-async def get_app(request: Request) -> FastAPI:
-    """Get FastAPI app instance from request."""
-    return request.app
-
-
-def _get_auth_service(app: FastAPI):
-    """Get auth service from app state, or raise 500."""
-    auth_service = getattr(app.state, "auth_service", None)
-    if auth_service is None:
-        raise HTTPException(500, "Auth service not initialized")
-    return auth_service
-
-
-def _extract_jwt_payload(request: Request) -> dict:
-    """Extract and verify JWT payload from Bearer token. Returns {user_id}."""
-    if _DEV_SKIP_AUTH:
-        return _DEV_PAYLOAD
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(401, "Missing or invalid Authorization header")
-    token = auth_header[7:]
-    try:
-        return _get_auth_service(request.app).verify_token(token)
-    except ValueError as e:
-        raise HTTPException(401, str(e))
-
-
-async def get_current_user_id(request: Request) -> str:
-    """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
-    user_id = _extract_jwt_payload(request)["user_id"]
-    if _DEV_SKIP_AUTH:
-        return user_id
-    member_repo = getattr(request.app.state, "member_repo", None)
-    if member_repo and member_repo.get_by_id(user_id) is None:
-        raise HTTPException(401, "User no longer exists — please re-login")
-    return user_id
+__all__ = [
+    "get_app",
+    "_get_auth_service",
+    "get_current_user",
+    "get_current_user_id",
+    "verify_thread_owner",
+    "verify_thread_row_owner",
+    "get_thread_lock",
+    "get_thread_agent",
+]
 
 
 async def verify_thread_owner(
@@ -66,11 +35,31 @@ async def verify_thread_owner(
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
     """Verify that user_id owns the thread. Returns user_id."""
+    runtime_state = inspect_owner_thread_runtime(app, thread_id)
+    if runtime_state == "missing":
+        raise HTTPException(404, "Thread not found")
+    if runtime_state == "incomplete":
+        raise HTTPException(409, "Thread runtime incomplete: missing workspace/sandbox binding")
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
-    agent_member = app.state.member_repo.get_by_id(thread["member_id"])
-    if not agent_member or agent_member.owner_user_id != user_id:
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if not agent_user or agent_user.owner_user_id != user_id:
+        raise HTTPException(403, "Not authorized")
+    return user_id
+
+
+async def verify_thread_row_owner(
+    thread_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[FastAPI, Depends(get_app)],
+) -> str:
+    """Verify ownership without mutating or converging thread runtime state."""
+    thread = app.state.thread_repo.get_by_id(thread_id)
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if not agent_user or agent_user.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
     return user_id
 

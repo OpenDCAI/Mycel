@@ -1,7 +1,7 @@
 """Web Service - registers WebSearch and WebFetch tools with ToolRegistry.
 
 Tools:
-- WebSearch: Web search (Tavily -> Exa -> Firecrawl fallback)
+- WebSearch: Web search provider chain (Tavily -> Exa -> Firecrawl)
 - WebFetch: Fetch web content and extract information using AI
 """
 
@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.tools.web.fetchers.jina import JinaFetcher
 from core.tools.web.fetchers.markdownify import MarkdownifyFetcher
 from core.tools.web.searchers.exa import ExaSearcher
@@ -59,64 +59,74 @@ class WebService:
         registry.register(
             ToolEntry(
                 name="WebSearch",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "WebSearch",
-                    "description": "Search the web for current information. Returns titles, URLs, and snippets.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query",
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Maximum number of results (default: 5)",
-                            },
-                            "include_domains": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Only include results from these domains",
-                            },
-                            "exclude_domains": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Exclude results from these domains",
-                            },
+                mode=ToolMode.DEFERRED,
+                schema=make_tool_schema(
+                    name="WebSearch",
+                    description=(
+                        "Search the web. Returns titles, URLs, and text snippets. "
+                        "Use for current events, documentation lookups, or fact-checking. Max 10 results per query."
+                    ),
+                    properties={
+                        "query": {
+                            "type": "string",
+                            "description": "Search query",
+                            "minLength": 1,
                         },
-                        "required": ["query"],
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results (default: 5)",
+                            "minimum": 1,
+                            "maximum": 10,
+                        },
+                        "allowed_domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Only include results from these domains",
+                        },
+                        "blocked_domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Exclude results from these domains",
+                        },
                     },
-                },
+                    required=["query"],
+                ),
                 handler=self._web_search,
                 source="WebService",
+                is_concurrency_safe=True,
+                is_read_only=True,
             )
         )
 
         registry.register(
             ToolEntry(
                 name="WebFetch",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "WebFetch",
-                    "description": "Fetch a URL and extract specific information using AI. Returns processed content, not raw HTML.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "description": "URL to fetch content from",
-                            },
-                            "prompt": {
-                                "type": "string",
-                                "description": "What information to extract from the page",
-                            },
+                mode=ToolMode.DEFERRED,
+                schema=make_tool_schema(
+                    name="WebFetch",
+                    description=(
+                        "Fetch a URL and extract specific information via AI. Returns processed text, not raw HTML. "
+                        "Provide a focused prompt describing what to extract. "
+                        "Useful for reading documentation pages, API references, or articles."
+                    ),
+                    properties={
+                        "url": {
+                            "type": "string",
+                            "description": "URL to fetch content from",
+                            "minLength": 1,
                         },
-                        "required": ["url", "prompt"],
+                        "prompt": {
+                            "type": "string",
+                            "description": "What information to extract from the page",
+                            "minLength": 1,
+                        },
                     },
-                },
+                    required=["url", "prompt"],
+                ),
                 handler=self._web_fetch,
                 source="WebService",
+                is_concurrency_safe=True,
+                is_read_only=True,
             )
         )
 
@@ -124,8 +134,8 @@ class WebService:
         self,
         query: str,
         max_results: int | None = None,
-        include_domains: list[str] | None = None,
-        exclude_domains: list[str] | None = None,
+        allowed_domains: list[str] | None = None,
+        blocked_domains: list[str] | None = None,
     ) -> str:
         if not self._searchers:
             return "No search providers configured"
@@ -137,8 +147,8 @@ class WebService:
                 result: SearchResult = await searcher.search(
                     query=query,
                     max_results=effective_max,
-                    include_domains=include_domains,
-                    exclude_domains=exclude_domains,
+                    include_domains=allowed_domains,
+                    exclude_domains=blocked_domains,
                 )
                 if not result.error:
                     return result.format_output()

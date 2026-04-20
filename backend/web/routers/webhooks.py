@@ -5,46 +5,51 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.web.services.sandbox_service import init_providers_and_managers
-from backend.web.utils.helpers import _get_container, extract_webhook_instance_id
-from sandbox.lease import lease_from_row
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-
-SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+from backend.sandbox_inventory import init_providers_and_managers
+from backend.storage_container_cache import get_storage_container as _get_container
+from backend.web.utils.helpers import extract_webhook_instance_id
+from sandbox.control_plane_repos import resolve_sandbox_db_path
+from sandbox.lease import lease_from_row as lower_runtime_from_row
+from storage.runtime import build_lease_repo as make_lower_runtime_repo
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
+def _public_provider_event(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in row.items() if key != "matched_runtime_handle"}
+
+
 @router.post("/{provider_name}")
 async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Ingest provider webhook: persist provider event and converge lease observed state."""
+    """Ingest provider webhook and converge matched lower-runtime state."""
     instance_id = extract_webhook_instance_id(payload)
     if not instance_id:
         raise HTTPException(400, "Webhook payload missing instance/session id")
 
     event_type = str(payload.get("event") or payload.get("type") or "unknown")
-    lease_repo = SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
+    runtime_repo = make_lower_runtime_repo()
     event_repo = _get_container().provider_event_repo()
     try:
-        lease_row = await asyncio.to_thread(lease_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
-        lease = lease_from_row(lease_row, lease_repo.db_path) if lease_row else None
-        matched_lease_id = lease.lease_id if lease else None
+        runtime_row = await asyncio.to_thread(runtime_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
+        lower_runtime = lower_runtime_from_row(runtime_row, resolve_sandbox_db_path()) if runtime_row else None
+        matched_runtime_handle = lower_runtime.lease_id if lower_runtime else None
+        matched_sandbox_id = str((runtime_row or {}).get("sandbox_id") or "").strip() or None
 
-        # @@@webhook-invalidation-only - Webhook is optimization only: persist event + mark lease stale.
+        # @@@webhook-runtime-observation - Webhook is optimization only: persist event + observe lower-runtime state.
         await asyncio.to_thread(
             event_repo.record,
             provider_name=provider_name,
             instance_id=instance_id,
             event_type=event_type,
             payload=payload,
-            matched_lease_id=matched_lease_id,
+            matched_runtime_handle=matched_runtime_handle,
+            matched_sandbox_id=matched_sandbox_id,
         )
     finally:
-        lease_repo.close()
+        runtime_repo.close()
         event_repo.close()
 
-    if not lease:
+    if not lower_runtime:
         return {
             "ok": True,
             "provider": provider_name,
@@ -67,7 +72,7 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     if not manager:
         raise HTTPException(503, f"Provider manager unavailable: {provider_name}")
     await asyncio.to_thread(
-        lease.apply,
+        lower_runtime.apply,
         manager.provider,
         event_type="observe.status",
         source="webhook",
@@ -79,7 +84,6 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
         "instance_id": instance_id,
         "event_type": event_type,
         "matched": True,
-        "lease_id": lease.lease_id,
     }
 
 
@@ -91,4 +95,4 @@ async def list_provider_events(limit: int = Query(default=100, ge=1, le=1000)) -
         items = await asyncio.to_thread(repo.list_recent, limit)
     finally:
         repo.close()
-    return {"items": items, "count": len(items)}
+    return {"items": [_public_provider_event(item) for item in items], "count": len(items)}

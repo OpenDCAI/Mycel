@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import type { TurnSegment, ToolSegment } from "../../api";
+import { isToolSegment, type TurnSegment, type ToolSegment } from "../../api";
 import MarkdownContent from "../MarkdownContent";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
 import { DEFAULT_BADGE, TOOL_BADGE_STYLES } from "./constants";
 import { getStepSummary, getStepResultSummary } from "./utils";
 import { CheckCircle2, Loader2, XCircle, MessageSquare, ChevronRight, ChevronDown } from "lucide-react";
-import { getToolRenderer } from "../tool-renderers";
+import { ToolRenderer } from "../tool-renderers";
 
 interface DetailBoxModalProps {
   open: boolean;
@@ -40,7 +40,6 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
   const badge = TOOL_BADGE_STYLES[step.name] ?? { ...DEFAULT_BADGE, label: step.name };
   const hasSubagent = !!step.subagent_stream;
   const resultSummary = getStepResultSummary(step);
-  const Renderer = getToolRenderer(step);
 
   return (
     <div className="border-l-2 border-border pl-3 py-1.5">
@@ -64,7 +63,7 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
 
       {expanded && (
         <div className="mt-2 pl-5 min-w-0 overflow-hidden">
-          <Renderer step={step} expanded={true} />
+          <ToolRenderer step={step} expanded={true} />
         </div>
       )}
 
@@ -125,8 +124,8 @@ export const DetailBoxModal = memo(function DetailBoxModal({
         </DialogHeader>
         <div className="space-y-2 mt-2">
           {segments.filter((s) => s.type !== "retry").map((seg, i) => {
-            if (seg.type === "tool") {
-              return <ToolEntry key={seg.step.id} seg={seg as ToolSegment} />;
+            if (isToolSegment(seg)) {
+              return <ToolEntry key={seg.step.id} seg={seg} />;
             }
             if (seg.type === "text" && seg.content.trim()) {
               return <TextEntry key={`text-${i}`} content={seg.content} />;

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
-import type { AssistantTurn, ToolStep } from "../../api";
+import { isAssistantTurn, type ToolStep } from "../../api";
 import { useThreadData } from "../../hooks/use-thread-data";
+import { useDisplayDeltas } from "../../hooks/use-display-deltas";
+import { useThreadStream } from "../../hooks/use-thread-stream";
+import { resolveAgentVisualStatus, type AgentVisualStatus } from "./agent-visual-status";
 import { parseAgentArgs } from "./utils";
 import type { FlowItem } from "./utils";
 import { FlowList } from "./flow-items";
@@ -22,12 +25,43 @@ export function AgentsView({ steps }: AgentsViewProps) {
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
 
-  const focused = steps.find((s) => s.id === selectedAgentId) ?? null;
+  const effectiveSelectedAgentId = useMemo(() => {
+    if (steps.length === 0) return null;
+    if (selectedAgentId && steps.some((step) => step.id === selectedAgentId)) return selectedAgentId;
+    return (
+      [...steps].reverse().find((step) => {
+        const status = step.subagent_stream?.status;
+        return status === "running" || step.status === "calling";
+      })?.id ?? steps[steps.length - 1].id
+    );
+  }, [steps, selectedAgentId]);
+
+  const focused = steps.find((s) => s.id === effectiveSelectedAgentId) ?? null;
   const stream = focused?.subagent_stream;
   const threadId = stream?.thread_id || undefined;
-  const isRunning = stream?.status === "running" || focused?.status === "calling";
-
-  const { entries, loading, refreshThread } = useThreadData(threadId);
+  const { entries, loading, refreshThread, setEntries, displaySeq } = useThreadData(threadId);
+  const refreshThreads = useCallback(async () => {}, []);
+  // @@@child-thread-live-stream - the Agent pane must subscribe to the child
+  // thread's own SSE stream. Polling child detail alone misses the running
+  // window and makes the pane look empty until a later refresh.
+  const childStream = useThreadStream(threadId ?? "", {
+    loading: loading || !threadId,
+    refreshThreads,
+  });
+  const childDisplay = useDisplayDeltas({
+    threadId: threadId ?? "",
+    onUpdate: setEntries,
+    displaySeq,
+    stream: childStream,
+  });
+  const focusedStatus =
+    focused
+      ? resolveAgentVisualStatus(focused, {
+        childDisplayRunning: childDisplay.isRunning,
+        childRuntimeState: childStream.runtimeStatus?.state?.state ?? null,
+      })
+      : null;
+  const isRunning = focusedStatus === "running";
 
   // Poll every second while sub-agent is running
   useEffect(() => {
@@ -39,8 +73,8 @@ export function AgentsView({ steps }: AgentsViewProps) {
   const flowItems = useMemo<FlowItem[]>(() => {
     const items: FlowItem[] = [];
     for (const entry of entries) {
-      if (entry.role !== "assistant") continue;
-      for (const seg of (entry as AssistantTurn).segments) {
+      if (!isAssistantTurn(entry)) continue;
+      for (const seg of entry.segments) {
         if (seg.type === "tool") {
           items.push({ type: "tool", step: seg.step, turnId: entry.id });
         } else if (seg.type === "text" && seg.content.trim()) {
@@ -61,7 +95,7 @@ export function AgentsView({ steps }: AgentsViewProps) {
           id: tc.id, name: tc.name, args: tc.args,
           status: tc.status === "done" ? "done" : "calling",
           result: tc.result,
-          timestamp: Date.now(),
+          timestamp: focused?.timestamp ?? 0,
         },
         turnId: "live",
       });
@@ -73,7 +107,7 @@ export function AgentsView({ steps }: AgentsViewProps) {
     }
 
     return items;
-  }, [entries]);
+  }, [entries, stream, focused?.timestamp]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -118,7 +152,8 @@ export function AgentsView({ steps }: AgentsViewProps) {
             <AgentListItem
               key={step.id}
               step={step}
-              isSelected={step.id === selectedAgentId}
+              visualStatus={step.id === effectiveSelectedAgentId ? focusedStatus ?? null : null}
+              isSelected={step.id === effectiveSelectedAgentId}
               onClick={() => setSelectedAgentId(step.id)}
             />
           ))}
@@ -141,7 +176,7 @@ export function AgentsView({ steps }: AgentsViewProps) {
           </div>
         ) : (
           <>
-            <AgentDetailHeader focused={focused} stream={stream} />
+            <AgentDetailHeader focused={focused} stream={stream} visualStatus={focusedStatus ?? "completed"} />
             <AgentPromptSection args={focused.args} />
             {loading ? (
               <div className="h-full flex items-center justify-center">
@@ -164,14 +199,25 @@ export function AgentsView({ steps }: AgentsViewProps) {
 
 /* -- Agent list item -- */
 
-function AgentListItem({ step, isSelected, onClick }: { step: ToolStep; isSelected: boolean; onClick: () => void }) {
+function AgentListItem({
+  step,
+  visualStatus,
+  isSelected,
+  onClick,
+}: {
+  step: ToolStep;
+  visualStatus: AgentVisualStatus | null;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
   const args = parseAgentArgs(step.args);
   const ss = step.subagent_stream;
   const displayName = ss?.description || args.description || args.prompt?.slice(0, 40) || "子任务";
   const prompt = args.prompt || "";
-  const isRunning = ss?.status === "running" || (step.status === "calling" && ss?.status !== "completed");
-  const isError = step.status === "error" || ss?.status === "error";
-  const isDone = !isRunning && !isError && (step.status === "done" || ss?.status === "completed");
+  const status = resolveAgentVisualStatus(step, { statusOverride: visualStatus });
+  const isRunning = status === "running";
+  const isError = status === "error";
+  const isDone = status === "completed";
   const statusDot = isRunning ? "bg-success animate-pulse" : isError ? "bg-destructive" : isDone ? "bg-success" : "bg-warning animate-pulse";
 
   return (
@@ -194,21 +240,27 @@ function AgentListItem({ step, isSelected, onClick }: { step: ToolStep; isSelect
 
 /* -- Agent detail header -- */
 
-function getStatusLabel(focused: ToolStep, stream: SubagentStream | undefined): string {
-  if (stream?.status === "running") return "运行中";
-  if (stream?.status === "error") return "出错";
-  if (focused.status === "calling") return "启动中";
+function getStatusLabel(status: AgentVisualStatus): string {
+  if (status === "running") return "运行中";
+  if (status === "error") return "出错";
   return "已完成";
 }
 
-function getStatusDotClass(focused: ToolStep, stream: SubagentStream | undefined): string {
-  if (stream?.status === "running") return "bg-success animate-pulse";
-  if (stream?.status === "error") return "bg-destructive";
-  if (focused.status === "calling") return "bg-warning animate-pulse";
+function getStatusDotClass(status: AgentVisualStatus): string {
+  if (status === "running") return "bg-success animate-pulse";
+  if (status === "error") return "bg-destructive";
   return "bg-success";
 }
 
-function AgentDetailHeader({ focused, stream }: { focused: ToolStep; stream: SubagentStream | undefined }) {
+function AgentDetailHeader({
+  focused,
+  stream,
+  visualStatus,
+}: {
+  focused: ToolStep;
+  stream: SubagentStream | undefined;
+  visualStatus: AgentVisualStatus;
+}) {
   const args = parseAgentArgs(focused.args);
   const displayName = stream?.description || args.description || args.prompt?.slice(0, 40) || "子任务";
   const agentType = args.subagent_type;
@@ -218,8 +270,8 @@ function AgentDetailHeader({ focused, stream }: { focused: ToolStep; stream: Sub
         <span className="text-2xs font-mono bg-border text-foreground-secondary px-1.5 py-0.5 rounded flex-shrink-0">{agentType}</span>
       )}
       <div className="text-sm font-medium text-foreground truncate flex-1">{displayName}</div>
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotClass(focused, stream)}`} />
-      <span className="text-2xs text-muted-foreground/70 flex-shrink-0">{getStatusLabel(focused, stream)}</span>
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotClass(visualStatus)}`} />
+      <span className="text-2xs text-muted-foreground/70 flex-shrink-0">{getStatusLabel(visualStatus)}</span>
     </div>
   );
 }
@@ -239,4 +291,3 @@ function AgentPromptSection({ args }: { args: unknown }) {
     </div>
   );
 }
-

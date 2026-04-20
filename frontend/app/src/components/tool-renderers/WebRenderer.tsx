@@ -1,10 +1,16 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
 import { CodeBlock } from "../shared/CodeBlock";
+import { asRecord, recordString } from "@/lib/records";
 
 function parseArgs(args: unknown): { url?: string; query?: string; prompt?: string } {
-  if (args && typeof args === "object") return args as { url?: string; query?: string; prompt?: string };
-  return {};
+  const record = asRecord(args);
+  if (!record) return {};
+  return {
+    url: recordString(record, "url"),
+    query: recordString(record, "query"),
+    prompt: recordString(record, "prompt"),
+  };
 }
 
 export default memo(function WebRenderer({ step, expanded }: ToolRendererProps) {

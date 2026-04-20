@@ -1,12 +1,14 @@
 # 批量 Rebase 所有 Worktree
 
-一个 PR 合并到 main 后，批量将所有 in-progress worktree rebase 到最新 `origin/main`。
+一个 PR 合并后，批量将所有 in-progress worktree rebase 到最新 `origin/<base-branch>`。
 
 ## 使用时机
 
 某个分支的 PR 合并后（尤其是 rebase and merge），其他 worktree 的 base 已过时，统一更新。
 
 ## Step 0：定位主仓库
+
+`<base-branch>` = 从对话上下文确定的项目默认开发分支。
 
 ```bash
 MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
@@ -37,7 +39,7 @@ git worktree list --porcelain
 ```
 DIRTY 检查
 ├── 有未提交改动 → 跳过，标记为"需手动处理"
-└── 干净 → git -C <path> rebase origin/main
+└── 干净 → git -C <path> rebase origin/<base-branch>
          ├── 成功 → 标记 ✅
          └── 有冲突 → git -C <path> rebase --abort（回滚）
                       标记为"需手动处理"，继续下一个
@@ -59,7 +61,7 @@ wtrebaseall 完成
 
 ❌ 冲突（已 abort，需手动处理）：
   - worktrees/old-a (old/a)
-    提示：cd worktrees/old-a && git rebase origin/main
+    提示：cd worktrees/old-a && git rebase origin/<base-branch>
 
 🗑 建议清理（PR 已关闭）：
   - worktrees/done-b (done/b) → PR #9 merged

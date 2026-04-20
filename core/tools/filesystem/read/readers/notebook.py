@@ -56,7 +56,7 @@ def read_notebook(
         result.error = f"Start cell {start_cell} exceeds total cells {total_cells}"
         return result
 
-    effective_limit = limit_cells if limit_cells else 50
+    effective_limit = limit_cells or 50
     end_idx = min(start_idx + effective_limit, total_cells)
 
     output_parts: list[str] = []

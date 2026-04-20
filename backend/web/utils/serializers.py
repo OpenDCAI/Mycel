@@ -1,44 +1,33 @@
 """Message serialization utilities."""
 
-import re
 from typing import Any
 
-# @@@strip-system-tags — remove injected system tags from user-visible content
-_SYSTEM_HINT_RE = re.compile(r"\s*<system-hint>.*?</system-hint>\s*", re.DOTALL)
-_SYSTEM_REMINDER_RE = re.compile(r"\s*<system-reminder>.*?</system-reminder>\s*", re.DOTALL)
+from backend.avatar_paths import avatars_dir
+from backend.message_content import extract_text_content, strip_system_tags
+
+__all__ = ["avatar_url", "strip_system_tags", "extract_text_content", "serialize_message"]
 
 
-def strip_system_tags(content: str) -> str:
-    """Remove <system-hint> and <system-reminder> tags from user-visible content."""
-    content = _SYSTEM_HINT_RE.sub("", content)
-    content = _SYSTEM_REMINDER_RE.sub("", content)
-    return content.strip()
-
-
-def avatar_url(member_id: str | None, has_avatar: bool) -> str | None:
-    """Build avatar URL. Returns None if no avatar uploaded."""
-    return f"/api/members/{member_id}/avatar" if member_id and has_avatar else None
-
-
-def extract_text_content(raw_content: Any) -> str:
-    """Extract text content from various message content formats."""
-    if isinstance(raw_content, str):
-        return raw_content
-    if isinstance(raw_content, list):
-        parts: list[str] = []
-        for block in raw_content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-            elif isinstance(block, str):
-                parts.append(block)
-        return "".join(parts)
-    return str(raw_content)
+def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
+    if not user_id:
+        return None
+    if has_avatar or (avatars_dir() / f"{user_id}.png").exists():
+        return f"/api/users/{user_id}/avatar"
+    return None
 
 
 def serialize_message(msg: Any) -> dict[str, Any]:
-    """Serialize a LangChain message to a JSON-compatible dict."""
+    """Serialize a LangChain message to a JSON-serializable dict."""
     content = getattr(msg, "content", "")
-    metadata = getattr(msg, "metadata", None) or {}
+    metadata = dict(getattr(msg, "metadata", None) or {})
+    additional_kwargs = getattr(msg, "additional_kwargs", None) or {}
+    tool_result_meta = additional_kwargs.get("tool_result_meta")
+    # @@@tool-result-meta-merge - LangChain ToolMessage keeps durable tool
+    # metadata in additional_kwargs, but Leon display rebuild consumes
+    # serialized metadata. Merge the exact structured tool_result_meta here so
+    # checkpoint rebuild can recover blocking subagent identity honestly.
+    if isinstance(tool_result_meta, dict):
+        metadata = {**tool_result_meta, **metadata}
 
     # Strip system tags from owner HumanMessages (context-shift hints).
     # External HumanMessages keep their <system-reminder> so frontend can
@@ -63,4 +52,6 @@ def serialize_message(msg: Any) -> dict[str, Any]:
     }
     if metadata:
         result["metadata"] = metadata
+    if metadata.get("source") == "internal":
+        result["display"] = {"showing": False}
     return result

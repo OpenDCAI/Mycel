@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain.agents.middleware.types import (
+from core.runtime.middleware import (
     AgentMiddleware,
     ModelCallResult,
     ModelRequest,
@@ -25,7 +25,7 @@ class MonitorMiddleware(AgentMiddleware):
     提供 AgentRuntime 聚合所有监控数据。
     """
 
-    tools = []  # 不注入工具
+    tools = ()  # 不注入工具
 
     def __init__(self, context_limit: int = 0, model_name: str = "", verbose: bool = False):
         self.verbose = verbose
@@ -112,6 +112,9 @@ class MonitorMiddleware(AgentMiddleware):
         except Exception as e:
             self._state_monitor.mark_error(e)
             raise
+
+        if response.prepared_request is not None:
+            return response
 
         messages = response.result if hasattr(response, "result") else [response]
         resp_dict = {"messages": messages}

@@ -6,6 +6,7 @@ import { useMarketplaceStore } from "@/store/marketplace-store";
 import LineageTree from "@/components/marketplace/LineageTree";
 import InstallDialog from "@/components/marketplace/InstallDialog";
 import { typeBadgeColors } from "@/components/marketplace/constants";
+import { marketplaceTypeLabel } from "@/lib/marketplace-types";
 
 export default function MarketplaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,9 @@ export default function MarketplaceDetailPage() {
   const fetchVersionSnapshot = useMarketplaceStore((s) => s.fetchVersionSnapshot);
   const clearSnapshot = useMarketplaceStore((s) => s.clearSnapshot);
   const [installOpen, setInstallOpen] = useState(false);
+  const detailId = detail?.id;
+  const detailType = detail?.type;
+  const previewVersion = detail?.versions[0]?.version;
 
   useEffect(() => {
     if (id) {
@@ -32,11 +36,11 @@ export default function MarketplaceDetailPage() {
   }, [id, fetchDetail, fetchLineage, clearDetail]);
 
   useEffect(() => {
-    if (detail && detail.versions.length > 0 && (detail.type === "skill" || detail.type === "agent")) {
-      fetchVersionSnapshot(detail.id, detail.versions[0].version);
+    if (detailId && previewVersion && (detailType === "skill" || detailType === "agent")) {
+      fetchVersionSnapshot(detailId, previewVersion);
     }
     return () => clearSnapshot();
-  }, [detail?.id, detail?.type, fetchVersionSnapshot, clearSnapshot]);
+  }, [detailId, detailType, previewVersion, fetchVersionSnapshot, clearSnapshot]);
 
   if (detailLoading) {
     return (
@@ -66,7 +70,7 @@ export default function MarketplaceDetailPage() {
       <div className="max-w-3xl mx-auto py-6 px-4 md:px-6">
         {/* Back button */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/marketplace?tab=explore")}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast mb-6"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
@@ -79,7 +83,7 @@ export default function MarketplaceDetailPage() {
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-xl font-semibold text-foreground">{detail.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeBadgeColors[detail.type] || "bg-muted text-muted-foreground"}`}>
-                {detail.type}
+                {marketplaceTypeLabel(detail.type)}
               </span>
             </div>
             <p className="text-sm text-muted-foreground mb-3">{detail.description || "No description"}</p>

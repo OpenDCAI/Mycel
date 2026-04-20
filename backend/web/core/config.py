@@ -1,18 +1,15 @@
 """Configuration constants for Leon web backend."""
 
-import os
-from pathlib import Path
-
+from backend import sandbox_paths
+from backend.local_workspace import local_workspace_root
 from config.user_paths import user_home_path
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
-# Database paths
-DB_PATH = resolve_role_db_path(SQLiteDBRole.MAIN)
-SANDBOXES_DIR = user_home_path("sandboxes")
-SANDBOX_VOLUME_ROOT = Path(os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))).expanduser().resolve()
+# SQLite sandbox repos use this as their default local DB path.
+DB_PATH = user_home_path("leon.db")
+SANDBOXES_DIR = sandbox_paths.SANDBOXES_DIR
 
 # Workspace
-LOCAL_WORKSPACE_ROOT = Path.cwd().resolve()
+LOCAL_WORKSPACE_ROOT = local_workspace_root()
 
 # Idle reaper
 IDLE_REAPER_INTERVAL_SEC = 30

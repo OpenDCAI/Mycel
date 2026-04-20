@@ -1,13 +1,24 @@
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { Loader2 } from "lucide-react";
-import type { AssistantTurn, NoticeSegment, NotificationType, RetrySegment, StreamStatus, ToolSegment, TurnSegment } from "../../api";
+import {
+  isNoticeSegment,
+  isRetrySegment,
+  isTextSegment,
+  isToolSegment,
+  type AssistantTurn,
+  type NotificationType,
+  type StreamStatus,
+  type TurnSegment,
+} from "../../api";
 import MarkdownContent from "../MarkdownContent";
-import MemberAvatar from "../MemberAvatar";
+import ActorAvatar from "../ActorAvatar";
 import { CopyButton } from "./CopyButton";
 import { InlineNotice } from "./NoticeBubble";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { ToolDetailBox } from "./ToolDetailBox";
 import { formatTime } from "./utils";
+import { AskUserQuestionCard } from "./AskUserQuestionCard";
+import type { AskUserQuestionAnsweredPayload, AskUserQuestionPendingState } from "../../pages/ask-user-question";
 
 // --- Phase splitting: segments → content phases + notice dividers ---
 
@@ -19,10 +30,9 @@ function splitPhases(segments: TurnSegment[]): Phase[] {
   const phases: Phase[] = [];
   let buf: TurnSegment[] = [];
   for (const seg of segments) {
-    if (seg.type === "notice") {
+    if (isNoticeSegment(seg)) {
       if (buf.length > 0) { phases.push({ kind: "content", segments: buf }); buf = []; }
-      const ns = seg as NoticeSegment;
-      phases.push({ kind: "notice", content: ns.content, notificationType: ns.notification_type });
+      phases.push({ kind: "notice", content: seg.content, notificationType: seg.notification_type });
     } else {
       buf.push(seg);
     }
@@ -40,30 +50,35 @@ function NoticeDivider({ content, notificationType }: { content: string; notific
 // --- Content phase rendering (tools + final text) ---
 
 function ContentPhaseBlock({
-  segments, allSegments, isStreaming, onFocusAgent,
+  segments, allSegments, isStreaming, onFocusAgent, askUserQuestion,
 }: {
   segments: TurnSegment[];
   /** All segments in the full turn (passed to DetailBoxModal). */
   allSegments?: TurnSegment[];
   isStreaming: boolean;
-  onFocusAgent?: (taskId: string) => void;
+  onFocusAgent?: () => void;
+  askUserQuestion?: { mode: "pending"; pending: AskUserQuestionPendingState } | { mode: "answered"; answered: AskUserQuestionAnsweredPayload };
 }) {
-  const toolSegs = segments.filter((s) => s.type === "tool") as ToolSegment[];
-  const textSegs = segments.filter((s) => s.type === "text");
+  const toolSegs = segments.filter(isToolSegment);
+  const visibleToolSegs = askUserQuestion
+    ? toolSegs.filter((segment) => segment.step.name !== "AskUserQuestion")
+    : toolSegs;
+  const textSegs = segments.filter(isTextSegment);
   const visibleText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
-  const retrySeg = segments.find((s) => s.type === "retry") as RetrySegment | undefined;
+  const retrySeg = segments.find(isRetrySegment);
 
   return (
     <>
-      {toolSegs.length > 0 && (
+      {visibleToolSegs.length > 0 && (
         <ToolDetailBox
-          toolSegments={toolSegs}
+          toolSegments={visibleToolSegs}
           isStreaming={isStreaming}
-          allSegments={allSegments}
+          allSegments={allSegments?.filter((segment) => segment.type !== "tool" || segment.step.name !== "AskUserQuestion")}
           onFocusAgent={onFocusAgent}
         />
       )}
-      {visibleText && visibleText.type === "text" && (
+      {askUserQuestion ? <AskUserQuestionCard {...askUserQuestion} /> : null}
+      {visibleText && (
         <MarkdownContent content={visibleText.content} />
       )}
       {retrySeg && (
@@ -82,9 +97,10 @@ interface AssistantBlockProps {
   entry: AssistantTurn;
   isStreamingThis?: boolean;
   runtimeStatus?: StreamStatus | null;
-  onFocusAgent?: (taskId: string) => void;
+  onFocusAgent?: () => void;
   agentName?: string;
   agentAvatarUrl?: string;
+  askUserQuestion?: { mode: "pending"; pending: AskUserQuestionPendingState } | { mode: "answered"; answered: AskUserQuestionAnsweredPayload };
 }
 
 function formatDuration(ms: number): string {
@@ -92,27 +108,19 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent, agentName, agentAvatarUrl }: AssistantBlockProps) {
+export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent, agentName, agentAvatarUrl, askUserQuestion }: AssistantBlockProps) {
   const displayName = agentName || "Agent";
   const hasNotice = entry.segments.some((s) => s.type === "notice");
 
-  const [elapsed, setElapsed] = useState<number | null>(() =>
-    entry.endTimestamp ? entry.endTimestamp - entry.timestamp : null
-  );
-
-  useEffect(() => {
-    if (entry.endTimestamp) {
-      setElapsed(entry.endTimestamp - entry.timestamp);
-    }
-  }, [entry.timestamp, entry.endTimestamp]);
+  const elapsed = entry.endTimestamp ? entry.endTimestamp - entry.timestamp : null;
 
   const fullText = entry.segments
-    .filter((s) => s.type === "text")
-    .map((s) => s.type === "text" ? s.content : "")
+    .filter(isTextSegment)
+    .map((s) => s.content)
     .join("\n");
 
-  const toolSegs = entry.segments.filter((s) => s.type === "tool") as ToolSegment[];
-  const textSegs = entry.segments.filter((s) => s.type === "text");
+  const toolSegs = entry.segments.filter(isToolSegment);
+  const textSegs = entry.segments.filter(isTextSegment);
 
   const hasVisible = toolSegs.length > 0 || textSegs.length > 0;
 
@@ -122,7 +130,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
 
   return (
     <div className="flex gap-2.5 animate-fade-in group/block">
-      <MemberAvatar name={displayName} avatarUrl={agentAvatarUrl} size="xs" type="mycel_agent" className={`mt-0.5${isBooting ? " avatar-booting" : ""}`} />
+      <ActorAvatar name={displayName} avatarUrl={agentAvatarUrl} size="xs" type="mycel_agent" className={`mt-0.5${isBooting ? " avatar-booting" : ""}`} />
       <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">{displayName}</span>
@@ -141,11 +149,12 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
             phase.kind === "notice"
               ? <NoticeDivider key={`notice-${i}-${phase.content.slice(0, 32)}`} content={phase.content} notificationType={phase.notificationType} />
               : <ContentPhaseBlock
-                  key={phase.segments[0]?.type === "tool" ? `tool-${(phase.segments[0] as ToolSegment).step.id}` : `content-${i}`}
+                  key={phase.segments[0] && isToolSegment(phase.segments[0]) ? `tool-${phase.segments[0].step.id}` : `content-${i}`}
                   segments={phase.segments}
                   allSegments={entry.segments}
                   isStreaming={!!isStreamingThis}
                   onFocusAgent={onFocusAgent}
+                  askUserQuestion={askUserQuestion}
                 />
           )
         ) : (
@@ -155,6 +164,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
             allSegments={entry.segments}
             isStreaming={!!isStreamingThis}
             onFocusAgent={onFocusAgent}
+            askUserQuestion={askUserQuestion}
           />
         )}
 

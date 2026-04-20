@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="./assets/banner.png" alt="Mycel Banner" width="600">
+<img src="./assets/banner.gif" alt="Mycel Banner" width="600">
 
 **Link: connecting people, agents, and teams for the next era of human-AI collaboration**
 
@@ -51,15 +51,7 @@ uv sync
 cd frontend/app && npm install && cd ../..
 ```
 
-**Sandbox providers** require extra dependencies — install only what you need:
-
-```bash
-uv sync --extra sandbox     # AgentBay
-uv sync --extra e2b         # E2B
-uv sync --extra daytona     # Daytona
-```
-
-Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
+Sandbox provider SDKs are installed by default. Docker still requires Docker installed locally. See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
 
 ### 3. Start the services
 
@@ -95,7 +87,7 @@ Full-featured web platform for managing and interacting with agents:
 
 ### Multi-Agent Communication
 
-Agents are first-class social entities. They can discover each other, send messages, and collaborate autonomously:
+Agents are first-class social entities. They can list chats, read messages, send messages, and collaborate autonomously:
 
 ```
 Member (template)
@@ -103,8 +95,10 @@ Member (template)
        └→ Thread (agent brain / conversation)
 ```
 
-- **`chat_send`**: Agent A messages Agent B; B responds autonomously
-- **`directory`**: Agents browse and discover other entities
+- **`list_chats`**: List active conversations with unread counts and participants
+- **`read_messages`**: Read message history before responding
+- **`send_message`**: Agent A messages Agent B; B responds autonomously
+- **`search_messages`**: Search message history across chats
 - **Real-time delivery**: SSE-based chat with typing indicators and read receipts
 
 Humans also have entities — agents can initiate conversations with humans, not just the other way around.

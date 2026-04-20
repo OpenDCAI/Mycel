@@ -2,34 +2,22 @@
 
 from __future__ import annotations
 
+import json
+import mimetypes
+import posixpath
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import ToolMessage
 
-try:
-    from langchain.agents.middleware.types import (
-        AgentMiddleware,
-        ModelRequest,
-        ModelResponse,
-        ToolCallRequest,
-    )
-except ImportError:
-
-    class AgentMiddleware:  # type: ignore[no-redef]
-        pass
-
-    ModelRequest = Any
-    ModelResponse = Any
-    ToolCallRequest = Any
-
-from core.tools.filesystem.backend import FileSystemBackend
+from core.runtime.middleware import AgentMiddleware, ModelRequest, ModelResponse, ToolCallRequest
+from sandbox.interfaces.filesystem import FileSystemBackend
 
 from .spill import spill_if_needed
 
 # Tools whose output must never be silently replaced.
-SKIP_TOOLS: set[str] = {"read_file"}
+SKIP_TOOLS: set[str] = {"Read"}
 
 
 class SpillBufferMiddleware(AgentMiddleware):
@@ -38,7 +26,7 @@ class SpillBufferMiddleware(AgentMiddleware):
     Oversized content is written to disk under
     ``{workspace_root}/.leon/tool-results/{tool_call_id}.txt``
     and replaced with a preview + file path so the model can
-    use ``read_file`` to inspect specific sections.
+    use ``Read`` to inspect specific sections.
     """
 
     def __init__(
@@ -56,6 +44,53 @@ class SpillBufferMiddleware(AgentMiddleware):
         self.workspace_root = str(workspace_root)
         self.thresholds: dict[str, int] = thresholds or {}
         self.default_threshold = default_threshold
+
+    def _rewrite_mcp_blocks(self, content: Any, *, tool_call_id: str) -> Any:
+        if not isinstance(content, list):
+            return content
+
+        lines: list[str] = []
+        saw_mcp_blocks = False
+
+        for index, block in enumerate(content):
+            if not isinstance(block, dict):
+                return content
+
+            kind = block.get("type")
+            if kind == "text":
+                lines.append(str(block.get("text", "")))
+                continue
+
+            saw_mcp_blocks = True
+            mime_type = str(block.get("mime_type") or "application/octet-stream")
+            guessed_ext = mimetypes.guess_extension(mime_type.split(";", 1)[0].strip()) or ".bin"
+
+            if isinstance(block.get("base64"), str):
+                payload_path = posixpath.join(
+                    self.workspace_root,
+                    ".leon",
+                    "tool-results",
+                    f"{tool_call_id}-{index}{guessed_ext}.base64",
+                )
+                # @@@mcp-binary-handoff - api-04 keeps Leon's sandbox/file
+                # abstraction by persisting encoded payloads through fs_backend
+                # instead of writing host-local bytes behind the sandbox's back.
+                write_result = self.fs_backend.write_file(payload_path, block["base64"])
+                if hasattr(write_result, "success") and not write_result.success:
+                    raise RuntimeError(write_result.error or f"failed to persist MCP payload to {payload_path}")
+                lines.append(f"MCP binary content ({mime_type}) saved to {payload_path} as base64 payload.")
+                continue
+
+            if isinstance(block.get("url"), str):
+                lines.append(f"MCP {kind} content available at {block['url']} ({mime_type})")
+                continue
+
+            lines.append(json.dumps(block, ensure_ascii=False, default=str))
+
+        if not saw_mcp_blocks:
+            text_only = "\n".join(line for line in lines if line)
+            return text_only or content
+        return "\n".join(line for line in lines if line)
 
     # -- model call: pass-through ------------------------------------------
 
@@ -81,6 +116,19 @@ class SpillBufferMiddleware(AgentMiddleware):
         if tool_name in SKIP_TOOLS:
             return result
 
+        source = result.additional_kwargs.get("tool_result_meta", {}).get("source")
+        normalized_content = result.content
+        if source == "mcp":
+            normalized_content = self._rewrite_mcp_blocks(
+                normalized_content,
+                tool_call_id=request.tool_call.get("id", "unknown"),
+            )
+            if normalized_content is not result.content:
+                result = result.model_copy(update={"content": normalized_content})
+
+        if isinstance(result.content, str) and not result.content.strip():
+            return result.model_copy(update={"content": f"({tool_name} completed with no output)"})
+
         threshold = self.thresholds.get(tool_name, self.default_threshold)
         tool_call_id = request.tool_call.get("id", "unknown")
 
@@ -93,10 +141,10 @@ class SpillBufferMiddleware(AgentMiddleware):
         )
 
         if spilled is not result.content:
-            return ToolMessage(
-                content=spilled,
-                tool_call_id=result.tool_call_id,
-            )
+            # @@@spill-message-preservation - replacing content must not discard
+            # metadata/name/id; te-03 is about persisted handoff, not rebuilding
+            # a thinner ToolMessage shell.
+            return result.model_copy(update={"content": spilled})
         return result
 
     def wrap_tool_call(

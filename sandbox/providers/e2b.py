@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from sandbox.provider import (
     Metrics,
@@ -30,6 +31,86 @@ if TYPE_CHECKING:
     from sandbox.terminal import AbstractTerminal
 
 logger = logging.getLogger(__name__)
+
+
+class _E2BProcessHandle(Protocol):
+    pid: int
+
+
+class _E2BCommandResult(Protocol):
+    stdout: str | None
+    stderr: str | None
+    exit_code: int
+
+
+class _E2BPtyCreateHandle(Protocol):
+    pid: int
+
+    def disconnect(self) -> None: ...
+
+
+class _E2BPtyStreamHandle(Protocol):
+    def __iter__(self) -> Iterator[tuple[object, object, bytes | None]]: ...
+
+    def disconnect(self) -> None: ...
+
+
+class _E2BCommandsHandle(Protocol):
+    def run(self, command: str, cwd: str | None = None, timeout: float | int | None = None) -> _E2BCommandResult: ...
+
+    def list(self) -> list[_E2BProcessHandle]: ...
+
+
+class _E2BPtyHandle(Protocol):
+    def create(self, *, size: object, cwd: str, timeout: float | int) -> _E2BPtyCreateHandle: ...
+
+    def connect(self, pid: int, timeout: float | int) -> _E2BPtyStreamHandle: ...
+
+    def send_stdin(self, pid: int, data: bytes) -> object: ...
+
+    def kill(self, pid: int) -> object: ...
+
+
+class _E2BFileType(Protocol):
+    value: str
+
+
+class _E2BFileEntry(Protocol):
+    name: str
+    type: _E2BFileType | None
+    size: int | None
+    path: str
+
+
+class _E2BFilesHandle(Protocol):
+    def read(self, path: str, format: str | None = None) -> str | bytes | bytearray | memoryview | None: ...
+
+    def write(self, path: str, content: object) -> object: ...
+
+    def list(self, path: str) -> list[_E2BFileEntry]: ...
+
+
+class _E2BSandboxHandle(Protocol):
+    sandbox_id: str
+    commands: _E2BCommandsHandle
+    pty: _E2BPtyHandle
+    files: _E2BFilesHandle
+
+    def beta_pause(self) -> object: ...
+
+    def kill(self) -> object: ...
+
+
+def _require_e2b_bytes(
+    value: str | bytes | bytearray | memoryview | None,
+    *,
+    path: str,
+) -> bytes:
+    if value is None:
+        return b""
+    if isinstance(value, str):
+        return value.encode("utf-8")
+    return bytes(value)
 
 
 class E2BProvider(SandboxProvider):
@@ -68,6 +149,10 @@ class E2BProvider(SandboxProvider):
         timeout: int = 300,
         provider_name: str | None = None,
     ):
+        # @@@e2b-sdk-presence - provider inventory must fail loudly when the SDK is absent,
+        # otherwise provider catalog/create-thread gates can overclaim e2b availability.
+        from e2b import Sandbox  # noqa: F401
+
         if provider_name:
             self.name = provider_name
         self.api_key = api_key
@@ -88,6 +173,16 @@ class E2BProvider(SandboxProvider):
             api_key=self.api_key,
         )
         self._sandboxes[sandbox.sandbox_id] = sandbox
+        # @@@e2b-workspace-bootstrap - fresh E2B sandboxes do not guarantee our sync root exists.
+        # Create it eagerly so upload/download and file hints target a real path contract.
+        bootstrap = sandbox.commands.run(
+            f"mkdir -p {self.WORKSPACE_ROOT}/files",
+            cwd=self.default_cwd,
+            timeout=10,
+        )
+        if getattr(bootstrap, "exit_code", 0) != 0:
+            error = getattr(bootstrap, "stderr", "") or getattr(bootstrap, "stdout", "") or "unknown error"
+            raise RuntimeError(f"Failed to bootstrap E2B workspace root: {error}")
 
         return SessionInfo(
             session_id=sandbox.sandbox_id,
@@ -192,7 +287,10 @@ class E2BProvider(SandboxProvider):
 
     def read_file(self, session_id: str, path: str) -> str:
         sandbox = self._get_sandbox(session_id)
-        return sandbox.files.read(path)
+        content = sandbox.files.read(path)
+        if isinstance(content, str):
+            return content
+        raise RuntimeError(f"E2B read_file returned non-text content for {path}")
 
     def write_file(self, session_id: str, path: str, content: str) -> str:
         sandbox = self._get_sandbox(session_id)
@@ -222,7 +320,7 @@ class E2BProvider(SandboxProvider):
     def download_bytes(self, session_id: str, remote_path: str) -> bytes:
         sandbox = self._get_sandbox(session_id)
         content = sandbox.files.read(remote_path, format="bytes")
-        return bytes(content) if content else b""
+        return _require_e2b_bytes(content, path=remote_path)
 
     def get_metrics(self, session_id: str) -> Metrics | None:
         # E2B is Ubuntu-based; free/top/df are available → delegate to shell command probing.
@@ -240,14 +338,14 @@ class E2BProvider(SandboxProvider):
             except Exception:
                 continue
             for entry in entries:
-                p = entry.path if hasattr(entry, "path") else f"{d}/{entry.name}"
+                p = entry.path or f"{d}/{entry.name}"
                 if entry.type and entry.type.value == "dir":
                     stack.append(p)
                     continue
                 try:
                     data = sandbox.files.read(p, format="bytes")
                     rel = p.removeprefix(self.WORKSPACE_ROOT + "/")
-                    files.append({"file_path": rel, "content": bytes(data)})
+                    files.append({"file_path": rel, "content": _require_e2b_bytes(data, path=p)})
                 except Exception:
                     logger.warning("[E2BProvider] snapshot_workspace failed to read %s", p, exc_info=True)
                     continue
@@ -260,7 +358,7 @@ class E2BProvider(SandboxProvider):
             abs_path = f"{self.WORKSPACE_ROOT}/{f['file_path']}"
             sandbox.files.write(abs_path, f["content"])
 
-    def _get_sandbox(self, session_id: str):
+    def _get_sandbox(self, session_id: str) -> _E2BSandboxHandle:
         """Get sandbox object, reconnecting if not cached."""
         if session_id not in self._sandboxes:
             from e2b import Sandbox
@@ -271,9 +369,9 @@ class E2BProvider(SandboxProvider):
                 api_key=self.api_key,
             )
             self._sandboxes[session_id] = sandbox
-        return self._sandboxes[session_id]
+        return cast(_E2BSandboxHandle, self._sandboxes[session_id])
 
-    def get_runtime_sandbox(self, session_id: str):
+    def get_runtime_sandbox(self, session_id: str) -> _E2BSandboxHandle:
         """Expose native SDK sandbox for runtime-level persistent terminal handling."""
         return self._get_sandbox(session_id)
 
@@ -313,7 +411,7 @@ class E2BPtyRuntime(_RemoteRuntimeBase):
 
     def _run_pty_command_sync(
         self,
-        sandbox,
+        sandbox: _E2BSandboxHandle,
         pid: int,
         command: str,
         timeout: float | None,
@@ -338,7 +436,10 @@ class E2BPtyRuntime(_RemoteRuntimeBase):
         finally:
             handle.disconnect()
 
-    def _ensure_shell_sync(self, timeout: float | None) -> tuple[object, int]:
+    def _provider_sandbox(self, instance_id: str) -> _E2BSandboxHandle:
+        return cast(_E2BSandboxHandle, super()._provider_sandbox(instance_id))
+
+    def _ensure_shell_sync(self, timeout: float | None) -> tuple[_E2BSandboxHandle, int]:
         instance = self.lease.ensure_active_instance(self.provider)
         if self._bound_instance_id != instance.instance_id:
             self._bound_instance_id = instance.instance_id
@@ -387,8 +488,8 @@ class E2BPtyRuntime(_RemoteRuntimeBase):
             snapshot_out,
             start_marker,
             end_marker,
-            cwd_fallback=state.cwd,
-            env_fallback=state.env_delta,
+            previous_cwd=state.cwd,
+            previous_env=state.env_delta,
         )
         env_delta = _compute_env_delta(env_map, self._baseline_env or {}, state.env_delta)
         from sandbox.terminal import TerminalState

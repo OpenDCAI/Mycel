@@ -1,7 +1,7 @@
 """Search Service - registers Grep and Glob tools with ToolRegistry.
 
 Tools:
-- Grep: Content search using regex (ripgrep preferred, Python fallback)
+- Grep: Content search using regex (ripgrep when available, Python implementation otherwise)
 - Glob: File pattern matching sorted by modification time
 """
 
@@ -12,11 +12,16 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 DEFAULT_EXCLUDES: list[str] = [
     "node_modules",
     ".git",
+    ".svn",
+    ".hg",
+    ".bzr",
+    ".jj",
+    ".sl",
     "__pycache__",
     ".venv",
     "venv",
@@ -50,67 +55,76 @@ class SearchService:
             ToolEntry(
                 name="Grep",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Grep",
-                    "description": "Search file contents using regex patterns.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "pattern": {
-                                "type": "string",
-                                "description": "Regex pattern to search for",
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "File or directory (absolute). Defaults to workspace.",
-                            },
-                            "glob": {
-                                "type": "string",
-                                "description": "Filter files by glob (e.g., '*.py')",
-                            },
-                            "type": {
-                                "type": "string",
-                                "description": "Filter by file type (e.g., 'py', 'js')",
-                            },
-                            "case_insensitive": {
-                                "type": "boolean",
-                                "description": "Case insensitive search",
-                            },
-                            "after_context": {
-                                "type": "integer",
-                                "description": "Lines to show after each match",
-                            },
-                            "before_context": {
-                                "type": "integer",
-                                "description": "Lines to show before each match",
-                            },
-                            "context": {
-                                "type": "integer",
-                                "description": "Context lines before and after each match",
-                            },
-                            "output_mode": {
-                                "type": "string",
-                                "enum": ["content", "files_with_matches", "count"],
-                                "description": "Output format. Default: files_with_matches",
-                            },
-                            "head_limit": {
-                                "type": "integer",
-                                "description": "Limit to first N entries",
-                            },
-                            "offset": {
-                                "type": "integer",
-                                "description": "Skip first N entries",
-                            },
-                            "multiline": {
-                                "type": "boolean",
-                                "description": "Allow pattern to span multiple lines",
-                            },
+                schema=make_tool_schema(
+                    name="Grep",
+                    description=(
+                        "Regex search across files (ripgrep-based). "
+                        "Default output_mode: files_with_matches (sorted by mtime). Default head_limit: 250 entries. "
+                        "Auto-excludes .git/.svn/.hg dirs. Max column width 500 chars (suppresses minified/base64). "
+                        "Use output_mode='content' with after_context/before_context/context for context lines."
+                    ),
+                    properties={
+                        "pattern": {
+                            "type": "string",
+                            "description": "Regex pattern to search for",
                         },
-                        "required": ["pattern"],
+                        "path": {
+                            "type": "string",
+                            "description": "File or directory (absolute). Defaults to workspace.",
+                        },
+                        "glob": {
+                            "type": "string",
+                            "description": "Filter files by glob (e.g., '*.py')",
+                        },
+                        "type": {
+                            "type": "string",
+                            "description": "Filter by file type (e.g., 'py', 'js')",
+                        },
+                        "case_insensitive": {
+                            "type": "boolean",
+                            "description": "Case insensitive search",
+                        },
+                        "after_context": {
+                            "type": "integer",
+                            "description": "Lines to show after each match",
+                        },
+                        "before_context": {
+                            "type": "integer",
+                            "description": "Lines to show before each match",
+                        },
+                        "context": {
+                            "type": "integer",
+                            "description": "Context lines before and after each match",
+                        },
+                        "output_mode": {
+                            "type": "string",
+                            "enum": ["content", "files_with_matches", "count"],
+                            "description": "Output format. Default: files_with_matches",
+                        },
+                        "head_limit": {
+                            "type": "integer",
+                            "description": "Limit to first N entries",
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "description": "Skip first N entries",
+                        },
+                        "multiline": {
+                            "type": "boolean",
+                            "description": "Allow pattern to span multiple lines",
+                        },
+                        "line_numbers": {
+                            "type": "boolean",
+                            "description": "Show line numbers (default true). Only applies with output_mode='content'.",
+                        },
                     },
-                },
+                    required=["pattern"],
+                ),
                 handler=self._grep,
                 source="SearchService",
+                search_hint="search file contents regex pattern matching ripgrep",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -118,26 +132,30 @@ class SearchService:
             ToolEntry(
                 name="Glob",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Glob",
-                    "description": "Find files by glob pattern. Returns paths sorted by modification time.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "pattern": {
-                                "type": "string",
-                                "description": "Glob pattern (e.g., '**/*.py')",
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "Directory to search (absolute). Defaults to workspace.",
-                            },
+                schema=make_tool_schema(
+                    name="Glob",
+                    description=(
+                        "Fast file pattern matching (ripgrep-based). Returns paths sorted by modification time. "
+                        "Includes hidden files, ignores .gitignore. Default limit 100 results. "
+                        "Use '**/*.py' for recursive search. Path must be absolute."
+                    ),
+                    properties={
+                        "pattern": {
+                            "type": "string",
+                            "description": "Glob pattern (e.g., '**/*.py')",
                         },
-                        "required": ["pattern"],
+                        "path": {
+                            "type": "string",
+                            "description": "Directory to search (absolute). Defaults to workspace.",
+                        },
                     },
-                },
+                    required=["pattern"],
+                ),
                 handler=self._glob,
                 source="SearchService",
+                search_hint="find files by name glob pattern matching",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -154,7 +172,7 @@ class SearchService:
 
         try:
             resolved = Path(path).resolve()
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             return False, f"Invalid path: {path} ({e})", self.workspace_root
 
         try:
@@ -183,9 +201,10 @@ class SearchService:
         before_context: int | None = None,
         context: int | None = None,
         output_mode: str = "files_with_matches",
-        head_limit: int | None = None,
+        head_limit: int | None = 250,
         offset: int | None = None,
         multiline: bool = False,
+        line_numbers: bool = True,
     ) -> str:
         ok, error, resolved = self._validate_path(path)
         if not ok:
@@ -195,23 +214,21 @@ class SearchService:
             return f"Path not found: {path or self.workspace_root}"
 
         if self.has_ripgrep:
-            try:
-                return self._ripgrep_search(
-                    resolved,
-                    pattern,
-                    glob=glob,
-                    type_filter=type,
-                    case_insensitive=case_insensitive,
-                    after_context=after_context,
-                    before_context=before_context,
-                    context=context,
-                    output_mode=output_mode,
-                    head_limit=head_limit,
-                    offset=offset,
-                    multiline=multiline,
-                )
-            except Exception:
-                pass  # fallback to Python
+            return self._ripgrep_search(
+                resolved,
+                pattern,
+                glob=glob,
+                type_filter=type,
+                case_insensitive=case_insensitive,
+                after_context=after_context,
+                before_context=before_context,
+                context=context,
+                output_mode=output_mode,
+                head_limit=head_limit,
+                offset=offset,
+                multiline=multiline,
+                line_numbers=line_numbers,
+            )
 
         return self._python_grep(
             resolved,
@@ -238,8 +255,9 @@ class SearchService:
         head_limit: int | None,
         offset: int | None,
         multiline: bool,
+        line_numbers: bool = True,
     ) -> str:
-        cmd: list[str] = ["rg", pattern, str(path)]
+        cmd: list[str] = ["rg", pattern, str(path), "--max-columns", "500"]
 
         for excl in DEFAULT_EXCLUDES:
             cmd.extend(["--glob", f"!{excl}"])
@@ -258,7 +276,8 @@ class SearchService:
         elif output_mode == "count":
             cmd.append("--count")
         elif output_mode == "content":
-            cmd.extend(["--line-number", "--no-heading"])
+            ln_flag = "--line-number" if line_numbers else "--no-line-number"
+            cmd.extend([ln_flag, "--no-heading"])
             if context is not None:
                 cmd.extend(["-C", str(context)])
             else:
