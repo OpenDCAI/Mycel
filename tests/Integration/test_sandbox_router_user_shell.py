@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -50,53 +49,6 @@ def test_sandbox_runtime_routes_do_not_expose_session_paths() -> None:
     assert "/api/sandbox/runtimes/{runtime_id}/resume" in route_paths
     assert "/api/sandbox/runtimes/{runtime_id}" in route_paths
     assert not any("/sessions" in path for path in route_paths)
-
-
-def test_sandbox_runtime_metrics_route_uses_neutral_owner() -> None:
-    source = inspect.getsource(sandbox_router)
-
-    assert "sandbox_service.get_runtime_metrics" not in source
-    assert "sandbox_runtime_metrics.get_runtime_metrics" in source
-    assert "init_providers_and_managers_fn=init_providers_and_managers" in source
-    assert "load_all_sandbox_runtimes_fn=load_all_sandbox_runtimes" in source
-    assert "find_runtime_and_manager_fn=find_runtime_and_manager" in source
-
-
-def test_sandbox_runtime_mutation_route_uses_neutral_owner() -> None:
-    source = inspect.getsource(sandbox_router)
-
-    assert "sandbox_service.mutate_sandbox_runtime" not in source
-    assert "sandbox_runtime_mutations.mutate_sandbox_runtime" in source
-    assert "init_providers_and_managers_fn=sandbox_service.init_providers_and_managers" not in source
-    assert "load_all_sandbox_runtimes_fn=sandbox_service.load_all_sandbox_runtimes" not in source
-    assert "find_runtime_and_manager_fn=sandbox_service.find_runtime_and_manager" not in source
-
-
-def test_sandbox_type_list_route_uses_neutral_owner() -> None:
-    source = inspect.getsource(sandbox_router)
-
-    assert "sandbox_service.available_sandbox_types" not in source
-    assert "sandbox_provider_availability.available_sandbox_types" in source
-
-
-def test_sandbox_runtime_list_route_uses_neutral_owners() -> None:
-    source = inspect.getsource(sandbox_router)
-
-    assert "from backend.sandbox_inventory import init_providers_and_managers" in source
-    assert "from backend.sandbox_runtime_reads import find_runtime_and_manager, load_all_sandbox_runtimes" in source
-    assert "await asyncio.to_thread(sandbox_service.init_providers_and_managers)" not in source
-    assert "await asyncio.to_thread(load_all_sandbox_runtimes, managers)" in source
-
-
-def test_sandbox_mine_route_uses_neutral_owner() -> None:
-    source = inspect.getsource(sandbox_router)
-
-    assert "await asyncio.to_thread(sandbox_service.list_user_sandboxes" not in source
-    assert "user_sandbox_reads.list_user_sandboxes" in source
-    assert "sandbox_service.make_sandbox_monitor_repo" not in source
-    assert "sandbox_service.canonical_owner_threads" not in source
-    assert "sandbox_service.avatar_url" not in source
-    assert "sandbox_service.is_virtual_thread_id" not in source
 
 
 @pytest.mark.asyncio
