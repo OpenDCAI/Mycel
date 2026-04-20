@@ -305,6 +305,7 @@ def aggregate_provider_telemetry(
 
 
 def resolve_card_cpu_metric(provider_type: str, telemetry: dict[str, Any]) -> dict[str, Any] | None:
-    if provider_type == "local":
-        return telemetry.get("cpu")
-    return None
+    cpu_metric = telemetry.get("cpu")
+    if isinstance(cpu_metric, dict):
+        return dict(cpu_metric)
+    return metric(None, None, "%", "derived", "live")

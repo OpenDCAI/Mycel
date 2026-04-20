@@ -161,9 +161,11 @@ class SupabaseSandboxMonitorRepo:
 
     def query_resource_rows(self) -> list[dict]:
         result = []
+        sandboxes = self._ordered_sandboxes("query_resource_rows")
+        thread_ids_by_sandbox = self._thread_ids_by_sandbox_id([str(sandbox.get("id") or "") for sandbox in sandboxes])
 
-        for sandbox in self._ordered_sandboxes("query_resource_rows"):
-            thread_ids = self._thread_ids_for_sandbox_id(str(sandbox.get("id") or ""))
+        for sandbox in sandboxes:
+            thread_ids = thread_ids_by_sandbox.get(str(sandbox.get("id") or "").strip(), [])
             if thread_ids:
                 for thread_id in thread_ids:
                     result.append(
@@ -315,6 +317,53 @@ class SupabaseSandboxMonitorRepo:
             if thread_id and thread_id not in seen:
                 seen.add(thread_id)
                 result.append(thread_id)
+        return result
+
+    def _thread_ids_by_sandbox_id(self, sandbox_ids: list[str]) -> dict[str, list[str]]:
+        ordered_ids = [str(sandbox_id or "").strip() for sandbox_id in sandbox_ids if str(sandbox_id or "").strip()]
+        if not ordered_ids:
+            return {}
+        sandbox_id_set = set(ordered_ids)
+
+        workspaces = q.rows(
+            q.schema_table(self._client, "container", "workspaces", _REPO).select("id,sandbox_id,updated_at,created_at").execute(),
+            _REPO,
+            "query_resource_rows workspaces",
+        )
+        workspace_to_sandbox: dict[str, str] = {}
+        for row in sorted(workspaces, key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True):
+            workspace_id = str(row.get("id") or "").strip()
+            sandbox_id = str(row.get("sandbox_id") or "").strip()
+            if workspace_id and sandbox_id in sandbox_id_set:
+                workspace_to_sandbox[workspace_id] = sandbox_id
+        if not workspace_to_sandbox:
+            return {}
+
+        workspace_id_set = set(workspace_to_sandbox)
+        threads = q.rows(
+            q.order(
+                q.schema_table(self._client, "agent", "threads", _REPO).select("id,current_workspace_id,updated_at,created_at"),
+                "updated_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_resource_rows threads",
+            ).execute(),
+            _REPO,
+            "query_resource_rows threads",
+        )
+        result = {sandbox_id: [] for sandbox_id in ordered_ids}
+        seen_by_sandbox: dict[str, set[str]] = {}
+        for row in sorted(threads, key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True):
+            thread_id = str(row.get("id") or "").strip()
+            workspace_id = str(row.get("current_workspace_id") or "").strip()
+            sandbox_id = workspace_to_sandbox.get(workspace_id)
+            if not thread_id or workspace_id not in workspace_id_set or not sandbox_id:
+                continue
+            seen = seen_by_sandbox.setdefault(sandbox_id, set())
+            if thread_id in seen:
+                continue
+            seen.add(thread_id)
+            result[sandbox_id].append(thread_id)
         return result
 
     def _lease_row_from_sandbox(self, sandbox: dict[str, Any]) -> dict[str, Any]:

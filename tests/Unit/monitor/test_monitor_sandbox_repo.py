@@ -53,6 +53,39 @@ class _NoWorkspaceSandboxInClient(FakeSupabaseClient):
         return _NoWorkspaceSandboxInClient(self._tables, self._auto_seq_tables, schema_name=schema_name)
 
 
+class _CountingQuery(FakeSupabaseQuery):
+    def __init__(self, table_name: str, tables: dict[str, list[dict]], counts: dict[str, int]):
+        super().__init__(table_name, tables)
+        self._counts = counts
+
+    def execute(self):
+        self._counts[self._table_name] = self._counts.get(self._table_name, 0) + 1
+        return super().execute()
+
+
+class _CountingClient(FakeSupabaseClient):
+    def __init__(
+        self,
+        tables: dict[str, list[dict]] | None = None,
+        auto_seq_tables: set[str] | None = None,
+        schema_name: str | None = None,
+        *,
+        counts: dict[str, int] | None = None,
+    ):
+        super().__init__(tables, auto_seq_tables, schema_name=schema_name)
+        self._counts = counts if counts is not None else {}
+
+    def table(self, table_name: str):
+        resolved_table = f"{self._schema_name}.{table_name}" if self._schema_name else table_name
+        query = _CountingQuery(resolved_table, self._tables, self._counts)
+        if resolved_table in self._auto_seq_tables:
+            query._auto_seq = True
+        return query
+
+    def schema(self, schema_name: str):
+        return _CountingClient(self._tables, self._auto_seq_tables, schema_name=schema_name, counts=self._counts)
+
+
 def _repo(tables: dict) -> SupabaseSandboxMonitorRepo:
     return SupabaseSandboxMonitorRepo(FakeSupabaseClient(tables))
 
@@ -960,3 +993,49 @@ def test_query_resource_rows_projects_sandbox_rows_without_session_rows() -> Non
             "created_at": "2026-04-05T10:00:00",
         },
     ]
+
+
+def test_query_resource_rows_bulk_loads_workspace_thread_bindings() -> None:
+    counts: dict[str, int] = {}
+    repo = SupabaseSandboxMonitorRepo(
+        _CountingClient(
+            {
+                "container.sandboxes": [
+                    _sandbox("sandbox-1", created_at="2026-04-05T10:00:00"),
+                    _sandbox("sandbox-2", created_at="2026-04-05T11:00:00"),
+                ],
+                "container.workspaces": [
+                    _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:05:00"),
+                    _workspace("workspace-2", "sandbox-2", updated_at="2026-04-05T11:05:00"),
+                ],
+                "agent.threads": [
+                    _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:05:00"),
+                    _thread("thread-2", "workspace-2", updated_at="2026-04-05T11:05:00"),
+                ],
+            },
+            counts=counts,
+        )
+    )
+
+    assert repo.query_resource_rows() == [
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-2",
+            "sandbox_id": "sandbox-2",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-05T11:00:00",
+        },
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-05T10:00:00",
+        },
+    ]
+    assert counts["container.workspaces"] == 1
+    assert counts["agent.threads"] == 1

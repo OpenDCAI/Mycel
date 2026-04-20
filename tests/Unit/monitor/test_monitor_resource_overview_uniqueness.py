@@ -179,6 +179,46 @@ def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch)
     ]
 
 
+def test_list_resource_providers_keeps_card_cpu_contract_for_remote_provider(monkeypatch):
+    rows = [
+        {
+            "provider": "agentbay",
+            "session_id": None,
+            "thread_id": None,
+            "sandbox_id": "sandbox-1",
+            LOWER_RUNTIME_KEY: "lease-1",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        }
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "agentbay", "available": True}],
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda thread_ids: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["id"] == "agentbay"
+    assert payload["providers"][0]["cardCpu"] == {
+        "used": None,
+        "limit": None,
+        "unit": "%",
+        "source": "derived",
+        "freshness": "live",
+    }
+
+
 def test_list_resource_providers_counts_running_sandboxes_once_when_lower_runtime_residue_duplicates(monkeypatch):
     rows = [
         {
