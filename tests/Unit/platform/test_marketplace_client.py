@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 import backend.library_paths as _lib_paths
-from backend.web.utils.versioning import bump_semver
+from backend.versioning import bump_semver
 
 # ── Version Bump (tested via publish internals) ──
 
@@ -77,6 +77,15 @@ def test_marketplace_client_uses_neutral_library_path_owner() -> None:
 
     assert "from backend.web.services.library_service import LIBRARY_DIR" not in source
     assert "import backend.library_paths as _lib_paths" in source
+
+
+def test_marketplace_client_uses_neutral_versioning_owner() -> None:
+    import backend.web.services.marketplace_client as marketplace_client
+
+    source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
+
+    assert "from backend.web.utils.versioning import BumpType, bump_semver" not in source
+    assert "from backend.versioning import BumpType, bump_semver" in source
 
 
 # ── Helpers ──
