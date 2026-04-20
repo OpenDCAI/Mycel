@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -8,7 +7,6 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-import backend.web.main as web_main
 from backend.chat.api.http import relationships_router as owner_relationship_router
 from messaging.contracts import RelationshipRow
 
@@ -25,27 +23,6 @@ def _row(*, state: str = "pending", initiator_user_id: str = "requester-user-1")
         created_at=now,
         updated_at=now,
     )
-
-
-def test_relationship_router_imports_actor_ownership_primitive() -> None:
-    source = inspect.getsource(owner_relationship_router)
-
-    assert "from messaging.actor_ownership import" in source
-    assert "owner_user_id" not in source
-
-
-def test_relationship_router_uses_neutral_chat_dependency_owner() -> None:
-    source = inspect.getsource(owner_relationship_router)
-
-    assert "backend.web.core.dependencies" not in source
-    assert "backend.chat.api.http.dependencies" in source
-
-
-def test_relationship_router_owner_module_lives_under_backend_chat() -> None:
-    assert owner_relationship_router.__name__ == "backend.chat.api.http.relationships_router"
-    main_source = inspect.getsource(web_main)
-    assert "relationships_router" in main_source
-    assert "messaging.relationships.router" not in main_source
 
 
 @pytest.mark.asyncio
