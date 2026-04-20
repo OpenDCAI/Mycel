@@ -64,6 +64,7 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.pool.registry")
     agent_pool_module = importlib.import_module("backend.web.services.agent_pool")
     source = inspect.getsource(agent_pool_module)
+    owner_source = inspect.getsource(owner_module)
 
     assert hasattr(agent_pool_module, "get_or_create_agent")
     assert hasattr(agent_pool_module, "update_agent_config")
@@ -74,6 +75,7 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
     assert hasattr(agent_pool_module, "get_file_channel_binding")
     assert owner_module.get_or_create_agent.__module__ == "backend.thread_runtime.pool.registry"
     assert owner_module.update_agent_config.__module__ == "backend.thread_runtime.pool.registry"
+    assert "backend.web.services.file_channel_service" not in owner_source
 
 
 def test_thread_launch_config_uses_thread_runtime_launch_config_owner() -> None:
