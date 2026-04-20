@@ -80,6 +80,21 @@ def test_threads_router_uses_neutral_thread_sandbox_owner() -> None:
     assert "from backend.thread_runtime.sandbox import resolve_thread_sandbox" in source
 
 
+def test_threads_router_uses_neutral_resource_cache_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.resource_cache import clear_resource_overview_cache" not in source
+    assert "from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache" in source
+
+
+def test_threads_router_uses_neutral_event_store_owners() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.event_store import get_latest_run_id, read_events_after" not in source
+    assert "from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq" not in source
+    assert "from backend.thread_runtime.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after" in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(

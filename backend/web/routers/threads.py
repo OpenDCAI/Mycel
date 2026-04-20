@@ -18,10 +18,12 @@ from backend.monitor.application.use_cases.thread_workbench import (
     sidebar_label,
 )
 from backend.monitor.infrastructure.read_models.thread_workbench_read_service import build_owner_thread_workbench_reader
+from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
 from backend.sandbox_inventory import init_providers_and_managers
 from backend.sandbox_thread_resources import destroy_thread_resources_sync
 from backend.thread_history import build_thread_history_transport, get_thread_history_payload
 from backend.thread_runtime.events.buffer import ThreadEventBuffer
+from backend.thread_runtime.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
 from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages
 from backend.thread_runtime.launch_config import resolve_default_config
 from backend.thread_runtime.owner_reads import list_owner_thread_rows_for_auth_burst
@@ -48,7 +50,6 @@ from backend.web.models.requests import (
 from backend.web.services import account_resource_service
 from backend.web.services.agent_pool import get_or_create_agent
 from backend.web.services.file_channel_service import get_file_channel_binding
-from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
@@ -504,8 +505,6 @@ async def _replay_latest_run_failure_events(
     thread_id: str,
     display_builder: Any,
 ) -> None:
-    from backend.web.services.event_store import get_latest_run_id, read_events_after
-
     run_id = await get_latest_run_id(thread_id)
     if not run_id or run_id.startswith("activity_"):
         return
@@ -1239,8 +1238,6 @@ async def get_thread_runtime(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get runtime status for a thread."""
-    from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
-
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     if not hasattr(agent, "runtime"):
@@ -1326,8 +1323,6 @@ async def stream_thread_events(
 
     if after > 0:
         # Replay from SQLite for reconnection
-        from backend.web.services.event_store import get_latest_run_id, read_events_after
-
         run_id = await get_latest_run_id(thread_id)
         if run_id:
             events = await read_events_after(thread_id, run_id, after)
