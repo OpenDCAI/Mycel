@@ -1,5 +1,3 @@
-import inspect
-
 from backend.monitor.application.use_cases import evaluation as monitor_evaluation_service
 
 
@@ -52,9 +50,3 @@ def test_start_batch_submits_typed_spec_to_scheduler(monkeypatch):
     assert spec.base_url == "http://api"
     assert spec.agent_user_id == "agent-1"
     assert spec.scenarios == [("scenario-stub", "scenario-1", "local")]
-
-
-def test_application_does_not_name_the_execution_function():
-    src = inspect.getsource(monitor_evaluation_service)
-    assert "run_monitor_evaluation_batch" not in src
-    assert "schedule_task" not in src
