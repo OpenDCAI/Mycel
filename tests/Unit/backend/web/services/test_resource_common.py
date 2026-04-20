@@ -2,16 +2,15 @@ import inspect
 
 import pytest
 
+from backend import resource_common, resource_projection, user_resource_projection
 from backend import resource_common as neutral_resource_common
 from backend import resource_io as neutral_resource_io
-from backend import resource_projection, user_resource_projection
 from backend import resource_provider_boundary as neutral_resource_provider_boundary
 from backend import resource_provider_contracts as neutral_resource_provider_contracts
 from backend import sandbox_provider_factory as neutral_sandbox_provider_factory
 from backend import user_sandbox_reads as neutral_user_sandbox_reads
 from backend.web.services import (
     account_resource_service,
-    resource_common,
     resource_service,
     sandbox_service,
 )
@@ -185,7 +184,7 @@ def test_shared_resource_consumers_use_neutral_resource_common_owner() -> None:
     assert "backend.resource_common" in projection_source
 
 
-def test_web_resource_common_keeps_compat_surface() -> None:
+def test_resource_common_owner_keeps_expected_surface() -> None:
     assert resource_common.metric is neutral_resource_common.metric
     assert resource_common.thread_owners is neutral_resource_common.thread_owners
 
