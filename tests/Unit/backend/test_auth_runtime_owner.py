@@ -60,6 +60,13 @@ def test_web_library_service_keeps_recipe_bootstrap_compat_surface():
     assert library_service.seed_default_recipes is recipe_bootstrap.seed_default_recipes
 
 
+def test_web_library_service_uses_neutral_library_path_owner() -> None:
+    source = inspect.getsource(library_service)
+
+    assert "from backend.web.core.paths import library_dir" not in source
+    assert "from backend.library_paths import LIBRARY_DIR" in source
+
+
 def test_neutral_avatar_helpers_use_neutral_avatar_path_owner():
     avatar_file_source = inspect.getsource(avatar_files)
     avatar_url_source = inspect.getsource(avatar_urls)

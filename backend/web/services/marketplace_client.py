@@ -12,6 +12,7 @@ import httpx
 import yaml
 from fastapi import HTTPException
 
+import backend.library_paths as _lib_paths
 from backend.web.utils.versioning import BumpType, bump_semver
 from config.loader import load_bundle_from_repo
 from config.types import AgentBundle
@@ -264,8 +265,6 @@ def download(
     installed_version = result["version"]
     item_type = item.get("type", "skill")
 
-    from backend.web.services.library_service import LIBRARY_DIR
-
     now = int(time.time() * 1000)
 
     if item_type == "skill":
@@ -302,8 +301,8 @@ def download(
             return {"resource_id": skill_name, "type": "skill", "version": installed_version, "agent_user_id": agent_user_id}
 
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
-        skill_dir = (LIBRARY_DIR / "skills" / slug).resolve()
-        if not skill_dir.is_relative_to((LIBRARY_DIR / "skills").resolve()):
+        skill_dir = (_lib_paths.LIBRARY_DIR / "skills" / slug).resolve()
+        if not skill_dir.is_relative_to((_lib_paths.LIBRARY_DIR / "skills").resolve()):
             raise ValueError(f"Invalid slug: {slug}")
         skill_dir.mkdir(parents=True, exist_ok=True)
 
@@ -329,7 +328,7 @@ def download(
 
     if item_type == "agent":
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
-        agent_dir = (LIBRARY_DIR / "agents").resolve()
+        agent_dir = (_lib_paths.LIBRARY_DIR / "agents").resolve()
         if not (agent_dir / slug).resolve().is_relative_to(agent_dir):
             raise ValueError(f"Invalid slug: {slug}")
         agent_dir.mkdir(parents=True, exist_ok=True)

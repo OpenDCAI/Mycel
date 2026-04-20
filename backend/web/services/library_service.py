@@ -8,12 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from backend import sandbox_provider_availability
+from backend.library_paths import LIBRARY_DIR
 from backend.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
-from backend.web.core.paths import library_dir
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
-
-LIBRARY_DIR = library_dir()
 
 
 def _read_json(path: Path, default: Any = None) -> Any:
