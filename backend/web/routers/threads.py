@@ -23,6 +23,7 @@ from backend.sandbox_thread_resources import destroy_thread_resources_sync
 from backend.thread_history import build_thread_history_transport, get_thread_history_payload
 from backend.thread_runtime.events.buffer import ThreadEventBuffer
 from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages
+from backend.thread_runtime.launch_config import resolve_default_config
 from backend.thread_runtime.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.thread_runtime.state import get_sandbox_info, get_sandbox_status_from_repos
 from backend.web.core.dependencies import (
@@ -48,7 +49,6 @@ from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
     observe_thread_events,
 )
-from backend.web.services.thread_launch_config_service import resolve_default_config
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
@@ -86,6 +86,12 @@ def _require_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any:
 
 def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
     _require_owned_agent(app, agent_user_id, owner_user_id)
+    from backend.thread_runtime import launch_config as launch_config_owner
+    from backend.web.services import sandbox_service
+    from backend.web.services.library_service import list_library
+
+    launch_config_owner.available_sandbox_types = sandbox_service.available_sandbox_types
+    launch_config_owner.list_library = list_library
     return resolve_default_config(app, owner_user_id, agent_user_id)
 
 

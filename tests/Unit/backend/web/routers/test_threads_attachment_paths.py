@@ -55,6 +55,13 @@ def test_threads_router_uses_neutral_thread_event_buffer_owner() -> None:
     assert "from backend.thread_runtime.events.buffer import ThreadEventBuffer" in source
 
 
+def test_threads_router_uses_neutral_launch_config_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.thread_launch_config_service import resolve_default_config" not in source
+    assert "from backend.thread_runtime.launch_config import resolve_default_config" in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(
