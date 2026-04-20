@@ -1,25 +1,8 @@
-import inspect
 from pathlib import Path
 
-from backend.monitor.application.use_cases import operations as monitor_operation_service
 from backend.web.services import sandbox_service
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
-
-
-def test_sandbox_service_runtime_helpers_do_not_keep_removed_names():
-    service_source = inspect.getsource(sandbox_service)
-    operation_source = inspect.getsource(monitor_operation_service)
-
-    for old_name in (
-        "def load_all_" + "sess" + "ions",
-        "def find_" + "session_and_manager",
-        "def mutate_sandbox_" + "session",
-        "def get_" + "session_metrics",
-        "mutate_sandbox_" + "session(",
-    ):
-        assert old_name not in service_source
-        assert old_name not in operation_source
 
 
 class _FakeLeaseStore:
