@@ -63,11 +63,20 @@ def test_sandbox_type_list_route_uses_neutral_owner() -> None:
     assert "sandbox_provider_availability.available_sandbox_types" in source
 
 
+def test_sandbox_runtime_list_route_uses_neutral_owners() -> None:
+    source = inspect.getsource(sandbox_router)
+
+    assert "sandbox_service.init_providers_and_managers" not in source
+    assert "from backend.sandbox_inventory import init_providers_and_managers" in source
+    assert "from backend.sandbox_runtime_reads import load_all_sandbox_runtimes" in source
+    assert "await asyncio.to_thread(load_all_sandbox_runtimes, managers)" in source
+
+
 @pytest.mark.asyncio
 async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sandbox_router.sandbox_service, "init_providers_and_managers", lambda: ({}, {"local": object()}))
+    monkeypatch.setattr(sandbox_router, "init_providers_and_managers", lambda: ({}, {"local": object()}))
     monkeypatch.setattr(
-        sandbox_router.sandbox_service,
+        sandbox_router,
         "load_all_sandbox_runtimes",
         lambda _managers: [
             {

@@ -6,6 +6,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend import sandbox_provider_availability, sandbox_runtime_metrics
+from backend.sandbox_inventory import init_providers_and_managers
+from backend.sandbox_runtime_reads import load_all_sandbox_runtimes
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.services import sandbox_service
 
@@ -45,8 +47,8 @@ async def list_sandbox_types() -> dict[str, Any]:
 @router.get("/runtimes")
 async def list_sandbox_runtimes() -> dict[str, Any]:
     """List all sandbox runtime rows across providers."""
-    _, managers = await asyncio.to_thread(sandbox_service.init_providers_and_managers)
-    runtime_rows = await asyncio.to_thread(sandbox_service.load_all_sandbox_runtimes, managers)
+    _, managers = await asyncio.to_thread(init_providers_and_managers)
+    runtime_rows = await asyncio.to_thread(load_all_sandbox_runtimes, managers)
     return {"runtime_rows": [_public_runtime_payload(row) for row in runtime_rows]}
 
 
