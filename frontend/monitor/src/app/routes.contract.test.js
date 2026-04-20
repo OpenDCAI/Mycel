@@ -28,4 +28,11 @@ describe("standalone monitor routes contract", () => {
       expect(source).not.toContain('to="/threads"');
     }
   });
+
+  it("redirects unmatched standalone monitor paths back to dashboard", () => {
+    const routeSource = readFileSync(resolve(import.meta.dirname, "routes.tsx"), "utf8");
+
+    expect(routeSource).toContain('path="*"');
+    expect(routeSource).toContain('to="/dashboard"');
+  });
 });

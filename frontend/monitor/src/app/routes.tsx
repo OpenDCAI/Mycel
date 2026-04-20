@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import ResourcesPage from "../ResourcesPage";
 import EvaluationBatchDetailPage from "../pages/EvaluationBatchDetailPage";
@@ -29,6 +29,7 @@ export function MonitorRoutes() {
         <Route path="/evaluation" element={<EvaluationPage />} />
         <Route path="/evaluation/batches/:batchId" element={<EvaluationBatchDetailPage />} />
         <Route path="/evaluation/runs/:runId" element={<EvaluationRunDetailPage />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </MonitorShell>
   );
