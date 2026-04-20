@@ -57,6 +57,9 @@ def test_sandbox_runtime_metrics_route_uses_neutral_owner() -> None:
 
     assert "sandbox_service.get_runtime_metrics" not in source
     assert "sandbox_runtime_metrics.get_runtime_metrics" in source
+    assert "init_providers_and_managers_fn=init_providers_and_managers" in source
+    assert "load_all_sandbox_runtimes_fn=load_all_sandbox_runtimes" in source
+    assert "find_runtime_and_manager_fn=find_runtime_and_manager" in source
 
 
 def test_sandbox_runtime_mutation_route_uses_neutral_owner() -> None:
@@ -77,7 +80,7 @@ def test_sandbox_runtime_list_route_uses_neutral_owners() -> None:
     source = inspect.getsource(sandbox_router)
 
     assert "from backend.sandbox_inventory import init_providers_and_managers" in source
-    assert "from backend.sandbox_runtime_reads import load_all_sandbox_runtimes" in source
+    assert "from backend.sandbox_runtime_reads import find_runtime_and_manager, load_all_sandbox_runtimes" in source
     assert "await asyncio.to_thread(sandbox_service.init_providers_and_managers)" not in source
     assert "await asyncio.to_thread(load_all_sandbox_runtimes, managers)" in source
 

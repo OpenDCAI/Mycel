@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend import sandbox_provider_availability, sandbox_runtime_metrics, sandbox_runtime_mutations, user_sandbox_reads
 from backend.sandbox_inventory import init_providers_and_managers
-from backend.sandbox_runtime_reads import load_all_sandbox_runtimes
+from backend.sandbox_runtime_reads import find_runtime_and_manager, load_all_sandbox_runtimes
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.services import sandbox_service
 
@@ -83,8 +83,9 @@ async def get_sandbox_runtime_metrics(runtime_id: str, provider: str | None = Qu
             sandbox_runtime_metrics.get_runtime_metrics,
             runtime_id,
             provider,
-            load_all_sandbox_runtimes_fn=sandbox_service.load_all_sandbox_runtimes,
-            find_runtime_and_manager_fn=sandbox_service.find_runtime_and_manager,
+            init_providers_and_managers_fn=init_providers_and_managers,
+            load_all_sandbox_runtimes_fn=load_all_sandbox_runtimes,
+            find_runtime_and_manager_fn=find_runtime_and_manager,
         )
     except RuntimeError as e:
         raise _runtime_http_error(e) from e
