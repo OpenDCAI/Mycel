@@ -3,6 +3,8 @@ import inspect
 from backend import auth_runtime_bootstrap, avatar_files, avatar_urls, contact_bootstrap, recipe_bootstrap
 from backend import auth_service as neutral_auth_service
 from backend.auth_service import AuthService
+from backend.web.routers import marketplace as marketplace_router
+from backend.web.routers import panel as panel_router
 from backend.web.routers import users as users_router
 from backend.web.services import agent_user_service, library_service
 
@@ -73,3 +75,17 @@ def test_web_paths_keeps_avatar_path_compat_surface():
     from backend.web.core import paths
 
     assert paths.avatars_dir is avatar_paths.avatars_dir
+
+
+def test_panel_router_uses_neutral_profile_owner() -> None:
+    source = inspect.getsource(panel_router)
+
+    assert "backend.web.services import agent_user_service, library_service, profile_service" not in source
+    assert "from backend import profile as profile_owner" in source
+
+
+def test_marketplace_router_uses_neutral_profile_owner() -> None:
+    source = inspect.getsource(marketplace_router)
+
+    assert "from backend.web.services.profile_service import get_profile" not in source
+    assert "from backend.profile import get_profile" in source

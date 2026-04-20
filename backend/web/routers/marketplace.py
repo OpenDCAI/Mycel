@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.profile import get_profile
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.marketplace import (
     CheckUpdatesRequest,
@@ -73,8 +74,6 @@ async def publish_agent_user_to_marketplace(
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
-
-    from backend.web.services.profile_service import get_profile
 
     publisher_user = user_repo.get_by_id(user_id)
     profile = await asyncio.to_thread(get_profile, publisher_user)

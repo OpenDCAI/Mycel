@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend import profile as profile_owner
 from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.models.panel import (
     AgentConfigPayload,
@@ -16,7 +17,7 @@ from backend.web.models.panel import (
     UpdateResourceContentRequest,
     UpdateResourceRequest,
 )
-from backend.web.services import agent_user_service, library_service, profile_service
+from backend.web.services import agent_user_service, library_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
@@ -333,7 +334,7 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 async def get_profile(
     user: CurrentUser,
 ) -> dict[str, Any]:
-    return profile_service.get_profile(user)
+    return profile_owner.get_profile(user)
 
 
 @router.put("/profile")
@@ -343,7 +344,7 @@ async def update_profile(
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
     return await asyncio.to_thread(
-        profile_service.update_profile,
+        profile_owner.update_profile,
         user_repo=request.app.state.user_repo,
         user_id=user_id,
         name=req.name,
