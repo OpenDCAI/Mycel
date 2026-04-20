@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backend.web.services import resource_service
+from backend import resource_io
 from sandbox import resource_snapshot
 from storage import runtime as storage_runtime
 
@@ -195,7 +195,7 @@ def test_probe_and_upsert_for_instance_requires_sandbox_id() -> None:
 
 def test_refresh_resource_snapshots_routes_successful_probe_through_snapshot_helper(monkeypatch):
     monkeypatch.setattr(
-        resource_service,
+        resource_io,
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
@@ -208,7 +208,7 @@ def test_refresh_resource_snapshots_routes_successful_probe_through_snapshot_hel
             ]
         ),
     )
-    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: _FakeProvider())
+    monkeypatch.setattr(resource_io, "build_provider_from_config_name", lambda _: _FakeProvider())
 
     captured: list[dict] = []
 
@@ -217,7 +217,19 @@ def test_refresh_resource_snapshots_routes_successful_probe_through_snapshot_hel
 
     monkeypatch.setattr(resource_snapshot, "upsert_resource_snapshot_for_sandbox", _fake_upsert_resource_snapshot_for_sandbox)
 
-    result = resource_service.refresh_resource_snapshots()
+    result = resource_io.refresh_resource_snapshots(
+        make_sandbox_monitor_repo_fn=lambda: _make_probe_repo(
+            [
+                {
+                    "provider_name": "p1",
+                    "instance_id": "s-1",
+                    "sandbox_id": "sandbox-1",
+                    "observed_state": "detached",
+                },
+            ]
+        ),
+        build_provider_from_config_name_fn=lambda _: _FakeProvider(),
+    )
 
     assert result["probed"] == 1
     assert result["errors"] == 1
@@ -242,7 +254,7 @@ def test_refresh_resource_snapshots_routes_successful_probe_through_snapshot_hel
 
 def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
     monkeypatch.setattr(
-        resource_service,
+        resource_io,
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
@@ -261,7 +273,7 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
             ]
         ),
     )
-    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: _FakeProvider())
+    monkeypatch.setattr(resource_io, "build_provider_from_config_name", lambda _: _FakeProvider())
 
     calls: list[dict] = []
 
@@ -269,9 +281,26 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
         calls.append(kwargs)
         return {"ok": True, "error": None}
 
-    monkeypatch.setattr(resource_service, "probe_and_upsert_for_instance", _fake_probe)
-
-    result = resource_service.refresh_resource_snapshots()
+    result = resource_io.refresh_resource_snapshots(
+        make_sandbox_monitor_repo_fn=lambda: _make_probe_repo(
+            [
+                {
+                    "provider_name": "p1",
+                    "instance_id": "s-1",
+                    "sandbox_id": "sandbox-1",
+                    "observed_state": "detached",
+                },
+                {
+                    "provider_name": "p1",
+                    "instance_id": "s-2",
+                    "sandbox_id": "sandbox-2",
+                    "observed_state": "paused",
+                },
+            ]
+        ),
+        build_provider_from_config_name_fn=lambda _: _FakeProvider(),
+        probe_and_upsert_for_instance_fn=_fake_probe,
+    )
     assert result["probed"] == 1
     assert result["errors"] == 0
     assert result["running_targets"] == 1
@@ -284,7 +313,7 @@ def test_refresh_resource_snapshots_skips_paused_leases(monkeypatch):
 
 def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     monkeypatch.setattr(
-        resource_service,
+        resource_io,
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
@@ -297,15 +326,26 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
             ]
         ),
     )
-    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
+    monkeypatch.setattr(resource_io, "build_provider_from_config_name", lambda _: None)
     captured: list[dict] = []
 
     def _fake_upsert_resource_snapshot_for_sandbox(**kwargs):
         captured.append(kwargs)
 
-    monkeypatch.setattr(resource_service, "upsert_resource_snapshot_for_sandbox", _fake_upsert_resource_snapshot_for_sandbox)
-
-    result = resource_service.refresh_resource_snapshots()
+    result = resource_io.refresh_resource_snapshots(
+        make_sandbox_monitor_repo_fn=lambda: _make_probe_repo(
+            [
+                {
+                    "provider_name": "p-missing",
+                    "instance_id": "s-1",
+                    "sandbox_id": "sandbox-1",
+                    "observed_state": "detached",
+                },
+            ]
+        ),
+        build_provider_from_config_name_fn=lambda _: None,
+        upsert_resource_snapshot_for_sandbox_fn=_fake_upsert_resource_snapshot_for_sandbox,
+    )
     assert result["probed"] == 0
     assert result["errors"] == 1
     assert result["running_targets"] == 1
@@ -323,7 +363,7 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
 
 def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatch):
     monkeypatch.setattr(
-        resource_service,
+        resource_io,
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
@@ -336,16 +376,27 @@ def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatc
             ]
         ),
     )
-    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
+    monkeypatch.setattr(resource_io, "build_provider_from_config_name", lambda _: None)
 
     captured: list[dict] = []
 
     def _fake_upsert_resource_snapshot_for_sandbox(**kwargs):
         captured.append(kwargs)
 
-    monkeypatch.setattr(resource_service, "upsert_resource_snapshot_for_sandbox", _fake_upsert_resource_snapshot_for_sandbox)
-
-    result = resource_service.refresh_resource_snapshots()
+    result = resource_io.refresh_resource_snapshots(
+        make_sandbox_monitor_repo_fn=lambda: _make_probe_repo(
+            [
+                {
+                    "provider_name": "p-missing",
+                    "instance_id": "s-1",
+                    "sandbox_id": "sandbox-1",
+                    "observed_state": "paused",
+                },
+            ]
+        ),
+        build_provider_from_config_name_fn=lambda _: None,
+        upsert_resource_snapshot_for_sandbox_fn=_fake_upsert_resource_snapshot_for_sandbox,
+    )
 
     assert result["probed"] == 0
     assert result["errors"] == 0
@@ -356,7 +407,7 @@ def test_refresh_resource_snapshots_skips_paused_provider_build_error(monkeypatc
 
 def test_browse_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> None:
     monkeypatch.setattr(
-        resource_service,
+        resource_io,
         "make_sandbox_monitor_repo",
         lambda: _CanonicalOnlyResourceRepo(
             sandboxes=[
@@ -369,9 +420,21 @@ def test_browse_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> N
             instance_ids={"sandbox-1": "instance-1"},
         ),
     )
-    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _name: _ReadableProvider())
-
-    payload = resource_service.browse_sandbox("sandbox-1", "/workspace")
+    payload = resource_io.browse_sandbox(
+        "sandbox-1",
+        "/workspace",
+        make_sandbox_monitor_repo_fn=lambda: _CanonicalOnlyResourceRepo(
+            sandboxes=[
+                {
+                    "sandbox_id": "sandbox-1",
+                    LOWER_RUNTIME_KEY: "lease-1",
+                    "provider_name": "daytona",
+                }
+            ],
+            instance_ids={"sandbox-1": "instance-1"},
+        ),
+        build_provider_from_config_name_fn=lambda _name: _ReadableProvider(),
+    )
 
     assert payload["current_path"] == "/workspace"
     assert payload["items"] == [{"name": "README.md", "path": "/workspace/README.md", "is_dir": False}]
@@ -379,7 +442,7 @@ def test_browse_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> N
 
 def test_read_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> None:
     monkeypatch.setattr(
-        resource_service,
+        resource_io,
         "make_sandbox_monitor_repo",
         lambda: _CanonicalOnlyResourceRepo(
             sandboxes=[
@@ -392,8 +455,20 @@ def test_read_sandbox_uses_canonical_sandbox_instance_lookup(monkeypatch) -> Non
             instance_ids={"sandbox-1": "instance-1"},
         ),
     )
-    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _name: _ReadableProvider())
-
-    payload = resource_service.read_sandbox("sandbox-1", "/README.md")
+    payload = resource_io.read_sandbox(
+        "sandbox-1",
+        "/README.md",
+        make_sandbox_monitor_repo_fn=lambda: _CanonicalOnlyResourceRepo(
+            sandboxes=[
+                {
+                    "sandbox_id": "sandbox-1",
+                    LOWER_RUNTIME_KEY: "lease-1",
+                    "provider_name": "daytona",
+                }
+            ],
+            instance_ids={"sandbox-1": "instance-1"},
+        ),
+        build_provider_from_config_name_fn=lambda _name: _ReadableProvider(),
+    )
 
     assert payload == {"path": "/README.md", "content": "instance-1:/README.md", "truncated": False}
