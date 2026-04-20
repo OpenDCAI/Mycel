@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
+from backend import sandbox_provider_factory
 from backend.monitor.application.use_cases.thread_workbench import (
     build_owner_thread_workbench_from_rows,
     sidebar_label,
@@ -34,7 +35,7 @@ from backend.web.models.requests import (
     SendMessageRequest,
     ThreadPermissionRuleRequest,
 )
-from backend.web.services import account_resource_service, sandbox_service
+from backend.web.services import account_resource_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_binding
@@ -276,7 +277,7 @@ def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: Creat
             sandbox_type = str(lower_runtime_row["provider_name"] or sandbox_type)
     if sandbox_type == "local":
         return None
-    provider = sandbox_service.build_provider_from_config_name(sandbox_type)
+    provider = sandbox_provider_factory.build_provider_from_config_name(sandbox_type)
     if provider is not None:
         return None
     return _provider_unavailable_response(sandbox_type)
@@ -570,10 +571,9 @@ def _create_thread_sandbox_resources(
         if sandbox_type == "local":
             initial_cwd = cwd or str(LOCAL_WORKSPACE_ROOT)
         else:
-            from backend.web.services.sandbox_service import build_provider_from_config_name
             from sandbox.manager import resolve_provider_cwd
 
-            provider = build_provider_from_config_name(sandbox_type)
+            provider = sandbox_provider_factory.build_provider_from_config_name(sandbox_type)
             initial_cwd = resolve_provider_cwd(provider) if provider else "/home/user"
         terminal_repo.create(
             terminal_id=terminal_id,

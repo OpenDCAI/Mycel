@@ -1011,7 +1011,7 @@ async def test_create_thread_route_rejects_unavailable_provider():
         }
     )
 
-    with patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None):
+    with patch.object(threads_router.sandbox_provider_factory, "build_provider_from_config_name", return_value=None):
         result = await threads_router.create_thread(payload, "owner-1", app)
 
     assert isinstance(result, threads_router.JSONResponse)
@@ -1036,7 +1036,7 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_san
     )
 
     with (
-        patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None),
+        patch.object(threads_router.sandbox_provider_factory, "build_provider_from_config_name", return_value=None),
     ):
         result = await threads_router.create_thread(payload, "owner-1", app)
 

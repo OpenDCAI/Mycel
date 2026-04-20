@@ -16,6 +16,15 @@ def test_threads_router_uses_neutral_provider_inventory_owner() -> None:
     assert "from backend.sandbox_inventory import init_providers_and_managers" in source
 
 
+def test_threads_router_uses_neutral_provider_factory_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "sandbox_service.build_provider_from_config_name" not in source
+    assert "from backend import sandbox_provider_factory" in source
+    assert "sandbox_provider_factory.build_provider_from_config_name" in source
+    assert "from backend.web.services.sandbox_service import build_provider_from_config_name" not in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(
