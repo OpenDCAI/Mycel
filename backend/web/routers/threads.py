@@ -28,6 +28,7 @@ from backend.thread_runtime.owner_reads import list_owner_thread_rows_for_auth_b
 from backend.thread_runtime.run.buffer_wiring import get_or_create_thread_buffer
 from backend.thread_runtime.run.lifecycle import prime_sandbox
 from backend.thread_runtime.run.observer import observe_thread_events
+from backend.thread_runtime.sandbox import resolve_thread_sandbox
 from backend.thread_runtime.state import get_sandbox_info, get_sandbox_status_from_repos
 from backend.web.core.dependencies import (
     get_app,
@@ -45,7 +46,7 @@ from backend.web.models.requests import (
     ThreadPermissionRuleRequest,
 )
 from backend.web.services import account_resource_service
-from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
+from backend.web.services.agent_pool import get_or_create_agent
 from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.utils.helpers import delete_thread_in_db
@@ -977,7 +978,7 @@ async def send_message(
 
     from backend.agent_runtime.port import get_agent_runtime_gateway
     from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
-    from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
+    from backend.web.services.agent_pool import get_or_create_agent
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths

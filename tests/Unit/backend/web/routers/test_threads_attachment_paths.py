@@ -72,6 +72,14 @@ def test_threads_router_uses_neutral_streaming_route_owners() -> None:
     assert "from backend.thread_runtime.run.lifecycle import prime_sandbox" in source
 
 
+def test_threads_router_uses_neutral_thread_sandbox_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox" not in source
+    assert "from backend.web.services.agent_pool import get_or_create_agent" in source
+    assert "from backend.thread_runtime.sandbox import resolve_thread_sandbox" in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(
