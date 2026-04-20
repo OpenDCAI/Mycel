@@ -116,6 +116,7 @@ def test_streaming_service_uses_thread_runtime_buffer_wiring_owner() -> None:
     assert "from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring" in streaming_source
     assert "backend.web.services.event_buffer" not in owner_source
     assert "backend.web.services.streaming_service" not in owner_source
+    assert "backend.web.services.event_store" not in owner_source
 
 
 def test_streaming_service_uses_thread_runtime_run_lifecycle_owner() -> None:
@@ -184,9 +185,11 @@ def test_streaming_service_uses_thread_runtime_activity_bridge_owner() -> None:
 def test_streaming_service_uses_thread_runtime_emit_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.emit")
     execution_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.execution"))
+    owner_source = inspect.getsource(owner_module)
 
     assert owner_module.build_emit is not None
     assert "from backend.thread_runtime.run import emit as _run_emit" in execution_source
+    assert "backend.web.services.event_store" not in owner_source
 
 
 def test_streaming_service_uses_thread_runtime_prologue_owner() -> None:

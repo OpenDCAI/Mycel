@@ -14,6 +14,7 @@ from backend.thread_runtime.run import input_construction as _run_input_construc
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
 from backend.thread_runtime.run import observer as _run_observer
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
+from backend.web.services.event_store import append_event as _append_event
 from backend.web.services.event_store import cleanup_old_runs
 from core.runtime.notifications import is_terminal_background_notification
 from storage.contracts import RunEventRepo
@@ -69,6 +70,7 @@ def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
 
 
 def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
+    _run_buffer_wiring._append_event = _append_event
     _run_buffer_wiring._start_agent_run = start_agent_run
     _run_buffer_wiring.ensure_thread_handlers(agent, thread_id, app)
 
@@ -193,6 +195,8 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     _run_execution.consume_followup_queue = _consume_followup_queue
     _run_execution.cleanup_old_runs = cleanup_old_runs
     _run_execution.log_captured_exception = _log_captured_exception
+    _run_emit.append_event = _append_event
+    _run_buffer_wiring._append_event = _append_event
     return await _run_execution.run_agent_to_buffer(
         agent=agent,
         thread_id=thread_id,

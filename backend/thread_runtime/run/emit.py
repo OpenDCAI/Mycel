@@ -6,8 +6,9 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from backend.web.services.event_store import append_event
 from storage.contracts import RunEventRepo
+
+append_event = None
 
 
 def resolve_run_event_repo(agent: Any) -> RunEventRepo:
@@ -34,6 +35,8 @@ def build_emit(
     display_builder: Any,
 ) -> Callable[[dict[str, Any], str | None], Awaitable[None]]:
     async def emit(event: dict[str, Any], message_id: str | None = None) -> None:
+        if append_event is None:
+            raise RuntimeError("thread_runtime.run.emit requires append_event binding")
         seq = await append_event(
             thread_id,
             run_id,
