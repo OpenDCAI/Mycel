@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from backend import sandbox_provider_factory
+from backend.file_channel import get_file_channel_binding
 from backend.monitor.application.use_cases.thread_workbench import (
     build_owner_thread_workbench_from_rows,
     sidebar_label,
@@ -49,7 +50,6 @@ from backend.web.models.requests import (
 )
 from backend.web.services import account_resource_service
 from backend.web.services.agent_pool import get_or_create_agent
-from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop

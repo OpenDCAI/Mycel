@@ -72,6 +72,8 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
     assert owner_module.get_or_create_agent.__module__ == "backend.thread_runtime.pool.registry"
     assert owner_module.update_agent_config.__module__ == "backend.thread_runtime.pool.registry"
     assert "backend.web.services.file_channel_service" not in owner_source
+    assert "from backend.file_channel import get_file_channel_binding" in source
+    assert "backend.web.services.file_channel_service" not in source
 
 
 def test_thread_launch_config_uses_thread_runtime_launch_config_owner() -> None:
