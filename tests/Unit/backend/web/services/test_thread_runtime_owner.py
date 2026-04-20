@@ -106,7 +106,7 @@ def test_thread_runtime_pool_exports_idle_reaper_owner() -> None:
 
 
 def test_thread_visibility_uses_thread_projection_owner() -> None:
-    owner_module = importlib.import_module("backend.thread_projection")
+    owner_module = importlib.import_module("backend.thread_runtime.projection")
 
     assert owner_module.canonical_owner_threads is not None
 

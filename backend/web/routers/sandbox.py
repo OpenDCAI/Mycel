@@ -9,7 +9,7 @@ from backend import sandbox_provider_availability, sandbox_runtime_metrics, sand
 from backend.avatar_urls import avatar_url
 from backend.sandbox_inventory import init_providers_and_managers
 from backend.sandbox_runtime_reads import find_runtime_and_manager, load_all_sandbox_runtimes
-from backend.thread_projection import canonical_owner_threads
+from backend.thread_runtime.projection import canonical_owner_threads
 from backend.virtual_threads import is_virtual_thread_id
 from backend.web.core.dependencies import get_current_user_id
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
