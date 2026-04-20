@@ -270,6 +270,16 @@ def test_resource_modules_use_neutral_sandbox_provider_factory_owner() -> None:
     assert "backend.sandbox_inventory" in sandbox_provider_factory_source
 
 
+def test_sandbox_provider_factory_returns_none_without_filesystem_probe(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.sandbox_inventory.init_providers_and_managers",
+        lambda: ({}, {}),
+    )
+
+    assert not hasattr(neutral_sandbox_provider_factory, "SANDBOXES_DIR")
+    assert neutral_sandbox_provider_factory.build_provider_from_config_name("missing-provider") is None
+
+
 def test_web_sandbox_service_keeps_provider_factory_compat_surface() -> None:
     assert sandbox_service.build_provider_from_config_name is neutral_sandbox_provider_factory.build_provider_from_config_name
 
