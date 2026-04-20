@@ -41,7 +41,7 @@ def test_conversations_router_uses_neutral_read_and_avatar_helpers() -> None:
     assert "backend.web.services.thread_visibility" not in source
     assert "backend.web.utils.serializers" not in source
     assert "backend.thread_runtime.owner_reads" in source
-    assert "backend.thread_projection" in source
+    assert "backend.thread_runtime.projection" in source
     assert "backend.avatar_urls" in source
 
 

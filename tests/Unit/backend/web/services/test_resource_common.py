@@ -225,7 +225,7 @@ def test_user_sandbox_reads_uses_neutral_avatar_and_virtual_thread_helpers() -> 
     assert "backend.web.services.thread_visibility" not in source
     assert "backend.avatar_urls" in source
     assert "backend.virtual_threads" in source
-    assert "backend.thread_projection" in source
+    assert "backend.thread_runtime.projection" in source
     assert "def count_user_visible_sandboxes_by_provider(" in source
 
 
@@ -235,7 +235,7 @@ def test_sandbox_service_uses_neutral_helper_owners_for_read_wrappers() -> None:
     assert "backend.web.services.thread_visibility" not in source
     assert "backend.web.utils.serializers" not in source
     assert "backend.web.utils.helpers" not in source
-    assert "backend.thread_projection" in source
+    assert "backend.thread_runtime.projection" in source
     assert "backend.avatar_urls" in source
     assert "backend.virtual_threads" in source
 
