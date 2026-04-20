@@ -111,5 +111,6 @@ frontend/.vite/
 ops
 
 # Auto-generated
+.codex-runtime/
 .playwright-mcp/
 /supabase/
