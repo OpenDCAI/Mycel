@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from backend.web.routers import threads as threads_router
+
+
+def test_threads_router_uses_neutral_provider_inventory_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers" not in source
+    assert "from backend.sandbox_inventory import init_providers_and_managers" in source
 
 
 @pytest.mark.asyncio
