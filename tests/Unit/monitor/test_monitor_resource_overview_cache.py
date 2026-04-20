@@ -1,6 +1,6 @@
 from backend.monitor.application.use_cases import resources as monitor_resource_service
+from backend.monitor.infrastructure.resources import resource_overview_cache as cache
 from backend.monitor.infrastructure.resources import resource_overview_cache as monitor_resource_cache
-from backend.web.services import resource_cache as cache
 
 
 def _triage_payload(category: str) -> dict:

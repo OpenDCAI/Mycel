@@ -19,8 +19,8 @@ class NativeAgentThreadInputHandler:
         self._app = app
 
     async def dispatch(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> agent_runtime_protocol.AgentThreadInputResult:
+        from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
         from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-        from backend.web.services.resource_cache import clear_resource_overview_cache
         from backend.web.services.streaming_service import start_agent_run
 
         thread_id = envelope.thread_id

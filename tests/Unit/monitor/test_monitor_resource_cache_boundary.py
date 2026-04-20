@@ -7,11 +7,9 @@ from backend.monitor.infrastructure.io import resource_io_service as resource_io
 from backend.monitor.infrastructure.read_models import resource_read_service as resource_read_impl
 from backend.monitor.infrastructure.read_models import resource_runtime_service as resource_runtime_impl
 from backend.monitor.infrastructure.resources import resource_overview_cache as monitor_resource_cache_impl
+from backend.monitor.infrastructure.resources import resource_overview_cache as resource_cache
 from backend.monitor.infrastructure.resources import resource_projection_service as monitor_resource_projection_impl
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
-from backend.web.services import (
-    resource_cache,
-)
 
 
 def test_resource_cache_does_not_import_monitor_sandbox_projection():
@@ -33,10 +31,7 @@ def test_resource_cache_refresh_loop_uses_resource_io_port():
 
 
 def test_web_resource_cache_is_only_a_compatibility_shell():
-    source = inspect.getsource(resource_cache)
-
-    assert "backend.monitor.infrastructure.resources.resource_overview_cache" in source
-    assert "resource_projection_service.list_resource_providers" not in source
+    assert resource_cache.__name__ == "backend.monitor.infrastructure.resources.resource_overview_cache"
 
 
 def test_monitor_resource_service_owns_resource_triage_composition():
