@@ -7,8 +7,8 @@ from typing import Any, cast
 
 import pytest
 
+from backend.agent_runtime import chat_inlet as chat_delivery_hook
 from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
-from backend.web.services import chat_delivery_hook
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
