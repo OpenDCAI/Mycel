@@ -34,6 +34,13 @@ def test_thread_runtime_history_uses_thread_runtime_message_repair_owner() -> No
     assert "backend.web.services.thread_message_interruption_service" not in history_source
 
 
+def test_trace_read_service_uses_thread_runtime_history_owner() -> None:
+    trace_source = inspect.getsource(importlib.import_module("backend.monitor.infrastructure.read_models.trace_read_service"))
+
+    assert "from backend.thread_history import build_thread_history_transport, get_thread_history_payload" not in trace_source
+    assert "from backend.thread_runtime.history import build_thread_history_transport, get_thread_history_payload" in trace_source
+
+
 def test_thread_runtime_convergence_does_not_import_web_compat_shell() -> None:
     convergence_source = inspect.getsource(importlib.import_module("backend.thread_runtime.convergence"))
 

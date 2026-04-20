@@ -22,9 +22,9 @@ from backend.monitor.infrastructure.read_models.thread_workbench_read_service im
 from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
 from backend.sandbox_inventory import init_providers_and_managers
 from backend.sandbox_thread_resources import destroy_thread_resources_sync
-from backend.thread_history import build_thread_history_transport, get_thread_history_payload
 from backend.thread_runtime.events.buffer import ThreadEventBuffer
 from backend.thread_runtime.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
+from backend.thread_runtime.history import build_thread_history_transport, get_thread_history_payload
 from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages
 from backend.thread_runtime.launch_config import resolve_default_config
 from backend.thread_runtime.owner_reads import list_owner_thread_rows_for_auth_burst
