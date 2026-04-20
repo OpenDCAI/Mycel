@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 import pytest
 
-from backend.web.services.thread_runtime_binding_service import (
+from backend.thread_runtime.binding import (
     ThreadRuntimeBindingError,
     resolve_thread_runtime_binding,
 )

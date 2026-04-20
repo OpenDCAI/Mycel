@@ -6,14 +6,12 @@ import inspect
 
 def test_thread_runtime_namespace_exports_binding_and_state_helpers() -> None:
     binding_owner = importlib.import_module("backend.thread_runtime.binding")
-    binding_shell = importlib.import_module("backend.web.services.thread_runtime_binding_service")
     state_owner = importlib.import_module("backend.thread_runtime.state")
-    state_shell = importlib.import_module("backend.web.services.thread_state_service")
 
-    assert binding_owner.resolve_thread_runtime_binding is binding_shell.resolve_thread_runtime_binding
-    assert binding_owner.ThreadRuntimeBindingError is binding_shell.ThreadRuntimeBindingError
-    assert state_owner.get_sandbox_info is state_shell.get_sandbox_info
-    assert state_owner.get_sandbox_status_from_repos is state_shell.get_sandbox_status_from_repos
+    assert binding_owner.resolve_thread_runtime_binding is not None
+    assert binding_owner.ThreadRuntimeBindingError is not None
+    assert state_owner.get_sandbox_info is not None
+    assert state_owner.get_sandbox_status_from_repos is not None
     assert "backend.web.services.thread_runtime_binding_service" not in inspect.getsource(state_owner)
 
 
@@ -30,9 +28,8 @@ def test_agent_pool_uses_thread_runtime_sandbox_owner() -> None:
 def test_thread_runtime_history_uses_thread_runtime_message_repair_owner() -> None:
     history_source = inspect.getsource(importlib.import_module("backend.thread_runtime.history"))
     owner_module = importlib.import_module("backend.thread_runtime.interruption")
-    shell_module = importlib.import_module("backend.web.services.thread_message_interruption_service")
 
-    assert owner_module.repair_interrupted_tool_call_messages is shell_module.repair_interrupted_tool_call_messages
+    assert owner_module.repair_interrupted_tool_call_messages is not None
     assert "from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages" in history_source
     assert "backend.web.services.thread_message_interruption_service" not in history_source
 
@@ -45,9 +42,8 @@ def test_thread_runtime_convergence_does_not_import_web_compat_shell() -> None:
 
 def test_thread_runtime_namespace_exports_owner_thread_reads() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.owner_reads")
-    shell_module = importlib.import_module("backend.web.services.owner_thread_read_service")
 
-    assert owner_module.list_owner_thread_rows_for_auth_burst is shell_module.list_owner_thread_rows_for_auth_burst
+    assert owner_module.list_owner_thread_rows_for_auth_burst is not None
 
 
 def test_agent_pool_uses_thread_runtime_pool_factory_owner() -> None:
@@ -103,9 +99,8 @@ def test_thread_runtime_pool_exports_idle_reaper_owner() -> None:
 
 def test_thread_visibility_uses_thread_projection_owner() -> None:
     owner_module = importlib.import_module("backend.thread_projection")
-    shell_module = importlib.import_module("backend.web.services.thread_visibility")
 
-    assert owner_module.canonical_owner_threads is shell_module.canonical_owner_threads
+    assert owner_module.canonical_owner_threads is not None
 
 
 def test_streaming_service_uses_thread_runtime_run_cancellation_owner() -> None:
