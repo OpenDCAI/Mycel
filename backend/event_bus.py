@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -10,6 +9,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 EventCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
+AsyncEventCallback = Callable[[dict[str, Any]], Awaitable[None]]
 Unsubscribe = Callable[[], None]
 
 
@@ -38,7 +38,7 @@ class EventBus:
         for cb in callbacks:
             try:
                 result = cb(event)
-                if asyncio.iscoroutine(result):
+                if result is not None:
                     await result
             except Exception:
                 logger.exception("[EventBus] subscriber error for thread %s", thread_id)
@@ -48,7 +48,7 @@ class EventBus:
         thread_id: str,
         agent_id: str = "",
         agent_name: str = "",
-    ) -> EventCallback:
+    ) -> AsyncEventCallback:
         async def _emit(event: dict[str, Any]) -> None:
             enriched = dict(event)
             if agent_id:

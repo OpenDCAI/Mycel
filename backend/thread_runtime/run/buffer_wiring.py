@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from backend.thread_runtime.events.buffer import ThreadEventBuffer
@@ -11,8 +12,8 @@ from core.runtime.middleware.monitor import AgentState
 
 logger = logging.getLogger(__name__)
 
-_start_agent_run = None
-_append_event = None
+_start_agent_run: Callable[..., Any] | None = None
+_append_event: Callable[[str, str, dict[str, Any]], Awaitable[int]] | None = None
 
 
 def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
