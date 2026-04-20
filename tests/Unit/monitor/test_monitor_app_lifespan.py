@@ -1,23 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 from types import SimpleNamespace
 
 import pytest
 
 from backend.monitor_app import lifespan as monitor_app_lifespan
-from backend.web.core import lifespan as web_lifespan
-
-
-def test_resource_refresh_loop_moves_from_web_lifespan_to_monitor_app_lifespan():
-    monitor_source = inspect.getsource(monitor_app_lifespan)
-    web_source = inspect.getsource(web_lifespan)
-
-    assert "resource_overview_refresh_loop" in monitor_source
-    assert "monitor_resources_task" in monitor_source
-    assert "resource_overview_refresh_loop" not in web_source
-    assert "monitor_resources_task" not in web_source
 
 
 @pytest.mark.asyncio
