@@ -8,12 +8,11 @@ from types import SimpleNamespace
 import pytest
 
 from backend.chat.api.http import conversations_router as owner_conversations_router
-from backend.web.routers import conversations as conversations_router
 from backend.web.routers import threads as threads_router
 
 
-def test_first_screen_conversations_router_shell_points_at_chat_owner_module() -> None:
-    assert owner_conversations_router.list_conversations is conversations_router.list_conversations
+def test_first_screen_conversations_router_owner_module_lives_under_backend_chat() -> None:
+    assert owner_conversations_router.__name__ == "backend.chat.api.http.conversations_router"
 
 
 class _CountingOwnerThreadRepo:
@@ -42,7 +41,7 @@ async def test_first_screen_reuses_inflight_owner_thread_read_across_conversatio
     )
 
     conversations, threads = await asyncio.gather(
-        conversations_router.list_conversations("owner-1", app=app),
+        owner_conversations_router.list_conversations("owner-1", app=app),
         threads_router.list_threads("owner-1", app=app),
     )
 

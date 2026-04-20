@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 import threading
 from types import SimpleNamespace
@@ -7,14 +8,16 @@ from types import SimpleNamespace
 import pytest
 
 from backend.chat.api.http import conversations_router as owner_conversations_router
-from backend.web.routers import conversations as conversations_router
 from backend.web.utils.serializers import avatar_url
 
 
 def test_conversations_http_owner_module_lives_under_backend_chat() -> None:
     assert owner_conversations_router.__name__ == "backend.chat.api.http.conversations_router"
-    assert owner_conversations_router.router is conversations_router.router
-    assert owner_conversations_router.list_conversations is conversations_router.list_conversations
+
+
+def test_conversations_router_shell_is_deleted() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("backend.web.routers.conversations")
 
 
 def test_conversations_router_uses_runtime_activity_reader_for_running_state() -> None:
@@ -88,7 +91,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
         )
     )
 
-    result = await conversations_router.list_conversations("human-user-1", app=app)
+    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
 
     assert result == [
         {
@@ -155,7 +158,7 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
         )
     )
 
-    result = await conversations_router.list_conversations("human-user-1", app=app)
+    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
 
     assert [item["id"] for item in result] == ["chat-1", "thread-1"]
 
@@ -182,7 +185,7 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
         )
     )
 
-    result = await conversations_router.list_conversations("human-user-1", app=app)
+    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
 
     assert result == [
         {
@@ -229,7 +232,7 @@ async def test_list_conversations_marks_hire_thread_running_from_runtime_activit
         )
     )
 
-    result = await conversations_router.list_conversations("human-user-1", app=app)
+    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
 
     assert result == [
         {
@@ -276,7 +279,7 @@ async def test_list_conversations_collapses_hire_threads_to_one_visible_conversa
         )
     )
 
-    result = await conversations_router.list_conversations("human-user-1", app=app)
+    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
 
     assert [(item["id"], item["title"]) for item in result] == [("thread-main", "Morel")]
 
@@ -325,7 +328,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
         )
     )
 
-    result = await conversations_router.list_conversations("human-user-1", app=app)
+    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
 
     assert result[0]["title"] == "Morel"
     assert result[0]["avatar_url"] == avatar_url("agent-user-1", True)
@@ -347,9 +350,9 @@ async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatc
         to_thread_calls.append((fn.__name__, args))
         return fn(*args)
 
-    monkeypatch.setattr(conversations_router.asyncio, "to_thread", _fake_to_thread)
+    monkeypatch.setattr(owner_conversations_router.asyncio, "to_thread", _fake_to_thread)
 
-    assert await conversations_router.list_conversations("human-user-1", app=app) == []
+    assert await owner_conversations_router.list_conversations("human-user-1", app=app) == []
     assert ("_list_visit_conversations_for_user", (app, "human-user-1")) in to_thread_calls
     assert ("_list_hire_conversations_from_threads", (app, [])) in to_thread_calls
 
@@ -380,4 +383,4 @@ async def test_list_conversations_fetches_hire_and_visit_sources_in_parallel() -
         )
     )
 
-    assert await conversations_router.list_conversations("human-user-1", app=app) == []
+    assert await owner_conversations_router.list_conversations("human-user-1", app=app) == []
