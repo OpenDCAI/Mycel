@@ -7,14 +7,18 @@ from typing import Any
 from backend.thread_runtime.binding import ThreadRuntimeBindingError, resolve_thread_runtime_binding
 
 
-def _delete_thread_in_db(thread_id: str) -> None:
-    # @@@compat-delete-seam - existing web/auth tests monkeypatch
-    # backend.web.services.thread_runtime_convergence.delete_thread_in_db.
-    # Keep the shared convergence path routed through that symbol so the old
-    # patch seam still intercepts purges after this helper move.
-    from backend.web.services import thread_runtime_convergence as compatibility_shell
+def _unbound_delete_thread_in_db(thread_id: str) -> None:
+    raise RuntimeError(f"thread_runtime.convergence.delete_thread_in_db not bound for {thread_id}")
 
-    compatibility_shell.delete_thread_in_db(thread_id)
+
+delete_thread_in_db = _unbound_delete_thread_in_db
+
+
+def _delete_thread_in_db(thread_id: str) -> None:
+    # @@@compat-delete-seam - delete_thread_in_db is bound by compat shells so
+    # legacy patch surfaces still intercept purges without introducing a
+    # thread_runtime -> web.services import inversion.
+    delete_thread_in_db(thread_id)
 
 
 def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
