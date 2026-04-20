@@ -990,7 +990,7 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
     )
 
     monkeypatch.setattr(
-        "backend.web.services.thread_runtime_convergence.delete_thread_in_db",
+        "backend.thread_runtime.convergence.delete_thread_in_db",
         lambda thread_id: purged.append(thread_id),
     )
 
