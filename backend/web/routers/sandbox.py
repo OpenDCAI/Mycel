@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from backend import sandbox_provider_availability, sandbox_runtime_metrics
+from backend import sandbox_provider_availability, sandbox_runtime_metrics, sandbox_runtime_mutations
 from backend.sandbox_inventory import init_providers_and_managers
 from backend.sandbox_runtime_reads import load_all_sandbox_runtimes
 from backend.web.core.dependencies import get_current_user_id
@@ -23,10 +23,13 @@ def _runtime_http_error(exc: RuntimeError) -> HTTPException:
 async def _mutate_runtime_action(runtime_id: str, action: str, provider: str | None) -> dict[str, Any]:
     try:
         result = await asyncio.to_thread(
-            sandbox_service.mutate_sandbox_runtime,
+            sandbox_runtime_mutations.mutate_sandbox_runtime,
             runtime_id=runtime_id,
             action=action,
             provider_hint=provider,
+            init_providers_and_managers_fn=sandbox_service.init_providers_and_managers,
+            load_all_sandbox_runtimes_fn=sandbox_service.load_all_sandbox_runtimes,
+            find_runtime_and_manager_fn=sandbox_service.find_runtime_and_manager,
         )
         return _public_runtime_payload(result)
     except RuntimeError as e:

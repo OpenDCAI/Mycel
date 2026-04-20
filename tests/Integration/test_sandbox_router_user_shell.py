@@ -56,6 +56,13 @@ def test_sandbox_runtime_metrics_route_uses_neutral_owner() -> None:
     assert "sandbox_runtime_metrics.get_runtime_metrics" in source
 
 
+def test_sandbox_runtime_mutation_route_uses_neutral_owner() -> None:
+    source = inspect.getsource(sandbox_router)
+
+    assert "sandbox_service.mutate_sandbox_runtime" not in source
+    assert "sandbox_runtime_mutations.mutate_sandbox_runtime" in source
+
+
 def test_sandbox_type_list_route_uses_neutral_owner() -> None:
     source = inspect.getsource(sandbox_router)
 
@@ -66,9 +73,9 @@ def test_sandbox_type_list_route_uses_neutral_owner() -> None:
 def test_sandbox_runtime_list_route_uses_neutral_owners() -> None:
     source = inspect.getsource(sandbox_router)
 
-    assert "sandbox_service.init_providers_and_managers" not in source
     assert "from backend.sandbox_inventory import init_providers_and_managers" in source
     assert "from backend.sandbox_runtime_reads import load_all_sandbox_runtimes" in source
+    assert "await asyncio.to_thread(sandbox_service.init_providers_and_managers)" not in source
     assert "await asyncio.to_thread(load_all_sandbox_runtimes, managers)" in source
 
 
@@ -121,7 +128,7 @@ async def test_sandbox_runtime_mutation_response_strips_lower_runtime_identity(m
         }
 
     monkeypatch.setattr(
-        sandbox_router.sandbox_service,
+        sandbox_router.sandbox_runtime_mutations,
         "mutate_sandbox_runtime",
         fake_mutate_sandbox_runtime,
     )
