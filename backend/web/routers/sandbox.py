@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from backend import sandbox_runtime_metrics
+from backend import sandbox_provider_availability, sandbox_runtime_metrics
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.services import sandbox_service
 
@@ -38,7 +38,7 @@ def _public_runtime_payload(row: dict[str, Any]) -> dict[str, Any]:
 @router.get("/types")
 async def list_sandbox_types() -> dict[str, Any]:
     """List available sandbox types."""
-    types = await asyncio.to_thread(sandbox_service.available_sandbox_types)
+    types = await asyncio.to_thread(sandbox_provider_availability.available_sandbox_types)
     return {"types": types}
 
 

@@ -56,6 +56,13 @@ def test_sandbox_runtime_metrics_route_uses_neutral_owner() -> None:
     assert "sandbox_runtime_metrics.get_runtime_metrics" in source
 
 
+def test_sandbox_type_list_route_uses_neutral_owner() -> None:
+    source = inspect.getsource(sandbox_router)
+
+    assert "sandbox_service.available_sandbox_types" not in source
+    assert "sandbox_provider_availability.available_sandbox_types" in source
+
+
 @pytest.mark.asyncio
 async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sandbox_router.sandbox_service, "init_providers_and_managers", lambda: ({}, {"local": object()}))
