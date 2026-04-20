@@ -75,6 +75,14 @@ def test_agent_user_service_uses_neutral_versioning_owner() -> None:
     assert "from backend.versioning import BumpType, bump_semver" in source
 
 
+def test_agent_user_service_uses_neutral_snapshot_install_owner() -> None:
+    source = inspect.getsource(agent_user_service)
+
+    assert "def install_from_snapshot(" not in source
+    assert "import backend.agent_user_snapshot_install as _snapshot_install_owner" in source
+    assert "install_from_snapshot = _snapshot_install_owner.install_from_snapshot" in source
+
+
 def test_panel_models_uses_neutral_versioning_owner() -> None:
     source = inspect.getsource(panel_models)
 

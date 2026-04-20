@@ -88,6 +88,15 @@ def test_marketplace_client_uses_neutral_versioning_owner() -> None:
     assert "from backend.versioning import BumpType, bump_semver" in source
 
 
+def test_marketplace_client_uses_neutral_agent_user_snapshot_install_owner() -> None:
+    import backend.web.services.marketplace_client as marketplace_client
+
+    source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
+
+    assert "from backend.web.services.agent_user_service import install_from_snapshot" not in source
+    assert "import backend.agent_user_snapshot_install as _snapshot_install_owner" in source
+
+
 # ── Helpers ──
 
 
@@ -249,7 +258,7 @@ class TestDownloadUser:
         seen: dict[str, object] = {}
 
         monkeypatch.setattr(
-            "backend.web.services.agent_user_service.install_from_snapshot",
+            "backend.web.services.marketplace_client._snapshot_install_owner.install_from_snapshot",
             lambda **kwargs: seen.update(kwargs) or "agent-user-1",
         )
 
@@ -307,7 +316,7 @@ def test_upgrade_returns_user_id_contract(monkeypatch):
     seen: dict[str, object] = {}
 
     monkeypatch.setattr(
-        "backend.web.services.agent_user_service.install_from_snapshot",
+        "backend.web.services.marketplace_client._snapshot_install_owner.install_from_snapshot",
         lambda **kwargs: seen.update(kwargs) or "agent-user-1",
     )
 
@@ -337,7 +346,7 @@ def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
         return "agent-user-1"
 
     monkeypatch.setattr(
-        "backend.web.services.agent_user_service.install_from_snapshot",
+        "backend.web.services.marketplace_client._snapshot_install_owner.install_from_snapshot",
         fake_install_from_snapshot,
     )
 
