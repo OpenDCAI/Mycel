@@ -12,6 +12,7 @@ import httpx
 import yaml
 from fastapi import HTTPException
 
+import backend.agent_user_snapshot_install as _snapshot_install_owner
 import backend.library_paths as _lib_paths
 from backend.versioning import BumpType, bump_semver
 from config.loader import load_bundle_from_repo
@@ -356,9 +357,7 @@ def download(
         if user_repo is None or agent_config_repo is None:
             raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
 
-        from backend.web.services.agent_user_service import install_from_snapshot
-
-        user_id = install_from_snapshot(
+        user_id = _snapshot_install_owner.install_from_snapshot(
             snapshot=snapshot,
             name=item["name"],
             description=item.get("description", ""),
@@ -382,9 +381,7 @@ def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = Non
     snapshot = result["snapshot"]
     installed_version = result["version"]
 
-    from backend.web.services.agent_user_service import install_from_snapshot
-
-    install_from_snapshot(
+    _snapshot_install_owner.install_from_snapshot(
         snapshot=snapshot,
         name=result["item"]["name"],
         description=result["item"].get("description", ""),
