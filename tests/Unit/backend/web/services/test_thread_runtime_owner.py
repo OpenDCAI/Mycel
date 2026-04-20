@@ -244,3 +244,12 @@ def test_streaming_service_uses_thread_runtime_execution_owner() -> None:
 
     assert owner_module.run_agent_to_buffer is not None
     assert "from backend.thread_runtime.run import execution as _run_execution" in streaming_source
+
+
+def test_lifespan_uses_neutral_display_builder_owner() -> None:
+    owner_module = importlib.import_module("backend.display_builder")
+    lifespan_source = inspect.getsource(importlib.import_module("backend.web.core.lifespan"))
+
+    assert owner_module.DisplayBuilder is not None
+    assert "from backend.web.services.display_builder import DisplayBuilder" not in lifespan_source
+    assert "from backend.display_builder import DisplayBuilder" in lifespan_source

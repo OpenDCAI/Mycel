@@ -122,7 +122,7 @@ async def lifespan(app: FastAPI):
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
     app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
 
-    from backend.web.services.display_builder import DisplayBuilder
+    from backend.display_builder import DisplayBuilder
 
     app.state.display_builder = DisplayBuilder()
     app.state.thread_last_active = {}  # thread_id → epoch timestamp
