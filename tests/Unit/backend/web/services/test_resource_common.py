@@ -12,7 +12,6 @@ from backend import user_sandbox_reads as neutral_user_sandbox_reads
 from backend.web.services import (
     account_resource_service,
     resource_common,
-    resource_provider_boundary_service,
     resource_service,
     sandbox_service,
 )
@@ -199,12 +198,6 @@ def test_shared_resource_consumers_use_neutral_resource_provider_boundary_owner(
     assert "backend.web.services import resource_provider_boundary_service" not in user_projection_source
     assert "backend.resource_provider_boundary" in projection_source
     assert "backend.resource_provider_boundary" in user_projection_source
-
-
-def test_web_resource_provider_boundary_keeps_compat_surface() -> None:
-    assert resource_provider_boundary_service.build_resource_row_payload is neutral_resource_provider_boundary.build_resource_row_payload
-    assert resource_provider_boundary_service.load_user_sandboxes is neutral_resource_provider_boundary.load_user_sandboxes
-    assert resource_provider_boundary_service is neutral_resource_provider_boundary
 
 
 def test_resource_provider_boundary_uses_neutral_sandbox_inventory_owner() -> None:
