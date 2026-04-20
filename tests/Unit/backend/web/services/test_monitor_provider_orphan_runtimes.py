@@ -83,6 +83,21 @@ def test_sandbox_thread_resource_cleanup_owner_moves_out_of_sandbox_service():
     assert "_sandbox_thread_resources.destroy_thread_resources_sync(" in service_source
 
 
+def test_sandbox_service_drops_dead_runtime_cleanup_helpers() -> None:
+    source = inspect.getsource(sandbox_service)
+
+    assert "def _sandbox_summary(" not in source
+    assert "def _detach_runtime_terminals(" not in source
+    assert "def _prune_stale_runtime_terminals(" not in source
+
+
+def test_sandbox_service_drops_runtime_metrics_owner() -> None:
+    source = inspect.getsource(sandbox_service)
+
+    assert "def get_runtime_metrics(" not in source
+    assert "_sandbox_runtime_metrics.get_runtime_metrics" in source
+
+
 def test_sandbox_service_drops_dead_helper_duplicates_after_owner_moves():
     source = inspect.getsource(sandbox_service)
 

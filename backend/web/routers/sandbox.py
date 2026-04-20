@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from backend import sandbox_runtime_metrics
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.services import sandbox_service
 
@@ -69,7 +70,13 @@ async def list_my_sandboxes(
 async def get_sandbox_runtime_metrics(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Get metrics for a specific sandbox runtime row."""
     try:
-        return await asyncio.to_thread(sandbox_service.get_runtime_metrics, runtime_id, provider)
+        return await asyncio.to_thread(
+            sandbox_runtime_metrics.get_runtime_metrics,
+            runtime_id,
+            provider,
+            load_all_sandbox_runtimes_fn=sandbox_service.load_all_sandbox_runtimes,
+            find_runtime_and_manager_fn=sandbox_service.find_runtime_and_manager,
+        )
     except RuntimeError as e:
         raise _runtime_http_error(e) from e
 

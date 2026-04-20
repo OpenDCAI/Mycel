@@ -7,6 +7,7 @@ import backend.user_sandbox_reads as user_sandbox_reads
 from backend import sandbox_inventory
 from backend import sandbox_provider_factory as _sandbox_provider_factory
 from backend import sandbox_recipe_catalog as _sandbox_recipe_catalog
+from backend import sandbox_runtime_metrics as _sandbox_runtime_metrics
 from backend import sandbox_runtime_mutations as _sandbox_runtime_mutations
 from backend import sandbox_runtime_reads as _sandbox_runtime_reads
 from backend import sandbox_thread_resources as _sandbox_thread_resources
@@ -43,10 +44,6 @@ def _list_user_runtime_rows(
         avatar_url_fn=avatar_url,
         is_virtual_thread_id_fn=is_virtual_thread_id,
     )
-
-
-def _sandbox_summary(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in row.items() if key != "lease_id"}
 
 
 def list_user_sandboxes(
@@ -154,68 +151,7 @@ def destroy_sandbox_runtime(*, lower_runtime_handle: str, provider_name: str, de
     )
 
 
-def _detach_runtime_terminals(manager: Any, lower_runtime_handle: str) -> None:
-    for row in list(manager.terminal_store.list_all()):
-        if str(row.get("lease_id") or "") != lower_runtime_handle:
-            continue
-        thread_id = str(row.get("thread_id") or "").strip()
-        terminal_id = str(row.get("terminal_id") or "").strip()
-        if not terminal_id:
-            raise RuntimeError(f"Lower runtime {lower_runtime_handle} has terminal row without terminal_id")
-        if thread_id:
-            manager.session_manager.delete_thread(thread_id, reason="detached_sandbox_cleanup")
-        manager.terminal_store.delete(terminal_id)
-
-
-def _prune_stale_runtime_terminals(manager: Any, lower_runtime_handle: str) -> None:
-    thread_repo = build_storage_container().thread_repo()
-    try:
-        for row in list(manager.terminal_store.list_all()):
-            if str(row.get("lease_id") or "") != lower_runtime_handle:
-                continue
-            thread_id = str(row.get("thread_id") or "").strip()
-            if thread_id and not is_virtual_thread_id(thread_id) and thread_repo.get_by_id(thread_id) is not None:
-                continue
-            terminal_id = str(row.get("terminal_id") or "").strip()
-            if not terminal_id:
-                raise RuntimeError(f"Lower runtime {lower_runtime_handle} has terminal row without terminal_id")
-            # @@@runtime-cleanup-stale-terminal-prune - detached residue can keep dead terminal
-            # pointers long after the owning thread row is gone; drop only those stale pointers
-            # before enforcing the remaining bound-terminal guard.
-            if thread_id and not is_virtual_thread_id(thread_id):
-                manager.session_manager.delete_thread(thread_id, reason="stale_terminal_pruned")
-            manager.terminal_store.delete(terminal_id)
-    finally:
-        thread_repo.close()
-
-
-def get_runtime_metrics(runtime_id: str, provider_hint: str | None = None) -> dict[str, Any]:
-    """Load one sandbox runtime's provider metrics through the current manager inventory."""
-    _, managers = init_providers_and_managers()
-    runtimes = load_all_sandbox_runtimes(managers)
-    runtime, manager = find_runtime_and_manager(runtimes, managers, runtime_id, provider_name=provider_hint)
-    if not runtime:
-        raise RuntimeError(f"Runtime not found: {runtime_id}")
-    if manager is None:
-        raise RuntimeError(f"Provider manager unavailable: {runtime.get('provider')}")
-
-    target_runtime_id = str(runtime.get("instance_id") or runtime.get("session_id") or runtime_id)
-    metrics = manager.provider.get_metrics(target_runtime_id)
-    if metrics is None:
-        return {"session_id": target_runtime_id, "provider": runtime.get("provider"), "metrics": None}
-    return {
-        "session_id": target_runtime_id,
-        "provider": runtime.get("provider"),
-        "metrics": {
-            "cpu_percent": metrics.cpu_percent,
-            "memory_used_mb": metrics.memory_used_mb,
-            "memory_total_mb": metrics.memory_total_mb,
-            "disk_used_gb": metrics.disk_used_gb,
-            "disk_total_gb": metrics.disk_total_gb,
-            "network_rx_kbps": metrics.network_rx_kbps,
-            "network_tx_kbps": metrics.network_tx_kbps,
-        },
-    }
+get_runtime_metrics = _sandbox_runtime_metrics.get_runtime_metrics
 
 
 build_provider_from_config_name = _sandbox_provider_factory.build_provider_from_config_name

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from types import SimpleNamespace
 
 import pytest
@@ -46,6 +47,13 @@ def test_sandbox_runtime_routes_do_not_expose_session_paths() -> None:
     assert "/api/sandbox/runtimes/{runtime_id}/resume" in route_paths
     assert "/api/sandbox/runtimes/{runtime_id}" in route_paths
     assert not any("/sessions" in path for path in route_paths)
+
+
+def test_sandbox_runtime_metrics_route_uses_neutral_owner() -> None:
+    source = inspect.getsource(sandbox_router)
+
+    assert "sandbox_service.get_runtime_metrics" not in source
+    assert "sandbox_runtime_metrics.get_runtime_metrics" in source
 
 
 @pytest.mark.asyncio
