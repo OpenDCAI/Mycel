@@ -6,10 +6,13 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend import sandbox_provider_availability, sandbox_runtime_metrics, sandbox_runtime_mutations, user_sandbox_reads
+from backend.avatar_urls import avatar_url
 from backend.sandbox_inventory import init_providers_and_managers
 from backend.sandbox_runtime_reads import find_runtime_and_manager, load_all_sandbox_runtimes
+from backend.thread_projection import canonical_owner_threads
+from backend.virtual_threads import is_virtual_thread_id
 from backend.web.core.dependencies import get_current_user_id
-from backend.web.services import sandbox_service
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
 
@@ -27,9 +30,9 @@ async def _mutate_runtime_action(runtime_id: str, action: str, provider: str | N
             runtime_id=runtime_id,
             action=action,
             provider_hint=provider,
-            init_providers_and_managers_fn=sandbox_service.init_providers_and_managers,
-            load_all_sandbox_runtimes_fn=sandbox_service.load_all_sandbox_runtimes,
-            find_runtime_and_manager_fn=sandbox_service.find_runtime_and_manager,
+            init_providers_and_managers_fn=init_providers_and_managers,
+            load_all_sandbox_runtimes_fn=load_all_sandbox_runtimes,
+            find_runtime_and_manager_fn=find_runtime_and_manager,
         )
         return _public_runtime_payload(result)
     except RuntimeError as e:
@@ -67,10 +70,10 @@ async def list_my_sandboxes(
         user_id,
         thread_repo=thread_repo,
         user_repo=user_repo,
-        make_sandbox_monitor_repo_fn=sandbox_service.make_sandbox_monitor_repo,
-        canonical_owner_threads_fn=sandbox_service.canonical_owner_threads,
-        avatar_url_fn=sandbox_service.avatar_url,
-        is_virtual_thread_id_fn=sandbox_service.is_virtual_thread_id,
+        make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
+        canonical_owner_threads_fn=canonical_owner_threads,
+        avatar_url_fn=avatar_url,
+        is_virtual_thread_id_fn=is_virtual_thread_id,
     )
     return {"sandboxes": sandboxes}
 

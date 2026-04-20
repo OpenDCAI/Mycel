@@ -35,10 +35,10 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
     assert seen["user_id"] == "owner-1"
     assert seen["thread_repo"] is thread_repo
     assert seen["user_repo"] is user_repo
-    assert seen["kwargs"]["make_sandbox_monitor_repo_fn"] is sandbox_router.sandbox_service.make_sandbox_monitor_repo
-    assert seen["kwargs"]["canonical_owner_threads_fn"] is sandbox_router.sandbox_service.canonical_owner_threads
-    assert seen["kwargs"]["avatar_url_fn"] is sandbox_router.sandbox_service.avatar_url
-    assert seen["kwargs"]["is_virtual_thread_id_fn"] is sandbox_router.sandbox_service.is_virtual_thread_id
+    assert seen["kwargs"]["make_sandbox_monitor_repo_fn"] is sandbox_router.make_sandbox_monitor_repo
+    assert seen["kwargs"]["canonical_owner_threads_fn"] is sandbox_router.canonical_owner_threads
+    assert seen["kwargs"]["avatar_url_fn"] is sandbox_router.avatar_url
+    assert seen["kwargs"]["is_virtual_thread_id_fn"] is sandbox_router.is_virtual_thread_id
 
 
 def test_sandbox_runtime_routes_do_not_expose_session_paths() -> None:
@@ -67,6 +67,9 @@ def test_sandbox_runtime_mutation_route_uses_neutral_owner() -> None:
 
     assert "sandbox_service.mutate_sandbox_runtime" not in source
     assert "sandbox_runtime_mutations.mutate_sandbox_runtime" in source
+    assert "init_providers_and_managers_fn=sandbox_service.init_providers_and_managers" not in source
+    assert "load_all_sandbox_runtimes_fn=sandbox_service.load_all_sandbox_runtimes" not in source
+    assert "find_runtime_and_manager_fn=sandbox_service.find_runtime_and_manager" not in source
 
 
 def test_sandbox_type_list_route_uses_neutral_owner() -> None:
@@ -90,6 +93,10 @@ def test_sandbox_mine_route_uses_neutral_owner() -> None:
 
     assert "await asyncio.to_thread(sandbox_service.list_user_sandboxes" not in source
     assert "user_sandbox_reads.list_user_sandboxes" in source
+    assert "sandbox_service.make_sandbox_monitor_repo" not in source
+    assert "sandbox_service.canonical_owner_threads" not in source
+    assert "sandbox_service.avatar_url" not in source
+    assert "sandbox_service.is_virtual_thread_id" not in source
 
 
 @pytest.mark.asyncio
