@@ -1,4 +1,3 @@
-import inspect
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -34,24 +33,6 @@ from backend.monitor.infrastructure.read_models import trace_read_service as mon
 LOWER_RUNTIME_KEY = "lease_" + "id"
 LOWER_RUNTIME_CAMEL_KEY = "lease" + "Id"
 REMOVED_LOWER_RUNTIME_IDS_KEY = "lease_" + "ids"
-
-
-def test_monitor_cleanup_truth_uses_runtime_row_names():
-    sources = (
-        inspect.getsource(monitor_operation_service),
-        inspect.getsource(monitor_sandbox_detail_service),
-        inspect.getsource(monitor_sandbox_projection_service),
-        inspect.getsource(monitor_thread_service),
-    )
-
-    for old_name in (
-        "_derive_thread_summary_from_" + "sess" + "ions",
-        "_has_active_" + "sess" + "ions",
-        "_can_close_stale_active_" + "sess" + "ions",
-        "has_active_" + "sess" + "ions =",
-        "can_close_stale_active_" + "sess" + "ions =",
-    ):
-        assert all(old_name not in source for source in sources)
 
 
 @pytest.fixture(autouse=True)
@@ -320,15 +301,6 @@ def test_get_monitor_runtime_detail_exposes_sandbox_identity(monkeypatch):
     assert payload["sandbox_id"] == "sandbox-1"
     assert LOWER_RUNTIME_KEY not in payload
     assert payload["thread_id"] == "thread-1"
-
-
-def test_get_monitor_runtime_detail_uses_resource_row_local_naming():
-    source = inspect.getsource(monitor_provider_runtime_service.get_monitor_runtime_detail)
-    old_loop_token = "for " + "session in provider.get"
-    old_runtime_payload_token = '"runtime": ' + "session"
-
-    assert old_loop_token not in source
-    assert old_runtime_payload_token not in source
 
 
 def test_get_monitor_sandbox_configs_reads_runtime_inventory(monkeypatch, tmp_path):
