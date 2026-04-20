@@ -6,7 +6,7 @@ from typing import Any
 
 from sandbox.recipes import default_recipe_id, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 
-sandbox_service: Any = None
+available_sandbox_types: Any = None
 list_library: Any = None
 
 
@@ -45,9 +45,9 @@ def build_new_launch_config(
 
 
 def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
-    if sandbox_service is None or list_library is None:
-        raise RuntimeError("thread_runtime.launch_config requires sandbox_service and list_library bindings")
-    providers = [item for item in sandbox_service.available_sandbox_types() if item.get("available")]
+    if available_sandbox_types is None or list_library is None:
+        raise RuntimeError("thread_runtime.launch_config requires available_sandbox_types and list_library bindings")
+    providers = [item for item in available_sandbox_types() if item.get("available")]
     sandbox_templates = list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
     agent_threads = app.state.thread_repo.list_by_agent_user(agent_user_id)
 

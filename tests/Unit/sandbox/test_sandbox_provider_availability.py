@@ -1,13 +1,28 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from backend import sandbox_inventory as neutral_sandbox_inventory
 from backend import sandbox_recipe_catalog as neutral_sandbox_recipe_catalog
 from backend.web.services import sandbox_service
 from sandbox.providers.local import LocalSessionProvider
+
+
+def test_sandbox_provider_availability_owner_moves_out_of_sandbox_service() -> None:
+    try:
+        neutral_sandbox_provider_availability = importlib.import_module("backend.sandbox_provider_availability")
+    except ModuleNotFoundError:
+        pytest.fail("backend.sandbox_provider_availability module missing")
+
+    source = inspect.getsource(neutral_sandbox_provider_availability)
+
+    assert "backend.web.services" not in source
+    assert "backend.web.core.config" in source
 
 
 def test_sandbox_inventory_owner_moves_out_of_sandbox_service() -> None:
@@ -20,7 +35,7 @@ def test_sandbox_inventory_owner_moves_out_of_sandbox_service() -> None:
 def test_sandbox_service_keeps_sandbox_inventory_compat_surface() -> None:
     source = inspect.getsource(sandbox_service)
 
-    assert "sandbox_inventory.available_sandbox_types(" in source
+    assert "_sandbox_provider_availability.available_sandbox_types(" in source
     assert "sandbox_inventory.init_providers_and_managers()" in source
 
 
@@ -35,6 +50,15 @@ def test_sandbox_recipe_catalog_owner_moves_out_of_sandbox_service() -> None:
 
     assert "backend.web.services" not in source
     assert "backend.sandbox_inventory" in source
+
+
+def test_library_service_uses_neutral_sandbox_provider_availability_owner() -> None:
+    from backend.web.services import library_service
+
+    source = inspect.getsource(library_service)
+
+    assert "sandbox_service.available_sandbox_types" not in source
+    assert "sandbox_provider_availability.available_sandbox_types" in source
 
 
 def test_available_sandbox_types_marks_configured_but_unavailable_provider(monkeypatch, tmp_path: Path) -> None:

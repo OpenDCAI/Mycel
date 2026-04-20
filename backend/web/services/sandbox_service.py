@@ -5,6 +5,7 @@ from typing import Any
 
 import backend.user_sandbox_reads as user_sandbox_reads
 from backend import sandbox_inventory
+from backend import sandbox_provider_availability as _sandbox_provider_availability
 from backend import sandbox_provider_factory as _sandbox_provider_factory
 from backend import sandbox_recipe_catalog as _sandbox_recipe_catalog
 from backend import sandbox_runtime_metrics as _sandbox_runtime_metrics
@@ -79,7 +80,7 @@ def count_user_visible_sandboxes_by_provider(
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:
-    return sandbox_inventory.available_sandbox_types(
+    return _sandbox_provider_availability.available_sandbox_types(
         sandboxes_dir=SANDBOXES_DIR,
         init_providers_and_managers_fn=init_providers_and_managers,
         sandbox_config_cls=SandboxConfig,

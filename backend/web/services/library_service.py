@@ -7,9 +7,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from backend import sandbox_provider_availability
 from backend.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from backend.web.core.paths import library_dir
-from backend.web.services import sandbox_service
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
 
@@ -148,7 +148,7 @@ def _resolve_recipe_provider(provider_name: str | None) -> tuple[str, str]:
     name = str(provider_name or "").strip()
     if not name:
         raise ValueError("Recipe provider_name is required")
-    for sandbox in sandbox_service.available_sandbox_types():
+    for sandbox in sandbox_provider_availability.available_sandbox_types():
         if str(sandbox.get("name") or "").strip() != name:
             continue
         provider_type = str(sandbox.get("provider") or "").strip()

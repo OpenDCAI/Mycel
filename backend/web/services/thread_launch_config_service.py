@@ -11,6 +11,6 @@ build_new_launch_config = _owner.build_new_launch_config
 
 
 def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
-    _owner.sandbox_service = sandbox_service
+    _owner.available_sandbox_types = sandbox_service.available_sandbox_types
     _owner.list_library = list_library
     return _owner.resolve_default_config(app, owner_user_id, agent_user_id)
