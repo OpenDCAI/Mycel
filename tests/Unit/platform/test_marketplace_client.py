@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-import backend.web.services.library_service as _lib_svc
+import backend.library_paths as _lib_paths
 from backend.web.utils.versioning import bump_semver
 
 # ── Version Bump (tested via publish internals) ──
@@ -70,6 +70,15 @@ def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
     assert exc_info.value.detail == "Unsupported sort: featured"
 
 
+def test_marketplace_client_uses_neutral_library_path_owner() -> None:
+    import backend.web.services.marketplace_client as marketplace_client
+
+    source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
+
+    assert "from backend.web.services.library_service import LIBRARY_DIR" not in source
+    assert "import backend.library_paths as _lib_paths" in source
+
+
 # ── Helpers ──
 
 
@@ -98,7 +107,7 @@ def _make_hub_response(item_type: str, slug: str, content: str = "# Hello", vers
 class TestDownloadSkill:
     def test_writes_skill_md(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
+        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
@@ -114,7 +123,7 @@ class TestDownloadSkill:
 
     def test_meta_json_has_source_tracking(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
+        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response(
             "skill", "tracked-skill", content="---\nname: Tracked Skill\n---\n# Hello", version="2.1.0", publisher="alice"
         )
@@ -131,7 +140,7 @@ class TestDownloadSkill:
 
     def test_path_traversal_blocked(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
+        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
@@ -195,7 +204,7 @@ class TestDownloadSkill:
 class TestDownloadAgent:
     def test_writes_agent_md(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
+        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("agent", "cool-agent", content="# Cool Agent")
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
@@ -211,7 +220,7 @@ class TestDownloadAgent:
 
     def test_meta_json_written(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
+        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("agent", "meta-agent", version="3.0.0", publisher="bob")
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
@@ -265,7 +274,7 @@ class TestDownloadUser:
 class TestDownloadIdempotency:
     def test_download_twice_overwrites_cleanly(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_svc, "LIBRARY_DIR", lib)
+        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
 
         v1 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV1", version="1.0.0")
         v2 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV2", version="1.0.1")
