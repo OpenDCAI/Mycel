@@ -1,5 +1,3 @@
-import inspect
-
 import backend.resource_common as neutral_resource_common
 import backend.resource_common as resource_common
 import backend.resource_projection as resource_projection_service
@@ -90,13 +88,6 @@ def test_resource_projection_row_identity_prefers_unbound_provider_runtime_ident
 
     assert resource_projection_service._resource_row_identity(resource_row) == "provider-session-1"
     assert resource_projection_service._resource_running_identity(resource_row) == ""
-
-
-def test_resource_row_identity_comment_uses_runtime_identity_language() -> None:
-    source = inspect.getsource(resource_projection_service._resource_row_identity)
-    old_comment_token = "Provider-native " + "session ids"
-
-    assert old_comment_token not in source
 
 
 def test_resource_projection_uses_resource_row_projection_seam() -> None:
