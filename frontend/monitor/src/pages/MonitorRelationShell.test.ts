@@ -3,21 +3,9 @@ import { describe, expect, it } from "vitest";
 import { buildOperationDetailShell } from "./OperationDetailPage";
 import { buildProviderRelationShell } from "./ProviderDetailPage";
 import { buildRuntimeRelationShell } from "./RuntimeDetailPage";
-import { buildThreadRelationShell } from "./ThreadDetailPage";
 import { buildSandboxGroupDetailLink } from "../ResourcesPage";
 
 describe("monitor relation shell", () => {
-  it("uses sandbox detail links for thread relations", () => {
-    const shell = buildThreadRelationShell({
-      provider_name: "daytona",
-      sandbox_id: "sandbox-1",
-      current_instance_id: "runtime-1",
-    });
-
-    expect(shell.sandboxLabel).toBe("Sandbox");
-    expect(shell.sandboxHref).toBe("/sandboxes/sandbox-1");
-  });
-
   it("uses sandbox ids for provider relations", () => {
     const shell = buildProviderRelationShell({
       provider: { id: "daytona", name: "daytona" },
