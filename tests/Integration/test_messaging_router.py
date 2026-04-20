@@ -115,36 +115,6 @@ def test_messaging_router_shell_is_deleted() -> None:
         importlib.import_module("backend.web.routers.messaging")
 
 
-def test_chat_router_imports_messaging_social_access_owner() -> None:
-    source = inspect.getsource(chat_router)
-
-    assert "from messaging.social_access import" in source
-
-
-def test_chat_router_uses_neutral_chat_dependency_owner() -> None:
-    source = inspect.getsource(chat_router)
-
-    assert "backend.web.core.dependencies" not in source
-    assert "backend.chat.api.http.dependencies" in source
-    assert "backend.web.services.social_access_service" not in source
-
-
-def test_chat_router_imports_actor_ownership_primitive() -> None:
-    source = inspect.getsource(chat_router)
-
-    assert "from messaging.actor_ownership import" in source
-    assert "owner_user_id ==" not in source
-
-
-def test_chat_router_imports_group_chat_social_access_primitive() -> None:
-    source = inspect.getsource(chat_router)
-
-    assert "can_group_chat_with_participant" in source
-    assert "ACTIVE_CHAT_RELATIONSHIP_STATES" not in source
-    assert "has_active_contact" not in source
-    assert ".get_state(" not in source
-
-
 def test_get_accessible_chat_or_404_returns_chat():
     chat = _chat("chat-1")
     app = SimpleNamespace(

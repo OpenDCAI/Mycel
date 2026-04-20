@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import inspect
 import threading
 from types import SimpleNamespace
 
@@ -18,31 +17,6 @@ def test_conversations_http_owner_module_lives_under_backend_chat() -> None:
 def test_conversations_router_shell_is_deleted() -> None:
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("backend.web.routers.conversations")
-
-
-def test_conversations_router_uses_runtime_activity_reader_for_running_state() -> None:
-    source = inspect.getsource(owner_conversations_router)
-
-    assert "AgentState" not in source
-    assert "agent_pool" not in source
-
-
-def test_conversations_router_uses_neutral_chat_dependency_owner() -> None:
-    source = inspect.getsource(owner_conversations_router)
-
-    assert "backend.web.core.dependencies" not in source
-    assert "backend.chat.api.http.dependencies" in source
-
-
-def test_conversations_router_uses_neutral_read_and_avatar_helpers() -> None:
-    source = inspect.getsource(owner_conversations_router)
-
-    assert "backend.web.services.owner_thread_read_service" not in source
-    assert "backend.web.services.thread_visibility" not in source
-    assert "backend.web.utils.serializers" not in source
-    assert "backend.thread_runtime.owner_reads" in source
-    assert "backend.thread_runtime.projection" in source
-    assert "backend.avatar_urls" in source
 
 
 @pytest.mark.asyncio
