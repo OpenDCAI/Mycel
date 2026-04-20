@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from backend.web.routers import webhooks
+
+
+def test_webhooks_router_uses_neutral_provider_inventory_owner() -> None:
+    source = inspect.getsource(webhooks)
+
+    assert "backend.web.services.sandbox_service" not in source
+    assert "backend.sandbox_inventory import init_providers_and_managers" in source
 
 
 @pytest.mark.asyncio

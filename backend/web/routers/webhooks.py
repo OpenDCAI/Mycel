@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.web.services.sandbox_service import init_providers_and_managers
+from backend.sandbox_inventory import init_providers_and_managers
 from backend.web.utils.helpers import _get_container, extract_webhook_instance_id
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.lease import lease_from_row as lower_runtime_from_row
