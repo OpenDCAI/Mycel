@@ -1,11 +1,12 @@
 """Compatibility shell for thread runtime convergence helpers."""
 
 from backend.thread_runtime import convergence as _owner
-from backend.web.utils.helpers import delete_thread_in_db
 
 
 def _delete_thread_proxy(thread_id: str) -> None:
-    delete_thread_in_db(thread_id)
+    from backend.web.services import thread_runtime_convergence as _shell
+
+    _shell.delete_thread_in_db(thread_id)
 
 
 _owner.delete_thread_in_db = _delete_thread_proxy
