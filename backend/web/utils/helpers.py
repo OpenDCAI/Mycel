@@ -5,16 +5,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from backend.storage_container_cache import get_storage_container as _get_container
 from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
 from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
-from storage.container import StorageContainer
 from storage.runtime import (
-    build_storage_container,
     build_thread_repo,
     uses_supabase_runtime_defaults,
 )
-
-_cached_container: StorageContainer | None = None
 
 
 def is_virtual_thread_id(thread_id: str | None) -> bool:
@@ -38,14 +35,6 @@ def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
                 return value
 
     return None
-
-
-def _get_container() -> StorageContainer:
-    global _cached_container
-    if _cached_container is not None:
-        return _cached_container
-    _cached_container = build_storage_container()
-    return _cached_container
 
 
 _cached_thread_repo = None

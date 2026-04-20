@@ -14,6 +14,13 @@ def test_webhooks_router_uses_neutral_provider_inventory_owner() -> None:
     assert "backend.sandbox_inventory import init_providers_and_managers" in source
 
 
+def test_webhooks_router_uses_neutral_storage_container_cache_owner() -> None:
+    source = inspect.getsource(webhooks)
+
+    assert "from backend.web.utils.helpers import _get_container" not in source
+    assert "from backend.storage_container_cache import get_storage_container as _get_container" in source
+
+
 @pytest.mark.asyncio
 async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     class _RuntimeRepo:
