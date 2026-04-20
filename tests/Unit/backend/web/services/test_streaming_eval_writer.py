@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.web.services.event_buffer import ThreadEventBuffer
+from backend.thread_runtime.events.buffer import ThreadEventBuffer
 from backend.web.services.streaming_service import _run_agent_to_buffer, write_cancellation_markers
 from core.runtime.middleware.monitor import AgentState
 from eval.models import RunTrajectory
