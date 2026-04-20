@@ -91,9 +91,7 @@ def test_supabase_monitor_operation_repo_uses_observability_schema_table() -> No
 
 def test_supabase_monitor_operation_repo_fails_loudly_when_monitor_operations_table_is_missing() -> None:
     client = _FakeClient()
-    client.table_obj.error = RuntimeError(
-        "Could not find the table 'observability.monitor_operations' in the schema cache"
-    )
+    client.table_obj.error = RuntimeError("Could not find the table 'observability.monitor_operations' in the schema cache")
     repo = SupabaseMonitorOperationRepo(client=client)
 
     with pytest.raises(RuntimeError, match="observability\\.monitor_operations is missing") as exc_info:

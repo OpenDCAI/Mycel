@@ -204,6 +204,8 @@ def test_list_resource_providers_keeps_card_cpu_contract_for_remote_provider(mon
         "_resolve_instance_capabilities",
         lambda _config_name: (resource_common.empty_capabilities(), None),
     )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "agentbay")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda thread_ids: {})
     monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
 

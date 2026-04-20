@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import backend.resource_projection as resource_projection_service
 import backend.resource_provider_boundary as resource_provider_boundary_service
 from backend import resource_common
+from backend import resource_provider_contracts as resource_service
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from backend.web.services import (
-    resource_service,
     sandbox_service,
 )
 from backend.web.utils.serializers import avatar_url

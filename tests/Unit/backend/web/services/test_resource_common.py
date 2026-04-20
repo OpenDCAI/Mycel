@@ -5,13 +5,14 @@ import pytest
 from backend import resource_common, resource_projection, user_resource_projection
 from backend import resource_common as neutral_resource_common
 from backend import resource_io as neutral_resource_io
+from backend import resource_io as resource_io
 from backend import resource_provider_boundary as neutral_resource_provider_boundary
 from backend import resource_provider_contracts as neutral_resource_provider_contracts
+from backend import resource_provider_contracts as resource_contracts
 from backend import sandbox_provider_factory as neutral_sandbox_provider_factory
 from backend import user_sandbox_reads as neutral_user_sandbox_reads
 from backend.web.services import (
     account_resource_service,
-    resource_service,
     sandbox_service,
 )
 
@@ -177,10 +178,10 @@ def test_resource_metrics_normalize_live_snapshot_values() -> None:
 
 def test_shared_resource_consumers_use_neutral_resource_common_owner() -> None:
     projection_source = inspect.getsource(resource_projection)
-    resource_service_source = inspect.getsource(resource_service)
+    resource_io_source = inspect.getsource(resource_io)
 
     assert "backend.web.services.resource_common" not in projection_source
-    assert "backend.web.services.resource_common" not in resource_service_source
+    assert "backend.web.services.resource_common" not in resource_io_source
     assert "backend.resource_common" in projection_source
 
 
@@ -258,14 +259,14 @@ def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
 
 def test_resource_modules_use_neutral_sandbox_provider_factory_owner() -> None:
     common_source = inspect.getsource(neutral_resource_common)
-    resource_service_source = inspect.getsource(resource_service)
+    resource_io_source = inspect.getsource(resource_io)
     sandbox_provider_factory_source = inspect.getsource(neutral_sandbox_provider_factory)
 
     assert "backend.web.services.sandbox_service" not in common_source
-    assert "backend.web.services.sandbox_service" not in resource_service_source
+    assert "backend.web.services.sandbox_service" not in resource_io_source
     assert "backend.web.services.sandbox_service" not in sandbox_provider_factory_source
     assert "backend.sandbox_provider_factory" in common_source
-    assert "backend.sandbox_provider_factory" in resource_service_source
+    assert "backend.sandbox_provider_factory" in resource_io_source
     assert "backend.sandbox_inventory" in sandbox_provider_factory_source
 
 
@@ -275,21 +276,18 @@ def test_web_sandbox_service_keeps_provider_factory_compat_surface() -> None:
 
 def test_resource_io_owner_moves_out_of_resource_service() -> None:
     io_source = inspect.getsource(neutral_resource_io)
-    service_source = inspect.getsource(resource_service)
 
     assert "backend.web.services import resource_service" not in io_source
-    assert "backend.resource_io" in service_source
+    assert resource_io.refresh_resource_snapshots is neutral_resource_io.refresh_resource_snapshots
 
 
 def test_resource_provider_boundary_moves_display_contract_out_of_resource_service() -> None:
     boundary_source = inspect.getsource(neutral_resource_provider_boundary)
-    service_source = inspect.getsource(resource_service)
 
     assert "backend.web.services import resource_service" not in boundary_source
     assert "resource_provider_contracts" in boundary_source
-    assert "resource_provider_contracts" in service_source
 
 
-def test_resource_service_keeps_provider_contract_compat_surface() -> None:
-    assert resource_service.get_provider_display_contract is neutral_resource_provider_contracts.get_provider_display_contract
-    assert resource_service.build_resource_row_payload is neutral_resource_provider_contracts.build_resource_row_payload
+def test_resource_provider_contract_owner_keeps_expected_surface() -> None:
+    assert resource_contracts.get_provider_display_contract is neutral_resource_provider_contracts.get_provider_display_contract
+    assert resource_contracts.build_resource_row_payload is neutral_resource_provider_contracts.build_resource_row_payload
