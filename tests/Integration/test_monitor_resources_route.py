@@ -316,6 +316,19 @@ def test_monitor_sandbox_routes_map_runtime_failures_to_503(monkeypatch, verb, p
     assert "provider unavailable" in response.text
 
 
+def test_monitor_operation_detail_maps_runtime_failures_to_503(monkeypatch):
+    monkeypatch.setattr(
+        monitor_gateway_impl,
+        "get_operation_detail",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("observability.monitor_operations is missing")),
+    )
+
+    response = _request("get", "/api/monitor/operations/op-1", raise_server_exceptions=False)
+
+    assert response.status_code == 503
+    assert "observability.monitor_operations is missing" in response.text
+
+
 @pytest.mark.parametrize(
     ("path", "service_name", "expected_args"),
     [

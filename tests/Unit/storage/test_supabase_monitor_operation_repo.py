@@ -5,6 +5,50 @@ from storage.providers.supabase.monitor_operation_repo import SupabaseMonitorOpe
 from tests.fakes.supabase import FakeSupabaseClient
 
 
+class _FakeTable:
+    def __init__(self) -> None:
+        self.rows = []
+        self.error: Exception | None = None
+
+    def upsert(self, _payload, **_kwargs):
+        return self
+
+    def select(self, _cols):
+        return self
+
+    def eq(self, _column, _value):
+        return self
+
+    def neq(self, _column, _value):
+        return self
+
+    def order(self, _column, desc: bool = False):
+        return self
+
+    def delete(self):
+        return self
+
+    def execute(self):
+        if self.error is not None:
+            raise self.error
+        return type("Resp", (), {"data": self.rows})()
+
+
+class _FakeClient:
+    def __init__(self) -> None:
+        self.table_obj = _FakeTable()
+        self.last_schema_name: str | None = None
+        self.last_table_name: str | None = None
+
+    def schema(self, name):
+        self.last_schema_name = name
+        return self
+
+    def table(self, name):
+        self.last_table_name = name
+        return self.table_obj
+
+
 def _operation(**overrides):
     payload = {
         "operation_id": "op-1",
@@ -43,6 +87,19 @@ def test_supabase_monitor_operation_repo_uses_observability_schema_table() -> No
     assert cleared == 1
     assert tables["observability.monitor_operations"] == []
     assert "monitor_operations" not in tables
+
+
+def test_supabase_monitor_operation_repo_fails_loudly_when_monitor_operations_table_is_missing() -> None:
+    client = _FakeClient()
+    client.table_obj.error = RuntimeError(
+        "Could not find the table 'observability.monitor_operations' in the schema cache"
+    )
+    repo = SupabaseMonitorOperationRepo(client=client)
+
+    with pytest.raises(RuntimeError, match="observability\\.monitor_operations is missing") as exc_info:
+        repo.list_for_target("sandbox", "sandbox-1")
+
+    assert "schema cache" in str(exc_info.value)
 
 
 @pytest.mark.parametrize(

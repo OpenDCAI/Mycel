@@ -43,13 +43,24 @@ def _sandbox_detail_cleanup_truth(
             "operation": None,
             "recent_operations": [],
         }
-    return operations.build_sandbox_cleanup_truth(
-        sandbox_id=sandbox_id,
-        triage=triage,
-        provider_name=provider_name,
-        runtime_rows=runtime_rows,
-        threads=threads,
-    )
+    try:
+        return operations.build_sandbox_cleanup_truth(
+            sandbox_id=sandbox_id,
+            triage=triage,
+            provider_name=provider_name,
+            runtime_rows=runtime_rows,
+            threads=threads,
+        )
+    except RuntimeError as err:
+        if "observability.monitor_operations is missing" not in str(err):
+            raise
+        return {
+            "allowed": False,
+            "recommended_action": None,
+            "reason": "Monitor cleanup history is unavailable in the current process.",
+            "operation": None,
+            "recent_operations": [],
+        }
 
 
 def _build_monitor_sandbox_detail(rows: dict[str, object]) -> dict[str, object]:

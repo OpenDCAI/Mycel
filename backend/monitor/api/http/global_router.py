@@ -16,6 +16,15 @@ def _or_404(fn, *args):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+def _or_404_or_503(fn, *args):
+    try:
+        return fn(*args)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 async def _resource_io(fn, *args):
     try:
         return await asyncio.to_thread(fn, *args)
@@ -57,7 +66,7 @@ def provider_orphan_runtime_cleanup_action(provider_id: str, runtime_id: str):
 
 @router.get("/operations/{operation_id}")
 def operation_detail_snapshot(operation_id: str):
-    return _or_404(monitor_gateway.get_operation_detail, operation_id)
+    return _or_404_or_503(monitor_gateway.get_operation_detail, operation_id)
 
 
 @router.get("/runtimes/{runtime_id}")

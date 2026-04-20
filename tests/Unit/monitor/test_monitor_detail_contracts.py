@@ -625,6 +625,28 @@ def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_read
     }
 
 
+def test_get_monitor_sandbox_detail_blocks_cleanup_when_operation_store_is_unavailable(monkeypatch):
+    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox()))
+    monkeypatch.setattr(
+        monitor_operation_service,
+        "_operations_for_target",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("observability.monitor_operations is missing; refresh the Supabase schema cache before retrying")
+        ),
+    )
+
+    payload = monitor_sandbox_detail_service.get_monitor_sandbox_detail("sandbox-1")
+
+    assert payload["sandbox"]["sandbox_id"] == "sandbox-1"
+    assert payload["cleanup"] == {
+        "allowed": False,
+        "recommended_action": None,
+        "reason": "Monitor cleanup history is unavailable in the current process.",
+        "operation": None,
+        "recent_operations": [],
+    }
+
+
 def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypatch):
     calls: list[tuple[str, str, bool]] = []
     _use_monitor_repo(
