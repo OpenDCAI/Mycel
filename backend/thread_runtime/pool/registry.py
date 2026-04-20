@@ -9,11 +9,17 @@ from fastapi import FastAPI
 
 from backend.thread_runtime.pool.factory import create_agent_sync
 from backend.thread_runtime.sandbox import resolve_thread_sandbox
-from backend.web.services.file_channel_service import get_file_channel_binding
 from core.identity.agent_registry import get_or_create_agent_id
 from sandbox.thread_context import set_current_thread_id
 
 logger = logging.getLogger(__name__)
+
+
+def _unbound_get_file_channel_binding(*_args, **_kwargs):
+    raise RuntimeError("thread_runtime.pool.registry requires get_file_channel_binding binding")
+
+
+get_file_channel_binding = _unbound_get_file_channel_binding
 
 # Thread lock for config updates
 _config_update_locks: dict[str, asyncio.Lock] = {}
