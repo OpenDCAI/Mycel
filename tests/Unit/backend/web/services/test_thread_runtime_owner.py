@@ -134,6 +134,16 @@ def test_streaming_service_uses_thread_runtime_buffer_wiring_owner() -> None:
     assert "backend.web.services.event_store" not in owner_source
 
 
+def test_thread_runtime_buffer_wiring_uses_neutral_event_bus_owner() -> None:
+    owner_module = importlib.import_module("backend.event_bus")
+    owner_source = inspect.getsource(importlib.import_module("backend.thread_runtime.run.buffer_wiring"))
+
+    assert owner_module.EventBus is not None
+    assert owner_module.get_event_bus is not None
+    assert "from backend.event_bus import get_event_bus" in owner_source
+    assert "backend.web.event_bus" not in owner_source
+
+
 def test_streaming_service_uses_thread_runtime_run_lifecycle_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.run.lifecycle")
     streaming_source = inspect.getsource(importlib.import_module("backend.web.services.streaming_service"))

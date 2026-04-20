@@ -603,7 +603,7 @@ def _patch_fake_event_bus(monkeypatch: pytest.MonkeyPatch) -> None:
 
             return _emit
 
-    monkeypatch.setattr("backend.web.event_bus.get_event_bus", lambda: _FakeEventBus())
+    monkeypatch.setattr("backend.event_bus.get_event_bus", lambda: _FakeEventBus())
 
 
 @pytest.mark.asyncio
