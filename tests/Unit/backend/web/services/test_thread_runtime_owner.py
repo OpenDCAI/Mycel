@@ -87,10 +87,12 @@ def test_thread_launch_config_uses_thread_runtime_launch_config_owner() -> None:
 
 def test_thread_runtime_pool_exports_idle_reaper_owner() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.pool.idle_reaper")
-    shell_module = importlib.import_module("backend.web.services.idle_reaper")
+    lifespan_source = inspect.getsource(importlib.import_module("backend.web.core.lifespan"))
 
-    assert hasattr(shell_module, "run_idle_reaper_once")
-    assert hasattr(shell_module, "idle_reaper_loop")
+    assert "backend.web.services.idle_reaper" not in lifespan_source
+    assert "backend.thread_runtime.pool" in lifespan_source
+    assert hasattr(owner_module, "run_idle_reaper_once")
+    assert hasattr(owner_module, "idle_reaper_loop")
     assert owner_module.__name__ == "backend.thread_runtime.pool.idle_reaper"
 
 

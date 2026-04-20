@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from psycopg import AsyncConnection
 
-from backend.web.services.idle_reaper import idle_reaper_loop
+from backend.thread_runtime.pool import idle_reaper as idle_reaper_owner
 from core.runtime.middleware.queue import MessageQueueManager
 
 
@@ -130,8 +130,14 @@ async def lifespan(app: FastAPI):
     app.state._event_loop = asyncio.get_running_loop()
 
     try:
+        from backend.web.core.config import IDLE_REAPER_INTERVAL_SEC
+        from backend.web.services.sandbox_service import init_providers_and_managers
+
+        idle_reaper_owner.init_providers_and_managers = init_providers_and_managers
+        idle_reaper_owner.IDLE_REAPER_INTERVAL_SEC = IDLE_REAPER_INTERVAL_SEC
+
         # Start idle reaper background task
-        app.state.idle_reaper_task = asyncio.create_task(idle_reaper_loop(app))
+        app.state.idle_reaper_task = asyncio.create_task(idle_reaper_owner.idle_reaper_loop(app))
 
         yield
     finally:
