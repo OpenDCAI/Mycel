@@ -80,6 +80,13 @@ def test_threads_router_uses_neutral_thread_sandbox_owner() -> None:
     assert "from backend.thread_runtime.sandbox import resolve_thread_sandbox" in source
 
 
+def test_threads_router_uses_neutral_file_channel_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.file_channel_service import get_file_channel_binding" not in source
+    assert "from backend.file_channel import get_file_channel_binding" in source
+
+
 def test_threads_router_uses_neutral_resource_cache_owner() -> None:
     source = inspect.getsource(threads_router)
 

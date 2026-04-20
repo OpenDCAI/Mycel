@@ -7,8 +7,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
+from backend import file_channel as file_channel_service
 from backend.web.core.dependencies import get_app, verify_thread_owner
-from backend.web.services import file_channel_service
 from backend.web.services.agent_pool import resolve_thread_sandbox
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
