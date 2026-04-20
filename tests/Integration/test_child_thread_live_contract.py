@@ -11,9 +11,9 @@ import pytest
 from fastapi import Request
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from backend.thread_runtime.events.buffer import ThreadEventBuffer
 from backend.web.routers import threads as threads_router
 from backend.web.services.display_builder import DisplayBuilder
-from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.streaming_service import run_child_thread_live
 from backend.web.utils.serializers import serialize_message
 from core.runtime.middleware.monitor import AgentState

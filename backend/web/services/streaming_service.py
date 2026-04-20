@@ -4,6 +4,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from backend.thread_runtime.events.buffer import RunEventBuffer, ThreadEventBuffer
 from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring
 from backend.thread_runtime.run import cancellation as _run_cancellation
 from backend.thread_runtime.run import emit as _run_emit
@@ -13,7 +14,6 @@ from backend.thread_runtime.run import followups as _run_followups
 from backend.thread_runtime.run import input_construction as _run_input_construction
 from backend.thread_runtime.run import lifecycle as _run_lifecycle
 from backend.thread_runtime.run import observer as _run_observer
-from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import append_event as _append_event
 from backend.web.services.event_store import cleanup_old_runs
 from core.runtime.notifications import is_terminal_background_notification

@@ -14,11 +14,11 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
 from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
+from backend.thread_runtime.events.buffer import ThreadEventBuffer
 from backend.web.models.requests import SendMessageRequest
 from backend.web.routers import threads as threads_router
 from backend.web.routers.threads import get_thread_history, get_thread_messages
 from backend.web.services.display_builder import DisplayBuilder
-from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.streaming_service import (
     _ensure_thread_handlers,
     _repair_incomplete_tool_calls,
