@@ -3,6 +3,7 @@ import inspect
 from backend import auth_runtime_bootstrap, avatar_files, avatar_urls, contact_bootstrap, recipe_bootstrap
 from backend import auth_service as neutral_auth_service
 from backend.auth_service import AuthService
+from backend.web.models import panel as panel_models
 from backend.web.routers import marketplace as marketplace_router
 from backend.web.routers import panel as panel_router
 from backend.web.routers import users as users_router
@@ -65,6 +66,20 @@ def test_web_library_service_uses_neutral_library_path_owner() -> None:
 
     assert "from backend.web.core.paths import library_dir" not in source
     assert "from backend.library_paths import LIBRARY_DIR" in source
+
+
+def test_agent_user_service_uses_neutral_versioning_owner() -> None:
+    source = inspect.getsource(agent_user_service)
+
+    assert "from backend.web.utils.versioning import BumpType, bump_semver" not in source
+    assert "from backend.versioning import BumpType, bump_semver" in source
+
+
+def test_panel_models_uses_neutral_versioning_owner() -> None:
+    source = inspect.getsource(panel_models)
+
+    assert "from backend.web.utils.versioning import BumpType" not in source
+    assert "from backend.versioning import BumpType" in source
 
 
 def test_neutral_avatar_helpers_use_neutral_avatar_path_owner():

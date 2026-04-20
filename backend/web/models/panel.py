@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from backend.web.utils.versioning import BumpType
+from backend.versioning import BumpType
 
 # ── Agents ──
 

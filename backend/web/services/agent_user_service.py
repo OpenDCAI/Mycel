@@ -7,8 +7,8 @@ from typing import Any
 
 import yaml
 
+from backend.versioning import BumpType, bump_semver
 from backend.web.utils.serializers import avatar_url
-from backend.web.utils.versioning import BumpType, bump_semver
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from config.loader import AgentLoader
 

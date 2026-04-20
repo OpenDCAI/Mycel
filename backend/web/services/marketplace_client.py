@@ -13,7 +13,7 @@ import yaml
 from fastapi import HTTPException
 
 import backend.library_paths as _lib_paths
-from backend.web.utils.versioning import BumpType, bump_semver
+from backend.versioning import BumpType, bump_semver
 from config.loader import load_bundle_from_repo
 from config.types import AgentBundle
 
