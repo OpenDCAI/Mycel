@@ -2,9 +2,9 @@ import inspect
 
 from backend import auth_runtime_bootstrap, avatar_files, avatar_urls, contact_bootstrap, recipe_bootstrap
 from backend import auth_service as neutral_auth_service
+from backend.auth_service import AuthService
 from backend.web.routers import users as users_router
 from backend.web.services import agent_user_service, library_service
-from backend.web.services.auth_service import AuthService
 
 
 def test_auth_runtime_bootstrap_depends_on_neutral_auth_service():
@@ -43,10 +43,8 @@ def test_agent_user_service_uses_neutral_contact_bootstrap_owner():
     assert "backend.contact_bootstrap" in source
 
 
-def test_web_contact_bootstrap_service_is_compat_shell():
-    from backend.web.services import contact_bootstrap_service
-
-    assert contact_bootstrap_service.ensure_owner_agent_contact is contact_bootstrap.ensure_owner_agent_contact
+def test_contact_bootstrap_owner_exports_contact_bootstrap_entrypoint() -> None:
+    assert contact_bootstrap.ensure_owner_agent_contact is not None
 
 
 def test_neutral_auth_service_uses_neutral_recipe_bootstrap_owner():

@@ -7,7 +7,7 @@ from typing import Any, cast
 import jwt
 import pytest
 
-from backend.web.services.auth_service import AuthService
+from backend.auth_service import AuthService
 
 
 class _FakeSupabaseAuth:
