@@ -155,9 +155,7 @@ export default function SandboxesPage() {
                   <div className="sandbox-topology__row">
                     <span className="sandbox-topology__label">thread</span>
                     {item.thread.thread_id ? (
-                      <Link className="mono" to={`/threads/${item.thread.thread_id}`}>
-                        {item.thread.thread_id.slice(0, 8)}
-                      </Link>
+                      <span className="mono">{item.thread.thread_id.slice(0, 8)}</span>
                     ) : (
                       <span className="orphan">orphan</span>
                     )}

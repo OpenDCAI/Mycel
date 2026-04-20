@@ -43,7 +43,7 @@ export default function EvaluationRunDetailPage() {
         <div className="info-grid">
           <div>
             <strong>Thread</strong>
-            {run.thread_id ? <Link to={`/threads/${run.thread_id}`}>{run.thread_id}</Link> : <span>-</span>}
+            <span>{run.thread_id || "-"}</span>
           </div>
           <div>
             <strong>Status</strong>

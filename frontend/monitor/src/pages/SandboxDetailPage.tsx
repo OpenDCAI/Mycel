@@ -242,7 +242,7 @@ export default function SandboxDetailPage() {
           <article className="surface-card">
             <p className="surface-card__eyebrow">Thread</p>
             <p className="surface-card__value surface-card__value--compact">
-              {threads[0]?.thread_id ? <Link to={`/threads/${threads[0].thread_id}`}>{threads[0].thread_id}</Link> : "No related thread"}
+              {threads[0]?.thread_id ? threads[0].thread_id : "No related thread"}
             </p>
             <p className="surface-card__body">Primary thread currently linked to this sandbox.</p>
           </article>

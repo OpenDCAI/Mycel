@@ -1067,9 +1067,7 @@ function SandboxInspector({
                   <div>
                     <div className="sandbox-resource-row__name">{resourceRow.agentName || "未绑定"}</div>
                     <div className="sandbox-resource-row__meta">
-                      <Link className="sandbox-link" to={`/threads/${resourceRow.threadId}`}>
-                        {resourceRow.threadId}
-                      </Link>
+                      <span className="sandbox-link">{resourceRow.threadId}</span>
                     </div>
                     {resourceRow.runtimeId && (
                       <div className="sandbox-resource-row__meta">

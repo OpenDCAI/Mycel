@@ -160,7 +160,7 @@ export default function EvaluationBatchDetailPage() {
               <tr key={run.batch_run_id ?? run.scenario_id}>
                 <td className="mono">{run.scenario_id ?? "-"}</td>
                 <td>{run.status ?? "-"}</td>
-                <td>{run.thread_id ? <Link to={`/threads/${run.thread_id}`}>{run.thread_id}</Link> : "-"}</td>
+                <td>{run.thread_id || "-"}</td>
                 <td>{run.eval_run_id ? <Link to={`/evaluation/runs/${run.eval_run_id}`}>{run.eval_run_id}</Link> : "-"}</td>
                 <td>{run.started_at ?? "-"}</td>
                 <td>{run.finished_at ?? "-"}</td>

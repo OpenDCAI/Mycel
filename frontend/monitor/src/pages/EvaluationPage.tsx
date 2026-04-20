@@ -297,7 +297,7 @@ export default function EvaluationPage() {
                   <td className="mono">
                     {run.run_id ? <Link to={`/evaluation/runs/${run.run_id}`}>{run.run_id}</Link> : "-"}
                   </td>
-                  <td>{run.thread_id ? <Link to={`/threads/${run.thread_id}`}>{run.thread_id}</Link> : "-"}</td>
+                  <td>{run.thread_id || "-"}</td>
                   <td>{run.status ?? "-"}</td>
                   <td>{run.started_at ?? "-"}</td>
                   <td>{run.finished_at ?? "-"}</td>
@@ -317,7 +317,7 @@ export default function EvaluationPage() {
         <div className="info-grid">
           <div>
             <strong>Thread</strong>
-            {selectedRun.thread_id ? <Link to={`/threads/${selectedRun.thread_id}`}>{selectedRun.thread_id}</Link> : <span>-</span>}
+            <span>{selectedRun.thread_id || "-"}</span>
           </div>
           <div>
             <strong>Run ID</strong>

@@ -63,7 +63,7 @@ export default function RuntimeDetailPage() {
           </div>
           <div>
             <strong>Thread</strong>
-            <span>{threadId ? <Link to={`/threads/${threadId}`}>{threadId}</Link> : "-"}</span>
+            <span>{threadId || "-"}</span>
           </div>
           <div>
             <strong>Surface</strong>
