@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from backend import sandbox_provider_availability, sandbox_runtime_metrics, sandbox_runtime_mutations
+from backend import sandbox_provider_availability, sandbox_runtime_metrics, sandbox_runtime_mutations, user_sandbox_reads
 from backend.sandbox_inventory import init_providers_and_managers
 from backend.sandbox_runtime_reads import load_all_sandbox_runtimes
 from backend.web.core.dependencies import get_current_user_id
@@ -63,10 +63,14 @@ async def list_my_sandboxes(
     thread_repo = getattr(request.app.state, "thread_repo", None)
     user_repo = getattr(request.app.state, "user_repo", None)
     sandboxes = await asyncio.to_thread(
-        sandbox_service.list_user_sandboxes,
+        user_sandbox_reads.list_user_sandboxes,
         user_id,
         thread_repo=thread_repo,
         user_repo=user_repo,
+        make_sandbox_monitor_repo_fn=sandbox_service.make_sandbox_monitor_repo,
+        canonical_owner_threads_fn=sandbox_service.canonical_owner_threads,
+        avatar_url_fn=sandbox_service.avatar_url,
+        is_virtual_thread_id_fn=sandbox_service.is_virtual_thread_id,
     )
     return {"sandboxes": sandboxes}
 

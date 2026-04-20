@@ -13,12 +13,13 @@ from backend.web.services import sandbox_service
 async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
-    def fake_list_user_sandboxes(user_id: str, *, thread_repo=None, user_repo=None) -> list[dict[str, object]]:
+    def fake_list_user_sandboxes(user_id: str, *, thread_repo=None, user_repo=None, **kwargs) -> list[dict[str, object]]:
         seen.update(
             {
                 "user_id": user_id,
                 "thread_repo": thread_repo,
                 "user_repo": user_repo,
+                "kwargs": kwargs,
             }
         )
         return [{"sandbox_id": "sandbox-1"}]
@@ -26,16 +27,18 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
     thread_repo = SimpleNamespace()
     user_repo = SimpleNamespace()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(thread_repo=thread_repo, user_repo=user_repo)))
-    monkeypatch.setattr(sandbox_router.sandbox_service, "list_user_sandboxes", fake_list_user_sandboxes, raising=False)
+    monkeypatch.setattr(sandbox_router.user_sandbox_reads, "list_user_sandboxes", fake_list_user_sandboxes, raising=False)
 
     result = await sandbox_router.list_my_sandboxes(user_id="owner-1", request=request)
 
     assert result == {"sandboxes": [{"sandbox_id": "sandbox-1"}]}
-    assert seen == {
-        "user_id": "owner-1",
-        "thread_repo": thread_repo,
-        "user_repo": user_repo,
-    }
+    assert seen["user_id"] == "owner-1"
+    assert seen["thread_repo"] is thread_repo
+    assert seen["user_repo"] is user_repo
+    assert seen["kwargs"]["make_sandbox_monitor_repo_fn"] is sandbox_router.sandbox_service.make_sandbox_monitor_repo
+    assert seen["kwargs"]["canonical_owner_threads_fn"] is sandbox_router.sandbox_service.canonical_owner_threads
+    assert seen["kwargs"]["avatar_url_fn"] is sandbox_router.sandbox_service.avatar_url
+    assert seen["kwargs"]["is_virtual_thread_id_fn"] is sandbox_router.sandbox_service.is_virtual_thread_id
 
 
 def test_sandbox_runtime_routes_do_not_expose_session_paths() -> None:
@@ -77,6 +80,13 @@ def test_sandbox_runtime_list_route_uses_neutral_owners() -> None:
     assert "from backend.sandbox_runtime_reads import load_all_sandbox_runtimes" in source
     assert "await asyncio.to_thread(sandbox_service.init_providers_and_managers)" not in source
     assert "await asyncio.to_thread(load_all_sandbox_runtimes, managers)" in source
+
+
+def test_sandbox_mine_route_uses_neutral_owner() -> None:
+    source = inspect.getsource(sandbox_router)
+
+    assert "await asyncio.to_thread(sandbox_service.list_user_sandboxes" not in source
+    assert "user_sandbox_reads.list_user_sandboxes" in source
 
 
 @pytest.mark.asyncio
