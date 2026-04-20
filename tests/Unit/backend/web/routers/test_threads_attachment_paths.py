@@ -32,6 +32,15 @@ def test_threads_router_uses_neutral_thread_resource_owner() -> None:
     assert "from backend.sandbox_thread_resources import destroy_thread_resources_sync" in source
 
 
+def test_threads_router_uses_neutral_thread_read_and_state_owners() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst" not in source
+    assert "from backend.web.services.thread_state_service import (" not in source
+    assert "from backend.thread_runtime.owner_reads import list_owner_thread_rows_for_auth_burst" in source
+    assert "from backend.thread_runtime.state import get_sandbox_info, get_sandbox_status_from_repos" in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(
