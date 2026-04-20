@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 from types import SimpleNamespace
 
@@ -106,12 +107,12 @@ def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
 
 
 def test_chat_http_owner_module_lives_under_backend_chat() -> None:
-    from backend.web.routers import messaging as messaging_shell
-
-    assert chat_router.router is messaging_shell.router
-    assert chat_router.list_chats is messaging_shell.list_chats
-    assert chat_router.send_message is messaging_shell.send_message
     assert chat_router.__name__ == "backend.chat.api.http.router"
+
+
+def test_messaging_router_shell_is_deleted() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("backend.web.routers.messaging")
 
 
 def test_chat_router_imports_messaging_social_access_owner() -> None:
