@@ -67,3 +67,10 @@ def test_save_file_does_not_touch_chat_session_activity(monkeypatch):
     result = file_channel_service.save_file(thread_id="thread-1", relative_path="note.txt", content=b"hello")
 
     assert result == {"path": "note.txt", "size": 5, "thread_id": "thread-1"}
+
+
+def test_file_channel_service_uses_neutral_storage_container_cache_owner() -> None:
+    source = file_channel_service.__loader__.get_source(file_channel_service.__name__) or ""
+
+    assert "from backend.web.utils.helpers import _get_container" not in source
+    assert "from backend.storage_container_cache import get_storage_container as _get_container" in source

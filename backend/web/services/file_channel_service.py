@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from backend.web.utils.helpers import _get_container
+from backend.storage_container_cache import get_storage_container as _get_container
 from config.user_paths import user_home_path
 
 logger = logging.getLogger(__name__)
