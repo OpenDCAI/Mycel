@@ -41,6 +41,13 @@ def test_threads_router_uses_neutral_thread_read_and_state_owners() -> None:
     assert "from backend.thread_runtime.state import get_sandbox_info, get_sandbox_status_from_repos" in source
 
 
+def test_threads_router_uses_neutral_message_interruption_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.thread_message_interruption_service import repair_interrupted_tool_call_messages" not in source
+    assert "from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages" in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(
