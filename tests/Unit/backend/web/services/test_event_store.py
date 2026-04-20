@@ -4,7 +4,8 @@ import importlib
 
 import pytest
 
-from backend.web.services import event_store
+from backend.thread_runtime.events import reads as event_store_reads
+from backend.thread_runtime.events import store as event_store
 
 
 @pytest.mark.asyncio
@@ -53,7 +54,7 @@ def test_build_run_event_read_transport_uses_repo_boundary() -> None:
             calls.append(("list_events", (thread_id, run_id), {"after": after, "limit": limit}))
             return [{"seq": 1, "event_type": "delta", "data": {"text": "hello"}}]
 
-    transport = event_store.build_run_event_read_transport(_Repo())
+    transport = event_store_reads.build_run_event_read_transport(_Repo())
 
     assert transport.latest_run_id("thread-1") == "run-1"
     assert transport.list_events("thread-1", "run-1", after=3, limit=50) == [{"seq": 1, "event_type": "delta", "data": {"text": "hello"}}]
@@ -65,12 +66,13 @@ def test_build_run_event_read_transport_uses_repo_boundary() -> None:
 
 def test_run_event_store_write_owner_lives_under_backend_thread_runtime_events() -> None:
     owner_module = importlib.import_module("backend.thread_runtime.events.store")
-    shell_module = importlib.import_module("backend.web.services.event_store")
+    read_owner_module = importlib.import_module("backend.thread_runtime.events.reads")
 
     assert owner_module.__name__ == "backend.thread_runtime.events.store"
-    assert hasattr(shell_module, "append_event")
-    assert hasattr(shell_module, "read_events_after")
-    assert hasattr(shell_module, "get_last_seq")
-    assert hasattr(shell_module, "get_run_start_seq")
-    assert hasattr(shell_module, "get_latest_run_id")
-    assert hasattr(shell_module, "cleanup_old_runs")
+    assert hasattr(owner_module, "append_event")
+    assert hasattr(owner_module, "read_events_after")
+    assert hasattr(owner_module, "get_last_seq")
+    assert hasattr(owner_module, "get_run_start_seq")
+    assert hasattr(owner_module, "get_latest_run_id")
+    assert hasattr(owner_module, "cleanup_old_runs")
+    assert hasattr(read_owner_module, "build_run_event_read_transport")

@@ -470,7 +470,7 @@ def _patch_streaming_event_store(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
         return 0
 
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.thread_runtime.events.store.append_event", fake_append_event)
     monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
 
 
@@ -1757,7 +1757,7 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
     async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
         return 0
 
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.thread_runtime.events.store.append_event", fake_append_event)
     monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 
@@ -1813,7 +1813,7 @@ async def test_run_agent_to_buffer_persists_terminal_notifications_before_assist
     async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
         return 0
 
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.thread_runtime.events.store.append_event", fake_append_event)
     monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 
@@ -1880,7 +1880,7 @@ async def test_run_agent_to_buffer_resumes_graph_for_terminal_background_notific
     async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
         return 0
 
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.thread_runtime.events.store.append_event", fake_append_event)
     monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 
@@ -2337,7 +2337,7 @@ async def test_run_agent_to_buffer_batches_additional_terminal_notifications(mon
     async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
         return 0
 
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.thread_runtime.events.store.append_event", fake_append_event)
     monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 

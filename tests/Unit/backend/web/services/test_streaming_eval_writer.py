@@ -181,7 +181,7 @@ def _install_runtime_writer_test_doubles(monkeypatch: pytest.MonkeyPatch) -> Non
         seq += 1
         return seq
 
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.thread_runtime.events.store.append_event", fake_append_event)
     monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", _noop_async)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
     monkeypatch.setattr("backend.web.services.streaming_service._consume_followup_queue", _noop_async)
