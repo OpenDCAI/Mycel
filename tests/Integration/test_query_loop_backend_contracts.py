@@ -1324,8 +1324,8 @@ async def test_get_thread_messages_idle_rebuild_replays_latest_run_error_from_ev
         patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
         patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
         patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
-        patch("backend.web.services.event_store.get_latest_run_id", AsyncMock(return_value="run-error-1")),
-        patch("backend.web.services.event_store.read_events_after", AsyncMock(return_value=run_events)),
+        patch("backend.web.routers.threads.get_latest_run_id", AsyncMock(return_value="run-error-1")),
+        patch("backend.web.routers.threads.read_events_after", AsyncMock(return_value=run_events)),
     ):
         detail = await get_thread_messages(
             "detail-thread",

@@ -142,9 +142,9 @@ def _make_request(app: SimpleNamespace) -> Request:
 
 
 def _patch_event_store(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("backend.web.services.event_store.get_last_seq", AsyncMock(return_value=0))
-    monkeypatch.setattr("backend.web.services.event_store.get_latest_run_id", AsyncMock(return_value=None))
-    monkeypatch.setattr("backend.web.services.event_store.get_run_start_seq", AsyncMock(return_value=0))
+    monkeypatch.setattr("backend.web.routers.threads.get_last_seq", AsyncMock(return_value=0))
+    monkeypatch.setattr("backend.web.routers.threads.get_latest_run_id", AsyncMock(return_value=None))
+    monkeypatch.setattr("backend.web.routers.threads.get_run_start_seq", AsyncMock(return_value=0))
 
 
 def _require_entries(builder: DisplayBuilder, thread_id: str) -> list[dict]:
