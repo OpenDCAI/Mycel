@@ -48,6 +48,13 @@ def test_threads_router_uses_neutral_message_interruption_owner() -> None:
     assert "from backend.thread_runtime.interruption import repair_interrupted_tool_call_messages" in source
 
 
+def test_threads_router_uses_neutral_thread_event_buffer_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.event_buffer import ThreadEventBuffer" not in source
+    assert "from backend.thread_runtime.events.buffer import ThreadEventBuffer" in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(
