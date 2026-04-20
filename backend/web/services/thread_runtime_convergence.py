@@ -2,50 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from backend.thread_runtime_convergence import inspect_owner_thread_runtime
+from backend.thread_runtime import convergence as _owner
 from backend.web.utils.helpers import delete_thread_in_db
 
 
-def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
+def _delete_thread_proxy(thread_id: str) -> None:
     delete_thread_in_db(thread_id)
-    app.state.thread_repo.delete(thread_id)
-
-    for attr in ("thread_sandbox", "thread_cwd", "thread_event_buffers", "thread_tasks", "thread_last_active"):
-        mapping = getattr(app.state, attr, None)
-        if isinstance(mapping, dict):
-            mapping.pop(thread_id, None)
-
-    agent_pool = getattr(app.state, "agent_pool", None)
-    if isinstance(agent_pool, dict):
-        for pool_key in [key for key in agent_pool if key.startswith(f"{thread_id}:")]:
-            agent_pool.pop(pool_key, None)
-
-    queue_manager = getattr(app.state, "queue_manager", None)
-    if queue_manager is not None and hasattr(queue_manager, "clear_all"):
-        queue_manager.clear_all(thread_id)
 
 
-def converge_owner_thread_runtime(app: Any, thread_id: str) -> str:
-    runtime_state = inspect_owner_thread_runtime(app, thread_id)
-    if runtime_state != "incomplete":
-        return runtime_state
+_owner.delete_thread_in_db = _delete_thread_proxy
 
-    purge_incomplete_owner_thread(app, thread_id)
-    return "purged"
-
-
-def summarize_owner_thread_runtime(app: Any, thread_ids: list[str]) -> dict[str, str]:
-    states: dict[str, str] = {}
-    for thread_id in thread_ids:
-        state = inspect_owner_thread_runtime(app, thread_id)
-        if state == "incomplete":
-            purge_incomplete_owner_thread(app, thread_id)
-            state = "purged"
-        states[thread_id] = state
-    return states
-
+inspect_owner_thread_runtime = _owner.inspect_owner_thread_runtime
+purge_incomplete_owner_thread = _owner.purge_incomplete_owner_thread
+converge_owner_thread_runtime = _owner.converge_owner_thread_runtime
+summarize_owner_thread_runtime = _owner.summarize_owner_thread_runtime
 
 __all__ = [
     "converge_owner_thread_runtime",
