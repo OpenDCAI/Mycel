@@ -19,6 +19,7 @@ from backend.monitor.application.use_cases.thread_workbench import (
 )
 from backend.monitor.infrastructure.read_models.thread_workbench_read_service import build_owner_thread_workbench_reader
 from backend.sandbox_inventory import init_providers_and_managers
+from backend.sandbox_thread_resources import destroy_thread_resources_sync
 from backend.thread_history import build_thread_history_transport, get_thread_history_payload
 from backend.web.core.dependencies import (
     get_app,
@@ -41,7 +42,6 @@ from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_binding
 from backend.web.services.owner_thread_read_service import list_owner_thread_rows_for_auth_burst
 from backend.web.services.resource_cache import clear_resource_overview_cache
-from backend.web.services.sandbox_service import destroy_thread_resources_sync
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
     observe_thread_events,

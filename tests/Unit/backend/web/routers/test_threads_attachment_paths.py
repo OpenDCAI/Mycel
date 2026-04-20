@@ -25,6 +25,13 @@ def test_threads_router_uses_neutral_provider_factory_owner() -> None:
     assert "from backend.web.services.sandbox_service import build_provider_from_config_name" not in source
 
 
+def test_threads_router_uses_neutral_thread_resource_owner() -> None:
+    source = inspect.getsource(threads_router)
+
+    assert "from backend.web.services.sandbox_service import destroy_thread_resources_sync" not in source
+    assert "from backend.sandbox_thread_resources import destroy_thread_resources_sync" in source
+
+
 @pytest.mark.asyncio
 async def test_prepare_attachment_message_uses_binding_local_staging_root(monkeypatch: pytest.MonkeyPatch):
     fake_manager = SimpleNamespace(
