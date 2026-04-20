@@ -6,8 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from backend.thread_history import build_thread_history_transport, get_thread_history_payload
 from backend.thread_runtime.events.reads import build_run_event_read_transport
+from backend.thread_runtime.history import build_thread_history_transport, get_thread_history_payload
 from backend.thread_runtime.sandbox import resolve_thread_sandbox
 from sandbox.thread_context import set_current_thread_id
 
