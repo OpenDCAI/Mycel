@@ -191,7 +191,12 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         )
     )
 
-    result = chats_router.get_chat("chat-1", user_id="user-1", app=app)
+    result = chats_router.get_chat(
+        "chat-1",
+        user_id="user-1",
+        chat_repo=app.state.chat_repo,
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result == {
         "id": "chat-1",
@@ -223,7 +228,12 @@ def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         )
     )
 
-    result = chats_router.delete_chat("chat-1", user_id="user-1", app=app)
+    result = chats_router.delete_chat(
+        "chat-1",
+        user_id="user-1",
+        chat_repo=app.state.chat_repo,
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result == {"status": "deleted"}
     assert seen == [
@@ -275,7 +285,12 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
         )
     )
 
-    result = chats_router.get_chat("chat-1", user_id="human-user-1", app=app)
+    result = chats_router.get_chat(
+        "chat-1",
+        user_id="human-user-1",
+        chat_repo=app.state.chat_repo,
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result["members"] == [
         {
