@@ -9,7 +9,7 @@ from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 from core.runtime.middleware.queue import MessageQueueManager
 
 
-def attach_threads_runtime(app: Any, storage_container: Any) -> None:
+def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: Any) -> None:
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
     app.state.agent_pool = {}
     app.state.thread_sandbox = {}
@@ -20,4 +20,4 @@ def attach_threads_runtime(app: Any, storage_container: Any) -> None:
     app.state.thread_event_buffers = {}
     app.state.subagent_buffers = {}
     app.state.thread_last_active = {}
-    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
+    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app, typing_tracker=typing_tracker)
