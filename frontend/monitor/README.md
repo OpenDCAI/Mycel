@@ -1,6 +1,6 @@
-# Leon Sandbox Monitor
+# Mycel Sandbox Monitor
 
-This is a standalone frontend for Leon's sandbox monitoring APIs.
+This is a standalone frontend for Mycel's sandbox monitoring APIs.
 
 Dev:
 

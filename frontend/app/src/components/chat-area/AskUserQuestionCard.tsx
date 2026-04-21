@@ -83,7 +83,7 @@ export function AskUserQuestionCard(props: AskUserQuestionCardProps) {
             <span className="text-xs font-medium text-foreground">等待回答</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            {pending.promptMessage || "Leon 需要你的回答后才能继续当前任务。"}
+            {pending.promptMessage || "Mycel 需要你的回答后才能继续当前任务。"}
           </p>
         </div>
 

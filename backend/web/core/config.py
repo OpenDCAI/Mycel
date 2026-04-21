@@ -1,4 +1,4 @@
-"""Configuration constants for Leon web backend."""
+"""Configuration constants for Mycel web backend."""
 
 from backend.sandboxes import paths as sandbox_paths
 from backend.sandboxes.local_workspace import local_workspace_root

@@ -1,4 +1,4 @@
-"""Pydantic request models for Leon web API."""
+"""Pydantic request models for Mycel web API."""
 
 from typing import Any, Literal
 
