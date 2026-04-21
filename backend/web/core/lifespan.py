@@ -67,13 +67,13 @@ async def lifespan(app: FastAPI):
     from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery
     from backend.threads.bootstrap import attach_threads_runtime
 
-    attach_threads_runtime(app, storage_container)
     attach_chat_runtime(
         app,
         storage_container,
         user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
     )
+    attach_threads_runtime(app, storage_container)
     wire_chat_delivery(
         app,
         activity_reader=app.state.agent_runtime_thread_activity_reader,
