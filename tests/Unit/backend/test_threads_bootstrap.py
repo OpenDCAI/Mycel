@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.threads import bootstrap as threads_bootstrap
+from backend.threads.chat_adapters import bootstrap as runtime_bootstrap
 
 
 def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
@@ -60,3 +61,17 @@ def test_attach_threads_runtime_requires_explicit_typing_tracker():
 
     with pytest.raises(TypeError, match="typing_tracker"):
         threads_bootstrap.attach_threads_runtime(app, storage_container)
+
+
+def test_build_agent_runtime_gateway_returns_gateway_from_runtime_state(monkeypatch):
+    gateway = object()
+    activity_reader = object()
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    monkeypatch.setattr(
+        runtime_bootstrap,
+        "build_agent_runtime_state",
+        lambda target_app, *, typing_tracker: SimpleNamespace(gateway=gateway, activity_reader=activity_reader),
+    )
+
+    assert runtime_bootstrap.build_agent_runtime_gateway(app, typing_tracker=object()) is gateway
