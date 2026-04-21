@@ -532,6 +532,10 @@ def _make_streaming_app(
         gateway=gateway,
         activity_reader=state.agent_runtime_thread_activity_reader,
     )
+    state.threads_runtime_state = SimpleNamespace(
+        agent_runtime_gateway=gateway,
+        activity_reader=state.agent_runtime_thread_activity_reader,
+    )
     return app, queue_manager
 
 
