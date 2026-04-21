@@ -289,6 +289,69 @@ async def test_run_agent_to_buffer_finalizes_same_eval_row_on_cancel(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_streaming_run_agent_to_buffer_borrows_optional_typing_tracker(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    typing_tracker = object()
+
+    async def _fake_run_agent_to_buffer(**kwargs):
+        captured.update(kwargs)
+        return "done"
+
+    monkeypatch.setattr("backend.threads.streaming._run_execution.run_agent_to_buffer", _fake_run_agent_to_buffer)
+
+    app = _make_app()
+    app.state.typing_tracker = typing_tracker
+
+    result = await _run_agent_to_buffer(
+        SimpleNamespace(),
+        "thread-typing",
+        "hello",
+        app,
+        False,
+        ThreadEventBuffer(),
+        "run-typing",
+    )
+
+    assert result == "done"
+    assert captured["typing_tracker"] is typing_tracker
+
+
+@pytest.mark.asyncio
+async def test_streaming_run_agent_to_buffer_passes_none_when_optional_typing_tracker_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def _fake_run_agent_to_buffer(**kwargs):
+        captured.update(kwargs)
+        return "done"
+
+    monkeypatch.setattr("backend.threads.streaming._run_execution.run_agent_to_buffer", _fake_run_agent_to_buffer)
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=_FakeDisplayBuilder(),
+            thread_tasks={},
+            thread_last_active={},
+            queue_manager=SimpleNamespace(peek=lambda _thread_id: False),
+        )
+    )
+
+    result = await _run_agent_to_buffer(
+        SimpleNamespace(),
+        "thread-no-typing",
+        "hello",
+        app,
+        False,
+        ThreadEventBuffer(),
+        "run-no-typing",
+    )
+
+    assert result == "done"
+    assert captured["typing_tracker"] is None
+
+
+@pytest.mark.asyncio
 async def test_write_cancellation_markers_advances_string_channel_versions() -> None:
     saver = _VersionedCheckpointSaver()
     agent = SimpleNamespace(agent=SimpleNamespace(checkpointer=saver))
