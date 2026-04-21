@@ -101,6 +101,47 @@ class EvaluationBatchService:
             "completed_runs": sum(1 for row in batch_runs if row.get("status") == "completed"),
             "failed_runs": sum(1 for row in batch_runs if row.get("status") in {"failed", "cancelled"}),
         }
+        scored_runs = 0
+        passed_runs = 0
+        failed_judges = 0
+        total_tokens = 0
+        total_artifacts = 0
+        score_totals: dict[str, float] = {}
+        score_counts: dict[str, int] = {}
+        benchmark_families: set[str] = set()
+        benchmark_splits: set[str] = set()
+        for row in batch_runs:
+            row_summary = row.get("summary_json") or {}
+            benchmark_family = str(row_summary.get("benchmark_family") or "").strip()
+            benchmark_split = str(row_summary.get("benchmark_split") or "").strip()
+            if benchmark_family:
+                benchmark_families.add(benchmark_family)
+            if benchmark_split:
+                benchmark_splits.add(benchmark_split)
+            total_tokens += int(row_summary.get("total_tokens") or 0)
+            total_artifacts += int(row_summary.get("artifact_count") or 0)
+            verdict = str(row_summary.get("judge_verdict") or "").strip().lower()
+            if verdict:
+                scored_runs += 1
+                if verdict == "passed":
+                    passed_runs += 1
+                elif verdict in {"failed", "error"}:
+                    failed_judges += 1
+            for key, value in dict(row_summary.get("scores") or {}).items():
+                score_totals[str(key)] = score_totals.get(str(key), 0.0) + float(value)
+                score_counts[str(key)] = score_counts.get(str(key), 0) + 1
+        summary["judge_passed_runs"] = passed_runs
+        summary["judge_failed_runs"] = failed_judges
+        summary["pass_rate"] = passed_runs / scored_runs if scored_runs else 0.0
+        summary["avg_total_tokens"] = total_tokens / max(1, summary["completed_runs"])
+        summary["artifact_count_total"] = total_artifacts
+        summary["avg_scores"] = {
+            key: score_totals[key] / score_counts[key]
+            for key in sorted(score_totals)
+            if score_counts.get(key)
+        }
+        summary["benchmark_families"] = sorted(benchmark_families)
+        summary["benchmark_splits"] = sorted(benchmark_splits)
         updated = self._batch_repo.update_batch(
             batch_id,
             summary_json=summary,
@@ -160,6 +201,17 @@ class EvaluationBatchService:
         summary = {
             "total_tokens": int(result.system_metrics.total_tokens),
             "tool_call_count": int(result.system_metrics.tool_call_count),
+            "artifact_count": len(result.artifacts),
+            "benchmark_family": result.benchmark.family if result.benchmark else "",
+            "benchmark_name": result.benchmark.name if result.benchmark else "",
+            "benchmark_split": result.benchmark.split if result.benchmark else "",
+            "instance_id": result.benchmark.instance_id if result.benchmark else "",
+            "judge_type": result.judge_result.judge_type if result.judge_result else "",
+            "judge_status": result.judge_result.status if result.judge_result else "",
+            "judge_verdict": result.judge_result.verdict if result.judge_result else "",
+            "scores": result.judge_result.scores if result.judge_result else {},
+            "export_format": result.export_config.format if result.export_config else "",
+            "export_key": result.export_config.key if result.export_config else "",
         }
         updated = self._batch_repo.update_batch_run(
             batch_run["batch_run_id"],
@@ -192,6 +244,51 @@ class EvaluationBatchService:
             if str(batch_run.get("scenario_id") or "") == scenario_id:
                 return batch_run
         raise KeyError(f"Evaluation batch run not found for scenario {scenario_id} in batch {batch_id}")
+
+    def get_batch_summary(self, batch_id: str) -> dict[str, Any]:
+        batch = self._batch_repo.get_batch(batch_id)
+        if batch is None:
+            raise KeyError(f"Evaluation batch not found: {batch_id}")
+        return {
+            "batch_id": batch_id,
+            "status": batch.get("status"),
+            "summary": self.refresh_batch_summary(batch_id),
+        }
+
+    def compare_batches(self, baseline_batch_id: str, candidate_batch_id: str) -> dict[str, Any]:
+        baseline = self.get_batch_summary(baseline_batch_id)
+        candidate = self.get_batch_summary(candidate_batch_id)
+        baseline_summary = baseline["summary"]
+        candidate_summary = candidate["summary"]
+        deltas = {}
+        for key in ("pass_rate", "judge_passed_runs", "judge_failed_runs", "avg_total_tokens", "artifact_count_total"):
+            baseline_value = float(baseline_summary.get(key) or 0.0)
+            candidate_value = float(candidate_summary.get(key) or 0.0)
+            deltas[key] = {
+                "baseline": baseline_value,
+                "candidate": candidate_value,
+                "delta": candidate_value - baseline_value,
+            }
+        score_keys = sorted(
+            set(dict(baseline_summary.get("avg_scores") or {}).keys())
+            | set(dict(candidate_summary.get("avg_scores") or {}).keys())
+        )
+        deltas["avg_scores"] = {
+            key: {
+                "baseline": float(dict(baseline_summary.get("avg_scores") or {}).get(key) or 0.0),
+                "candidate": float(dict(candidate_summary.get("avg_scores") or {}).get(key) or 0.0),
+                "delta": float(dict(candidate_summary.get("avg_scores") or {}).get(key) or 0.0)
+                - float(dict(baseline_summary.get("avg_scores") or {}).get(key) or 0.0),
+            }
+            for key in score_keys
+        }
+        return {
+            "baseline_batch_id": baseline_batch_id,
+            "candidate_batch_id": candidate_batch_id,
+            "baseline": baseline_summary,
+            "candidate": candidate_summary,
+            "delta": deltas,
+        }
 
     @staticmethod
     def _serialize_scenario_ref(scenario: EvalScenario) -> dict[str, Any]:

@@ -190,3 +190,4 @@ class EvalResult(BaseModel):
     benchmark: BenchmarkInfo | None = None
     judge_result: JudgeResult | None = None
     artifacts: list[ArtifactRecord] = Field(default_factory=list)
+    export_config: ExportConfig | None = None

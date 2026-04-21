@@ -228,6 +228,9 @@ def test_batch_service_records_eval_result_for_matching_scenario():
             status="completed",
         ),
         system_metrics=SystemMetrics(total_tokens=42, tool_call_count=3),
+        benchmark=BenchmarkInfo(family="swe-bench", split="smoke", instance_id="repo__1"),
+        judge_result={"judge_type": "heuristic", "status": "completed", "verdict": "passed", "scores": {"resolved": 1.0}},
+        artifacts=[{"name": "final-response", "kind": "submission"}],
     )
 
     updated = service.record_eval_result(batch["batch_id"], result)
@@ -235,7 +238,11 @@ def test_batch_service_records_eval_result_for_matching_scenario():
     assert updated["eval_run_id"] == "eval-run-1"
     assert updated["thread_id"] == "thread-1"
     assert updated["status"] == "completed"
-    assert updated["summary_json"] == {"total_tokens": 42, "tool_call_count": 3}
+    assert updated["summary_json"]["total_tokens"] == 42
+    assert updated["summary_json"]["tool_call_count"] == 3
+    assert updated["summary_json"]["judge_verdict"] == "passed"
+    assert updated["summary_json"]["benchmark_family"] == "swe-bench"
+    assert updated["summary_json"]["artifact_count"] == 1
 
 
 def test_batch_service_records_eval_error_for_matching_scenario():
@@ -310,3 +317,41 @@ def test_batch_service_lists_batch_runs_for_thread():
     found = service.list_batch_runs_for_thread("thread-1")
 
     assert [row["eval_run_id"] for row in found] == ["eval-run-1"]
+
+
+def test_batch_service_computes_benchmark_aggregate_and_compare():
+    repo = _FakeBatchRepo()
+    service = EvaluationBatchService(batch_repo=repo)
+    baseline = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+    candidate = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-2"],
+        sandbox="local",
+        max_concurrent=1,
+    )
+    baseline_run = repo.list_batch_runs(baseline["batch_id"])[0]
+    candidate_run = repo.list_batch_runs(candidate["batch_id"])[0]
+    repo.update_batch_run(
+        baseline_run["batch_run_id"],
+        status="completed",
+        summary_json={"judge_verdict": "failed", "scores": {"resolved": 0.0}, "artifact_count": 1},
+    )
+    repo.update_batch_run(
+        candidate_run["batch_run_id"],
+        status="completed",
+        summary_json={"judge_verdict": "passed", "scores": {"resolved": 1.0}, "artifact_count": 2},
+    )
+
+    baseline_summary = service.get_batch_summary(baseline["batch_id"])
+    comparison = service.compare_batches(baseline["batch_id"], candidate["batch_id"])
+
+    assert baseline_summary["summary"]["pass_rate"] == 0.0
+    assert comparison["delta"]["pass_rate"]["delta"] == 1.0
+    assert comparison["delta"]["artifact_count_total"]["candidate"] == 2.0
