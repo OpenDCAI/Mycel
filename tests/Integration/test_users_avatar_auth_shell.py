@@ -7,7 +7,6 @@ import pytest
 
 from backend.identity.avatar import urls as avatar_urls
 from backend.web.routers import users as users_router
-from backend.web.utils import serializers
 
 
 class _FakeUploadFile:
@@ -33,8 +32,8 @@ def test_avatar_url_uses_local_file_truth_when_db_avatar_is_null(monkeypatch: py
     (avatar_dir / "agent-1.png").write_bytes(b"png")
     monkeypatch.setattr(avatar_urls, "avatars_dir", lambda: avatar_dir)
 
-    assert serializers.avatar_url("agent-1", False) == "/api/users/agent-1/avatar"
-    assert serializers.avatar_url("agent-2", False) is None
+    assert avatar_urls.avatar_url("agent-1", False) == "/api/users/agent-1/avatar"
+    assert avatar_urls.avatar_url("agent-2", False) is None
 
 
 @pytest.mark.asyncio

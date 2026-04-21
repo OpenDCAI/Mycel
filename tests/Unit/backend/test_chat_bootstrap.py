@@ -71,6 +71,24 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert app.state.messaging_service.delivery_fn is None
 
 
+def test_attach_chat_runtime_requires_user_repo_and_thread_repo():
+    app = SimpleNamespace(state=SimpleNamespace())
+    storage_container = SimpleNamespace(
+        chat_repo=lambda: object(),
+        contact_repo=lambda: object(),
+        chat_member_repo=lambda: object(),
+        messages_repo=lambda: object(),
+        relationship_repo=lambda: object(),
+    )
+
+    try:
+        chat_bootstrap.attach_chat_runtime(app, storage_container)
+    except RuntimeError as exc:
+        assert str(exc) == "attach_chat_runtime requires user_repo and thread_repo on app.state"
+    else:
+        raise AssertionError("attach_chat_runtime should fail loudly when user_repo/thread_repo are missing")
+
+
 def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
     delivery_fn = object()
     messaging_service = SimpleNamespace(delivery_fn=None)

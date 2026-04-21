@@ -9,8 +9,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from backend.chat.api.http import chats_router
+from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_app, get_current_user_id
-from backend.web.utils.serializers import avatar_url
 from storage.contracts import ContactEdgeRow
 
 

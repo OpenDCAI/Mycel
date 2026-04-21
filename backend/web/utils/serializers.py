@@ -2,10 +2,9 @@
 
 from typing import Any
 
-from backend.identity.avatar.urls import avatar_url
 from backend.threads.message_content import extract_text_content, strip_system_tags
 
-__all__ = ["avatar_url", "strip_system_tags", "extract_text_content", "serialize_message"]
+__all__ = ["strip_system_tags", "extract_text_content", "serialize_message"]
 
 
 def serialize_message(msg: Any) -> dict[str, Any]:
