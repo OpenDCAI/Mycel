@@ -1055,6 +1055,10 @@ class LeonAgent:
         middleware.append(self._monitor_middleware)
 
         # 2. Prompt Caching — only attach for Anthropic-backed runs
+        # @@@prompt-caching-provider-contract - this middleware is Anthropic-only.
+        # The generic configurable model wrapper used by current runtime models is
+        # not itself a safe signal to install prompt caching, so gate on the
+        # resolved provider name at wiring time instead of warning on every run.
         if self._current_model_config.get("model_provider") == "anthropic":
             middleware.append(PromptCachingMiddleware(ttl="5m", min_messages_to_cache=0))
 
