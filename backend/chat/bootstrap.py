@@ -58,6 +58,10 @@ def attach_chat_runtime(
 
 
 def wire_chat_delivery(app: Any, *, messaging_service: Any, activity_reader: Any, thread_repo: Any) -> None:
+    # @@@chat-delivery-borrowed-service - delivery wiring runs after chat bootstrap,
+    # but it should still consume the already-constructed messaging service
+    # explicitly rather than re-reading app.state and silently depending on
+    # bootstrap ordering through a hidden state lookup.
     messaging_service.set_delivery_fn(
         make_chat_delivery_fn(
             app,
