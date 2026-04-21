@@ -49,6 +49,9 @@ def _public_runtime_payload(row: dict[str, Any]) -> dict[str, Any]:
 @router.get("/types")
 async def list_sandbox_types() -> dict[str, Any]:
     """List available sandbox types."""
+    # @@@sandbox-type-availability - this route reflects the current process
+    # inventory contract: configured providers are either instantiated and
+    # exposed as available, or reported unavailable with an explicit reason.
     types = await asyncio.to_thread(sandbox_provider_availability.available_sandbox_types)
     return {"types": types}
 
