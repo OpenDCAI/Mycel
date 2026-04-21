@@ -118,13 +118,13 @@ def get_evaluation_scenarios() -> dict[str, Any]:
 def start_evaluation_batch(
     *,
     batch_id: str,
-    base_url: str,
+    execution_base_url: str,
     token: str,
     schedule_task,
 ) -> dict[str, Any]:
     return monitor_evaluation.start_monitor_evaluation_batch(
         batch_id=batch_id,
-        base_url=base_url,
+        execution_base_url=execution_base_url,
         token=token,
         scheduler=BackgroundTaskEvaluationScheduler(schedule_task),
     )
