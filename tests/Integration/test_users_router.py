@@ -9,9 +9,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from backend.web.routers import users as users_router
+from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow, UserRow, UserType
 
 NOW = 1_775_223_756.0
@@ -294,3 +297,83 @@ def test_user_router_exposes_chat_candidates_route():
     paths = {route.path for route in users_router.users_router.routes}
 
     assert "/api/users/chat-candidates" in paths
+
+
+def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
+    owner = _human("u1", "owner")
+    other = _human("u2", "other")
+    app = FastAPI()
+    app.include_router(users_router.users_router)
+    app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
+    app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
+    app.state.relationship_service = SimpleNamespace(
+        list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")]
+    )
+    app.state.contact_repo = _empty_contact_repo()
+    app.dependency_overrides[get_current_user_id] = lambda: "u1"
+
+    with TestClient(app) as client:
+        response = client.get("/api/users/chat-candidates", headers={"Authorization": "Bearer token"})
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "user_id": "u2",
+            "name": "other",
+            "type": "human",
+            "avatar_url": None,
+            "owner_name": None,
+            "agent_name": "other",
+            "is_owned": False,
+            "relationship_state": "visit",
+            "can_chat": True,
+        }
+    ]
+
+
+def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
+    owner = _human("u1", "owner")
+    owned_agent = _agent("a-owned", "Ready Agent", "u1")
+    app = FastAPI()
+    app.include_router(users_router.users_router)
+    app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, owned_agent])
+    app.state.thread_repo = SimpleNamespace(get_default_thread=lambda agent_user_id: {"id": "thread-ready"} if agent_user_id == "a-owned" else None)
+    app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
+    app.state.contact_repo = _empty_contact_repo()
+    app.dependency_overrides[get_current_user_id] = lambda: "u1"
+
+    with TestClient(app) as client:
+        response = client.get("/api/users/chat-candidates", headers={"Authorization": "Bearer token"})
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "user_id": "a-owned",
+            "name": "Ready Agent",
+            "type": "agent",
+            "avatar_url": None,
+            "owner_name": "owner",
+            "agent_name": "Ready Agent",
+            "is_owned": True,
+            "relationship_state": "none",
+            "can_chat": True,
+            "default_thread_id": "thread-ready",
+        }
+    ]
+
+
+def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
+    owner = _human("u1", "owner")
+    other = _human("u2", "other")
+    app = FastAPI()
+    app.include_router(users_router.users_router)
+    app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
+    app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
+    app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
+    app.dependency_overrides[get_current_user_id] = lambda: "u1"
+
+    with TestClient(app) as client:
+        response = client.get("/api/users/chat-candidates", headers={"Authorization": "Bearer token"})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Contact repo unavailable"}

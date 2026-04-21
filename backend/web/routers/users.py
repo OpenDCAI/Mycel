@@ -8,8 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.chat.api.http.dependencies import get_thread_repo, get_user_repo
-from backend.chat.runtime_access import get_contact_repo, get_relationship_service
+from backend.chat.api.http.dependencies import get_contact_repo, get_relationship_service, get_thread_repo, get_user_repo
 from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.avatar.paths import avatars_dir
 from backend.identity.avatar.urls import avatar_url
@@ -144,6 +143,9 @@ def _relationship_states_for_user(relationship_service: Any, user_id: str) -> di
 @users_router.get("/chat-candidates")
 async def list_chat_candidates(
     user_id: Annotated[str, Depends(get_current_user_id)],
+    # @@@chat-candidate-http-di - keep these as HTTP dependency helpers; the
+    # raw runtime_access functions take a plain app param and FastAPI will
+    # otherwise misread that as a query arg on real route calls.
     user_repo: Annotated[Any, Depends(get_user_repo)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
