@@ -141,6 +141,29 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
     }
 
 
+def test_global_monitor_router_accepts_evaluation_batch_create(monkeypatch):
+    monkeypatch.setattr(
+        monitor_gateway_impl,
+        "create_evaluation_batch",
+        lambda **kwargs: {"batch": kwargs},
+    )
+    app = FastAPI()
+    app.include_router(global_router.router, prefix="/api/monitor")
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/monitor/evaluation/batches",
+                json={"agent_user_id": "agent-1", "scenario_ids": ["scenario-1"], "sandbox": "local", "max_concurrent": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["batch"]["submitted_by_user_id"] == "owner-1"
+    assert response.json()["batch"]["agent_user_id"] == "agent-1"
+
+
 @pytest.mark.parametrize(
     ("method", "path", "service_name", "payload"),
     [
