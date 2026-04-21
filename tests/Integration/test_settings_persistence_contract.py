@@ -38,9 +38,7 @@ class _FakeSettingsRepo:
 
 def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
     app = FastAPI()
-    app.state.runtime_storage_state = SimpleNamespace(
-        storage_container=SimpleNamespace(user_settings_repo=lambda: repo)
-    )
+    app.state.runtime_storage_state = SimpleNamespace(storage_container=SimpleNamespace(user_settings_repo=lambda: repo))
     app.dependency_overrides[settings_router.get_current_user_id] = lambda: "user-1"
     app.include_router(settings_router.router)
     return app

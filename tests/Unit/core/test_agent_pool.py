@@ -691,9 +691,7 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            runtime_storage_state=SimpleNamespace(
-                storage_container=SimpleNamespace(user_settings_repo=lambda: _UserSettingsRepo())
-            ),
+            runtime_storage_state=SimpleNamespace(storage_container=SimpleNamespace(user_settings_repo=lambda: _UserSettingsRepo())),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -747,9 +745,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            runtime_storage_state=SimpleNamespace(
-                storage_container=SimpleNamespace(user_settings_repo=lambda: _UserSettingsRepo())
-            ),
+            runtime_storage_state=SimpleNamespace(storage_container=SimpleNamespace(user_settings_repo=lambda: _UserSettingsRepo())),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
