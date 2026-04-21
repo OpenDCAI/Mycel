@@ -1,5 +1,6 @@
 import os
 import subprocess
+from importlib.util import find_spec
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -90,3 +91,7 @@ def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
             },
         )
     ]
+
+
+def test_web_backend_no_longer_depends_on_aggregate_monitor_router_module():
+    assert find_spec("backend.monitor.api.http.router") is None

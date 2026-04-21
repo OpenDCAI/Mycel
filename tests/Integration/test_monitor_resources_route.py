@@ -2,7 +2,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.monitor.api.http import router as monitor_router
+from backend.monitor.api.http import global_router, web_local_router
 from backend.monitor.application.use_cases import resources as monitor_resources_impl
 from backend.monitor.infrastructure.io import resource_io_service as monitor_resource_io_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
@@ -12,7 +12,8 @@ from backend.web.routers import resources
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
-    app.include_router(monitor_router.router)
+    app.include_router(global_router.router, prefix="/api/monitor")
+    app.include_router(web_local_router.router, prefix="/api/monitor")
     if include_product_resources:
         app.include_router(resources.router)
         app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
@@ -206,7 +207,7 @@ def test_monitor_threads_routes_use_authenticated_owner(monkeypatch):
 
     monkeypatch.setattr(monitor_gateway_impl, "list_threads", _list_threads)
     app = _app()
-    app.dependency_overrides[monitor_router.get_current_user_id] = lambda: "owner-1"
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
 
     response = _request("get", "/api/monitor/threads", app=app)
 
