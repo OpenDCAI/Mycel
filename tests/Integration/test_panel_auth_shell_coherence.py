@@ -130,6 +130,8 @@ async def test_delete_agent_route_keeps_builtin_guard_before_owner_lookup(monkey
             "__leon__",
             request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=SimpleNamespace()))),
             user_id="user-1",
+            thread_repo=SimpleNamespace(),
+            contact_repo=SimpleNamespace(),
         )
 
     assert excinfo.value.status_code == 403
@@ -155,6 +157,8 @@ async def test_delete_agent_route_rejects_agent_with_existing_threads(monkeypatc
                 )
             ),
             user_id="user-1",
+            thread_repo=SimpleNamespace(list_by_agent_user=lambda agent_user_id: [{"id": f"{agent_user_id}-1"}]),
+            contact_repo=SimpleNamespace(),
         )
 
     assert excinfo.value.status_code == 409
@@ -422,6 +426,7 @@ async def test_create_agent_route_fails_loud_when_contact_repo_missing():
             panel_router.CreateAgentRequest(name="Toad", description="probe"),
             request=request,
             user_id="user-1",
+            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
@@ -446,6 +451,8 @@ async def test_delete_agent_route_fails_loud_when_contact_repo_missing(monkeypat
             "agent-1",
             request=request,
             user_id="user-1",
+            thread_repo=request.app.state.thread_repo,
+            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
@@ -470,6 +477,8 @@ async def test_delete_agent_route_fails_loud_when_thread_repo_missing(monkeypatc
             "agent-1",
             request=request,
             user_id="user-1",
+            thread_repo=None,
+            contact_repo=request.app.state.contact_repo,
         )
 
     assert exc_info.value.status_code == 503

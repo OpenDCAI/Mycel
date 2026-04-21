@@ -89,11 +89,16 @@ async def create_agent(
     req: CreateAgentRequest,
     user_id: CurrentUserId,
     request: Request,
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     try:
-        contact_repo = get_contact_repo(request.app)
+        # @@@panel-chat-consumer - panel owns the agent CRUD route, but contact
+        # edge cleanup is chat-owned truth. Borrow the repo explicitly so panel
+        # does not reach through request.app for chat runtime state.
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
     return await asyncio.to_thread(
@@ -182,19 +187,20 @@ async def delete_agent(
     agent_id: str,
     request: Request,
     user_id: CurrentUserId,
+    thread_repo: Annotated[Any, Depends(get_thread_repo)],
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ) -> dict[str, Any]:
     if agent_id == "__leon__":
         raise HTTPException(403, "Cannot delete builtin agent")
     user_repo = request.app.state.user_repo
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
-    try:
-        thread_repo = get_thread_repo(request.app)
-    except HTTPException:
-        raise
+    if thread_repo is None:
+        raise HTTPException(503, "Thread repo unavailable")
     await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     try:
-        contact_repo = get_contact_repo(request.app)
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
     ok = await asyncio.to_thread(
