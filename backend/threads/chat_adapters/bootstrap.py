@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.threads.chat_adapters.activity_reader import AppRuntimeThreadActivityReader
 from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHandler
 from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRuntimeServices
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
-from backend.threads.chat_adapters.activity_reader import AppRuntimeThreadActivityReader
 from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 
 

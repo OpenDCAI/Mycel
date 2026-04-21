@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
-from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
 from core.runtime.middleware.monitor import AgentState
+from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
 
 
 class _FakeQueueManager:

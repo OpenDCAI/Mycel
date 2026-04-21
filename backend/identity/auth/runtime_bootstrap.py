@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from backend.identity.auth.service import AuthService
 from backend.identity.auth.supabase_runtime import create_supabase_auth_client

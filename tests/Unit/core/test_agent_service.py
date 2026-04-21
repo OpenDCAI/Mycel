@@ -1123,6 +1123,7 @@ async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(m
         observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
         observed["child_lower_runtime_id"] = getattr(child_capability._session.lease, lower_runtime_key)
         return "(Agent completed with no text output)"
+
     set_current_thread_id(parent_thread_id)
 
     thread_repo = _FakeThreadRepo(

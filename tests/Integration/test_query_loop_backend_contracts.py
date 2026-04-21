@@ -14,17 +14,16 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 from backend.threads.display.builder import DisplayBuilder
-from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 from backend.threads.events.buffer import ThreadEventBuffer
-from backend.web.models.requests import SendMessageRequest
-from backend.web.routers import threads as threads_router
-from backend.web.routers.threads import get_thread_history, get_thread_messages
 from backend.threads.streaming import (
     _ensure_thread_handlers,
     _repair_incomplete_tool_calls,
     _run_agent_to_buffer,
     start_agent_run,
 )
+from backend.web.models.requests import SendMessageRequest
+from backend.web.routers import threads as threads_router
+from backend.web.routers.threads import get_thread_history, get_thread_messages
 from core.runtime.checkpoint_store import ThreadCheckpointState
 from core.runtime.loop import QueryLoop
 from core.runtime.middleware.memory.middleware import MemoryMiddleware
@@ -34,6 +33,7 @@ from core.runtime.middleware.queue.middleware import SteeringMiddleware
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig
 from core.tools.tool_search.service import ToolSearchService
+from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 from storage.contracts import NotificationType
 
 

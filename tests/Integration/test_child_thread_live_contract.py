@@ -13,8 +13,8 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from backend.threads.display.builder import DisplayBuilder
 from backend.threads.events.buffer import ThreadEventBuffer
-from backend.web.routers import threads as threads_router
 from backend.threads.streaming import run_child_thread_live
+from backend.web.routers import threads as threads_router
 from backend.web.utils.serializers import serialize_message
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.middleware.queue.manager import MessageQueueManager

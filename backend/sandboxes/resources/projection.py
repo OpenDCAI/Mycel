@@ -7,6 +7,7 @@ from typing import Any
 
 import backend.sandboxes.resources.provider_boundary as resource_provider_boundary
 from backend.monitor.infrastructure.read_models import resource_runtime_service
+from backend.sandboxes.paths import SANDBOXES_DIR
 from backend.sandboxes.resources.common import CATALOG as _CATALOG
 from backend.sandboxes.resources.common import CatalogEntry as _CatalogEntry
 from backend.sandboxes.resources.common import aggregate_provider_telemetry as _aggregate_provider_telemetry
@@ -19,7 +20,6 @@ from backend.sandboxes.resources.common import resolve_provider_type as _resolve
 from backend.sandboxes.resources.common import thread_owners as _thread_owners
 from backend.sandboxes.resources.common import to_resource_metrics as _to_resource_metrics
 from backend.sandboxes.resources.common import to_resource_status as _to_resource_status
-from backend.sandboxes.paths import SANDBOXES_DIR
 from backend.sandboxes.resources.user_projection import list_user_resource_providers as _list_user_resource_providers
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_sandbox_state_to_display_status

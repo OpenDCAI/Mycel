@@ -12,18 +12,20 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from backend.sandboxes import provider_factory as sandbox_provider_factory
-from backend.threads.file_channel import get_file_channel_binding
 from backend.monitor.application.use_cases.thread_workbench import (
     build_owner_thread_workbench_from_rows,
     sidebar_label,
 )
 from backend.monitor.infrastructure.read_models.thread_workbench_read_service import build_owner_thread_workbench_reader
 from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
+from backend.sandboxes import account as account_resource_service
+from backend.sandboxes import provider_factory as sandbox_provider_factory
 from backend.sandboxes.inventory import init_providers_and_managers
 from backend.sandboxes.thread_resources import destroy_thread_resources_sync
+from backend.threads.activity_pool_service import get_or_create_agent
 from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
+from backend.threads.file_channel import get_file_channel_binding
 from backend.threads.history import build_thread_history_transport, get_thread_history_payload
 from backend.threads.interruption import repair_interrupted_tool_call_messages
 from backend.threads.launch_config import resolve_default_config
@@ -48,8 +50,6 @@ from backend.web.models.requests import (
     SendMessageRequest,
     ThreadPermissionRuleRequest,
 )
-from backend.sandboxes import account as account_resource_service
-from backend.threads.activity_pool_service import get_or_create_agent
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
@@ -87,9 +87,9 @@ def _require_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any:
 
 def _resolve_default_config_for_owned_agent(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
     _require_owned_agent(app, agent_user_id, owner_user_id)
-    from backend.threads import launch_config as launch_config_owner
-    from backend.sandboxes import service as sandbox_service
     from backend.library.service import list_library
+    from backend.sandboxes import service as sandbox_service
+    from backend.threads import launch_config as launch_config_owner
 
     launch_config_owner.available_sandbox_types = sandbox_service.available_sandbox_types
     launch_config_owner.list_library = list_library
@@ -975,9 +975,9 @@ async def send_message(
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
+    from backend.threads.activity_pool_service import get_or_create_agent
     from backend.threads.chat_adapters.port import get_agent_runtime_gateway
     from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
-    from backend.threads.activity_pool_service import get_or_create_agent
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths

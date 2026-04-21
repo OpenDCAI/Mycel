@@ -10,8 +10,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from backend.web.core.dependencies import get_current_user_id
 from backend.sandboxes import account as account_resource_service
+from backend.web.core.dependencies import get_current_user_id
 from backend.web.utils.serializers import extract_text_content
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig

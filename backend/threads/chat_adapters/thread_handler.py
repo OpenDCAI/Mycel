@@ -6,8 +6,8 @@ import asyncio
 import logging
 from typing import Any
 
-from protocols import agent_runtime as agent_runtime_protocol
 from core.runtime.middleware.monitor import AgentState
+from protocols import agent_runtime as agent_runtime_protocol
 
 logger = logging.getLogger(__name__)
 

@@ -8,11 +8,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
-from backend.identity.avatar.urls import avatar_url
 from backend.chat.api.http.dependencies import get_app, get_current_user_id
-from protocols.runtime_read import RuntimeThreadActivityReader
+from backend.identity.avatar.urls import avatar_url
 from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.threads.projection import canonical_owner_threads
+from protocols.runtime_read import RuntimeThreadActivityReader
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 

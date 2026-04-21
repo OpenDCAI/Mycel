@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.sandboxes.paths import SANDBOXES_DIR
 from backend.sandboxes.resources.common import CATALOG as _CATALOG
 from backend.sandboxes.resources.common import CatalogEntry as _CatalogEntry
 from backend.sandboxes.resources.common import resolve_console_url as _resolve_console_url
@@ -11,7 +12,6 @@ from backend.sandboxes.resources.common import resolve_instance_capabilities as 
 from backend.sandboxes.resources.common import resolve_provider_name
 from backend.sandboxes.resources.common import resolve_provider_type as _resolve_provider_type
 from backend.sandboxes.resources.common import to_resource_status as _to_resource_status
-from backend.sandboxes.paths import SANDBOXES_DIR
 
 
 def get_provider_display_contract(config_name: str) -> dict[str, Any]:

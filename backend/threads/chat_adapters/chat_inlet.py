@@ -8,6 +8,8 @@ from typing import Any
 
 from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from messaging.delivery.contracts import ChatDeliveryRequest
+from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -15,8 +17,6 @@ from protocols.agent_runtime import (
     AgentRuntimeActor,
     AgentRuntimeMessage,
 )
-from messaging.delivery.contracts import ChatDeliveryRequest
-from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
 
 logger = logging.getLogger(__name__)
 

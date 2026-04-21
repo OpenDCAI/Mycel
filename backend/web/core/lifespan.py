@@ -130,8 +130,8 @@ async def lifespan(app: FastAPI):
     app.state._event_loop = asyncio.get_running_loop()
 
     try:
-        from backend.web.core.config import IDLE_REAPER_INTERVAL_SEC
         from backend.sandboxes.service import init_providers_and_managers
+        from backend.web.core.config import IDLE_REAPER_INTERVAL_SEC
 
         idle_reaper_owner.init_providers_and_managers = init_providers_and_managers
         idle_reaper_owner.IDLE_REAPER_INTERVAL_SEC = IDLE_REAPER_INTERVAL_SEC

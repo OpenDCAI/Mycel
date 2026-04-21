@@ -7,8 +7,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.library.paths import LIBRARY_DIR
+from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
