@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends
 
 from backend.chat.api.http.dependencies import (
     get_current_user_id,
-    get_owner_thread_rows_loader,
     get_optional_messaging_service,
+    get_owner_thread_rows_loader,
     get_runtime_thread_activity_reader,
     get_thread_last_active_map,
 )
