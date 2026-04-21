@@ -89,11 +89,13 @@ async def create_agent(
     req: CreateAgentRequest,
     user_id: CurrentUserId,
     request: Request,
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     try:
-        contact_repo = get_contact_repo(request.app)
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
     return await asyncio.to_thread(
