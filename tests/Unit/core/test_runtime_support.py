@@ -194,6 +194,21 @@ async def test_cleanup_registry_runs_in_priority_order_and_survives_failures():
 
 
 @pytest.mark.asyncio
+async def test_cleanup_registry_logs_fail_loud_exception(caplog):
+    reg = CleanupRegistry()
+
+    def failing():
+        raise RuntimeError("boom")
+
+    reg.register(failing, priority=1)
+
+    await reg.run_cleanup()
+
+    assert "CleanupRegistry: error in cleanup fn" in caplog.text
+    assert "boom" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_cleanup_registry_reuses_first_inflight_run():
     order = []
     release = asyncio.Event()
