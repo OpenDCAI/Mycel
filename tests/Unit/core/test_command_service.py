@@ -224,3 +224,56 @@ class TestCommandServiceCancellation:
 
         assert emitted == []
         queue_manager.enqueue.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_execute_async_uses_injected_event_bus_factory(self, tmp_path, monkeypatch):
+        class _Executor(BaseExecutor):
+            runtime_owns_cwd = True
+            shell_name = "bash"
+
+            async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env=None):
+                raise AssertionError("blocking path not expected")
+
+            async def execute_async(self, command: str, cwd: str | None = None, env=None):
+                return AsyncCommand(
+                    command_id="cmd-1",
+                    command_line=command,
+                    cwd=str(tmp_path),
+                    done=True,
+                    exit_code=0,
+                )
+
+            async def get_status(self, command_id: str):
+                return None
+
+            async def wait_for(self, command_id: str, timeout: float | None = None):
+                return None
+
+        emitted: list[str] = []
+
+        class _Bus:
+            def make_emitter(self, *, thread_id: str, agent_id: str = "", agent_name: str = ""):
+                assert thread_id == "thread-1"
+                assert agent_id == "cmd-1"
+
+                async def _emit(event: dict) -> None:
+                    emitted.append(event["event"])
+
+                return _emit
+
+        from sandbox import thread_context
+
+        monkeypatch.setattr(thread_context, "get_current_thread_id", lambda: "thread-1")
+
+        service = CommandService(
+            registry=ToolRegistry(),
+            workspace_root=tmp_path,
+            executor=_Executor(),
+            event_bus_factory=lambda: _Bus(),
+        )
+
+        result = await service._execute_async("echo hi", str(tmp_path), 5.0, description="bg")
+        await asyncio.sleep(0)
+
+        assert "task_id: cmd-1" in result
+        assert emitted == ["task_start", "task_done"]

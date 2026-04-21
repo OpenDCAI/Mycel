@@ -479,6 +479,43 @@ async def test_run_agent_uses_injected_child_agent_factory(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_run_agent_uses_injected_event_bus_factory(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+    emitted: list[str] = []
+    _patch_create_leon_agent(monkeypatch, created=created)
+
+    class _Bus:
+        def make_emitter(self, *, thread_id: str, agent_id: str = "", agent_name: str = ""):
+            assert thread_id == "parent-thread"
+            assert agent_id == "task-1"
+
+            async def _emit(event: dict) -> None:
+                emitted.append(event["event"])
+
+            return _emit
+
+    service = _make_service(tmp_path, event_bus_factory=lambda: _Bus())
+
+    set_current_thread_id("parent-thread")
+    try:
+        result = await service._run_agent(
+            task_id="task-1",
+            agent_name="child",
+            thread_id="subagent-1",
+            prompt="do work",
+            subagent_type="general",
+            max_turns=None,
+            fork_context=False,
+        )
+    finally:
+        set_current_thread_id(None)
+
+    assert result == "(Agent completed with no text output)"
+    assert emitted == ["task_start", "task_done"]
+    assert len(created) == 1
+
+
+@pytest.mark.asyncio
 async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
 

@@ -13,6 +13,7 @@ from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_s
 from core.runtime.tool_result import ToolResultEnvelope, tool_permission_denied
 from core.tools.command.base import describe_execution_exception
 from core.tools.command.dispatcher import get_executor
+from protocols.event_bus import EventBusFactory
 from sandbox.interfaces.executor import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -33,12 +34,14 @@ class CommandService:
         executor: BaseExecutor | None = None,
         queue_manager: Any = None,
         background_runs: dict | None = None,
+        event_bus_factory: EventBusFactory | None = None,
     ):
         self.workspace_root = Path(workspace_root).resolve()
         self.hooks = hooks or []
         self.env = env
         self._queue_manager = queue_manager
         self._background_runs = background_runs  # shared with AgentService
+        self._event_bus_factory = event_bus_factory
 
         if executor is not None:
             self._executor = executor
@@ -158,20 +161,17 @@ class CommandService:
         emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
         parent_thread_id = None
         try:
-            from backend.web.event_bus import get_event_bus
             from sandbox.thread_context import get_current_thread_id
 
             parent_thread_id = get_current_thread_id()
             logger.debug("[CommandService] _execute_async: parent_thread_id=%s task_id=%s", parent_thread_id, task_id)
-            if parent_thread_id:
-                event_bus = get_event_bus()
+            if parent_thread_id and self._event_bus_factory is not None:
+                event_bus = self._event_bus_factory()
                 emit_fn = event_bus.make_emitter(
                     thread_id=parent_thread_id,
                     agent_id=task_id,
                     agent_name=f"bash-{task_id[:8]}",
                 )
-        except ImportError:
-            logger.debug("[CommandService] backend.web.event_bus not available")
         except Exception as e:
             logger.warning("[CommandService] emit_fn setup failed: %s", e)
 

@@ -80,6 +80,7 @@ from core.tools.skills.service import SkillsService  # noqa: E402
 from core.tools.task.service import TaskService  # noqa: E402
 from core.tools.tool_search.service import ToolSearchService  # noqa: E402
 from core.tools.web.service import WebService  # noqa: E402
+from protocols.event_bus import EventBusFactory  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,7 @@ class LeonAgent:
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
         web_app: Any = None,
+        event_bus_factory: EventBusFactory | None = None,
         extra_allowed_paths: list[str] | None = None,
         extra_blocked_tools: set[str] | None = None,
         allowed_tools: set[str] | None = None,
@@ -201,6 +203,7 @@ class LeonAgent:
         self._thread_repo = thread_repo
         self._user_repo = user_repo
         self._web_app = web_app
+        self._event_bus_factory = event_bus_factory
         self._session_started = False
         self._session_ended = False
         self._closing = False
@@ -1182,6 +1185,7 @@ class LeonAgent:
         # Command tools
         if self.config.tools.command.enabled:
             command_hooks = []
+            event_bus_factory = getattr(self, "_event_bus_factory", None)
             if self._sandbox.name == "local":
                 if self.block_dangerous_commands:
                     command_hooks.append(
@@ -1198,6 +1202,7 @@ class LeonAgent:
                 executor=cmd_executor,
                 queue_manager=self.queue_manager,
                 background_runs=self._background_runs,
+                event_bus_factory=event_bus_factory,
             )
 
         # Skills tools
@@ -1243,6 +1248,7 @@ class LeonAgent:
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
             web_app=self._web_app,
+            event_bus_factory=getattr(self, "_event_bus_factory", None),
             child_agent_factory=create_leon_agent,
         )
 
