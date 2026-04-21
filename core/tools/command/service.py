@@ -160,20 +160,17 @@ class CommandService:
         # Build emit_fn for SSE task lifecycle events
         emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
         parent_thread_id = None
-        try:
-            from sandbox.thread_context import get_current_thread_id
+        from sandbox.thread_context import get_current_thread_id
 
-            parent_thread_id = get_current_thread_id()
-            logger.debug("[CommandService] _execute_async: parent_thread_id=%s task_id=%s", parent_thread_id, task_id)
-            if parent_thread_id and self._event_bus_factory is not None:
-                event_bus = self._event_bus_factory()
-                emit_fn = event_bus.make_emitter(
-                    thread_id=parent_thread_id,
-                    agent_id=task_id,
-                    agent_name=f"bash-{task_id[:8]}",
-                )
-        except Exception as e:
-            logger.warning("[CommandService] emit_fn setup failed: %s", e)
+        parent_thread_id = get_current_thread_id()
+        logger.debug("[CommandService] _execute_async: parent_thread_id=%s task_id=%s", parent_thread_id, task_id)
+        if parent_thread_id and self._event_bus_factory is not None:
+            event_bus = self._event_bus_factory()
+            emit_fn = event_bus.make_emitter(
+                thread_id=parent_thread_id,
+                agent_id=task_id,
+                agent_name=f"bash-{task_id[:8]}",
+            )
 
         # Emit task_start so the frontend dot lights up immediately
         if emit_fn is not None:

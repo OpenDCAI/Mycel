@@ -277,3 +277,41 @@ class TestCommandServiceCancellation:
 
         assert "task_id: cmd-1" in result
         assert emitted == ["task_start", "task_done"]
+
+    @pytest.mark.asyncio
+    async def test_execute_async_fails_loud_when_event_bus_factory_breaks(self, tmp_path, monkeypatch):
+        class _Executor(BaseExecutor):
+            runtime_owns_cwd = True
+            shell_name = "bash"
+
+            async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env=None):
+                raise AssertionError("blocking path not expected")
+
+            async def execute_async(self, command: str, cwd: str | None = None, env=None):
+                return AsyncCommand(
+                    command_id="cmd-1",
+                    command_line=command,
+                    cwd=str(tmp_path),
+                    done=True,
+                    exit_code=0,
+                )
+
+            async def get_status(self, command_id: str):
+                return None
+
+            async def wait_for(self, command_id: str, timeout: float | None = None):
+                return None
+
+        from sandbox import thread_context
+
+        monkeypatch.setattr(thread_context, "get_current_thread_id", lambda: "thread-1")
+
+        service = CommandService(
+            registry=ToolRegistry(),
+            workspace_root=tmp_path,
+            executor=_Executor(),
+            event_bus_factory=lambda: (_ for _ in ()).throw(RuntimeError("event bus offline")),
+        )
+
+        with pytest.raises(RuntimeError, match="event bus offline"):
+            await service._execute_async("echo hi", str(tmp_path), 5.0, description="bg")
