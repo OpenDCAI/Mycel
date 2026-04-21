@@ -215,6 +215,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1")
             ),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -504,6 +505,7 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             user_settings_repo=_UserSettingsRepo(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
@@ -556,6 +558,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             user_settings_repo=_UserSettingsRepo(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
@@ -604,6 +607,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_AgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
