@@ -1033,6 +1033,10 @@ class LeonAgent:
         try:
             self.close()
         except RuntimeError as exc:
+            # @@@dunder-del-shutdown-noise - interpreter teardown can still
+            # trip a late RuntimeError while Python is dismantling the default
+            # executor; suppress only that shutdown-specific noise here and
+            # leave all other runtime errors loud.
             if "interpreter shutdown" not in str(exc):
                 raise
 
