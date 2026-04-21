@@ -89,7 +89,10 @@ async def get_or_create_agent(
         # Look up model for this thread (thread override -> repo-backed user settings)
         model_name = thread_data.get("model") if thread_data else None
         models_config_override = None
-        user_settings_repo = getattr(app_obj.state, "user_settings_repo", None)
+        runtime_storage = getattr(app_obj.state, "runtime_storage_state", None)
+        storage_container = getattr(runtime_storage, "storage_container", None)
+        user_settings_repo_factory = getattr(storage_container, "user_settings_repo", None)
+        user_settings_repo = user_settings_repo_factory() if callable(user_settings_repo_factory) else None
         owner_user_id = getattr(agent_user, "owner_user_id", None) if agent_user is not None else None
         if user_settings_repo is not None and owner_user_id is not None:
             settings_row = user_settings_repo.get(owner_user_id) or {}

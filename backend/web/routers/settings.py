@@ -56,7 +56,10 @@ def _resolve_workspace_path_or_400(
 
 
 def _get_settings_repo(request: Request):
-    repo = getattr(request.app.state, "user_settings_repo", None)
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "user_settings_repo", None)
+    repo = repo_factory() if callable(repo_factory) else None
     if repo is None:
         raise RuntimeError("user_settings_repo is required for backend web settings routes")
     return repo

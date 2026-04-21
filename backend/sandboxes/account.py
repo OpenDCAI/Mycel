@@ -25,7 +25,10 @@ class AccountResourceLimitExceededError(RuntimeError):
 
 
 def _settings_repo(app: Any) -> Any:
-    repo = getattr(app.state, "user_settings_repo", None)
+    runtime_storage = getattr(app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "user_settings_repo", None)
+    repo = repo_factory() if callable(repo_factory) else None
     if repo is None:
         raise RuntimeError("user_settings_repo is required for account resource limits")
     return repo

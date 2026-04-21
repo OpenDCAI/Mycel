@@ -22,7 +22,9 @@ def _invite_code_repo(request: Request) -> InviteCodeRepo:
     sb_client = getattr(runtime_storage, "supabase_client", None)
     if sb_client is None:
         raise HTTPException(503, "邀请码服务不可用（当前为 SQLite 模式）")
-    repo = getattr(request.app.state, "invite_code_repo", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "invite_code_repo", None)
+    repo = repo_factory() if callable(repo_factory) else None
     if repo is None:
         raise HTTPException(503, "邀请码仓库未初始化")
     return repo

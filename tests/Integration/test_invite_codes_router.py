@@ -47,8 +47,10 @@ def _request(repo: _FakeInviteCodeRepo):
     return SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                runtime_storage_state=SimpleNamespace(supabase_client=object()),
-                invite_code_repo=repo,
+                runtime_storage_state=SimpleNamespace(
+                    supabase_client=object(),
+                    storage_container=SimpleNamespace(invite_code_repo=lambda: repo),
+                ),
             )
         )
     )
