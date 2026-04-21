@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from backend.identity.avatar.urls import avatar_url
@@ -13,13 +14,21 @@ from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
 
 
+@dataclass(frozen=True)
+class ChatRuntimeState:
+    contact_repo: Any
+    typing_tracker: Any
+    relationship_service: Any
+    messaging_service: Any
+
+
 def attach_chat_runtime(
     app: Any,
     storage_container: Any,
     *,
     user_repo: Any,
     thread_repo: Any,
-) -> None:
+) -> ChatRuntimeState:
     chat_repo = storage_container.chat_repo()
     contact_repo = storage_container.contact_repo()
     chat_member_repo = storage_container.chat_member_repo()
@@ -55,6 +64,12 @@ def attach_chat_runtime(
     app.state.typing_tracker = typing_tracker
     app.state.relationship_service = relationship_service
     app.state.messaging_service = messaging_service
+    return ChatRuntimeState(
+        contact_repo=contact_repo,
+        typing_tracker=typing_tracker,
+        relationship_service=relationship_service,
+        messaging_service=messaging_service,
+    )
 
 
 def wire_chat_delivery(app: Any, *, messaging_service: Any, activity_reader: Any, thread_repo: Any) -> None:
