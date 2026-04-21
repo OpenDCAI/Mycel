@@ -315,13 +315,14 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
 
 @pytest.mark.asyncio
 async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    messaging_service = SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: [])
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
             agent_pool={},
             agent_runtime_thread_activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
             thread_last_active={},
-            messaging_service=SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: []),
+            messaging_service=messaging_service,
         )
     )
     to_thread_calls: list[tuple[str, tuple[object, ...]]] = []
@@ -333,7 +334,7 @@ async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatc
     monkeypatch.setattr(owner_conversations_router.asyncio, "to_thread", _fake_to_thread)
 
     assert await owner_conversations_router.list_conversations("human-user-1", app=app) == []
-    assert ("_list_visit_conversations_for_user", (app, "human-user-1")) in to_thread_calls
+    assert ("_list_visit_conversations_for_user", (messaging_service, "human-user-1")) in to_thread_calls
     assert (
         "_list_hire_conversations_from_threads",
         ([], app.state.agent_runtime_thread_activity_reader, {}),

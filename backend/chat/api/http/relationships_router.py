@@ -36,10 +36,6 @@ class RelationshipActionBody(BaseModel):
     actor_user_id: str | None = None
 
 
-def _get_rel_service(app: Any):
-    return get_relationship_service(app)
-
-
 def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
     existing = svc.get_by_id(relationship_id)
     if not existing:
@@ -86,7 +82,7 @@ async def list_relationships(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    svc = _get_rel_service(app)
+    svc = get_relationship_service(app)
     rows = svc.list_for_user(user_id)
     return [_row_to_dict(r, user_id) for r in rows]
 
@@ -97,7 +93,7 @@ async def request_relationship(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    svc = _get_rel_service(app)
+    svc = get_relationship_service(app)
     actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
     if actor_user_id == body.target_user_id:
         raise HTTPException(400, "Cannot request relationship with yourself")
@@ -115,7 +111,7 @@ async def approve_relationship(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    svc = _get_rel_service(app)
+    svc = get_relationship_service(app)
     actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
     existing = _get_existing(svc, relationship_id, actor_user_id)
     requester_id, _ = _resolve_parties(existing, actor_user_id)
@@ -134,7 +130,7 @@ async def reject_relationship(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    svc = _get_rel_service(app)
+    svc = get_relationship_service(app)
     actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
     existing = _get_existing(svc, relationship_id, actor_user_id)
     requester_id, _ = _resolve_parties(existing, actor_user_id)
@@ -153,7 +149,7 @@ async def upgrade_relationship(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    svc = _get_rel_service(app)
+    svc = get_relationship_service(app)
     actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
     existing = _get_existing(svc, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
@@ -170,7 +166,7 @@ async def revoke_relationship(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    svc = _get_rel_service(app)
+    svc = get_relationship_service(app)
     actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
     existing = _get_existing(svc, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
@@ -187,7 +183,7 @@ async def downgrade_relationship(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    svc = _get_rel_service(app)
+    svc = get_relationship_service(app)
     actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
     existing = _get_existing(svc, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)

@@ -10,6 +10,12 @@ def _app_state(**kwargs):
     return SimpleNamespace(state=SimpleNamespace(**kwargs))
 
 
+def test_get_messaging_service_returns_service_when_present():
+    service = SimpleNamespace(name="messaging")
+
+    assert chat_http_dependencies.get_messaging_service(_app_state(messaging_service=service)) is service
+
+
 def test_get_messaging_service_fails_loud_when_missing():
     with pytest.raises(HTTPException) as exc_info:
         chat_http_dependencies.get_messaging_service(_app_state())

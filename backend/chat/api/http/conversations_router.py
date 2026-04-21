@@ -48,9 +48,10 @@ async def list_conversations(
 ) -> list[dict[str, Any]]:
     activity_reader = get_runtime_thread_activity_reader(app)
     thread_last_active = get_thread_last_active_map(app)
+    messaging_service = get_optional_messaging_service(app)
     raw_threads, visit_items = await asyncio.gather(
         list_owner_thread_rows_for_auth_burst(app, user_id),
-        asyncio.to_thread(_list_visit_conversations_for_user, app, user_id),
+        asyncio.to_thread(_list_visit_conversations_for_user, messaging_service, user_id),
     )
     hire_items = await asyncio.to_thread(
         _list_hire_conversations_from_threads,
@@ -99,9 +100,8 @@ def _thread_running(activity_reader: RuntimeThreadActivityReader, agent_user_id:
     )
 
 
-def _list_visit_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
+def _list_visit_conversations_for_user(messaging: Any | None, user_id: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    messaging = get_optional_messaging_service(app)
     if messaging is not None:
         chats = messaging.list_conversation_summaries_for_user(user_id)
         for chat in chats:
