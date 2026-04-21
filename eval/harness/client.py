@@ -12,7 +12,7 @@ from eval.models import TrajectoryCapture
 
 
 class EvalClient:
-    """HTTP + SSE client for driving Leon agent evaluation."""
+    """HTTP + SSE client for driving Mycel agent evaluation."""
 
     def __init__(self, base_url: str = "http://localhost:8001", token: str | None = None):
         self.base_url = base_url.rstrip("/")

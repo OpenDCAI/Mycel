@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Leon Agent 交互式聊天 - 流式输出 + 工具调用展示
+Mycel Agent 交互式聊天 - 流式输出 + 工具调用展示
 
 特点：
 - 流式输出 agent 响应
@@ -44,7 +44,7 @@ class Colors:
 def print_banner():
     """打印欢迎横幅"""
     print(f"\n{Colors.CYAN}{'=' * 70}")
-    print(f"{Colors.BOLD}  Leon Agent - 交互式聊天{Colors.RESET}")
+    print(f"{Colors.BOLD}  Mycel Agent - 交互式聊天{Colors.RESET}")
     print(f"{Colors.CYAN}  流式输出 + 工具调用展示")
     print(f"{'=' * 70}{Colors.RESET}\n")
 
@@ -82,7 +82,7 @@ def print_tool_result(tool_name: str, result: str):
 
 def stream_response(agent, message: str, thread_id: str = "chat"):
     """流式处理 agent 响应并展示工具调用"""
-    print(f"{Colors.GREEN}🤖 Leon:{Colors.RESET} ", end="", flush=True)
+    print(f"{Colors.GREEN}🤖 Mycel:{Colors.RESET} ", end="", flush=True)
 
     try:
         config = {"configurable": {"thread_id": thread_id}}
@@ -146,7 +146,7 @@ def main():
         return
 
     # 创建 agent
-    print(f"{Colors.BLUE}🚀 初始化 Leon Agent...{Colors.RESET}")
+    print(f"{Colors.BLUE}🚀 初始化 Mycel Agent...{Colors.RESET}")
     agent = create_leon_agent()
     print(f"{Colors.GREEN}✅ Agent 已就绪{Colors.RESET}")
     print(f"{Colors.BLUE}📁 工作目录: {agent.workspace_root}{Colors.RESET}\n")
