@@ -7,9 +7,9 @@ from typing import Any, cast
 
 import pytest
 
+from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters import chat_inlet as chat_delivery_hook
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
-from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope

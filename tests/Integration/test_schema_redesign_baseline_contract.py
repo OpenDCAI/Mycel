@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import backend.sandboxes.resources.projection as resource_projection_service
 import backend.sandboxes.resources.provider_boundary as resource_provider_boundary_service
+from backend.identity.avatar.urls import avatar_url
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from backend.sandboxes import service as sandbox_service
 from backend.sandboxes.resources import common as resource_common
 from backend.sandboxes.resources import provider_contracts as resource_service
-from backend.web.utils.serializers import avatar_url
 
 
 def test_list_user_sandboxes_exposes_thread_identity_not_member_id(monkeypatch) -> None:

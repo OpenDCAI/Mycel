@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
+from backend.identity.avatar.urls import avatar_url
 from backend.monitor.application.use_cases.thread_workbench import (
     build_owner_thread_workbench_from_rows,
     sidebar_label,
@@ -51,7 +52,7 @@ from backend.web.models.requests import (
     SendMessageRequest,
     ThreadPermissionRuleRequest,
 )
-from backend.web.utils.serializers import avatar_url, serialize_message
+from backend.web.utils.serializers import serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec

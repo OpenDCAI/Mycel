@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.chat.api.http import conversations_router as owner_conversations_router
-from backend.web.utils.serializers import avatar_url
+from backend.identity.avatar.urls import avatar_url
 
 
 def test_conversations_http_owner_module_lives_under_backend_chat() -> None:
