@@ -23,14 +23,30 @@ def _require_state_attr(app: Any, attr_name: str, detail: str) -> Any:
 
 
 def get_messaging_service(app: Annotated[Any, Depends(get_app)]) -> Any:
+    runtime_state = getattr(app.state, "chat_runtime_state", None)
+    if runtime_state is not None:
+        # @@@chat-http-borrowed-runtime-state - HTTP dependency helpers still
+        # read through app.state, but they should borrow chat-owned services
+        # from the bundled chat_runtime_state before falling back to legacy attrs.
+        value = getattr(runtime_state, "messaging_service", None)
+        if value is not None:
+            return value
     return _require_state_attr(app, "messaging_service", "MessagingService not initialized")
 
 
 def get_optional_messaging_service(app: Annotated[Any, Depends(get_app)]) -> Any | None:
+    runtime_state = getattr(app.state, "chat_runtime_state", None)
+    if runtime_state is not None:
+        return getattr(runtime_state, "messaging_service", None)
     return getattr(app.state, "messaging_service", None)
 
 
 def get_relationship_service(app: Annotated[Any, Depends(get_app)]) -> Any:
+    runtime_state = getattr(app.state, "chat_runtime_state", None)
+    if runtime_state is not None:
+        value = getattr(runtime_state, "relationship_service", None)
+        if value is not None:
+            return value
     return _require_state_attr(app, "relationship_service", "Relationship service unavailable")
 
 
@@ -43,6 +59,11 @@ def get_thread_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
 
 
 def get_contact_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
+    runtime_state = getattr(app.state, "chat_runtime_state", None)
+    if runtime_state is not None:
+        value = getattr(runtime_state, "contact_repo", None)
+        if value is not None:
+            return value
     return _require_state_attr(app, "contact_repo", "Contact repo unavailable")
 
 
