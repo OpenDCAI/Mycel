@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from backend.web.services import agent_pool
+from backend.threads import activity_pool_service as agent_pool
 
 
 class _FakeThreadRepo:

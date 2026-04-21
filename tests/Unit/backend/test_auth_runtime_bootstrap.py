@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from backend import auth_runtime_bootstrap
+from backend.identity.auth import runtime_bootstrap as auth_runtime_bootstrap
 
 
 def _fake_storage_container():

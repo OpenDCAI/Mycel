@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtime_service
-from backend.web.services import sandbox_service
+from backend.sandboxes import service as sandbox_service
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from backend import file_channel as file_channel_service
+from backend.threads import file_channel as file_channel_service
 
 
 class _ThreadRepo:

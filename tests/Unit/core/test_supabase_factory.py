@@ -1,7 +1,7 @@
 import pytest
 from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
-from backend import supabase_runtime
+from backend.identity.auth import supabase_runtime
 from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
 
 
