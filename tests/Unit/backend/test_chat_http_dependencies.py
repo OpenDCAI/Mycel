@@ -22,12 +22,16 @@ def test_chat_http_dependencies_read_chat_runtime_state_bundle():
     messaging_service = object()
     relationship_service = object()
     contact_repo = object()
+    chat_repo = object()
+    chat_event_bus = object()
 
     app = _app_state(
         chat_runtime_state=SimpleNamespace(
             messaging_service=messaging_service,
             relationship_service=relationship_service,
             contact_repo=contact_repo,
+            chat_repo=chat_repo,
+            chat_event_bus=chat_event_bus,
         )
     )
 
@@ -35,6 +39,8 @@ def test_chat_http_dependencies_read_chat_runtime_state_bundle():
     assert chat_http_dependencies.get_optional_messaging_service(app) is messaging_service
     assert chat_http_dependencies.get_relationship_service(app) is relationship_service
     assert chat_http_dependencies.get_contact_repo(app) is contact_repo
+    assert chat_http_dependencies.get_chat_repo(app) is chat_repo
+    assert chat_http_dependencies.get_chat_event_bus(app) is chat_event_bus
 
 
 def test_chat_http_dependencies_do_not_fall_back_to_legacy_chat_attrs():
