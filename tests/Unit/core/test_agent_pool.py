@@ -20,6 +20,27 @@ class _EmptyAgentConfigRepo:
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+    messaging_service = object()
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+    monkeypatch.setattr(agent_pool, "get_messaging_service", lambda app: messaging_service, raising=False)
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert kwargs["messaging_service"] is messaging_service
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.MonkeyPatch):
     created: list[object] = []
 
