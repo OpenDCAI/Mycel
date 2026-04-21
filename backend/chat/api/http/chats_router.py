@@ -45,11 +45,6 @@ class MuteChatBody(BaseModel):
     muted: bool
     mute_until: float | None = None
 
-
-def _messaging(app: Any):
-    return get_messaging_service(app)
-
-
 def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
     # @@@thread-social-owner-check - sender_id can be a thread-owned social user_id, so
     # ownership must resolve through the thread back to the owning agent user before checking owner.
@@ -65,13 +60,13 @@ def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
     chat = get_chat_repo(app).get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    if not _messaging(app).is_chat_member(chat_id, user_id):
+    if not get_messaging_service(app).is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     return chat
 
 
 def _resolve_display_user(app: Any, social_user_id: str) -> Any | None:
-    return _messaging(app).resolve_display_user(social_user_id)
+    return get_messaging_service(app).resolve_display_user(social_user_id)
 
 
 def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
@@ -82,16 +77,15 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
         if participant_id == requester_user_id:
             validated.append(participant_id)
             continue
-        if thread_repo is not None and thread_repo.get_by_user_id(participant_id) is not None:
+        if thread_repo.get_by_user_id(participant_id) is not None:
             validated.append(participant_id)
             continue
-        if user_repo is not None:
-            candidate = user_repo.get_by_id(participant_id)
-            if candidate is not None and getattr(candidate, "owner_user_id", None) is None:
-                validated.append(participant_id)
-                continue
-            if candidate is not None and getattr(candidate, "owner_user_id", None) is not None:
-                raise ValueError(f"Agent participant ids must be actor user_ids, not agent_user_id: {participant_id}")
+        candidate = user_repo.get_by_id(participant_id)
+        if candidate is not None and getattr(candidate, "owner_user_id", None) is None:
+            validated.append(participant_id)
+            continue
+        if candidate is not None and getattr(candidate, "owner_user_id", None) is not None:
+            raise ValueError(f"Agent participant ids must be actor user_ids, not agent_user_id: {participant_id}")
         raise ValueError(f"Unknown chat participant id: {participant_id}")
     return validated
 
@@ -135,7 +129,7 @@ def list_chats(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    return _messaging(app).list_chats_for_user(user_id)
+    return get_messaging_service(app).list_chats_for_user(user_id)
 
 
 @router.post("")
@@ -148,9 +142,9 @@ def create_chat(
         participant_ids = _validate_chat_participant_ids(app, body.user_ids, user_id)
         if len(participant_ids) >= 3:
             _validate_group_chat_relationships(app, participant_ids, user_id)
-            chat = _messaging(app).create_group_chat(participant_ids, body.title)
+            chat = get_messaging_service(app).create_group_chat(participant_ids, body.title)
         else:
-            chat = _messaging(app).find_or_create_chat(participant_ids, body.title)
+            chat = get_messaging_service(app).find_or_create_chat(participant_ids, body.title)
         return {
             "id": chat["id"],
             "title": chat.get("title"),
@@ -168,7 +162,7 @@ def get_chat(
     app: Annotated[Any, Depends(get_app)],
 ):
     chat = _get_accessible_chat_or_404(app, chat_id, user_id)
-    return _messaging(app).get_chat_detail(chat)
+    return get_messaging_service(app).get_chat_detail(chat)
 
 
 @router.get("/{chat_id}/messages")
@@ -179,9 +173,9 @@ def list_messages(
     limit: int = Query(50, ge=1, le=200),
     before: str | None = Query(None),
 ):
-    if not _messaging(app).is_chat_member(chat_id, user_id):
+    if not get_messaging_service(app).is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
-    return _messaging(app).list_message_responses(chat_id, limit=limit, before=before, viewer_id=user_id)
+    return get_messaging_service(app).list_message_responses(chat_id, limit=limit, before=before, viewer_id=user_id)
 
 
 @router.post("/{chat_id}/messages")
@@ -194,7 +188,7 @@ def send_message(
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
     _verify_user_ownership(app, body.sender_id, user_id)
-    msg = _messaging(app).send(
+    msg = get_messaging_service(app).send(
         chat_id,
         body.sender_id,
         body.content,
@@ -202,7 +196,7 @@ def send_message(
         signal=body.signal,
         message_type=body.message_type,
     )
-    return _messaging(app).project_message_response(msg)
+    return get_messaging_service(app).project_message_response(msg)
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")
@@ -212,7 +206,7 @@ def retract_message(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    ok = _messaging(app).retract(message_id, user_id)
+    ok = get_messaging_service(app).retract(message_id, user_id)
     if not ok:
         raise HTTPException(400, "Cannot retract: not sender, already retracted, or 2-min window expired")
     return {"status": "retracted"}
@@ -225,7 +219,7 @@ def delete_message_for_self(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    _messaging(app).delete_for(message_id, user_id)
+    get_messaging_service(app).delete_for(message_id, user_id)
     return {"status": "deleted"}
 
 
@@ -235,7 +229,7 @@ def mark_read(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    _messaging(app).mark_read(chat_id, user_id)
+    get_messaging_service(app).mark_read(chat_id, user_id)
     return {"status": "ok"}
 
 
@@ -289,5 +283,5 @@ def mute_chat(
 ):
     _verify_user_ownership(app, body.user_id, user_id)
     mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
-    _messaging(app).update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
+    get_messaging_service(app).update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
     return {"status": "ok", "muted": body.muted}
