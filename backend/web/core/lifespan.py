@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
     attach_threads_runtime(app, storage_container)
     wire_chat_delivery(
         app,
+        messaging_service=app.state.messaging_service,
         activity_reader=app.state.agent_runtime_thread_activity_reader,
         thread_repo=app.state.thread_repo,
     )
