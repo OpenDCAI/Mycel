@@ -20,32 +20,41 @@ def attach_chat_runtime(
     user_repo: Any,
     thread_repo: Any,
 ) -> None:
-    app.state.chat_repo = storage_container.chat_repo()
-    app.state.contact_repo = storage_container.contact_repo()
-    app.state.chat_member_repo = storage_container.chat_member_repo()
-    app.state.messages_repo = storage_container.messages_repo()
-    app.state.relationship_repo = storage_container.relationship_repo()
-
-    app.state.chat_event_bus = ChatEventBus()
-    app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
-    app.state.relationship_service = RelationshipService(app.state.relationship_repo)
+    chat_repo = storage_container.chat_repo()
+    contact_repo = storage_container.contact_repo()
+    chat_member_repo = storage_container.chat_member_repo()
+    messages_repo = storage_container.messages_repo()
+    relationship_repo = storage_container.relationship_repo()
+    chat_event_bus = ChatEventBus()
+    typing_tracker = TypingTracker(chat_event_bus)
+    relationship_service = RelationshipService(relationship_repo)
 
     delivery_resolver = HireVisitDeliveryResolver(
-        contact_repo=app.state.contact_repo,
-        chat_member_repo=app.state.chat_member_repo,
-        relationship_repo=app.state.relationship_repo,
+        contact_repo=contact_repo,
+        chat_member_repo=chat_member_repo,
+        relationship_repo=relationship_repo,
     )
 
-    app.state.messaging_service = MessagingService(
-        chat_repo=app.state.chat_repo,
-        chat_member_repo=app.state.chat_member_repo,
-        messages_repo=app.state.messages_repo,
+    messaging_service = MessagingService(
+        chat_repo=chat_repo,
+        chat_member_repo=chat_member_repo,
+        messages_repo=messages_repo,
         user_repo=user_repo,
         thread_repo=thread_repo,
-        event_bus=app.state.chat_event_bus,
+        event_bus=chat_event_bus,
         delivery_resolver=delivery_resolver,
         avatar_url_builder=avatar_url,
     )
+
+    app.state.chat_repo = chat_repo
+    app.state.contact_repo = contact_repo
+    app.state.chat_member_repo = chat_member_repo
+    app.state.messages_repo = messages_repo
+    app.state.relationship_repo = relationship_repo
+    app.state.chat_event_bus = chat_event_bus
+    app.state.typing_tracker = typing_tracker
+    app.state.relationship_service = relationship_service
+    app.state.messaging_service = messaging_service
 
 
 def wire_chat_delivery(app: Any, *, activity_reader: Any, thread_repo: Any) -> None:

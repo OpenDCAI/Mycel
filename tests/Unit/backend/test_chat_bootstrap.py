@@ -76,6 +76,69 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert app.state.messaging_service.delivery_fn is None
 
 
+def test_attach_chat_runtime_does_not_read_back_chat_state_during_wiring(monkeypatch):
+    class _TrackingState:
+        def __init__(self):
+            object.__setattr__(self, "_values", {})
+            object.__setattr__(self, "reads", [])
+
+        def __getattribute__(self, name):
+            if name in {"_values", "reads", "__dict__", "__class__"}:
+                return object.__getattribute__(self, name)
+            reads = object.__getattribute__(self, "reads")
+            reads.append(name)
+            values = object.__getattribute__(self, "_values")
+            if name in values:
+                return values[name]
+            raise AttributeError(name)
+
+        def __setattr__(self, name, value):
+            self._values[name] = value
+
+    chat_repo = object()
+    contact_repo = object()
+    chat_member_repo = object()
+    messages_repo = object()
+    relationship_repo = object()
+    event_bus = object()
+    tracking_state = _TrackingState()
+    tracking_state.user_repo = object()
+    tracking_state.thread_repo = object()
+
+    storage_container = SimpleNamespace(
+        chat_repo=lambda: chat_repo,
+        contact_repo=lambda: contact_repo,
+        chat_member_repo=lambda: chat_member_repo,
+        messages_repo=lambda: messages_repo,
+        relationship_repo=lambda: relationship_repo,
+    )
+
+    monkeypatch.setattr(chat_bootstrap, "ChatEventBus", lambda: event_bus)
+    monkeypatch.setattr(chat_bootstrap, "TypingTracker", lambda owner_event_bus: ("typing", owner_event_bus))
+    monkeypatch.setattr(chat_bootstrap, "RelationshipService", lambda repo: ("relationship", repo))
+    monkeypatch.setattr(chat_bootstrap, "HireVisitDeliveryResolver", lambda **kwargs: kwargs)
+    monkeypatch.setattr(chat_bootstrap, "MessagingService", lambda **kwargs: SimpleNamespace(kwargs=kwargs, delivery_fn=None))
+
+    app = SimpleNamespace(state=tracking_state)
+
+    chat_bootstrap.attach_chat_runtime(
+        app,
+        storage_container,
+        user_repo=tracking_state.user_repo,
+        thread_repo=tracking_state.thread_repo,
+    )
+
+    forbidden_reads = {
+        "chat_repo",
+        "contact_repo",
+        "chat_member_repo",
+        "messages_repo",
+        "relationship_repo",
+        "chat_event_bus",
+    }
+    assert forbidden_reads.isdisjoint(tracking_state.reads)
+
+
 def test_attach_chat_runtime_requires_explicit_user_repo_and_thread_repo():
     app = SimpleNamespace(state=SimpleNamespace(user_repo=object(), thread_repo=object()))
     storage_container = SimpleNamespace(
