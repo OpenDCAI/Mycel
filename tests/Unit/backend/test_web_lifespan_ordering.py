@@ -36,6 +36,7 @@ def _patch_lifespan_runtime_contract(monkeypatch, *, attach_chat_runtime, attach
         user_settings_repo=lambda: object(),
         agent_config_repo=lambda: object(),
         queue_repo=lambda: object(),
+        contact_repo=lambda: object(),
     )
 
     runtime_storage = SimpleNamespace(
@@ -98,11 +99,13 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
 @pytest.mark.asyncio
 async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatch):
     call_log: list[str] = []
+    contact_repo = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
         call_log.append("chat")
         app.state.typing_tracker = object()
         app.state.messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
+        app.state.contact_repo = contact_repo
 
     def _attach_threads_runtime(app, _storage_container, *, typing_tracker):
         call_log.append("threads")
@@ -126,6 +129,76 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
 
     async with web_lifespan.lifespan(app):
         assert call_log == ["chat", "threads", "wire"]
+
+
+@pytest.mark.asyncio
+async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monkeypatch):
+    seen: list[object] = []
+    contact_repo = object()
+
+    monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
+    monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
+
+    async def _no_validate():
+        return None
+
+    monkeypatch.setattr(web_lifespan, "_validate_web_checkpointer_contract", _no_validate)
+
+    storage_container = SimpleNamespace(
+        user_repo=lambda: object(),
+        thread_repo=lambda: object(),
+        lease_repo=lambda: object(),
+        recipe_repo=lambda: SimpleNamespace(close=lambda: None),
+        workspace_repo=lambda: object(),
+        sandbox_repo=lambda: object(),
+        invite_code_repo=lambda: object(),
+        user_settings_repo=lambda: object(),
+        agent_config_repo=lambda: object(),
+        queue_repo=lambda: object(),
+        contact_repo=lambda: contact_repo,
+    )
+
+    runtime_storage = SimpleNamespace(
+        supabase_client=object(),
+        storage_container=storage_container,
+    )
+
+    monkeypatch.setattr("backend.bootstrap.storage.attach_runtime_storage_state", lambda _app: runtime_storage)
+    monkeypatch.setattr(
+        "backend.identity.auth.runtime_bootstrap.attach_auth_runtime_state",
+        lambda _app, *, storage_state, contact_repo: seen.append(contact_repo) or object(),
+    )
+    monkeypatch.setattr(
+        "core.runtime.langgraph_checkpoint_store.agent_checkpoint_saver_from_conn_string",
+        lambda _pg_url: _FakeCheckpointCtx(),
+    )
+    monkeypatch.setattr(
+        "core.runtime.langgraph_checkpoint_store.LangGraphCheckpointStore",
+        lambda saver: SimpleNamespace(saver=saver),
+    )
+    monkeypatch.setattr(
+        "backend.chat.bootstrap.attach_chat_runtime",
+        lambda app, _storage_container, *, user_repo, thread_repo: (
+            setattr(app.state, "typing_tracker", object())
+            or setattr(app.state, "messaging_service", SimpleNamespace(set_delivery_fn=lambda _fn: None))
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.threads.bootstrap.attach_threads_runtime",
+        lambda app, *_args, **_kwargs: (
+            setattr(app.state, "agent_runtime_thread_activity_reader", object()) or setattr(app.state, "agent_pool", {})
+        ),
+    )
+    monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
+    monkeypatch.setattr("backend.sandboxes.service.init_providers_and_managers", lambda: None)
+    monkeypatch.setattr("backend.threads.pool.idle_reaper.idle_reaper_loop", lambda _app: _never())
+    monkeypatch.setattr("backend.web.core.config.IDLE_REAPER_INTERVAL_SEC", 1)
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    async with web_lifespan.lifespan(app):
+        assert seen == [contact_repo]
 
 
 async def _never():

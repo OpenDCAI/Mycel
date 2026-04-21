@@ -14,6 +14,7 @@ async def test_monitor_app_lifespan_starts_and_cancels_resource_refresh_loop(mon
     cancelled = asyncio.Event()
     auth_calls = []
     user_repo = object()
+    contact_repo = object()
 
     async def _loop():
         started.set()
@@ -24,7 +25,7 @@ async def test_monitor_app_lifespan_starts_and_cancels_resource_refresh_loop(mon
             raise
 
     monitor_storage = SimpleNamespace(
-        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: contact_repo),
     )
 
     monkeypatch.setattr(monitor_app_lifespan, "resource_overview_refresh_loop", _loop)
@@ -32,7 +33,7 @@ async def test_monitor_app_lifespan_starts_and_cancels_resource_refresh_loop(mon
     monkeypatch.setattr(
         monitor_app_lifespan,
         "attach_auth_runtime_state",
-        lambda _app, *, storage_state: auth_calls.append(storage_state) or object(),
+        lambda _app, *, storage_state, contact_repo: auth_calls.append((storage_state, contact_repo)) or object(),
     )
 
     app = SimpleNamespace(state=SimpleNamespace())
@@ -44,7 +45,7 @@ async def test_monitor_app_lifespan_starts_and_cancels_resource_refresh_loop(mon
         assert app.state.user_repo is user_repo
 
     await asyncio.wait_for(cancelled.wait(), timeout=1)
-    assert auth_calls == [monitor_storage]
+    assert auth_calls == [(monitor_storage, contact_repo)]
 
 
 @pytest.mark.asyncio
