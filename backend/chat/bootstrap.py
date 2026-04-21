@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.chat_inlet import make_chat_delivery_fn
-from backend.web.utils.serializers import avatar_url
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.realtime.events import ChatEventBus
 from messaging.realtime.typing import TypingTracker

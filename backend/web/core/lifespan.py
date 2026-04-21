@@ -60,11 +60,9 @@ async def lifespan(app: FastAPI):
     app.state.recipe_repo = storage_container.recipe_repo()
     app.state.workspace_repo = storage_container.workspace_repo()
     app.state.sandbox_repo = storage_container.sandbox_repo()
-    app.state.chat_repo = storage_container.chat_repo()
     app.state.invite_code_repo = storage_container.invite_code_repo()
     app.state.user_settings_repo = storage_container.user_settings_repo()
     app.state.agent_config_repo = storage_container.agent_config_repo()
-    app.state.contact_repo = storage_container.contact_repo()
     attach_auth_runtime_state(app, storage_state=runtime_storage)
 
     from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery
