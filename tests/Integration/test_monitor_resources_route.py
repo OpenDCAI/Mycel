@@ -7,12 +7,14 @@ from backend.monitor.application.use_cases import resources as monitor_resources
 from backend.monitor.infrastructure.io import resource_io_service as monitor_resource_io_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.core.dependencies import get_current_user_id
+from backend.web.routers import monitor_threads as monitor_threads_router
 from backend.web.routers import resources
 
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
     app.include_router(global_router.router, prefix="/api/monitor")
+    app.include_router(monitor_threads_router.router, prefix="/api/monitor")
     app.include_router(web_local_router.router, prefix="/api/monitor")
     if include_product_resources:
         app.include_router(resources.router)
