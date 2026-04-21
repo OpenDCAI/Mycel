@@ -202,6 +202,40 @@ async def test_list_chat_candidates_marks_agents_owned_by_active_contacts_as_cha
     assert agent_item["can_chat"] is True
 
 
+@pytest.mark.asyncio
+async def test_list_chat_candidates_fails_loud_when_relationship_service_missing():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _human("u2", "other")]),
+            thread_repo=SimpleNamespace(get_default_thread=lambda _agent_user_id: None),
+            contact_repo=_empty_contact_repo(),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await users_router.list_chat_candidates(user_id="u1", app=app)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "chat bootstrap not attached: relationship_service"
+
+
+@pytest.mark.asyncio
+async def test_list_chat_candidates_fails_loud_when_contact_repo_missing():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _human("u2", "other")]),
+            thread_repo=SimpleNamespace(get_default_thread=lambda _agent_user_id: None),
+            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await users_router.list_chat_candidates(user_id="u1", app=app)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
+
+
 def test_get_user_or_404_returns_user():
     agent = _agent("a-main", "Toad", "u2")
     app = SimpleNamespace(
