@@ -2581,7 +2581,6 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
                 get_by_id=lambda thread_id: {"id": thread_id, "agent_user_id": "agent-user-1"} if thread_id == "thread-1" else None,
             ),
             agent_pool={},
-            typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
             queue_manager=SimpleNamespace(enqueue=lambda *_args, **_kwargs: None),
             thread_cwd={},
             thread_sandbox={},
@@ -2590,7 +2589,7 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
             thread_locks_guard=asyncio.Lock(),
         )
     )
-    runtime_state = build_agent_runtime_state(app, typing_tracker=app.state.typing_tracker)
+    runtime_state = build_agent_runtime_state(app, typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None))
     gateway = runtime_state.gateway
     app.state.threads_runtime_state = SimpleNamespace(
         agent_runtime_gateway=gateway,
@@ -2652,7 +2651,6 @@ async def _run_chat_delivery(
                 get_by_id=lambda thread_id: next((row for row in thread_rows if row["id"] == thread_id), None),
             ),
             agent_pool=pool or {},
-            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
@@ -2665,7 +2663,10 @@ async def _run_chat_delivery(
             thread_locks_guard=asyncio.Lock(),
         )
     )
-    runtime_state = build_agent_runtime_state(app, typing_tracker=app.state.typing_tracker)
+    runtime_state = build_agent_runtime_state(
+        app,
+        typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
+    )
     gateway = runtime_state.gateway
     app.state.threads_runtime_state = SimpleNamespace(
         agent_runtime_gateway=gateway,

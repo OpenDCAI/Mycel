@@ -499,6 +499,10 @@ def _make_streaming_app(
     include_route_locks: bool = False,
 ) -> tuple[SimpleNamespace, MessageQueueManager]:
     queue_manager = queue_manager or MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    typing_tracker = SimpleNamespace(
+        start_chat=lambda *_args, **_kwargs: None,
+        stop=lambda *_args, **_kwargs: None,
+    )
     state = SimpleNamespace(
         display_builder=DisplayBuilder(),
         thread_repo=SimpleNamespace(
@@ -516,17 +520,13 @@ def _make_streaming_app(
         subagent_buffers={},
         queue_manager=queue_manager,
         thread_last_active={},
-        typing_tracker=SimpleNamespace(
-            start_chat=lambda *_args, **_kwargs: None,
-            stop=lambda *_args, **_kwargs: None,
-        ),
     )
     if thread_id is not None and agent is not None:
         state.agent_pool = {f"{thread_id}:local": agent}
         state.thread_sandbox = {thread_id: "local"}
         state._event_loop = asyncio.get_running_loop()
     app = SimpleNamespace(state=state)
-    runtime_state = build_agent_runtime_state(app, typing_tracker=state.typing_tracker)
+    runtime_state = build_agent_runtime_state(app, typing_tracker=typing_tracker)
     gateway = runtime_state.gateway
     state.agent_runtime_gateway_state = runtime_state
     state.threads_runtime_state = SimpleNamespace(
@@ -1250,9 +1250,10 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
 
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda *_args, **_kwargs: "local")
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.get_or_create_agent", fake_get_or_create_agent)
+    typing_tracker = SimpleNamespace(start_chat=lambda *_args, **_kwargs: None)
 
     startup_task = asyncio.create_task(
-        build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_thread_input(
+        build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="owner"),

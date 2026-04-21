@@ -39,7 +39,6 @@ def _fake_app() -> SimpleNamespace:
                 list_by_agent_user=lambda _uid: [],
             ),
             agent_pool={},
-            typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
             queue_manager=_FakeQueueManager(),
             thread_cwd={},
             thread_sandbox={},
@@ -63,6 +62,7 @@ def _thread_input(content: str = "hello", *, enable_trajectory: bool = False) ->
 async def test_gateway_thread_input_clears_resource_overview_cache_when_starting_run() -> None:
     app = _fake_app()
     agent = _FakeAgent()
+    typing_tracker = SimpleNamespace(start_chat=lambda *_args, **_kwargs: None)
 
     with (
         patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
@@ -70,7 +70,7 @@ async def test_gateway_thread_input_clears_resource_overview_cache_when_starting
         patch("backend.threads.chat_adapters.bootstrap.start_agent_run", return_value="run-123"),
         patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache") as clear_cache,
     ):
-        result = await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_thread_input(_thread_input())
+        result = await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(_thread_input())
 
     assert result == AgentThreadInputResult(status="started", routing="direct", run_id="run-123", thread_id="thread-1")
     clear_cache.assert_called_once_with()
@@ -79,6 +79,7 @@ async def test_gateway_thread_input_clears_resource_overview_cache_when_starting
 @pytest.mark.asyncio
 async def test_gateway_thread_input_requires_agent_runtime() -> None:
     app = _fake_app()
+    typing_tracker = SimpleNamespace(start_chat=lambda *_args, **_kwargs: None)
 
     with (
         patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
@@ -87,13 +88,14 @@ async def test_gateway_thread_input_requires_agent_runtime() -> None:
         patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache"),
     ):
         with pytest.raises(AttributeError):
-            await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_thread_input(_thread_input())
+            await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(_thread_input())
 
 
 @pytest.mark.asyncio
 async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run() -> None:
     app = _fake_app()
     agent = _FakeAgent()
+    typing_tracker = SimpleNamespace(start_chat=lambda *_args, **_kwargs: None)
 
     with (
         patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
@@ -101,7 +103,7 @@ async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run(
         patch("backend.threads.chat_adapters.bootstrap.start_agent_run", return_value="run-123") as start_run,
         patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache"),
     ):
-        await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_thread_input(
+        await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(
             _thread_input(enable_trajectory=True)
         )
 

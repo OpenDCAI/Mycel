@@ -35,7 +35,6 @@ def _app(
                 get_by_id=lambda thread_id: next((row for row in thread_rows if row["id"] == thread_id), None),
             ),
             agent_pool=pool or {},
-            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
@@ -75,8 +74,9 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     app, started, unread_calls, enqueued = _app()
+    typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
 
-    result = await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_chat(_envelope())
+    result = await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_chat(_envelope())
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-1"
@@ -91,9 +91,10 @@ async def test_gateway_dispatch_chat_raises_for_missing_thread(monkeypatch: pyte
         "backend.threads.chat_adapters.bootstrap.get_or_create_agent", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError)
     )
     app, started, unread_calls, enqueued = _app(threads=[])
+    typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
 
     with pytest.raises(RuntimeError, match="Agent chat recipient has no runtime thread: agent-user-1"):
-        await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_chat(_envelope(thread_id=None))
+        await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_chat(_envelope(thread_id=None))
 
     assert started == []
     assert unread_calls == []
@@ -110,9 +111,6 @@ async def test_gateway_dispatch_chat_uses_explicit_typing_tracker(monkeypatch: p
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     app, _started, _unread_calls, enqueued = _app()
     started: list[tuple[str, str, str]] = []
-    app.state.typing_tracker = SimpleNamespace(
-        start_chat=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should use explicit typing tracker"))
-    )
     explicit_typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
 
     result = await build_agent_runtime_gateway(app, typing_tracker=explicit_typing_tracker).dispatch_chat(_envelope())
