@@ -37,7 +37,7 @@ git config extensions.worktreeConfig true
 
 目录名规则：分支名中的 `/` 替换为 `-`（如 `feat/eval` → `feat-eval`）
 
-路径规则：`~/worktrees/<项目名>--<目录名>`（如 `~/worktrees/leon--feat-eval`）
+路径规则：`~/worktrees/<项目名>--<目录名>`（如 `~/worktrees/project--feat-eval`）
 
 ```bash
 git worktree add "$HOME/worktrees/$PROJECT_NAME--<目录名>" -b $ARGUMENTS origin/<base-branch>
@@ -114,8 +114,6 @@ fi
 cd "$HOME/worktrees/$PROJECT_NAME--<目录名>"
 git config --worktree worktree.ports.backend $ASSIGNED_BACKEND
 git config --worktree worktree.ports.frontend $ASSIGNED_FRONTEND
-git config --worktree leon.backend.port $ASSIGNED_BACKEND
-git config --worktree leon.frontend.port $ASSIGNED_FRONTEND
 git config --worktree worktree.description "<AI 生成的描述>"
 git config --worktree worktree.created "$(date +%Y-%m-%d)"
 git config --worktree worktree.project "$PROJECT_NAME"
@@ -123,7 +121,7 @@ git config --worktree worktree.project "$PROJECT_NAME"
 # 验证配置已正确写入
 echo ""
 echo "✅ 配置已写入："
-git config --worktree --list | grep -E "(ports|leon\.(backend|frontend)\.port)"
+git config --worktree --list | grep -E "^worktree\\."
 ```
 
 description 由 AI 根据分支名和用户提供的上下文自动推断，简短描述这个分支的目的（中文，10-20 字）。

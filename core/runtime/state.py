@@ -95,7 +95,7 @@ class AppState(BaseModel):
     resolved_permission_requests: dict[str, dict[str, Any]] = Field(default_factory=dict)
     announced_mcp_instruction_blocks: dict[str, dict[str, str]] = Field(default_factory=dict)
     # @@@session-hooks-not-watchers - keep this surface local and lifecycle-scoped.
-    # File watching remains a later outer-layer concern so Leon keeps the
+    # File watching remains a later outer-layer concern so Mycel keeps the
     # filesystem + terminal core decoupled.
     session_hooks: dict[str, list[Any]] = Field(default_factory=dict)
 

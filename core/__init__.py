@@ -1,1 +1,1 @@
-"""Leon Core - Runtime, Tools, and Agent coordination."""
+"""Mycel Core - Runtime, Tools, and Agent coordination."""
