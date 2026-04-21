@@ -44,7 +44,14 @@ class _FakeInviteCodeRepo:
 
 
 def _request(repo: _FakeInviteCodeRepo):
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(_supabase_client=object(), invite_code_repo=repo)))
+    return SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                runtime_storage_state=SimpleNamespace(supabase_client=object()),
+                invite_code_repo=repo,
+            )
+        )
+    )
 
 
 @pytest.mark.asyncio
