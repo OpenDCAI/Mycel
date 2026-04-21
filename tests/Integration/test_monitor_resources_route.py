@@ -295,7 +295,17 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
     monkeypatch.setattr(
         monitor_gateway_impl,
         "start_evaluation_batch",
-        lambda **kwargs: start_calls.append(kwargs) or {"accepted": True},
+        lambda *, batch_id, execution_base_url, token, schedule_task: (
+            start_calls.append(
+                {
+                    "batch_id": batch_id,
+                    "execution_base_url": execution_base_url,
+                    "token": token,
+                    "schedule_task": schedule_task,
+                }
+            )
+            or {"accepted": True}
+        ),
     )
     app = _app()
     app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
@@ -319,7 +329,7 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
         }
     ]
     assert start_calls[0]["batch_id"] == "batch-1"
-    assert start_calls[0]["base_url"] == "http://testserver"
+    assert start_calls[0]["execution_base_url"] == "http://testserver"
     assert start_calls[0]["token"] == "token-1"
 
 
