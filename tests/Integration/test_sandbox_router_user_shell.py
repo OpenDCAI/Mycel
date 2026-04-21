@@ -52,6 +52,27 @@ def test_sandbox_runtime_routes_do_not_expose_session_paths() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_sandbox_types_reports_current_daytona_provider_when_inventory_builds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sandbox_router.sandbox_provider_availability,
+        "available_sandbox_types",
+        lambda: [
+            {"name": "local", "provider": "local", "available": True},
+            {"name": "daytona_selfhost", "provider": "daytona", "available": True},
+        ],
+    )
+
+    result = await sandbox_router.list_sandbox_types()
+
+    assert result["types"] == [
+        {"name": "local", "provider": "local", "available": True},
+        {"name": "daytona_selfhost", "provider": "daytona", "available": True},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sandbox_router, "init_providers_and_managers", lambda: ({}, {"local": object()}))
     monkeypatch.setattr(
