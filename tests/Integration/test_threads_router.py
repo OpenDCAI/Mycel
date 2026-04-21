@@ -174,11 +174,17 @@ async def test_send_message_passes_enable_trajectory_to_agent_runtime_gateway() 
             captured.append(envelope)
             return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
 
+    gateway = _Gateway()
     result = await threads_router.send_message(
         "thread-1",
         SendMessageRequest(message="hello", enable_trajectory=True),
         user_id="owner-1",
-        app=SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=_Gateway())),
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                agent_runtime_gateway=gateway,
+                threads_runtime_state=SimpleNamespace(agent_runtime_gateway=gateway),
+            )
+        ),
     )
 
     assert result == {"status": "started", "routing": "direct", "thread_id": "thread-1"}
@@ -1252,13 +1258,19 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             captured.append(envelope)
             return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
 
+    gateway = _Gateway()
     result = await threads_router.resolve_thread_permission_request(
         "thread-1",
         "perm-ask",
         payload,
         user_id="owner-1",
         agent=agent,
-        app=SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=_Gateway())),
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                agent_runtime_gateway=gateway,
+                threads_runtime_state=SimpleNamespace(agent_runtime_gateway=gateway),
+            )
+        ),
         thread_lock=_NullLock(),
     )
 
