@@ -23,6 +23,7 @@ from backend.sandboxes import provider_factory as sandbox_provider_factory
 from backend.sandboxes.inventory import init_providers_and_managers
 from backend.sandboxes.thread_resources import destroy_thread_resources_sync
 from backend.threads.activity_pool_service import get_or_create_agent
+from backend.threads.convergence import delete_thread_in_db
 from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
 from backend.threads.file_channel import get_file_channel_binding
@@ -50,7 +51,6 @@ from backend.web.models.requests import (
     SendMessageRequest,
     ThreadPermissionRuleRequest,
 )
-from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState

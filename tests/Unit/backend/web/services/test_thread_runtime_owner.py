@@ -47,6 +47,13 @@ def test_thread_runtime_convergence_does_not_import_web_compat_shell() -> None:
     assert "backend.web.services.thread_runtime_convergence" not in convergence_source
 
 
+def test_thread_runtime_dependencies_do_not_monkeypatch_delete_helper_from_web_utils() -> None:
+    dependencies_source = inspect.getsource(importlib.import_module("backend.web.core.dependencies"))
+
+    assert "from backend.web.utils.helpers import delete_thread_in_db" not in dependencies_source
+    assert "thread_runtime_convergence.delete_thread_in_db = delete_thread_in_db" not in dependencies_source
+
+
 def test_thread_runtime_namespace_exports_owner_thread_reads() -> None:
     owner_module = importlib.import_module("backend.threads.owner_reads")
 

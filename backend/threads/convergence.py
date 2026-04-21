@@ -4,28 +4,39 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.runtime_bootstrap.storage_container_cache import get_storage_container as _get_container
 from backend.threads.binding import ThreadRuntimeBindingError, resolve_thread_runtime_binding
+from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
+from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
+from storage.runtime import uses_supabase_runtime_defaults
 
 
-def _unbound_delete_thread_in_db(thread_id: str) -> None:
-    raise RuntimeError(f"thread_runtime.convergence.delete_thread_in_db not bound for {thread_id}")
+def delete_thread_in_db(thread_id: str) -> None:
+    """Delete all records for a thread via storage repos + sandbox db."""
+    _get_container().purge_thread(thread_id)
 
+    sandbox_db = resolve_sandbox_db_path()
+    if not uses_supabase_runtime_defaults() and not sandbox_db.exists():
+        return
 
-delete_thread_in_db = _unbound_delete_thread_in_db
-
-
-def _delete_thread_in_db(thread_id: str) -> None:
-    # @@@compat-delete-seam - delete_thread_in_db is bound by compat shells so
-    # legacy patch surfaces still intercept purges without introducing a
-    # thread_runtime -> web.services import inversion.
-    delete_thread_in_db(thread_id)
+    session_repo = make_chat_session_repo()
+    terminal_repo = make_terminal_repo()
+    sync_state = SyncState(repo=ProcessLocalSyncFileBacking())
+    try:
+        session_repo.delete_by_thread(thread_id)
+        terminal_repo.delete_by_thread(thread_id)
+        sync_state.clear_thread(thread_id)
+    finally:
+        sync_state.close()
+        session_repo.close()
+        terminal_repo.close()
 
 
 def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
     # @@@incomplete-thread-purge - visible threads that cannot satisfy the
     # current thread->workspace->sandbox runtime binding should be removed once,
     # not kept alive behind endpoint-level repair guesses.
-    _delete_thread_in_db(thread_id)
+    delete_thread_in_db(thread_id)
     app.state.thread_repo.delete(thread_id)
 
     for attr in ("thread_sandbox", "thread_cwd", "thread_event_buffers", "thread_tasks", "thread_last_active"):

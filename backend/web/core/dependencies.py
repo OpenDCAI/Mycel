@@ -11,10 +11,8 @@ from backend.identity.auth.user_resolution import get_current_user_id as get_cur
 from backend.runtime_bootstrap.request_app import get_app as get_app
 from backend.threads import convergence as thread_runtime_convergence
 from backend.threads.activity_pool_service import get_or_create_agent, resolve_thread_sandbox
-from backend.web.utils.helpers import delete_thread_in_db
 from sandbox.thread_context import set_current_thread_id
 
-thread_runtime_convergence.delete_thread_in_db = delete_thread_in_db
 inspect_owner_thread_runtime = thread_runtime_convergence.inspect_owner_thread_runtime
 
 __all__ = [
