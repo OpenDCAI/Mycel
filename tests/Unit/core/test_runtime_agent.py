@@ -154,6 +154,17 @@ def test_dunder_del_swallows_interpreter_shutdown_runtimeerror(monkeypatch: pyte
     LeonAgent.__del__(agent)
 
 
+def test_dunder_del_swallows_executor_shutdown_runtimeerror(monkeypatch: pytest.MonkeyPatch):
+    agent = object.__new__(LeonAgent)
+
+    def _boom() -> None:
+        raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+    monkeypatch.setattr(agent, "close", _boom)
+
+    LeonAgent.__del__(agent)
+
+
 def test_dunder_del_reraises_unrelated_runtimeerror(monkeypatch: pytest.MonkeyPatch):
     agent = object.__new__(LeonAgent)
 
