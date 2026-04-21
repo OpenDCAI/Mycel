@@ -2073,6 +2073,27 @@ section li {
   color: #2f261d;
 }
 
+.evaluation-artifact-grid,
+.evaluation-trace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.evaluation-artifact-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.85rem;
+}
+
+.evaluation-artifact-card__title {
+  margin-top: 0.25rem;
+  color: #241d14;
+  font-size: 0.96rem;
+}
+
 @media (max-width: 840px) {
   .evaluation-pagination--inline {
     justify-content: flex-start;
