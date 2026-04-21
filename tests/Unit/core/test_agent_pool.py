@@ -30,7 +30,7 @@ async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkey
         return SimpleNamespace()
 
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
-    monkeypatch.setattr(agent_pool, "get_messaging_service", lambda app: messaging_service, raising=False)
+    monkeypatch.setattr(agent_pool, "get_optional_messaging_service", lambda app: messaging_service, raising=False)
 
     app = SimpleNamespace(state=SimpleNamespace())
 
@@ -38,6 +38,25 @@ async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkey
 
     kwargs = cast(dict[str, object], captured["kwargs"])
     assert kwargs["messaging_service"] is messaging_service
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_skips_borrow_when_chat_bootstrap_missing(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-chat")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert "messaging_service" not in kwargs
 
 
 @pytest.mark.asyncio
