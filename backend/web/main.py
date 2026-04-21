@@ -11,7 +11,7 @@ from backend.chat.api.http import (  # noqa: E402
     relationships_router,  # noqa: E402
 )
 from backend.chat.api.http import router as messaging_router  # noqa: E402
-from backend.monitor.api.http import router as monitor_router  # noqa: E402
+from backend.monitor.api.http import global_router, web_local_router  # noqa: E402
 from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
@@ -49,7 +49,10 @@ app.include_router(thread_files.router)
 app.include_router(thread_files._public)
 app.include_router(settings.router)
 app.include_router(panel.router)
-app.include_router(monitor_router.router)
+app.include_router(global_router.router, prefix="/api/monitor")
+# @@@monitor-web-local-drain - web_local routes still depend on the main web process.
+# Drain this mount only after those routes are either retired or moved behind the separate monitor process boundary.
+app.include_router(web_local_router.router, prefix="/api/monitor")
 app.include_router(resources.router)
 app.include_router(marketplace.router)
 app.include_router(conversations_router.router)
