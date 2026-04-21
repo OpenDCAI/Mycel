@@ -19,6 +19,22 @@ def test_conversations_router_shell_is_deleted() -> None:
         importlib.import_module("backend.web.routers.conversations")
 
 
+async def _list_conversations(app: SimpleNamespace, user_id: str = "human-user-1"):
+    async def _owner_thread_rows(_user_id: str):
+        return await owner_conversations_router.asyncio.to_thread(
+            app.state.thread_repo.list_by_owner_user_id,
+            _user_id,
+        )
+
+    return await owner_conversations_router.list_conversations(
+        user_id,
+        owner_thread_rows=_owner_thread_rows,
+        activity_reader=owner_conversations_router.get_runtime_thread_activity_reader(app),
+        thread_last_active=owner_conversations_router.get_thread_last_active_map(app),
+        messaging_service=getattr(app.state, "messaging_service", None),
+    )
+
+
 @pytest.mark.asyncio
 async def test_list_conversations_resolves_thread_user_participant_title_and_avatar() -> None:
     app = SimpleNamespace(
@@ -66,7 +82,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
         )
     )
 
-    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
+    result = await _list_conversations(app)
 
     assert result == [
         {
@@ -134,7 +150,7 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
         )
     )
 
-    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
+    result = await _list_conversations(app)
 
     assert [item["id"] for item in result] == ["chat-1", "thread-1"]
 
@@ -162,7 +178,7 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
         )
     )
 
-    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
+    result = await _list_conversations(app)
 
     assert result == [
         {
@@ -209,7 +225,7 @@ async def test_list_conversations_marks_hire_thread_running_from_runtime_activit
         )
     )
 
-    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
+    result = await _list_conversations(app)
 
     assert result == [
         {
@@ -257,7 +273,7 @@ async def test_list_conversations_collapses_hire_threads_to_one_visible_conversa
         )
     )
 
-    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
+    result = await _list_conversations(app)
 
     assert [(item["id"], item["title"]) for item in result] == [("thread-main", "Morel")]
 
@@ -307,7 +323,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
         )
     )
 
-    result = await owner_conversations_router.list_conversations("human-user-1", app=app)
+    result = await _list_conversations(app)
 
     assert result[0]["title"] == "Morel"
     assert result[0]["avatar_url"] == avatar_url("agent-user-1", True)
@@ -316,6 +332,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
 @pytest.mark.asyncio
 async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
     messaging_service = SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: [])
+    owner_thread_rows_loader = SimpleNamespace()
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
@@ -333,7 +350,13 @@ async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatc
 
     monkeypatch.setattr(owner_conversations_router.asyncio, "to_thread", _fake_to_thread)
 
-    assert await owner_conversations_router.list_conversations("human-user-1", app=app) == []
+    async def _owner_thread_rows(_user_id: str):
+        return []
+
+    assert (
+        await _list_conversations(app)
+        == []
+    )
     assert ("_list_visit_conversations_for_user", (messaging_service, "human-user-1")) in to_thread_calls
     assert (
         "_list_hire_conversations_from_threads",
@@ -368,7 +391,7 @@ async def test_list_conversations_fetches_hire_and_visit_sources_in_parallel() -
         )
     )
 
-    assert await owner_conversations_router.list_conversations("human-user-1", app=app) == []
+    assert await _list_conversations(app) == []
 
 
 @pytest.mark.asyncio
@@ -382,7 +405,7 @@ async def test_list_conversations_fails_loud_when_thread_activity_reader_missing
     )
 
     with pytest.raises(Exception) as exc_info:
-        await owner_conversations_router.list_conversations("human-user-1", app=app)
+        await _list_conversations(app)
 
     assert getattr(exc_info.value, "status_code", None) == 503
     assert getattr(exc_info.value, "detail", None) == "Thread activity reader unavailable"
