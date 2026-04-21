@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from backend.event_bus import get_event_bus
-from backend.thread_runtime.run.entrypoints import run_child_thread_live
+from backend.threads.event_bus import get_event_bus
+from backend.threads.run.entrypoints import run_child_thread_live
 from core.runtime.agent import create_leon_agent
 from storage.runtime import build_storage_container
 
