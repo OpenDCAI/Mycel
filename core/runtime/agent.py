@@ -1054,8 +1054,9 @@ class LeonAgent:
         )
         middleware.append(self._monitor_middleware)
 
-        # 2. Prompt Caching — adds cache_control markers to model requests
-        middleware.append(PromptCachingMiddleware(ttl="5m", min_messages_to_cache=0))
+        # 2. Prompt Caching — only attach for Anthropic-backed runs
+        if self._current_model_config.get("model_provider") == "anthropic":
+            middleware.append(PromptCachingMiddleware(ttl="5m", min_messages_to_cache=0))
 
         # 3. Memory — prunes/compacts context before model call
         memory_enabled = self.config.memory.pruning.enabled or self.config.memory.compaction.enabled

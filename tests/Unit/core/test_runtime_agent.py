@@ -156,3 +156,113 @@ def test_memory_config_override_updates_compaction_trigger_without_losing_defaul
     assert updated.memory.compaction.trigger_tokens == 80000
     assert updated.memory.compaction.reserve_tokens == settings.memory.compaction.reserve_tokens
     assert updated.memory.pruning.soft_trim_chars == settings.memory.pruning.soft_trim_chars
+
+
+def test_build_middleware_stack_skips_prompt_caching_for_non_anthropic_provider(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    prompt_calls: list[str] = []
+    mcp = object()
+    steering = object()
+    toolrunner = object()
+
+    class _PromptCachingProbe:
+        def __init__(self, **_kwargs) -> None:
+            prompt_calls.append("prompt")
+
+    class _MonitorProbe:
+        def __init__(self, **_kwargs) -> None:
+            self.runtime = SimpleNamespace()
+            self._context_monitor = SimpleNamespace(context_limit=128000)
+
+    monkeypatch.setattr("core.runtime.agent.PromptCachingMiddleware", _PromptCachingProbe)
+    monkeypatch.setattr("core.runtime.agent.MonitorMiddleware", _MonitorProbe)
+    monkeypatch.setattr("core.runtime.agent.McpInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
+    monkeypatch.setattr("core.runtime.agent.SteeringMiddleware", lambda **_kwargs: steering)
+    monkeypatch.setattr("core.runtime.agent.ToolRunner", lambda **_kwargs: toolrunner)
+    monkeypatch.setattr("core.runtime.agent.SpillBufferMiddleware", lambda **_kwargs: "spill")
+
+    agent = object.__new__(LeonAgent)
+    agent._sandbox = SimpleNamespace(fs=lambda: SimpleNamespace(), name="local", close=lambda: None)
+    agent.config = SimpleNamespace(
+        runtime=SimpleNamespace(context_limit=0),
+        memory=SimpleNamespace(
+            pruning=SimpleNamespace(enabled=False),
+            compaction=SimpleNamespace(enabled=False),
+        ),
+        tools=SimpleNamespace(
+            spill_buffer=SimpleNamespace(enabled=False),
+        ),
+    )
+    agent._current_model_config = {"model_provider": "openai"}
+    agent._model_overrides = {}
+    agent.workspace_root = Path("/tmp")
+    agent.queue_manager = SimpleNamespace()
+    agent._tool_registry = SimpleNamespace()
+    agent._get_mcp_instruction_blocks = lambda: []
+    agent.model_name = "gpt-5.4"
+    agent.verbose = False
+    agent._closed = True
+    agent._closing = False
+
+    middleware = LeonAgent._build_middleware_stack(agent)
+
+    assert prompt_calls == []
+    assert middleware == [agent._monitor_middleware, mcp, steering, toolrunner]
+
+
+def test_build_middleware_stack_keeps_prompt_caching_for_anthropic_provider(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    prompt_calls: list[str] = []
+    mcp = object()
+    steering = object()
+    toolrunner = object()
+
+    class _PromptCachingProbe:
+        def __init__(self, **_kwargs) -> None:
+            prompt_calls.append("prompt")
+
+    class _MonitorProbe:
+        def __init__(self, **_kwargs) -> None:
+            self.runtime = SimpleNamespace()
+            self._context_monitor = SimpleNamespace(context_limit=128000)
+
+    monkeypatch.setattr("core.runtime.agent.PromptCachingMiddleware", _PromptCachingProbe)
+    monkeypatch.setattr("core.runtime.agent.MonitorMiddleware", _MonitorProbe)
+    monkeypatch.setattr("core.runtime.agent.McpInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
+    monkeypatch.setattr("core.runtime.agent.SteeringMiddleware", lambda **_kwargs: steering)
+    monkeypatch.setattr("core.runtime.agent.ToolRunner", lambda **_kwargs: toolrunner)
+    monkeypatch.setattr("core.runtime.agent.SpillBufferMiddleware", lambda **_kwargs: "spill")
+
+    agent = object.__new__(LeonAgent)
+    agent._sandbox = SimpleNamespace(fs=lambda: SimpleNamespace(), name="local", close=lambda: None)
+    agent.config = SimpleNamespace(
+        runtime=SimpleNamespace(context_limit=0),
+        memory=SimpleNamespace(
+            pruning=SimpleNamespace(enabled=False),
+            compaction=SimpleNamespace(enabled=False),
+        ),
+        tools=SimpleNamespace(
+            spill_buffer=SimpleNamespace(enabled=False),
+        ),
+    )
+    agent._current_model_config = {"model_provider": "anthropic"}
+    agent._model_overrides = {}
+    agent.workspace_root = Path("/tmp")
+    agent.queue_manager = SimpleNamespace()
+    agent._tool_registry = SimpleNamespace()
+    agent._get_mcp_instruction_blocks = lambda: []
+    agent.model_name = "claude-sonnet"
+    agent.verbose = False
+    agent._closed = True
+    agent._closing = False
+
+    middleware = LeonAgent._build_middleware_stack(agent)
+
+    assert prompt_calls == ["prompt"]
+    assert len(middleware) == 5
+    assert middleware[0] is agent._monitor_middleware
+    assert middleware[2] is mcp
+    assert middleware[3] is steering
+    assert middleware[4] is toolrunner
