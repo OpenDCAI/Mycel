@@ -20,7 +20,7 @@ from backend.chat.api.http.dependencies import (
     get_thread_repo,
     get_user_repo,
 )
-from messaging.actor_ownership import access_scope_targets, is_owned_by_viewer
+from messaging.actor_ownership import is_owned_by_viewer
 from messaging.social_access import can_group_chat_with_participant
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
@@ -96,11 +96,6 @@ def _validate_chat_participant_ids(
 def _is_owned_participant(user_repo: Any, participant_id: str, requester_user_id: str) -> bool:
     participant = user_repo.get_by_id(participant_id)
     return is_owned_by_viewer(requester_user_id, participant)
-
-
-def _participant_access_targets(user_repo: Any, participant_id: str) -> list[str]:
-    participant = user_repo.get_by_id(participant_id)
-    return access_scope_targets(participant, fallback_actor_id=participant_id)
 
 
 def _validate_group_chat_relationships(
