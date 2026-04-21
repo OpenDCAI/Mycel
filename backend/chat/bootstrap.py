@@ -40,4 +40,7 @@ def attach_chat_runtime(app: Any, storage_container: Any) -> None:
         delivery_resolver=delivery_resolver,
         avatar_url_builder=avatar_url,
     )
+
+
+def wire_chat_delivery(app: Any) -> None:
     app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))

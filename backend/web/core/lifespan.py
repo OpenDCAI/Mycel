@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
     app.state.contact_repo = storage_container.contact_repo()
     attach_auth_runtime_state(app, storage_state=runtime_storage)
 
-    from backend.chat.bootstrap import attach_chat_runtime
+    from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery
 
     attach_chat_runtime(app, storage_container)
 
@@ -85,6 +85,7 @@ async def lifespan(app: FastAPI):
     from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
+    wire_chat_delivery(app)
 
     from backend.threads.display.builder import DisplayBuilder
 

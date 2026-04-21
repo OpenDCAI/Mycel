@@ -38,15 +38,12 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
             self.delivery_fn = delivery_fn
 
     event_bus = _EventBus()
-    delivery_fn = object()
 
     monkeypatch.setattr(chat_bootstrap, "ChatEventBus", lambda: event_bus)
     monkeypatch.setattr(chat_bootstrap, "TypingTracker", _TypingTracker)
     monkeypatch.setattr(chat_bootstrap, "RelationshipService", _RelationshipService)
     monkeypatch.setattr(chat_bootstrap, "HireVisitDeliveryResolver", lambda **kwargs: kwargs)
     monkeypatch.setattr(chat_bootstrap, "MessagingService", _MessagingService)
-    monkeypatch.setattr(chat_bootstrap, "make_chat_delivery_fn", lambda app: delivery_fn)
-
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=object(),
@@ -67,4 +64,22 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert app.state.messaging_service.kwargs["chat_repo"] is chat_repo
     assert app.state.messaging_service.kwargs["delivery_resolver"]["contact_repo"] is contact_repo
     assert app.state.messaging_service.kwargs["thread_repo"] is app.state.thread_repo
+    assert app.state.messaging_service.delivery_fn is None
+
+
+def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
+    delivery_fn = object()
+    messaging_service = SimpleNamespace(delivery_fn=None)
+
+    def _set_delivery_fn(value):
+        messaging_service.delivery_fn = value
+
+    messaging_service.set_delivery_fn = _set_delivery_fn
+
+    app = SimpleNamespace(state=SimpleNamespace(messaging_service=messaging_service))
+
+    monkeypatch.setattr(chat_bootstrap, "make_chat_delivery_fn", lambda target_app: delivery_fn)
+
+    chat_bootstrap.wire_chat_delivery(app)
+
     assert app.state.messaging_service.delivery_fn is delivery_fn
