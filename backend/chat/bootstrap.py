@@ -67,12 +67,14 @@ def attach_chat_runtime(
     # @@@chat-bootstrap-borrowable-state - bootstrap still attaches chat-owned
     # state onto app.state for the wider app, but it also returns the freshly
     # built runtime objects so enclosing lifespans do not need to reread them.
-    return ChatRuntimeState(
+    state = ChatRuntimeState(
         contact_repo=contact_repo,
         typing_tracker=typing_tracker,
         relationship_service=relationship_service,
         messaging_service=messaging_service,
     )
+    app.state.chat_runtime_state = state
+    return state
 
 
 def wire_chat_delivery(app: Any, *, messaging_service: Any, activity_reader: Any, thread_repo: Any) -> None:

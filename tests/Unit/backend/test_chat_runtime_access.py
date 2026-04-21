@@ -27,3 +27,26 @@ def test_runtime_access_getters_fail_loud_when_chat_bootstrap_missing(getter_nam
 
 def test_get_optional_typing_tracker_returns_none_when_missing():
     assert chat_runtime_access.get_optional_typing_tracker(_app_state()) is None
+
+
+def test_runtime_access_reads_chat_runtime_state_bundle():
+    messaging_service = object()
+    typing_tracker = object()
+    relationship_service = object()
+    contact_repo = object()
+
+    app = _app_state(
+        chat_runtime_state=SimpleNamespace(
+            messaging_service=messaging_service,
+            typing_tracker=typing_tracker,
+            relationship_service=relationship_service,
+            contact_repo=contact_repo,
+        )
+    )
+
+    assert chat_runtime_access.get_messaging_service(app) is messaging_service
+    assert chat_runtime_access.get_optional_messaging_service(app) is messaging_service
+    assert chat_runtime_access.get_typing_tracker(app) is typing_tracker
+    assert chat_runtime_access.get_optional_typing_tracker(app) is typing_tracker
+    assert chat_runtime_access.get_relationship_service(app) is relationship_service
+    assert chat_runtime_access.get_contact_repo(app) is contact_repo

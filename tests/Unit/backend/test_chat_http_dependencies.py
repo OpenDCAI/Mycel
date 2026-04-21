@@ -16,6 +16,25 @@ def test_get_messaging_service_returns_service_when_present():
     assert chat_http_dependencies.get_messaging_service(_app_state(messaging_service=service)) is service
 
 
+def test_chat_http_dependencies_read_chat_runtime_state_bundle():
+    messaging_service = object()
+    relationship_service = object()
+    contact_repo = object()
+
+    app = _app_state(
+        chat_runtime_state=SimpleNamespace(
+            messaging_service=messaging_service,
+            relationship_service=relationship_service,
+            contact_repo=contact_repo,
+        )
+    )
+
+    assert chat_http_dependencies.get_messaging_service(app) is messaging_service
+    assert chat_http_dependencies.get_optional_messaging_service(app) is messaging_service
+    assert chat_http_dependencies.get_relationship_service(app) is relationship_service
+    assert chat_http_dependencies.get_contact_repo(app) is contact_repo
+
+
 @pytest.mark.asyncio
 async def test_get_owner_thread_rows_loader_binds_app() -> None:
     seen: list[tuple[object, str]] = []
