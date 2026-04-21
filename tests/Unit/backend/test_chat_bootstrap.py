@@ -177,7 +177,7 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
 
     messaging_service.set_delivery_fn = _set_delivery_fn
 
-    app = SimpleNamespace(state=SimpleNamespace(messaging_service=messaging_service))
+    app = SimpleNamespace(state=SimpleNamespace())
 
     monkeypatch.setattr(
         chat_bootstrap,
@@ -192,7 +192,7 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
         thread_repo=thread_repo,
     )
 
-    assert app.state.messaging_service.delivery_fn is delivery_fn
+    assert messaging_service.delivery_fn is delivery_fn
 
 
 def test_wire_chat_delivery_does_not_read_back_messaging_service(monkeypatch):

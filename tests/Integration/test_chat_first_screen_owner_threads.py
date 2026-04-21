@@ -30,6 +30,7 @@ class _CountingOwnerThreadRepo:
 @pytest.mark.asyncio
 async def test_first_screen_reuses_inflight_owner_thread_read_across_conversations_and_threads() -> None:
     thread_repo = _CountingOwnerThreadRepo()
+    messaging_service = SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: [])
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=thread_repo,
@@ -39,7 +40,7 @@ async def test_first_screen_reuses_inflight_owner_thread_read_across_conversatio
                 activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
             ),
             thread_last_active={},
-            messaging_service=SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: []),
+            chat_runtime_state=SimpleNamespace(messaging_service=messaging_service),
         )
     )
 
@@ -49,7 +50,7 @@ async def test_first_screen_reuses_inflight_owner_thread_read_across_conversatio
             owner_thread_rows=owner_conversations_router.get_owner_thread_rows_loader(app),
             activity_reader=app.state.threads_runtime_state.activity_reader,
             thread_last_active=app.state.thread_last_active,
-            messaging_service=app.state.messaging_service,
+            messaging_service=app.state.chat_runtime_state.messaging_service,
         ),
         threads_router.list_threads("owner-1", app=app),
     )
