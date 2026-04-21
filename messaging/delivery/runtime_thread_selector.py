@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.protocols.runtime_read import RuntimeThreadActivityReader
+from protocols.runtime_read import RuntimeThreadActivityReader
 
 _LIVE_CHILD_STATES = {"initializing", "ready", "active", "idle", "suspended"}
 
