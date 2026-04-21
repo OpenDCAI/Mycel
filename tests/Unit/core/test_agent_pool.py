@@ -744,6 +744,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
+            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             user_settings_repo=_UserSettingsRepo(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
