@@ -20,7 +20,7 @@ def test_monitor_app_module_path_is_internalized():
 
 def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
     monitor_storage = SimpleNamespace(
-        storage_container=SimpleNamespace(user_repo=lambda: object()),
+        storage_container=SimpleNamespace(user_repo=lambda: object(), contact_repo=lambda: object()),
     )
     monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
     monkeypatch.setattr(monitor_app_lifespan, "attach_auth_runtime_state", lambda *_args, **_kwargs: object())
@@ -41,13 +41,13 @@ def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.Monke
 def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyPatch):
     user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
     monitor_storage = SimpleNamespace(
-        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
     monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
     monkeypatch.setattr(
         monitor_app_lifespan,
         "attach_auth_runtime_state",
-        lambda app, *, storage_state: (
+        lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
                 "auth_service",
@@ -77,13 +77,13 @@ def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyP
 def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatch: pytest.MonkeyPatch):
     user_repo = SimpleNamespace(get_by_id=lambda _user_id: None)
     monitor_storage = SimpleNamespace(
-        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
     monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
     monkeypatch.setattr(
         monitor_app_lifespan,
         "attach_auth_runtime_state",
-        lambda app, *, storage_state: (
+        lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
                 "auth_service",
@@ -107,13 +107,13 @@ def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatc
 def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPatch):
     user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
     monitor_storage = SimpleNamespace(
-        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
     monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
     monkeypatch.setattr(
         monitor_app_lifespan,
         "attach_auth_runtime_state",
-        lambda app, *, storage_state: (
+        lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
                 "auth_service",
@@ -149,13 +149,13 @@ def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPa
 def test_monitor_app_maps_missing_remote_execution_target_to_503(monkeypatch: pytest.MonkeyPatch):
     user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
     monitor_storage = SimpleNamespace(
-        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
     monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
     monkeypatch.setattr(
         monitor_app_lifespan,
         "attach_auth_runtime_state",
-        lambda app, *, storage_state: (
+        lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
                 "auth_service",
