@@ -119,6 +119,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     contact_repo = object()
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
+    returned_contact_repo = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
         call_log.append("chat")
@@ -126,9 +127,15 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         app.state.messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
         app.state.contact_repo = contact_repo
         return SimpleNamespace(
+            contact_repo=returned_contact_repo,
             typing_tracker=returned_typing_tracker,
             messaging_service=returned_messaging_service,
         )
+
+    def _attach_auth_runtime(_app, *, storage_state, contact_repo):
+        call_log.append("auth")
+        assert contact_repo is returned_contact_repo
+        return object()
 
     def _attach_threads_runtime(app, _storage_container, *, typing_tracker):
         call_log.append("threads")
@@ -144,7 +151,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     _patch_lifespan_runtime_contract(
         monkeypatch,
         attach_chat_runtime=_attach_chat_runtime,
-        attach_auth_runtime=lambda *_args, **_kwargs: object(),
+        attach_auth_runtime=_attach_auth_runtime,
         attach_threads_runtime=_attach_threads_runtime,
         wire_chat_delivery=_wire_chat_delivery,
     )
@@ -152,7 +159,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     app = SimpleNamespace(state=SimpleNamespace())
 
     async with web_lifespan.lifespan(app):
-        assert call_log == ["chat", "threads", "wire"]
+        assert call_log == ["chat", "auth", "threads", "wire"]
 
 
 @pytest.mark.asyncio
