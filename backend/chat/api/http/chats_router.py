@@ -162,10 +162,10 @@ def create_chat(
 def get_chat(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    messaging_service = get_messaging_service(app)
-    chat = _get_accessible_chat_or_404(get_chat_repo(app), messaging_service, chat_id, user_id)
+    chat = _get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
     return messaging_service.get_chat_detail(chat)
 
 
@@ -243,10 +243,9 @@ def mark_read(
 def delete_chat(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    messaging_service = get_messaging_service(app)
-    chat_repo = get_chat_repo(app)
     _get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
     chat_repo.delete(chat_id)
     return {"status": "deleted"}
@@ -256,15 +255,15 @@ def delete_chat(
 async def stream_chat_events(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+    chat_event_bus: Annotated[Any, Depends(get_chat_event_bus)],
 ):
-    messaging_service = get_messaging_service(app)
-    _get_accessible_chat_or_404(get_chat_repo(app), messaging_service, chat_id, user_id)
+    _get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
 
     from fastapi.responses import StreamingResponse
 
-    event_bus = get_chat_event_bus(app)
-    queue = event_bus.subscribe(chat_id)
+    queue = chat_event_bus.subscribe(chat_id)
 
     async def event_generator():
         try:
@@ -278,7 +277,7 @@ async def stream_chat_events(
                 except TimeoutError:
                     yield ": keepalive\n\n"
         finally:
-            event_bus.unsubscribe(chat_id, queue)
+            chat_event_bus.unsubscribe(chat_id, queue)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
