@@ -180,8 +180,56 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
 
     chat_bootstrap.wire_chat_delivery(
         app,
+        messaging_service=messaging_service,
         activity_reader=activity_reader,
         thread_repo=thread_repo,
     )
 
     assert app.state.messaging_service.delivery_fn is delivery_fn
+
+
+def test_wire_chat_delivery_does_not_read_back_messaging_service(monkeypatch):
+    class _TrackingState:
+        def __init__(self):
+            object.__setattr__(self, "_values", {})
+            object.__setattr__(self, "reads", [])
+
+        def __getattribute__(self, name):
+            if name in {"_values", "reads", "__dict__", "__class__"}:
+                return object.__getattribute__(self, name)
+            reads = object.__getattribute__(self, "reads")
+            reads.append(name)
+            values = object.__getattribute__(self, "_values")
+            if name in values:
+                return values[name]
+            raise AttributeError(name)
+
+        def __setattr__(self, name, value):
+            self._values[name] = value
+
+    delivery_fn = object()
+    messaging_service = SimpleNamespace(delivery_fn=None)
+
+    def _set_delivery_fn(value):
+        messaging_service.delivery_fn = value
+
+    messaging_service.set_delivery_fn = _set_delivery_fn
+
+    tracking_state = _TrackingState()
+    app = SimpleNamespace(state=tracking_state)
+
+    monkeypatch.setattr(
+        chat_bootstrap,
+        "make_chat_delivery_fn",
+        lambda target_app, *, activity_reader, thread_repo: delivery_fn,
+    )
+
+    chat_bootstrap.wire_chat_delivery(
+        app,
+        messaging_service=messaging_service,
+        activity_reader=object(),
+        thread_repo=object(),
+    )
+
+    assert "messaging_service" not in tracking_state.reads
+    assert messaging_service.delivery_fn is delivery_fn
