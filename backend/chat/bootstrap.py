@@ -68,7 +68,8 @@ def attach_chat_runtime(
     app.state.messaging_service = messaging_service
     # @@@chat-bootstrap-borrowable-state - bootstrap still attaches chat-owned
     # state onto app.state for the wider app, but it also returns the freshly
-    # built runtime objects so enclosing lifespans do not need to reread them.
+    # built runtime objects so enclosing lifespans and dependency helpers do
+    # not need to reread loose attrs.
     state = ChatRuntimeState(
         chat_repo=chat_repo,
         chat_event_bus=chat_event_bus,
