@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
@@ -14,12 +15,19 @@ from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputH
 from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
 
 
-def build_agent_runtime_gateway(app: Any, *, typing_tracker: Any) -> NativeAgentRuntimeGateway:
-    app.state.agent_runtime_thread_activity_reader = AppRuntimeThreadActivityReader(
+@dataclass(frozen=True)
+class AgentRuntimeGatewayState:
+    gateway: NativeAgentRuntimeGateway
+    activity_reader: Any
+
+
+def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeGatewayState:
+    activity_reader = AppRuntimeThreadActivityReader(
         thread_repo=app.state.thread_repo,
         agent_pool=app.state.agent_pool,
     )
-    return NativeAgentRuntimeGateway(
+    app.state.agent_runtime_thread_activity_reader = activity_reader
+    gateway = NativeAgentRuntimeGateway(
         chat_handlers={
             "mycel": NativeAgentChatDeliveryHandler(
                 runtime_services=AppAgentChatRuntimeServices(
@@ -48,3 +56,8 @@ def build_agent_runtime_gateway(app: Any, *, typing_tracker: Any) -> NativeAgent
             clear_resource_overview_cache=clear_resource_overview_cache,
         ),
     )
+    return AgentRuntimeGatewayState(gateway=gateway, activity_reader=activity_reader)
+
+
+def build_agent_runtime_gateway(app: Any, *, typing_tracker: Any) -> NativeAgentRuntimeGateway:
+    return build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway
