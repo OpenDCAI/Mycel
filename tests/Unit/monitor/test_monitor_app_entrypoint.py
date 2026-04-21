@@ -11,6 +11,10 @@ from backend.monitor.app import main as monitor_app_main
 app = monitor_app_main.app
 
 
+def test_monitor_app_module_path_is_internalized():
+    assert monitor_app_main.__name__ == "backend.monitor.app.main"
+
+
 def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: object())
     with TestClient(app) as client:
