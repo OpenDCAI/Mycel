@@ -9,6 +9,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     queue_repo = object()
     queue_manager = object()
     gateway = object()
+    activity_reader = object()
     typing_tracker = object()
     seen: list[tuple[str, object]] = []
 
@@ -22,12 +23,11 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     )
     monkeypatch.setattr(
         threads_bootstrap,
-        "build_agent_runtime_gateway",
+        "build_agent_runtime_state",
         lambda target_app, *, typing_tracker: (
-            seen.append(("gateway", target_app))
+            seen.append(("runtime_state", target_app))
             or seen.append(("typing_tracker", typing_tracker))
-            or setattr(target_app.state, "agent_runtime_thread_activity_reader", "activity-reader")
-            or gateway
+            or SimpleNamespace(gateway=gateway, activity_reader=activity_reader)
         ),
     )
 
@@ -42,13 +42,12 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert app.state.subagent_buffers == {}
     assert app.state.thread_last_active == {}
     assert app.state.agent_runtime_gateway is gateway
-    assert app.state.agent_runtime_thread_activity_reader == "activity-reader"
     assert state.queue_manager is queue_manager
     assert state.agent_runtime_gateway is gateway
-    assert state.activity_reader == "activity-reader"
+    assert state.activity_reader is activity_reader
     assert seen == [
         ("queue_manager", queue_repo),
-        ("gateway", app),
+        ("runtime_state", app),
         ("typing_tracker", typing_tracker),
     ]
     assert hasattr(app.state, "thread_locks_guard")
