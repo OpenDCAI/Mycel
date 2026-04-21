@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 
 from backend.identity.auth.service import AuthService
 from backend.identity.auth.supabase_runtime import create_supabase_auth_client
@@ -11,13 +12,13 @@ from backend.identity.auth.supabase_runtime import create_supabase_auth_client
 @dataclass(frozen=True)
 class AuthRuntimeState:
     auth_service: object
-    supabase_auth_client_factory: object
+    supabase_auth_client_factory: Callable[[], object]
 
 
 def build_auth_runtime_state(storage_state) -> AuthRuntimeState:
     storage_container = storage_state.storage_container
     supabase_client = storage_state.supabase_client
-    supabase_auth_client_factory = create_supabase_auth_client()
+    supabase_auth_client_factory = create_supabase_auth_client
     auth_service = AuthService(
         users=storage_container.user_repo(),
         agent_configs=storage_container.agent_config_repo(),

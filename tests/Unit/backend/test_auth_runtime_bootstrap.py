@@ -31,13 +31,13 @@ def test_build_auth_runtime_state_uses_runtime_storage_state(monkeypatch):
 
     state = auth_runtime_bootstrap.build_auth_runtime_state(storage_state)
 
-    assert state.supabase_auth_client_factory is fake_auth_factory
+    assert state.supabase_auth_client_factory() is fake_auth_factory
     assert isinstance(state.auth_service, _FakeAuthService)
     assert calls["kwargs"] == {
         "users": "users-repo",
         "agent_configs": "agent-config-repo",
         "supabase_client": "supabase-client",
-        "supabase_auth_client_factory": fake_auth_factory,
+        "supabase_auth_client_factory": state.supabase_auth_client_factory,
         "invite_codes": "invite-code-repo",
         "contact_repo": "contact-repo",
         "recipe_repo": "recipe-repo",
