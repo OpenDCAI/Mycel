@@ -1149,6 +1149,63 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
     assert "thread_repo" not in captured
 
 
+def test_leon_agent_init_services_passes_child_thread_live_runner(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from core.runtime.agent import LeonAgent
+    from core.runtime.registry import ToolRegistry
+
+    captured: dict[str, Any] = {}
+
+    class _NoopService:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class _CapturingAgentService:
+        def __init__(self, *args, **kwargs) -> None:
+            captured.update(kwargs)
+            self._agent_registry = None
+
+    async def fake_child_thread_live_runner(agent, thread_id, prompt, app, *, input_messages):
+        return "LIVE_CHILD_DONE"
+
+    monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.AgentService", _CapturingAgentService)
+
+    agent = object.__new__(LeonAgent)
+    agent._sandbox = SimpleNamespace(name="local", fs=lambda: None, shell=lambda: None)
+    agent._tool_registry = ToolRegistry()
+    agent.workspace_root = str(tmp_path)
+    agent.model_name = "test-model"
+    agent._thread_repo = SimpleNamespace()
+    agent._user_repo = SimpleNamespace()
+    agent.queue_manager = SimpleNamespace()
+    agent._web_app = SimpleNamespace()
+    agent._child_thread_live_runner = fake_child_thread_live_runner
+    agent.allowed_file_extensions = []
+    agent.extra_allowed_paths = []
+    agent.enable_audit_log = False
+    agent.block_dangerous_commands = False
+    agent.block_network_commands = False
+    agent.verbose = False
+    agent._get_mcp_server_configs = lambda: {}
+    agent._chat_repos = None
+    cast(Any, agent).config = SimpleNamespace(
+        tools=SimpleNamespace(
+            filesystem=SimpleNamespace(enabled=False),
+            search=SimpleNamespace(enabled=False),
+            web=SimpleNamespace(enabled=False),
+            command=SimpleNamespace(enabled=False),
+        ),
+        skills=SimpleNamespace(enabled=False, paths=[], skills={}),
+    )
+
+    LeonAgent._init_services(agent)
+
+    assert captured["child_thread_live_runner"] is fake_child_thread_live_runner
+    assert captured["web_app"] is agent._web_app
+
+
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():
     from core.runtime.prompts import build_rules_section
 

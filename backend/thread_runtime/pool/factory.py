@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.event_bus import get_event_bus
+from backend.thread_runtime.run.entrypoints import run_child_thread_live
 from core.runtime.agent import create_leon_agent
 from storage.runtime import build_storage_container
 
@@ -43,6 +44,7 @@ def create_agent_sync(
         chat_repos=chat_repos,
         web_app=web_app,
         event_bus_factory=get_event_bus,
+        child_thread_live_runner=run_child_thread_live,
         models_config_override=models_config_override,
         memory_config_override=memory_config_override,
         verbose=True,

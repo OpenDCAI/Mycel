@@ -163,6 +163,7 @@ class LeonAgent:
         chat_repos: dict | None = None,
         web_app: Any = None,
         event_bus_factory: EventBusFactory | None = None,
+        child_thread_live_runner: Any | None = None,
         extra_allowed_paths: list[str] | None = None,
         extra_blocked_tools: set[str] | None = None,
         allowed_tools: set[str] | None = None,
@@ -204,6 +205,7 @@ class LeonAgent:
         self._user_repo = user_repo
         self._web_app = web_app
         self._event_bus_factory = event_bus_factory
+        self._child_thread_live_runner = child_thread_live_runner
         self._session_started = False
         self._session_ended = False
         self._closing = False
@@ -1249,6 +1251,7 @@ class LeonAgent:
             shared_runs=self._background_runs,
             web_app=self._web_app,
             event_bus_factory=getattr(self, "_event_bus_factory", None),
+            child_thread_live_runner=getattr(self, "_child_thread_live_runner", None),
             child_agent_factory=create_leon_agent,
         )
 
