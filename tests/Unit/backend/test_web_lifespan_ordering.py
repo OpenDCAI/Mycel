@@ -74,9 +74,10 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
         app.state.typing_tracker = object()
         app.state.messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
 
-    def _attach_threads_runtime(app, _storage_container):
+    def _attach_threads_runtime(app, _storage_container, *, typing_tracker):
         if not hasattr(app.state, "typing_tracker"):
             raise RuntimeError("threads runtime needs typing_tracker first")
+        assert typing_tracker is app.state.typing_tracker
         app.state.agent_pool = {}
         app.state.agent_runtime_thread_activity_reader = object()
 
@@ -103,8 +104,9 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         app.state.typing_tracker = object()
         app.state.messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
 
-    def _attach_threads_runtime(app, _storage_container):
+    def _attach_threads_runtime(app, _storage_container, *, typing_tracker):
         call_log.append("threads")
+        assert typing_tracker is app.state.typing_tracker
         app.state.agent_pool = {}
         app.state.agent_runtime_thread_activity_reader = object()
 

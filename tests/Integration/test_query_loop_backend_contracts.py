@@ -526,7 +526,7 @@ def _make_streaming_app(
         state.thread_sandbox = {thread_id: "local"}
         state._event_loop = asyncio.get_running_loop()
     app = SimpleNamespace(state=state)
-    state.agent_runtime_gateway = build_agent_runtime_gateway(app)
+    state.agent_runtime_gateway = build_agent_runtime_gateway(app, typing_tracker=state.typing_tracker)
     return app, queue_manager
 
 
@@ -1246,7 +1246,7 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.get_or_create_agent", fake_get_or_create_agent)
 
     startup_task = asyncio.create_task(
-        build_agent_runtime_gateway(app).dispatch_thread_input(
+        build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="owner"),
