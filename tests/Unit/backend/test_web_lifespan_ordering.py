@@ -213,6 +213,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
             setattr(app.state, "typing_tracker", object())
             or setattr(app.state, "messaging_service", SimpleNamespace(set_delivery_fn=lambda _fn: None))
             or SimpleNamespace(
+                contact_repo=contact_repo,
                 typing_tracker=app.state.typing_tracker,
                 messaging_service=app.state.messaging_service,
             )
