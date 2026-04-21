@@ -1802,7 +1802,7 @@ if __name__ == "__main__":
     try:
         print("=== Example 1: File Operations ===")
         response = leon_agent.get_response(
-            f"Create a Python file at {leon_agent.workspace_root}/hello.py that prints 'Hello, Leon!'",
+            f"Create a Python file at {leon_agent.workspace_root}/hello.py that prints 'Hello, Mycel!'",
             thread_id="demo",
         )
         print(response)

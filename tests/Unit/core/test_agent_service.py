@@ -1772,7 +1772,7 @@ async def test_ask_user_question_requests_structured_question_payload(tmp_path):
     assert meta["request_id"] == "ask-1"
     assert result.content == "User input required to continue."
     assert captured["name"] == "AskUserQuestion"
-    assert captured["message"] == "Please answer the following questions so Leon can continue."
+    assert captured["message"] == "Please answer the following questions so Mycel can continue."
     assert captured["args"] == {
         "questions": [
             {

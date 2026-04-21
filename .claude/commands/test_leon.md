@@ -1,6 +1,6 @@
-# 测试 Leon 新功能
+# 测试 Mycel 新功能
 
-在开发 Leon 时，用此命令验证新功能是否正常工作。
+在开发 Mycel 时，用此命令验证新功能是否正常工作。
 
 **重要**：Middleware 级别的更新必须通过此测试才能交付。
 
@@ -28,7 +28,7 @@
 测试前先清理可能卡住的进程：
 
 ```bash
-# 杀掉所有 leonai 相关进程
+# 杀掉 CLI 相关进程
 pkill -9 -f "leonai" 2>/dev/null || true
 pkill -9 -f "context7\|upstash" 2>/dev/null || true
 sleep 1
@@ -41,7 +41,7 @@ sleep 1
 ```bash
 # 1. 清除缓存（必须！否则可能安装旧版本）
 # 如果提示 "Cache is currently in-use"，加 --force
-uv cache clean leonai --force
+uv cache clean mycel --force
 
 # 2. 强制重新安装（必须用 --force）
 uv tool install . --force
