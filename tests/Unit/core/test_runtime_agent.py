@@ -177,6 +177,20 @@ def test_dunder_del_reraises_unrelated_runtimeerror(monkeypatch: pytest.MonkeyPa
         LeonAgent.__del__(agent)
 
 
+def test_dunder_del_calls_close_without_noise_when_close_succeeds(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+    agent = object.__new__(LeonAgent)
+
+    def _ok() -> None:
+        calls.append("close")
+
+    monkeypatch.setattr(agent, "close", _ok)
+
+    LeonAgent.__del__(agent)
+
+    assert calls == ["close"]
+
+
 def test_memory_config_override_updates_compaction_trigger_without_losing_defaults():
     from config.schema import LeonSettings
 
