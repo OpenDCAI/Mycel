@@ -42,7 +42,7 @@ async def test_list_contacts_exposes_directed_user_edge_shape() -> None:
 
     payload = await contacts_router.list_contacts(
         user_id="user-a",
-        app=SimpleNamespace(state=SimpleNamespace(contact_repo=repo)),
+        contact_repo=repo,
     )
 
     assert payload == [
@@ -66,7 +66,7 @@ async def test_set_contact_persists_directed_edge_contract() -> None:
     result = await contacts_router.set_contact(
         contacts_router.SetContactBody(target_user_id="user-b", kind="blocked", state="active"),
         user_id="user-a",
-        app=SimpleNamespace(state=SimpleNamespace(contact_repo=repo)),
+        contact_repo=repo,
     )
 
     assert result == {"status": "ok", "kind": "blocked", "state": "active"}
@@ -85,7 +85,7 @@ async def test_delete_contact_uses_directed_user_ids() -> None:
     result = await contacts_router.delete_contact(
         "user-b",
         user_id="user-a",
-        app=SimpleNamespace(state=SimpleNamespace(contact_repo=repo)),
+        contact_repo=repo,
     )
 
     assert result == {"status": "deleted"}
@@ -97,7 +97,7 @@ async def test_list_contacts_fails_loud_when_contact_repo_missing() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await contacts_router.list_contacts(
             user_id="user-a",
-            app=SimpleNamespace(state=SimpleNamespace()),
+            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
@@ -110,7 +110,7 @@ async def test_set_contact_fails_loud_when_contact_repo_missing() -> None:
         await contacts_router.set_contact(
             contacts_router.SetContactBody(target_user_id="user-b", kind="blocked", state="active"),
             user_id="user-a",
-            app=SimpleNamespace(state=SimpleNamespace()),
+            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
@@ -123,7 +123,7 @@ async def test_delete_contact_fails_loud_when_contact_repo_missing() -> None:
         await contacts_router.delete_contact(
             "user-b",
             user_id="user-a",
-            app=SimpleNamespace(state=SimpleNamespace()),
+            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
