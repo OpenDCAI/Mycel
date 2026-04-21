@@ -249,7 +249,7 @@ class AuthService:
             {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
             {"name": "Morel", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
         ]
-        assets_dir = Path(__file__).resolve().parents[1] / "assets"
+        assets_dir = Path(__file__).resolve().parents[3] / "assets"
         first_agent_info = None
 
         for i, agent_def in enumerate(initial_agents):
