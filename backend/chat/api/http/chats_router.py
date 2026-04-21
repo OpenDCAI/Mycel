@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.chat.api.http.dependencies import (
-    get_app,
     get_chat_event_bus,
     get_chat_repo,
     get_contact_repo,
@@ -200,7 +199,6 @@ def send_message(
     body: SendMessageBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
-    app: Annotated[Any, Depends(get_app)],
 ):
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
