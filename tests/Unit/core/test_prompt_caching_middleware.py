@@ -42,3 +42,37 @@ def test_prompt_caching_raises_for_unsupported_model_when_configured(monkeypatch
 
     with pytest.raises(ValueError, match="only supports Anthropic models"):
         middleware._should_apply_caching(request)
+
+
+def test_prompt_caching_applies_cache_control_to_string_system_message():
+    middleware = PromptCachingMiddleware()
+    request = ModelRequest(
+        model=object(),
+        messages=[],
+        system_message=SimpleNamespace(content="system prompt"),
+    )
+
+    updated = middleware._apply_system_cache(request)
+
+    assert updated.system_message.content == [
+        {"type": "text", "text": "system prompt", "cache_control": {"type": "ephemeral"}}
+    ]
+
+
+def test_prompt_caching_applies_cache_control_to_first_system_block():
+    middleware = PromptCachingMiddleware()
+    request = ModelRequest(
+        model=object(),
+        messages=[],
+        system_message=SimpleNamespace(
+            content=[
+                {"type": "text", "text": "system prompt"},
+                {"type": "text", "text": "second block"},
+            ]
+        ),
+    )
+
+    updated = middleware._apply_system_cache(request)
+
+    assert updated.system_message.content[0]["cache_control"] == {"type": "ephemeral"}
+    assert updated.system_message.content[1] == {"type": "text", "text": "second block"}
