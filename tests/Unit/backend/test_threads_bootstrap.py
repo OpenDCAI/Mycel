@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from backend.threads import bootstrap as threads_bootstrap
 
 
@@ -7,6 +9,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     queue_repo = object()
     queue_manager = object()
     gateway = object()
+    typing_tracker = object()
     seen: list[tuple[str, object]] = []
 
     storage_container = SimpleNamespace(queue_repo=lambda: queue_repo)
@@ -20,10 +23,12 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     monkeypatch.setattr(
         threads_bootstrap,
         "build_agent_runtime_gateway",
-        lambda target_app: seen.append(("gateway", target_app)) or gateway,
+        lambda target_app, *, typing_tracker: (
+            seen.append(("gateway", target_app)) or seen.append(("typing_tracker", typing_tracker)) or gateway
+        ),
     )
 
-    threads_bootstrap.attach_threads_runtime(app, storage_container)
+    threads_bootstrap.attach_threads_runtime(app, storage_container, typing_tracker=typing_tracker)
 
     assert app.state.queue_manager is queue_manager
     assert app.state.agent_pool == {}
@@ -37,6 +42,15 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert seen == [
         ("queue_manager", queue_repo),
         ("gateway", app),
+        ("typing_tracker", typing_tracker),
     ]
     assert hasattr(app.state, "thread_locks_guard")
     assert hasattr(app.state, "thread_locks")
+
+
+def test_attach_threads_runtime_requires_explicit_typing_tracker():
+    app = SimpleNamespace(state=SimpleNamespace())
+    storage_container = SimpleNamespace(queue_repo=lambda: object())
+
+    with pytest.raises(TypeError, match="typing_tracker"):
+        threads_bootstrap.attach_threads_runtime(app, storage_container)
