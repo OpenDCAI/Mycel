@@ -406,6 +406,52 @@ def test_get_agent_user_keeps_runtime_skill_desc_override_ahead_of_repo_meta(mon
     assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "runtime desc"}]
 
 
+@pytest.mark.asyncio
+async def test_create_agent_route_fails_loud_when_contact_repo_missing():
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                user_repo=SimpleNamespace(),
+                agent_config_repo=SimpleNamespace(),
+            )
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await panel_router.create_agent(
+            panel_router.CreateAgentRequest(name="Toad", description="probe"),
+            request=request,
+            user_id="user-1",
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
+
+
+@pytest.mark.asyncio
+async def test_delete_agent_route_fails_loud_when_contact_repo_missing(monkeypatch: pytest.MonkeyPatch):
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                user_repo=SimpleNamespace(),
+                agent_config_repo=SimpleNamespace(),
+                thread_repo=None,
+            )
+        )
+    )
+    monkeypatch.setattr(panel_router, "_require_owned_agent_user", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await panel_router.delete_agent(
+            "agent-1",
+            request=request,
+            user_id="user-1",
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
+
+
 def test_get_agent_user_preserves_explicit_empty_repo_skill_desc(monkeypatch: pytest.MonkeyPatch):
     agent = UserRow(
         id="agent-1",
