@@ -12,7 +12,7 @@ from backend.chat.api.http.dependencies import (
     get_app,
     get_current_user_id,
     get_optional_messaging_service,
-    get_optional_runtime_thread_activity_reader,
+    get_runtime_thread_activity_reader,
     get_thread_last_active_map,
 )
 from backend.identity.avatar.urls import avatar_url
@@ -46,7 +46,7 @@ async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> list[dict[str, Any]]:
-    activity_reader = get_optional_runtime_thread_activity_reader(app)
+    activity_reader = get_runtime_thread_activity_reader(app)
     thread_last_active = get_thread_last_active_map(app)
     raw_threads, visit_items = await asyncio.gather(
         list_owner_thread_rows_for_auth_burst(app, user_id),
@@ -63,7 +63,7 @@ async def list_conversations(
 
 def _list_hire_conversations_from_threads(
     raw_thread_rows: list[dict[str, Any]],
-    activity_reader: RuntimeThreadActivityReader | None,
+    activity_reader: RuntimeThreadActivityReader,
     thread_last_active: dict[str, Any],
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
@@ -89,9 +89,7 @@ def _list_hire_conversations_from_threads(
     return items
 
 
-def _thread_running(activity_reader: RuntimeThreadActivityReader | None, agent_user_id: Any, thread_id: str) -> bool:
-    if activity_reader is None:
-        return False
+def _thread_running(activity_reader: RuntimeThreadActivityReader, agent_user_id: Any, thread_id: str) -> bool:
     normalized_agent_user_id = str(agent_user_id or "").strip()
     if not normalized_agent_user_id:
         return False

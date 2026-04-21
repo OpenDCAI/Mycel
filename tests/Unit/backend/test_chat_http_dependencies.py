@@ -26,8 +26,12 @@ def test_get_relationship_service_fails_loud_when_missing():
     assert exc_info.value.detail == "Relationship service unavailable"
 
 
-def test_get_optional_runtime_thread_activity_reader_returns_none_when_missing():
-    assert chat_http_dependencies.get_optional_runtime_thread_activity_reader(_app_state()) is None
+def test_get_runtime_thread_activity_reader_fails_loud_when_missing():
+    with pytest.raises(HTTPException) as exc_info:
+        chat_http_dependencies.get_runtime_thread_activity_reader(_app_state())
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "Thread activity reader unavailable"
 
 
 @pytest.mark.parametrize(
