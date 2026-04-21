@@ -1,1 +1,1 @@
-"""Built-in agent definitions for Leon AI Task system."""
+"""Built-in agent definitions for Mycel AI task system."""

@@ -1,4 +1,4 @@
-# Leon Default Configurations
+# Mycel Default Configurations
 
 System default configurations for agents and model mappings.
 
@@ -96,7 +96,7 @@ LLM-based summarization when context approaches limit:
 
 Load a preset via CLI:
 ```bash
-leonai --agent coder
+mycel --agent coder
 ```
 
 Or programmatically:

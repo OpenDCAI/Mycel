@@ -42,4 +42,4 @@ Config files support `${VAR_NAME}` syntax for environment variable substitution.
 ## See Also
 
 - [Sandbox Documentation](../../docs/en/sandbox.md) — Provider details, lifecycle, monitoring
-- [CLI Reference](../../docs/en/cli.md) — `leonai sandbox` commands
+- [CLI Reference](../../docs/en/cli.md) — `mycel sandbox` commands
