@@ -87,21 +87,20 @@ class _ChatEventBus:
 
 @pytest.mark.asyncio
 async def test_chat_events_requires_chat_membership():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: {"id": "chat-1"}),
-            messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: False),
-            chat_event_bus=_ChatEventBus(),
-        )
+    runtime_state = SimpleNamespace(
+        chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: {"id": "chat-1"}),
+        messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: False),
+        chat_event_bus=_ChatEventBus(),
     )
+    app = SimpleNamespace(state=SimpleNamespace(chat_runtime_state=runtime_state))
 
     with pytest.raises(HTTPException) as exc_info:
         await chats_router.stream_chat_events(
             "chat-1",
             user_id="user-1",
-            chat_repo=app.state.chat_repo,
-            messaging_service=app.state.messaging_service,
-            chat_event_bus=app.state.chat_event_bus,
+            chat_repo=app.state.chat_runtime_state.chat_repo,
+            messaging_service=app.state.chat_runtime_state.messaging_service,
+            chat_event_bus=app.state.chat_runtime_state.chat_event_bus,
         )
 
     assert exc_info.value.status_code == 403
@@ -111,20 +110,19 @@ async def test_chat_events_requires_chat_membership():
 @pytest.mark.asyncio
 async def test_chat_events_uses_authenticated_participant():
     event_bus = _ChatEventBus()
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: {"id": "chat-1"}),
-            messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, user_id: user_id == "user-1"),
-            chat_event_bus=event_bus,
-        )
+    runtime_state = SimpleNamespace(
+        chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: {"id": "chat-1"}),
+        messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, user_id: user_id == "user-1"),
+        chat_event_bus=event_bus,
     )
+    app = SimpleNamespace(state=SimpleNamespace(chat_runtime_state=runtime_state))
 
     response = await chats_router.stream_chat_events(
         "chat-1",
         user_id="user-1",
-        chat_repo=app.state.chat_repo,
-        messaging_service=app.state.messaging_service,
-        chat_event_bus=app.state.chat_event_bus,
+        chat_repo=app.state.chat_runtime_state.chat_repo,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
+        chat_event_bus=app.state.chat_runtime_state.chat_event_bus,
     )
 
     assert event_bus.subscribed == ["chat-1"]

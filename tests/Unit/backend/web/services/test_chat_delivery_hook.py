@@ -14,7 +14,6 @@ def _hook_app(gateway: object) -> SimpleNamespace:
     activity_reader = SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
     return SimpleNamespace(
         state=SimpleNamespace(
-            agent_runtime_gateway=gateway,
             threads_runtime_state=SimpleNamespace(
                 agent_runtime_gateway=gateway,
                 activity_reader=activity_reader,
@@ -23,7 +22,6 @@ def _hook_app(gateway: object) -> SimpleNamespace:
                 get_by_user_id=lambda uid: default_thread if uid == "agent-user-1" else None,
                 list_by_agent_user=lambda uid: [default_thread] if uid == "agent-user-1" else [],
             ),
-            agent_runtime_thread_activity_reader=activity_reader,
         )
     )
 
@@ -37,7 +35,7 @@ async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
     app = _hook_app(FailingGateway())
     deliver = owner_chat_inlet.make_chat_delivery_fn(
         app,
-        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        activity_reader=app.state.threads_runtime_state.activity_reader,
         thread_repo=app.state.thread_repo,
     )
     request = ChatDeliveryRequest(
@@ -69,7 +67,7 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
     app = _hook_app(gateway)
     deliver = owner_chat_inlet.make_chat_delivery_fn(
         app,
-        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        activity_reader=app.state.threads_runtime_state.activity_reader,
         thread_repo=app.state.thread_repo,
     )
     request = ChatDeliveryRequest(
@@ -106,7 +104,7 @@ async def test_chat_delivery_hook_requires_recipient_user_type() -> None:
     app = _hook_app(gateway)
     deliver = owner_chat_inlet.make_chat_delivery_fn(
         app,
-        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        activity_reader=app.state.threads_runtime_state.activity_reader,
         thread_repo=app.state.thread_repo,
     )
     request = ChatDeliveryRequest(
@@ -140,7 +138,7 @@ async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
     app = _hook_app(gateway)
     deliver = owner_chat_inlet.make_chat_delivery_fn(
         app,
-        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        activity_reader=app.state.threads_runtime_state.activity_reader,
         thread_repo=app.state.thread_repo,
     )
     request = ChatDeliveryRequest(
@@ -165,7 +163,6 @@ async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
 def test_make_chat_delivery_fn_requires_activity_reader():
     app = SimpleNamespace(
         state=SimpleNamespace(
-            agent_runtime_gateway=object(),
             threads_runtime_state=SimpleNamespace(agent_runtime_gateway=object(), activity_reader=None),
         )
     )

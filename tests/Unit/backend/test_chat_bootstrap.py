@@ -62,24 +62,25 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
         thread_repo=app.state.thread_repo,
     )
 
-    assert app.state.chat_repo is chat_repo
-    assert app.state.contact_repo is contact_repo
-    assert app.state.chat_member_repo is chat_member_repo
-    assert app.state.messages_repo is messages_repo
-    assert app.state.relationship_repo is relationship_repo
-    assert app.state.chat_event_bus is event_bus
-    assert app.state.typing_tracker.event_bus is event_bus
-    assert app.state.relationship_service.repo is relationship_repo
-    assert app.state.messaging_service.kwargs["chat_repo"] is chat_repo
-    assert app.state.messaging_service.kwargs["delivery_resolver"]["contact_repo"] is contact_repo
-    assert app.state.messaging_service.kwargs["thread_repo"] is app.state.thread_repo
-    assert app.state.messaging_service.delivery_fn is None
     assert app.state.chat_runtime_state is state
     assert state.chat_repo is chat_repo
     assert state.chat_event_bus is event_bus
     assert state.contact_repo is contact_repo
-    assert state.typing_tracker is app.state.typing_tracker
-    assert state.messaging_service is app.state.messaging_service
+    assert state.typing_tracker.event_bus is event_bus
+    assert state.relationship_service.repo is relationship_repo
+    assert state.messaging_service.kwargs["chat_repo"] is chat_repo
+    assert state.messaging_service.kwargs["delivery_resolver"]["contact_repo"] is contact_repo
+    assert state.messaging_service.kwargs["thread_repo"] is app.state.thread_repo
+    assert state.messaging_service.delivery_fn is None
+    assert not hasattr(app.state, "chat_repo")
+    assert not hasattr(app.state, "contact_repo")
+    assert not hasattr(app.state, "chat_member_repo")
+    assert not hasattr(app.state, "messages_repo")
+    assert not hasattr(app.state, "relationship_repo")
+    assert not hasattr(app.state, "chat_event_bus")
+    assert not hasattr(app.state, "typing_tracker")
+    assert not hasattr(app.state, "relationship_service")
+    assert not hasattr(app.state, "messaging_service")
 
 
 def test_attach_chat_runtime_does_not_read_back_chat_state_during_wiring(monkeypatch):
@@ -176,7 +177,7 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
 
     messaging_service.set_delivery_fn = _set_delivery_fn
 
-    app = SimpleNamespace(state=SimpleNamespace(messaging_service=messaging_service))
+    app = SimpleNamespace(state=SimpleNamespace())
 
     monkeypatch.setattr(
         chat_bootstrap,
@@ -191,7 +192,7 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
         thread_repo=thread_repo,
     )
 
-    assert app.state.messaging_service.delivery_fn is delivery_fn
+    assert messaging_service.delivery_fn is delivery_fn
 
 
 def test_wire_chat_delivery_does_not_read_back_messaging_service(monkeypatch):

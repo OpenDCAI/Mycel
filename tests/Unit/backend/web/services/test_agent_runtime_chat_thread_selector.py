@@ -37,7 +37,6 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
                 ),
             ),
             agent_pool={},
-            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, _notification_type, **_meta: enqueued.append((content, thread_id))
             ),
@@ -48,6 +47,7 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
             thread_locks_guard=asyncio.Lock(),
         )
     )
+    typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
 
     envelope = AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id="chat-1"),
@@ -56,7 +56,7 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
         message=AgentRuntimeMessage(content="hello", signal="ping"),
     )
 
-    result = await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_chat(envelope)
+    result = await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_chat(envelope)
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-preselected"

@@ -42,11 +42,11 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert app.state.thread_event_buffers == {}
     assert app.state.subagent_buffers == {}
     assert app.state.thread_last_active == {}
-    assert app.state.agent_runtime_gateway is gateway
     assert app.state.threads_runtime_state is state
     assert state.queue_manager is queue_manager
     assert state.agent_runtime_gateway is gateway
     assert state.activity_reader is activity_reader
+    assert not hasattr(app.state, "agent_runtime_gateway")
     assert seen == [
         ("queue_manager", queue_repo),
         ("runtime_state", app),
@@ -76,3 +76,30 @@ def test_build_agent_runtime_gateway_returns_gateway_from_runtime_state(monkeypa
     )
 
     assert runtime_bootstrap.build_agent_runtime_gateway(app, typing_tracker=object()) is gateway
+
+
+def test_build_agent_runtime_state_does_not_write_top_level_activity_reader(monkeypatch):
+    gateway = object()
+    activity_reader = object()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=object(),
+            agent_pool={},
+            queue_manager=object(),
+            thread_tasks={},
+            thread_locks={},
+            thread_locks_guard=object(),
+        )
+    )
+
+    monkeypatch.setattr(runtime_bootstrap, "AppRuntimeThreadActivityReader", lambda **_kwargs: activity_reader)
+    monkeypatch.setattr(runtime_bootstrap, "NativeAgentRuntimeGateway", lambda **_kwargs: gateway)
+    monkeypatch.setattr(runtime_bootstrap, "NativeAgentChatDeliveryHandler", lambda **_kwargs: object())
+    monkeypatch.setattr(runtime_bootstrap, "AppAgentChatRuntimeServices", lambda *args, **kwargs: object())
+    monkeypatch.setattr(runtime_bootstrap, "NativeAgentThreadInputHandler", lambda *args, **kwargs: object())
+
+    state = runtime_bootstrap.build_agent_runtime_state(app, typing_tracker=object())
+
+    assert state.gateway is gateway
+    assert state.activity_reader is activity_reader
+    assert not hasattr(app.state, "agent_runtime_thread_activity_reader")
