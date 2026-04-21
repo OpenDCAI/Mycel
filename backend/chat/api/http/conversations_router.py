@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
-from backend.chat.api.http.dependencies import get_app, get_current_user_id
+from backend.chat.api.http.dependencies import get_app, get_current_user_id, get_optional_messaging_service
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.threads.projection import canonical_owner_threads
@@ -87,8 +87,8 @@ def _thread_running(activity_reader: RuntimeThreadActivityReader | None, agent_u
 
 def _list_visit_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    messaging = getattr(app.state, "messaging_service", None)
-    if messaging:
+    messaging = get_optional_messaging_service(app)
+    if messaging is not None:
         chats = messaging.list_conversation_summaries_for_user(user_id)
         for chat in chats:
             items.append(

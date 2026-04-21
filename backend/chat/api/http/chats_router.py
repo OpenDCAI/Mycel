@@ -10,7 +10,16 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from backend.chat.api.http.dependencies import get_app, get_current_user_id
+from backend.chat.api.http.dependencies import (
+    get_app,
+    get_chat_repo,
+    get_contact_repo,
+    get_current_user_id,
+    get_messaging_service,
+    get_relationship_service,
+    get_thread_repo,
+    get_user_repo,
+)
 from messaging.actor_ownership import access_scope_targets, is_owned_by_viewer
 from messaging.social_access import can_group_chat_with_participant
 
@@ -37,10 +46,7 @@ class MuteChatBody(BaseModel):
 
 
 def _messaging(app: Any):
-    svc = getattr(app.state, "messaging_service", None)
-    if svc is None:
-        raise HTTPException(503, "MessagingService not initialized")
-    return svc
+    return get_messaging_service(app)
 
 
 def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
@@ -55,7 +61,7 @@ def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
 
 
 def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
-    chat = app.state.chat_repo.get_by_id(chat_id)
+    chat = get_chat_repo(app).get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
     if not _messaging(app).is_chat_member(chat_id, user_id):
@@ -68,8 +74,8 @@ def _resolve_display_user(app: Any, social_user_id: str) -> Any | None:
 
 
 def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
-    user_repo = getattr(app.state, "user_repo", None)
-    thread_repo = getattr(app.state, "thread_repo", None)
+    user_repo = get_user_repo(app)
+    thread_repo = get_thread_repo(app)
     validated: list[str] = []
     for participant_id in participant_ids:
         if participant_id == requester_user_id:
@@ -90,30 +96,26 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
 
 
 def _is_owned_participant(app: Any, participant_id: str, requester_user_id: str) -> bool:
-    user_repo = getattr(app.state, "user_repo", None)
-    if user_repo is None:
-        return False
+    user_repo = get_user_repo(app)
     participant = user_repo.get_by_id(participant_id)
     return is_owned_by_viewer(requester_user_id, participant)
 
 
 def _participant_access_targets(app: Any, participant_id: str) -> list[str]:
-    user_repo = getattr(app.state, "user_repo", None)
-    participant = user_repo.get_by_id(participant_id) if user_repo is not None else None
+    user_repo = get_user_repo(app)
+    participant = user_repo.get_by_id(participant_id)
     return access_scope_targets(participant, fallback_actor_id=participant_id)
 
 
 def _validate_group_chat_relationships(app: Any, participant_ids: list[str], requester_user_id: str) -> None:
-    svc = getattr(app.state, "relationship_service", None)
-    if svc is None:
-        raise ValueError("Relationship service is required for group chat creation")
-    contact_repo = getattr(app.state, "contact_repo", None)
-    user_repo = getattr(app.state, "user_repo", None)
+    svc = get_relationship_service(app)
+    contact_repo = get_contact_repo(app)
+    user_repo = get_user_repo(app)
     for participant_id in dict.fromkeys(participant_ids):
         if participant_id == requester_user_id or _is_owned_participant(app, participant_id, requester_user_id):
             continue
         try:
-            participant_user = user_repo.get_by_id(participant_id) if user_repo is not None else None
+            participant_user = user_repo.get_by_id(participant_id)
             if can_group_chat_with_participant(
                 viewer_user_id=requester_user_id,
                 participant_user_id=participant_id,
@@ -243,7 +245,7 @@ def delete_chat(
     app: Annotated[Any, Depends(get_app)],
 ):
     _get_accessible_chat_or_404(app, chat_id, user_id)
-    app.state.chat_repo.delete(chat_id)
+    get_chat_repo(app).delete(chat_id)
     return {"status": "deleted"}
 
 

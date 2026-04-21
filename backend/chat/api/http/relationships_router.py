@@ -8,7 +8,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from backend.chat.api.http.dependencies import get_app, get_current_user_id
+from backend.chat.api.http.dependencies import (
+    get_app,
+    get_current_user_id,
+    get_relationship_service,
+    get_user_repo,
+)
 from messaging.actor_ownership import is_owned_by_viewer
 from messaging.contracts import RelationshipRow
 from messaging.relationships.state_machine import TransitionError
@@ -32,10 +37,7 @@ class RelationshipActionBody(BaseModel):
 
 
 def _get_rel_service(app: Any):
-    svc = getattr(app.state, "relationship_service", None)
-    if svc is None:
-        raise HTTPException(503, "Relationship service unavailable")
-    return svc
+    return get_relationship_service(app)
 
 
 def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
@@ -50,9 +52,7 @@ def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
 def _resolve_actor_user_id(app: Any, current_user_id: str, actor_user_id: str | None) -> str:
     if actor_user_id is None or actor_user_id == current_user_id:
         return current_user_id
-    user_repo = getattr(app.state, "user_repo", None)
-    if user_repo is None:
-        raise HTTPException(503, "User repo unavailable")
+    user_repo = get_user_repo(app)
     actor = user_repo.get_by_id(actor_user_id)
     if actor is None:
         raise HTTPException(404, "Actor user not found")
