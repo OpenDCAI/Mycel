@@ -167,6 +167,10 @@ async def list_chat_candidates(
             continue
         is_owned = user.type is UserType.AGENT and user.owner_user_id == user_id
         if is_owned and thread_repo is None:
+            # @@@owned-agent-thread-truth - owned agent candidates expose
+            # default_thread_id when available, so this consumer must fail loud
+            # when thread_repo is absent instead of silently pretending the
+            # owned agent has no thread truth.
             raise HTTPException(503, "Thread repo unavailable")
         relationship_state = relationship_states.get(user.id, "none")
         owner_user_id = str(user.owner_user_id) if user.type is UserType.AGENT and user.owner_user_id else None
