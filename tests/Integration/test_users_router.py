@@ -73,6 +73,16 @@ def _users_app(
     )
 
 
+def _list_chat_candidates(app: SimpleNamespace, *, user_id: str = "u1"):
+    return users_router.list_chat_candidates(
+        user_id=user_id,
+        user_repo=app.state.user_repo,
+        relationship_service=getattr(app.state, "relationship_service", None),
+        contact_repo=getattr(app.state, "contact_repo", None),
+        thread_repo=getattr(app.state, "thread_repo", None),
+    )
+
+
 @pytest.mark.asyncio
 async def test_list_chat_candidates_excludes_current_user_and_returns_all_others():
     current_user = _human("u1", "owner")
@@ -84,7 +94,7 @@ async def test_list_chat_candidates_excludes_current_user_and_returns_all_others
         relationships={"u2": "visit", "a-main": "pending"},
     )
 
-    result = await users_router.list_chat_candidates(user_id="u1", app=app)
+    result = await _list_chat_candidates(app)
 
     # Current user (u1) is excluded; all other users are returned.
     candidates = [(item["type"], item.get("user_id")) for item in result]
@@ -135,7 +145,7 @@ async def test_list_chat_candidates_excludes_current_user_and_returns_all_others
 async def test_list_chat_candidates_marks_owned_agents_as_chat_candidates_without_relationship():
     app = _users_app([_human("u1", "owner"), _agent("a-owned", "Morel", "u1")])
 
-    result = await users_router.list_chat_candidates(user_id="u1", app=app)
+    result = await _list_chat_candidates(app)
 
     assert result[0]["user_id"] == "a-owned"
     assert result[0]["is_owned"] is True
@@ -153,7 +163,7 @@ async def test_list_chat_candidates_exposes_default_thread_id_for_owned_agents_o
         },
     )
 
-    result = await users_router.list_chat_candidates(user_id="u1", app=app)
+    result = await _list_chat_candidates(app)
 
     ready = next(item for item in result if item["user_id"] == "a-owned-ready")
     cold = next(item for item in result if item["user_id"] == "a-owned-cold")
@@ -172,7 +182,7 @@ async def test_list_chat_candidates_fails_loud_when_owned_agent_threads_need_thr
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await users_router.list_chat_candidates(user_id="u1", app=app)
+        await _list_chat_candidates(app)
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "Thread repo unavailable"
@@ -185,7 +195,7 @@ async def test_list_chat_candidates_marks_normal_active_contacts_as_chat_candida
         contact_repo=_active_contact_repo("u1", "u2"),
     )
 
-    result = await users_router.list_chat_candidates(user_id="u1", app=app)
+    result = await _list_chat_candidates(app)
 
     assert result == [
         {
@@ -209,7 +219,7 @@ async def test_list_chat_candidates_marks_agents_owned_by_active_contacts_as_cha
         contact_repo=_active_contact_repo("u1", "u2"),
     )
 
-    result = await users_router.list_chat_candidates(user_id="u1", app=app)
+    result = await _list_chat_candidates(app)
 
     human_item = next(item for item in result if item["user_id"] == "u2")
     agent_item = next(item for item in result if item["user_id"] == "a-other")
@@ -230,7 +240,7 @@ async def test_list_chat_candidates_fails_loud_when_relationship_service_missing
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await users_router.list_chat_candidates(user_id="u1", app=app)
+        await _list_chat_candidates(app)
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "chat bootstrap not attached: relationship_service"
@@ -247,7 +257,7 @@ async def test_list_chat_candidates_fails_loud_when_contact_repo_missing():
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await users_router.list_chat_candidates(user_id="u1", app=app)
+        await _list_chat_candidates(app)
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
