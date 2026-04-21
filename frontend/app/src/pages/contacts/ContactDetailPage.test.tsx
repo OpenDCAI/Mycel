@@ -139,6 +139,41 @@ describe("ContactDetailPage", () => {
     expect(screen.queryByText("分支")).toBeNull();
   });
 
+  it("opens a human contact through the chat surface", async () => {
+    authFetch
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "human-2",
+          name: "Ada",
+          type: "human",
+          avatar_url: null,
+          owner_name: null,
+          is_owned: false,
+          relationship_state: "visit",
+          can_chat: true,
+        },
+      ]))
+      .mockResolvedValueOnce(okJson({ id: "chat-human-2" }));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/users/human-2"]}>
+        <Routes>
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "发起对话" }));
+
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith("/api/chats", {
+        method: "POST",
+        body: JSON.stringify({ user_ids: ["human-1", "human-2"] }),
+      });
+    });
+    expect(navigate).toHaveBeenCalledWith("/chat/visit/chat-human-2");
+  });
+
   it("shows chat-capable contacts as contacts instead of exposing raw none state", async () => {
     authFetch.mockResolvedValueOnce(okJson([
       {
