@@ -57,19 +57,9 @@ def attach_chat_runtime(
         avatar_url_builder=avatar_url,
     )
 
-    app.state.chat_repo = chat_repo
-    app.state.contact_repo = contact_repo
-    app.state.chat_member_repo = chat_member_repo
-    app.state.messages_repo = messages_repo
-    app.state.relationship_repo = relationship_repo
-    app.state.chat_event_bus = chat_event_bus
-    app.state.typing_tracker = typing_tracker
-    app.state.relationship_service = relationship_service
-    app.state.messaging_service = messaging_service
-    # @@@chat-bootstrap-borrowable-state - bootstrap still attaches chat-owned
-    # state onto app.state for the wider app, but it also returns the freshly
-    # built runtime objects so enclosing lifespans and dependency helpers do
-    # not need to reread loose attrs.
+    # @@@chat-bootstrap-borrowable-state - chat bootstrap now keeps its owned
+    # runtime objects inside the returned/chat_runtime_state bundle so the app
+    # has one canonical read surface instead of loose top-level mirrors.
     state = ChatRuntimeState(
         chat_repo=chat_repo,
         chat_event_bus=chat_event_bus,
