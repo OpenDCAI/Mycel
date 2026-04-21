@@ -119,6 +119,11 @@ def _build_providers_and_managers(
                 key = _configured_api_key(name, config.daytona.api_key, "DAYTONA_API_KEY")
                 if not key:
                     continue
+                # @@@daytona-inventory-contract - current Daytona config/provider
+                # shape is the narrow api_url/target/cwd/bind_mounts contract.
+                # Do not reintroduce the older wider default_* / server_url /
+                # workspace_provider argument set here unless the provider and
+                # schema grow those fields again together.
                 providers[name] = DaytonaProvider(
                     api_key=key,
                     api_url=config.daytona.api_url,
