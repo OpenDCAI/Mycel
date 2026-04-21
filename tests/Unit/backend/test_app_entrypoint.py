@@ -75,14 +75,14 @@ def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
     monkeypatch.setattr(app_entrypoint.uvicorn, "run", _run)
 
     app_entrypoint.run_reloadable_app(
-        "backend.monitor_app.main:app",
+        "backend.monitor.app.main:app",
         port=55417,
         reload_dirs=["backend", "storage", "eval"],
     )
 
     assert calls == [
         (
-            ("backend.monitor_app.main:app",),
+            ("backend.monitor.app.main:app",),
             {
                 "host": "0.0.0.0",
                 "port": 55417,
@@ -93,5 +93,10 @@ def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
     ]
 
 
-def test_web_backend_no_longer_depends_on_aggregate_monitor_router_module():
-    assert find_spec("backend.monitor.api.http.router") is None
+def test_monitor_process_shell_no_longer_lives_under_backend_monitor_app():
+    try:
+        legacy_spec = find_spec("backend.monitor_app.main")
+    except ModuleNotFoundError:
+        legacy_spec = None
+    assert legacy_spec is None
+    assert find_spec("backend.monitor.app.main") is not None

@@ -5,10 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from backend.bootstrap import app_entrypoint
-from backend.monitor_app import lifespan as monitor_app_lifespan
-from backend.monitor_app import main as monitor_app_main
+from backend.monitor.app import lifespan as monitor_app_lifespan
+from backend.monitor.app import main as monitor_app_main
 
 app = monitor_app_main.app
+
+
+def test_monitor_app_module_path_is_internalized():
+    assert monitor_app_main.__name__ == "backend.monitor.app.main"
 
 
 def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
