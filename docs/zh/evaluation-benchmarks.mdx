@@ -1,0 +1,88 @@
+---
+title: 评测 Benchmark
+sidebarTitle: 评测 Benchmark
+description: 当前 benchmark 支持情况、验收命令与 live 环境边界
+icon: book-open
+keywords: [评测, benchmark, swe-bench, monitor, playwright]
+---
+
+## 当前已被真实验证的能力
+
+Mycel 目前已经有一条本地 `SWE-bench Verified` smoke slice 的真实验收链路。
+
+已验证环节包括：
+
+- `/api/monitor/evaluation/scenarios` 发布结构化 benchmark scenario
+- `/api/monitor/evaluation/batches` 创建与启动 batch
+- `EvaluationBatchExecutor` 后台执行
+- 轨迹、指标与 artifact 持久化
+- command judge 打分
+- batch aggregate 与 compare API
+- `/api/monitor/evaluation/batches/{batch_id}/export` 导出
+- monitor 前端的 Playwright CLI 浏览器验证
+
+## 实际验证环境
+
+本次验收**没有**直接启动完整生产形态的 `backend.web`。
+
+实际使用的是：
+
+- `eval.benchmarks.swe_verified.acceptance` 本地 FastAPI harness
+- 产品里的 monitor router、batch service、executor、judge、export 代码
+- 内存版 fake Supabase client
+- fake thread endpoint，但仍然走真实 `EvalClient` 的 HTTP + SSE 路径
+
+这足以证明以下 monitor 评测主链成立：
+
+- 输入
+- 编排
+- 轨迹与 artifact 采集
+- judge 执行
+- 汇总与对比
+- 导出
+
+但它**不能**证明主 web runtime 的 live-only 部分，例如：
+
+- `backend.web` 的 Postgres checkpoint 启动
+- 真实 Supabase auth / storage wiring
+- 实际 repo checkout 与 patch 捕获
+- 官方 SWE-bench evaluator 执行
+
+## 支持矩阵
+
+| Benchmark 家族 | 当前状态 | 已证明的路径 | 仍不支持 |
+| --- | --- | --- | --- |
+| SWE-bench Verified smoke | 部分支持 | scenario catalog、batch create/start、command judge、compare、`predictions_json` export、monitor Playwright 流程 | official evaluator bridge、repo checkout、patch/test-log 捕获、`predictions_jsonl` export |
+| Terminal-Bench | 不支持 | 无 | task loader、verifier bridge、transcript artifact、export |
+| GAIA | 不支持 | 无 | dataset loader、附件接入、scorer、export |
+| tau2-bench / AppWorld | 不支持 | 无 | simulator bridge、state validator、reward integration |
+| WebArena / VisualWebArena / WorkArena | 不支持 | 无 | browser env adapter、DOM/network/screenshot artifact、validator bridge |
+| OSWorld | 不支持 | 无 | desktop runtime、录屏、GUI validator |
+
+## 本次验收使用的命令
+
+```bash
+./.venv/bin/python -m pytest \
+  tests/Unit/eval/test_swe_verified_acceptance.py \
+  tests/Unit/eval/test_judge.py \
+  tests/Unit/eval/test_exporter.py \
+  tests/Unit/eval/test_swe_verified_assets.py
+
+./.venv/bin/python -m eval.benchmarks.swe_verified.acceptance serve --port 8765
+
+./.venv/bin/python -m eval.benchmarks.swe_verified.acceptance rpc \
+  --request eval/benchmarks/swe_verified/smoke/rpc/judge_request.json
+
+./.venv/bin/python -m eval.benchmarks.swe_verified.acceptance rpc \
+  --request eval/benchmarks/swe_verified/smoke/rpc/export_request.json
+
+cd frontend/monitor
+npx playwright test -c playwright.acceptance.config.ts
+```
+
+## 已知限制
+
+- `backend.web` 仍然需要真实的 Postgres 与 Supabase runtime config。本次 harness 证明的是 monitor evaluation 逻辑，不是完整 app bootstrap。
+- smoke slice 目前仍是 scenario-backed。`eval/benchmarks/swe_verified/smoke/` 里的 JSON 资产还需要 official evaluator bridge 才能进入 live 打分。
+- 当前 artifact 只证明了 final response、benchmark metadata、workspace metadata 和 requested placeholder，不是完整的 SWE patch/test-log artifact 栈。
+- 后端 export 目前真实证明的是 `predictions_json`。样例资产里的 `sample_predictions.jsonl` 仍然属于后续 official evaluator 对接材料。

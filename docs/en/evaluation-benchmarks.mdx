@@ -1,0 +1,88 @@
+---
+title: Evaluation Benchmarks
+sidebarTitle: Evaluation Benchmarks
+description: Current benchmark support, validation commands, and live-environment limits
+icon: book-open
+keywords: [evaluation, benchmark, swe-bench, monitor, playwright]
+---
+
+## What is currently proven
+
+Mycel now has a real benchmark acceptance path for a local `SWE-bench Verified` smoke slice.
+
+The validated path covers:
+
+- structured benchmark scenarios published by `/api/monitor/evaluation/scenarios`
+- batch creation and start via `/api/monitor/evaluation/batches`
+- background execution through `EvaluationBatchExecutor`
+- trace, metrics, and artifact persistence
+- command-judge scoring
+- batch aggregate and compare APIs
+- export via `/api/monitor/evaluation/batches/{batch_id}/export`
+- frontend monitor verification with Playwright CLI
+
+## Validation environment
+
+The acceptance run does **not** use the full production `backend.web` stack.
+
+Instead it uses:
+
+- `eval.benchmarks.swe_verified.acceptance` as a local FastAPI harness
+- product monitor routers, batch service, executor, judge, and export code
+- an in-memory fake Supabase client
+- fake thread endpoints that still exercise the real `EvalClient` HTTP + SSE path
+
+This is enough to prove that the monitor evaluation chain is wired correctly for:
+
+- scenario intake
+- orchestration
+- trajectory and artifact collection
+- judge execution
+- aggregation and comparison
+- export
+
+It does **not** prove the live-only parts of the main web runtime such as:
+
+- Postgres checkpoint boot for `backend.web`
+- real Supabase auth and storage wiring
+- actual repo checkout and patch capture
+- official SWE-bench evaluator execution
+
+## Support Matrix
+
+| Benchmark family | Current status | Proven path | Not yet supported |
+| --- | --- | --- | --- |
+| SWE-bench Verified smoke | Partial | scenario catalog, batch create/start, command judge, compare, `predictions_json` export, monitor Playwright flow | official evaluator bridge, repo checkout, patch/test-log capture, `predictions_jsonl` export |
+| Terminal-Bench | Not supported | none | task loader, verifier bridge, transcript artifacts, export |
+| GAIA | Not supported | none | dataset loader, attachment ingest, scorer, export |
+| tau2-bench / AppWorld | Not supported | none | simulator bridge, state validator, reward integration |
+| WebArena / VisualWebArena / WorkArena | Not supported | none | browser env adapter, DOM/network/screenshot artifacts, validator bridge |
+| OSWorld | Not supported | none | desktop runtime, recording, GUI validator |
+
+## Commands used in acceptance
+
+```bash
+./.venv/bin/python -m pytest \
+  tests/Unit/eval/test_swe_verified_acceptance.py \
+  tests/Unit/eval/test_judge.py \
+  tests/Unit/eval/test_exporter.py \
+  tests/Unit/eval/test_swe_verified_assets.py
+
+./.venv/bin/python -m eval.benchmarks.swe_verified.acceptance serve --port 8765
+
+./.venv/bin/python -m eval.benchmarks.swe_verified.acceptance rpc \
+  --request eval/benchmarks/swe_verified/smoke/rpc/judge_request.json
+
+./.venv/bin/python -m eval.benchmarks.swe_verified.acceptance rpc \
+  --request eval/benchmarks/swe_verified/smoke/rpc/export_request.json
+
+cd frontend/monitor
+npx playwright test -c playwright.acceptance.config.ts
+```
+
+## Known limits
+
+- `backend.web` still needs real Postgres and Supabase runtime config. The acceptance harness proves monitor evaluation logic, not full app bootstrap.
+- The smoke slice is scenario-backed. The JSON asset bundle under `eval/benchmarks/swe_verified/smoke/` still needs an official evaluator bridge for live scoring.
+- Artifact coverage is currently limited to final response, benchmark metadata, workspace metadata, and requested placeholders. It is not yet a full SWE patch/test-log artifact stack.
+- The backend export surface currently proves `predictions_json`. The sample asset bundle still documents `sample_predictions.jsonl` for future official evaluator integration.

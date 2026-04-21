@@ -42,7 +42,8 @@
               "en/concepts",
               "en/multi-agent-chat",
               "en/sandbox",
-              "en/memory"
+              "en/memory",
+              "en/evaluation-benchmarks"
             ]
           },
           {
@@ -80,7 +81,8 @@
               "zh/concepts",
               "zh/multi-agent-chat",
               "zh/sandbox",
-              "zh/memory"
+              "zh/memory",
+              "zh/evaluation-benchmarks"
             ]
           },
           {
