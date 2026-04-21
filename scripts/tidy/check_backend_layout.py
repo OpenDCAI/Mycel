@@ -28,8 +28,7 @@ Invariants checked:
    messaging/, config/.
 
 5. Required backend subdirectories: web/, chat/, identity/, threads/,
-   sandboxes/, library/, hub/, monitor/, monitor_app/,
-   bootstrap/.
+   sandboxes/, library/, hub/, monitor/, bootstrap/.
 
 6. Required sub-sub-packages: backend/identity/auth/, backend/identity/avatar/,
    backend/sandboxes/runtime/, backend/sandboxes/resources/,
@@ -116,7 +115,6 @@ REQUIRED_BACKEND_SUBDIRS = [
     "library",
     "hub",
     "monitor",
-    "monitor_app",
     "bootstrap",
 ]
 

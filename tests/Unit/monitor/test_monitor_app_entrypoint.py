@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from backend.bootstrap import app_entrypoint
-from backend.monitor_app import lifespan as monitor_app_lifespan
-from backend.monitor_app import main as monitor_app_main
+from backend.monitor.app import lifespan as monitor_app_lifespan
+from backend.monitor.app import main as monitor_app_main
 
 app = monitor_app_main.app
 

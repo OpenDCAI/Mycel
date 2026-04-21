@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.monitor_app import lifespan as monitor_app_lifespan
+from backend.monitor.app import lifespan as monitor_app_lifespan
 
 
 @pytest.mark.asyncio

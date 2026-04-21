@@ -47,7 +47,7 @@ These are useful signals, but not completion:
 
 - `scripts/tidy/check_backend_layout.py` passing
 - `backend.web.main` importing
-- `backend.monitor_app.main` importing
+- `backend.monitor.app.main` importing
 - pytest collection becoming clean
 - unit tests passing
 - source-guard or owner-shell tests passing
@@ -127,7 +127,7 @@ Before claiming progress, answer:
 Current branch-level runtime proof already obtained on the active recovery line:
 
 - `backend.web.main` imports and boots
-- `backend.monitor_app.main` imports and boots
+- `backend.monitor.app.main` imports and boots
 - `uv run pytest --collect-only -q` restores full collection (`1570 collected`, `0` collection errors)
 - real login smoke on the break backend returns `200`
 - `/api/panel/agents` returns `200`
@@ -140,7 +140,7 @@ Current branch-level runtime proof already obtained on the active recovery line:
 - `/api/marketplace/items` returns `200`
 - `/api/marketplace/download` returns `200`
 - installed skill is visible when re-reading `/api/panel/agents/{id}`
-- standalone `backend.monitor_app.main` running on a separate port returns `200`
+- standalone `backend.monitor.app.main` running on a separate port returns `200`
   for `/api/monitor/resources`, `/api/monitor/sandboxes`,
   `/api/monitor/dashboard`, and `/api/monitor/provider-orphan-runtimes`
 

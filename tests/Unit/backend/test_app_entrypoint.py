@@ -74,14 +74,14 @@ def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
     monkeypatch.setattr(app_entrypoint.uvicorn, "run", _run)
 
     app_entrypoint.run_reloadable_app(
-        "backend.monitor_app.main:app",
+        "backend.monitor.app.main:app",
         port=55417,
         reload_dirs=["backend", "storage", "eval"],
     )
 
     assert calls == [
         (
-            ("backend.monitor_app.main:app",),
+            ("backend.monitor.app.main:app",),
             {
                 "host": "0.0.0.0",
                 "port": 55417,
