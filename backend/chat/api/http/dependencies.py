@@ -54,11 +54,13 @@ def get_contact_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
 
 
 def get_chat_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
-    return _require_state_attr(app, "chat_repo", "Chat repo unavailable")
+    runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat repo unavailable")
+    return runtime_state.chat_repo
 
 
 def get_chat_event_bus(app: Annotated[Any, Depends(get_app)]) -> Any:
-    return _require_state_attr(app, "chat_event_bus", "Chat event bus unavailable")
+    runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat event bus unavailable")
+    return runtime_state.chat_event_bus
 
 
 def get_runtime_thread_activity_reader(app: Annotated[Any, Depends(get_app)]) -> Any:
