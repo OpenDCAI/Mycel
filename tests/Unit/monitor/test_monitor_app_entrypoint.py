@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from backend.bootstrap import app_entrypoint
 from backend.monitor.app import lifespan as monitor_app_lifespan
 from backend.monitor.app import main as monitor_app_main
+from backend.monitor.api.http import execution_target as monitor_execution_target
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
 
 app = monitor_app_main.app
@@ -33,7 +34,7 @@ def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.Monke
     assert "/api/monitor/sandboxes" in paths
     assert "/api/monitor/threads" not in paths
     assert "/api/monitor/threads/{thread_id}" not in paths
-    assert "/api/monitor/evaluation/batches/{batch_id}/start" not in paths
+    assert "/api/monitor/evaluation/batches/{batch_id}/start" in paths
     assert set(paths["/api/monitor/evaluation/batches"]) == {"get", "post"}
 
 
@@ -101,6 +102,48 @@ def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatc
 
     assert response.status_code == 401
     assert "User no longer exists" in response.text
+
+
+def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPatch):
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
+    monitor_storage = SimpleNamespace(
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+    )
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
+    monkeypatch.setattr(
+        monitor_app_lifespan,
+        "attach_auth_runtime_state",
+        lambda app, *, storage_state: (
+            setattr(
+                app.state,
+                "auth_service",
+                SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+            )
+            or object()
+        ),
+    )
+    monkeypatch.setattr(
+        monitor_gateway,
+        "start_evaluation_batch",
+        lambda **kwargs: {"batch": kwargs},
+    )
+    monkeypatch.setattr(
+        monitor_execution_target,
+        "resolve_app_port",
+        lambda *_args, **_kwargs: 55417,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/monitor/evaluation/batches/batch-1/start",
+            headers={"Authorization": "Bearer token-1"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["batch"]
+    assert payload["batch_id"] == "batch-1"
+    assert payload["execution_base_url"] == "http://127.0.0.1:55417"
+    assert payload["token"] == "token-1"
 
 
 def test_monitor_app_resolve_port_prefers_monitor_backend_env(monkeypatch: pytest.MonkeyPatch):
