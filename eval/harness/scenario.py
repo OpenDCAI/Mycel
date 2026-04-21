@@ -13,7 +13,7 @@ from eval.models import ArtifactPolicy, BenchmarkInfo, EvalScenario, ExportConfi
 def load_scenario(path: str | Path) -> EvalScenario:
     """Load a single scenario from a YAML file."""
     path = Path(path)
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         raw = yaml.safe_load(f)
 
     messages = [
