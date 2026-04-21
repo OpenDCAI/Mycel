@@ -46,3 +46,11 @@ def get_contact_repo(app: Any) -> Any:
 
 def get_chat_repo(app: Any) -> Any:
     return _require_state_attr(app, "chat_repo", "Chat repo unavailable")
+
+
+def get_optional_runtime_thread_activity_reader(app: Any) -> Any | None:
+    return getattr(app.state, "agent_runtime_thread_activity_reader", None)
+
+
+def get_thread_last_active_map(app: Any) -> Any:
+    return _require_state_attr(app, "thread_last_active", "Thread last-active map unavailable")

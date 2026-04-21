@@ -26,6 +26,10 @@ def test_get_relationship_service_fails_loud_when_missing():
     assert exc_info.value.detail == "Relationship service unavailable"
 
 
+def test_get_optional_runtime_thread_activity_reader_returns_none_when_missing():
+    assert chat_http_dependencies.get_optional_runtime_thread_activity_reader(_app_state()) is None
+
+
 @pytest.mark.parametrize(
     ("getter_name", "detail"),
     [
@@ -33,6 +37,7 @@ def test_get_relationship_service_fails_loud_when_missing():
         ("get_thread_repo", "Thread repo unavailable"),
         ("get_contact_repo", "Contact repo unavailable"),
         ("get_chat_repo", "Chat repo unavailable"),
+        ("get_thread_last_active_map", "Thread last-active map unavailable"),
     ],
 )
 def test_repo_getters_fail_loud_when_missing(getter_name: str, detail: str):
