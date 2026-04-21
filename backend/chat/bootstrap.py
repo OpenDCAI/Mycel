@@ -13,12 +13,13 @@ from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
 
 
-def attach_chat_runtime(app: Any, storage_container: Any) -> None:
-    user_repo = getattr(app.state, "user_repo", None)
-    thread_repo = getattr(app.state, "thread_repo", None)
-    if user_repo is None or thread_repo is None:
-        raise RuntimeError("attach_chat_runtime requires user_repo and thread_repo on app.state")
-
+def attach_chat_runtime(
+    app: Any,
+    storage_container: Any,
+    *,
+    user_repo: Any,
+    thread_repo: Any,
+) -> None:
     app.state.chat_repo = storage_container.chat_repo()
     app.state.contact_repo = storage_container.contact_repo()
     app.state.chat_member_repo = storage_container.chat_member_repo()
@@ -47,5 +48,11 @@ def attach_chat_runtime(app: Any, storage_container: Any) -> None:
     )
 
 
-def wire_chat_delivery(app: Any) -> None:
-    app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
+def wire_chat_delivery(app: Any, *, activity_reader: Any, thread_repo: Any) -> None:
+    app.state.messaging_service.set_delivery_fn(
+        make_chat_delivery_fn(
+            app,
+            activity_reader=activity_reader,
+            thread_repo=thread_repo,
+        )
+    )

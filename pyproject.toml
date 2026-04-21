@@ -103,7 +103,6 @@ packages = [
     "core.tools.web.fetchers",
     "core.tools.web.searchers",
     "core.agents",
-    "core.agents.communication",
     "sandbox",
     "sandbox.interfaces",
     "sandbox.providers",

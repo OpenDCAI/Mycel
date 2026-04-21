@@ -2586,7 +2586,11 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
 
     with pytest.raises(AttributeError):
         await asyncio.to_thread(
-            chat_delivery_hook.make_chat_delivery_fn(app),
+            chat_delivery_hook.make_chat_delivery_fn(
+                app,
+                activity_reader=app.state.agent_runtime_thread_activity_reader,
+                thread_repo=app.state.thread_repo,
+            ),
             ChatDeliveryRequest(
                 recipient_id="agent-user-1",
                 recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
@@ -2645,7 +2649,11 @@ async def _run_chat_delivery(
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
 
     await asyncio.to_thread(
-        chat_delivery_hook.make_chat_delivery_fn(app),
+        chat_delivery_hook.make_chat_delivery_fn(
+            app,
+            activity_reader=app.state.agent_runtime_thread_activity_reader,
+            thread_repo=app.state.thread_repo,
+        ),
         ChatDeliveryRequest(
             recipient_id="agent-user-1",
             recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),

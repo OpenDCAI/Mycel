@@ -30,7 +30,11 @@ async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
             raise RuntimeError("runtime gateway down")
 
     app = _hook_app(FailingGateway())
-    deliver = owner_chat_inlet.make_chat_delivery_fn(app)
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        thread_repo=app.state.thread_repo,
+    )
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",
         recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
@@ -58,7 +62,11 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
 
     gateway = RecordingGateway()
     app = _hook_app(gateway)
-    deliver = owner_chat_inlet.make_chat_delivery_fn(app)
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        thread_repo=app.state.thread_repo,
+    )
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",
         recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
@@ -91,7 +99,11 @@ async def test_chat_delivery_hook_requires_recipient_user_type() -> None:
 
     gateway = RecordingGateway()
     app = _hook_app(gateway)
-    deliver = owner_chat_inlet.make_chat_delivery_fn(app)
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        thread_repo=app.state.thread_repo,
+    )
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",
         recipient_user=SimpleNamespace(id="agent-user-1"),
@@ -121,7 +133,11 @@ async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
 
     gateway = RecordingGateway()
     app = _hook_app(gateway)
-    deliver = owner_chat_inlet.make_chat_delivery_fn(app)
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        thread_repo=app.state.thread_repo,
+    )
     request = ChatDeliveryRequest(
         recipient_id="agent-user-1",
         recipient_user=SimpleNamespace(type="agent"),
@@ -139,3 +155,14 @@ async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
         await asyncio.to_thread(deliver, request)
 
     assert gateway.called is False
+
+
+def test_make_chat_delivery_fn_requires_activity_reader():
+    app = SimpleNamespace(state=SimpleNamespace(agent_runtime_gateway=object()))
+
+    with pytest.raises(RuntimeError, match="Agent runtime thread activity reader is not configured"):
+        owner_chat_inlet.make_chat_delivery_fn(
+            app,
+            activity_reader=None,
+            thread_repo=object(),
+        )

@@ -21,15 +21,14 @@ from protocols.agent_runtime import (
 logger = logging.getLogger(__name__)
 
 
-def make_chat_delivery_fn(app: Any):
+def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
     """Create a delivery callback for MessagingService."""
     import asyncio
 
-    loop = asyncio.get_running_loop()
-    logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
-    activity_reader = getattr(app.state, "agent_runtime_thread_activity_reader", None)
     if activity_reader is None:
         raise RuntimeError("Agent runtime thread activity reader is not configured")
+    loop = asyncio.get_running_loop()
+    logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
 
     async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
         raw_recipient_type = getattr(request.recipient_user, "type", None)
@@ -49,7 +48,7 @@ def make_chat_delivery_fn(app: Any):
         )
         thread_id = select_runtime_thread_for_recipient(
             request.recipient_id,
-            thread_repo=app.state.thread_repo,
+            thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
         if thread_id is None:

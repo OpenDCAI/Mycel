@@ -8,7 +8,13 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
-from backend.chat.api.http.dependencies import get_app, get_current_user_id
+from backend.chat.api.http.dependencies import (
+    get_app,
+    get_current_user_id,
+    get_optional_messaging_service,
+    get_optional_runtime_thread_activity_reader,
+    get_thread_last_active_map,
+)
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.threads.projection import canonical_owner_threads
@@ -40,24 +46,34 @@ async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> list[dict[str, Any]]:
+    activity_reader = get_optional_runtime_thread_activity_reader(app)
+    thread_last_active = get_thread_last_active_map(app)
     raw_threads, visit_items = await asyncio.gather(
         list_owner_thread_rows_for_auth_burst(app, user_id),
         asyncio.to_thread(_list_visit_conversations_for_user, app, user_id),
     )
-    hire_items = await asyncio.to_thread(_list_hire_conversations_from_threads, app, raw_threads)
+    hire_items = await asyncio.to_thread(
+        _list_hire_conversations_from_threads,
+        raw_threads,
+        activity_reader,
+        thread_last_active,
+    )
     return _sort_conversation_items([*hire_items, *visit_items])
 
 
-def _list_hire_conversations_from_threads(app: Any, raw_thread_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _list_hire_conversations_from_threads(
+    raw_thread_rows: list[dict[str, Any]],
+    activity_reader: RuntimeThreadActivityReader | None,
+    thread_last_active: dict[str, Any],
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     raw_threads = canonical_owner_threads(raw_thread_rows)
-    activity_reader = getattr(app.state, "agent_runtime_thread_activity_reader", None)
     for t in raw_threads:
         tid = t["id"]
         if _is_internal_child_thread(tid):
             continue
         running = _thread_running(activity_reader, t.get("agent_user_id"), tid)
-        last_active = app.state.thread_last_active.get(tid)
+        last_active = thread_last_active.get(tid)
         updated_at = datetime.fromtimestamp(last_active, tz=UTC).isoformat() if last_active else None
         items.append(
             {
@@ -87,8 +103,8 @@ def _thread_running(activity_reader: RuntimeThreadActivityReader | None, agent_u
 
 def _list_visit_conversations_for_user(app: Any, user_id: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    messaging = getattr(app.state, "messaging_service", None)
-    if messaging:
+    messaging = get_optional_messaging_service(app)
+    if messaging is not None:
         chats = messaging.list_conversation_summaries_for_user(user_id)
         for chat in chats:
             items.append(
