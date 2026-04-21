@@ -70,16 +70,16 @@ async def lifespan(app: FastAPI):
     # @@@web-chat-before-threads - threads bootstrap now constructs the agent
     # runtime gateway eagerly, and that path requires chat-owned typing state
     # to exist first. Reordering this back will fail startup on fresh dev.
-    attach_chat_runtime(
+    chat_runtime = attach_chat_runtime(
         app,
         storage_container,
         user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
     )
-    attach_threads_runtime(app, storage_container, typing_tracker=app.state.typing_tracker)
+    attach_threads_runtime(app, storage_container, typing_tracker=chat_runtime.typing_tracker)
     wire_chat_delivery(
         app,
-        messaging_service=app.state.messaging_service,
+        messaging_service=chat_runtime.messaging_service,
         activity_reader=app.state.agent_runtime_thread_activity_reader,
         thread_repo=app.state.thread_repo,
     )

@@ -55,7 +55,7 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
         )
     )
 
-    chat_bootstrap.attach_chat_runtime(
+    state = chat_bootstrap.attach_chat_runtime(
         app,
         storage_container,
         user_repo=app.state.user_repo,
@@ -74,6 +74,9 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert app.state.messaging_service.kwargs["delivery_resolver"]["contact_repo"] is contact_repo
     assert app.state.messaging_service.kwargs["thread_repo"] is app.state.thread_repo
     assert app.state.messaging_service.delivery_fn is None
+    assert state.contact_repo is contact_repo
+    assert state.typing_tracker is app.state.typing_tracker
+    assert state.messaging_service is app.state.messaging_service
 
 
 def test_attach_chat_runtime_does_not_read_back_chat_state_during_wiring(monkeypatch):
