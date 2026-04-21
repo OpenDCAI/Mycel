@@ -94,6 +94,9 @@ async def create_agent(
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     try:
+        # @@@panel-chat-consumer - panel owns the agent CRUD route, but contact
+        # edge cleanup is chat-owned truth. Borrow the repo explicitly so panel
+        # does not reach through request.app for chat runtime state.
         if contact_repo is None:
             raise RuntimeError("chat bootstrap not attached: contact_repo")
     except RuntimeError as exc:
