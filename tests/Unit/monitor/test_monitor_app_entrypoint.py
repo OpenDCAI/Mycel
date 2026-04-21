@@ -1,4 +1,5 @@
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from fastapi.testclient import TestClient
 from backend.bootstrap import app_entrypoint
 from backend.monitor.app import lifespan as monitor_app_lifespan
 from backend.monitor.app import main as monitor_app_main
+from backend.monitor.infrastructure.web import gateway as monitor_gateway
 
 app = monitor_app_main.app
 
@@ -16,7 +18,11 @@ def test_monitor_app_module_path_is_internalized():
 
 
 def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: object())
+    monitor_storage = SimpleNamespace(
+        storage_container=SimpleNamespace(user_repo=lambda: object()),
+    )
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
+    monkeypatch.setattr(monitor_app_lifespan, "attach_auth_runtime_state", lambda *_args, **_kwargs: object())
     with TestClient(app) as client:
         response = client.get("/openapi.json")
 
@@ -28,7 +34,67 @@ def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.Monke
     assert "/api/monitor/threads" not in paths
     assert "/api/monitor/threads/{thread_id}" not in paths
     assert "/api/monitor/evaluation/batches/{batch_id}/start" not in paths
-    assert set(paths["/api/monitor/evaluation/batches"]) == {"get"}
+    assert set(paths["/api/monitor/evaluation/batches"]) == {"get", "post"}
+
+
+def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyPatch):
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
+    monitor_storage = SimpleNamespace(
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+    )
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
+    monkeypatch.setattr(
+        monitor_app_lifespan,
+        "attach_auth_runtime_state",
+        lambda app, *, storage_state: setattr(
+            app.state,
+            "auth_service",
+            SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+        ) or object(),
+    )
+    monkeypatch.setattr(
+        monitor_gateway,
+        "create_evaluation_batch",
+        lambda **kwargs: {"batch": kwargs},
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/monitor/evaluation/batches",
+            json={"agent_user_id": "agent-1", "scenario_ids": ["scenario-1"], "sandbox": "local", "max_concurrent": 1},
+            headers={"Authorization": "Bearer token-1"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["batch"]
+    assert payload["submitted_by_user_id"] == "owner-1"
+    assert payload["agent_user_id"] == "agent-1"
+
+
+def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatch: pytest.MonkeyPatch):
+    user_repo = SimpleNamespace(get_by_id=lambda _user_id: None)
+    monitor_storage = SimpleNamespace(
+        storage_container=SimpleNamespace(user_repo=lambda: user_repo),
+    )
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: monitor_storage)
+    monkeypatch.setattr(
+        monitor_app_lifespan,
+        "attach_auth_runtime_state",
+        lambda app, *, storage_state: setattr(
+            app.state,
+            "auth_service",
+            SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+        ) or object(),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/monitor/evaluation/batches",
+            json={"agent_user_id": "agent-1", "scenario_ids": ["scenario-1"], "sandbox": "local", "max_concurrent": 1},
+            headers={"Authorization": "Bearer token-1"},
+        )
+
+    assert response.status_code == 401
+    assert "User no longer exists" in response.text
 
 
 def test_monitor_app_resolve_port_prefers_monitor_backend_env(monkeypatch: pytest.MonkeyPatch):

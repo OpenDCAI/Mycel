@@ -1,12 +1,22 @@
 """Global monitor routes eligible for future monitor_app mounting."""
 
 import asyncio
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
+from backend.monitor.api.http.dependencies import get_current_user_id
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
 
 router = APIRouter()
+
+
+class EvaluationBatchCreateRequest(BaseModel):
+    agent_user_id: str
+    scenario_ids: list[str] = Field(min_length=1)
+    sandbox: str = "local"
+    max_concurrent: int = Field(default=1, ge=1, le=50)
 
 
 def _or_404(fn, *args):
@@ -92,6 +102,20 @@ def evaluation_snapshot():
 @router.get("/evaluation/batches")
 def evaluation_batches_snapshot(limit: int = Query(default=50, ge=1, le=200)):
     return monitor_gateway.get_evaluation_batches(limit=limit)
+
+
+@router.post("/evaluation/batches")
+def evaluation_batch_create_action(
+    payload: EvaluationBatchCreateRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    return monitor_gateway.create_evaluation_batch(
+        submitted_by_user_id=user_id,
+        agent_user_id=payload.agent_user_id,
+        scenario_ids=payload.scenario_ids,
+        sandbox=payload.sandbox,
+        max_concurrent=payload.max_concurrent,
+    )
 
 
 @router.get("/evaluation/scenarios")
