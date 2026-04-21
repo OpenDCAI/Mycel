@@ -112,6 +112,45 @@ async def test_registry_get_or_create_agent_uses_explicit_messaging_service(
 
 
 @pytest.mark.asyncio
+async def test_registry_get_or_create_agent_requires_explicit_messaging_service_for_chat_repos(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def _fake_create_agent_sync(**_kwargs) -> object:
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-direct-missing",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-direct-missing", agent_config_id="cfg-direct-missing")
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-direct-missing")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
+        await agent_pool._registry.get_or_create_agent(cast(Any, app), "local", thread_id="thread-direct-missing")
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.MonkeyPatch):
     created: list[object] = []
 
