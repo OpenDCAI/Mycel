@@ -29,7 +29,7 @@ def test_build_auth_runtime_state_uses_runtime_storage_state(monkeypatch):
         storage_container=_fake_storage_container(),
     )
 
-    state = auth_runtime_bootstrap.build_auth_runtime_state(storage_state)
+    state = auth_runtime_bootstrap.build_auth_runtime_state(storage_state, contact_repo="contact-repo")
 
     assert state.supabase_auth_client_factory() is fake_auth_factory
     assert isinstance(state.auth_service, _FakeAuthService)
@@ -44,13 +44,27 @@ def test_build_auth_runtime_state_uses_runtime_storage_state(monkeypatch):
     }
 
 
+def test_build_auth_runtime_state_requires_explicit_contact_repo():
+    storage_state = SimpleNamespace(
+        supabase_client="supabase-client",
+        storage_container=_fake_storage_container(),
+    )
+
+    try:
+        auth_runtime_bootstrap.build_auth_runtime_state(storage_state)
+    except TypeError as exc:
+        assert "contact_repo" in str(exc)
+    else:
+        raise AssertionError("build_auth_runtime_state should require explicit contact_repo")
+
+
 def test_attach_auth_runtime_state_sets_app_state(monkeypatch):
     fake_state = SimpleNamespace(auth_service=object(), supabase_auth_client_factory=object())
     app = type("_App", (), {"state": type("_State", (), {})()})()
 
-    monkeypatch.setattr(auth_runtime_bootstrap, "build_auth_runtime_state", lambda _storage_state: fake_state)
+    monkeypatch.setattr(auth_runtime_bootstrap, "build_auth_runtime_state", lambda _storage_state, *, contact_repo: fake_state)
 
-    result = auth_runtime_bootstrap.attach_auth_runtime_state(app, storage_state=object())
+    result = auth_runtime_bootstrap.attach_auth_runtime_state(app, storage_state=object(), contact_repo=object())
 
     assert result is fake_state
     assert app.state.auth_service is fake_state.auth_service
