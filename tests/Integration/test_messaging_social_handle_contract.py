@@ -2590,7 +2590,12 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
             thread_locks_guard=asyncio.Lock(),
         )
     )
-    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker)
+    gateway = build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker)
+    app.state.agent_runtime_gateway = gateway
+    app.state.threads_runtime_state = SimpleNamespace(
+        agent_runtime_gateway=gateway,
+        activity_reader=app.state.agent_runtime_thread_activity_reader,
+    )
 
     with pytest.raises(AttributeError):
         await asyncio.to_thread(
@@ -2660,7 +2665,12 @@ async def _run_chat_delivery(
             thread_locks_guard=asyncio.Lock(),
         )
     )
-    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker)
+    gateway = build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker)
+    app.state.agent_runtime_gateway = gateway
+    app.state.threads_runtime_state = SimpleNamespace(
+        agent_runtime_gateway=gateway,
+        activity_reader=app.state.agent_runtime_thread_activity_reader,
+    )
 
     await asyncio.to_thread(
         chat_delivery_hook.make_chat_delivery_fn(

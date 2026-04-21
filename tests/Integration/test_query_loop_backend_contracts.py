@@ -526,7 +526,16 @@ def _make_streaming_app(
         state.thread_sandbox = {thread_id: "local"}
         state._event_loop = asyncio.get_running_loop()
     app = SimpleNamespace(state=state)
-    state.agent_runtime_gateway = build_agent_runtime_gateway(app, typing_tracker=state.typing_tracker)
+    gateway = build_agent_runtime_gateway(app, typing_tracker=state.typing_tracker)
+    state.agent_runtime_gateway = gateway
+    state.agent_runtime_gateway_state = SimpleNamespace(
+        gateway=gateway,
+        activity_reader=state.agent_runtime_thread_activity_reader,
+    )
+    state.threads_runtime_state = SimpleNamespace(
+        agent_runtime_gateway=gateway,
+        activity_reader=state.agent_runtime_thread_activity_reader,
+    )
     return app, queue_manager
 
 

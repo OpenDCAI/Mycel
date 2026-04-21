@@ -43,6 +43,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert app.state.subagent_buffers == {}
     assert app.state.thread_last_active == {}
     assert app.state.agent_runtime_gateway is gateway
+    assert app.state.threads_runtime_state is state
     assert state.queue_manager is queue_manager
     assert state.agent_runtime_gateway is gateway
     assert state.activity_reader is activity_reader

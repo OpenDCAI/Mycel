@@ -33,11 +33,14 @@ def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: 
     # at bootstrap so downstream gateway setup does not reopen app.state.
     runtime_state = build_agent_runtime_state(app, typing_tracker=typing_tracker)
     app.state.agent_runtime_gateway = runtime_state.gateway
+    app.state.threads_runtime_state = None
     # @@@threads-bootstrap-borrowable-state - bootstrap still attaches thread
     # runtime objects onto app.state for the wider app, but it also returns the
     # freshly built runtime handles so enclosing lifespans do not need to reread them.
-    return ThreadsRuntimeState(
+    state = ThreadsRuntimeState(
         queue_manager=app.state.queue_manager,
         agent_runtime_gateway=app.state.agent_runtime_gateway,
         activity_reader=runtime_state.activity_reader,
     )
+    app.state.threads_runtime_state = state
+    return state
