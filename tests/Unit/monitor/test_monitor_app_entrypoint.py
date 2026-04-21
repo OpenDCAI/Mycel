@@ -46,11 +46,14 @@ def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         monitor_app_lifespan,
         "attach_auth_runtime_state",
-        lambda app, *, storage_state: setattr(
-            app.state,
-            "auth_service",
-            SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
-        ) or object(),
+        lambda app, *, storage_state: (
+            setattr(
+                app.state,
+                "auth_service",
+                SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+            )
+            or object()
+        ),
     )
     monkeypatch.setattr(
         monitor_gateway,
@@ -79,11 +82,14 @@ def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatc
     monkeypatch.setattr(
         monitor_app_lifespan,
         "attach_auth_runtime_state",
-        lambda app, *, storage_state: setattr(
-            app.state,
-            "auth_service",
-            SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
-        ) or object(),
+        lambda app, *, storage_state: (
+            setattr(
+                app.state,
+                "auth_service",
+                SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+            )
+            or object()
+        ),
     )
 
     with TestClient(app) as client:
