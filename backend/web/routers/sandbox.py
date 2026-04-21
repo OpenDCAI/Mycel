@@ -5,12 +5,15 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from backend import sandbox_provider_availability, sandbox_runtime_metrics, sandbox_runtime_mutations, user_sandbox_reads
-from backend.avatar_urls import avatar_url
-from backend.sandbox_inventory import init_providers_and_managers
-from backend.sandbox_runtime_reads import find_runtime_and_manager, load_all_sandbox_runtimes
-from backend.thread_runtime.projection import canonical_owner_threads
-from backend.virtual_threads import is_virtual_thread_id
+from backend.identity.avatar.urls import avatar_url
+from backend.sandboxes import provider_availability as sandbox_provider_availability
+from backend.sandboxes import user_reads as user_sandbox_reads
+from backend.sandboxes.inventory import init_providers_and_managers
+from backend.sandboxes.runtime import metrics as sandbox_runtime_metrics
+from backend.sandboxes.runtime import mutations as sandbox_runtime_mutations
+from backend.sandboxes.runtime.reads import find_runtime_and_manager, load_all_sandbox_runtimes
+from backend.threads.projection import canonical_owner_threads
+from backend.threads.virtual_threads import is_virtual_thread_id
 from backend.web.core.dependencies import get_current_user_id
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 

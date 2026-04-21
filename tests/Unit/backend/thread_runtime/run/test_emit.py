@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.thread_runtime.events.buffer import ThreadEventBuffer
+from backend.threads.events.buffer import ThreadEventBuffer
 
 
 class _FakeDisplayBuilder:
@@ -24,7 +24,7 @@ class _FakeDisplayBuilder:
 
 @pytest.mark.asyncio
 async def test_build_emit_carries_seq_run_id_message_id_and_display_delta(monkeypatch: pytest.MonkeyPatch) -> None:
-    from backend.thread_runtime.run.emit import build_emit
+    from backend.threads.run.emit import build_emit
 
     seq = 40
 
@@ -33,7 +33,7 @@ async def test_build_emit_carries_seq_run_id_message_id_and_display_delta(monkey
         seq += 1
         return seq
 
-    monkeypatch.setattr("backend.thread_runtime.run.emit.append_event", fake_append_event)
+    monkeypatch.setattr("backend.threads.run.emit.append_event", fake_append_event)
 
     thread_buf = ThreadEventBuffer()
     display_builder = _FakeDisplayBuilder()
@@ -86,7 +86,7 @@ async def test_build_emit_carries_seq_run_id_message_id_and_display_delta(monkey
 
 
 def test_resolve_run_event_repo_requires_callable_repo_factory() -> None:
-    from backend.thread_runtime.run.emit import resolve_run_event_repo
+    from backend.threads.run.emit import resolve_run_event_repo
 
     agent = SimpleNamespace(storage_container=SimpleNamespace(run_event_repo=None))
 

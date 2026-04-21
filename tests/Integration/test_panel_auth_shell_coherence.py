@@ -6,9 +6,10 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from backend.library import service as library_service
+from backend.threads import agent_user_service
 from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest
 from backend.web.routers import panel as panel_router
-from backend.web.services import agent_user_service, library_service
 from storage.contracts import UserRow, UserType
 
 

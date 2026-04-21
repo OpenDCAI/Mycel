@@ -1,7 +1,7 @@
 import pytest
 from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
-from backend import supabase_runtime
+from backend.identity.auth import supabase_runtime
 from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
 
 
@@ -51,7 +51,7 @@ def test_create_supabase_client_uses_runtime_schema(monkeypatch):
     monkeypatch.setenv("SUPABASE_INTERNAL_URL", "http://storage.example.test")
     monkeypatch.setenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
     monkeypatch.setenv("LEON_DB_SCHEMA", "agent")
-    monkeypatch.setattr("backend.supabase_runtime.create_client", fake_create_client)
+    monkeypatch.setattr("backend.identity.auth.supabase_runtime.create_client", fake_create_client)
 
     create_supabase_client()
 

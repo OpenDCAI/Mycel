@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from backend import sandbox_paths
+from backend.sandboxes import paths as sandbox_paths
 from backend.web.core import config
 
 

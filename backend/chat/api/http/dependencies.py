@@ -1,7 +1,11 @@
 """Chat HTTP dependency helpers."""
 
-from backend.auth_user_resolution import get_current_user_id as resolve_current_user_id
-from backend.request_app import get_app as resolve_app
+from fastapi import FastAPI, Request
+
+from backend.identity.auth.user_resolution import get_current_user_id as resolve_current_user_id
 
 get_current_user_id = resolve_current_user_id
-get_app = resolve_app
+
+
+async def get_app(request: Request) -> FastAPI:
+    return request.app

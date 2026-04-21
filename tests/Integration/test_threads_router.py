@@ -167,7 +167,7 @@ class _FakeRecipeRepo:
 async def test_send_message_passes_enable_trajectory_to_agent_runtime_gateway() -> None:
     captured: list[Any] = []
 
-    from backend.protocols.agent_runtime import AgentThreadInputResult
+    from protocols.agent_runtime import AgentThreadInputResult
 
     class _Gateway:
         async def dispatch_thread_input(self, envelope: Any) -> AgentThreadInputResult:
@@ -990,7 +990,7 @@ async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch:
     )
 
     monkeypatch.setattr(
-        "backend.thread_runtime.convergence.delete_thread_in_db",
+        "backend.threads.convergence.delete_thread_in_db",
         lambda thread_id: purged.append(thread_id),
     )
 
@@ -1245,7 +1245,7 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
 
     captured: list[Any] = []
 
-    from backend.protocols.agent_runtime import AgentThreadInputResult
+    from protocols.agent_runtime import AgentThreadInputResult
 
     class _Gateway:
         async def dispatch_thread_input(self, envelope: Any) -> AgentThreadInputResult:

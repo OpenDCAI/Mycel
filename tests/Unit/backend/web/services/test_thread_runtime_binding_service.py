@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 import pytest
 
-from backend.thread_runtime.binding import (
+from backend.threads.binding import (
     ThreadRuntimeBindingError,
     resolve_thread_runtime_binding,
 )

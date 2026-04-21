@@ -5,12 +5,12 @@ from typing import get_type_hints
 
 
 def test_agent_runtime_protocol_types_live_outside_web_service_layer() -> None:
-    protocol_module = importlib.import_module("backend.protocols.agent_runtime")
-    gateway_module = importlib.import_module("backend.agent_runtime.gateway")
+    protocol_module = importlib.import_module("protocols.agent_runtime")
+    gateway_module = importlib.import_module("backend.threads.chat_adapters.gateway")
 
-    assert protocol_module.AgentChatDeliveryEnvelope.__module__ == "backend.protocols.agent_runtime"
-    assert protocol_module.AgentThreadInputEnvelope.__module__ == "backend.protocols.agent_runtime"
-    assert protocol_module.AgentChatDeliveryResult.__module__ == "backend.protocols.agent_runtime"
+    assert protocol_module.AgentChatDeliveryEnvelope.__module__ == "protocols.agent_runtime"
+    assert protocol_module.AgentThreadInputEnvelope.__module__ == "protocols.agent_runtime"
+    assert protocol_module.AgentChatDeliveryResult.__module__ == "protocols.agent_runtime"
     assert not hasattr(protocol_module, "AgentGatewayDeliveryResult")
     assert not hasattr(gateway_module, "AgentChatDeliveryEnvelope")
     assert not hasattr(gateway_module, "AgentThreadInputEnvelope")
@@ -18,7 +18,7 @@ def test_agent_runtime_protocol_types_live_outside_web_service_layer() -> None:
 
 
 def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -> None:
-    protocol_module = importlib.import_module("backend.protocols.agent_runtime")
+    protocol_module = importlib.import_module("protocols.agent_runtime")
 
     chat_fields = get_type_hints(protocol_module.AgentChatDeliveryEnvelope)
     thread_fields = get_type_hints(protocol_module.AgentThreadInputEnvelope)
@@ -35,7 +35,7 @@ def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -
 
 
 def test_agent_chat_recipient_supports_optional_preselected_thread_id() -> None:
-    protocol_module = importlib.import_module("backend.protocols.agent_runtime")
+    protocol_module = importlib.import_module("protocols.agent_runtime")
 
     recipient_fields = get_type_hints(protocol_module.AgentChatRecipient)
 
@@ -43,20 +43,20 @@ def test_agent_chat_recipient_supports_optional_preselected_thread_id() -> None:
 
 
 def test_agent_runtime_thread_input_result_is_a_protocol_object() -> None:
-    protocol_module = importlib.import_module("backend.protocols.agent_runtime")
-    gateway_module = importlib.import_module("backend.agent_runtime.gateway")
-    port_module = importlib.import_module("backend.agent_runtime.port")
+    protocol_module = importlib.import_module("protocols.agent_runtime")
+    gateway_module = importlib.import_module("backend.threads.chat_adapters.gateway")
+    port_module = importlib.import_module("backend.threads.chat_adapters.port")
 
     gateway_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.dispatch_thread_input)
     port_hints = get_type_hints(port_module.AgentRuntimeGatewayPort.dispatch_thread_input)
 
-    assert protocol_module.AgentThreadInputResult.__module__ == "backend.protocols.agent_runtime"
+    assert protocol_module.AgentThreadInputResult.__module__ == "protocols.agent_runtime"
     assert gateway_hints["return"] is protocol_module.AgentThreadInputResult
     assert port_hints["return"] is protocol_module.AgentThreadInputResult
 
 
 def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
-    gateway_module = importlib.import_module("backend.agent_runtime.gateway")
+    gateway_module = importlib.import_module("backend.threads.chat_adapters.gateway")
 
     constructor_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.__init__)
 
@@ -66,17 +66,17 @@ def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
 
 
 def test_agent_runtime_implementation_lives_under_backend_agent_runtime() -> None:
-    gateway_impl = importlib.import_module("backend.agent_runtime.gateway")
-    bootstrap_impl = importlib.import_module("backend.agent_runtime.bootstrap")
-    port_impl = importlib.import_module("backend.agent_runtime.port")
-    chat_handler_impl = importlib.import_module("backend.agent_runtime.chat_handler")
-    thread_handler_impl = importlib.import_module("backend.agent_runtime.thread_handler")
+    gateway_impl = importlib.import_module("backend.threads.chat_adapters.gateway")
+    bootstrap_impl = importlib.import_module("backend.threads.chat_adapters.bootstrap")
+    port_impl = importlib.import_module("backend.threads.chat_adapters.port")
+    chat_handler_impl = importlib.import_module("backend.threads.chat_adapters.chat_handler")
+    thread_handler_impl = importlib.import_module("backend.threads.chat_adapters.thread_handler")
 
-    assert gateway_impl.NativeAgentRuntimeGateway.__module__ == "backend.agent_runtime.gateway"
-    assert bootstrap_impl.build_agent_runtime_gateway.__module__ == "backend.agent_runtime.bootstrap"
-    assert port_impl.get_agent_runtime_gateway.__module__ == "backend.agent_runtime.port"
-    assert chat_handler_impl.NativeAgentChatDeliveryHandler.__module__ == "backend.agent_runtime.chat_handler"
-    assert thread_handler_impl.NativeAgentThreadInputHandler.__module__ == "backend.agent_runtime.thread_handler"
+    assert gateway_impl.NativeAgentRuntimeGateway.__module__ == "backend.threads.chat_adapters.gateway"
+    assert bootstrap_impl.build_agent_runtime_gateway.__module__ == "backend.threads.chat_adapters.bootstrap"
+    assert port_impl.get_agent_runtime_gateway.__module__ == "backend.threads.chat_adapters.port"
+    assert chat_handler_impl.NativeAgentChatDeliveryHandler.__module__ == "backend.threads.chat_adapters.chat_handler"
+    assert thread_handler_impl.NativeAgentThreadInputHandler.__module__ == "backend.threads.chat_adapters.thread_handler"
     assert gateway_impl.NativeAgentRuntimeGateway is not None
     assert port_impl.get_agent_runtime_gateway is not None
     assert chat_handler_impl.NativeAgentChatDeliveryHandler is not None

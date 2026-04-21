@@ -3,7 +3,7 @@ import subprocess
 
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend import app_entrypoint
+from backend.bootstrap import app_entrypoint
 
 
 def test_resolve_app_port_prefers_env_key(monkeypatch):

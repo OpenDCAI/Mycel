@@ -181,7 +181,7 @@ async def test_verify_thread_owner_fails_loud_without_purging_terminal_less_thre
     )
 
     monkeypatch.setattr(
-        "backend.thread_runtime.convergence.delete_thread_in_db",
+        "backend.threads.convergence.delete_thread_in_db",
         lambda thread_id: purged.append(thread_id),
     )
 

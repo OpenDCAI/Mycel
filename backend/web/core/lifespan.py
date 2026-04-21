@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from psycopg import AsyncConnection
 
-from backend.thread_runtime.pool import idle_reaper as idle_reaper_owner
+from backend.threads.pool import idle_reaper as idle_reaper_owner
 from core.runtime.middleware.queue import MessageQueueManager
 
 
@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
     await _validate_web_checkpointer_contract()
 
     # ---- Chat repos + services ----
-    from backend.auth_runtime_bootstrap import attach_auth_runtime_state
-    from backend.runtime_storage_bootstrap import attach_runtime_storage_state
+    from backend.bootstrap.storage import attach_runtime_storage_state
+    from backend.identity.auth.runtime_bootstrap import attach_auth_runtime_state
 
     runtime_storage = attach_runtime_storage_state(app)
     _supabase_client = runtime_storage.supabase_client
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     # Wire chat delivery after event loop is available
     # ---- Messaging system (Supabase-backed, required) ----
-    from backend.agent_runtime.chat_inlet import make_chat_delivery_fn
+    from backend.threads.chat_adapters.chat_inlet import make_chat_delivery_fn
     from backend.web.utils.serializers import avatar_url
     from messaging.delivery.resolver import HireVisitDeliveryResolver
     from messaging.relationships.service import RelationshipService
@@ -117,12 +117,12 @@ async def lifespan(app: FastAPI):
     app.state.thread_event_buffers = {}
     app.state.subagent_buffers = {}
 
-    from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
+    from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
     app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
 
-    from backend.display_builder import DisplayBuilder
+    from backend.threads.display.builder import DisplayBuilder
 
     app.state.display_builder = DisplayBuilder()
     app.state.thread_last_active = {}  # thread_id → epoch timestamp
@@ -130,8 +130,8 @@ async def lifespan(app: FastAPI):
     app.state._event_loop = asyncio.get_running_loop()
 
     try:
+        from backend.sandboxes.service import init_providers_and_managers
         from backend.web.core.config import IDLE_REAPER_INTERVAL_SEC
-        from backend.web.services.sandbox_service import init_providers_and_managers
 
         idle_reaper_owner.init_providers_and_managers = init_providers_and_managers
         idle_reaper_owner.IDLE_REAPER_INTERVAL_SEC = IDLE_REAPER_INTERVAL_SEC

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.thread_runtime.state import get_sandbox_info, get_sandbox_status_from_repos
+from backend.threads.state import get_sandbox_info, get_sandbox_status_from_repos
 
 
 def test_sandbox_info_does_not_expose_terminal_or_session_identity() -> None:

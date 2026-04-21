@@ -1,7 +1,7 @@
-import backend.resource_common as neutral_resource_common
-import backend.resource_common as resource_common
-import backend.resource_projection as resource_projection_service
-import backend.resource_provider_boundary as resource_provider_boundary_service
+import backend.sandboxes.resources.common as neutral_resource_common
+import backend.sandboxes.resources.common as resource_common
+import backend.sandboxes.resources.projection as resource_projection_service
+import backend.sandboxes.resources.provider_boundary as resource_provider_boundary_service
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from storage import runtime as storage_runtime
 

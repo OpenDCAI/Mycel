@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.sandboxes import service as sandbox_service
 from backend.web.routers import sandbox as sandbox_router
-from backend.web.services import sandbox_service
 
 
 @pytest.mark.asyncio

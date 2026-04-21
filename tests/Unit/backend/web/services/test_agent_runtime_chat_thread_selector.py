@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
-from backend.protocols.agent_runtime import (
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
+from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
     AgentChatRecipient,
@@ -22,9 +22,9 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
     async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
         return SimpleNamespace(id=f"agent-for-{thread_id}")
 
-    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
-    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("backend.threads.activity_pool_service.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.threads.activity_pool_service.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.threads.streaming._ensure_thread_handlers", lambda *_args, **_kwargs: None)
 
     app = SimpleNamespace(
         state=SimpleNamespace(

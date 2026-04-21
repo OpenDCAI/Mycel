@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from backend.web.services import sandbox_service
+from backend.sandboxes import service as sandbox_service
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
 

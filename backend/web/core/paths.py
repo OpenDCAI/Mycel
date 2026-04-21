@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.avatar_paths import avatars_dir as avatar_storage_dir
+from backend.identity.avatar.paths import avatars_dir as avatar_storage_dir
 from config.user_paths import preferred_user_home_dir
 
 

@@ -4,8 +4,8 @@ import importlib
 
 import pytest
 
-from backend.thread_runtime.events import reads as event_store_reads
-from backend.thread_runtime.events import store as event_store
+from backend.threads.events import reads as event_store_reads
+from backend.threads.events import store as event_store
 
 
 @pytest.mark.asyncio
@@ -65,10 +65,10 @@ def test_build_run_event_read_transport_uses_repo_boundary() -> None:
 
 
 def test_run_event_store_write_owner_lives_under_backend_thread_runtime_events() -> None:
-    owner_module = importlib.import_module("backend.thread_runtime.events.store")
-    read_owner_module = importlib.import_module("backend.thread_runtime.events.reads")
+    owner_module = importlib.import_module("backend.threads.events.store")
+    read_owner_module = importlib.import_module("backend.threads.events.reads")
 
-    assert owner_module.__name__ == "backend.thread_runtime.events.store"
+    assert owner_module.__name__ == "backend.threads.events.store"
     assert hasattr(owner_module, "append_event")
     assert hasattr(owner_module, "read_events_after")
     assert hasattr(owner_module, "get_last_seq")

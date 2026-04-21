@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.auth_dependencies import _get_auth_service
+from backend.identity.auth.dependencies import _get_auth_service
 from backend.web.core.dependencies import get_app
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])

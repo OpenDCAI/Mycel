@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from backend.bootstrap.storage import attach_runtime_storage_state
 from backend.monitor.infrastructure.resources.resource_overview_cache import resource_overview_refresh_loop
-from backend.runtime_storage_bootstrap import attach_runtime_storage_state
 
 
 def _require_monitor_runtime_contract(app: FastAPI) -> None:

@@ -7,8 +7,8 @@ from typing import Any, cast
 
 import pytest
 
-from backend.agent_runtime import chat_inlet as chat_delivery_hook
-from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
+from backend.threads.chat_adapters import chat_inlet as chat_delivery_hook
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
@@ -2617,11 +2617,11 @@ async def _run_chat_delivery(
     async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
         return SimpleNamespace(id=f"agent-for-{thread_id}")
 
-    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
-    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("backend.threads.activity_pool_service.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.threads.activity_pool_service.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.threads.streaming._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        "backend.agent_runtime.chat_inlet.format_chat_notification",
+        "backend.threads.chat_adapters.chat_inlet.format_chat_notification",
         lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
     )
 

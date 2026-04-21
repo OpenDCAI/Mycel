@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from backend.agent_runtime.gateway import NativeAgentRuntimeGateway
-from backend.protocols.agent_runtime import AgentChatDeliveryResult, AgentThreadInputResult
+from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
+from protocols.agent_runtime import AgentChatDeliveryResult, AgentThreadInputResult
 
 
 @dataclass
@@ -29,7 +29,7 @@ class _FakeThreadInputHandler:
 
 @pytest.mark.asyncio
 async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> None:
-    from backend.protocols.agent_runtime import (
+    from protocols.agent_runtime import (
         AgentChatContext,
         AgentChatDeliveryEnvelope,
         AgentChatRecipient,
@@ -66,8 +66,8 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
 
 
 def test_split_handler_modules_are_the_behavior_owners() -> None:
-    from backend.agent_runtime.chat_handler import NativeAgentChatDeliveryHandler
-    from backend.agent_runtime.thread_handler import NativeAgentThreadInputHandler
+    from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHandler
+    from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 
     assert NativeAgentChatDeliveryHandler.__name__ == "NativeAgentChatDeliveryHandler"
     assert NativeAgentThreadInputHandler.__name__ == "NativeAgentThreadInputHandler"
@@ -84,7 +84,7 @@ def test_gateway_rejects_single_chat_handler_entrypoint() -> None:
 
 @pytest.mark.asyncio
 async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
-    from backend.protocols.agent_runtime import (
+    from protocols.agent_runtime import (
         AgentChatContext,
         AgentChatDeliveryEnvelope,
         AgentChatRecipient,
@@ -112,7 +112,7 @@ async def test_gateway_routes_chat_delivery_by_runtime_source() -> None:
 
 @pytest.mark.asyncio
 async def test_gateway_rejects_unregistered_chat_runtime_source() -> None:
-    from backend.protocols.agent_runtime import (
+    from protocols.agent_runtime import (
         AgentChatContext,
         AgentChatDeliveryEnvelope,
         AgentChatRecipient,

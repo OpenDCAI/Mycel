@@ -1,3 +1,4 @@
+from backend.threads import convergence
 from backend.web.utils import helpers
 
 
@@ -48,17 +49,17 @@ def test_delete_thread_in_db_uses_runtime_repo_factories_without_db_path(monkeyp
     terminal_repo = _ThreadRepo()
     sync_state_holder: dict[str, _SyncState] = {}
 
-    monkeypatch.setattr(helpers, "_get_container", lambda: container)
-    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
-    monkeypatch.setattr(helpers, "make_chat_session_repo", lambda: session_repo)
-    monkeypatch.setattr(helpers, "make_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr(convergence, "_get_container", lambda: container)
+    monkeypatch.setattr(convergence, "resolve_sandbox_db_path", lambda: sandbox_db)
+    monkeypatch.setattr(convergence, "make_chat_session_repo", lambda: session_repo)
+    monkeypatch.setattr(convergence, "make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(
-        helpers,
+        convergence,
         "SyncState",
         lambda **kwargs: sync_state_holder.setdefault("instance", _SyncState(**kwargs)),
     )
 
-    helpers.delete_thread_in_db("thread-1")
+    convergence.delete_thread_in_db("thread-1")
 
     sync_state = sync_state_holder["instance"]
     assert container.purged == ["thread-1"]
@@ -78,18 +79,18 @@ def test_delete_thread_in_db_cleans_runtime_repos_when_supabase_defaults_without
     terminal_repo = _ThreadRepo()
     sync_state_holder: dict[str, _SyncState] = {}
 
-    monkeypatch.setattr(helpers, "_get_container", lambda: container)
-    monkeypatch.setattr(helpers, "resolve_sandbox_db_path", lambda: sandbox_db)
-    monkeypatch.setattr(helpers, "uses_supabase_runtime_defaults", lambda: True)
-    monkeypatch.setattr(helpers, "make_chat_session_repo", lambda: session_repo)
-    monkeypatch.setattr(helpers, "make_terminal_repo", lambda: terminal_repo)
+    monkeypatch.setattr(convergence, "_get_container", lambda: container)
+    monkeypatch.setattr(convergence, "resolve_sandbox_db_path", lambda: sandbox_db)
+    monkeypatch.setattr(convergence, "uses_supabase_runtime_defaults", lambda: True)
+    monkeypatch.setattr(convergence, "make_chat_session_repo", lambda: session_repo)
+    monkeypatch.setattr(convergence, "make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(
-        helpers,
+        convergence,
         "SyncState",
         lambda **kwargs: sync_state_holder.setdefault("instance", _SyncState(**kwargs)),
     )
 
-    helpers.delete_thread_in_db("thread-1")
+    convergence.delete_thread_in_db("thread-1")
 
     sync_state = sync_state_holder["instance"]
     assert container.purged == ["thread-1"]

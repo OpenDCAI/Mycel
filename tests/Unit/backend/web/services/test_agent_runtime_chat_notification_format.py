@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.agent_runtime.chat_notification_format import format_chat_notification
+from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
 
 
 def test_chat_notification_format_includes_explicit_read_and_reply_instructions() -> None:

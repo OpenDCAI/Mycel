@@ -6,12 +6,12 @@ import pytest
 
 
 def test_thread_runtime_namespace_exports_legacy_helpers() -> None:
-    history_owner = importlib.import_module("backend.thread_runtime.history")
-    projection_owner = importlib.import_module("backend.thread_runtime.projection")
-    convergence_owner = importlib.import_module("backend.thread_runtime.convergence")
-    sandbox_owner = importlib.import_module("backend.thread_runtime.sandbox")
-    reads_owner = importlib.import_module("backend.thread_runtime.events.reads")
-    buffer_owner = importlib.import_module("backend.thread_runtime.events.buffer")
+    history_owner = importlib.import_module("backend.threads.history")
+    projection_owner = importlib.import_module("backend.threads.projection")
+    convergence_owner = importlib.import_module("backend.threads.convergence")
+    sandbox_owner = importlib.import_module("backend.threads.sandbox_resolution")
+    reads_owner = importlib.import_module("backend.threads.events.reads")
+    buffer_owner = importlib.import_module("backend.threads.events.buffer")
 
     assert history_owner.build_thread_history_transport is not None
     assert projection_owner.canonical_owner_threads is not None

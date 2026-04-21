@@ -7,7 +7,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_activity_bridge_attaches_drains_and_detaches_runtime_events() -> None:
-    from backend.thread_runtime.run.activity_bridge import build_activity_bridge
+    from backend.threads.run.activity_bridge import build_activity_bridge
 
     emitted: list[dict[str, str]] = []
 
@@ -41,7 +41,7 @@ async def test_activity_bridge_attaches_drains_and_detaches_runtime_events() -> 
 
 @pytest.mark.asyncio
 async def test_activity_bridge_drops_events_after_queue_is_full() -> None:
-    from backend.thread_runtime.run.activity_bridge import build_activity_bridge
+    from backend.threads.run.activity_bridge import build_activity_bridge
 
     emitted: list[dict[str, int]] = []
 
