@@ -129,3 +129,24 @@ def test_build_owner_thread_workbench_preserves_agent_order_across_fallback_sele
     payload = thread_workbench.build_owner_thread_workbench_from_rows(rows, reader=reader)
 
     assert [thread["thread_id"] for thread in payload["threads"]] == ["agent-1-branch", "agent-2-main"]
+
+
+def test_build_owner_thread_workbench_omits_agent_groups_with_no_visible_runtime_candidate():
+    rows = [
+        {"id": "agent-1-main", "agent_user_id": "agent-1", "is_main": True, "branch_index": 0, "sandbox_type": "local"},
+        {"id": "agent-1-branch", "agent_user_id": "agent-1", "is_main": False, "branch_index": 1, "sandbox_type": "local"},
+        {"id": "agent-2-main", "agent_user_id": "agent-2", "is_main": True, "branch_index": 0, "sandbox_type": "local"},
+    ]
+    reader = _reader(
+        rows=rows,
+        runtime_states={
+            "agent-1-main": "purged",
+            "agent-1-branch": "missing",
+            "agent-2-main": "ready",
+        },
+        converge_calls=[],
+    )
+
+    payload = thread_workbench.build_owner_thread_workbench_from_rows(rows, reader=reader)
+
+    assert [thread["thread_id"] for thread in payload["threads"]] == ["agent-2-main"]
