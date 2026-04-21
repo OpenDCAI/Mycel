@@ -1030,7 +1030,11 @@ class LeonAgent:
         self._mcp_client = None
 
     def __del__(self):
-        self.close()
+        try:
+            self.close()
+        except RuntimeError as exc:
+            if "interpreter shutdown" not in str(exc):
+                raise
 
     def _build_middleware_stack(self) -> list:
         """Build middleware stack.

@@ -143,6 +143,29 @@ def test_close_remains_idempotent_after_shutdown_fallback(monkeypatch: pytest.Mo
     assert events == ["async", "sync"]
 
 
+def test_dunder_del_swallows_interpreter_shutdown_runtimeerror(monkeypatch: pytest.MonkeyPatch):
+    agent = object.__new__(LeonAgent)
+
+    def _boom() -> None:
+        raise RuntimeError("can't create new thread at interpreter shutdown")
+
+    monkeypatch.setattr(agent, "close", _boom)
+
+    LeonAgent.__del__(agent)
+
+
+def test_dunder_del_reraises_unrelated_runtimeerror(monkeypatch: pytest.MonkeyPatch):
+    agent = object.__new__(LeonAgent)
+
+    def _boom() -> None:
+        raise RuntimeError("some other runtime problem")
+
+    monkeypatch.setattr(agent, "close", _boom)
+
+    with pytest.raises(RuntimeError, match="some other runtime problem"):
+        LeonAgent.__del__(agent)
+
+
 def test_memory_config_override_updates_compaction_trigger_without_losing_defaults():
     from config.schema import LeonSettings
 
