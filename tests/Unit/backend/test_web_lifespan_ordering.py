@@ -108,8 +108,9 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         app.state.agent_pool = {}
         app.state.agent_runtime_thread_activity_reader = object()
 
-    def _wire_chat_delivery(_app, *, activity_reader, thread_repo):
+    def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo):
         call_log.append("wire")
+        assert messaging_service is _app.state.messaging_service
         assert activity_reader is _app.state.agent_runtime_thread_activity_reader
 
     _patch_lifespan_runtime_contract(
