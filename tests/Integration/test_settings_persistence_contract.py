@@ -38,7 +38,7 @@ class _FakeSettingsRepo:
 
 def _settings_test_app(repo: _FakeSettingsRepo | None) -> FastAPI:
     app = FastAPI()
-    app.state.user_settings_repo = repo
+    app.state.runtime_storage_state = SimpleNamespace(storage_container=SimpleNamespace(user_settings_repo=lambda: repo))
     app.dependency_overrides[settings_router.get_current_user_id] = lambda: "user-1"
     app.include_router(settings_router.router)
     return app
@@ -237,9 +237,13 @@ def test_update_provider_platform_source_removes_stored_user_key():
 
 
 def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
-    app = _settings_test_app(_FakeSettingsRepo())
+    repo = _FakeSettingsRepo()
+    app = _settings_test_app(repo)
     app.state.thread_repo = object()
-    app.state.runtime_storage_state = SimpleNamespace(supabase_client=object())
+    app.state.runtime_storage_state = SimpleNamespace(
+        supabase_client=object(),
+        storage_container=SimpleNamespace(user_settings_repo=lambda: repo),
+    )
     seen: dict[str, object] = {}
 
     def _fake_count_user_visible_sandboxes_by_provider(user_id: str, **kwargs):
