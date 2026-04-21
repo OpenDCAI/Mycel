@@ -68,3 +68,33 @@ async def test_runtime_model_client_cleanup_closes_both_clients() -> None:
     assert events == ["async", "sync"]
     assert agent._model_http_client is None
     assert agent._model_http_async_client is None
+
+
+@pytest.mark.asyncio
+async def test_runtime_model_client_cleanup_falls_back_when_to_thread_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    class _SyncClient:
+        def close(self) -> None:
+            events.append("sync")
+
+    class _AsyncClient:
+        async def aclose(self) -> None:
+            events.append("async")
+
+    async def _boom(_fn: Any, *_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+    monkeypatch.setattr("core.runtime.agent.asyncio.to_thread", _boom)
+
+    agent = cast(Any, object.__new__(LeonAgent))
+    agent._model_http_client = _SyncClient()
+    agent._model_http_async_client = _AsyncClient()
+
+    await LeonAgent._cleanup_model_clients(agent)
+
+    assert events == ["async", "sync"]
+    assert agent._model_http_client is None
+    assert agent._model_http_async_client is None
