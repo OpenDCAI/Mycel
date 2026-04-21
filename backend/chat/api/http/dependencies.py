@@ -48,6 +48,10 @@ def get_chat_repo(app: Any) -> Any:
     return _require_state_attr(app, "chat_repo", "Chat repo unavailable")
 
 
+def get_chat_event_bus(app: Any) -> Any:
+    return _require_state_attr(app, "chat_event_bus", "Chat event bus unavailable")
+
+
 def get_optional_runtime_thread_activity_reader(app: Any) -> Any | None:
     return getattr(app.state, "agent_runtime_thread_activity_reader", None)
 

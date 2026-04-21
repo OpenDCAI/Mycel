@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from backend.chat.runtime_access import get_messaging_service
 from backend.threads.pool.factory import create_agent_sync
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from core.identity.agent_registry import get_or_create_agent_id
@@ -130,7 +131,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 "chat_identity_id": agent_user_id,
                 "owner_id": owner_id,
                 "user_repo": user_repo,
-                "messaging_service": getattr(app_obj.state, "messaging_service", None),
+                "messaging_service": get_messaging_service(app_obj),
                 "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
             }
 

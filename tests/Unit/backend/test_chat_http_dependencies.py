@@ -37,6 +37,7 @@ def test_get_optional_runtime_thread_activity_reader_returns_none_when_missing()
         ("get_thread_repo", "Thread repo unavailable"),
         ("get_contact_repo", "Contact repo unavailable"),
         ("get_chat_repo", "Chat repo unavailable"),
+        ("get_chat_event_bus", "Chat event bus unavailable"),
         ("get_thread_last_active_map", "Thread last-active map unavailable"),
     ],
 )

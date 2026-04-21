@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from backend.chat.runtime_access import get_typing_tracker
+
 
 class AgentChatRuntimeServices(Protocol):
     async def get_or_create_thread_agent(self, thread_id: str) -> Any: ...
@@ -37,9 +39,8 @@ class AppAgentChatRuntimeServices:
         return agent
 
     def start_chat(self, thread_id: str, chat_id: str, recipient_user_id: str) -> None:
-        typing_tracker = getattr(self._app.state, "typing_tracker", None)
-        if typing_tracker is not None:
-            typing_tracker.start_chat(thread_id, chat_id, recipient_user_id)
+        typing_tracker = get_typing_tracker(self._app)
+        typing_tracker.start_chat(thread_id, chat_id, recipient_user_id)
 
     def enqueue_chat_message(
         self,

@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
+from backend.chat.runtime_access import get_optional_typing_tracker
 from backend.threads.run import activity_bridge as _run_activity_bridge
 from backend.threads.run import emit as _run_emit
 from backend.threads.run import epilogue as _run_epilogue
@@ -203,7 +204,7 @@ async def run_agent_to_buffer(
         return ""
     finally:
         prompt_restore()
-        typing_tracker = getattr(app.state, "typing_tracker", None)
+        typing_tracker = get_optional_typing_tracker(app)
         if typing_tracker is not None:
             typing_tracker.stop(thread_id)
         detach_activity_bridge()

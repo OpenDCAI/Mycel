@@ -215,6 +215,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1")
             ),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -273,6 +274,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -288,6 +290,44 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
     assert "chat_member_repo" not in chat_repos
     assert "messages_repo" not in chat_repos
     assert "relationship_repo" not in chat_repos
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_fails_loud_when_chat_repos_need_missing_messaging_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def _fake_create_agent_sync(**_kwargs) -> object:
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-5",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-5", agent_config_id="cfg-5")
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-5")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            agent_config_repo=_EmptyAgentConfigRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="chat bootstrap not attached: messaging_service"):
+        await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5")
 
 
 @pytest.mark.asyncio
@@ -325,6 +365,7 @@ async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_all
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -402,6 +443,7 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -465,6 +507,7 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             user_settings_repo=_UserSettingsRepo(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
@@ -517,6 +560,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             user_settings_repo=_UserSettingsRepo(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
@@ -565,6 +609,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_AgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -607,6 +652,7 @@ async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_miss
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            messaging_service=SimpleNamespace(),
             agent_config_repo=_EmptyAgentConfigRepo(),
             thread_cwd={},
             thread_sandbox={},
