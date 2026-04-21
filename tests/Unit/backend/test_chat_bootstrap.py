@@ -55,7 +55,12 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
         )
     )
 
-    chat_bootstrap.attach_chat_runtime(app, storage_container)
+    chat_bootstrap.attach_chat_runtime(
+        app,
+        storage_container,
+        user_repo=app.state.user_repo,
+        thread_repo=app.state.thread_repo,
+    )
 
     assert app.state.chat_repo is chat_repo
     assert app.state.contact_repo is contact_repo
@@ -71,8 +76,8 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert app.state.messaging_service.delivery_fn is None
 
 
-def test_attach_chat_runtime_requires_user_repo_and_thread_repo():
-    app = SimpleNamespace(state=SimpleNamespace())
+def test_attach_chat_runtime_requires_explicit_user_repo_and_thread_repo():
+    app = SimpleNamespace(state=SimpleNamespace(user_repo=object(), thread_repo=object()))
     storage_container = SimpleNamespace(
         chat_repo=lambda: object(),
         contact_repo=lambda: object(),
@@ -83,10 +88,12 @@ def test_attach_chat_runtime_requires_user_repo_and_thread_repo():
 
     try:
         chat_bootstrap.attach_chat_runtime(app, storage_container)
-    except RuntimeError as exc:
-        assert str(exc) == "attach_chat_runtime requires user_repo and thread_repo on app.state"
+    except TypeError as exc:
+        message = str(exc)
+        assert "user_repo" in message
+        assert "thread_repo" in message
     else:
-        raise AssertionError("attach_chat_runtime should fail loudly when user_repo/thread_repo are missing")
+        raise AssertionError("attach_chat_runtime should require explicit user_repo/thread_repo kwargs")
 
 
 def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
