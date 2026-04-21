@@ -14,7 +14,7 @@ from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputH
 from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
 
 
-def build_agent_runtime_gateway(app: Any) -> NativeAgentRuntimeGateway:
+def build_agent_runtime_gateway(app: Any, *, typing_tracker: Any) -> NativeAgentRuntimeGateway:
     app.state.agent_runtime_thread_activity_reader = AppRuntimeThreadActivityReader(
         thread_repo=app.state.thread_repo,
         agent_pool=app.state.agent_pool,
@@ -24,7 +24,11 @@ def build_agent_runtime_gateway(app: Any) -> NativeAgentRuntimeGateway:
             "mycel": NativeAgentChatDeliveryHandler(
                 runtime_services=AppAgentChatRuntimeServices(
                     app,
-                    typing_tracker=app.state.typing_tracker,
+                    # @@@chat-runtime-borrowed-typing-tracker - threads runtime
+                    # consumes chat-owned typing state, but the borrow happens at
+                    # bootstrap so this gateway builder does not reach back
+                    # through app.state for chat truth on its own.
+                    typing_tracker=typing_tracker,
                     queue_manager=app.state.queue_manager,
                     get_or_create_agent=get_or_create_agent,
                     resolve_thread_sandbox=resolve_thread_sandbox,

@@ -56,7 +56,7 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
         message=AgentRuntimeMessage(content="hello", signal="ping"),
     )
 
-    result = await build_agent_runtime_gateway(app).dispatch_chat(envelope)
+    result = await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_chat(envelope)
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-preselected"

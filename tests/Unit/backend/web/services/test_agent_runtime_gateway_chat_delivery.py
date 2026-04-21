@@ -76,7 +76,7 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     app, started, unread_calls, enqueued = _app()
 
-    result = await build_agent_runtime_gateway(app).dispatch_chat(_envelope())
+    result = await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_chat(_envelope())
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-1"
@@ -93,8 +93,30 @@ async def test_gateway_dispatch_chat_raises_for_missing_thread(monkeypatch: pyte
     app, started, unread_calls, enqueued = _app(threads=[])
 
     with pytest.raises(RuntimeError, match="Agent chat recipient has no runtime thread: agent-user-1"):
-        await build_agent_runtime_gateway(app).dispatch_chat(_envelope(thread_id=None))
+        await build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker).dispatch_chat(_envelope(thread_id=None))
 
     assert started == []
     assert unread_calls == []
     assert enqueued == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_dispatch_chat_uses_explicit_typing_tracker(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
+        return SimpleNamespace(id=f"agent-for-{thread_id}")
+
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    app, _started, _unread_calls, enqueued = _app()
+    started: list[tuple[str, str, str]] = []
+    app.state.typing_tracker = SimpleNamespace(
+        start_chat=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should use explicit typing tracker"))
+    )
+    explicit_typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
+
+    result = await build_agent_runtime_gateway(app, typing_tracker=explicit_typing_tracker).dispatch_chat(_envelope())
+
+    assert result.status == "accepted"
+    assert started == [("thread-1", "chat-1", "agent-user-1")]
+    assert enqueued == [("hello", "thread-1", "human-user-1", "Human")]
