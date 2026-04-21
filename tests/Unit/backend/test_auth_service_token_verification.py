@@ -7,7 +7,7 @@ from typing import Any, cast
 import jwt
 import pytest
 
-from backend.auth_service import AuthService
+from backend.identity.auth.service import AuthService
 
 
 class _FakeSupabaseAuth:
@@ -183,7 +183,7 @@ def test_login_uses_dedicated_auth_client_instead_of_storage_client():
 def test_login_repairs_existing_user_sandbox_recipes(monkeypatch: pytest.MonkeyPatch):
     auth_client = _FakeAuthClient()
     monkeypatch.setattr(
-        "backend.recipe_bootstrap.available_sandbox_types",
+        "backend.sandboxes.recipe_bootstrap.available_sandbox_types",
         lambda: [{"name": "daytona_selfhost", "provider": "daytona", "available": True}],
     )
     recipe_rows: dict[tuple[str, str], dict] = {}
@@ -304,9 +304,9 @@ def test_verify_register_otp_accepts_direct_gotrue_client_without_auth_wrapper()
 
 def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
-    monkeypatch.setattr("backend.avatar_files.process_and_save_avatar", lambda _source, user_id: f"avatars/{user_id}.png")
+    monkeypatch.setattr("backend.identity.avatar.files.process_and_save_avatar", lambda _source, user_id: f"avatars/{user_id}.png")
     monkeypatch.setattr(
-        "backend.recipe_bootstrap.available_sandbox_types",
+        "backend.sandboxes.recipe_bootstrap.available_sandbox_types",
         lambda: [
             {"name": "local", "provider": "local", "available": True},
             {"name": "daytona_selfhost", "provider": "daytona", "available": True},
@@ -360,7 +360,7 @@ def test_create_initial_agents_keeps_avatar_column_null_under_file_backed_avatar
 
     monkeypatch.setattr("storage.utils.generate_agent_user_id", lambda: next(user_ids))
     monkeypatch.setattr("storage.utils.generate_agent_config_id", lambda: next(config_ids))
-    monkeypatch.setattr("backend.avatar_files.process_and_save_avatar", lambda _source, user_id: f"avatars/{user_id}.png")
+    monkeypatch.setattr("backend.identity.avatar.files.process_and_save_avatar", lambda _source, user_id: f"avatars/{user_id}.png")
 
     user_repo = SimpleNamespace(
         create=lambda row: created_users.append(row),

@@ -5,9 +5,10 @@ from __future__ import annotations
 import time
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from backend.chat.runtime_access import get_contact_repo
 from backend.web.core.dependencies import get_app, get_current_user_id
 from storage.contracts import ContactEdgeRow
 
@@ -26,7 +27,10 @@ async def list_contacts(
     app: Annotated[Any, Depends(get_app)],
 ):
     """List contacts (blocked/muted) for the current user."""
-    rows = app.state.contact_repo.list_for_user(user_id)
+    try:
+        rows = get_contact_repo(app).list_for_user(user_id)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
     return [
         {
             "source_user_id": row.source_user_id,
@@ -49,18 +53,21 @@ async def set_contact(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Upsert contact (block/mute/normal)."""
-    app.state.contact_repo.upsert(
-        ContactEdgeRow(
-            source_user_id=user_id,
-            target_user_id=body.target_user_id,
-            kind=body.kind,
-            state=body.state,
-            muted=body.kind == "muted",
-            blocked=body.kind == "blocked",
-            created_at=time.time(),
-            updated_at=time.time(),
+    try:
+        get_contact_repo(app).upsert(
+            ContactEdgeRow(
+                source_user_id=user_id,
+                target_user_id=body.target_user_id,
+                kind=body.kind,
+                state=body.state,
+                muted=body.kind == "muted",
+                blocked=body.kind == "blocked",
+                created_at=time.time(),
+                updated_at=time.time(),
+            )
         )
-    )
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
     return {"status": "ok", "kind": body.kind, "state": body.state}
 
 
@@ -71,5 +78,8 @@ async def delete_contact(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Remove contact entry."""
-    app.state.contact_repo.delete(user_id, target_id)
+    try:
+        get_contact_repo(app).delete(user_id, target_id)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
     return {"status": "deleted"}

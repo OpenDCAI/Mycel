@@ -221,7 +221,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         asRecord(currentPermissionRequest.args.annotations) ?? undefined,
       );
       await refreshThread();
-      toast.success("已提交回答，Leon 会继续当前任务");
+      toast.success("已提交回答，Mycel 会继续当前任务");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(`提交回答失败: ${message}`);
@@ -313,7 +313,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
                     <>
                       <p>{currentPermissionRequest.message || "该工具需要你明确批准后才能继续。"}</p>
                       <p className="text-xs text-muted-foreground">
-                        处理后不会自动重跑；Leon 需要在下一次相同操作时继续执行。
+                        处理后不会自动重跑；Mycel 需要在下一次相同操作时继续执行。
                       </p>
                       <code className="block w-full overflow-x-auto rounded-md bg-background/80 px-2 py-1 text-xs text-foreground border border-border/60">
                         {JSON.stringify(currentPermissionRequest.args)}
@@ -409,7 +409,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
                 isAskUserQuestionRequest(currentPermissionRequest)
                   ? {
                       requestId: currentPermissionRequest.request_id,
-                      promptMessage: currentPermissionRequest.message || "Leon 需要你的回答后才能继续当前任务。",
+                      promptMessage: currentPermissionRequest.message || "Mycel 需要你的回答后才能继续当前任务。",
                       prompts: questionPrompts,
                       selections: questionSelections,
                       resolving: resolvingId === currentPermissionRequest.request_id,
@@ -433,7 +433,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           <InputBox
             disabled={isStreaming}
             isStreaming={isStreaming}
-            placeholder="告诉 Leon 你需要什么帮助..."
+            placeholder="告诉 Mycel 你需要什么帮助..."
             onSendMessage={(msg) => void handleSendWithAttachments(msg)}
             onSendQueueMessage={handleSendQueueMessage}
             onStop={handleStopStreaming}

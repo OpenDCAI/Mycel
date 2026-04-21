@@ -133,7 +133,7 @@ async def test_remote_file_list_defaults_to_workspace_binding_not_terminal_cwd(m
         return agent
 
     monkeypatch.setattr(thread_files_router, "resolve_thread_sandbox", lambda _app, _thread_id: "daytona")
-    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", fake_get_or_create_agent)
+    monkeypatch.setattr("backend.threads.activity_pool_service.get_or_create_agent", fake_get_or_create_agent)
     monkeypatch.setattr(
         thread_files_router.file_channel_service,
         "get_file_channel_binding",

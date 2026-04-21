@@ -7,7 +7,7 @@ import pytest
 
 
 def test_build_initial_input_prefers_explicit_input_messages() -> None:
-    from backend.thread_runtime.run.input_construction import build_initial_input
+    from backend.threads.run.input_construction import build_initial_input
 
     input_messages = [object()]
     initial_input, prompt_restore = asyncio.run(
@@ -28,7 +28,7 @@ def test_build_initial_input_prefers_explicit_input_messages() -> None:
 
 
 def test_build_initial_input_wraps_message_metadata_when_present() -> None:
-    from backend.thread_runtime.run.input_construction import build_initial_input
+    from backend.threads.run.input_construction import build_initial_input
 
     initial_input, _prompt_restore = asyncio.run(
         build_initial_input(
@@ -51,7 +51,7 @@ def test_build_initial_input_wraps_message_metadata_when_present() -> None:
 
 @pytest.mark.asyncio
 async def test_build_initial_input_adds_terminal_followthrough_system_note_and_queued_items() -> None:
-    from backend.thread_runtime.run.input_construction import build_initial_input
+    from backend.threads.run.input_construction import build_initial_input
 
     queued = [
         {

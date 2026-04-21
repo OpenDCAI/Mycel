@@ -57,7 +57,7 @@ class TestConsumeFollowupQueue:
 
     async def test_no_followup_does_nothing(self, mock_agent, mock_app):
         """When queue is empty, nothing happens."""
-        from backend.web.services.streaming_service import _consume_followup_queue
+        from backend.threads.streaming import _consume_followup_queue
 
         await _consume_followup_queue(mock_agent, "thread-1", mock_app)
         # Queue is still empty
@@ -68,9 +68,9 @@ class TestConsumeFollowupQueue:
     async def test_successful_followup_consumes_message(self, mock_agent, mock_app, queue_manager):
         """When followup succeeds, message is consumed and not re-enqueued."""
         queue_manager.enqueue("do something", "thread-1")
-        from backend.web.services.streaming_service import _consume_followup_queue
+        from backend.threads.streaming import _consume_followup_queue
 
-        with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
+        with patch("backend.threads.streaming.start_agent_run") as mock_start:
             mock_start.return_value = "run-123"  # start_agent_run returns str run_id
 
             await _consume_followup_queue(mock_agent, "thread-1", mock_app)
@@ -94,9 +94,9 @@ class TestConsumeFollowupQueue:
     async def test_exception_re_enqueues_message(self, mock_agent, mock_app, queue_manager):
         """When start_agent_run raises, the dequeued message is re-enqueued."""
         queue_manager.enqueue("important followup", "thread-1")
-        from backend.web.services.streaming_service import _consume_followup_queue
+        from backend.threads.streaming import _consume_followup_queue
 
-        with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("boom")):
+        with patch("backend.threads.streaming.start_agent_run", side_effect=RuntimeError("boom")):
             await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
         # Message was re-enqueued — it should be available again
@@ -108,9 +108,9 @@ class TestConsumeFollowupQueue:
         """When runtime.transition returns False, followup stays queued."""
         queue_manager.enqueue("wont run", "thread-1")
         mock_agent.runtime.transition.return_value = False
-        from backend.web.services.streaming_service import _consume_followup_queue
+        from backend.threads.streaming import _consume_followup_queue
 
-        with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
+        with patch("backend.threads.streaming.start_agent_run") as mock_start:
             await _consume_followup_queue(mock_agent, "thread-1", mock_app)
             mock_start.assert_not_called()
 

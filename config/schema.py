@@ -1,4 +1,4 @@
-"""Core runtime configuration schema for Leon using Pydantic.
+"""Core runtime configuration schema for Mycel using Pydantic.
 
 This module defines the runtime configuration structure with:
 - Nested config groups (Memory, Tools, MCP, Skills)
@@ -228,7 +228,7 @@ class SkillsConfig(BaseModel):
 
 
 class LeonSettings(BaseModel):
-    """Main Leon runtime configuration.
+    """Main Mycel runtime configuration.
 
     Contains non-model runtime settings: memory, tools, mcp, skills, behavior params.
     Model identity (model name, provider, API keys) lives in ModelsConfig.

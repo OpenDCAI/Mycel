@@ -402,7 +402,7 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
     ]
 
 
-def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
+def test_start_monitor_evaluation_batch_schedules_runner_with_explicit_execution_target(tmp_path, monkeypatch):
     scenario_dir = tmp_path / "scenarios"
     scenario_dir.mkdir()
     (scenario_dir / "scenario-1.yaml").write_text(
@@ -444,14 +444,14 @@ def test_start_monitor_evaluation_batch_schedules_runner(tmp_path, monkeypatch):
 
     payload = monitor_evaluation_service.start_monitor_evaluation_batch(
         "batch-1",
-        base_url="http://testserver",
+        execution_base_url="http://backend-main",
         token="token-1",
         scheduler=_Scheduler(),
     )
 
     assert payload == {"accepted": True, "batch": {"batch_id": "batch-1", "status": "running"}}
     assert len(scheduled) == 1
-    assert scheduled[0].base_url == "http://testserver"
+    assert scheduled[0].execution_base_url == "http://backend-main"
     assert scheduled[0].token == "token-1"
     assert scheduled[0].agent_user_id == "agent-1"
     assert scheduled[0].scenarios[0].id == "scenario-1"
@@ -641,7 +641,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         ),
     )
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -699,7 +699,7 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
 def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypatch):
     calls: list[tuple[str, str, bool]] = []
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -739,7 +739,7 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
     )
     _use_monitor_repo(monkeypatch, repo)
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -794,7 +794,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
         }
 
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.mutate_sandbox_runtime",
+        "backend.sandboxes.service.mutate_sandbox_runtime",
         _mutate_sandbox_runtime,
         raising=False,
     )
@@ -867,7 +867,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
         return {"ok": True}
 
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.mutate_sandbox_runtime",
+        "backend.sandboxes.service.mutate_sandbox_runtime",
         _mutate_sandbox_runtime,
         raising=False,
     )
@@ -1056,7 +1056,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
         ),
     )
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )

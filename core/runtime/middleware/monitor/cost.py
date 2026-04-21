@@ -192,7 +192,7 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
 
         req = urllib.request.Request(
             "https://openrouter.ai/api/v1/models",
-            headers={"User-Agent": "leon-agent/1.0"},
+            headers={"User-Agent": "mycel-agent/1.0"},
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())

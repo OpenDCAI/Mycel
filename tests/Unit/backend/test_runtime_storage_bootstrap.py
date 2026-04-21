@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from backend import runtime_storage_bootstrap
+from backend.bootstrap import storage as runtime_storage_bootstrap
 
 
 def test_build_runtime_storage_state_uses_shared_supabase_client(monkeypatch):

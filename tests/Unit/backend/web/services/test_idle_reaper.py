@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from backend.thread_runtime.pool import idle_reaper as idle_reaper_module
+from backend.threads.pool import idle_reaper as idle_reaper_module
 
 
 class _MutatingManager:

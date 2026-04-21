@@ -5,12 +5,8 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.storage_container_cache import get_storage_container as _get_container
-from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
-from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
 from storage.runtime import (
     build_thread_repo,
-    uses_supabase_runtime_defaults,
 )
 
 
@@ -92,25 +88,3 @@ def resolve_local_workspace_path(
     except ValueError as exc:
         raise HTTPException(400, f"Path outside workspace: {target}") from exc
     return target
-
-
-def delete_thread_in_db(thread_id: str) -> None:
-    """Delete all records for a thread via storage repos + sandbox db."""
-    # Purge storage-managed repos (works for both sqlite and supabase strategies)
-    _get_container().purge_thread(thread_id)
-
-    sandbox_db = resolve_sandbox_db_path()
-    if not uses_supabase_runtime_defaults() and not sandbox_db.exists():
-        return
-
-    session_repo = make_chat_session_repo()
-    terminal_repo = make_terminal_repo()
-    sync_state = SyncState(repo=ProcessLocalSyncFileBacking())
-    try:
-        session_repo.delete_by_thread(thread_id)
-        terminal_repo.delete_by_thread(thread_id)
-        sync_state.clear_thread(thread_id)
-    finally:
-        sync_state.close()
-        session_repo.close()
-        terminal_repo.close()

@@ -479,6 +479,43 @@ async def test_run_agent_uses_injected_child_agent_factory(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_run_agent_uses_injected_event_bus_factory(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+    emitted: list[str] = []
+    _patch_create_leon_agent(monkeypatch, created=created)
+
+    class _Bus:
+        def make_emitter(self, *, thread_id: str, agent_id: str = "", agent_name: str = ""):
+            assert thread_id == "parent-thread"
+            assert agent_id == "task-1"
+
+            async def _emit(event: dict) -> None:
+                emitted.append(event["event"])
+
+            return _emit
+
+    service = _make_service(tmp_path, event_bus_factory=lambda: _Bus())
+
+    set_current_thread_id("parent-thread")
+    try:
+        result = await service._run_agent(
+            task_id="task-1",
+            agent_name="child",
+            thread_id="subagent-1",
+            prompt="do work",
+            subagent_type="general",
+            max_turns=None,
+            fork_context=False,
+        )
+    finally:
+        set_current_thread_id(None)
+
+    assert result == "(Agent completed with no text output)"
+    assert emitted == ["task_start", "task_done"]
+    assert len(created) == 1
+
+
+@pytest.mark.asyncio
 async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
 
@@ -1087,10 +1124,6 @@ async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(m
         observed["child_lower_runtime_id"] = getattr(child_capability._session.lease, lower_runtime_key)
         return "(Agent completed with no text output)"
 
-    monkeypatch.setattr(
-        "backend.web.services.streaming_service.run_child_thread_live",
-        _fake_run_child_thread_live,
-    )
     set_current_thread_id(parent_thread_id)
 
     thread_repo = _FakeThreadRepo(
@@ -1115,6 +1148,7 @@ async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(m
         tmp_path,
         thread_repo=thread_repo,
         web_app=SimpleNamespace(state=SimpleNamespace(workspace_repo=workspace_repo)),
+        child_thread_live_runner=_fake_run_child_thread_live,
     )
 
     try:
@@ -1138,10 +1172,7 @@ async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(m
 @pytest.mark.asyncio
 async def test_run_agent_passes_parent_workspace_path_into_thread_reuse_bind(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
-    monkeypatch.setattr(
-        "backend.web.services.streaming_service.run_child_thread_live",
-        AsyncMock(return_value="LIVE_CHILD_DONE"),
-    )
+    live_child_thread_runner = AsyncMock(return_value="LIVE_CHILD_DONE")
 
     thread_repo = _FakeThreadRepo(
         rows={
@@ -1184,6 +1215,7 @@ async def test_run_agent_passes_parent_workspace_path_into_thread_reuse_bind(mon
         thread_repo=thread_repo,
         user_repo=user_repo,
         web_app=web_app,
+        child_thread_live_runner=live_child_thread_runner,
     )
 
     set_current_thread_id("parent-thread")
@@ -1207,10 +1239,7 @@ async def test_run_agent_passes_parent_workspace_path_into_thread_reuse_bind(mon
 @pytest.mark.asyncio
 async def test_run_agent_fails_loud_when_parent_workspace_repo_is_missing(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
-    monkeypatch.setattr(
-        "backend.web.services.streaming_service.run_child_thread_live",
-        AsyncMock(return_value="LIVE_CHILD_DONE"),
-    )
+    live_child_thread_runner = AsyncMock(return_value="LIVE_CHILD_DONE")
 
     thread_repo = _FakeThreadRepo(
         rows={
@@ -1234,6 +1263,7 @@ async def test_run_agent_fails_loud_when_parent_workspace_repo_is_missing(monkey
         thread_repo=thread_repo,
         user_repo=user_repo,
         web_app=SimpleNamespace(state=SimpleNamespace()),
+        child_thread_live_runner=live_child_thread_runner,
     )
 
     set_current_thread_id("parent-thread")
@@ -1254,10 +1284,7 @@ async def test_run_agent_fails_loud_when_parent_workspace_repo_is_missing(monkey
 @pytest.mark.asyncio
 async def test_run_agent_falls_back_to_child_workspace_root_when_parent_workspace_truth_is_absent(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
-    monkeypatch.setattr(
-        "backend.web.services.streaming_service.run_child_thread_live",
-        AsyncMock(return_value="LIVE_CHILD_DONE"),
-    )
+    live_child_thread_runner = AsyncMock(return_value="LIVE_CHILD_DONE")
 
     captured: dict[str, Any] = {}
 
@@ -1269,7 +1296,11 @@ async def test_run_agent_falls_back_to_child_workspace_root_when_parent_workspac
 
     monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_lease", fake_bind)
 
-    service = _make_service(tmp_path)
+    service = _make_service(
+        tmp_path,
+        web_app=SimpleNamespace(),
+        child_thread_live_runner=live_child_thread_runner,
+    )
 
     set_current_thread_id("parent-thread")
     try:
@@ -1281,7 +1312,7 @@ async def test_run_agent_falls_back_to_child_workspace_root_when_parent_workspac
             subagent_type="explore",
             max_turns=None,
         )
-        assert result == "(Agent completed with no text output)"
+        assert result == "LIVE_CHILD_DONE"
         assert captured == {
             "thread_id": "subagent-child",
             "parent_thread_id": "parent-thread",
@@ -1580,10 +1611,8 @@ async def test_run_agent_uses_live_child_thread_path_when_web_app_present(monkey
         return "LIVE_CHILD_DONE"
 
     _patch_create_leon_agent(monkeypatch, captured=captured)
-    monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
-
     web_app = SimpleNamespace()
-    service = _make_service(tmp_path, web_app=web_app)
+    service = _make_service(tmp_path, web_app=web_app, child_thread_live_runner=fake_run_child_thread_live)
 
     result = await service._run_agent(
         task_id="task-1",
@@ -1608,6 +1637,47 @@ async def test_run_agent_uses_live_child_thread_path_when_web_app_present(monkey
 
 
 @pytest.mark.asyncio
+async def test_run_agent_prefers_injected_live_child_thread_runner(monkeypatch, tmp_path):
+    captured: dict[str, Any] = {}
+
+    async def fake_live_child_thread_runner(agent, thread_id, prompt, app, *, input_messages):
+        captured["agent"] = agent
+        captured["thread_id"] = thread_id
+        captured["prompt"] = prompt
+        captured["app"] = app
+        captured["input_messages"] = input_messages
+        return "INJECTED_LIVE_CHILD_DONE"
+
+    _patch_create_leon_agent(monkeypatch, captured=captured)
+    web_app = SimpleNamespace()
+    service = _make_service(
+        tmp_path,
+        web_app=web_app,
+        child_thread_live_runner=fake_live_child_thread_runner,
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "INJECTED_LIVE_CHILD_DONE"
+    assert captured["thread_id"] == "subagent-1"
+    assert captured["prompt"] == "do work"
+    assert captured["app"] is web_app
+    assert captured["kwargs"]["web_app"] is web_app
+    assert captured["kwargs"]["child_thread_live_runner"] is fake_live_child_thread_runner
+    assert captured["input_messages"][0]["content"] == "do work"
+    assert captured["agent"].cleanup_calls == 1
+    assert captured["agent"].closed is False
+
+
+@pytest.mark.asyncio
 async def test_run_agent_normalizes_workspace_suffix_in_child_prompt(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
 
@@ -1617,9 +1687,11 @@ async def test_run_agent_normalizes_workspace_suffix_in_child_prompt(monkeypatch
         return "LIVE_CHILD_DONE"
 
     _patch_create_leon_agent(monkeypatch)
-    monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
-
-    service = _make_service(tmp_path, web_app=SimpleNamespace())
+    service = _make_service(
+        tmp_path,
+        web_app=SimpleNamespace(),
+        child_thread_live_runner=fake_run_child_thread_live,
+    )
     raw_prompt = f"Inspect the workspace at {tmp_path}/current working directory. Read-only only. Report existing files."
 
     result = await service._run_agent(
@@ -1700,7 +1772,7 @@ async def test_ask_user_question_requests_structured_question_payload(tmp_path):
     assert meta["request_id"] == "ask-1"
     assert result.content == "User input required to continue."
     assert captured["name"] == "AskUserQuestion"
-    assert captured["message"] == "Please answer the following questions so Leon can continue."
+    assert captured["message"] == "Please answer the following questions so Mycel can continue."
     assert captured["args"] == {
         "questions": [
             {

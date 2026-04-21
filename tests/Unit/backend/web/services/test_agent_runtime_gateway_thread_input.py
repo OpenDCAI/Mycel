@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
-from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 from core.runtime.middleware.monitor import AgentState
+from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
 
 
 class _FakeQueueManager:
@@ -33,7 +33,16 @@ class _FakeAgent:
 def _fake_app() -> SimpleNamespace:
     return SimpleNamespace(
         state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_by_id=lambda thread_id: {"id": thread_id, "sandbox_type": "local"},
+                get_by_user_id=lambda _uid: None,
+                list_by_agent_user=lambda _uid: [],
+            ),
+            agent_pool={},
+            typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
             queue_manager=_FakeQueueManager(),
+            thread_cwd={},
+            thread_sandbox={},
             thread_locks={},
             thread_locks_guard=asyncio.Lock(),
             thread_tasks={},
@@ -56,10 +65,10 @@ async def test_gateway_thread_input_clears_resource_overview_cache_when_starting
     agent = _FakeAgent()
 
     with (
-        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
-        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=agent)),
-        patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
-        patch("backend.monitor.infrastructure.resources.resource_overview_cache.clear_resource_overview_cache") as clear_cache,
+        patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.chat_adapters.bootstrap.get_or_create_agent", AsyncMock(return_value=agent)),
+        patch("backend.threads.chat_adapters.bootstrap.start_agent_run", return_value="run-123"),
+        patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache") as clear_cache,
     ):
         result = await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input())
 
@@ -72,10 +81,10 @@ async def test_gateway_thread_input_requires_agent_runtime() -> None:
     app = _fake_app()
 
     with (
-        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
-        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=SimpleNamespace())),
-        patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
-        patch("backend.monitor.infrastructure.resources.resource_overview_cache.clear_resource_overview_cache"),
+        patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.chat_adapters.bootstrap.get_or_create_agent", AsyncMock(return_value=SimpleNamespace())),
+        patch("backend.threads.chat_adapters.bootstrap.start_agent_run", return_value="run-123"),
+        patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache"),
     ):
         with pytest.raises(AttributeError):
             await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input())
@@ -87,10 +96,10 @@ async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run(
     agent = _FakeAgent()
 
     with (
-        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
-        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=agent)),
-        patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123") as start_run,
-        patch("backend.monitor.infrastructure.resources.resource_overview_cache.clear_resource_overview_cache"),
+        patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.chat_adapters.bootstrap.get_or_create_agent", AsyncMock(return_value=agent)),
+        patch("backend.threads.chat_adapters.bootstrap.start_agent_run", return_value="run-123") as start_run,
+        patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache"),
     ):
         await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input(enable_trajectory=True))
 

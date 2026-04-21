@@ -8,9 +8,9 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from backend.chat.api.http import router as chat_router
+from backend.chat.api.http import chats_router
+from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_app, get_current_user_id
-from backend.web.utils.serializers import avatar_url
 from storage.contracts import ContactEdgeRow
 
 
@@ -26,7 +26,7 @@ def _chat(chat_id: str) -> SimpleNamespace:
 def _route_test_app(state: SimpleNamespace) -> FastAPI:
     app = FastAPI()
     app.state = state
-    app.include_router(chat_router.router)
+    app.include_router(chats_router.router)
     app.dependency_overrides[get_current_user_id] = lambda: "human-user-1"
     app.dependency_overrides[get_app] = lambda: app
     return app
@@ -90,24 +90,24 @@ def _create_chat_route_state(
 
 def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
     sync_routes = [
-        chat_router.list_chats,
-        chat_router.create_chat,
-        chat_router.get_chat,
-        chat_router.list_messages,
-        chat_router.send_message,
-        chat_router.retract_message,
-        chat_router.delete_message_for_self,
-        chat_router.mark_read,
-        chat_router.delete_chat,
-        chat_router.mute_chat,
+        chats_router.list_chats,
+        chats_router.create_chat,
+        chats_router.get_chat,
+        chats_router.list_messages,
+        chats_router.send_message,
+        chats_router.retract_message,
+        chats_router.delete_message_for_self,
+        chats_router.mark_read,
+        chats_router.delete_chat,
+        chats_router.mute_chat,
     ]
 
     assert [fn.__name__ for fn in sync_routes if inspect.iscoroutinefunction(fn)] == []
-    assert inspect.iscoroutinefunction(chat_router.stream_chat_events)
+    assert inspect.iscoroutinefunction(chats_router.stream_chat_events)
 
 
 def test_chat_http_owner_module_lives_under_backend_chat() -> None:
-    assert chat_router.__name__ == "backend.chat.api.http.router"
+    assert chats_router.__name__ == "backend.chat.api.http.chats_router"
 
 
 def test_messaging_router_shell_is_deleted() -> None:
@@ -124,7 +124,7 @@ def test_get_accessible_chat_or_404_returns_chat():
         )
     )
 
-    result = chat_router._get_accessible_chat_or_404(app, "chat-1", "user-1")
+    result = chats_router._get_accessible_chat_or_404(app, "chat-1", "user-1")
 
     assert result is chat
 
@@ -138,7 +138,7 @@ def test_get_accessible_chat_or_404_raises_404_for_missing_chat():
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        chat_router._get_accessible_chat_or_404(app, "missing", "user-1")
+        chats_router._get_accessible_chat_or_404(app, "missing", "user-1")
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Chat not found"
@@ -153,7 +153,7 @@ def test_get_accessible_chat_or_404_raises_403_for_non_member():
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        chat_router._get_accessible_chat_or_404(app, "chat-1", "user-2")
+        chats_router._get_accessible_chat_or_404(app, "chat-1", "user-2")
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not a participant of this chat"
@@ -173,7 +173,7 @@ def test_resolve_display_user_delegates_to_messaging_service(monkeypatch: pytest
         )
     )
 
-    result = chat_router._resolve_display_user(app, "thread-user-1")
+    result = chats_router._resolve_display_user(app, "thread-user-1")
 
     assert result is expected
     assert seen == [("resolve_display_user", "thread-user-1")]
@@ -187,7 +187,7 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         seen.append(("helper", (app_obj, chat_id, user_id)))
         return chat
 
-    monkeypatch.setattr(chat_router, "_get_accessible_chat_or_404", fake_helper)
+    monkeypatch.setattr(chats_router, "_get_accessible_chat_or_404", fake_helper)
 
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -210,7 +210,7 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         )
     )
 
-    result = chat_router.get_chat("chat-1", user_id="user-1", app=app)
+    result = chats_router.get_chat("chat-1", user_id="user-1", app=app)
 
     assert result == {
         "id": "chat-1",
@@ -230,7 +230,7 @@ def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         seen.append(("helper", (app_obj, chat_id, user_id)))
         return chat
 
-    monkeypatch.setattr(chat_router, "_get_accessible_chat_or_404", fake_helper)
+    monkeypatch.setattr(chats_router, "_get_accessible_chat_or_404", fake_helper)
 
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -241,7 +241,7 @@ def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         )
     )
 
-    result = chat_router.delete_chat("chat-1", user_id="user-1", app=app)
+    result = chats_router.delete_chat("chat-1", user_id="user-1", app=app)
 
     assert result == {"status": "deleted"}
     assert seen == [
@@ -253,7 +253,7 @@ def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
 def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: pytest.MonkeyPatch):
     chat = _chat("chat-1")
 
-    monkeypatch.setattr(chat_router, "_get_accessible_chat_or_404", lambda _app, _chat_id, _user_id: chat)
+    monkeypatch.setattr(chats_router, "_get_accessible_chat_or_404", lambda _app, _chat_id, _user_id: chat)
 
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -288,7 +288,7 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
         )
     )
 
-    result = chat_router.get_chat("chat-1", user_id="human-user-1", app=app)
+    result = chats_router.get_chat("chat-1", user_id="human-user-1", app=app)
 
     assert result["members"] == [
         {
@@ -342,7 +342,7 @@ def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
         )
     )
 
-    result = chat_router.list_messages("chat-1", user_id="human-user-1", app=app)
+    result = chats_router.list_messages("chat-1", user_id="human-user-1", app=app)
 
     assert result == [
         {
@@ -452,9 +452,9 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
         )
     )
 
-    result = chat_router.send_message(
+    result = chats_router.send_message(
         "chat-1",
-        chat_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
+        chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
         app=app,
     )
@@ -529,9 +529,9 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
         )
     )
 
-    result = chat_router.send_message(
+    result = chats_router.send_message(
         "chat-1",
-        chat_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
+        chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
         app=app,
     )
@@ -562,8 +562,8 @@ def test_create_chat_rejects_template_member_ids_for_group_participants() -> Non
     app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
-        chat_router.create_chat(
-            chat_router.CreateChatBody(
+        chats_router.create_chat(
+            chats_router.CreateChatBody(
                 user_ids=["human-user-1", "agent-user-1", "agent-user-2"],
                 title="bad-group",
             ),
@@ -585,8 +585,8 @@ def test_create_chat_rejects_template_member_id_for_direct_participant() -> None
     app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
-        chat_router.create_chat(
-            chat_router.CreateChatBody(
+        chats_router.create_chat(
+            chats_router.CreateChatBody(
                 user_ids=["human-user-1", "agent-user-1"],
                 title=None,
             ),
@@ -603,8 +603,8 @@ def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_particip
     state, called = _create_chat_route_state(thread_user_ids={"thread-user-1", "thread-user-2"})
     app = SimpleNamespace(state=state)
 
-    result = chat_router.create_chat(
-        chat_router.CreateChatBody(
+    result = chats_router.create_chat(
+        chats_router.CreateChatBody(
             user_ids=["human-user-1", "thread-user-1", "thread-user-2"],
             title="good-group",
         ),
@@ -633,8 +633,8 @@ def test_create_group_chat_rejects_external_participant_without_active_relations
     app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
-        chat_router.create_chat(
-            chat_router.CreateChatBody(
+        chats_router.create_chat(
+            chats_router.CreateChatBody(
                 user_ids=["human-user-1", "owned-agent-1", "human-user-2"],
                 title="bad-group",
             ),
@@ -659,8 +659,8 @@ def test_create_group_chat_accepts_external_active_contact_without_relationship(
     )
     app = SimpleNamespace(state=state)
 
-    result = chat_router.create_chat(
-        chat_router.CreateChatBody(
+    result = chats_router.create_chat(
+        chats_router.CreateChatBody(
             user_ids=["human-user-1", "owned-agent-1", "human-user-2"],
             title="contact-group",
         ),
@@ -685,8 +685,8 @@ def test_create_group_chat_accepts_agent_owned_by_external_active_contact() -> N
     )
     app = SimpleNamespace(state=state)
 
-    result = chat_router.create_chat(
-        chat_router.CreateChatBody(
+    result = chats_router.create_chat(
+        chats_router.CreateChatBody(
             user_ids=["human-user-1", "owned-agent-1", "external-agent-1"],
             title="owner-contact-agent-group",
         ),
@@ -709,8 +709,8 @@ def test_create_group_chat_accepts_owned_agent_without_relationship() -> None:
     )
     app = SimpleNamespace(state=state)
 
-    result = chat_router.create_chat(
-        chat_router.CreateChatBody(
+    result = chats_router.create_chat(
+        chats_router.CreateChatBody(
             user_ids=["human-user-1", "owned-agent-1", "human-user-2"],
             title="good-group",
         ),
@@ -727,8 +727,8 @@ def test_create_chat_rejects_unknown_participant_ids_instead_of_falling_to_stora
     app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
-        chat_router.create_chat(
-            chat_router.CreateChatBody(
+        chats_router.create_chat(
+            chats_router.CreateChatBody(
                 user_ids=["human-user-1", "thread-id-not-a-user", "thread-user-2"],
                 title="bad-group",
             ),

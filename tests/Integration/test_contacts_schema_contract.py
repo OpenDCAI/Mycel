@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from backend.web.routers import contacts as contacts_router
 from storage.contracts import ContactEdgeRow
@@ -89,3 +90,41 @@ async def test_delete_contact_uses_directed_user_ids() -> None:
 
     assert result == {"status": "deleted"}
     assert repo.deleted == [("user-a", "user-b")]
+
+
+@pytest.mark.asyncio
+async def test_list_contacts_fails_loud_when_contact_repo_missing() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        await contacts_router.list_contacts(
+            user_id="user-a",
+            app=SimpleNamespace(state=SimpleNamespace()),
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
+
+
+@pytest.mark.asyncio
+async def test_set_contact_fails_loud_when_contact_repo_missing() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        await contacts_router.set_contact(
+            contacts_router.SetContactBody(target_user_id="user-b", kind="blocked", state="active"),
+            user_id="user-a",
+            app=SimpleNamespace(state=SimpleNamespace()),
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
+
+
+@pytest.mark.asyncio
+async def test_delete_contact_fails_loud_when_contact_repo_missing() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        await contacts_router.delete_contact(
+            "user-b",
+            user_id="user-a",
+            app=SimpleNamespace(state=SimpleNamespace()),
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"

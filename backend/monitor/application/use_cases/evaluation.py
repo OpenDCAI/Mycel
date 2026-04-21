@@ -201,7 +201,7 @@ def create_monitor_evaluation_batch(
 def start_monitor_evaluation_batch(
     batch_id: str,
     *,
-    base_url: str,
+    execution_base_url: str,
     token: str,
     scheduler: EvaluationJobScheduler,
 ) -> dict[str, Any]:
@@ -228,7 +228,7 @@ def start_monitor_evaluation_batch(
         EvaluationJobSpec(
             batch_id=batch_id,
             scenarios=scenarios,
-            base_url=base_url.rstrip("/"),
+            execution_base_url=execution_base_url.rstrip("/"),
             token=token,
             agent_user_id=str(agent_user_id),
             max_concurrent=max_concurrent,

@@ -1,1 +1,1 @@
-"""Core module for Leon web backend."""
+"""Core module for Mycel web backend."""

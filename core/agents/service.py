@@ -28,6 +28,7 @@ from core.runtime.permissions import ToolPermissionContext
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.runtime.state import BootstrapConfig, ToolUseContext
 from core.runtime.tool_result import tool_error, tool_permission_request, tool_success
+from protocols.event_bus import EventBusFactory, EventEmitter
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,8 @@ if TYPE_CHECKING:
     from core.runtime.agent import LeonAgent
 
 
-EventEmitter = Callable[[dict[str, Any]], Awaitable[None] | None]
 ChildAgentFactory = Callable[..., "LeonAgent"]
+ChildThreadLiveRunner = Callable[..., Awaitable[str]]
 
 
 def _resolve_default_child_agent_factory() -> ChildAgentFactory:
@@ -469,6 +470,8 @@ class AgentService:
         thread_repo: Any = None,
         user_repo: Any = None,
         web_app: Any = None,
+        event_bus_factory: EventBusFactory | None = None,
+        child_thread_live_runner: ChildThreadLiveRunner | None = None,
         child_agent_factory: ChildAgentFactory | None = None,
     ):
         self._agent_registry = None
@@ -480,6 +483,8 @@ class AgentService:
         self._thread_repo = thread_repo
         self._user_repo = user_repo
         self._web_app = web_app
+        self._event_bus_factory = event_bus_factory
+        self._child_thread_live_runner = child_thread_live_runner
         self._child_agent_factory = child_agent_factory or _resolve_default_child_agent_factory()
         self._parent_bootstrap: BootstrapConfig | None = None
         self._parent_tool_context: Any | None = None
@@ -756,18 +761,13 @@ class AgentService:
 
         # emit_fn is set if EventBus is available; used for task lifecycle SSE events
         emit_fn: EventEmitter | None = None
-        try:
-            from backend.web.event_bus import get_event_bus
-
-            if parent_thread_id:
-                event_bus = get_event_bus()
-                emit_fn = event_bus.make_emitter(
-                    thread_id=parent_thread_id,
-                    agent_id=task_id,
-                    agent_name=agent_name,
-                )
-        except ImportError:
-            pass  # backend not available in standalone core usage
+        if self._event_bus_factory is not None and parent_thread_id:
+            event_bus = self._event_bus_factory()
+            emit_fn = event_bus.make_emitter(
+                thread_id=parent_thread_id,
+                agent_id=task_id,
+                agent_name=agent_name,
+            )
 
         agent: LeonAgent | None = None
         progress_task: asyncio.Task | None = None
@@ -815,6 +815,8 @@ class AgentService:
                         sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
                         agent=agent_name_for_role,
                         web_app=self._web_app,
+                        event_bus_factory=self._event_bus_factory,
+                        child_thread_live_runner=self._child_thread_live_runner,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -841,6 +843,8 @@ class AgentService:
                         sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
                         agent=agent_name_for_role,
                         web_app=self._web_app,
+                        event_bus_factory=self._event_bus_factory,
+                        child_thread_live_runner=self._child_thread_live_runner,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -871,6 +875,8 @@ class AgentService:
                     ),
                     agent=agent_name_for_role,
                     web_app=self._web_app,
+                    event_bus_factory=self._event_bus_factory,
+                    child_thread_live_runner=self._child_thread_live_runner,
                     extra_blocked_tools=extra_blocked,
                     allowed_tools=allowed,
                     verbose=False,
@@ -963,9 +969,10 @@ class AgentService:
                 initial_messages = [{"role": "user", "content": prompt}]
 
             if self._web_app is not None:
-                from backend.web.services.streaming_service import run_child_thread_live
+                if self._child_thread_live_runner is None:
+                    raise RuntimeError("child_thread_live_runner is required when web_app is configured")
 
-                result = await run_child_thread_live(
+                result = await self._child_thread_live_runner(
                     agent,
                     thread_id,
                     prompt,
@@ -1273,7 +1280,7 @@ class AgentService:
             payload,
             ToolPermissionContext(is_read_only=True, is_destructive=False),
             None,
-            "Please answer the following questions so Leon can continue.",
+            "Please answer the following questions so Mycel can continue.",
         )
         request_id = request_result.get("request_id") if isinstance(request_result, dict) else request_result
         if not isinstance(request_id, str) or not request_id:

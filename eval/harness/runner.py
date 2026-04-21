@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class EvalRunner:
-    """Run eval scenarios against a Leon backend instance."""
+    """Run eval scenarios against a Mycel backend instance."""
 
     def __init__(
         self,
@@ -300,7 +300,7 @@ async def _main() -> None:
 
     from eval.harness.scenario import load_scenario, load_scenarios_from_dir
 
-    parser = argparse.ArgumentParser(description="Leon Eval Runner")
+    parser = argparse.ArgumentParser(description="Mycel Eval Runner")
     parser.add_argument("--scenario", type=str, help="Path to a single scenario YAML")
     parser.add_argument("--scenario-dir", type=str, help="Path to scenario directory")
     parser.add_argument("--base-url", type=str, default="http://localhost:8001")

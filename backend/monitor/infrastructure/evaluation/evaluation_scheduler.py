@@ -12,7 +12,7 @@ from eval.models import EvalScenario
 class EvaluationJobSpec:
     batch_id: str
     scenarios: list[EvalScenario]
-    base_url: str
+    execution_base_url: str
     token: str
     agent_user_id: str
     max_concurrent: int = 1

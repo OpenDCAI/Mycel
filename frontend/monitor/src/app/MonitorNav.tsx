@@ -21,8 +21,8 @@ export function MonitorNav({
       <div className="monitor-sidebar__brand">
         <div className="monitor-sidebar__brand-row">
           <div>
-            <span className="monitor-sidebar__eyebrow">Leon Ops</span>
-            <h1>{collapsed ? "LM" : "Leon Sandbox Monitor"}</h1>
+            <span className="monitor-sidebar__eyebrow">Mycel Ops</span>
+            <h1>{collapsed ? "MM" : "Mycel Sandbox Monitor"}</h1>
           </div>
           <button
             type="button"

@@ -1,9 +1,10 @@
 import os
 import subprocess
+from importlib.util import find_spec
 
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend import app_entrypoint
+from backend.bootstrap import app_entrypoint
 
 
 def test_resolve_app_port_prefers_env_key(monkeypatch):
@@ -74,14 +75,14 @@ def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
     monkeypatch.setattr(app_entrypoint.uvicorn, "run", _run)
 
     app_entrypoint.run_reloadable_app(
-        "backend.monitor_app.main:app",
+        "backend.monitor.app.main:app",
         port=55417,
         reload_dirs=["backend", "storage", "eval"],
     )
 
     assert calls == [
         (
-            ("backend.monitor_app.main:app",),
+            ("backend.monitor.app.main:app",),
             {
                 "host": "0.0.0.0",
                 "port": 55417,
@@ -90,3 +91,12 @@ def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
             },
         )
     ]
+
+
+def test_monitor_process_shell_no_longer_lives_under_backend_monitor_app():
+    try:
+        legacy_spec = find_spec("backend.monitor_app.main")
+    except ModuleNotFoundError:
+        legacy_spec = None
+    assert legacy_spec is None
+    assert find_spec("backend.monitor.app.main") is not None

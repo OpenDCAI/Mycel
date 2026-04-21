@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.avatar_urls import avatar_url
-from backend.thread_runtime.convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
-from backend.thread_runtime.projection import canonical_owner_threads
+from backend.identity.avatar.urls import avatar_url
+from backend.threads.convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
+from backend.threads.projection import canonical_owner_threads
 from core.runtime.middleware.monitor import AgentState
 
 

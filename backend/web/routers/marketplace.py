@@ -5,7 +5,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.profile import get_profile
+from backend.hub import client as marketplace_client
+from backend.identity.profile import get_profile
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.marketplace import (
     CheckUpdatesRequest,
@@ -13,7 +14,6 @@ from backend.web.models.marketplace import (
     PublishAgentUserToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
-from backend.web.services import marketplace_client
 
 router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
 

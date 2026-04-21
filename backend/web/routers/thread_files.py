@@ -7,9 +7,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
-from backend import file_channel as file_channel_service
+from backend.threads import file_channel as file_channel_service
+from backend.threads.activity_pool_service import resolve_thread_sandbox
 from backend.web.core.dependencies import get_app, verify_thread_owner
-from backend.web.services.agent_pool import resolve_thread_sandbox
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
 
@@ -68,7 +68,7 @@ async def list_workspace_path(
         }
 
     # Remote sandbox
-    from backend.web.services.agent_pool import get_or_create_agent
+    from backend.threads.activity_pool_service import get_or_create_agent
 
     try:
         set_current_thread_id(thread_id)
@@ -135,7 +135,7 @@ async def read_workspace_file(
         return {"thread_id": thread_id, "path": str(target), "content": data.content, "size": data.size}
 
     # Remote sandbox
-    from backend.web.services.agent_pool import get_or_create_agent
+    from backend.threads.activity_pool_service import get_or_create_agent
 
     try:
         set_current_thread_id(thread_id)

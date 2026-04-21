@@ -12,7 +12,7 @@ def _decode(events: list[dict[str, str]]) -> list[tuple[str, dict[str, object]]]
 
 @pytest.mark.asyncio
 async def test_emit_run_prologue_owner_message_emits_user_message_then_run_start() -> None:
-    from backend.thread_runtime.run.prologue import emit_run_prologue
+    from backend.threads.run.prologue import emit_run_prologue
 
     events: list[dict[str, str]] = []
 
@@ -44,7 +44,7 @@ async def test_emit_run_prologue_owner_message_emits_user_message_then_run_start
 
 @pytest.mark.asyncio
 async def test_emit_run_prologue_skips_duplicate_user_message_for_steer() -> None:
-    from backend.thread_runtime.run.prologue import emit_run_prologue
+    from backend.threads.run.prologue import emit_run_prologue
 
     events: list[dict[str, str]] = []
 
@@ -72,7 +72,7 @@ async def test_emit_run_prologue_skips_duplicate_user_message_for_steer() -> Non
 
 @pytest.mark.asyncio
 async def test_emit_run_prologue_emits_notice_after_run_start_for_system_message() -> None:
-    from backend.thread_runtime.run.prologue import emit_run_prologue
+    from backend.threads.run.prologue import emit_run_prologue
 
     events: list[dict[str, str]] = []
 

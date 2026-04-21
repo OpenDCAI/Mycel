@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from backend.web.services import sandbox_service
+from backend.sandboxes import service as sandbox_service
 from sandbox.providers.local import LocalSessionProvider
 
 

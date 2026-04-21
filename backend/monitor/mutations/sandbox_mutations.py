@@ -9,7 +9,7 @@ from backend.monitor.mutations.contracts import (
     RuntimeMutationResult,
     SandboxCleanupRequest,
 )
-from backend.sandbox_runtime_mutations import destroy_sandbox_runtime, mutate_sandbox_runtime
+from backend.sandboxes.runtime.mutations import destroy_sandbox_runtime, mutate_sandbox_runtime
 
 
 def _public_destroy_result(result: Any) -> Any:

@@ -5,7 +5,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend import profile as profile_owner
+from backend.chat.api.http.dependencies import get_thread_repo
+from backend.chat.runtime_access import get_contact_repo
+from backend.identity import profile as profile_owner
+from backend.library import service as library_service
+from backend.threads import agent_user_service
 from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.models.panel import (
     AgentConfigPayload,
@@ -17,7 +21,6 @@ from backend.web.models.panel import (
     UpdateResourceContentRequest,
     UpdateResourceRequest,
 )
-from backend.web.services import agent_user_service, library_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
@@ -89,6 +92,10 @@ async def create_agent(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    try:
+        contact_repo = get_contact_repo(request.app)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
     return await asyncio.to_thread(
         agent_user_service.create_agent_user,
         req.name,
@@ -96,7 +103,7 @@ async def create_agent(
         owner_user_id=user_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
-        contact_repo=getattr(request.app.state, "contact_repo", None),
+        contact_repo=contact_repo,
     )
 
 
@@ -180,11 +187,16 @@ async def delete_agent(
         raise HTTPException(403, "Cannot delete builtin agent")
     user_repo = request.app.state.user_repo
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
-    thread_repo = getattr(request.app.state, "thread_repo", None)
-    if thread_repo is not None:
-        await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
+    try:
+        thread_repo = get_thread_repo(request.app)
+    except HTTPException:
+        raise
+    await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
-    contact_repo = getattr(request.app.state, "contact_repo", None)
+    try:
+        contact_repo = get_contact_repo(request.app)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
     ok = await asyncio.to_thread(
         agent_user_service.delete_agent_user,
         agent_id,

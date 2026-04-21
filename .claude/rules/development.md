@@ -5,7 +5,7 @@
 修改代码后本地测试：
 
 ```bash
-uv cache clean leonai --force && uv tool install . --force
+uv cache clean mycel --force && uv tool install . --force
 ```
 
 - `--force` 必须加，否则缓存/进程占用会导致安装旧版本

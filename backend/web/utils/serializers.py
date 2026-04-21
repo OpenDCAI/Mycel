@@ -2,18 +2,9 @@
 
 from typing import Any
 
-from backend.avatar_paths import avatars_dir
-from backend.message_content import extract_text_content, strip_system_tags
+from backend.threads.message_content import extract_text_content, strip_system_tags
 
-__all__ = ["avatar_url", "strip_system_tags", "extract_text_content", "serialize_message"]
-
-
-def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
-    if not user_id:
-        return None
-    if has_avatar or (avatars_dir() / f"{user_id}.png").exists():
-        return f"/api/users/{user_id}/avatar"
-    return None
+__all__ = ["strip_system_tags", "extract_text_content", "serialize_message"]
 
 
 def serialize_message(msg: Any) -> dict[str, Any]:
@@ -23,7 +14,7 @@ def serialize_message(msg: Any) -> dict[str, Any]:
     additional_kwargs = getattr(msg, "additional_kwargs", None) or {}
     tool_result_meta = additional_kwargs.get("tool_result_meta")
     # @@@tool-result-meta-merge - LangChain ToolMessage keeps durable tool
-    # metadata in additional_kwargs, but Leon display rebuild consumes
+    # metadata in additional_kwargs, but Mycel display rebuild consumes
     # serialized metadata. Merge the exact structured tool_result_meta here so
     # checkpoint rebuild can recover blocking subagent identity honestly.
     if isinstance(tool_result_meta, dict):

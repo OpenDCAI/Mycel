@@ -16,7 +16,7 @@ class ToolMessage:
 
 @pytest.mark.asyncio
 async def test_tool_call_dedup_prepopulates_checkpoint_ids_and_tracks_emission_state() -> None:
-    from backend.thread_runtime.run.tool_call_dedup import ToolCallDedup
+    from backend.threads.run.tool_call_dedup import ToolCallDedup
 
     agent = SimpleNamespace(
         agent=SimpleNamespace(

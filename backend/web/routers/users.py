@@ -8,10 +8,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.avatar_files import process_and_save_avatar
-from backend.avatar_paths import avatars_dir
+from backend.chat.api.http.dependencies import get_thread_repo
+from backend.chat.runtime_access import get_contact_repo, get_relationship_service
+from backend.identity.avatar.files import process_and_save_avatar
+from backend.identity.avatar.paths import avatars_dir
+from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_app, get_current_user_id
-from backend.web.utils.serializers import avatar_url
 from messaging.social_access import active_contact_target_ids, can_chat_with_owner_scope
 from storage.contracts import UserType
 
@@ -126,9 +128,10 @@ async def delete_avatar(
 
 
 def _relationship_states_for_user(app: Any, user_id: str) -> dict[str, str]:
-    svc = getattr(app.state, "relationship_service", None)
-    if svc is None:
-        raise HTTPException(503, "Relationship service unavailable")
+    try:
+        svc = get_relationship_service(app)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
     states: dict[str, str] = {}
     for row in svc.list_for_user(user_id):
         other_id = getattr(row, "other_user_id", None)
@@ -151,12 +154,12 @@ async def list_chat_candidates(
     user_map = {user.id: user for user in users}
     relationship_states = _relationship_states_for_user(app, user_id)
     try:
-        contact_targets = active_contact_target_ids(getattr(app.state, "contact_repo", None), user_id)
+        contact_targets = active_contact_target_ids(get_contact_repo(app), user_id)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
 
     items = []
-    thread_repo = getattr(app.state, "thread_repo", None)
+    thread_repo = get_thread_repo(app)
 
     for user in users:
         if user.id == user_id:

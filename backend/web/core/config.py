@@ -1,7 +1,7 @@
-"""Configuration constants for Leon web backend."""
+"""Configuration constants for Mycel web backend."""
 
-from backend import sandbox_paths
-from backend.local_workspace import local_workspace_root
+from backend.sandboxes import paths as sandbox_paths
+from backend.sandboxes.local_workspace import local_workspace_root
 from config.user_paths import user_home_path
 
 # SQLite sandbox repos use this as their default local DB path.

@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backend import resource_io
+from backend.sandboxes.resources import io as resource_io
 from sandbox import resource_snapshot
 from storage import runtime as storage_runtime
 

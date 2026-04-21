@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.web.services.streaming_service import prime_sandbox
+from backend.threads.streaming import prime_sandbox
 
 
 @pytest.mark.asyncio

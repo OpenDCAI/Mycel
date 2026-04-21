@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "leonai"
+name = "mycel"
 version = "0.3.0"
-description = "Leon - Proactive AI coding assistant with persistent memory"
+description = "Mycel - proactive human-agent collaboration platform with persistent memory"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -67,9 +67,9 @@ otel = ["opentelemetry-api>=1.20.0", "opentelemetry-sdk>=1.20.0", "opentelemetry
 all = ["pymupdf>=1.24.0", "python-pptx>=1.0.0", "httpx-sse>=0.4.0", "langfuse>=3.0.0", "langsmith>=0.1.0"]
 
 [project.urls]
-Homepage = "https://github.com/Ju-Yi-AI-Lab/leonai"
-Repository = "https://github.com/Ju-Yi-AI-Lab/leonai"
-Issues = "https://github.com/Ju-Yi-AI-Lab/leonai/issues"
+Homepage = "https://github.com/OpenDCAI/Mycel"
+Repository = "https://github.com/OpenDCAI/Mycel"
+Issues = "https://github.com/OpenDCAI/Mycel/issues"
 
 [tool.setuptools]
 packages = [
@@ -103,7 +103,6 @@ packages = [
     "core.tools.web.fetchers",
     "core.tools.web.searchers",
     "core.agents",
-    "core.agents.communication",
     "sandbox",
     "sandbox.interfaces",
     "sandbox.providers",

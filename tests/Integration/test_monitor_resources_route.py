@@ -2,18 +2,20 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.monitor.api.http import router as monitor_router
+from backend.monitor.api.http import global_router
 from backend.monitor.application.use_cases import resources as monitor_resources_impl
 from backend.monitor.infrastructure.io import resource_io_service as monitor_resource_io_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
+from backend.web.core.dependencies import get_current_user_id
+from backend.web.routers import monitor_threads as monitor_threads_router
 
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
-    app.include_router(monitor_router.router)
+    app.include_router(global_router.router, prefix="/api/monitor")
+    app.include_router(monitor_threads_router.router, prefix="/api/monitor")
     if include_product_resources:
         try:
-            from backend.web.core.dependencies import get_current_user_id
             from backend.web.routers import resources
         except ImportError as exc:  # pragma: no cover - environment guard
             pytest.skip(f"product resource routes unavailable in lightweight test env: {exc}")
@@ -143,6 +145,29 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
     }
 
 
+def test_global_monitor_router_accepts_evaluation_batch_create(monkeypatch):
+    monkeypatch.setattr(
+        monitor_gateway_impl,
+        "create_evaluation_batch",
+        lambda **kwargs: {"batch": kwargs},
+    )
+    app = FastAPI()
+    app.include_router(global_router.router, prefix="/api/monitor")
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/monitor/evaluation/batches",
+                json={"agent_user_id": "agent-1", "scenario_ids": ["scenario-1"], "sandbox": "local", "max_concurrent": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["batch"]["submitted_by_user_id"] == "owner-1"
+    assert response.json()["batch"]["agent_user_id"] == "agent-1"
+
+
 @pytest.mark.parametrize(
     ("method", "path", "service_name", "payload"),
     [
@@ -217,26 +242,26 @@ def test_monitor_threads_routes_use_authenticated_owner(monkeypatch):
     expected = {"threads": [{"thread_id": "thread-1", "agent_user_id": "agent-1"}]}
     calls = []
 
-    def _list_threads(app, user_id):
-        calls.append((app, user_id))
+    def _list_threads(user_id, *, workbench_reader):
+        calls.append((user_id, workbench_reader))
         return expected
 
-    monkeypatch.setattr(monitor_gateway_impl, "list_threads", _list_threads)
+    monkeypatch.setattr(monitor_threads_router.monitor_thread_service, "list_monitor_threads", _list_threads)
     app = _app()
-    app.dependency_overrides[monitor_router.get_current_user_id] = lambda: "owner-1"
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
 
     response = _request("get", "/api/monitor/threads", app=app)
 
     assert response.status_code == 200
     assert response.json() == expected
-    assert calls[0][1] == "owner-1"
+    assert calls[0][0] == "owner-1"
 
 
 def test_monitor_thread_detail_route_awaits_service(monkeypatch):
-    async def _detail(app, thread_id):
+    async def _detail(thread_id, *, load_thread_base, trace_reader):
         return {"thread": {"thread_id": thread_id}, "trajectory": {"events": []}}
 
-    monkeypatch.setattr(monitor_gateway_impl, "get_thread_detail", _detail)
+    monkeypatch.setattr(monitor_threads_router.monitor_thread_service, "get_monitor_thread_detail", _detail)
 
     response = _request("get", "/api/monitor/threads/thread-1")
 
@@ -294,10 +319,20 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
     monkeypatch.setattr(
         monitor_gateway_impl,
         "start_evaluation_batch",
-        lambda **kwargs: start_calls.append(kwargs) or {"accepted": True},
+        lambda *, batch_id, execution_base_url, token, schedule_task: (
+            start_calls.append(
+                {
+                    "batch_id": batch_id,
+                    "execution_base_url": execution_base_url,
+                    "token": token,
+                    "schedule_task": schedule_task,
+                }
+            )
+            or {"accepted": True}
+        ),
     )
     app = _app()
-    app.dependency_overrides[monitor_router.get_current_user_id] = lambda: "owner-1"
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
 
     with TestClient(app) as client:
         create = client.post(
@@ -318,7 +353,7 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
         }
     ]
     assert start_calls[0]["batch_id"] == "batch-1"
-    assert start_calls[0]["base_url"] == "http://testserver"
+    assert start_calls[0]["execution_base_url"] == "http://testserver"
     assert start_calls[0]["token"] == "token-1"
 
 
