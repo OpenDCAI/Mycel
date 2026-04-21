@@ -24,9 +24,8 @@ def build_owner_thread_workbench(user_id: str, *, reader: OwnerThreadWorkbenchRe
     return build_owner_thread_workbench_from_rows(raw, reader=reader)
 
 
-def _group_visible_threads_by_agent(raw: list[dict[str, object]]) -> list[list[dict[str, object]]]:
+def _group_visible_threads_by_agent(raw: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
     groups: dict[str, list[dict[str, object]]] = {}
-    order: list[str] = []
     for thread in raw:
         thread_id = str(thread.get("id") or "")
         if is_internal_child_thread(thread_id):
@@ -36,9 +35,8 @@ def _group_visible_threads_by_agent(raw: list[dict[str, object]]) -> list[list[d
             raise RuntimeError(f"Owner-visible thread {thread_id or '<missing>'} is missing agent_user_id")
         if agent_user_id not in groups:
             groups[agent_user_id] = []
-            order.append(agent_user_id)
         groups[agent_user_id].append(thread)
-    return [groups[agent_user_id] for agent_user_id in order]
+    return groups
 
 
 def _select_visible_thread(group: list[dict[str, object]], *, reader: OwnerThreadWorkbenchReader) -> dict[str, object] | None:
@@ -58,14 +56,21 @@ def _select_visible_thread(group: list[dict[str, object]], *, reader: OwnerThrea
 
 
 def build_owner_thread_workbench_from_rows(raw: list[dict[str, object]], *, reader: OwnerThreadWorkbenchReader) -> dict[str, object]:
+    raw_index = {str(thread.get("id") or ""): index for index, thread in enumerate(raw)}
     threads = []
     # @@@lazy-owner-thread-selection - monitor only needs one visible thread per agent.
     # Choosing the best candidate lazily avoids N full runtime-binding inspections
     # across every historical branch before we even know which thread would surface.
-    for group in _group_visible_threads_by_agent(raw):
+    selected_threads = []
+    for group in _group_visible_threads_by_agent(raw).values():
         thread = _select_visible_thread(group, reader=reader)
         if thread is None:
             continue
+        selected_threads.append(thread)
+
+    selected_threads.sort(key=lambda thread: raw_index.get(str(thread.get("id") or ""), 0))
+
+    for thread in selected_threads:
         thread_id = thread["id"]
         sandbox_type = thread.get("sandbox_type", "local")
         running = reader.is_runtime_active(thread_id, sandbox_type)

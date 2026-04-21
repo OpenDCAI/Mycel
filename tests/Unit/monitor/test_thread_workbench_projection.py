@@ -128,7 +128,7 @@ def test_build_owner_thread_workbench_preserves_agent_order_across_fallback_sele
 
     payload = thread_workbench.build_owner_thread_workbench_from_rows(rows, reader=reader)
 
-    assert [thread["thread_id"] for thread in payload["threads"]] == ["agent-1-branch", "agent-2-main"]
+    assert [thread["thread_id"] for thread in payload["threads"]] == ["agent-2-main", "agent-1-branch"]
 
 
 def test_build_owner_thread_workbench_omits_agent_groups_with_no_visible_runtime_candidate():
