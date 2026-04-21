@@ -26,16 +26,6 @@ def _chat(chat_id: str) -> SimpleNamespace:
 def _route_test_app(state: SimpleNamespace) -> FastAPI:
     app = FastAPI()
     app.state = state
-    if not hasattr(app.state, "chat_runtime_state"):
-        messaging_service = getattr(app.state, "messaging_service", None)
-        relationship_service = getattr(app.state, "relationship_service", None)
-        contact_repo = getattr(app.state, "contact_repo", None)
-        if any(value is not None for value in (messaging_service, relationship_service, contact_repo)):
-            app.state.chat_runtime_state = SimpleNamespace(
-                messaging_service=messaging_service,
-                relationship_service=relationship_service,
-                contact_repo=contact_repo,
-            )
     app.include_router(chats_router.router)
     app.dependency_overrides[get_current_user_id] = lambda: "human-user-1"
     return app
@@ -85,14 +75,19 @@ def _create_chat_route_state(
         return relationship_state.get(participant, "none") if isinstance(relationship_state, dict) else relationship_state
 
     messaging_entrypoint = {"create_group_chat" if group_route else "find_or_create_chat": chat_factory}
+    relationship_service = SimpleNamespace(get_state=get_state)
+    contact_repo = _contact_repo(active_contact_pairs)
+    messaging_service = SimpleNamespace(**messaging_entrypoint)
     state = SimpleNamespace(
         user_repo=SimpleNamespace(get_by_id=lambda uid: users.get(uid)),
         thread_repo=SimpleNamespace(
             get_by_user_id=lambda uid: {"id": f"thread-{uid}"} if uid in thread_user_ids else None,
         ),
-        relationship_service=SimpleNamespace(get_state=get_state),
-        contact_repo=_contact_repo(active_contact_pairs),
-        messaging_service=SimpleNamespace(**messaging_entrypoint),
+        chat_runtime_state=SimpleNamespace(
+            relationship_service=relationship_service,
+            contact_repo=contact_repo,
+            messaging_service=messaging_service,
+        ),
     )
     return state, called
 
@@ -101,11 +96,11 @@ def _create_chat(app: SimpleNamespace, body: chats_router.CreateChatBody, *, use
     return chats_router.create_chat(
         body,
         user_id=user_id,
-        messaging_service=app.state.messaging_service,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
         user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
-        contact_repo=app.state.contact_repo,
-        relationship_service=app.state.relationship_service,
+        contact_repo=app.state.chat_runtime_state.contact_repo,
+        relationship_service=app.state.chat_runtime_state.relationship_service,
     )
 
 
@@ -193,19 +188,23 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
 
     app = SimpleNamespace(
         state=SimpleNamespace(
-            chat_repo=SimpleNamespace(
-                get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("route should use helper, not chat_repo lookup directly"))
-            ),
-            messaging_service=SimpleNamespace(
-                get_chat_detail=lambda chat_obj: {
-                    "id": chat_obj.id,
-                    "title": chat_obj.title,
-                    "status": chat_obj.status,
-                    "created_at": chat_obj.created_at,
-                    "members": [],
-                },
-                list_chat_members=lambda _chat_id: (_ for _ in ()).throw(
-                    AssertionError("route should consume service-owned chat detail, not rebuild members locally")
+            chat_runtime_state=SimpleNamespace(
+                chat_repo=SimpleNamespace(
+                    get_by_id=lambda _chat_id: (_ for _ in ()).throw(
+                        AssertionError("route should use helper, not chat_repo lookup directly")
+                    )
+                ),
+                messaging_service=SimpleNamespace(
+                    get_chat_detail=lambda chat_obj: {
+                        "id": chat_obj.id,
+                        "title": chat_obj.title,
+                        "status": chat_obj.status,
+                        "created_at": chat_obj.created_at,
+                        "members": [],
+                    },
+                    list_chat_members=lambda _chat_id: (_ for _ in ()).throw(
+                        AssertionError("route should consume service-owned chat detail, not rebuild members locally")
+                    ),
                 ),
             ),
             user_repo=SimpleNamespace(get_by_id=lambda _user_id: None),
@@ -215,8 +214,8 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     result = chats_router.get_chat(
         "chat-1",
         user_id="user-1",
-        chat_repo=app.state.chat_repo,
-        messaging_service=app.state.messaging_service,
+        chat_repo=app.state.chat_runtime_state.chat_repo,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
     )
 
     assert result == {
@@ -226,7 +225,9 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         "created_at": "2026-04-07T00:00:00Z",
         "members": [],
     }
-    assert seen == [("helper", (app.state.chat_repo, app.state.messaging_service, "chat-1", "user-1"))]
+    assert seen == [
+        ("helper", (app.state.chat_runtime_state.chat_repo, app.state.chat_runtime_state.messaging_service, "chat-1", "user-1"))
+    ]
 
 
 def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
@@ -241,24 +242,28 @@ def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
 
     app = SimpleNamespace(
         state=SimpleNamespace(
-            chat_repo=SimpleNamespace(
-                get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("route should use helper, not chat_repo lookup directly")),
-                delete=lambda chat_id: seen.append(("delete", chat_id)),
+            chat_runtime_state=SimpleNamespace(
+                chat_repo=SimpleNamespace(
+                    get_by_id=lambda _chat_id: (_ for _ in ()).throw(
+                        AssertionError("route should use helper, not chat_repo lookup directly")
+                    ),
+                    delete=lambda chat_id: seen.append(("delete", chat_id)),
+                ),
+                messaging_service=SimpleNamespace(name="messaging"),
             ),
-            messaging_service=SimpleNamespace(name="messaging"),
         )
     )
 
     result = chats_router.delete_chat(
         "chat-1",
         user_id="user-1",
-        chat_repo=app.state.chat_repo,
-        messaging_service=app.state.messaging_service,
+        chat_repo=app.state.chat_runtime_state.chat_repo,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
     )
 
     assert result == {"status": "deleted"}
     assert seen == [
-        ("helper", (app.state.chat_repo, app.state.messaging_service, "chat-1", "user-1")),
+        ("helper", (app.state.chat_runtime_state.chat_repo, app.state.chat_runtime_state.messaging_service, "chat-1", "user-1")),
         ("delete", "chat-1"),
     ]
 
@@ -274,23 +279,25 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
 
     app = SimpleNamespace(
         state=SimpleNamespace(
-            messaging_service=SimpleNamespace(
-                get_chat_detail=lambda _chat: {
-                    "id": "chat-1",
-                    "title": "Chat title",
-                    "status": "active",
-                    "created_at": "2026-04-07T00:00:00Z",
-                    "members": [
-                        {
-                            "id": "thread-user-1",
-                            "name": "Toad",
-                            "type": "agent",
-                            "avatar_url": avatar_url("agent-user-1", False),
-                        }
-                    ],
-                }
+            chat_runtime_state=SimpleNamespace(
+                messaging_service=SimpleNamespace(
+                    get_chat_detail=lambda _chat: {
+                        "id": "chat-1",
+                        "title": "Chat title",
+                        "status": "active",
+                        "created_at": "2026-04-07T00:00:00Z",
+                        "members": [
+                            {
+                                "id": "thread-user-1",
+                                "name": "Toad",
+                                "type": "agent",
+                                "avatar_url": avatar_url("agent-user-1", False),
+                            }
+                        ],
+                    }
+                ),
+                chat_repo=SimpleNamespace(name="chat-repo"),
             ),
-            chat_repo=SimpleNamespace(name="chat-repo"),
             user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
                     None
@@ -309,8 +316,8 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
     result = chats_router.get_chat(
         "chat-1",
         user_id="human-user-1",
-        chat_repo=app.state.chat_repo,
-        messaging_service=app.state.messaging_service,
+        chat_repo=app.state.chat_runtime_state.chat_repo,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
     )
 
     assert result["members"] == [
@@ -326,28 +333,30 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
 def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
     app = SimpleNamespace(
         state=SimpleNamespace(
-            messaging_service=SimpleNamespace(
-                is_chat_member=lambda _chat_id, _user_id: True,
-                list_message_responses=lambda _chat_id, **_kwargs: [
-                    {
-                        "id": "msg-1",
-                        "chat_id": "chat-1",
-                        "sender_id": "thread-user-1",
-                        "sender_name": "Toad",
-                        "content": "hello",
-                        "message_type": "human",
-                        "mentioned_ids": [],
-                        "signal": None,
-                        "retracted_at": None,
-                        "created_at": "2026-04-07T00:00:00Z",
-                    }
-                ],
-                resolve_display_user=lambda uid: (
-                    SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)
-                    if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
-                    if uid == "agent-user-1"
-                    else None
+            chat_runtime_state=SimpleNamespace(
+                messaging_service=SimpleNamespace(
+                    is_chat_member=lambda _chat_id, _user_id: True,
+                    list_message_responses=lambda _chat_id, **_kwargs: [
+                        {
+                            "id": "msg-1",
+                            "chat_id": "chat-1",
+                            "sender_id": "thread-user-1",
+                            "sender_name": "Toad",
+                            "content": "hello",
+                            "message_type": "human",
+                            "mentioned_ids": [],
+                            "signal": None,
+                            "retracted_at": None,
+                            "created_at": "2026-04-07T00:00:00Z",
+                        }
+                    ],
+                    resolve_display_user=lambda uid: (
+                        SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None)
+                        if uid == "thread-user-1"
+                        else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                        if uid == "agent-user-1"
+                        else None
+                    ),
                 ),
             ),
             user_repo=SimpleNamespace(
@@ -368,7 +377,7 @@ def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
     result = chats_router.list_messages(
         "chat-1",
         user_id="human-user-1",
-        messaging_service=app.state.messaging_service,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
     )
 
     assert result == [
@@ -390,26 +399,28 @@ def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
 def test_list_messages_route_resolves_sender_name_via_messaging_service() -> None:
     test_app = _route_test_app(
         SimpleNamespace(
-            messaging_service=SimpleNamespace(
-                is_chat_member=lambda _chat_id, _user_id: True,
-                list_message_responses=lambda _chat_id, **_kwargs: [
-                    {
-                        "id": "msg-1",
-                        "chat_id": "chat-1",
-                        "sender_id": "thread-user-1",
-                        "sender_name": "Projected Toad",
-                        "content": "hello",
-                        "message_type": "human",
-                        "mentioned_ids": [],
-                        "signal": None,
-                        "retracted_at": None,
-                        "created_at": "2026-04-07T00:00:00Z",
-                    }
-                ],
-                list_messages=lambda _chat_id, **_kwargs: (_ for _ in ()).throw(
-                    AssertionError("route should consume service-owned message projection")
-                ),
-            )
+            chat_runtime_state=SimpleNamespace(
+                messaging_service=SimpleNamespace(
+                    is_chat_member=lambda _chat_id, _user_id: True,
+                    list_message_responses=lambda _chat_id, **_kwargs: [
+                        {
+                            "id": "msg-1",
+                            "chat_id": "chat-1",
+                            "sender_id": "thread-user-1",
+                            "sender_name": "Projected Toad",
+                            "content": "hello",
+                            "message_type": "human",
+                            "mentioned_ids": [],
+                            "signal": None,
+                            "retracted_at": None,
+                            "created_at": "2026-04-07T00:00:00Z",
+                        }
+                    ],
+                    list_messages=lambda _chat_id, **_kwargs: (_ for _ in ()).throw(
+                        AssertionError("route should consume service-owned message projection")
+                    ),
+                )
+            ),
         )
     )
 
@@ -440,41 +451,43 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
     seen: list[tuple[str, str, str]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
-            messaging_service=SimpleNamespace(
-                resolve_display_user=lambda uid: (
-                    SimpleNamespace(
-                        id="agent-user-1",
-                        display_name="Ownership Toad",
-                        type="agent",
-                        avatar=None,
-                        owner_user_id="owner-user-1",
-                    )
-                    if uid == "thread-user-1"
-                    else None
+            chat_runtime_state=SimpleNamespace(
+                messaging_service=SimpleNamespace(
+                    resolve_display_user=lambda uid: (
+                        SimpleNamespace(
+                            id="agent-user-1",
+                            display_name="Ownership Toad",
+                            type="agent",
+                            avatar=None,
+                            owner_user_id="owner-user-1",
+                        )
+                        if uid == "thread-user-1"
+                        else None
+                    ),
+                    send=lambda chat_id, sender_id, content, **_kwargs: (
+                        seen.append((chat_id, sender_id, content))
+                        or {
+                            "id": "msg-1",
+                            "chat_id": chat_id,
+                            "sender_id": sender_id,
+                            "content": content,
+                            "message_type": "human",
+                            "created_at": "2026-04-07T00:00:00Z",
+                        }
+                    ),
+                    project_message_response=lambda msg: {
+                        "id": msg["id"],
+                        "chat_id": msg["chat_id"],
+                        "sender_id": msg["sender_id"],
+                        "sender_name": "Projected Toad",
+                        "content": msg["content"],
+                        "message_type": msg["message_type"],
+                        "mentioned_ids": [],
+                        "signal": None,
+                        "retracted_at": None,
+                        "created_at": msg["created_at"],
+                    },
                 ),
-                send=lambda chat_id, sender_id, content, **_kwargs: (
-                    seen.append((chat_id, sender_id, content))
-                    or {
-                        "id": "msg-1",
-                        "chat_id": chat_id,
-                        "sender_id": sender_id,
-                        "content": content,
-                        "message_type": "human",
-                        "created_at": "2026-04-07T00:00:00Z",
-                    }
-                ),
-                project_message_response=lambda msg: {
-                    "id": msg["id"],
-                    "chat_id": msg["chat_id"],
-                    "sender_id": msg["sender_id"],
-                    "sender_name": "Projected Toad",
-                    "content": msg["content"],
-                    "message_type": msg["message_type"],
-                    "mentioned_ids": [],
-                    "signal": None,
-                    "retracted_at": None,
-                    "created_at": msg["created_at"],
-                },
             ),
         )
     )
@@ -483,7 +496,7 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
         "chat-1",
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
-        messaging_service=app.state.messaging_service,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
     )
 
     assert seen == [("chat-1", "thread-user-1", "hello")]
@@ -517,41 +530,43 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
             thread_repo=SimpleNamespace(
                 get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
             ),
-            messaging_service=SimpleNamespace(
-                resolve_display_user=lambda uid: (
-                    SimpleNamespace(
-                        id="agent-user-1",
-                        display_name="Toad",
-                        type="agent",
-                        avatar=None,
-                        owner_user_id="owner-user-1",
-                    )
-                    if uid == "thread-user-1"
-                    else None
+            chat_runtime_state=SimpleNamespace(
+                messaging_service=SimpleNamespace(
+                    resolve_display_user=lambda uid: (
+                        SimpleNamespace(
+                            id="agent-user-1",
+                            display_name="Toad",
+                            type="agent",
+                            avatar=None,
+                            owner_user_id="owner-user-1",
+                        )
+                        if uid == "thread-user-1"
+                        else None
+                    ),
+                    send=lambda chat_id, sender_id, content, **_kwargs: (
+                        seen.append((chat_id, sender_id, content))
+                        or {
+                            "id": "msg-1",
+                            "chat_id": chat_id,
+                            "sender_id": sender_id,
+                            "content": content,
+                            "message_type": "human",
+                            "created_at": "2026-04-07T00:00:00Z",
+                        }
+                    ),
+                    project_message_response=lambda msg: {
+                        "id": msg["id"],
+                        "chat_id": msg["chat_id"],
+                        "sender_id": msg["sender_id"],
+                        "sender_name": "Toad",
+                        "content": msg["content"],
+                        "message_type": msg["message_type"],
+                        "mentioned_ids": [],
+                        "signal": None,
+                        "retracted_at": None,
+                        "created_at": msg["created_at"],
+                    },
                 ),
-                send=lambda chat_id, sender_id, content, **_kwargs: (
-                    seen.append((chat_id, sender_id, content))
-                    or {
-                        "id": "msg-1",
-                        "chat_id": chat_id,
-                        "sender_id": sender_id,
-                        "content": content,
-                        "message_type": "human",
-                        "created_at": "2026-04-07T00:00:00Z",
-                    }
-                ),
-                project_message_response=lambda msg: {
-                    "id": msg["id"],
-                    "chat_id": msg["chat_id"],
-                    "sender_id": msg["sender_id"],
-                    "sender_name": "Toad",
-                    "content": msg["content"],
-                    "message_type": msg["message_type"],
-                    "mentioned_ids": [],
-                    "signal": None,
-                    "retracted_at": None,
-                    "created_at": msg["created_at"],
-                },
             ),
         )
     )
@@ -560,7 +575,7 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
         "chat-1",
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
-        messaging_service=app.state.messaging_service,
+        messaging_service=app.state.chat_runtime_state.messaging_service,
     )
 
     assert seen == [("chat-1", "thread-user-1", "hello")]
