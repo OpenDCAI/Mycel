@@ -19,4 +19,4 @@ class AgentRuntimeGatewayPort(Protocol):
 
 
 def get_agent_runtime_gateway(app: Any) -> AgentRuntimeGatewayPort:
-    return app.state.agent_runtime_gateway
+    return app.state.threads_runtime_state.agent_runtime_gateway

@@ -55,7 +55,8 @@ def get_chat_event_bus(app: Annotated[Any, Depends(get_app)]) -> Any:
 
 
 def get_runtime_thread_activity_reader(app: Annotated[Any, Depends(get_app)]) -> Any:
-    return _require_state_attr(app, "agent_runtime_thread_activity_reader", "Thread activity reader unavailable")
+    runtime_state = _require_state_attr(app, "threads_runtime_state", "Thread activity reader unavailable")
+    return runtime_state.activity_reader
 
 
 def get_thread_last_active_map(app: Annotated[Any, Depends(get_app)]) -> Any:
