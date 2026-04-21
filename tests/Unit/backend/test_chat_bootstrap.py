@@ -74,6 +74,7 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert app.state.messaging_service.kwargs["delivery_resolver"]["contact_repo"] is contact_repo
     assert app.state.messaging_service.kwargs["thread_repo"] is app.state.thread_repo
     assert app.state.messaging_service.delivery_fn is None
+    assert app.state.chat_runtime_state is state
     assert state.contact_repo is contact_repo
     assert state.typing_tracker is app.state.typing_tracker
     assert state.messaging_service is app.state.messaging_service
