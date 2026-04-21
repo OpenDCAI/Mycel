@@ -349,7 +349,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         self,
         terminal,
         lease,
-        shell_command: tuple[str, ...] = ("/bin/bash",),
+        shell_command: tuple[str, ...] = ("/bin/bash", "--noprofile", "--norc"),
     ):
         super().__init__(terminal, lease)
         self.shell_command = shell_command

@@ -48,6 +48,7 @@ class AsyncCommand:
     exit_code: int | None = None
     done: bool = False
     cancelled: bool = False
+    monitor_task: Any = None
 
 
 class BaseExecutor(ABC):

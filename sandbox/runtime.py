@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import platform
 import re
@@ -26,6 +27,8 @@ from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
 from sandbox.shell_output import normalize_pty_result
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from storage.runtime import uses_supabase_runtime_defaults
+
+logger = logging.getLogger(__name__)
 
 if platform.system() == "Windows":
     pty = None
@@ -793,9 +796,13 @@ class PhysicalTerminalRuntime(ABC):
         stopped = await self._cancel_running_command()
         if stopped:
             try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+                await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
             except (TimeoutError, asyncio.CancelledError):
-                task.cancel()
+                logger.warning(
+                    "Timed out waiting for cancelled command %s to drain after runtime stop",
+                    command_id,
+                )
+                return False
         else:
             task.cancel()
         cmd.done = True
