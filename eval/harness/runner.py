@@ -7,9 +7,9 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from eval.judge import build_judge
 from eval.collector import MetricsCollector
 from eval.harness.client import EvalClient
+from eval.judge import build_judge
 from eval.models import ArtifactPolicy, ArtifactRecord, EvalResult, EvalScenario, JudgeResult, TrajectoryCapture
 from eval.storage import TrajectoryStore
 
@@ -37,7 +37,13 @@ class EvalRunner:
     async def run_scenario(self, scenario: EvalScenario) -> EvalResult:
         """Execute a single scenario end-to-end."""
         cwd = scenario.workspace.cwd if scenario.workspace and scenario.workspace.cwd else None
-        logger.info("Starting eval scenario %s (benchmark=%s, instance=%s, cwd=%s)", scenario.id, scenario.benchmark.family if scenario.benchmark else "", scenario.benchmark.instance_id if scenario.benchmark else "", cwd)
+        logger.info(
+            "Starting eval scenario %s (benchmark=%s, instance=%s, cwd=%s)",
+            scenario.id,
+            scenario.benchmark.family if scenario.benchmark else "",
+            scenario.benchmark.instance_id if scenario.benchmark else "",
+            cwd,
+        )
         thread_id = await self.client.create_thread(agent_user_id=self.agent_user_id, sandbox=scenario.sandbox, cwd=cwd)
         captures: list[TrajectoryCapture] = []
         started_at = datetime.now(UTC)

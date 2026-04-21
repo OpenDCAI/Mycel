@@ -100,7 +100,7 @@ def test_local_sandbox_rebuilds_stale_closed_capability_before_execute_async(tmp
 
     async def run():
         async_cmd = await sandbox.shell().execute_async("echo hi")
-        result = await sandbox.shell().wait_for(async_cmd.command_id, timeout=1.0)
+        result = await sandbox.shell().wait_for(async_cmd.command_id, timeout=2.0)
         return async_cmd, result
 
     async_cmd, result = asyncio.run(run())

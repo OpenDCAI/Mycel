@@ -3,8 +3,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from eval.benchmarks.swe_verified.acceptance import evaluate_smoke_judge_payload, simulate_jsonrpc_request
-from eval.benchmarks.swe_verified.acceptance import create_acceptance_app
+from eval.benchmarks.swe_verified.acceptance import create_acceptance_app, evaluate_smoke_judge_payload, simulate_jsonrpc_request
 from eval.harness.scenario import load_scenarios_from_dirs
 
 

@@ -10,7 +10,6 @@ from eval.benchmarks.swe_verified.assets import (
     validate_smoke_assets,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -164,9 +164,19 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
         ("get", "/api/monitor/evaluation/batches", "get_monitor_evaluation_batches", {"items": [], "count": 0}),
         ("get", "/api/monitor/evaluation/scenarios", "get_monitor_evaluation_scenarios", {"items": [], "count": 0}),
         ("get", "/api/monitor/evaluation/batches/batch-1", "get_monitor_evaluation_batch_detail", {"batch": {"batch_id": "batch-1"}}),
-        ("get", "/api/monitor/evaluation/batches/batch-1/aggregate", "get_monitor_evaluation_batch_aggregate", {"summary": {"pass_rate": 1.0}}),
+        (
+            "get",
+            "/api/monitor/evaluation/batches/batch-1/aggregate",
+            "get_monitor_evaluation_batch_aggregate",
+            {"summary": {"pass_rate": 1.0}},
+        ),
         ("get", "/api/monitor/evaluation/runs/run-1", "get_monitor_evaluation_run_detail", {"run": {"run_id": "run-1"}}),
-        ("get", "/api/monitor/evaluation/runs/run-1/artifacts", "get_monitor_evaluation_run_artifacts", {"run_id": "run-1", "artifacts": []}),
+        (
+            "get",
+            "/api/monitor/evaluation/runs/run-1/artifacts",
+            "get_monitor_evaluation_run_artifacts",
+            {"run_id": "run-1", "artifacts": []},
+        ),
     ],
 )
 def test_monitor_routes_delegate_to_service(monkeypatch, method, path, service_name, payload):
@@ -242,7 +252,11 @@ def test_monitor_thread_detail_route_awaits_service(monkeypatch):
         ("/api/monitor/operations/missing", "get_monitor_operation_detail", "Operation not found: missing"),
         ("/api/monitor/runtimes/missing", "get_monitor_runtime_detail", "Runtime not found: missing"),
         ("/api/monitor/evaluation/batches/missing", "get_monitor_evaluation_batch_detail", "Evaluation batch not found: missing"),
-        ("/api/monitor/evaluation/batches/missing/aggregate", "get_monitor_evaluation_batch_aggregate", "Evaluation batch not found: missing"),
+        (
+            "/api/monitor/evaluation/batches/missing/aggregate",
+            "get_monitor_evaluation_batch_aggregate",
+            "Evaluation batch not found: missing",
+        ),
         ("/api/monitor/evaluation/runs/missing", "get_monitor_evaluation_run_detail", "Evaluation run not found: missing"),
         ("/api/monitor/evaluation/runs/missing/artifacts", "get_monitor_evaluation_run_artifacts", "Evaluation run not found: missing"),
     ],

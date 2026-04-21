@@ -116,7 +116,9 @@ class TrajectoryStore:
 
     def save_artifacts(self, run_id: str, artifacts: list[ArtifactRecord] | list[dict[str, Any]]) -> None:
         payload = [
-            artifact.model_dump(mode="json") if isinstance(artifact, ArtifactRecord) else ArtifactRecord.model_validate(artifact).model_dump(mode="json")
+            artifact.model_dump(mode="json")
+            if isinstance(artifact, ArtifactRecord)
+            else ArtifactRecord.model_validate(artifact).model_dump(mode="json")
             for artifact in artifacts
         ]
         self.save_metrics(run_id, "artifacts", payload)

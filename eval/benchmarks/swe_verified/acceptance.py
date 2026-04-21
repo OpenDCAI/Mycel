@@ -331,9 +331,9 @@ def create_acceptance_app() -> FastAPI:
 
         async def _emit() -> Any:
             for event in events:
-                yield f"id: {event['id']}\n".encode("utf-8")
-                yield f"event: {event['event']}\n".encode("utf-8")
-                yield f"data: {json.dumps(event['data'])}\n\n".encode("utf-8")
+                yield f"id: {event['id']}\n".encode()
+                yield f"event: {event['event']}\n".encode()
+                yield f"data: {json.dumps(event['data'])}\n\n".encode()
                 await asyncio.sleep(0)
 
         return StreamingResponse(_emit(), media_type="text/event-stream")

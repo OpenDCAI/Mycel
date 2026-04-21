@@ -35,7 +35,9 @@ def load_scenario(path: str | Path) -> EvalScenario:
         evaluation_criteria=raw.get("evaluation_criteria", []),
         benchmark=BenchmarkInfo.model_validate(raw["benchmark"]) if raw.get("benchmark") else None,
         workspace=WorkspaceSpec.model_validate(raw["workspace"]) if raw.get("workspace") else None,
-        judge_config=JudgeConfig.model_validate(raw.get("judge_config") or raw.get("judge")) if raw.get("judge_config") or raw.get("judge") else None,
+        judge_config=JudgeConfig.model_validate(raw.get("judge_config") or raw.get("judge"))
+        if raw.get("judge_config") or raw.get("judge")
+        else None,
         artifact_policy=ArtifactPolicy.model_validate(raw.get("artifact_policy") or raw.get("artifacts"))
         if raw.get("artifact_policy") or raw.get("artifacts")
         else None,

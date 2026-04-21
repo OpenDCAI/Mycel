@@ -222,7 +222,9 @@ class HarnessState:
                 "name": "test_output.log",
                 "kind": "test_log",
                 "mime_type": "text/plain",
-                "content": "pytest testing/test_capture.py -q\n1 passed\n" if verdict == "passed" else "pytest testing/test_capture.py -q\n1 failed\n",
+                "content": "pytest testing/test_capture.py -q\n1 passed\n"
+                if verdict == "passed"
+                else "pytest testing/test_capture.py -q\n1 failed\n",
                 "metadata": {"verdict": verdict},
             },
             {
@@ -372,7 +374,9 @@ class HarnessState:
             raise KeyError(f"Thread not found: {thread_id}")
         return copy.deepcopy(self.threads[thread_id])
 
-    def create_batch(self, *, submitted_by_user_id: str, agent_user_id: str, scenario_ids: list[str], sandbox: str, max_concurrent: int) -> dict[str, Any]:
+    def create_batch(
+        self, *, submitted_by_user_id: str, agent_user_id: str, scenario_ids: list[str], sandbox: str, max_concurrent: int
+    ) -> dict[str, Any]:
         catalog = {item["scenario_id"]: item for item in self.scenarios}
         scenario_refs = []
         for scenario_id in scenario_ids:
@@ -556,12 +560,12 @@ def _patch_gateway() -> None:
     monitor_gateway.get_evaluation_batch_aggregate = STATE.batch_aggregate
     monitor_gateway.get_evaluation_run_detail = STATE.run_detail
     monitor_gateway.get_evaluation_run_artifacts = STATE.run_artifacts
-    monitor_gateway.compare_evaluation_batches = (
-        lambda *, baseline_batch_id, candidate_batch_id: STATE.compare_batches(baseline_batch_id, candidate_batch_id)
+    monitor_gateway.compare_evaluation_batches = lambda *, baseline_batch_id, candidate_batch_id: STATE.compare_batches(
+        baseline_batch_id, candidate_batch_id
     )
     monitor_gateway.export_evaluation_batch = lambda *, batch_id, export_format=None: STATE.export_batch(batch_id, export_format)
-    monitor_gateway.create_evaluation_batch = (
-        lambda *, submitted_by_user_id, agent_user_id, scenario_ids, sandbox, max_concurrent: STATE.create_batch(
+    monitor_gateway.create_evaluation_batch = lambda *, submitted_by_user_id, agent_user_id, scenario_ids, sandbox, max_concurrent: (
+        STATE.create_batch(
             submitted_by_user_id=submitted_by_user_id,
             agent_user_id=agent_user_id,
             scenario_ids=scenario_ids,
@@ -569,9 +573,7 @@ def _patch_gateway() -> None:
             max_concurrent=max_concurrent,
         )
     )
-    monitor_gateway.start_evaluation_batch = (
-        lambda *, batch_id, base_url, token, schedule_task: STATE.start_batch(batch_id=batch_id)
-    )
+    monitor_gateway.start_evaluation_batch = lambda *, batch_id, base_url, token, schedule_task: STATE.start_batch(batch_id=batch_id)
     monitor_gateway.get_thread_detail = _thread_detail
 
 

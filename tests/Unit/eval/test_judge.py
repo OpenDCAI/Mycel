@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from eval.judge import build_judge

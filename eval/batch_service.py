@@ -135,11 +135,7 @@ class EvaluationBatchService:
         summary["pass_rate"] = passed_runs / scored_runs if scored_runs else 0.0
         summary["avg_total_tokens"] = total_tokens / max(1, summary["completed_runs"])
         summary["artifact_count_total"] = total_artifacts
-        summary["avg_scores"] = {
-            key: score_totals[key] / score_counts[key]
-            for key in sorted(score_totals)
-            if score_counts.get(key)
-        }
+        summary["avg_scores"] = {key: score_totals[key] / score_counts[key] for key in sorted(score_totals) if score_counts.get(key)}
         summary["benchmark_families"] = sorted(benchmark_families)
         summary["benchmark_splits"] = sorted(benchmark_splits)
         updated = self._batch_repo.update_batch(
@@ -270,8 +266,7 @@ class EvaluationBatchService:
                 "delta": candidate_value - baseline_value,
             }
         score_keys = sorted(
-            set(dict(baseline_summary.get("avg_scores") or {}).keys())
-            | set(dict(candidate_summary.get("avg_scores") or {}).keys())
+            set(dict(baseline_summary.get("avg_scores") or {}).keys()) | set(dict(candidate_summary.get("avg_scores") or {}).keys())
         )
         deltas["avg_scores"] = {
             key: {

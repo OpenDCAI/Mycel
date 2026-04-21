@@ -109,9 +109,7 @@ class CommandJudge:
         )
         if completed.returncode != 0:
             logger.error("Command judge failed for scenario %s with exit code %s", scenario.id, completed.returncode)
-            raise RuntimeError(
-                f"Judge command failed with exit={completed.returncode}: {(completed.stderr or completed.stdout).strip()}"
-            )
+            raise RuntimeError(f"Judge command failed with exit={completed.returncode}: {(completed.stderr or completed.stdout).strip()}")
 
         stdout = (completed.stdout or "").strip()
         parsed = json.loads(stdout) if stdout else {}
