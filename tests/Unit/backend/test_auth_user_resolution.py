@@ -60,9 +60,7 @@ async def test_get_current_user_returns_user_row_off_event_loop_thread():
         headers={"Authorization": "Bearer tok-1"},
         app=SimpleNamespace(
             state=SimpleNamespace(
-                auth_runtime_state=SimpleNamespace(
-                    auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"})
-                ),
+                auth_runtime_state=SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"})),
                 user_repo=_UserRepo(),
             )
         ),
@@ -87,9 +85,7 @@ async def test_get_current_user_id_coalesces_concurrent_user_existence_checks():
     repo = CountingUserRepo()
     app = SimpleNamespace(
         state=SimpleNamespace(
-            auth_runtime_state=SimpleNamespace(
-                auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"})
-            ),
+            auth_runtime_state=SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"})),
             user_repo=repo,
         )
     )

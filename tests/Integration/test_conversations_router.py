@@ -400,9 +400,7 @@ async def test_list_conversations_fails_loud_when_thread_activity_reader_missing
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
             thread_last_active={},
-            chat_runtime_state=SimpleNamespace(
-                messaging_service=SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: [])
-            ),
+            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: [])),
         )
     )
 
