@@ -96,7 +96,13 @@ async def test_chat_events_requires_chat_membership():
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await chats_router.stream_chat_events("chat-1", user_id="user-1", app=app)
+        await chats_router.stream_chat_events(
+            "chat-1",
+            user_id="user-1",
+            chat_repo=app.state.chat_repo,
+            messaging_service=app.state.messaging_service,
+            chat_event_bus=app.state.chat_event_bus,
+        )
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not a participant of this chat"
@@ -113,7 +119,13 @@ async def test_chat_events_uses_authenticated_participant():
         )
     )
 
-    response = await chats_router.stream_chat_events("chat-1", user_id="user-1", app=app)
+    response = await chats_router.stream_chat_events(
+        "chat-1",
+        user_id="user-1",
+        chat_repo=app.state.chat_repo,
+        messaging_service=app.state.messaging_service,
+        chat_event_bus=app.state.chat_event_bus,
+    )
 
     assert event_bus.subscribed == ["chat-1"]
     assert response.media_type == "text/event-stream"

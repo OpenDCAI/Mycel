@@ -46,10 +46,10 @@ class MuteChatBody(BaseModel):
     mute_until: float | None = None
 
 
-def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
+def _verify_user_ownership(messaging_service: Any, sender_id: str, user_id: str) -> None:
     # @@@thread-social-owner-check - sender_id can be a thread-owned social user_id, so
     # ownership must resolve through the thread back to the owning agent user before checking owner.
-    sender = _resolve_display_user(app, sender_id)
+    sender = _resolve_display_user(messaging_service, sender_id)
     if not sender:
         raise HTTPException(403, "User not found")
     if is_owned_by_viewer(user_id, sender):
@@ -57,17 +57,17 @@ def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
     raise HTTPException(403, "User does not belong to you")
 
 
-def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
-    chat = get_chat_repo(app).get_by_id(chat_id)
+def _get_accessible_chat_or_404(chat_repo: Any, messaging_service: Any, chat_id: str, user_id: str) -> Any:
+    chat = chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    if not get_messaging_service(app).is_chat_member(chat_id, user_id):
+    if not messaging_service.is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     return chat
 
 
-def _resolve_display_user(app: Any, social_user_id: str) -> Any | None:
-    return get_messaging_service(app).resolve_display_user(social_user_id)
+def _resolve_display_user(messaging_service: Any, social_user_id: str) -> Any | None:
+    return messaging_service.resolve_display_user(social_user_id)
 
 
 def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
@@ -128,9 +128,9 @@ def _validate_group_chat_relationships(app: Any, participant_ids: list[str], req
 @router.get("")
 def list_chats(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    return get_messaging_service(app).list_chats_for_user(user_id)
+    return messaging_service.list_chats_for_user(user_id)
 
 
 @router.post("")
@@ -139,13 +139,14 @@ def create_chat(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
+    messaging_service = get_messaging_service(app)
     try:
         participant_ids = _validate_chat_participant_ids(app, body.user_ids, user_id)
         if len(participant_ids) >= 3:
             _validate_group_chat_relationships(app, participant_ids, user_id)
-            chat = get_messaging_service(app).create_group_chat(participant_ids, body.title)
+            chat = messaging_service.create_group_chat(participant_ids, body.title)
         else:
-            chat = get_messaging_service(app).find_or_create_chat(participant_ids, body.title)
+            chat = messaging_service.find_or_create_chat(participant_ids, body.title)
         return {
             "id": chat["id"],
             "title": chat.get("title"),
@@ -160,23 +161,24 @@ def create_chat(
 def get_chat(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    chat = _get_accessible_chat_or_404(app, chat_id, user_id)
-    return get_messaging_service(app).get_chat_detail(chat)
+    chat = _get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
+    return messaging_service.get_chat_detail(chat)
 
 
 @router.get("/{chat_id}/messages")
 def list_messages(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
     limit: int = Query(50, ge=1, le=200),
     before: str | None = Query(None),
 ):
-    if not get_messaging_service(app).is_chat_member(chat_id, user_id):
+    if not messaging_service.is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
-    return get_messaging_service(app).list_message_responses(chat_id, limit=limit, before=before, viewer_id=user_id)
+    return messaging_service.list_message_responses(chat_id, limit=limit, before=before, viewer_id=user_id)
 
 
 @router.post("/{chat_id}/messages")
@@ -184,12 +186,13 @@ def send_message(
     chat_id: str,
     body: SendMessageBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
     app: Annotated[Any, Depends(get_app)],
 ):
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
-    _verify_user_ownership(app, body.sender_id, user_id)
-    msg = get_messaging_service(app).send(
+    _verify_user_ownership(messaging_service, body.sender_id, user_id)
+    msg = messaging_service.send(
         chat_id,
         body.sender_id,
         body.content,
@@ -197,7 +200,7 @@ def send_message(
         signal=body.signal,
         message_type=body.message_type,
     )
-    return get_messaging_service(app).project_message_response(msg)
+    return messaging_service.project_message_response(msg)
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")
@@ -205,9 +208,9 @@ def retract_message(
     chat_id: str,
     message_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    ok = get_messaging_service(app).retract(message_id, user_id)
+    ok = messaging_service.retract(message_id, user_id)
     if not ok:
         raise HTTPException(400, "Cannot retract: not sender, already retracted, or 2-min window expired")
     return {"status": "retracted"}
@@ -218,9 +221,9 @@ def delete_message_for_self(
     chat_id: str,
     message_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    get_messaging_service(app).delete_for(message_id, user_id)
+    messaging_service.delete_for(message_id, user_id)
     return {"status": "deleted"}
 
 
@@ -228,9 +231,9 @@ def delete_message_for_self(
 def mark_read(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    get_messaging_service(app).mark_read(chat_id, user_id)
+    messaging_service.mark_read(chat_id, user_id)
     return {"status": "ok"}
 
 
@@ -238,10 +241,11 @@ def mark_read(
 def delete_chat(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    _get_accessible_chat_or_404(app, chat_id, user_id)
-    get_chat_repo(app).delete(chat_id)
+    _get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
+    chat_repo.delete(chat_id)
     return {"status": "deleted"}
 
 
@@ -249,14 +253,15 @@ def delete_chat(
 async def stream_chat_events(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+    chat_event_bus: Annotated[Any, Depends(get_chat_event_bus)],
 ):
-    _get_accessible_chat_or_404(app, chat_id, user_id)
+    _get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
 
     from fastapi.responses import StreamingResponse
 
-    event_bus = get_chat_event_bus(app)
-    queue = event_bus.subscribe(chat_id)
+    queue = chat_event_bus.subscribe(chat_id)
 
     async def event_generator():
         try:
@@ -270,7 +275,7 @@ async def stream_chat_events(
                 except TimeoutError:
                     yield ": keepalive\n\n"
         finally:
-            event_bus.unsubscribe(chat_id, queue)
+            chat_event_bus.unsubscribe(chat_id, queue)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -280,9 +285,9 @@ def mute_chat(
     chat_id: str,
     body: MuteChatBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    _verify_user_ownership(app, body.user_id, user_id)
+    _verify_user_ownership(messaging_service, body.user_id, user_id)
     mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
-    get_messaging_service(app).update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
+    messaging_service.update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
     return {"status": "ok", "muted": body.muted}

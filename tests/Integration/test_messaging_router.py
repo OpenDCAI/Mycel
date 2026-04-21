@@ -117,43 +117,31 @@ def test_messaging_router_shell_is_deleted() -> None:
 
 def test_get_accessible_chat_or_404_returns_chat():
     chat = _chat("chat-1")
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            chat_repo=SimpleNamespace(get_by_id=lambda chat_id: chat if chat_id == "chat-1" else None),
-            messaging_service=SimpleNamespace(is_chat_member=lambda chat_id, user_id: (chat_id, user_id) == ("chat-1", "user-1")),
-        )
-    )
+    chat_repo = SimpleNamespace(get_by_id=lambda chat_id: chat if chat_id == "chat-1" else None)
+    messaging_service = SimpleNamespace(is_chat_member=lambda chat_id, user_id: (chat_id, user_id) == ("chat-1", "user-1"))
 
-    result = chats_router._get_accessible_chat_or_404(app, "chat-1", "user-1")
+    result = chats_router._get_accessible_chat_or_404(chat_repo, messaging_service, "chat-1", "user-1")
 
     assert result is chat
 
 
 def test_get_accessible_chat_or_404_raises_404_for_missing_chat():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: None),
-            messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: True),
-        )
-    )
+    chat_repo = SimpleNamespace(get_by_id=lambda _chat_id: None)
+    messaging_service = SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: True)
 
     with pytest.raises(HTTPException) as exc_info:
-        chats_router._get_accessible_chat_or_404(app, "missing", "user-1")
+        chats_router._get_accessible_chat_or_404(chat_repo, messaging_service, "missing", "user-1")
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Chat not found"
 
 
 def test_get_accessible_chat_or_404_raises_403_for_non_member():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            chat_repo=SimpleNamespace(get_by_id=lambda _chat_id: _chat("chat-1")),
-            messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: False),
-        )
-    )
+    chat_repo = SimpleNamespace(get_by_id=lambda _chat_id: _chat("chat-1"))
+    messaging_service = SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: False)
 
     with pytest.raises(HTTPException) as exc_info:
-        chats_router._get_accessible_chat_or_404(app, "chat-1", "user-2")
+        chats_router._get_accessible_chat_or_404(chat_repo, messaging_service, "chat-1", "user-2")
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not a participant of this chat"
@@ -162,18 +150,11 @@ def test_get_accessible_chat_or_404_raises_403_for_non_member():
 def test_resolve_display_user_delegates_to_messaging_service(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[str, str]] = []
     expected = SimpleNamespace(id="agent-user-1", display_name="Toad")
-
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            messaging_service=SimpleNamespace(
-                resolve_display_user=lambda social_user_id: seen.append(("resolve_display_user", social_user_id)) or expected
-            ),
-            user_repo=SimpleNamespace(name="user-repo"),
-            thread_repo=SimpleNamespace(name="thread-repo"),
-        )
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda social_user_id: seen.append(("resolve_display_user", social_user_id)) or expected
     )
 
-    result = chats_router._resolve_display_user(app, "thread-user-1")
+    result = chats_router._resolve_display_user(messaging_service, "thread-user-1")
 
     assert result is expected
     assert seen == [("resolve_display_user", "thread-user-1")]
@@ -183,8 +164,8 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     seen: list[tuple[str, object]] = []
     chat = _chat("chat-1")
 
-    def fake_helper(app_obj, chat_id: str, user_id: str):
-        seen.append(("helper", (app_obj, chat_id, user_id)))
+    def fake_helper(chat_repo, messaging_service, chat_id: str, user_id: str):
+        seen.append(("helper", (chat_repo, messaging_service, chat_id, user_id)))
         return chat
 
     monkeypatch.setattr(chats_router, "_get_accessible_chat_or_404", fake_helper)
@@ -210,7 +191,12 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         )
     )
 
-    result = chats_router.get_chat("chat-1", user_id="user-1", app=app)
+    result = chats_router.get_chat(
+        "chat-1",
+        user_id="user-1",
+        chat_repo=app.state.chat_repo,
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result == {
         "id": "chat-1",
@@ -219,15 +205,15 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         "created_at": "2026-04-07T00:00:00Z",
         "members": [],
     }
-    assert seen == [("helper", (app, "chat-1", "user-1"))]
+    assert seen == [("helper", (app.state.chat_repo, app.state.messaging_service, "chat-1", "user-1"))]
 
 
 def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     seen: list[tuple[str, object]] = []
     chat = _chat("chat-1")
 
-    def fake_helper(app_obj, chat_id: str, user_id: str):
-        seen.append(("helper", (app_obj, chat_id, user_id)))
+    def fake_helper(chat_repo, messaging_service, chat_id: str, user_id: str):
+        seen.append(("helper", (chat_repo, messaging_service, chat_id, user_id)))
         return chat
 
     monkeypatch.setattr(chats_router, "_get_accessible_chat_or_404", fake_helper)
@@ -238,14 +224,20 @@ def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
                 get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("route should use helper, not chat_repo lookup directly")),
                 delete=lambda chat_id: seen.append(("delete", chat_id)),
             ),
+            messaging_service=SimpleNamespace(name="messaging"),
         )
     )
 
-    result = chats_router.delete_chat("chat-1", user_id="user-1", app=app)
+    result = chats_router.delete_chat(
+        "chat-1",
+        user_id="user-1",
+        chat_repo=app.state.chat_repo,
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result == {"status": "deleted"}
     assert seen == [
-        ("helper", (app, "chat-1", "user-1")),
+        ("helper", (app.state.chat_repo, app.state.messaging_service, "chat-1", "user-1")),
         ("delete", "chat-1"),
     ]
 
@@ -253,7 +245,11 @@ def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
 def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: pytest.MonkeyPatch):
     chat = _chat("chat-1")
 
-    monkeypatch.setattr(chats_router, "_get_accessible_chat_or_404", lambda _app, _chat_id, _user_id: chat)
+    monkeypatch.setattr(
+        chats_router,
+        "_get_accessible_chat_or_404",
+        lambda _chat_repo, _messaging_service, _chat_id, _user_id: chat,
+    )
 
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -273,6 +269,7 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
                     ],
                 }
             ),
+            chat_repo=SimpleNamespace(name="chat-repo"),
             user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
                     None
@@ -288,7 +285,12 @@ def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: 
         )
     )
 
-    result = chats_router.get_chat("chat-1", user_id="human-user-1", app=app)
+    result = chats_router.get_chat(
+        "chat-1",
+        user_id="human-user-1",
+        chat_repo=app.state.chat_repo,
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result["members"] == [
         {
@@ -342,7 +344,11 @@ def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
         )
     )
 
-    result = chats_router.list_messages("chat-1", user_id="human-user-1", app=app)
+    result = chats_router.list_messages(
+        "chat-1",
+        user_id="human-user-1",
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result == [
         {
@@ -456,6 +462,7 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
         "chat-1",
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
+        messaging_service=app.state.messaging_service,
         app=app,
     )
 
@@ -533,6 +540,7 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
         "chat-1",
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
+        messaging_service=app.state.messaging_service,
         app=app,
     )
 
