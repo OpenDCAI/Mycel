@@ -98,3 +98,24 @@ async def test_runtime_model_client_cleanup_falls_back_when_to_thread_unavailabl
     assert events == ["async", "sync"]
     assert agent._model_http_client is None
     assert agent._model_http_async_client is None
+
+
+@pytest.mark.asyncio
+async def test_runtime_model_client_cleanup_reraises_unexpected_runtimeerror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _SyncClient:
+        def close(self) -> None:
+            raise AssertionError("sync close should stay inside to_thread")
+
+    async def _boom(_fn: Any, *_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("some other runtime problem")
+
+    monkeypatch.setattr("core.runtime.agent.asyncio.to_thread", _boom)
+
+    agent = cast(Any, object.__new__(LeonAgent))
+    agent._model_http_client = _SyncClient()
+    agent._model_http_async_client = None
+
+    with pytest.raises(RuntimeError, match="some other runtime problem"):
+        await LeonAgent._cleanup_model_clients(agent)
