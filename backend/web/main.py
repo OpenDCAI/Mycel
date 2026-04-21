@@ -6,11 +6,7 @@ load_env_file_from_env()
 
 from fastapi import FastAPI  # noqa: E402
 
-from backend.chat.api.http import (  # noqa: E402
-    conversations_router,  # noqa: E402
-    relationships_router,  # noqa: E402
-)
-from backend.chat.api.http import router as messaging_router  # noqa: E402
+from backend.chat.api.http import app_router as chat_app_router  # noqa: E402
 from backend.monitor.api.http import global_router, web_local_router  # noqa: E402
 from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
@@ -38,10 +34,9 @@ app.include_router(auth.router)
 app.include_router(invite_codes.router)
 app.include_router(threads.router)
 
-app.include_router(messaging_router.router)
+app.include_router(chat_app_router.router)
 
 app.include_router(contacts.router)
-app.include_router(relationships_router.router)
 app.include_router(users.users_router)
 app.include_router(sandbox.router)
 app.include_router(webhooks.router)
@@ -55,7 +50,6 @@ app.include_router(global_router.router, prefix="/api/monitor")
 app.include_router(web_local_router.router, prefix="/api/monitor")
 app.include_router(resources.router)
 app.include_router(marketplace.router)
-app.include_router(conversations_router.router)
 
 
 def _resolve_port() -> int:
