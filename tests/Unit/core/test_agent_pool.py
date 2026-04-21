@@ -191,7 +191,7 @@ async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_se
         raising=False,
     )
 
-    with pytest.raises(AssertionError, match="registry should not read app.state messaging_service"):
+    with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
         await agent_pool._registry.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-fallback")
 
 
@@ -502,7 +502,7 @@ async def test_get_or_create_agent_fails_loud_when_chat_repos_need_missing_messa
         )
     )
 
-    with pytest.raises(RuntimeError, match="chat bootstrap not attached: messaging_service"):
+    with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
         await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5")
 
 
