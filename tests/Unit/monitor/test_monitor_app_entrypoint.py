@@ -5,8 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from backend.bootstrap import app_entrypoint
+from backend.monitor.api.http.dependencies import get_current_user_id
 from backend.monitor.app import lifespan as monitor_app_lifespan
 from backend.monitor.app import main as monitor_app_main
+from backend.monitor.infrastructure.web import gateway as monitor_gateway
 
 app = monitor_app_main.app
 
@@ -17,6 +19,7 @@ def test_monitor_app_module_path_is_internalized():
 
 def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: object())
+    monkeypatch.setattr(monitor_app_lifespan, "attach_auth_runtime_state", lambda *_args, **_kwargs: object())
     with TestClient(app) as client:
         response = client.get("/openapi.json")
 
@@ -28,7 +31,31 @@ def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.Monke
     assert "/api/monitor/threads" not in paths
     assert "/api/monitor/threads/{thread_id}" not in paths
     assert "/api/monitor/evaluation/batches/{batch_id}/start" not in paths
-    assert set(paths["/api/monitor/evaluation/batches"]) == {"get"}
+    assert set(paths["/api/monitor/evaluation/batches"]) == {"get", "post"}
+
+
+def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(monitor_app_lifespan, "attach_runtime_storage_state", lambda _app: object())
+    monkeypatch.setattr(monitor_app_lifespan, "attach_auth_runtime_state", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        monitor_gateway,
+        "create_evaluation_batch",
+        lambda **kwargs: {"batch": kwargs},
+    )
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/monitor/evaluation/batches",
+                json={"agent_user_id": "agent-1", "scenario_ids": ["scenario-1"], "sandbox": "local", "max_concurrent": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()["batch"]
+    assert payload["submitted_by_user_id"] == "owner-1"
+    assert payload["agent_user_id"] == "agent-1"
 
 
 def test_monitor_app_resolve_port_prefers_monitor_backend_env(monkeypatch: pytest.MonkeyPatch):
