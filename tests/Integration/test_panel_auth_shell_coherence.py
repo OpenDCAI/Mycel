@@ -422,6 +422,7 @@ async def test_create_agent_route_fails_loud_when_contact_repo_missing():
             panel_router.CreateAgentRequest(name="Toad", description="probe"),
             request=request,
             user_id="user-1",
+            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
