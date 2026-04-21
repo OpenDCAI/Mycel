@@ -16,6 +16,8 @@ from messaging.service import MessagingService
 
 @dataclass(frozen=True)
 class ChatRuntimeState:
+    chat_repo: Any
+    chat_event_bus: Any
     contact_repo: Any
     typing_tracker: Any
     relationship_service: Any
@@ -68,6 +70,8 @@ def attach_chat_runtime(
     # state onto app.state for the wider app, but it also returns the freshly
     # built runtime objects so enclosing lifespans do not need to reread them.
     state = ChatRuntimeState(
+        chat_repo=chat_repo,
+        chat_event_bus=chat_event_bus,
         contact_repo=contact_repo,
         typing_tracker=typing_tracker,
         relationship_service=relationship_service,
