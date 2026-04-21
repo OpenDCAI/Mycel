@@ -1686,17 +1686,11 @@ async def test_run_agent_normalizes_workspace_suffix_in_child_prompt(monkeypatch
         return "LIVE_CHILD_DONE"
 
     _patch_create_leon_agent(monkeypatch)
-<<<<<<< HEAD
     service = _make_service(
         tmp_path,
         web_app=SimpleNamespace(),
         child_thread_live_runner=fake_run_child_thread_live,
     )
-=======
-    monkeypatch.setattr("backend.threads.streaming.run_child_thread_live", fake_run_child_thread_live)
-
-    service = _make_service(tmp_path, web_app=SimpleNamespace())
->>>>>>> c86e9f1c (refactor(tidy): recover backend import graph checkpoint)
     raw_prompt = f"Inspect the workspace at {tmp_path}/current working directory. Read-only only. Report existing files."
 
     result = await service._run_agent(
