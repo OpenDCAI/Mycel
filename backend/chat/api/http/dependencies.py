@@ -1,10 +1,12 @@
 """Chat HTTP dependency helpers."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 
 from backend.identity.auth.user_resolution import get_current_user_id as resolve_current_user_id
+from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 
 get_current_user_id = resolve_current_user_id
 
@@ -58,3 +60,10 @@ def get_runtime_thread_activity_reader(app: Any) -> Any:
 
 def get_thread_last_active_map(app: Any) -> Any:
     return _require_state_attr(app, "thread_last_active", "Thread last-active map unavailable")
+
+
+def get_owner_thread_rows_loader(app: Any) -> Callable[[str], Awaitable[list[dict[str, Any]]]]:
+    async def _load(user_id: str) -> list[dict[str, Any]]:
+        return await list_owner_thread_rows_for_auth_burst(app, user_id)
+
+    return _load

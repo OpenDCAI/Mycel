@@ -42,7 +42,13 @@ async def test_first_screen_reuses_inflight_owner_thread_read_across_conversatio
     )
 
     conversations, threads = await asyncio.gather(
-        owner_conversations_router.list_conversations("owner-1", app=app),
+        owner_conversations_router.list_conversations(
+            "owner-1",
+            owner_thread_rows=owner_conversations_router.get_owner_thread_rows_loader(app),
+            activity_reader=app.state.agent_runtime_thread_activity_reader,
+            thread_last_active=app.state.thread_last_active,
+            messaging_service=app.state.messaging_service,
+        ),
         threads_router.list_threads("owner-1", app=app),
     )
 

@@ -9,14 +9,13 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 
 from backend.chat.api.http.dependencies import (
-    get_app,
     get_current_user_id,
     get_optional_messaging_service,
+    get_owner_thread_rows_loader,
     get_runtime_thread_activity_reader,
     get_thread_last_active_map,
 )
 from backend.identity.avatar.urls import avatar_url
-from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.threads.projection import canonical_owner_threads
 from protocols.runtime_read import RuntimeThreadActivityReader
 
@@ -44,13 +43,13 @@ def _conversation_updated_at_key(item: dict[str, Any]) -> float:
 @router.get("")
 async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
+    owner_thread_rows: Annotated[Any, Depends(get_owner_thread_rows_loader)],
+    activity_reader: Annotated[RuntimeThreadActivityReader, Depends(get_runtime_thread_activity_reader)],
+    thread_last_active: Annotated[dict[str, Any], Depends(get_thread_last_active_map)],
+    messaging_service: Annotated[Any | None, Depends(get_optional_messaging_service)] = None,
 ) -> list[dict[str, Any]]:
-    activity_reader = get_runtime_thread_activity_reader(app)
-    thread_last_active = get_thread_last_active_map(app)
-    messaging_service = get_optional_messaging_service(app)
     raw_threads, visit_items = await asyncio.gather(
-        list_owner_thread_rows_for_auth_burst(app, user_id),
+        owner_thread_rows(user_id),
         asyncio.to_thread(_list_visit_conversations_for_user, messaging_service, user_id),
     )
     hire_items = await asyncio.to_thread(
