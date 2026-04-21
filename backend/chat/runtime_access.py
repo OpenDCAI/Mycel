@@ -16,6 +16,10 @@ def get_messaging_service(app: Any) -> Any:
     return _require_chat_state(app, "messaging_service")
 
 
+def get_optional_messaging_service(app: Any) -> Any | None:
+    return getattr(app.state, "messaging_service", None)
+
+
 def get_typing_tracker(app: Any) -> Any:
     return _require_chat_state(app, "typing_tracker")
 

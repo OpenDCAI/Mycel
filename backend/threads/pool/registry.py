@@ -27,7 +27,14 @@ _config_update_locks: dict[str, asyncio.Lock] = {}
 _agent_create_locks: dict[str, asyncio.Lock] = {}
 
 
-async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: str | None = None, agent: str | None = None) -> Any:
+async def get_or_create_agent(
+    app_obj: FastAPI,
+    sandbox_type: str,
+    thread_id: str | None = None,
+    agent: str | None = None,
+    *,
+    messaging_service: Any | None = None,
+) -> Any:
     """Lazy agent pool — one agent per thread, created on demand."""
     if thread_id:
         set_current_thread_id(thread_id)
@@ -131,7 +138,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 "chat_identity_id": agent_user_id,
                 "owner_id": owner_id,
                 "user_repo": user_repo,
-                "messaging_service": get_messaging_service(app_obj),
+                "messaging_service": messaging_service if messaging_service is not None else get_messaging_service(app_obj),
                 "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
             }
 
