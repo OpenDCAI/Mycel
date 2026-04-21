@@ -286,6 +286,7 @@ export default function EvaluationPage() {
                       <button
                         key={scenarioId || scenario.name}
                         type="button"
+                        aria-pressed={selected}
                         className={`evaluation-scenario-chip ${selected ? "evaluation-scenario-chip--selected" : ""}`}
                         onClick={() => scenarioId && toggleScenario(scenarioId)}
                       >
