@@ -1,1 +1,1 @@
-"""Utils module for Leon web backend."""
+"""Utils module for Mycel web backend."""

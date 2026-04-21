@@ -53,11 +53,11 @@ DIRTY 检查
 wtrebaseall 完成
 ─────────────────────────────────────
 ✅ 成功 rebase：
-  - ~/worktrees/leon--feat-x (feat/x)  +2 新 commit
-  - ~/worktrees/leon--fix-y  (fix/y)   已是最新
+  - ~/worktrees/project--feat-x (feat/x)  +2 新 commit
+  - ~/worktrees/project--fix-y  (fix/y)   已是最新
 
 ⚠ 跳过（有未提交改动，需手动处理）：
-  - ~/worktrees/leon--wip-z (wip/z)
+  - ~/worktrees/project--wip-z (wip/z)
 
 ❌ 冲突（已 abort，需手动处理）：
   - worktrees/old-a (old/a)

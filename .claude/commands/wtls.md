@@ -39,8 +39,8 @@ git -C <path> config --worktree --get worktree.description 2>/dev/null
 ```
 worktree                        branch          ports        ahead  behind  dirty  PR           description
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-~/worktrees/leon--feat-x        feat/x          8002:5174    +3     -0      ✗      #12 open     评估系统开发
-~/worktrees/leon--fix-y         fix/y           8003:5175    +0     -5      ✓      none         修复登录 bug
+~/worktrees/project--feat-x     feat/x          8002:5174    +3     -0      ✗      #12 open     评估系统开发
+~/worktrees/project--fix-y      fix/y           8003:5175    +0     -5      ✓      none         修复登录 bug
 worktrees/old-feat              old/feat        -            +1     -12     ✗      #8 merged ⚠  (旧路径)
 ```
 

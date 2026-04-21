@@ -1,4 +1,4 @@
-"""Models configuration schema for Leon.
+"""Models configuration schema for Mycel.
 
 Defines the unified models.json structure:
 - active: current model selection

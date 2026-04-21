@@ -72,7 +72,7 @@ def build_observation(app: Any, thread_id: str, config: dict[str, Any]) -> tuple
                     metadata["session_id"] = thread_id
     except ImportError as imp_err:
         logger.warning(
-            "Observation provider '%s' missing package: %s. Install: uv pip install 'leonai[%s]'",
+            "Observation provider '%s' missing package: %s. Install: uv pip install 'mycel[%s]'",
             obs_provider,
             imp_err,
             obs_provider,
