@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.chat.api.http.dependencies import get_thread_repo
+from backend.chat.api.http.dependencies import get_thread_repo, get_user_repo
 from backend.chat.runtime_access import get_contact_repo, get_relationship_service
 from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.avatar.paths import avatars_dir
@@ -127,13 +127,11 @@ async def delete_avatar(
 # ---------------------------------------------------------------------------
 
 
-def _relationship_states_for_user(app: Any, user_id: str) -> dict[str, str]:
-    try:
-        svc = get_relationship_service(app)
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc)) from exc
+def _relationship_states_for_user(relationship_service: Any, user_id: str) -> dict[str, str]:
+    if relationship_service is None:
+        raise HTTPException(503, "chat bootstrap not attached: relationship_service")
     states: dict[str, str] = {}
-    for row in svc.list_for_user(user_id):
+    for row in relationship_service.list_for_user(user_id):
         other_id = getattr(row, "other_user_id", None)
         if other_id is None:
             user_low = getattr(row, "user_low")
@@ -146,25 +144,30 @@ def _relationship_states_for_user(app: Any, user_id: str) -> dict[str, str]:
 @users_router.get("/chat-candidates")
 async def list_chat_candidates(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
+    thread_repo: Annotated[Any, Depends(get_thread_repo)],
 ):
     """List chattable users for discovery (New Chat picker). Excludes the current user."""
-    user_repo = app.state.user_repo
     users = user_repo.list_all()
     user_map = {user.id: user for user in users}
-    relationship_states = _relationship_states_for_user(app, user_id)
+    relationship_states = _relationship_states_for_user(relationship_service, user_id)
     try:
-        contact_targets = active_contact_target_ids(get_contact_repo(app), user_id)
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
+        contact_targets = active_contact_target_ids(contact_repo, user_id)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
 
     items = []
-    thread_repo = get_thread_repo(app)
 
     for user in users:
         if user.id == user_id:
             continue
         is_owned = user.type is UserType.AGENT and user.owner_user_id == user_id
+        if is_owned and thread_repo is None:
+            raise HTTPException(503, "Thread repo unavailable")
         relationship_state = relationship_states.get(user.id, "none")
         owner_user_id = str(user.owner_user_id) if user.type is UserType.AGENT and user.owner_user_id else None
         can_chat = can_chat_with_owner_scope(
