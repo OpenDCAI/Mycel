@@ -57,8 +57,8 @@ def attach_chat_runtime(
     app.state.messaging_service = messaging_service
 
 
-def wire_chat_delivery(app: Any, *, activity_reader: Any, thread_repo: Any) -> None:
-    app.state.messaging_service.set_delivery_fn(
+def wire_chat_delivery(app: Any, *, messaging_service: Any, activity_reader: Any, thread_repo: Any) -> None:
+    messaging_service.set_delivery_fn(
         make_chat_delivery_fn(
             app,
             activity_reader=activity_reader,
