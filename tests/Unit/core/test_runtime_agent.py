@@ -191,6 +191,18 @@ def test_dunder_del_calls_close_without_noise_when_close_succeeds(monkeypatch: p
     assert calls == ["close"]
 
 
+def test_dunder_del_reraises_non_runtime_errors(monkeypatch: pytest.MonkeyPatch):
+    agent = object.__new__(LeonAgent)
+
+    def _boom() -> None:
+        raise ValueError("not a runtime error")
+
+    monkeypatch.setattr(agent, "close", _boom)
+
+    with pytest.raises(ValueError, match="not a runtime error"):
+        LeonAgent.__del__(agent)
+
+
 def test_memory_config_override_updates_compaction_trigger_without_losing_defaults():
     from config.schema import LeonSettings
 
