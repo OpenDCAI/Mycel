@@ -26,5 +26,11 @@ def build_agent_runtime_gateway(app: Any) -> NativeAgentRuntimeGateway:
                 ),
             )
         },
-        thread_input_handler=NativeAgentThreadInputHandler(app),
+        thread_input_handler=NativeAgentThreadInputHandler(
+            app,
+            queue_manager=app.state.queue_manager,
+            thread_tasks=app.state.thread_tasks,
+            thread_locks=app.state.thread_locks,
+            thread_locks_guard=app.state.thread_locks_guard,
+        ),
     )
