@@ -20,6 +20,8 @@ def test_conversations_router_shell_is_deleted() -> None:
 
 
 async def _list_conversations(app: SimpleNamespace, user_id: str = "human-user-1"):
+    if not hasattr(app.state, "threads_runtime_state") and hasattr(app.state, "agent_runtime_thread_activity_reader"):
+        app.state.threads_runtime_state = SimpleNamespace(activity_reader=app.state.agent_runtime_thread_activity_reader)
     return await owner_conversations_router.list_conversations(
         user_id,
         owner_thread_rows=owner_conversations_router.get_owner_thread_rows_loader(app),

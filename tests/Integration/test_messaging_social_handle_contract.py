@@ -2592,8 +2592,8 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
     )
     gateway = build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker)
     app.state.agent_runtime_gateway = gateway
-    app.state.agent_runtime_gateway_state = SimpleNamespace(
-        gateway=gateway,
+    app.state.threads_runtime_state = SimpleNamespace(
+        agent_runtime_gateway=gateway,
         activity_reader=app.state.agent_runtime_thread_activity_reader,
     )
 
@@ -2667,8 +2667,8 @@ async def _run_chat_delivery(
     )
     gateway = build_agent_runtime_gateway(app, typing_tracker=app.state.typing_tracker)
     app.state.agent_runtime_gateway = gateway
-    app.state.agent_runtime_gateway_state = SimpleNamespace(
-        gateway=gateway,
+    app.state.threads_runtime_state = SimpleNamespace(
+        agent_runtime_gateway=gateway,
         activity_reader=app.state.agent_runtime_thread_activity_reader,
     )
 
