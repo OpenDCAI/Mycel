@@ -58,7 +58,7 @@ def test_build_auth_runtime_state_requires_explicit_contact_repo():
         raise AssertionError("build_auth_runtime_state should require explicit contact_repo")
 
 
-def test_attach_auth_runtime_state_sets_app_state(monkeypatch):
+def test_attach_auth_runtime_state_returns_bundle_without_loose_state_mirrors(monkeypatch):
     fake_state = SimpleNamespace(auth_service=object(), supabase_auth_client_factory=object())
     app = type("_App", (), {"state": type("_State", (), {})()})()
 
@@ -67,5 +67,6 @@ def test_attach_auth_runtime_state_sets_app_state(monkeypatch):
     result = auth_runtime_bootstrap.attach_auth_runtime_state(app, storage_state=object(), contact_repo=object())
 
     assert result is fake_state
-    assert app.state.auth_service is fake_state.auth_service
-    assert app.state._supabase_auth_client_factory is fake_state.supabase_auth_client_factory
+    assert app.state.auth_runtime_state is fake_state
+    assert not hasattr(app.state, "auth_service")
+    assert not hasattr(app.state, "_supabase_auth_client_factory")

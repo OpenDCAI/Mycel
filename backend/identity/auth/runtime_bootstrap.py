@@ -39,6 +39,5 @@ def build_auth_runtime_state(storage_state, *, contact_repo) -> AuthRuntimeState
 
 def attach_auth_runtime_state(app, *, storage_state, contact_repo) -> AuthRuntimeState:
     state = build_auth_runtime_state(storage_state, contact_repo=contact_repo)
-    app.state.auth_service = state.auth_service
-    app.state._supabase_auth_client_factory = state.supabase_auth_client_factory
+    app.state.auth_runtime_state = state
     return state
