@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from backend.chat.api.http.dependencies import (
-    get_app,
     get_current_user_id,
     get_relationship_service,
     get_user_repo,
@@ -45,10 +44,9 @@ def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
     return existing
 
 
-def _resolve_actor_user_id(app: Any, current_user_id: str, actor_user_id: str | None) -> str:
+def _resolve_actor_user_id(user_repo: Any, current_user_id: str, actor_user_id: str | None) -> str:
     if actor_user_id is None or actor_user_id == current_user_id:
         return current_user_id
-    user_repo = get_user_repo(app)
     actor = user_repo.get_by_id(actor_user_id)
     if actor is None:
         raise HTTPException(404, "Actor user not found")
@@ -80,10 +78,9 @@ def _row_to_dict(row: RelationshipRow, viewer_id: str) -> dict:
 @router.get("")
 async def list_relationships(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
 ):
-    svc = get_relationship_service(app)
-    rows = svc.list_for_user(user_id)
+    rows = relationship_service.list_for_user(user_id)
     return [_row_to_dict(r, user_id) for r in rows]
 
 
@@ -91,14 +88,14 @@ async def list_relationships(
 async def request_relationship(
     body: RelationshipRequestBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    svc = get_relationship_service(app)
-    actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
     if actor_user_id == body.target_user_id:
         raise HTTPException(400, "Cannot request relationship with yourself")
     try:
-        row = svc.request(actor_user_id, body.target_user_id)
+        row = relationship_service.request(actor_user_id, body.target_user_id)
         return _row_to_dict(row, actor_user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
@@ -109,16 +106,16 @@ async def approve_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    svc = get_relationship_service(app)
-    actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
-    existing = _get_existing(svc, relationship_id, actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     requester_id, _ = _resolve_parties(existing, actor_user_id)
     if actor_user_id == requester_id:
         raise HTTPException(409, "Cannot approve your own request")
     try:
-        return _row_to_dict(svc.approve(actor_user_id, requester_id), actor_user_id)
+        return _row_to_dict(relationship_service.approve(actor_user_id, requester_id), actor_user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -128,16 +125,16 @@ async def reject_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    svc = get_relationship_service(app)
-    actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
-    existing = _get_existing(svc, relationship_id, actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     requester_id, _ = _resolve_parties(existing, actor_user_id)
     if actor_user_id == requester_id:
         raise HTTPException(409, "Cannot reject your own request")
     try:
-        return _row_to_dict(svc.reject(actor_user_id, requester_id), actor_user_id)
+        return _row_to_dict(relationship_service.reject(actor_user_id, requester_id), actor_user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -147,14 +144,14 @@ async def upgrade_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    svc = get_relationship_service(app)
-    actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
-    existing = _get_existing(svc, relationship_id, actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
     try:
-        return _row_to_dict(svc.upgrade(actor_user_id, other_id), actor_user_id)
+        return _row_to_dict(relationship_service.upgrade(actor_user_id, other_id), actor_user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -164,14 +161,14 @@ async def revoke_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    svc = get_relationship_service(app)
-    actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
-    existing = _get_existing(svc, relationship_id, actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
     try:
-        return _row_to_dict(svc.revoke(actor_user_id, other_id), actor_user_id)
+        return _row_to_dict(relationship_service.revoke(actor_user_id, other_id), actor_user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -181,13 +178,13 @@ async def downgrade_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    svc = get_relationship_service(app)
-    actor_user_id = _resolve_actor_user_id(app, user_id, body.actor_user_id)
-    existing = _get_existing(svc, relationship_id, actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
     try:
-        return _row_to_dict(svc.downgrade(actor_user_id, other_id), actor_user_id)
+        return _row_to_dict(relationship_service.downgrade(actor_user_id, other_id), actor_user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
