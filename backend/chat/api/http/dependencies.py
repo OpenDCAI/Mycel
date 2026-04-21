@@ -23,6 +23,9 @@ def _require_state_attr(app: Any, attr_name: str, detail: str) -> Any:
 
 
 def get_messaging_service(app: Annotated[Any, Depends(get_app)]) -> Any:
+    # @@@chat-http-runtime-bundle-only - chat HTTP dependency helpers should
+    # read chat-owned services from the bundled chat_runtime_state instead of
+    # falling back to loose app.state attrs.
     runtime_state = _require_state_attr(app, "chat_runtime_state", "MessagingService not initialized")
     return runtime_state.messaging_service
 
