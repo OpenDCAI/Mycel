@@ -8,7 +8,7 @@ from backend.monitor_app.lifespan import lifespan
 
 load_env_file_from_env()
 
-app = FastAPI(title="Leon Monitor Backend", lifespan=lifespan)
+app = FastAPI(title="Mycel Monitor Backend", lifespan=lifespan)
 add_permissive_cors(app)
 
 # @@@monitor-app-global-only - the first separate-process shell mounts only the route bucket already ruled process-safe.

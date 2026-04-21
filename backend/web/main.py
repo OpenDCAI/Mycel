@@ -1,4 +1,4 @@
-"""Leon Web Backend - FastAPI Application."""
+"""Mycel Web Backend - FastAPI Application."""
 
 from backend.bootstrap.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port, run_reloadable_app
 
@@ -29,7 +29,7 @@ from backend.web.routers import (  # noqa: E402
 )
 
 # Create FastAPI app
-app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
+app = FastAPI(title="Mycel Web Backend", lifespan=lifespan)
 
 add_permissive_cors(app)
 
