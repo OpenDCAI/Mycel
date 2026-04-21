@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.monitor.api.http import router as monitor_router
+from backend.monitor.api.http.dependencies import get_current_user_id
 from backend.monitor.application.use_cases import resources as monitor_resources_impl
 from backend.monitor.infrastructure.io import resource_io_service as monitor_resource_io_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
@@ -223,7 +224,7 @@ def test_monitor_threads_routes_use_authenticated_owner(monkeypatch):
 
     monkeypatch.setattr(monitor_gateway_impl, "list_threads", _list_threads)
     app = _app()
-    app.dependency_overrides[monitor_router.get_current_user_id] = lambda: "owner-1"
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
 
     response = _request("get", "/api/monitor/threads", app=app)
 
@@ -297,7 +298,7 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
         lambda **kwargs: start_calls.append(kwargs) or {"accepted": True},
     )
     app = _app()
-    app.dependency_overrides[monitor_router.get_current_user_id] = lambda: "owner-1"
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
 
     with TestClient(app) as client:
         create = client.post(
