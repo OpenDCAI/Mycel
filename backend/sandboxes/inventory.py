@@ -122,18 +122,9 @@ def _build_providers_and_managers(
                 providers[name] = DaytonaProvider(
                     api_key=key,
                     api_url=config.daytona.api_url,
-                    server_url=config.daytona.server_url,
                     target=config.daytona.target,
-                    default_public=config.daytona.default_public,
-                    default_snapshot=config.daytona.default_snapshot,
-                    default_cpu=config.daytona.default_cpu,
-                    default_memory=config.daytona.default_memory,
-                    default_disk=config.daytona.default_disk,
-                    default_gpu=config.daytona.default_gpu,
-                    default_image=config.daytona.default_image,
-                    default_user=config.daytona.default_user,
-                    workspace_provider=config.daytona.workspace_provider,
-                    workspace_provider_metadata=config.daytona.workspace_provider_metadata,
+                    default_cwd=config.daytona.cwd,
+                    bind_mounts=config.daytona.bind_mounts,
                     provider_name=name,
                 )
             else:

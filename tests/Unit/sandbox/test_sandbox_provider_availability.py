@@ -103,3 +103,58 @@ def test_build_providers_and_managers_passes_agentbay_pause_capability_overrides
     assert "agentbay" in managers
     assert captured["supports_pause"] is False
     assert captured["supports_resume"] is False
+
+
+def test_build_providers_and_managers_uses_current_daytona_contract(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "daytona_selfhost.json").write_text("{}")
+    monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", tmp_path)
+
+    captured: dict[str, object] = {}
+
+    class _FakeDaytonaProvider:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+            self.name = kwargs["provider_name"]
+
+        def get_capability(self):
+            return SimpleNamespace(can_pause=True, can_resume=True, can_destroy=True)
+
+    class _FakeSandboxManager:
+        def __init__(self, provider, db_path=None) -> None:
+            self.provider = provider
+            self.db_path = db_path
+
+    monkeypatch.setattr(sandbox_service, "SandboxManager", _FakeSandboxManager)
+    monkeypatch.setattr(
+        sandbox_service.SandboxConfig,
+        "load",
+        classmethod(
+            lambda cls, name: SimpleNamespace(
+                provider="daytona",
+                daytona=SimpleNamespace(
+                    api_key="test-key",
+                    api_url="https://example.daytona/api",
+                    target="self-host",
+                    cwd="/home/daytona",
+                    bind_mounts=[],
+                ),
+            )
+        ),
+    )
+
+    import sandbox.providers.daytona as daytona_module
+
+    monkeypatch.setattr(daytona_module, "DaytonaProvider", _FakeDaytonaProvider)
+
+    providers, managers = sandbox_service._build_providers_and_managers()
+
+    assert "daytona_selfhost" in providers
+    assert "daytona_selfhost" in managers
+    assert captured == {
+        "api_key": "test-key",
+        "api_url": "https://example.daytona/api",
+        "target": "self-host",
+        "default_cwd": "/home/daytona",
+        "bind_mounts": [],
+        "provider_name": "daytona_selfhost",
+    }
