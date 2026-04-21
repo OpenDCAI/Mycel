@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 
 ChildAgentFactory = Callable[..., "LeonAgent"]
+ChildThreadLiveRunner = Callable[..., Awaitable[str]]
 
 
 def _resolve_default_child_agent_factory() -> ChildAgentFactory:
@@ -470,6 +471,7 @@ class AgentService:
         user_repo: Any = None,
         web_app: Any = None,
         event_bus_factory: EventBusFactory | None = None,
+        child_thread_live_runner: ChildThreadLiveRunner | None = None,
         child_agent_factory: ChildAgentFactory | None = None,
     ):
         self._agent_registry = None
@@ -482,6 +484,7 @@ class AgentService:
         self._user_repo = user_repo
         self._web_app = web_app
         self._event_bus_factory = event_bus_factory
+        self._child_thread_live_runner = child_thread_live_runner
         self._child_agent_factory = child_agent_factory or _resolve_default_child_agent_factory()
         self._parent_bootstrap: BootstrapConfig | None = None
         self._parent_tool_context: Any | None = None
@@ -813,6 +816,7 @@ class AgentService:
                         agent=agent_name_for_role,
                         web_app=self._web_app,
                         event_bus_factory=self._event_bus_factory,
+                        child_thread_live_runner=self._child_thread_live_runner,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -840,6 +844,7 @@ class AgentService:
                         agent=agent_name_for_role,
                         web_app=self._web_app,
                         event_bus_factory=self._event_bus_factory,
+                        child_thread_live_runner=self._child_thread_live_runner,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -871,6 +876,7 @@ class AgentService:
                     agent=agent_name_for_role,
                     web_app=self._web_app,
                     event_bus_factory=self._event_bus_factory,
+                    child_thread_live_runner=self._child_thread_live_runner,
                     extra_blocked_tools=extra_blocked,
                     allowed_tools=allowed,
                     verbose=False,
@@ -963,9 +969,10 @@ class AgentService:
                 initial_messages = [{"role": "user", "content": prompt}]
 
             if self._web_app is not None:
-                from backend.web.services.streaming_service import run_child_thread_live
+                if self._child_thread_live_runner is None:
+                    raise RuntimeError("child_thread_live_runner is required when web_app is configured")
 
-                result = await run_child_thread_live(
+                result = await self._child_thread_live_runner(
                     agent,
                     thread_id,
                     prompt,
