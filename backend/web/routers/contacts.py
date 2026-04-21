@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend.chat.runtime_access import get_contact_repo
-from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
@@ -24,11 +24,13 @@ class SetContactBody(BaseModel):
 @router.get("")
 async def list_contacts(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ):
     """List contacts (blocked/muted) for the current user."""
     try:
-        rows = get_contact_repo(app).list_for_user(user_id)
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
+        rows = contact_repo.list_for_user(user_id)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
     return [
@@ -50,11 +52,13 @@ async def list_contacts(
 async def set_contact(
     body: SetContactBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ):
     """Upsert contact (block/mute/normal)."""
     try:
-        get_contact_repo(app).upsert(
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
+        contact_repo.upsert(
             ContactEdgeRow(
                 source_user_id=user_id,
                 target_user_id=body.target_user_id,
@@ -75,11 +79,13 @@ async def set_contact(
 async def delete_contact(
     target_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ):
     """Remove contact entry."""
     try:
-        get_contact_repo(app).delete(user_id, target_id)
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
+        contact_repo.delete(user_id, target_id)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
     return {"status": "deleted"}
