@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from backend.chat.runtime_access import get_typing_tracker
-
 
 class AgentChatRuntimeServices(Protocol):
     async def get_or_create_thread_agent(self, thread_id: str) -> Any: ...
@@ -26,21 +24,31 @@ class AgentChatRuntimeServices(Protocol):
 class AppAgentChatRuntimeServices:
     """Runtime-owned adapter around app-backed chat delivery dependencies."""
 
-    def __init__(self, app: Any) -> None:
+    def __init__(
+        self,
+        app: Any,
+        *,
+        typing_tracker: Any,
+        queue_manager: Any,
+        get_or_create_agent: Any,
+        resolve_thread_sandbox: Any,
+        ensure_thread_handlers: Any,
+    ) -> None:
         self._app = app
+        self._typing_tracker = typing_tracker
+        self._queue_manager = queue_manager
+        self._get_or_create_agent = get_or_create_agent
+        self._resolve_thread_sandbox = resolve_thread_sandbox
+        self._ensure_thread_handlers = ensure_thread_handlers
 
     async def get_or_create_thread_agent(self, thread_id: str) -> Any:
-        from backend.threads.activity_pool_service import get_or_create_agent, resolve_thread_sandbox
-        from backend.threads.streaming import _ensure_thread_handlers
-
-        sandbox_type = resolve_thread_sandbox(self._app, thread_id)
-        agent = await get_or_create_agent(self._app, sandbox_type, thread_id=thread_id)
-        _ensure_thread_handlers(agent, thread_id, self._app)
+        sandbox_type = self._resolve_thread_sandbox(self._app, thread_id)
+        agent = await self._get_or_create_agent(self._app, sandbox_type, thread_id=thread_id)
+        self._ensure_thread_handlers(agent, thread_id, self._app)
         return agent
 
     def start_chat(self, thread_id: str, chat_id: str, recipient_user_id: str) -> None:
-        typing_tracker = get_typing_tracker(self._app)
-        typing_tracker.start_chat(thread_id, chat_id, recipient_user_id)
+        self._typing_tracker.start_chat(thread_id, chat_id, recipient_user_id)
 
     def enqueue_chat_message(
         self,
@@ -51,7 +59,7 @@ class AppAgentChatRuntimeServices:
         sender_name: str,
         sender_avatar_url: str | None,
     ) -> None:
-        self._app.state.queue_manager.enqueue(
+        self._queue_manager.enqueue(
             content,
             thread_id,
             "chat",

@@ -501,20 +501,30 @@ def _make_streaming_app(
     queue_manager = queue_manager or MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     state = SimpleNamespace(
         display_builder=DisplayBuilder(),
+        thread_repo=SimpleNamespace(
+            get_by_id=lambda target_thread_id: {"id": target_thread_id, "sandbox_type": "local"},
+            get_by_user_id=lambda _user_id: None,
+            list_by_agent_user=lambda _user_id: [],
+        ),
+        agent_pool={},
+        thread_sandbox={},
+        thread_cwd={},
         thread_tasks={},
+        thread_locks={},
+        thread_locks_guard=asyncio.Lock(),
         thread_event_buffers={},
         subagent_buffers={},
         queue_manager=queue_manager,
         thread_last_active={},
-        typing_tracker=None,
+        typing_tracker=SimpleNamespace(
+            start_chat=lambda *_args, **_kwargs: None,
+            stop=lambda *_args, **_kwargs: None,
+        ),
     )
     if thread_id is not None and agent is not None:
         state.agent_pool = {f"{thread_id}:local": agent}
         state.thread_sandbox = {thread_id: "local"}
         state._event_loop = asyncio.get_running_loop()
-    if include_route_locks:
-        state.thread_locks = {}
-        state.thread_locks_guard = asyncio.Lock()
     app = SimpleNamespace(state=state)
     state.agent_runtime_gateway = build_agent_runtime_gateway(app)
     return app, queue_manager
@@ -1126,7 +1136,10 @@ async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(mon
             subagent_buffers={},
             queue_manager=queue_manager,
             thread_last_active={},
-            typing_tracker=None,
+            typing_tracker=SimpleNamespace(
+                start_chat=lambda *_args, **_kwargs: None,
+                stop=lambda *_args, **_kwargs: None,
+            ),
         )
     )
     thread_id = "steer-cancel-poison-thread"
@@ -1208,10 +1221,19 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_by_id=lambda target_thread_id: {"id": target_thread_id, "sandbox_type": "local"},
+                get_by_user_id=lambda _user_id: None,
+                list_by_agent_user=lambda _user_id: [],
+            ),
+            agent_pool={},
+            thread_sandbox={},
+            thread_cwd={},
             thread_tasks={},
             thread_locks={},
             thread_locks_guard=asyncio.Lock(),
             queue_manager=queue_manager,
+            typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
         )
     )
 
@@ -1220,8 +1242,8 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
         await release_agent_lookup.wait()
         return agent
 
-    monkeypatch.setattr("backend.threads.activity_pool_service.resolve_thread_sandbox", lambda *_args, **_kwargs: "local")
-    monkeypatch.setattr("backend.threads.activity_pool_service.get_or_create_agent", fake_get_or_create_agent)
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda *_args, **_kwargs: "local")
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.get_or_create_agent", fake_get_or_create_agent)
 
     startup_task = asyncio.create_task(
         build_agent_runtime_gateway(app).dispatch_thread_input(
@@ -1774,7 +1796,10 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
             subagent_buffers={},
             queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             thread_last_active={},
-            typing_tracker=None,
+            typing_tracker=SimpleNamespace(
+                start_chat=lambda *_args, **_kwargs: None,
+                stop=lambda *_args, **_kwargs: None,
+            ),
         )
     )
     thread_buf = ThreadEventBuffer()
@@ -1840,7 +1865,10 @@ async def test_run_agent_to_buffer_persists_terminal_notifications_before_assist
             subagent_buffers={},
             queue_manager=queue_manager,
             thread_last_active={},
-            typing_tracker=None,
+            typing_tracker=SimpleNamespace(
+                start_chat=lambda *_args, **_kwargs: None,
+                stop=lambda *_args, **_kwargs: None,
+            ),
         )
     )
     thread_buf = ThreadEventBuffer()
@@ -1898,7 +1926,10 @@ async def test_run_agent_to_buffer_resumes_graph_for_terminal_background_notific
             subagent_buffers={},
             queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             thread_last_active={},
-            typing_tracker=None,
+            typing_tracker=SimpleNamespace(
+                start_chat=lambda *_args, **_kwargs: None,
+                stop=lambda *_args, **_kwargs: None,
+            ),
         )
     )
     thread_buf = ThreadEventBuffer()
@@ -2126,8 +2157,8 @@ async def test_send_message_route_then_agent_terminal_notification_reenters_foll
     )
 
     with (
-        patch("backend.threads.activity_pool_service.get_or_create_agent", AsyncMock(return_value=agent)),
-        patch("backend.threads.activity_pool_service.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.chat_adapters.bootstrap.get_or_create_agent", AsyncMock(return_value=agent)),
+        patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
     ):
         result = await threads_router.send_message(
             thread_id,
@@ -2260,7 +2291,10 @@ async def test_run_agent_to_buffer_logs_real_stream_error_without_none_traceback
             subagent_buffers={},
             queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             thread_last_active={},
-            typing_tracker=None,
+            typing_tracker=SimpleNamespace(
+                start_chat=lambda *_args, **_kwargs: None,
+                stop=lambda *_args, **_kwargs: None,
+            ),
         )
     )
     thread_buf = ThreadEventBuffer()
@@ -2301,7 +2335,10 @@ async def test_run_agent_to_buffer_drains_activity_notice_before_stream_error(mo
             subagent_buffers={},
             queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             thread_last_active={},
-            typing_tracker=None,
+            typing_tracker=SimpleNamespace(
+                start_chat=lambda *_args, **_kwargs: None,
+                stop=lambda *_args, **_kwargs: None,
+            ),
         )
     )
     thread_buf = ThreadEventBuffer()
@@ -2374,7 +2411,10 @@ async def test_run_agent_to_buffer_batches_additional_terminal_notifications(mon
             subagent_buffers={},
             queue_manager=queue_manager,
             thread_last_active={},
-            typing_tracker=None,
+            typing_tracker=SimpleNamespace(
+                start_chat=lambda *_args, **_kwargs: None,
+                stop=lambda *_args, **_kwargs: None,
+            ),
         )
     )
     thread_buf = ThreadEventBuffer()
