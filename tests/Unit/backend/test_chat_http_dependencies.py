@@ -16,6 +16,27 @@ def test_get_messaging_service_returns_service_when_present():
     assert chat_http_dependencies.get_messaging_service(_app_state(messaging_service=service)) is service
 
 
+@pytest.mark.asyncio
+async def test_get_owner_thread_rows_loader_binds_app() -> None:
+    seen: list[tuple[object, str]] = []
+
+    async def _fake_list_owner_thread_rows_for_auth_burst(app, user_id: str):
+        seen.append((app, user_id))
+        return [{"id": "thread-1"}]
+
+    app = _app_state(thread_repo=SimpleNamespace())
+    original = chat_http_dependencies.list_owner_thread_rows_for_auth_burst
+    chat_http_dependencies.list_owner_thread_rows_for_auth_burst = _fake_list_owner_thread_rows_for_auth_burst
+    try:
+        loader = chat_http_dependencies.get_owner_thread_rows_loader(app)
+        result = await loader("owner-1")
+    finally:
+        chat_http_dependencies.list_owner_thread_rows_for_auth_burst = original
+
+    assert result == [{"id": "thread-1"}]
+    assert seen == [(app, "owner-1")]
+
+
 def test_get_messaging_service_fails_loud_when_missing():
     with pytest.raises(HTTPException) as exc_info:
         chat_http_dependencies.get_messaging_service(_app_state())
