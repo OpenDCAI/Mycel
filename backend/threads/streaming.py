@@ -4,18 +4,18 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from backend.thread_runtime.events.buffer import RunEventBuffer, ThreadEventBuffer
-from backend.thread_runtime.events.store import append_event as _append_event
-from backend.thread_runtime.events.store import cleanup_old_runs
-from backend.thread_runtime.run import buffer_wiring as _run_buffer_wiring
-from backend.thread_runtime.run import cancellation as _run_cancellation
-from backend.thread_runtime.run import emit as _run_emit
-from backend.thread_runtime.run import entrypoints as _run_entrypoints
-from backend.thread_runtime.run import execution as _run_execution
-from backend.thread_runtime.run import followups as _run_followups
-from backend.thread_runtime.run import input_construction as _run_input_construction
-from backend.thread_runtime.run import lifecycle as _run_lifecycle
-from backend.thread_runtime.run import observer as _run_observer
+from backend.threads.events.buffer import RunEventBuffer, ThreadEventBuffer
+from backend.threads.events.store import append_event as _append_event
+from backend.threads.events.store import cleanup_old_runs
+from backend.threads.run import buffer_wiring as _run_buffer_wiring
+from backend.threads.run import cancellation as _run_cancellation
+from backend.threads.run import emit as _run_emit
+from backend.threads.run import entrypoints as _run_entrypoints
+from backend.threads.run import execution as _run_execution
+from backend.threads.run import followups as _run_followups
+from backend.threads.run import input_construction as _run_input_construction
+from backend.threads.run import lifecycle as _run_lifecycle
+from backend.threads.run import observer as _run_observer
 from core.runtime.notifications import is_terminal_background_notification
 from storage.contracts import RunEventRepo
 
@@ -255,7 +255,7 @@ async def run_child_thread_live(
     *,
     input_messages: list[Any],
 ) -> str:
-    from backend.web.services.agent_pool import resolve_thread_sandbox
+    from backend.threads.activity_pool_service import resolve_thread_sandbox
     from backend.web.utils.serializers import extract_text_content
 
     _run_entrypoints._start_agent_run = start_agent_run

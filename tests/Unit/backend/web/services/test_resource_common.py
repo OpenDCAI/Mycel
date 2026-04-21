@@ -182,7 +182,7 @@ def test_shared_resource_consumers_use_neutral_resource_common_owner() -> None:
 
     assert "backend.web.services.resource_common" not in projection_source
     assert "backend.web.services.resource_common" not in resource_io_source
-    assert "backend.resource_common" in projection_source
+    assert "backend.sandboxes.resources.common" in projection_source
 
 
 def test_resource_common_owner_keeps_expected_surface() -> None:
@@ -196,15 +196,15 @@ def test_shared_resource_consumers_use_neutral_resource_provider_boundary_owner(
 
     assert "backend.web.services import resource_provider_boundary_service" not in projection_source
     assert "backend.web.services import resource_provider_boundary_service" not in user_projection_source
-    assert "backend.resource_provider_boundary" in projection_source
-    assert "backend.resource_provider_boundary" in user_projection_source
+    assert "backend.sandboxes.resources.provider_boundary" in projection_source
+    assert "backend.sandboxes.resources.provider_boundary" in user_projection_source
 
 
 def test_resource_provider_boundary_uses_neutral_sandbox_inventory_owner() -> None:
     boundary_source = inspect.getsource(neutral_resource_provider_boundary)
 
     assert "sandbox_service.available_sandbox_types" not in boundary_source
-    assert "backend.sandbox_inventory" in boundary_source
+    assert "backend.sandboxes.inventory" in boundary_source
 
 
 def test_resource_provider_boundary_moves_user_sandbox_reads_out_of_sandbox_service() -> None:
@@ -212,7 +212,7 @@ def test_resource_provider_boundary_moves_user_sandbox_reads_out_of_sandbox_serv
     sandbox_service_source = inspect.getsource(sandbox_service)
 
     assert "sandbox_service.list_user_sandboxes" not in boundary_source
-    assert "backend.user_sandbox_reads" in boundary_source
+    assert "backend.sandboxes.user_reads" in boundary_source
     assert "user_sandbox_reads.list_user_sandboxes(" in sandbox_service_source
     assert "user_sandbox_reads._list_user_runtime_rows(" in sandbox_service_source
 
@@ -223,9 +223,9 @@ def test_user_sandbox_reads_uses_neutral_avatar_and_virtual_thread_helpers() -> 
     assert "backend.web.utils.serializers" not in source
     assert "backend.web.utils.helpers" not in source
     assert "backend.web.services.thread_visibility" not in source
-    assert "backend.avatar_urls" in source
-    assert "backend.virtual_threads" in source
-    assert "backend.thread_runtime.projection" in source
+    assert "backend.identity.avatar.urls" in source
+    assert "backend.threads.virtual_threads" in source
+    assert "backend.threads.projection" in source
     assert "def count_user_visible_sandboxes_by_provider(" in source
 
 
@@ -235,9 +235,9 @@ def test_sandbox_service_uses_neutral_helper_owners_for_read_wrappers() -> None:
     assert "backend.web.services.thread_visibility" not in source
     assert "backend.web.utils.serializers" not in source
     assert "backend.web.utils.helpers" not in source
-    assert "backend.thread_runtime.projection" in source
-    assert "backend.avatar_urls" in source
-    assert "backend.virtual_threads" in source
+    assert "backend.threads.projection" in source
+    assert "backend.identity.avatar.urls" in source
+    assert "backend.threads.virtual_threads" in source
 
 
 def test_account_resource_service_uses_neutral_sandbox_count_owner() -> None:
@@ -253,8 +253,8 @@ def test_resource_modules_use_neutral_sandbox_path_owner() -> None:
 
     assert "backend.web.core.config" not in common_source
     assert "backend.web.core.config" not in projection_source
-    assert "backend.sandbox_paths" in common_source
-    assert "backend.sandbox_paths" in projection_source
+    assert "backend.sandboxes.paths" in common_source
+    assert "backend.sandboxes.paths" in projection_source
 
 
 def test_resource_modules_use_neutral_sandbox_provider_factory_owner() -> None:
@@ -262,17 +262,17 @@ def test_resource_modules_use_neutral_sandbox_provider_factory_owner() -> None:
     resource_io_source = inspect.getsource(resource_io)
     sandbox_provider_factory_source = inspect.getsource(neutral_sandbox_provider_factory)
 
-    assert "backend.web.services.sandbox_service" not in common_source
-    assert "backend.web.services.sandbox_service" not in resource_io_source
-    assert "backend.web.services.sandbox_service" not in sandbox_provider_factory_source
-    assert "backend.sandbox_provider_factory" in common_source
-    assert "backend.sandbox_provider_factory" in resource_io_source
-    assert "backend.sandbox_inventory" in sandbox_provider_factory_source
+    assert "backend.sandboxes.service" not in common_source
+    assert "backend.sandboxes.service" not in resource_io_source
+    assert "backend.sandboxes.service" not in sandbox_provider_factory_source
+    assert "backend.sandboxes.provider_factory" in common_source
+    assert "backend.sandboxes.provider_factory" in resource_io_source
+    assert "backend.sandboxes.inventory" in sandbox_provider_factory_source
 
 
 def test_sandbox_provider_factory_returns_none_without_filesystem_probe(monkeypatch) -> None:
     monkeypatch.setattr(
-        "backend.sandbox_inventory.init_providers_and_managers",
+        "backend.sandboxes.inventory.init_providers_and_managers",
         lambda: ({}, {}),
     )
 

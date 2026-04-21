@@ -7,8 +7,8 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from backend.thread_runtime.pool.factory import create_agent_sync
-from backend.thread_runtime.sandbox import resolve_thread_sandbox
+from backend.threads.pool.factory import create_agent_sync
+from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from core.identity.agent_registry import get_or_create_agent_id
 from sandbox.thread_context import set_current_thread_id
 

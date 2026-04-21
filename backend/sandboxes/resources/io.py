@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.sandbox_provider_factory import build_provider_from_config_name
+from backend.sandboxes.provider_factory import build_provider_from_config_name
 from sandbox.resource_snapshot import probe_and_upsert_for_instance
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 from storage.runtime import upsert_resource_snapshot_for_sandbox

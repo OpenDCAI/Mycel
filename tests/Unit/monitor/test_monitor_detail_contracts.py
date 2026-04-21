@@ -630,7 +630,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         ),
     )
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -688,7 +688,7 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
 def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypatch):
     calls: list[tuple[str, str, bool]] = []
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -728,7 +728,7 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
     )
     _use_monitor_repo(monkeypatch, repo)
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )
@@ -783,7 +783,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_uses_sandbox_manager(mo
         }
 
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.mutate_sandbox_runtime",
+        "backend.sandboxes.service.mutate_sandbox_runtime",
         _mutate_sandbox_runtime,
         raising=False,
     )
@@ -856,7 +856,7 @@ def test_request_monitor_provider_orphan_runtime_cleanup_rejects_running_orphan(
         return {"ok": True}
 
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.mutate_sandbox_runtime",
+        "backend.sandboxes.service.mutate_sandbox_runtime",
         _mutate_sandbox_runtime,
         raising=False,
     )
@@ -1045,7 +1045,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
         ),
     )
     monkeypatch.setattr(
-        "backend.web.services.sandbox_service.destroy_sandbox_runtime",
+        "backend.sandboxes.service.destroy_sandbox_runtime",
         _record_destroy(calls),
         raising=False,
     )

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from core.runtime.middleware.monitor import AgentState
 from protocols.runtime_read import AgentThreadActivity
+from core.runtime.middleware.monitor import AgentState
 
 
 def _normalize_state(state: AgentState) -> Literal["initializing", "ready", "active", "idle", "suspended", "stopped", "destroyed"]:

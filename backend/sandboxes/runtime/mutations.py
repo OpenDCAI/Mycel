@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.sandbox_inventory import init_providers_and_managers
-from backend.virtual_threads import is_virtual_thread_id
+from backend.sandboxes.inventory import init_providers_and_managers
+from backend.threads.virtual_threads import is_virtual_thread_id
 from storage.runtime import build_storage_container
 
 

@@ -11,7 +11,7 @@ def _decode(events: list[dict[str, str]]) -> list[tuple[str, dict[str, object]]]
 
 @pytest.mark.asyncio
 async def test_emit_run_epilogue_success_emits_status_then_run_done() -> None:
-    from backend.thread_runtime.run.epilogue import emit_run_epilogue
+    from backend.threads.run.epilogue import emit_run_epilogue
 
     events: list[dict[str, str]] = []
 
@@ -34,7 +34,7 @@ async def test_emit_run_epilogue_success_emits_status_then_run_done() -> None:
 
 @pytest.mark.asyncio
 async def test_emit_run_epilogue_cancelled_emits_cancelled_then_run_done() -> None:
-    from backend.thread_runtime.run.epilogue import emit_run_epilogue
+    from backend.threads.run.epilogue import emit_run_epilogue
 
     events: list[dict[str, str]] = []
 
@@ -57,7 +57,7 @@ async def test_emit_run_epilogue_cancelled_emits_cancelled_then_run_done() -> No
 
 @pytest.mark.asyncio
 async def test_emit_run_epilogue_error_emits_error_then_run_done() -> None:
-    from backend.thread_runtime.run.epilogue import emit_run_epilogue
+    from backend.threads.run.epilogue import emit_run_epilogue
 
     events: list[dict[str, str]] = []
 

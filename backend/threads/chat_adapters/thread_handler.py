@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
-from backend.protocols import agent_runtime as agent_runtime_protocol
+from protocols import agent_runtime as agent_runtime_protocol
 from core.runtime.middleware.monitor import AgentState
 
 logger = logging.getLogger(__name__)
@@ -20,8 +20,8 @@ class NativeAgentThreadInputHandler:
 
     async def dispatch(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> agent_runtime_protocol.AgentThreadInputResult:
         from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
-        from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-        from backend.web.services.streaming_service import start_agent_run
+        from backend.threads.activity_pool_service import get_or_create_agent, resolve_thread_sandbox
+        from backend.threads.streaming import start_agent_run
 
         thread_id = envelope.thread_id
         startup_cancel = None

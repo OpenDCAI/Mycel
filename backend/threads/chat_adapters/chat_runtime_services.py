@@ -28,8 +28,8 @@ class AppAgentChatRuntimeServices:
         self._app = app
 
     async def get_or_create_thread_agent(self, thread_id: str) -> Any:
-        from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-        from backend.web.services.streaming_service import _ensure_thread_handlers
+        from backend.threads.activity_pool_service import get_or_create_agent, resolve_thread_sandbox
+        from backend.threads.streaming import _ensure_thread_handlers
 
         sandbox_type = resolve_thread_sandbox(self._app, thread_id)
         agent = await get_or_create_agent(self._app, sandbox_type, thread_id=thread_id)

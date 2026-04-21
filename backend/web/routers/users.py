@@ -8,8 +8,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.avatar_files import process_and_save_avatar
-from backend.avatar_paths import avatars_dir
+from backend.identity.avatar.files import process_and_save_avatar
+from backend.identity.avatar.paths import avatars_dir
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
 from messaging.social_access import active_contact_target_ids, can_chat_with_owner_scope

@@ -6,9 +6,9 @@ import logging
 from enum import Enum
 from typing import Any
 
-from backend.agent_runtime.chat_notification_format import format_chat_notification
-from backend.agent_runtime.port import get_agent_runtime_gateway
-from backend.protocols.agent_runtime import (
+from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
+from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
     AgentChatRecipient,

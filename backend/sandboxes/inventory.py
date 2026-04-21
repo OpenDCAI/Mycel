@@ -8,8 +8,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from backend.local_workspace import local_workspace_root
-from backend.sandbox_paths import SANDBOXES_DIR
+from backend.sandboxes.local_workspace import local_workspace_root
+from backend.sandboxes.paths import SANDBOXES_DIR
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability

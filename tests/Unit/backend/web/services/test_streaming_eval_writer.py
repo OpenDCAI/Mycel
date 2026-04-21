@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.thread_runtime.events.buffer import ThreadEventBuffer
-from backend.web.services.streaming_service import _run_agent_to_buffer, write_cancellation_markers
+from backend.threads.events.buffer import ThreadEventBuffer
+from backend.threads.streaming import _run_agent_to_buffer, write_cancellation_markers
 from core.runtime.middleware.monitor import AgentState
 from eval.models import RunTrajectory
 
@@ -181,13 +181,13 @@ def _install_runtime_writer_test_doubles(monkeypatch: pytest.MonkeyPatch) -> Non
         seq += 1
         return seq
 
-    monkeypatch.setattr("backend.thread_runtime.events.store.append_event", fake_append_event)
-    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", _noop_async)
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
-    monkeypatch.setattr("backend.web.services.streaming_service._consume_followup_queue", _noop_async)
-    monkeypatch.setattr("backend.web.services.streaming_service.write_cancellation_markers", _noop_async)
-    monkeypatch.setattr("backend.web.services.streaming_service._persist_cancelled_run_input_if_missing", _noop_async)
-    monkeypatch.setattr("backend.web.services.streaming_service._flush_cancelled_owner_steers", _noop_async)
+    monkeypatch.setattr("backend.threads.events.store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.threads.streaming.cleanup_old_runs", _noop_async)
+    monkeypatch.setattr("backend.threads.streaming._ensure_thread_handlers", lambda *args, **kwargs: None)
+    monkeypatch.setattr("backend.threads.streaming._consume_followup_queue", _noop_async)
+    monkeypatch.setattr("backend.threads.streaming.write_cancellation_markers", _noop_async)
+    monkeypatch.setattr("backend.threads.streaming._persist_cancelled_run_input_if_missing", _noop_async)
+    monkeypatch.setattr("backend.threads.streaming._flush_cancelled_owner_steers", _noop_async)
     monkeypatch.setattr("eval.storage.TrajectoryStore", _FakeTrajectoryStore)
     monkeypatch.setattr("eval.tracer.TrajectoryTracer", _FakeTrajectoryTracer)
 

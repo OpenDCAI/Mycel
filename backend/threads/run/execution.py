@@ -6,15 +6,15 @@ import asyncio
 import logging
 from typing import Any
 
-from backend.thread_runtime.run import activity_bridge as _run_activity_bridge
-from backend.thread_runtime.run import emit as _run_emit
-from backend.thread_runtime.run import epilogue as _run_epilogue
-from backend.thread_runtime.run import input_construction as _run_input_construction
-from backend.thread_runtime.run import observation as _run_observation
-from backend.thread_runtime.run import prologue as _run_prologue
-from backend.thread_runtime.run import stream_loop as _run_stream_loop
-from backend.thread_runtime.run import tool_call_dedup as _run_tool_call_dedup
-from backend.thread_runtime.run import trajectory as _run_trajectory
+from backend.threads.run import activity_bridge as _run_activity_bridge
+from backend.threads.run import emit as _run_emit
+from backend.threads.run import epilogue as _run_epilogue
+from backend.threads.run import input_construction as _run_input_construction
+from backend.threads.run import observation as _run_observation
+from backend.threads.run import prologue as _run_prologue
+from backend.threads.run import stream_loop as _run_stream_loop
+from backend.threads.run import tool_call_dedup as _run_tool_call_dedup
+from backend.threads.run import trajectory as _run_trajectory
 from core.runtime.middleware.monitor import AgentState
 from sandbox.thread_context import set_current_run_id, set_current_thread_id
 

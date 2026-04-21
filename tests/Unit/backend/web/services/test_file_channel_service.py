@@ -73,4 +73,4 @@ def test_file_channel_service_uses_neutral_storage_container_cache_owner() -> No
     source = file_channel_service.__loader__.get_source(file_channel_service.__name__) or ""
 
     assert "from backend.web.utils.helpers import _get_container" not in source
-    assert "from backend.storage_container_cache import get_storage_container as _get_container" in source
+    assert "from backend.runtime_bootstrap.storage_container_cache import get_storage_container as _get_container" in source

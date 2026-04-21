@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.avatar_paths import avatars_dir
+from backend.identity.avatar.paths import avatars_dir
 
 
 def avatar_url(user_id: str | None, has_avatar: bool) -> str | None:

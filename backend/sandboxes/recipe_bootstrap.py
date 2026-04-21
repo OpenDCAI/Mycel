@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from backend.sandbox_inventory import available_sandbox_types
+from backend.sandboxes.inventory import available_sandbox_types
 from sandbox.recipes import default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
 

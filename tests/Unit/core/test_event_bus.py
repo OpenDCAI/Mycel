@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-import backend.event_bus as neutral_event_bus
-import backend.web.event_bus as web_event_bus
-from backend.web.event_bus import EventBus, get_event_bus
+import backend.threads.event_bus as neutral_event_bus
+import backend.threads.event_bus as web_event_bus
+from backend.threads.event_bus import EventBus, get_event_bus
 
 
 class TestEventBus:

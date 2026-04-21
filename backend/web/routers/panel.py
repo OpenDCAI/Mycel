@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend import profile as profile_owner
+from backend.identity import profile as profile_owner
 from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.models.panel import (
     AgentConfigPayload,
@@ -17,7 +17,8 @@ from backend.web.models.panel import (
     UpdateResourceContentRequest,
     UpdateResourceRequest,
 )
-from backend.web.services import agent_user_service, library_service
+from backend.library import service as library_service
+from backend.threads import agent_user_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]

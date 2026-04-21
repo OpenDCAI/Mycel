@@ -1,6 +1,6 @@
 from backend import auth_service as neutral_auth_service
 from backend import avatar_files, avatar_urls, contact_bootstrap, recipe_bootstrap
-from backend.auth_service import AuthService
+from backend.identity.auth.service import AuthService
 from backend.web.routers import users as users_router
 from backend.web.services import library_service
 

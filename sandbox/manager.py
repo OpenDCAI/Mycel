@@ -35,7 +35,7 @@ def resolve_provider_cwd(provider) -> str:
 
 
 def _build_provider_from_name(name: str):
-    from backend.web.services.sandbox_service import build_provider_from_config_name
+    from backend.sandboxes.service import build_provider_from_config_name
 
     return build_provider_from_config_name(name)
 

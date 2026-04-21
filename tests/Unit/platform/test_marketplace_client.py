@@ -9,8 +9,8 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-import backend.library_paths as _lib_paths
-from backend.versioning import bump_semver
+import backend.library.paths as _lib_paths
+from backend.agent_marketplace.versioning import bump_semver
 
 # ── Version Bump (tested via publish internals) ──
 
@@ -33,7 +33,7 @@ class TestVersionBump:
 
 
 def test_hub_client_disables_env_proxy_trust():
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     marketplace_client = importlib.reload(marketplace_client)
 
@@ -43,7 +43,7 @@ def test_hub_client_disables_env_proxy_trust():
 def test_hub_client_defaults_to_public_mycel_hub(monkeypatch):
     monkeypatch.delenv("MYCEL_HUB_URL", raising=False)
 
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     marketplace_client = importlib.reload(marketplace_client)
 
@@ -51,7 +51,7 @@ def test_hub_client_defaults_to_public_mycel_hub(monkeypatch):
 
 
 def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     class _Response:
         status_code = 400
@@ -71,30 +71,30 @@ def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
 
 
 def test_marketplace_client_uses_neutral_library_path_owner() -> None:
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
 
-    assert "from backend.web.services.library_service import LIBRARY_DIR" not in source
-    assert "import backend.library_paths as _lib_paths" in source
+    assert "from backend.library.service import LIBRARY_DIR" not in source
+    assert "import backend.library.paths as _lib_paths" in source
 
 
 def test_marketplace_client_uses_neutral_versioning_owner() -> None:
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
 
     assert "from backend.web.utils.versioning import BumpType, bump_semver" not in source
-    assert "from backend.versioning import BumpType, bump_semver" in source
+    assert "from backend.agent_marketplace.versioning import BumpType, bump_semver" in source
 
 
 def test_marketplace_client_uses_neutral_agent_user_snapshot_install_owner() -> None:
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
 
-    assert "from backend.web.services.agent_user_service import install_from_snapshot" not in source
-    assert "import backend.agent_user_snapshot_install as _snapshot_install_owner" in source
+    assert "from backend.threads.agent_user_service import install_from_snapshot" not in source
+    assert "import backend.agent_marketplace.snapshot_install as _snapshot_install_owner" in source
 
 
 # ── Helpers ──
@@ -128,8 +128,8 @@ class TestDownloadSkill:
         monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
-            from backend.web.services.marketplace_client import download
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.library.marketplace_client import download
 
             result = download("item-123")
 
@@ -146,8 +146,8 @@ class TestDownloadSkill:
             "skill", "tracked-skill", content="---\nname: Tracked Skill\n---\n# Hello", version="2.1.0", publisher="alice"
         )
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
-            from backend.web.services.marketplace_client import download
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.library.marketplace_client import download
 
             download("item-456")
 
@@ -161,8 +161,8 @@ class TestDownloadSkill:
         monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
-            from backend.web.services.marketplace_client import download
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.library.marketplace_client import download
 
             with pytest.raises(ValueError, match="Invalid slug"):
                 download("item-evil")
@@ -171,7 +171,7 @@ class TestDownloadSkill:
         assert not (tmp_path / "evil").exists()
 
     def test_installs_skill_to_agent_config_when_agent_user_id_is_provided(self):
-        import backend.web.services.marketplace_client as marketplace_client
+        import backend.library.marketplace_client as marketplace_client
 
         saved: list[tuple[str, str, str, dict[str, object] | None]] = []
         user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
@@ -188,7 +188,7 @@ class TestDownloadSkill:
             content="---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter.",
         )
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
             result = marketplace_client.download(
                 "skillsmp:fastapi",
                 owner_user_id="owner-1",
@@ -225,8 +225,8 @@ class TestDownloadAgent:
         monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("agent", "cool-agent", content="# Cool Agent")
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
-            from backend.web.services.marketplace_client import download
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.library.marketplace_client import download
 
             result = download("item-a1")
 
@@ -241,8 +241,8 @@ class TestDownloadAgent:
         monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("agent", "meta-agent", version="3.0.0", publisher="bob")
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
-            from backend.web.services.marketplace_client import download
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.library.marketplace_client import download
 
             download("item-a2")
 
@@ -258,12 +258,12 @@ class TestDownloadUser:
         seen: dict[str, object] = {}
 
         monkeypatch.setattr(
-            "backend.web.services.marketplace_client._snapshot_install_owner.install_from_snapshot",
+            "backend.library.marketplace_client._snapshot_install_owner.install_from_snapshot",
             lambda **kwargs: seen.update(kwargs) or "agent-user-1",
         )
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
-            from backend.web.services.marketplace_client import download
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.library.marketplace_client import download
 
             result = download(
                 "item-u1",
@@ -279,8 +279,8 @@ class TestDownloadUser:
     def test_member_type_download_requires_repos(self):
         hub_resp = _make_hub_response("member", "agent-user")
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
-            from backend.web.services.marketplace_client import download
+        with patch("backend.library.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.library.marketplace_client import download
 
             with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
                 download("item-u1", owner_user_id="owner-1")
@@ -297,12 +297,12 @@ class TestDownloadIdempotency:
         v1 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV1", version="1.0.0")
         v2 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV2", version="1.0.1")
 
-        from backend.web.services.marketplace_client import download
+        from backend.library.marketplace_client import download
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=v1):
+        with patch("backend.library.marketplace_client._hub_api", return_value=v1):
             download("item-idem")
 
-        with patch("backend.web.services.marketplace_client._hub_api", return_value=v2):
+        with patch("backend.library.marketplace_client._hub_api", return_value=v2):
             result = download("item-idem")
 
         assert result["version"] == "1.0.1"
@@ -316,14 +316,14 @@ def test_upgrade_returns_user_id_contract(monkeypatch):
     seen: dict[str, object] = {}
 
     monkeypatch.setattr(
-        "backend.web.services.marketplace_client._snapshot_install_owner.install_from_snapshot",
+        "backend.library.marketplace_client._snapshot_install_owner.install_from_snapshot",
         lambda **kwargs: seen.update(kwargs) or "agent-user-1",
     )
 
     with patch(
-        "backend.web.services.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
+        "backend.library.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
     ):
-        from backend.web.services.marketplace_client import upgrade
+        from backend.library.marketplace_client import upgrade
 
         result = upgrade(
             user_id="agent-user-1",
@@ -346,14 +346,14 @@ def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
         return "agent-user-1"
 
     monkeypatch.setattr(
-        "backend.web.services.marketplace_client._snapshot_install_owner.install_from_snapshot",
+        "backend.library.marketplace_client._snapshot_install_owner.install_from_snapshot",
         fake_install_from_snapshot,
     )
 
     with patch(
-        "backend.web.services.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
+        "backend.library.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
     ):
-        from backend.web.services.marketplace_client import upgrade
+        from backend.library.marketplace_client import upgrade
 
         upgrade(
             user_id="agent-user-1",
@@ -369,16 +369,16 @@ def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
 
 def test_upgrade_requires_repos():
     with patch(
-        "backend.web.services.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
+        "backend.library.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
     ):
-        from backend.web.services.marketplace_client import upgrade
+        from backend.library.marketplace_client import upgrade
 
         with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
             upgrade(user_id="agent-user-1", item_id="item-u2", owner_user_id="owner-1")
 
 
 def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatch):
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     saved: dict[str, object] = {}
     captured: dict[str, object] = {}
@@ -462,7 +462,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
 
 
 def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path, monkeypatch):
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     saved: dict[str, object] = {}
     captured: dict[str, object] = {}
@@ -549,7 +549,7 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
 
 
 def test_publish_requires_repos():
-    import backend.web.services.marketplace_client as marketplace_client
+    import backend.library.marketplace_client as marketplace_client
 
     with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
         marketplace_client.publish(

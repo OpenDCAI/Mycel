@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend import user_sandbox_reads as sandbox_service
+from backend.sandboxes import user_reads as sandbox_service
 from sandbox.recipes import humanize_recipe_provider
 
 SANDBOX_PROVIDER_ORDER = ("local", "daytona_selfhost", "daytona", "agentbay", "e2b", "docker")

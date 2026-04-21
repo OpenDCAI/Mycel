@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.sandbox_inventory import available_sandbox_types
+from backend.sandboxes.inventory import available_sandbox_types
 from sandbox.recipes import list_builtin_recipes
 
 

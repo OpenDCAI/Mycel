@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.agent_runtime.bootstrap import build_agent_runtime_gateway
-from backend.protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
+from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
 from core.runtime.middleware.monitor import AgentState
 
 
@@ -56,9 +56,9 @@ async def test_gateway_thread_input_clears_resource_overview_cache_when_starting
     agent = _FakeAgent()
 
     with (
-        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
-        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=agent)),
-        patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
+        patch("backend.threads.activity_pool_service.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.activity_pool_service.get_or_create_agent", AsyncMock(return_value=agent)),
+        patch("backend.threads.streaming.start_agent_run", return_value="run-123"),
         patch("backend.monitor.infrastructure.resources.resource_overview_cache.clear_resource_overview_cache") as clear_cache,
     ):
         result = await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input())
@@ -72,9 +72,9 @@ async def test_gateway_thread_input_requires_agent_runtime() -> None:
     app = _fake_app()
 
     with (
-        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
-        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=SimpleNamespace())),
-        patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123"),
+        patch("backend.threads.activity_pool_service.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.activity_pool_service.get_or_create_agent", AsyncMock(return_value=SimpleNamespace())),
+        patch("backend.threads.streaming.start_agent_run", return_value="run-123"),
         patch("backend.monitor.infrastructure.resources.resource_overview_cache.clear_resource_overview_cache"),
     ):
         with pytest.raises(AttributeError):
@@ -87,9 +87,9 @@ async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run(
     agent = _FakeAgent()
 
     with (
-        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
-        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=agent)),
-        patch("backend.web.services.streaming_service.start_agent_run", return_value="run-123") as start_run,
+        patch("backend.threads.activity_pool_service.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.activity_pool_service.get_or_create_agent", AsyncMock(return_value=agent)),
+        patch("backend.threads.streaming.start_agent_run", return_value="run-123") as start_run,
         patch("backend.monitor.infrastructure.resources.resource_overview_cache.clear_resource_overview_cache"),
     ):
         await build_agent_runtime_gateway(app).dispatch_thread_input(_thread_input(enable_trajectory=True))

@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from backend.avatar_paths import avatars_dir
-from backend.message_content import extract_text_content, strip_system_tags
+from backend.identity.avatar.paths import avatars_dir
+from backend.threads.message_content import extract_text_content, strip_system_tags
 
 __all__ = ["avatar_url", "strip_system_tags", "extract_text_content", "serialize_message"]
 

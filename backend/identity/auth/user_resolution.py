@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 
-from backend.auth_dependencies import _get_auth_service
+from backend.identity.auth.dependencies import _get_auth_service
 
 
 def _extract_jwt_payload(request: Request) -> dict:

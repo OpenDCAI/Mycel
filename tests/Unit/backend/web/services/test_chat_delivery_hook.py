@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.agent_runtime import chat_inlet as owner_chat_inlet
+from backend.threads.chat_adapters import chat_inlet as owner_chat_inlet
 from messaging.delivery.dispatcher import ChatDeliveryRequest
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-import backend.resource_provider_boundary as resource_provider_boundary
+import backend.sandboxes.resources.provider_boundary as resource_provider_boundary
 from backend.monitor.infrastructure.read_models import resource_runtime_service
 from storage.models import map_sandbox_state_to_display_status
 

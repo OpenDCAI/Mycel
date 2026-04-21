@@ -7,7 +7,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from backend.thread_runtime.events.buffer import ThreadEventBuffer
+from backend.threads.events.buffer import ThreadEventBuffer
 from core.runtime.middleware.monitor import AgentState
 
 logger = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     qm.register_wake(thread_id, wake_handler)
 
     try:
-        from backend.event_bus import get_event_bus
+        from backend.threads.event_bus import get_event_bus
 
         unsubscribe = getattr(runtime, "_thread_event_unsubscribe", None)
         if callable(unsubscribe):

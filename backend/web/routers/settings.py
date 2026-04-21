@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_current_user_id
-from backend.web.services import account_resource_service
+from backend.sandboxes import account as account_resource_service
 from backend.web.utils.serializers import extract_text_content
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
@@ -305,7 +305,7 @@ class ModelConfigRequest(BaseModel):
 @router.post("/config")
 async def update_model_config(request: ModelConfigRequest, req: Request) -> dict[str, Any]:
     """Update model configuration for agent (hot-reload) and persist per-thread."""
-    from backend.web.services.agent_pool import update_agent_config
+    from backend.threads.activity_pool_service import update_agent_config
 
     # Persist model per-thread if thread_id provided
     if request.thread_id:

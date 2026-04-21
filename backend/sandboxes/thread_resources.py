@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.sandbox_inventory import init_providers_and_managers
+from backend.sandboxes.inventory import init_providers_and_managers
 
 
 def destroy_thread_resources_sync(

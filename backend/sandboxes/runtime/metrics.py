@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.sandbox_inventory import init_providers_and_managers
+from backend.sandboxes.inventory import init_providers_and_managers
 
 
 def get_runtime_metrics(

@@ -6,9 +6,9 @@ import json
 from collections import Counter
 from typing import Any
 
-from backend.avatar_urls import avatar_url
-from backend.thread_runtime.projection import canonical_owner_threads
-from backend.virtual_threads import is_virtual_thread_id
+from backend.identity.avatar.urls import avatar_url
+from backend.threads.projection import canonical_owner_threads
+from backend.threads.virtual_threads import is_virtual_thread_id
 from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from storage.models import map_sandbox_state_to_display_status
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo

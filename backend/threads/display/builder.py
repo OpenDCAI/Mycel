@@ -16,8 +16,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from backend.message_content import extract_text_content as _extract_text_content
-from backend.message_content import strip_system_tags as _strip_system_tags
+from backend.threads.message_content import extract_text_content as _extract_text_content
+from backend.threads.message_content import strip_system_tags as _strip_system_tags
 
 logger = logging.getLogger(__name__)
 

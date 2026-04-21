@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from backend.agent_runtime.chat_runtime_services import AgentChatRuntimeServices
-from backend.protocols import agent_runtime as agent_runtime_protocol
+from backend.threads.chat_adapters.chat_runtime_services import AgentChatRuntimeServices
+from protocols import agent_runtime as agent_runtime_protocol
 
 logger = logging.getLogger(__name__)
 

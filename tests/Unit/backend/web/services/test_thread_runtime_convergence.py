@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from backend.thread_runtime.convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
+from backend.threads.convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 
 
 class _FakeThreadRepo:
@@ -82,7 +82,7 @@ def test_converge_owner_thread_runtime_accepts_workspace_sandbox_binding_without
     )
 
     monkeypatch.setattr(
-        "backend.thread_runtime.convergence.delete_thread_in_db",
+        "backend.threads.convergence.delete_thread_in_db",
         lambda _thread_id: (_ for _ in ()).throw(AssertionError("purge should not run when runtime binding exists")),
     )
 
@@ -98,7 +98,7 @@ def test_converge_owner_thread_runtime_purges_thread_without_workspace_binding(m
     app = _make_app(thread_repo=thread_repo)
 
     monkeypatch.setattr(
-        "backend.thread_runtime.convergence.delete_thread_in_db",
+        "backend.threads.convergence.delete_thread_in_db",
         lambda thread_id: purged.append(thread_id),
     )
 
@@ -150,7 +150,7 @@ def test_summarize_owner_thread_runtime_uses_workspace_sandbox_binding(monkeypat
         ),
     )
     monkeypatch.setattr(
-        "backend.thread_runtime.convergence.delete_thread_in_db",
+        "backend.threads.convergence.delete_thread_in_db",
         lambda thread_id: purged.append(thread_id),
     )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
-from backend.protocols import agent_runtime as agent_runtime_protocol
+from protocols import agent_runtime as agent_runtime_protocol
 
 
 class AgentChatRuntimeHandler(Protocol):

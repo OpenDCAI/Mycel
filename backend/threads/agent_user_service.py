@@ -6,8 +6,8 @@ from typing import Any
 
 import yaml
 
-import backend.agent_user_snapshot_install as _snapshot_install_owner
-from backend.versioning import BumpType, bump_semver
+import backend.agent_marketplace.snapshot_install as _snapshot_install_owner
+from backend.agent_marketplace.versioning import BumpType, bump_semver
 from backend.web.utils.serializers import avatar_url
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from config.loader import AgentLoader
@@ -72,7 +72,7 @@ def _skills_from_repo(agent_config_id: str, config: dict[str, Any], agent_config
             if "desc" in meta and meta.get("desc") is not None:
                 desc = str(meta.get("desc") or "")
         if desc is None:
-            from backend.web.services.library_service import get_library_skill_desc
+            from backend.library.service import get_library_skill_desc
 
             desc = get_library_skill_desc(str(row["name"]))
         skills_list.append(
@@ -303,7 +303,7 @@ def create_agent_user(
     agent_config_repo: Any = None,
     contact_repo: Any = None,
 ) -> dict[str, Any]:
-    from backend.contact_bootstrap import ensure_owner_agent_contact
+    from backend.identity.contact_bootstrap import ensure_owner_agent_contact
     from storage.contracts import UserRow, UserType
     from storage.utils import generate_agent_config_id, generate_agent_user_id
 

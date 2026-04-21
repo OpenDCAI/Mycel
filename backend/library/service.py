@@ -7,9 +7,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from backend import sandbox_provider_availability
-from backend.library_paths import LIBRARY_DIR
-from backend.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
+from backend.sandboxes import provider_availability as sandbox_provider_availability
+from backend.library.paths import LIBRARY_DIR
+from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
 
@@ -367,7 +367,7 @@ def get_resource_used_by(
     agent_config_repo: Any = None,
 ) -> list[str]:
     """Return agent user names under the owner that use a given resource."""
-    from backend.web.services.agent_user_service import list_agent_users
+    from backend.threads.agent_user_service import list_agent_users
 
     config_key = {"skill": "skills", "mcp": "mcps", "agent": "subAgents"}.get(resource_type, "")
     if not config_key:

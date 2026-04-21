@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.thread_runtime.binding import ThreadRuntimeBindingError, resolve_thread_runtime_binding
+from backend.threads.binding import ThreadRuntimeBindingError, resolve_thread_runtime_binding
 
 
 def _unbound_delete_thread_in_db(thread_id: str) -> None:

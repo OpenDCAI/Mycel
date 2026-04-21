@@ -9,9 +9,9 @@ from collections.abc import Callable
 
 import jwt
 
-from backend.avatar_files import process_and_save_avatar
-from backend.contact_bootstrap import ensure_owner_agent_contact
-from backend.recipe_bootstrap import seed_default_recipes
+from backend.identity.avatar.files import process_and_save_avatar
+from backend.identity.contact_bootstrap import ensure_owner_agent_contact
+from backend.sandboxes.recipe_bootstrap import seed_default_recipes
 from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
 from storage.providers.supabase import _query as q
 

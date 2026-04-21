@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from backend.protocols.agent_runtime import (
+from protocols.agent_runtime import (
     AgentChatDeliveryEnvelope,
     AgentChatDeliveryResult,
     AgentThreadInputEnvelope,

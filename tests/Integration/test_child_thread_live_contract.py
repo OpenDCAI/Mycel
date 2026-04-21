@@ -11,10 +11,10 @@ import pytest
 from fastapi import Request
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from backend.display_builder import DisplayBuilder
-from backend.thread_runtime.events.buffer import ThreadEventBuffer
+from backend.threads.display.builder import DisplayBuilder
+from backend.threads.events.buffer import ThreadEventBuffer
 from backend.web.routers import threads as threads_router
-from backend.web.services.streaming_service import run_child_thread_live
+from backend.threads.streaming import run_child_thread_live
 from backend.web.utils.serializers import serialize_message
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.middleware.queue.manager import MessageQueueManager
@@ -411,7 +411,7 @@ async def test_run_child_thread_live_raises_when_child_run_emits_error_event(mon
         app.state.thread_tasks[thread_id] = asyncio.create_task(_fake_run())
         return "run-error-1"
 
-    monkeypatch.setattr("backend.web.services.streaming_service.start_agent_run", fake_start_agent_run)
+    monkeypatch.setattr("backend.threads.streaming.start_agent_run", fake_start_agent_run)
 
     with pytest.raises(RuntimeError, match="child model init failed"):
         await run_child_thread_live(
@@ -449,7 +449,7 @@ async def test_run_child_thread_live_raises_when_child_never_makes_a_model_call(
         app.state.thread_tasks[thread_id] = asyncio.create_task(_fake_run())
         return "run-no-call-1"
 
-    monkeypatch.setattr("backend.web.services.streaming_service.start_agent_run", fake_start_agent_run)
+    monkeypatch.setattr("backend.threads.streaming.start_agent_run", fake_start_agent_run)
 
     with pytest.raises(RuntimeError, match="before first model call"):
         await run_child_thread_live(

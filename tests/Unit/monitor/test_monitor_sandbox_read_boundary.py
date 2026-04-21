@@ -9,7 +9,7 @@ from backend.monitor.infrastructure.read_models import sandbox_read_service as m
 from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
 from backend.monitor.infrastructure.read_models import thread_workbench_read_service as owner_thread_workbench_read_service
 from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
-from backend.thread_runtime import history as thread_history_owner
+from backend.threads import history as thread_history_owner
 
 
 def test_monitor_sandbox_projection_does_not_construct_runtime_repo():
@@ -82,14 +82,14 @@ def test_monitor_trace_uses_trace_read_source_port():
     assert "get_thread_history_payload" in read_source
     assert "get_thread_history_payload(app=" not in read_source
     assert "build_thread_history_transport" in read_source
-    assert "from backend.thread_runtime.events.reads import build_run_event_read_transport" in read_source
-    assert "from backend.thread_runtime.sandbox import resolve_thread_sandbox" in read_source
+    assert "from backend.threads.events.reads import build_run_event_read_transport" in read_source
+    assert "from backend.threads.sandbox_resolution import resolve_thread_sandbox" in read_source
     assert "backend.run_event_reads" not in read_source
     assert "backend.thread_sandbox" not in read_source
     assert "build_storage_container" not in read_source
     assert "build_run_event_read_transport" in read_source
     assert "backend.web.services.thread_history_service" not in read_source
-    assert "backend.web.services.agent_pool" not in read_source
+    assert "backend.threads.activity_pool_service" not in read_source
     assert "backend.web.services.event_store" not in read_source
     assert "agent_pool" not in history_source
     assert "checkpoint_store" not in history_source
@@ -118,8 +118,8 @@ def test_owner_thread_workbench_uses_app_state_read_source():
     assert "app.state" in read_source
     assert "canonical_owner_threads" in read_source
     assert "avatar_url" in read_source
-    assert "from backend.thread_runtime.convergence import" in read_source
-    assert "backend.thread_runtime_convergence" not in read_source
+    assert "from backend.threads.convergence import" in read_source
+    assert "backend.threads_convergence" not in read_source
     assert "backend.web.services.thread_visibility" not in read_source
     assert "backend.web.utils.serializers" not in read_source
     assert "backend.web.services.thread_runtime_convergence" not in read_source

@@ -1,9 +1,9 @@
 """Agent pool management service."""
 
-from backend.file_channel import get_file_channel_binding
-from backend.thread_runtime.pool import registry as _registry
-from backend.thread_runtime.pool.factory import create_agent_sync
-from backend.thread_runtime.sandbox import resolve_thread_sandbox
+from backend.threads.file_channel import get_file_channel_binding
+from backend.threads.pool import registry as _registry
+from backend.threads.pool.factory import create_agent_sync
+from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from core.identity.agent_registry import get_or_create_agent_id
 
 

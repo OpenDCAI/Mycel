@@ -6,8 +6,8 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-import backend.resource_projection as resource_projection_service
-import backend.resource_provider_boundary as resource_provider_boundary_service
+import backend.sandboxes.resources.projection as resource_projection_service
+import backend.sandboxes.resources.provider_boundary as resource_provider_boundary_service
 from backend import resource_common
 from backend.monitor.api.http import router as monitor_router
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service

@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.thread_runtime import launch_config as thread_launch_config_service
+from backend.threads import launch_config as thread_launch_config_service
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router

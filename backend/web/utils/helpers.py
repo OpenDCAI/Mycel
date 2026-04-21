@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.storage_container_cache import get_storage_container as _get_container
+from backend.runtime_bootstrap.storage_container_cache import get_storage_container as _get_container
 from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
 from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
 from storage.runtime import (
