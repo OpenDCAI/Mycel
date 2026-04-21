@@ -6,9 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from backend.bootstrap import app_entrypoint
+from backend.monitor.api.http import execution_target as monitor_execution_target
 from backend.monitor.app import lifespan as monitor_app_lifespan
 from backend.monitor.app import main as monitor_app_main
-from backend.monitor.api.http import execution_target as monitor_execution_target
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
 
 app = monitor_app_main.app
