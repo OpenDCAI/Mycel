@@ -2,7 +2,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.monitor.api.http import global_router, web_local_router
+from backend.monitor.api.http import global_router
 from backend.monitor.application.use_cases import resources as monitor_resources_impl
 from backend.monitor.infrastructure.io import resource_io_service as monitor_resource_io_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
@@ -15,7 +15,6 @@ def _app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
     app.include_router(global_router.router, prefix="/api/monitor")
     app.include_router(monitor_threads_router.router, prefix="/api/monitor")
-    app.include_router(web_local_router.router, prefix="/api/monitor")
     if include_product_resources:
         app.include_router(resources.router)
         app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
