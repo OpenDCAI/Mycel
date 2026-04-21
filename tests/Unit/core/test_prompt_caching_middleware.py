@@ -29,3 +29,16 @@ def test_prompt_caching_applies_for_supported_anthropic_model(monkeypatch: pytes
     request = ModelRequest(model=_FakeAnthropicModel(), messages=[SimpleNamespace()], system_message=None)
 
     assert middleware._should_apply_caching(request) is True
+
+
+def test_prompt_caching_raises_for_unsupported_model_when_configured(monkeypatch: pytest.MonkeyPatch):
+    class _FakeAnthropicModel:
+        pass
+
+    monkeypatch.setattr("core.runtime.middleware.prompt_caching.ChatAnthropic", _FakeAnthropicModel)
+
+    middleware = PromptCachingMiddleware(unsupported_model_behavior="raise")
+    request = ModelRequest(model=object(), messages=[SimpleNamespace()], system_message=None)
+
+    with pytest.raises(ValueError, match="only supports Anthropic models"):
+        middleware._should_apply_caching(request)
