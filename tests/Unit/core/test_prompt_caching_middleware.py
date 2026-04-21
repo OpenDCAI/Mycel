@@ -76,3 +76,25 @@ def test_prompt_caching_applies_cache_control_to_first_system_block():
 
     assert updated.system_message.content[0]["cache_control"] == {"type": "ephemeral"}
     assert updated.system_message.content[1] == {"type": "text", "text": "second block"}
+
+
+def test_prompt_caching_leaves_request_unchanged_without_system_message():
+    middleware = PromptCachingMiddleware()
+    request = ModelRequest(model=object(), messages=[SimpleNamespace()], system_message=None)
+
+    updated = middleware._apply_system_cache(request)
+
+    assert updated is request
+
+
+def test_prompt_caching_leaves_request_unchanged_for_empty_system_blocks():
+    middleware = PromptCachingMiddleware()
+    request = ModelRequest(
+        model=object(),
+        messages=[],
+        system_message=SimpleNamespace(content=[]),
+    )
+
+    updated = middleware._apply_system_cache(request)
+
+    assert updated is request
