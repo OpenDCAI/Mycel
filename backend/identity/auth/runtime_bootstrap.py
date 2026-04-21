@@ -19,6 +19,9 @@ def build_auth_runtime_state(storage_state, *, contact_repo) -> AuthRuntimeState
     storage_container = storage_state.storage_container
     supabase_client = storage_state.supabase_client
     supabase_auth_client_factory = create_supabase_auth_client
+    # @@@auth-runtime-borrowed-contact-repo - auth runtime seeds owner-agent
+    # contacts, but chat-owned contact_repo must be borrowed explicitly by the
+    # enclosing app bootstrap instead of being reopened inside this helper.
     auth_service = AuthService(
         users=storage_container.user_repo(),
         agent_configs=storage_container.agent_config_repo(),
