@@ -129,6 +129,10 @@ async def get_or_create_agent(
         if user_repo is not None and thread_data:
             if not agent_user_id:
                 raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
+            # @@@agent-chat-runtime-explicit-messaging - registry constructs
+            # chat_repos for runtime startup, but chat-owned messaging_service
+            # must be borrowed explicitly by the caller instead of falling back
+            # to app.state here.
             if messaging_service is None:
                 raise RuntimeError(f"messaging_service is required for agent chat runtime: {thread_id}")
             agent_user = agent_user or user_repo.get_by_id(agent_user_id)
