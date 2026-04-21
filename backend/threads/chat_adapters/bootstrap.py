@@ -19,7 +19,11 @@ def build_agent_runtime_gateway(app: Any) -> NativeAgentRuntimeGateway:
     return NativeAgentRuntimeGateway(
         chat_handlers={
             "mycel": NativeAgentChatDeliveryHandler(
-                runtime_services=AppAgentChatRuntimeServices(app),
+                runtime_services=AppAgentChatRuntimeServices(
+                    app,
+                    typing_tracker=app.state.typing_tracker,
+                    queue_manager=app.state.queue_manager,
+                ),
             )
         },
         thread_input_handler=NativeAgentThreadInputHandler(app),
