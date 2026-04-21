@@ -150,3 +150,26 @@ def test_build_owner_thread_workbench_omits_agent_groups_with_no_visible_runtime
     payload = thread_workbench.build_owner_thread_workbench_from_rows(rows, reader=reader)
 
     assert [thread["thread_id"] for thread in payload["threads"]] == ["agent-2-main"]
+
+
+def test_build_owner_thread_workbench_stops_after_first_ready_candidate_per_agent():
+    rows = [
+        {"id": "agent-1-main", "agent_user_id": "agent-1", "is_main": True, "branch_index": 0, "sandbox_type": "local"},
+        {"id": "agent-1-branch-1", "agent_user_id": "agent-1", "is_main": False, "branch_index": 1, "sandbox_type": "local"},
+        {"id": "agent-1-branch-2", "agent_user_id": "agent-1", "is_main": False, "branch_index": 2, "sandbox_type": "local"},
+    ]
+    converge_calls: list[str] = []
+    reader = _reader(
+        rows=rows,
+        runtime_states={
+            "agent-1-main": "ready",
+            "agent-1-branch-1": "ready",
+            "agent-1-branch-2": "ready",
+        },
+        converge_calls=converge_calls,
+    )
+
+    payload = thread_workbench.build_owner_thread_workbench_from_rows(rows, reader=reader)
+
+    assert [thread["thread_id"] for thread in payload["threads"]] == ["agent-1-main"]
+    assert converge_calls == ["agent-1-main"]
