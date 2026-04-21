@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from backend.chat.api.http.dependencies import (
     get_app,
+    get_chat_event_bus,
     get_chat_repo,
     get_contact_repo,
     get_current_user_id,
@@ -259,7 +260,7 @@ async def stream_chat_events(
 
     from fastapi.responses import StreamingResponse
 
-    event_bus = app.state.chat_event_bus
+    event_bus = get_chat_event_bus(app)
     queue = event_bus.subscribe(chat_id)
 
     async def event_generator():
