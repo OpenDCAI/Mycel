@@ -122,6 +122,28 @@ Before claiming progress, answer:
 - what is blocked by env/config?
 - did low-value cleanup try to hijack the lane?
 
+## Current recovery proof
+
+Current branch-level runtime proof already obtained on the active recovery line:
+
+- `backend.web.main` imports and boots
+- `backend.monitor_app.main` imports and boots
+- `uv run pytest --collect-only -q` restores full collection (`1570 collected`, `0` collection errors)
+- real login smoke on the break backend returns `200`
+- `/api/panel/agents` returns `200`
+- `/api/threads/default-config` returns `200`
+- real thread creation returns `200`
+- real thread message dispatch returns `200`
+- thread detail shows a real `Agent` tool invocation with `subagent_stream`
+  status `completed`
+- final assistant text after the subagent turn is `"The subagent said 4."`
+- `/api/marketplace/items` returns `200`
+- `/api/marketplace/download` returns `200`
+- installed skill is visible when re-reading `/api/panel/agents/{id}`
+- standalone `backend.monitor_app.main` running on a separate port returns `200`
+  for `/api/monitor/resources`, `/api/monitor/sandboxes`,
+  `/api/monitor/dashboard`, and `/api/monitor/provider-orphan-runtimes`
+
 ## Stopline
 
 Do not claim recovery complete because:
