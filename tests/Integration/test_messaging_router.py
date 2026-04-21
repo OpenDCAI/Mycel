@@ -344,7 +344,11 @@ def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
         )
     )
 
-    result = chats_router.list_messages("chat-1", user_id="human-user-1", app=app)
+    result = chats_router.list_messages(
+        "chat-1",
+        user_id="human-user-1",
+        messaging_service=app.state.messaging_service,
+    )
 
     assert result == [
         {
@@ -458,6 +462,7 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
         "chat-1",
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
+        messaging_service=app.state.messaging_service,
         app=app,
     )
 
@@ -535,6 +540,7 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
         "chat-1",
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
+        messaging_service=app.state.messaging_service,
         app=app,
     )
 

@@ -128,9 +128,8 @@ def _validate_group_chat_relationships(app: Any, participant_ids: list[str], req
 @router.get("")
 def list_chats(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    messaging_service = get_messaging_service(app)
     return messaging_service.list_chats_for_user(user_id)
 
 
@@ -173,11 +172,10 @@ def get_chat(
 def list_messages(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
     limit: int = Query(50, ge=1, le=200),
     before: str | None = Query(None),
 ):
-    messaging_service = get_messaging_service(app)
     if not messaging_service.is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     return messaging_service.list_message_responses(chat_id, limit=limit, before=before, viewer_id=user_id)
@@ -188,9 +186,9 @@ def send_message(
     chat_id: str,
     body: SendMessageBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    messaging_service = get_messaging_service(app)
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
     _verify_user_ownership(messaging_service, body.sender_id, user_id)
@@ -210,9 +208,9 @@ def retract_message(
     chat_id: str,
     message_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    ok = get_messaging_service(app).retract(message_id, user_id)
+    ok = messaging_service.retract(message_id, user_id)
     if not ok:
         raise HTTPException(400, "Cannot retract: not sender, already retracted, or 2-min window expired")
     return {"status": "retracted"}
@@ -223,9 +221,9 @@ def delete_message_for_self(
     chat_id: str,
     message_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    get_messaging_service(app).delete_for(message_id, user_id)
+    messaging_service.delete_for(message_id, user_id)
     return {"status": "deleted"}
 
 
@@ -233,9 +231,9 @@ def delete_message_for_self(
 def mark_read(
     chat_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    get_messaging_service(app).mark_read(chat_id, user_id)
+    messaging_service.mark_read(chat_id, user_id)
     return {"status": "ok"}
 
 
@@ -287,9 +285,8 @@ def mute_chat(
     chat_id: str,
     body: MuteChatBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
-    messaging_service = get_messaging_service(app)
     _verify_user_ownership(messaging_service, body.user_id, user_id)
     mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
     messaging_service.update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
