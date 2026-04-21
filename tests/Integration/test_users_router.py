@@ -9,12 +9,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from backend.web.routers import users as users_router
 from backend.web.core.dependencies import get_current_user_id
+from backend.web.routers import users as users_router
 from storage.contracts import ContactEdgeRow, UserRow, UserType
 
 NOW = 1_775_223_756.0
@@ -306,9 +305,7 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
     app.include_router(users_router.users_router)
     app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
     app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
-    app.state.relationship_service = SimpleNamespace(
-        list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")]
-    )
+    app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")])
     app.state.contact_repo = _empty_contact_repo()
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
 
@@ -337,7 +334,9 @@ def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
     app = FastAPI()
     app.include_router(users_router.users_router)
     app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, owned_agent])
-    app.state.thread_repo = SimpleNamespace(get_default_thread=lambda agent_user_id: {"id": "thread-ready"} if agent_user_id == "a-owned" else None)
+    app.state.thread_repo = SimpleNamespace(
+        get_default_thread=lambda agent_user_id: {"id": "thread-ready"} if agent_user_id == "a-owned" else None
+    )
     app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
     app.state.contact_repo = _empty_contact_repo()
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
