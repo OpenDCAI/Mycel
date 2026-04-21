@@ -8,8 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.chat.api.http.dependencies import get_thread_repo, get_user_repo
-from backend.chat.runtime_access import get_contact_repo, get_relationship_service
+from backend.chat.api.http.dependencies import get_contact_repo, get_relationship_service, get_thread_repo, get_user_repo
 from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.avatar.paths import avatars_dir
 from backend.identity.avatar.urls import avatar_url
