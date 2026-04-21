@@ -447,6 +447,8 @@ async def test_delete_agent_route_fails_loud_when_contact_repo_missing(monkeypat
             "agent-1",
             request=request,
             user_id="user-1",
+            thread_repo=request.app.state.thread_repo,
+            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
@@ -471,6 +473,8 @@ async def test_delete_agent_route_fails_loud_when_thread_repo_missing(monkeypatc
             "agent-1",
             request=request,
             user_id="user-1",
+            thread_repo=None,
+            contact_repo=request.app.state.contact_repo,
         )
 
     assert exc_info.value.status_code == 503
