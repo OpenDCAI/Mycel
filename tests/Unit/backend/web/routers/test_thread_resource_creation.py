@@ -1,5 +1,5 @@
 from backend.web.routers import threads as threads_router
-from backend.web.utils import helpers
+from storage import container_cache
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
 
@@ -39,7 +39,7 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
     workspace_repo = object()
     materialize_calls: list[dict[str, object]] = []
 
-    monkeypatch.setattr(helpers, "_get_container", lambda: _Container())
+    monkeypatch.setattr(container_cache, "get_storage_container", lambda: _Container())
     monkeypatch.setattr("storage.runtime.build_lease_repo", lambda: lease_repo)
     monkeypatch.setattr("sandbox.control_plane_repos.make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(
@@ -75,7 +75,7 @@ def test_create_thread_sandbox_resources_returns_workspace_id(monkeypatch, tmp_p
     terminal_repo = _TerminalRepo()
     workspace_repo = object()
 
-    monkeypatch.setattr(helpers, "_get_container", lambda: _Container())
+    monkeypatch.setattr(container_cache, "get_storage_container", lambda: _Container())
     monkeypatch.setattr("storage.runtime.build_lease_repo", lambda: lease_repo)
     monkeypatch.setattr("sandbox.control_plane_repos.make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(threads_router, "_materialize_workspace_for_sandbox", lambda *args, **kwargs: "workspace-new")
