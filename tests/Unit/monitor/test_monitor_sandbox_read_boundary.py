@@ -123,3 +123,9 @@ def test_owner_thread_workbench_uses_app_state_read_source():
     assert "backend.web.services.thread_visibility" not in read_source
     assert "backend.web.utils.serializers" not in read_source
     assert "backend.web.services.thread_runtime_convergence" not in read_source
+
+
+def test_owner_thread_workbench_does_not_eagerly_summarize_all_runtime_states():
+    workbench_source = inspect.getsource(owner_thread_workbench_service)
+
+    assert "summarize_runtime_states(raw)" not in workbench_source
