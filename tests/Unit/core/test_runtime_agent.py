@@ -75,6 +75,40 @@ def test_close_uses_shutdown_fallback_for_model_client_cleanup(monkeypatch: pyte
 
     assert events == ["async", "sync"]
     assert agent._closed is True
+    assert agent._model_http_client is None
+    assert agent._model_http_async_client is None
+
+
+def test_close_logs_unexpected_runtimeerror_from_model_client_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    events: list[str] = []
+
+    class _SyncClient:
+        def close(self) -> None:
+            events.append("sync")
+
+    async def _boom(_fn, *_args, **_kwargs):
+        raise RuntimeError("some other runtime problem")
+
+    monkeypatch.setattr("core.runtime.agent.asyncio.to_thread", _boom)
+
+    agent = object.__new__(LeonAgent)
+    agent._session_started = False
+    agent._session_ended = False
+    agent._closing = False
+    agent._closed = False
+    agent._model_http_client = _SyncClient()
+    agent._model_http_async_client = None
+    agent._cleanup_registry = CleanupRegistry()
+    agent._cleanup_registry.register(agent._cleanup_model_clients, priority=1)
+
+    LeonAgent.close(agent)
+
+    assert "some other runtime problem" in caplog.text
+    assert events == []
+    assert agent._closed is True
 
 
 def test_memory_config_override_updates_compaction_trigger_without_losing_defaults():
