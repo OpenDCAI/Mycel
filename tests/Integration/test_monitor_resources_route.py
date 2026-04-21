@@ -226,11 +226,11 @@ def test_monitor_threads_routes_use_authenticated_owner(monkeypatch):
     expected = {"threads": [{"thread_id": "thread-1", "agent_user_id": "agent-1"}]}
     calls = []
 
-    def _list_threads(app, user_id):
-        calls.append((app, user_id))
+    def _list_threads(user_id, *, workbench_reader):
+        calls.append((user_id, workbench_reader))
         return expected
 
-    monkeypatch.setattr(monitor_gateway_impl, "list_threads", _list_threads)
+    monkeypatch.setattr(monitor_threads_router.monitor_thread_service, "list_monitor_threads", _list_threads)
     app = _app()
     app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
 
@@ -238,14 +238,14 @@ def test_monitor_threads_routes_use_authenticated_owner(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == expected
-    assert calls[0][1] == "owner-1"
+    assert calls[0][0] == "owner-1"
 
 
 def test_monitor_thread_detail_route_awaits_service(monkeypatch):
-    async def _detail(app, thread_id):
+    async def _detail(thread_id, *, load_thread_base, trace_reader):
         return {"thread": {"thread_id": thread_id}, "trajectory": {"events": []}}
 
-    monkeypatch.setattr(monitor_gateway_impl, "get_thread_detail", _detail)
+    monkeypatch.setattr(monitor_threads_router.monitor_thread_service, "get_monitor_thread_detail", _detail)
 
     response = _request("get", "/api/monitor/threads/thread-1")
 
