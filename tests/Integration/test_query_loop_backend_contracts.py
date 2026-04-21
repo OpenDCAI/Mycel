@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway, build_agent_runtime_state
 from backend.threads.display.builder import DisplayBuilder
 from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.streaming import (
@@ -526,15 +526,12 @@ def _make_streaming_app(
         state.thread_sandbox = {thread_id: "local"}
         state._event_loop = asyncio.get_running_loop()
     app = SimpleNamespace(state=state)
-    gateway = build_agent_runtime_gateway(app, typing_tracker=state.typing_tracker)
-    state.agent_runtime_gateway = gateway
-    state.agent_runtime_gateway_state = SimpleNamespace(
-        gateway=gateway,
-        activity_reader=state.agent_runtime_thread_activity_reader,
-    )
+    runtime_state = build_agent_runtime_state(app, typing_tracker=state.typing_tracker)
+    gateway = runtime_state.gateway
+    state.agent_runtime_gateway_state = runtime_state
     state.threads_runtime_state = SimpleNamespace(
         agent_runtime_gateway=gateway,
-        activity_reader=state.agent_runtime_thread_activity_reader,
+        activity_reader=runtime_state.activity_reader,
     )
     return app, queue_manager
 
