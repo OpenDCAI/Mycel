@@ -16,7 +16,14 @@ class _FakeCheckpointCtx:
         return None
 
 
-def _patch_lifespan_runtime_contract(monkeypatch, *, attach_chat_runtime, attach_threads_runtime, wire_chat_delivery):
+def _patch_lifespan_runtime_contract(
+    monkeypatch,
+    *,
+    attach_chat_runtime,
+    attach_auth_runtime,
+    attach_threads_runtime,
+    wire_chat_delivery,
+):
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
     monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
 
@@ -50,7 +57,7 @@ def _patch_lifespan_runtime_contract(monkeypatch, *, attach_chat_runtime, attach
     )
     monkeypatch.setattr(
         "backend.identity.auth.runtime_bootstrap.attach_auth_runtime_state",
-        lambda *_args, **_kwargs: object(),
+        attach_auth_runtime,
     )
     monkeypatch.setattr(
         "core.runtime.langgraph_checkpoint_store.agent_checkpoint_saver_from_conn_string",
@@ -72,11 +79,14 @@ def _patch_lifespan_runtime_contract(monkeypatch, *, attach_chat_runtime, attach
 @pytest.mark.asyncio
 async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeypatch):
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
+        contact_repo = object()
         typing_tracker = object()
         messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
+        app.state.contact_repo = contact_repo
         app.state.typing_tracker = typing_tracker
         app.state.messaging_service = messaging_service
         return SimpleNamespace(
+            contact_repo=contact_repo,
             typing_tracker=typing_tracker,
             messaging_service=messaging_service,
         )
@@ -91,6 +101,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
     _patch_lifespan_runtime_contract(
         monkeypatch,
         attach_chat_runtime=_attach_chat_runtime,
+        attach_auth_runtime=lambda *_args, **_kwargs: object(),
         attach_threads_runtime=_attach_threads_runtime,
         wire_chat_delivery=lambda *_args, **_kwargs: None,
     )
@@ -108,6 +119,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     contact_repo = object()
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
+    returned_contact_repo = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
         call_log.append("chat")
@@ -115,9 +127,15 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         app.state.messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
         app.state.contact_repo = contact_repo
         return SimpleNamespace(
+            contact_repo=returned_contact_repo,
             typing_tracker=returned_typing_tracker,
             messaging_service=returned_messaging_service,
         )
+
+    def _attach_auth_runtime(_app, *, storage_state, contact_repo):
+        call_log.append("auth")
+        assert contact_repo is returned_contact_repo
+        return object()
 
     def _attach_threads_runtime(app, _storage_container, *, typing_tracker):
         call_log.append("threads")
@@ -133,6 +151,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     _patch_lifespan_runtime_contract(
         monkeypatch,
         attach_chat_runtime=_attach_chat_runtime,
+        attach_auth_runtime=_attach_auth_runtime,
         attach_threads_runtime=_attach_threads_runtime,
         wire_chat_delivery=_wire_chat_delivery,
     )
@@ -140,7 +159,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     app = SimpleNamespace(state=SimpleNamespace())
 
     async with web_lifespan.lifespan(app):
-        assert call_log == ["chat", "threads", "wire"]
+        assert call_log == ["chat", "auth", "threads", "wire"]
 
 
 @pytest.mark.asyncio
@@ -194,6 +213,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
             setattr(app.state, "typing_tracker", object())
             or setattr(app.state, "messaging_service", SimpleNamespace(set_delivery_fn=lambda _fn: None))
             or SimpleNamespace(
+                contact_repo=contact_repo,
                 typing_tracker=app.state.typing_tracker,
                 messaging_service=app.state.messaging_service,
             )

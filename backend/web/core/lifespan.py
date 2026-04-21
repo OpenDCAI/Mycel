@@ -61,9 +61,6 @@ async def lifespan(app: FastAPI):
     app.state.sandbox_repo = storage_container.sandbox_repo()
     app.state.invite_code_repo = storage_container.invite_code_repo()
     app.state.user_settings_repo = storage_container.user_settings_repo()
-    app.state.agent_config_repo = storage_container.agent_config_repo()
-    attach_auth_runtime_state(app, storage_state=runtime_storage, contact_repo=storage_container.contact_repo())
-
     from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery
     from backend.threads.bootstrap import attach_threads_runtime
 
@@ -76,6 +73,11 @@ async def lifespan(app: FastAPI):
         user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
     )
+    # @@@web-auth-borrowed-chat-contact - auth startup still needs the
+    # owner-agent contact repo, but web bootstrap should borrow the chat-owned
+    # contact_repo returned by chat bootstrap instead of reopening storage.
+    app.state.agent_config_repo = storage_container.agent_config_repo()
+    attach_auth_runtime_state(app, storage_state=runtime_storage, contact_repo=chat_runtime.contact_repo)
     attach_threads_runtime(app, storage_container, typing_tracker=chat_runtime.typing_tracker)
     wire_chat_delivery(
         app,
