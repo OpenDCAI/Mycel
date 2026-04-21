@@ -370,7 +370,7 @@ class _FakeAskUserQuestionAgent(_FakePermissionAgent):
                         }
                     ]
                 },
-                "message": "Please answer the following questions so Leon can continue.",
+                "message": "Please answer the following questions so Mycel can continue.",
             }
         ]
 

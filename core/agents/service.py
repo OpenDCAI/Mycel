@@ -1280,7 +1280,7 @@ class AgentService:
             payload,
             ToolPermissionContext(is_read_only=True, is_destructive=False),
             None,
-            "Please answer the following questions so Leon can continue.",
+            "Please answer the following questions so Mycel can continue.",
         )
         request_id = request_result.get("request_id") if isinstance(request_result, dict) else request_result
         if not isinstance(request_id, str) or not request_id:
