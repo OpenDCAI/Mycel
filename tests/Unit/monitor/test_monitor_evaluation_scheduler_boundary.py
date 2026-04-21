@@ -38,7 +38,7 @@ def test_start_batch_submits_typed_spec_to_scheduler(monkeypatch):
     scheduler = _FakeScheduler()
     result = monitor_evaluation_service.start_monitor_evaluation_batch(
         "batch-1",
-        base_url="http://api/",
+        execution_base_url="http://api/",
         token="tok",
         scheduler=scheduler,
     )
@@ -47,6 +47,6 @@ def test_start_batch_submits_typed_spec_to_scheduler(monkeypatch):
     assert len(scheduler.submitted) == 1
     spec = scheduler.submitted[0]
     assert spec.batch_id == "batch-1"
-    assert spec.base_url == "http://api"
+    assert spec.execution_base_url == "http://api"
     assert spec.agent_user_id == "agent-1"
     assert spec.scenarios == [("scenario-stub", "scenario-1", "local")]
