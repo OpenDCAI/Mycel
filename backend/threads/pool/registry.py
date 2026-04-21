@@ -7,7 +7,6 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from backend.chat.runtime_access import get_messaging_service
 from backend.threads.pool.factory import create_agent_sync
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from core.identity.agent_registry import get_or_create_agent_id
@@ -130,6 +129,8 @@ async def get_or_create_agent(
         if user_repo is not None and thread_data:
             if not agent_user_id:
                 raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
+            if messaging_service is None:
+                raise RuntimeError(f"messaging_service is required for agent chat runtime: {thread_id}")
             agent_user = agent_user or user_repo.get_by_id(agent_user_id)
             # @@@thread-chat-identity-source - agent users are now the stable social
             # identity root. Runtime threads no longer carry a second dedicated user_id.
@@ -138,7 +139,7 @@ async def get_or_create_agent(
                 "chat_identity_id": agent_user_id,
                 "owner_id": owner_id,
                 "user_repo": user_repo,
-                "messaging_service": messaging_service if messaging_service is not None else get_messaging_service(app_obj),
+                "messaging_service": messaging_service,
                 "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
             }
 
