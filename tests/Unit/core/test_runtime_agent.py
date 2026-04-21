@@ -111,6 +111,38 @@ def test_close_logs_unexpected_runtimeerror_from_model_client_cleanup(
     assert agent._closed is True
 
 
+def test_close_remains_idempotent_after_shutdown_fallback(monkeypatch: pytest.MonkeyPatch):
+    events: list[str] = []
+
+    class _SyncClient:
+        def close(self) -> None:
+            events.append("sync")
+
+    class _AsyncClient:
+        async def aclose(self) -> None:
+            events.append("async")
+
+    async def _boom(_fn, *_args, **_kwargs):
+        raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+    monkeypatch.setattr("core.runtime.agent.asyncio.to_thread", _boom)
+
+    agent = object.__new__(LeonAgent)
+    agent._session_started = False
+    agent._session_ended = False
+    agent._closing = False
+    agent._closed = False
+    agent._model_http_client = _SyncClient()
+    agent._model_http_async_client = _AsyncClient()
+    agent._cleanup_registry = CleanupRegistry()
+    agent._cleanup_registry.register(agent._cleanup_model_clients, priority=1)
+
+    LeonAgent.close(agent)
+    LeonAgent.close(agent)
+
+    assert events == ["async", "sync"]
+
+
 def test_memory_config_override_updates_compaction_trigger_without_losing_defaults():
     from config.schema import LeonSettings
 
