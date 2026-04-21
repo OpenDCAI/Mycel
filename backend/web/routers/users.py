@@ -8,6 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from backend.chat.api.http.dependencies import get_thread_repo
 from backend.chat.runtime_access import get_contact_repo, get_relationship_service
 from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.avatar.paths import avatars_dir
@@ -158,7 +159,7 @@ async def list_chat_candidates(
         raise HTTPException(503, str(exc)) from exc
 
     items = []
-    thread_repo = getattr(app.state, "thread_repo", None)
+    thread_repo = get_thread_repo(app)
 
     for user in users:
         if user.id == user_id:

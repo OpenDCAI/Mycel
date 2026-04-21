@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.chat.api.http.dependencies import get_thread_repo
 from backend.chat.runtime_access import get_contact_repo
 from backend.identity import profile as profile_owner
 from backend.library import service as library_service
@@ -186,9 +187,11 @@ async def delete_agent(
         raise HTTPException(403, "Cannot delete builtin agent")
     user_repo = request.app.state.user_repo
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
-    thread_repo = getattr(request.app.state, "thread_repo", None)
-    if thread_repo is not None:
-        await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
+    try:
+        thread_repo = get_thread_repo(request.app)
+    except HTTPException:
+        raise
+    await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     try:
         contact_repo = get_contact_repo(request.app)
