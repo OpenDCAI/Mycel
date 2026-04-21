@@ -44,6 +44,10 @@ def _group_visible_threads_by_agent(raw: list[dict[str, object]]) -> list[list[d
 def _select_visible_thread(group: list[dict[str, object]], *, reader: OwnerThreadWorkbenchReader) -> dict[str, object] | None:
     remaining = list(group)
     while remaining:
+        # @@@owner-thread-candidate-fallback - pick the current best candidate for one agent,
+        # inspect just that candidate, and only fall through when it is purged/missing.
+        # This keeps user-surface selection correct without paying a full binding scan
+        # across every historical branch before we know which thread could even surface.
         candidate = reader.canonical_owner_threads(remaining)[0]
         thread_id = candidate["id"]
         runtime_state = reader.converge_runtime_state(thread_id)
