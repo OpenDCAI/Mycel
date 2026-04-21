@@ -60,7 +60,21 @@ export async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> 
   return payload as T;
 }
 
-export function useMonitorData<T>(path: string) {
+export function buildMonitorPath(
+  path: string,
+  params?: Record<string, string | number | boolean | null | undefined>,
+): string {
+  if (!params) return path;
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null) continue;
+    search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+export function useMonitorData<T>(path: string | null) {
   const [data, setData] = React.useState<T | null>(null);
   const [error, setError] = React.useState<MonitorFetchError | null>(null);
 
@@ -68,6 +82,12 @@ export function useMonitorData<T>(path: string) {
     let cancelled = false;
     setData(null);
     setError(null);
+
+    if (!path) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
     fetchAPI<T>(path)
       .then((result) => {

@@ -1870,13 +1870,67 @@ section li {
   text-transform: uppercase;
 }
 
-.evaluation-create-form__field input {
+.evaluation-create-form__field input,
+.evaluation-create-form__field select {
   width: 100%;
   padding: 0.65rem 0.75rem;
   border: 1px solid rgba(81, 59, 29, 0.14);
   border-radius: 12px;
   background: rgba(255, 252, 245, 0.92);
   color: #241d14;
+}
+
+.evaluation-benchmark-filters,
+.evaluation-contract-preview,
+.evaluation-compare-panel,
+.evaluation-compare-result {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 252, 247, 0.78);
+}
+
+.evaluation-benchmark-filters__header,
+.evaluation-contract-preview__header,
+.evaluation-compare-result__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  color: #4a3a29;
+  font-size: 0.82rem;
+}
+
+.evaluation-benchmark-filters__header span,
+.evaluation-contract-preview__header span,
+.evaluation-compare-result__header span {
+  color: #776a5b;
+  font-size: 0.76rem;
+}
+
+.evaluation-contract-preview__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.evaluation-contract-preview__grid div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.evaluation-contract-preview__grid strong {
+  color: #4a3a29;
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.evaluation-contract-preview__grid span {
+  color: #241d14;
+  font-size: 0.88rem;
 }
 
 .evaluation-scenario-picker {
@@ -1993,6 +2047,30 @@ section li {
 .evaluation-pagination--inline {
   margin: 0.9rem 0 1rem;
   justify-content: flex-end;
+}
+
+.evaluation-json-panel {
+  border: 1px solid rgba(81, 59, 29, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.9);
+  overflow: hidden;
+}
+
+.evaluation-json-panel summary {
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  color: #4a3a29;
+  font-weight: 700;
+}
+
+.evaluation-json-panel pre {
+  margin: 0;
+  padding: 0 1rem 1rem;
+  overflow: auto;
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #2f261d;
 }
 
 @media (max-width: 840px) {
