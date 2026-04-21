@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from eval.benchmarks.swe_verified.acceptance import evaluate_smoke_judge_payload, simulate_jsonrpc_request
+from eval.benchmarks.swe_verified.acceptance import create_acceptance_app
 from eval.harness.scenario import load_scenarios_from_dirs
 
 
@@ -46,3 +49,24 @@ def test_swe_verified_acceptance_jsonrpc_matches_fixtures():
         expected = json.loads(response_path.read_text(encoding="utf-8"))
 
         assert simulate_jsonrpc_request(request) == expected
+
+
+def test_swe_verified_acceptance_app_can_create_benchmark_batch():
+    app = create_acceptance_app()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/monitor/evaluation/batches",
+            headers={"Authorization": "Bearer token-1"},
+            json={
+                "agent_user_id": "agent-1",
+                "scenario_ids": ["swe_verified_pytest_7521", "swe_verified_pytest_7571"],
+                "sandbox": "local",
+                "max_concurrent": 2,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()["batch"]
+    assert payload["kind"] == "benchmark_batch"
+    assert payload["config_json"]["scenario_ids"] == ["swe_verified_pytest_7521", "swe_verified_pytest_7571"]

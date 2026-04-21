@@ -15,8 +15,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from backend.monitor.api.http import global_router, web_local_router
+from backend.monitor.infrastructure.evaluation import evaluation_storage_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
+from eval.batch_service import EvaluationBatchService
 from eval.benchmarks.swe_verified.assets import load_smoke_asset_bundle, resolve_repo_path
+from eval.storage import TrajectoryStore
+from storage.container import StorageContainer
 from tests.fakes.supabase import FakeSupabaseClient
 
 logger = logging.getLogger(__name__)
@@ -285,9 +289,19 @@ class _ThreadHarness:
 def create_acceptance_app() -> FastAPI:
     reset_fake_supabase_client()
     thread_harness = _ThreadHarness()
+    storage_container = StorageContainer(supabase_client=create_fake_supabase_client())
 
     app = FastAPI(title="SWE-bench Verified Acceptance Harness")
     app.state.auth_service = _FakeAuthService()
+
+    def _make_trajectory_store() -> TrajectoryStore:
+        return TrajectoryStore(eval_repo=storage_container.eval_repo())
+
+    def _make_eval_batch_service() -> EvaluationBatchService:
+        return EvaluationBatchService(batch_repo=storage_container.evaluation_batch_repo())
+
+    evaluation_storage_service.make_trajectory_store = _make_trajectory_store
+    evaluation_storage_service.make_eval_batch_service = _make_eval_batch_service
 
     async def _thread_detail(_app: FastAPI, thread_id: str) -> dict[str, Any]:
         return thread_harness.monitor_thread_detail(thread_id)
