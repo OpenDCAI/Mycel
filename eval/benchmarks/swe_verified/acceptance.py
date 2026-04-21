@@ -14,9 +14,8 @@ from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from backend.monitor.api.http import global_router, web_local_router
+from backend.monitor.api.http import global_router
 from backend.monitor.infrastructure.evaluation import evaluation_storage_service
-from backend.monitor.infrastructure.web import gateway as monitor_gateway
 from eval.batch_service import EvaluationBatchService
 from eval.benchmarks.swe_verified.assets import load_smoke_asset_bundle, resolve_repo_path
 from eval.storage import TrajectoryStore
@@ -303,12 +302,29 @@ def create_acceptance_app() -> FastAPI:
     evaluation_storage_service.make_trajectory_store = _make_trajectory_store
     evaluation_storage_service.make_eval_batch_service = _make_eval_batch_service
 
-    async def _thread_detail(_app: FastAPI, thread_id: str) -> dict[str, Any]:
-        return thread_harness.monitor_thread_detail(thread_id)
-
-    monitor_gateway.get_thread_detail = _thread_detail
-
+    monitor_thread_router = APIRouter()
     thread_router = APIRouter()
+
+    @monitor_thread_router.get("/threads")
+    async def monitor_threads() -> dict[str, Any]:
+        return {
+            "threads": [
+                {
+                    "thread_id": record.thread_id,
+                    "agent_user_id": record.agent_user_id,
+                    "sandbox": record.sandbox,
+                    "status": "deleted" if record.deleted else "active",
+                }
+                for record in thread_harness._threads.values()
+            ]
+        }
+
+    @monitor_thread_router.get("/threads/{thread_id}")
+    async def monitor_thread_detail(thread_id: str) -> dict[str, Any]:
+        try:
+            return thread_harness.monitor_thread_detail(thread_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @thread_router.post("/api/threads")
     async def create_thread(payload: _CreateThreadRequest) -> dict[str, str]:
@@ -358,7 +374,7 @@ def create_acceptance_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(global_router.router, prefix="/api/monitor")
-    app.include_router(web_local_router.router, prefix="/api/monitor")
+    app.include_router(monitor_thread_router, prefix="/api/monitor")
     app.include_router(thread_router)
     return app
 
