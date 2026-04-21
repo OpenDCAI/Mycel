@@ -5,7 +5,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.monitor.api.http.dependencies import get_app, get_current_user_id
-from backend.monitor.infrastructure.web import gateway as monitor_gateway
+from backend.monitor.application.use_cases import threads as monitor_thread_service
+from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
+from backend.monitor.infrastructure.read_models import thread_workbench_read_service as monitor_thread_workbench_read_service
+from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
 
 router = APIRouter()
 
@@ -15,12 +18,19 @@ def threads_snapshot(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ):
-    return monitor_gateway.list_threads(app, user_id)
+    return monitor_thread_service.list_monitor_threads(
+        user_id,
+        workbench_reader=monitor_thread_workbench_read_service.build_owner_thread_workbench_reader(app),
+    )
 
 
 @router.get("/threads/{thread_id}")
 async def thread_detail_snapshot(request: Request, thread_id: str):
     try:
-        return await monitor_gateway.get_thread_detail(request.app, thread_id)
+        return await monitor_thread_service.get_monitor_thread_detail(
+            thread_id,
+            load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(request.app),
+            trace_reader=monitor_trace_read_service.build_monitor_trace_reader(request.app),
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
