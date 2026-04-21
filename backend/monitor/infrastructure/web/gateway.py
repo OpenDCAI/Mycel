@@ -8,9 +8,7 @@ from backend.monitor.application.use_cases import evaluation as monitor_evaluati
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtimes
 from backend.monitor.application.use_cases import resources as monitor_resources
 from backend.monitor.application.use_cases import sandbox_configs, sandbox_detail, sandbox_projection
-from backend.monitor.application.use_cases import threads as monitor_threads
 from backend.monitor.infrastructure.evaluation.background_task_scheduler import BackgroundTaskEvaluationScheduler
-from backend.monitor.infrastructure.read_models import thread_read_service, thread_workbench_read_service, trace_read_service
 from backend.monitor.mutations import sandbox_mutations
 
 
@@ -20,13 +18,6 @@ def list_sandboxes() -> dict[str, Any]:
 
 def list_provider_orphan_runtimes() -> dict[str, Any]:
     return monitor_provider_runtimes.list_monitor_provider_orphan_runtimes()
-
-
-def list_threads(app: Any, user_id: str) -> dict[str, Any]:
-    return monitor_threads.list_monitor_threads(
-        user_id,
-        workbench_reader=thread_workbench_read_service.build_owner_thread_workbench_reader(app),
-    )
 
 
 def get_provider_detail(provider_id: str) -> dict[str, Any]:
@@ -62,14 +53,6 @@ def get_runtime_detail(runtime_id: str) -> dict[str, Any]:
 
 def get_sandbox_configs() -> dict[str, Any]:
     return sandbox_configs.get_monitor_sandbox_configs()
-
-
-async def get_thread_detail(app: Any, thread_id: str) -> dict[str, Any]:
-    return await monitor_threads.get_monitor_thread_detail(
-        thread_id,
-        load_thread_base=thread_read_service.build_monitor_thread_base_loader(app),
-        trace_reader=trace_read_service.build_monitor_trace_reader(app),
-    )
 
 
 def get_dashboard() -> dict[str, Any]:

@@ -14,6 +14,7 @@ from backend.web.routers import (  # noqa: E402
     contacts,
     invite_codes,
     marketplace,
+    monitor_threads,
     panel,
     resources,
     sandbox,
@@ -45,6 +46,7 @@ app.include_router(thread_files._public)
 app.include_router(settings.router)
 app.include_router(panel.router)
 app.include_router(global_router.router, prefix="/api/monitor")
+app.include_router(monitor_threads.router, prefix="/api/monitor")
 # @@@monitor-web-local-drain - web_local routes still depend on the main web process.
 # Drain this mount only after those routes are either retired or moved behind the separate monitor process boundary.
 app.include_router(web_local_router.router, prefix="/api/monitor")
