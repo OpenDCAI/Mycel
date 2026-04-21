@@ -24,20 +24,44 @@ def build_owner_thread_workbench(user_id: str, *, reader: OwnerThreadWorkbenchRe
     return build_owner_thread_workbench_from_rows(raw, reader=reader)
 
 
-def build_owner_thread_workbench_from_rows(raw: list[dict[str, object]], *, reader: OwnerThreadWorkbenchReader) -> dict[str, object]:
-    runtime_states = reader.summarize_runtime_states(raw)
-    visible_threads = []
+def _group_visible_threads_by_agent(raw: list[dict[str, object]]) -> list[list[dict[str, object]]]:
+    groups: dict[str, list[dict[str, object]]] = {}
+    order: list[str] = []
     for thread in raw:
-        thread_id = thread["id"]
-        runtime_state = runtime_states.get(thread_id) or reader.converge_runtime_state(thread_id)
-        if runtime_state in {"missing", "purged"}:
-            continue
+        thread_id = str(thread.get("id") or "")
         if is_internal_child_thread(thread_id):
             continue
-        visible_threads.append(thread)
+        agent_user_id = str(thread.get("agent_user_id") or "").strip()
+        if not agent_user_id:
+            raise RuntimeError(f"Owner-visible thread {thread_id or '<missing>'} is missing agent_user_id")
+        if agent_user_id not in groups:
+            groups[agent_user_id] = []
+            order.append(agent_user_id)
+        groups[agent_user_id].append(thread)
+    return [groups[agent_user_id] for agent_user_id in order]
 
+
+def _select_visible_thread(group: list[dict[str, object]], *, reader: OwnerThreadWorkbenchReader) -> dict[str, object] | None:
+    remaining = list(group)
+    while remaining:
+        candidate = reader.canonical_owner_threads(remaining)[0]
+        thread_id = candidate["id"]
+        runtime_state = reader.converge_runtime_state(thread_id)
+        if runtime_state not in {"missing", "purged"}:
+            return candidate
+        remaining = [thread for thread in remaining if thread["id"] != thread_id]
+    return None
+
+
+def build_owner_thread_workbench_from_rows(raw: list[dict[str, object]], *, reader: OwnerThreadWorkbenchReader) -> dict[str, object]:
     threads = []
-    for thread in reader.canonical_owner_threads(visible_threads):
+    # @@@lazy-owner-thread-selection - monitor only needs one visible thread per agent.
+    # Choosing the best candidate lazily avoids N full runtime-binding inspections
+    # across every historical branch before we even know which thread would surface.
+    for group in _group_visible_threads_by_agent(raw):
+        thread = _select_visible_thread(group, reader=reader)
+        if thread is None:
+            continue
         thread_id = thread["id"]
         sandbox_type = thread.get("sandbox_type", "local")
         running = reader.is_runtime_active(thread_id, sandbox_type)
