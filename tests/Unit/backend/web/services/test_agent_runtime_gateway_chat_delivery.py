@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 
@@ -31,6 +32,7 @@ def _app(
             thread_repo=SimpleNamespace(
                 get_by_user_id=lambda uid: default_thread if uid == "agent-user-1" else None,
                 list_by_agent_user=lambda uid: list(thread_rows) if uid == "agent-user-1" else [],
+                get_by_id=lambda thread_id: next((row for row in thread_rows if row["id"] == thread_id), None),
             ),
             agent_pool=pool or {},
             typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
@@ -39,6 +41,11 @@ def _app(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
                 )
             ),
+            thread_cwd={},
+            thread_sandbox={},
+            thread_tasks={},
+            thread_locks={},
+            thread_locks_guard=asyncio.Lock(),
         )
     )
     return app, started, unread_calls, enqueued
@@ -64,9 +71,9 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
     async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
         return SimpleNamespace(id=f"agent-for-{thread_id}")
 
-    monkeypatch.setattr("backend.threads.activity_pool_service.get_or_create_agent", _fake_get_or_create_agent)
-    monkeypatch.setattr("backend.threads.activity_pool_service.resolve_thread_sandbox", lambda _app, _thread_id: "local")
-    monkeypatch.setattr("backend.threads.streaming._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     app, started, unread_calls, enqueued = _app()
 
     result = await build_agent_runtime_gateway(app).dispatch_chat(_envelope())
@@ -81,7 +88,7 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
 @pytest.mark.asyncio
 async def test_gateway_dispatch_chat_raises_for_missing_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "backend.threads.activity_pool_service.get_or_create_agent", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError)
+        "backend.threads.chat_adapters.bootstrap.get_or_create_agent", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError)
     )
     app, started, unread_calls, enqueued = _app(threads=[])
 
