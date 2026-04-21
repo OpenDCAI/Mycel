@@ -67,44 +67,9 @@ async def lifespan(app: FastAPI):
     app.state.contact_repo = storage_container.contact_repo()
     attach_auth_runtime_state(app, storage_state=runtime_storage)
 
-    from messaging.realtime.events import ChatEventBus
-    from messaging.realtime.typing import TypingTracker
+    from backend.chat.bootstrap import attach_chat_runtime
 
-    app.state.chat_event_bus = ChatEventBus()
-    app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
-
-    # Wire chat delivery after event loop is available
-    # ---- Messaging system (Supabase-backed, required) ----
-    from backend.threads.chat_adapters.chat_inlet import make_chat_delivery_fn
-    from backend.web.utils.serializers import avatar_url
-    from messaging.delivery.resolver import HireVisitDeliveryResolver
-    from messaging.relationships.service import RelationshipService
-    from messaging.service import MessagingService
-
-    _chat_member_repo = storage_container.chat_member_repo()
-    _messages_repo = storage_container.messages_repo()
-    app.state.relationship_repo = storage_container.relationship_repo()
-    app.state.chat_member_repo = _chat_member_repo
-    app.state.messages_repo = _messages_repo
-
-    app.state.relationship_service = RelationshipService(app.state.relationship_repo)
-
-    _msg_delivery_resolver = HireVisitDeliveryResolver(
-        contact_repo=app.state.contact_repo,
-        chat_member_repo=_chat_member_repo,
-        relationship_repo=app.state.relationship_repo,
-    )
-
-    app.state.messaging_service = MessagingService(
-        chat_repo=app.state.chat_repo,
-        chat_member_repo=_chat_member_repo,
-        messages_repo=_messages_repo,
-        user_repo=app.state.user_repo,
-        thread_repo=app.state.thread_repo,
-        event_bus=app.state.chat_event_bus,
-        delivery_resolver=_msg_delivery_resolver,
-        avatar_url_builder=avatar_url,
-    )
+    attach_chat_runtime(app, storage_container)
 
     # ---- Existing state ----
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
@@ -120,7 +85,6 @@ async def lifespan(app: FastAPI):
     from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
-    app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
 
     from backend.threads.display.builder import DisplayBuilder
 
