@@ -56,6 +56,9 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
             clear_resource_overview_cache=clear_resource_overview_cache,
         ),
     )
+    # @@@gateway-bootstrap-borrowable-state - bootstrap still attaches the
+    # activity reader onto app.state for wider consumers, but it also returns
+    # the freshly built gateway/activity handles so callers do not need to reread them.
     return AgentRuntimeGatewayState(gateway=gateway, activity_reader=activity_reader)
 
 
