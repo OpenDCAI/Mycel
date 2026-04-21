@@ -54,9 +54,7 @@ def test_prompt_caching_applies_cache_control_to_string_system_message():
 
     updated = middleware._apply_system_cache(request)
 
-    assert updated.system_message.content == [
-        {"type": "text", "text": "system prompt", "cache_control": {"type": "ephemeral"}}
-    ]
+    assert updated.system_message.content == [{"type": "text", "text": "system prompt", "cache_control": {"type": "ephemeral"}}]
 
 
 def test_prompt_caching_applies_cache_control_to_first_system_block():
