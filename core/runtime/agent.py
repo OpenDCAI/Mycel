@@ -1185,6 +1185,7 @@ class LeonAgent:
         # Command tools
         if self.config.tools.command.enabled:
             command_hooks = []
+            event_bus_factory = getattr(self, "_event_bus_factory", None)
             if self._sandbox.name == "local":
                 if self.block_dangerous_commands:
                     command_hooks.append(
@@ -1201,7 +1202,7 @@ class LeonAgent:
                 executor=cmd_executor,
                 queue_manager=self.queue_manager,
                 background_runs=self._background_runs,
-                event_bus_factory=self._event_bus_factory,
+                event_bus_factory=event_bus_factory,
             )
 
         # Skills tools
@@ -1247,7 +1248,7 @@ class LeonAgent:
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
             web_app=self._web_app,
-            event_bus_factory=self._event_bus_factory,
+            event_bus_factory=getattr(self, "_event_bus_factory", None),
             child_agent_factory=create_leon_agent,
         )
 
