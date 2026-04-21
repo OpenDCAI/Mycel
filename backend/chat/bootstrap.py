@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from backend.identity.avatar.urls import avatar_url
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 from backend.threads.chat_adapters.chat_inlet import make_chat_delivery_fn
+from core.runtime.middleware.queue import MessageQueueManager
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.realtime.events import ChatEventBus
 from messaging.realtime.typing import TypingTracker
@@ -44,3 +47,18 @@ def attach_chat_runtime(app: Any, storage_container: Any) -> None:
 
 def wire_chat_delivery(app: Any) -> None:
     app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
+
+
+def attach_chat_runtime_gateway_state(app: Any, storage_container: Any) -> None:
+    app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
+    app.state.agent_pool = {}
+    app.state.thread_sandbox = {}
+    app.state.thread_cwd = {}
+    app.state.thread_locks = {}
+    app.state.thread_locks_guard = asyncio.Lock()
+    app.state.thread_tasks = {}
+    app.state.thread_event_buffers = {}
+    app.state.subagent_buffers = {}
+    app.state.thread_last_active = {}
+    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
+    wire_chat_delivery(app)

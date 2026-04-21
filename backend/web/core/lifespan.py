@@ -8,7 +8,6 @@ from fastapi import FastAPI
 from psycopg import AsyncConnection
 
 from backend.threads.pool import idle_reaper as idle_reaper_owner
-from core.runtime.middleware.queue import MessageQueueManager
 
 
 def _require_web_runtime_contract() -> None:
@@ -65,30 +64,15 @@ async def lifespan(app: FastAPI):
     app.state.agent_config_repo = storage_container.agent_config_repo()
     attach_auth_runtime_state(app, storage_state=runtime_storage)
 
-    from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery
+    from backend.chat.bootstrap import attach_chat_runtime, attach_chat_runtime_gateway_state
 
     attach_chat_runtime(app, storage_container)
+    attach_chat_runtime_gateway_state(app, storage_container)
 
     # ---- Existing state ----
-    app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
-    app.state.agent_pool = {}
-    app.state.thread_sandbox = {}
-    app.state.thread_cwd = {}
-    app.state.thread_locks = {}
-    app.state.thread_locks_guard = asyncio.Lock()
-    app.state.thread_tasks = {}
-    app.state.thread_event_buffers = {}
-    app.state.subagent_buffers = {}
-
-    from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
-
-    app.state.agent_runtime_gateway = build_agent_runtime_gateway(app)
-    wire_chat_delivery(app)
-
     from backend.threads.display.builder import DisplayBuilder
 
     app.state.display_builder = DisplayBuilder()
-    app.state.thread_last_active = {}  # thread_id → epoch timestamp
     app.state.idle_reaper_task = None
     app.state._event_loop = asyncio.get_running_loop()
 
