@@ -25,17 +25,18 @@ def _normalize_state(state: AgentState) -> Literal["initializing", "ready", "act
 class AppRuntimeThreadActivityReader:
     """Read live runtime thread activity from app-backed state."""
 
-    def __init__(self, app: Any) -> None:
-        self._app = app
+    def __init__(self, *, thread_repo: Any, agent_pool: dict[str, Any]) -> None:
+        self._thread_repo = thread_repo
+        self._agent_pool = agent_pool
 
     def list_active_threads_for_agent(self, agent_user_id: str) -> list[AgentThreadActivity]:
-        rows = self._app.state.thread_repo.list_by_agent_user(agent_user_id)
+        rows = self._thread_repo.list_by_agent_user(agent_user_id)
         activities: list[AgentThreadActivity] = []
         for row in rows:
             thread_id = str(row.get("id") or "").strip()
             if not thread_id:
                 continue
-            for pool_key, agent in self._app.state.agent_pool.items():
+            for pool_key, agent in self._agent_pool.items():
                 if not str(pool_key).startswith(f"{thread_id}:"):
                     continue
                 activities.append(

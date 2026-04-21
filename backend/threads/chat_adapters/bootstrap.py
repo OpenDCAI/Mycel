@@ -12,7 +12,10 @@ from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputH
 
 
 def build_agent_runtime_gateway(app: Any) -> NativeAgentRuntimeGateway:
-    app.state.agent_runtime_thread_activity_reader = AppRuntimeThreadActivityReader(app)
+    app.state.agent_runtime_thread_activity_reader = AppRuntimeThreadActivityReader(
+        thread_repo=app.state.thread_repo,
+        agent_pool=app.state.agent_pool,
+    )
     return NativeAgentRuntimeGateway(
         chat_handlers={
             "mycel": NativeAgentChatDeliveryHandler(
