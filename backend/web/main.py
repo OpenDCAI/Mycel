@@ -1,6 +1,6 @@
 """Leon Web Backend - FastAPI Application."""
 
-from backend.runtime_bootstrap.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port, run_reloadable_app
+from backend.bootstrap.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port, run_reloadable_app
 
 load_env_file_from_env()
 

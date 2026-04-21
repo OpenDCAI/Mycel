@@ -4,9 +4,9 @@ import pytest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
+from backend.bootstrap import app_entrypoint
 from backend.monitor_app import lifespan as monitor_app_lifespan
 from backend.monitor_app import main as monitor_app_main
-from backend.runtime_bootstrap import app_entrypoint
 
 app = monitor_app_main.app
 

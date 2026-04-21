@@ -5,11 +5,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.runtime_bootstrap.storage_container_cache import get_storage_container as _get_container
 from backend.sandboxes.inventory import init_providers_and_managers
 from backend.web.utils.helpers import extract_webhook_instance_id
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.lease import lease_from_row as lower_runtime_from_row
+from storage.container_cache import get_storage_container as _get_container
 from storage.runtime import build_lease_repo as make_lower_runtime_repo
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])

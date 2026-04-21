@@ -2,9 +2,9 @@
 
 from fastapi import FastAPI
 
+from backend.bootstrap.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port, run_reloadable_app
 from backend.monitor.api.http import global_router
 from backend.monitor_app.lifespan import lifespan
-from backend.runtime_bootstrap.app_entrypoint import add_permissive_cors, load_env_file_from_env, resolve_app_port, run_reloadable_app
 
 load_env_file_from_env()
 

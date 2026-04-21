@@ -29,7 +29,7 @@ Invariants checked:
 
 5. Required backend subdirectories: web/, chat/, identity/, threads/,
    sandboxes/, library/, hub/, monitor/, monitor_app/,
-   runtime_bootstrap/.
+   bootstrap/.
 
 6. Required sub-sub-packages: backend/identity/auth/, backend/identity/avatar/,
    backend/sandboxes/runtime/, backend/sandboxes/resources/,
@@ -117,7 +117,7 @@ REQUIRED_BACKEND_SUBDIRS = [
     "hub",
     "monitor",
     "monitor_app",
-    "runtime_bootstrap",
+    "bootstrap",
 ]
 
 REQUIRED_SUB_SUB_PACKAGES = [

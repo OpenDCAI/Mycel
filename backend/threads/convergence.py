@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.runtime_bootstrap.storage_container_cache import get_storage_container as _get_container
 from backend.threads.binding import ThreadRuntimeBindingError, resolve_thread_runtime_binding
 from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
 from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
+from storage.container_cache import get_storage_container as _get_container
 from storage.runtime import uses_supabase_runtime_defaults
 
 

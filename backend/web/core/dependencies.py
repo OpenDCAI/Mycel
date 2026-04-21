@@ -3,17 +3,21 @@
 import asyncio
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 
 from backend.identity.auth.dependencies import _get_auth_service as _get_auth_service
 from backend.identity.auth.user_resolution import get_current_user as get_current_user
 from backend.identity.auth.user_resolution import get_current_user_id as get_current_user_id
-from backend.runtime_bootstrap.request_app import get_app as get_app
 from backend.threads import convergence as thread_runtime_convergence
 from backend.threads.activity_pool_service import get_or_create_agent, resolve_thread_sandbox
 from sandbox.thread_context import set_current_thread_id
 
 inspect_owner_thread_runtime = thread_runtime_convergence.inspect_owner_thread_runtime
+
+
+async def get_app(request: Request) -> FastAPI:
+    return request.app
+
 
 __all__ = [
     "get_app",

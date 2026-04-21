@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
     await _validate_web_checkpointer_contract()
 
     # ---- Chat repos + services ----
+    from backend.bootstrap.storage import attach_runtime_storage_state
     from backend.identity.auth.runtime_bootstrap import attach_auth_runtime_state
-    from backend.runtime_bootstrap.storage import attach_runtime_storage_state
 
     runtime_storage = attach_runtime_storage_state(app)
     _supabase_client = runtime_storage.supabase_client
