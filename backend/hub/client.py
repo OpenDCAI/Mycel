@@ -12,9 +12,9 @@ import httpx
 import yaml
 from fastapi import HTTPException
 
-import backend.agent_marketplace.snapshot_install as _snapshot_install_owner
+import backend.hub.snapshot_install as _snapshot_install_owner
 import backend.library.paths as _lib_paths
-from backend.agent_marketplace.versioning import BumpType, bump_semver
+from backend.hub.versioning import BumpType, bump_semver
 from config.loader import load_bundle_from_repo
 from config.types import AgentBundle
 

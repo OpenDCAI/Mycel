@@ -28,7 +28,7 @@ Invariants checked:
    messaging/, config/.
 
 5. Required backend subdirectories: web/, chat/, identity/, threads/,
-   sandboxes/, library/, agent_marketplace/, monitor/, monitor_app/,
+   sandboxes/, library/, hub/, monitor/, monitor_app/,
    runtime_bootstrap/.
 
 6. Required sub-sub-packages: backend/identity/auth/, backend/identity/avatar/,
@@ -54,7 +54,6 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND = REPO_ROOT / "backend"
@@ -115,7 +114,7 @@ REQUIRED_BACKEND_SUBDIRS = [
     "threads",
     "sandboxes",
     "library",
-    "agent_marketplace",
+    "hub",
     "monitor",
     "monitor_app",
     "runtime_bootstrap",
@@ -143,9 +142,7 @@ FORBIDDEN_WEB_SERVICES = "backend/web/services"
 
 # For rule 9: top-level portable packages that must NOT import from backend/
 TOP_LEVEL_PORTABLE = ["core", "sandbox", "storage", "messaging", "protocols", "config"]
-BACKEND_IMPORT_RE = re.compile(
-    r"^\s*(?:from\s+backend(?:\.|\s)|import\s+backend(?:\.|\s|$))", re.MULTILINE
-)
+BACKEND_IMPORT_RE = re.compile(r"^\s*(?:from\s+backend(?:\.|\s)|import\s+backend(?:\.|\s|$))", re.MULTILINE)
 
 
 def check_forbidden_root_files() -> list[str]:

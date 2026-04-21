@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from backend.agent_marketplace.versioning import BumpType
+from backend.hub.versioning import BumpType
 
 # ── Agents ──
 

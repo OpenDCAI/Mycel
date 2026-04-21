@@ -6,8 +6,8 @@ from typing import Any
 
 import yaml
 
-import backend.agent_marketplace.snapshot_install as _snapshot_install_owner
-from backend.agent_marketplace.versioning import BumpType, bump_semver
+import backend.hub.snapshot_install as _snapshot_install_owner
+from backend.hub.versioning import BumpType, bump_semver
 from backend.web.utils.serializers import avatar_url
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from config.loader import AgentLoader
