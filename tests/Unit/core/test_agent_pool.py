@@ -66,7 +66,9 @@ async def test_registry_get_or_create_agent_uses_explicit_messaging_service(
 
     monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-explicit")
-    monkeypatch.setattr(agent_pool._registry, "get_file_channel_binding", lambda _thread_id: (_ for _ in ()).throw(ValueError()), raising=False)
+    monkeypatch.setattr(
+        agent_pool._registry, "get_file_channel_binding", lambda _thread_id: (_ for _ in ()).throw(ValueError()), raising=False
+    )
 
     app = SimpleNamespace(
         state=SimpleNamespace(

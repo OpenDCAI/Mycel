@@ -15,6 +15,10 @@ async def get_or_create_agent(*args, **kwargs):
     _registry.get_file_channel_binding = get_file_channel_binding
     _registry.resolve_thread_sandbox = resolve_thread_sandbox
     if "messaging_service" not in kwargs and app is not None:
+        # @@@agent-pool-chat-borrow - registry owns thread-runtime lifecycle,
+        # but chat-owned messaging_service is still needed when chat_repos are
+        # constructed. Borrow it here so registry does not reach back through
+        # app state for chat truth on its own.
         kwargs["messaging_service"] = get_messaging_service(app)
     return await _registry.get_or_create_agent(*args, **kwargs)
 
