@@ -61,6 +61,14 @@ def test_get_runtime_thread_activity_reader_fails_loud_when_missing():
     assert exc_info.value.detail == "Thread activity reader unavailable"
 
 
+def test_get_runtime_thread_activity_reader_reads_threads_runtime_state():
+    activity_reader = object()
+
+    app = _app_state(threads_runtime_state=SimpleNamespace(activity_reader=activity_reader))
+
+    assert chat_http_dependencies.get_runtime_thread_activity_reader(app) is activity_reader
+
+
 @pytest.mark.parametrize(
     ("getter_name", "detail"),
     [
