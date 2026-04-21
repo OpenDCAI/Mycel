@@ -15,7 +15,7 @@ class AuthRuntimeState:
     supabase_auth_client_factory: Callable[[], object]
 
 
-def build_auth_runtime_state(storage_state) -> AuthRuntimeState:
+def build_auth_runtime_state(storage_state, *, contact_repo) -> AuthRuntimeState:
     storage_container = storage_state.storage_container
     supabase_client = storage_state.supabase_client
     supabase_auth_client_factory = create_supabase_auth_client
@@ -25,7 +25,7 @@ def build_auth_runtime_state(storage_state) -> AuthRuntimeState:
         supabase_client=supabase_client,
         supabase_auth_client_factory=supabase_auth_client_factory,
         invite_codes=storage_container.invite_code_repo(),
-        contact_repo=storage_container.contact_repo(),
+        contact_repo=contact_repo,
         recipe_repo=storage_container.recipe_repo(),
     )
     return AuthRuntimeState(
@@ -34,8 +34,8 @@ def build_auth_runtime_state(storage_state) -> AuthRuntimeState:
     )
 
 
-def attach_auth_runtime_state(app, *, storage_state) -> AuthRuntimeState:
-    state = build_auth_runtime_state(storage_state)
+def attach_auth_runtime_state(app, *, storage_state, contact_repo) -> AuthRuntimeState:
+    state = build_auth_runtime_state(storage_state, contact_repo=contact_repo)
     app.state.auth_service = state.auth_service
     app.state._supabase_auth_client_factory = state.supabase_auth_client_factory
     return state
