@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from backend.chat.api.http import chats_router
 from backend.identity.avatar.urls import avatar_url
-from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
 
 
@@ -28,7 +28,6 @@ def _route_test_app(state: SimpleNamespace) -> FastAPI:
     app.state = state
     app.include_router(chats_router.router)
     app.dependency_overrides[get_current_user_id] = lambda: "human-user-1"
-    app.dependency_overrides[get_app] = lambda: app
     return app
 
 
@@ -475,7 +474,6 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
         messaging_service=app.state.messaging_service,
-        app=app,
     )
 
     assert seen == [("chat-1", "thread-user-1", "hello")]
@@ -553,7 +551,6 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
         chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
         user_id="owner-user-1",
         messaging_service=app.state.messaging_service,
-        app=app,
     )
 
     assert seen == [("chat-1", "thread-user-1", "hello")]
