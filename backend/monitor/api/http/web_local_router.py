@@ -49,13 +49,16 @@ def evaluation_batch_create_action(
     payload: EvaluationBatchCreateRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
-    return monitor_gateway.create_evaluation_batch(
-        submitted_by_user_id=user_id,
-        agent_user_id=payload.agent_user_id,
-        scenario_ids=payload.scenario_ids,
-        sandbox=payload.sandbox,
-        max_concurrent=payload.max_concurrent,
-    )
+    try:
+        return monitor_gateway.create_evaluation_batch(
+            submitted_by_user_id=user_id,
+            agent_user_id=payload.agent_user_id,
+            scenario_ids=payload.scenario_ids,
+            sandbox=payload.sandbox,
+            max_concurrent=payload.max_concurrent,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/evaluation/batches/{batch_id}/start")

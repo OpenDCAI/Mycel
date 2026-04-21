@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from eval.batch_executor import EvaluationBatchExecutor
@@ -59,10 +61,10 @@ async def test_batch_executor_records_failed_scenario_before_reraising():
     )
     executor = EvaluationBatchExecutor(runner=_FailingRunner(), batch_service=batch_service)
 
-    with pytest.raises(RuntimeError, match="runner exploded"):
-        await executor.run_batch(batch["batch_id"], [EvalScenario(id="scenario-1", name="Scenario 1")])
+    results = await executor.run_batch(batch["batch_id"], [EvalScenario(id="scenario-1", name="Scenario 1")])
 
     batch_run = repo.list_batch_runs(batch["batch_id"])[0]
+    assert results == []
     assert batch_run["status"] == "failed"
     assert batch_run["summary_json"] == {"error": "runner exploded"}
     assert repo.get_batch(batch["batch_id"])["status"] == "failed"
@@ -99,6 +101,54 @@ async def test_batch_executor_marks_batch_running_before_first_scenario():
     executor = EvaluationBatchExecutor(runner=InspectingRunner(repo, batch["batch_id"]), batch_service=batch_service)
 
     await executor.run_batch(batch["batch_id"], [EvalScenario(id="scenario-1", name="Scenario 1")])
+
+
+@pytest.mark.asyncio
+async def test_batch_executor_respects_max_concurrent():
+    active = 0
+    max_seen = 0
+    release = asyncio.Event()
+
+    class _ConcurrencyRunner:
+        async def run_scenario(self, scenario: EvalScenario) -> EvalResult:
+            nonlocal active, max_seen
+            active += 1
+            max_seen = max(max_seen, active)
+            if scenario.id == "scenario-1":
+                await asyncio.sleep(0)
+                assert active == 2
+                release.set()
+            else:
+                await release.wait()
+            active -= 1
+            return EvalResult(
+                scenario_id=scenario.id,
+                trajectory=RunTrajectory(
+                    id=f"eval-run-{scenario.id}",
+                    thread_id=f"thread-{scenario.id}",
+                    user_message="",
+                    status="completed",
+                ),
+            )
+
+    repo = _FakeBatchRepo()
+    batch_service = EvaluationBatchService(batch_repo=repo)
+    batch = batch_service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["scenario-1", "scenario-2"],
+        sandbox="local",
+        max_concurrent=2,
+    )
+    executor = EvaluationBatchExecutor(runner=_ConcurrencyRunner(), batch_service=batch_service)
+
+    await executor.run_batch(
+        batch["batch_id"],
+        [EvalScenario(id="scenario-1", name="Scenario 1"), EvalScenario(id="scenario-2", name="Scenario 2")],
+        max_concurrent=2,
+    )
+
+    assert max_seen == 2
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,5 @@
 from eval.batch_service import EvaluationBatchService
-from eval.models import EvalResult, RunTrajectory, SystemMetrics
+from eval.models import BenchmarkInfo, EvalResult, EvalScenario, RunTrajectory, SystemMetrics
 
 
 def _batch_row(*, batch_id: str = "batch-1", status: str = "pending") -> dict:
@@ -124,6 +124,31 @@ def test_batch_service_creates_batch_and_runs():
 
     assert batch["summary_json"]["total_runs"] == 2
     assert len(repo.list_batch_runs(batch["batch_id"])) == 2
+
+
+def test_batch_service_persists_structured_scenario_refs():
+    repo = _FakeBatchRepo()
+    service = EvaluationBatchService(batch_repo=repo)
+
+    batch = service.create_batch(
+        submitted_by_user_id="user-1",
+        agent_user_id="agent-1",
+        scenario_ids=["s1"],
+        sandbox="local",
+        max_concurrent=1,
+        scenario_refs=[
+            EvalScenario(
+                id="s1",
+                name="Scenario 1",
+                benchmark=BenchmarkInfo(family="swe-bench", instance_id="repo__1"),
+                workspace={"cwd": "/workspace/repo", "repo": "repo/name", "base_commit": "abc123"},
+            )
+        ],
+    )
+
+    assert batch["kind"] == "benchmark_batch"
+    assert batch["config_json"]["scenario_refs"][0]["benchmark"]["family"] == "swe-bench"
+    assert batch["config_json"]["scenario_refs"][0]["workspace"]["cwd"] == "/workspace/repo"
 
 
 def test_batch_service_recomputes_summary():

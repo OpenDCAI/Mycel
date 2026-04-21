@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -95,6 +96,43 @@ class ScenarioMessage(BaseModel):
     delay_seconds: float = 0.0
 
 
+class BenchmarkInfo(BaseModel):
+    family: str = ""
+    name: str = ""
+    split: str = ""
+    variant: str = ""
+    instance_id: str = ""
+    dataset_version: str = ""
+    tags: list[str] = Field(default_factory=list)
+    source_uri: str = ""
+
+
+class WorkspaceSpec(BaseModel):
+    cwd: str | None = None
+    repo: str | None = None
+    base_commit: str | None = None
+    env: dict[str, str] = Field(default_factory=dict)
+    setup_commands: list[str] = Field(default_factory=list)
+
+
+class JudgeConfig(BaseModel):
+    type: str = "noop"
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class ArtifactPolicy(BaseModel):
+    include_final_response: bool = True
+    include_benchmark_metadata: bool = True
+    include_workspace_metadata: bool = True
+    requested_artifacts: list[str] = Field(default_factory=list)
+
+
+class ExportConfig(BaseModel):
+    format: str = "generic_json"
+    key: str = ""
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
 class EvalScenario(BaseModel):
     id: str
     name: str
@@ -104,6 +142,11 @@ class EvalScenario(BaseModel):
     messages: list[ScenarioMessage] = Field(default_factory=list)
     expected_behaviors: list[str] = Field(default_factory=list)
     evaluation_criteria: list[str] = Field(default_factory=list)
+    benchmark: BenchmarkInfo | None = None
+    workspace: WorkspaceSpec | None = None
+    judge_config: JudgeConfig | None = None
+    artifact_policy: ArtifactPolicy | None = None
+    export: ExportConfig | None = None
 
 
 # --- SSE stream capture ---
@@ -121,8 +164,29 @@ class TrajectoryCapture(BaseModel):
 # --- Eval result ---
 
 
+class ArtifactRecord(BaseModel):
+    name: str
+    kind: str
+    content: str | None = None
+    path: str | None = None
+    mime_type: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class JudgeResult(BaseModel):
+    judge_type: str = "noop"
+    status: str = "not_run"
+    verdict: str = "unknown"
+    rationale: str = ""
+    scores: dict[str, float] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class EvalResult(BaseModel):
     scenario_id: str
     trajectory: RunTrajectory
     system_metrics: SystemMetrics = Field(default_factory=SystemMetrics)
     objective_metrics: ObjectiveMetrics = Field(default_factory=ObjectiveMetrics)
+    benchmark: BenchmarkInfo | None = None
+    judge_result: JudgeResult | None = None
+    artifacts: list[ArtifactRecord] = Field(default_factory=list)

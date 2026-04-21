@@ -18,6 +18,7 @@ class _FakeBatchSvc:
                 "config_json": {
                     "scenario_ids": ["scenario-1"],
                     "sandbox": "local",
+                    "max_concurrent": 3,
                 },
             },
             "runs": [],
@@ -49,4 +50,5 @@ def test_start_batch_submits_typed_spec_to_scheduler(monkeypatch):
     assert spec.batch_id == "batch-1"
     assert spec.base_url == "http://api"
     assert spec.agent_user_id == "agent-1"
+    assert spec.max_concurrent == 3
     assert spec.scenarios == [("scenario-stub", "scenario-1", "local")]

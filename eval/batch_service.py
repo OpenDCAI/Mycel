@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from eval.models import EvalScenario
+
 
 class EvaluationBatchService:
     def __init__(self, *, batch_repo) -> None:
@@ -17,19 +19,23 @@ class EvaluationBatchService:
         scenario_ids: list[str],
         sandbox: str,
         max_concurrent: int,
+        scenario_refs: list[EvalScenario] | None = None,
     ) -> dict:
         now = datetime.now(UTC).isoformat()
         batch_id = f"eval-batch-{uuid4().hex[:12]}"
+        scenario_refs = scenario_refs or []
+        kind = "benchmark_batch" if any(scenario.benchmark for scenario in scenario_refs) else "scenario_batch"
         batch = self._batch_repo.create_batch(
             {
                 "batch_id": batch_id,
-                "kind": "scenario_batch",
+                "kind": kind,
                 "submitted_by_user_id": submitted_by_user_id,
                 "agent_user_id": agent_user_id,
                 "config_json": {
                     "scenario_ids": list(scenario_ids),
                     "sandbox": sandbox,
                     "max_concurrent": max_concurrent,
+                    "scenario_refs": [self._serialize_scenario_ref(scenario) for scenario in scenario_refs],
                 },
                 "status": "pending",
                 "created_at": now,
@@ -186,3 +192,17 @@ class EvaluationBatchService:
             if str(batch_run.get("scenario_id") or "") == scenario_id:
                 return batch_run
         raise KeyError(f"Evaluation batch run not found for scenario {scenario_id} in batch {batch_id}")
+
+    @staticmethod
+    def _serialize_scenario_ref(scenario: EvalScenario) -> dict[str, Any]:
+        return {
+            "scenario_id": scenario.id,
+            "name": scenario.name,
+            "category": scenario.category,
+            "sandbox": scenario.sandbox,
+            "benchmark": scenario.benchmark.model_dump(mode="json") if scenario.benchmark else None,
+            "workspace": scenario.workspace.model_dump(mode="json") if scenario.workspace else None,
+            "judge_config": scenario.judge_config.model_dump(mode="json") if scenario.judge_config else None,
+            "artifact_policy": scenario.artifact_policy.model_dump(mode="json") if scenario.artifact_policy else None,
+            "export": scenario.export.model_dump(mode="json") if scenario.export else None,
+        }

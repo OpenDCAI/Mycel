@@ -5,7 +5,7 @@ from eval.models import EvalScenario, ScenarioMessage, TrajectoryCapture
 
 
 class _RuntimeFailingClient:
-    async def create_thread(self, *, agent_user_id: str, sandbox: str) -> str:
+    async def create_thread(self, *, agent_user_id: str, sandbox: str, cwd: str | None = None) -> str:
         return "thread-1"
 
     async def run_message(self, _thread_id: str, _message: str, enable_trajectory: bool = True) -> TrajectoryCapture:
@@ -19,7 +19,7 @@ class _RuntimeFailingClient:
 
 
 class _DeleteFailingClient:
-    async def create_thread(self, *, agent_user_id: str, sandbox: str) -> str:
+    async def create_thread(self, *, agent_user_id: str, sandbox: str, cwd: str | None = None) -> str:
         return "thread-1"
 
     async def run_message(self, _thread_id: str, _message: str, enable_trajectory: bool = True) -> TrajectoryCapture:
@@ -37,7 +37,7 @@ class _TerminalErrorClient:
         self.messages: list[str] = []
         self.deleted = False
 
-    async def create_thread(self, *, agent_user_id: str, sandbox: str) -> str:
+    async def create_thread(self, *, agent_user_id: str, sandbox: str, cwd: str | None = None) -> str:
         return "thread-1"
 
     async def run_message(self, _thread_id: str, message: str, enable_trajectory: bool = True) -> TrajectoryCapture:
@@ -83,3 +83,27 @@ async def test_eval_runner_stops_on_terminal_error_before_next_message():
 
     assert client.messages == ["first"]
     assert client.deleted is True
+
+
+@pytest.mark.asyncio
+async def test_eval_runner_passes_workspace_cwd_to_thread_creation():
+    captured: dict[str, str | None] = {"cwd": None}
+
+    class _InspectingClient(_DeleteFailingClient):
+        async def create_thread(self, *, agent_user_id: str, sandbox: str, cwd: str | None = None) -> str:
+            captured["cwd"] = cwd
+            return "thread-1"
+
+    runner = EvalRunner(client=_InspectingClient(), agent_user_id="agent-1")
+
+    with pytest.raises(RuntimeError, match="delete failed"):
+        await runner.run_scenario(
+            EvalScenario(
+                id="scenario-1",
+                name="Scenario 1",
+                workspace={"cwd": "/workspace/project"},
+                messages=[ScenarioMessage(content="hello")],
+            )
+        )
+
+    assert captured["cwd"] == "/workspace/project"

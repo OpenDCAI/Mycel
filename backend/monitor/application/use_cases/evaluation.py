@@ -115,6 +115,10 @@ def get_monitor_evaluation_scenarios() -> dict[str, Any]:
             "sandbox": scenario.sandbox,
             "message_count": len(scenario.messages),
             "timeout_seconds": scenario.timeout_seconds,
+            "benchmark": scenario.benchmark.model_dump(mode="json") if scenario.benchmark else None,
+            "workspace": scenario.workspace.model_dump(mode="json") if scenario.workspace else None,
+            "judge_type": scenario.judge_config.type if scenario.judge_config else None,
+            "export_format": scenario.export.format if scenario.export else None,
         }
         for scenario in evaluation_execution_service.load_monitor_eval_scenarios()
     ]
@@ -129,12 +133,14 @@ def create_monitor_evaluation_batch(
     sandbox: str,
     max_concurrent: int,
 ) -> dict[str, Any]:
+    scenarios = evaluation_execution_service.select_monitor_eval_scenarios(list(scenario_ids), sandbox=sandbox)
     batch = evaluation_read_service.make_eval_batch_service().create_batch(
         submitted_by_user_id=submitted_by_user_id,
         agent_user_id=agent_user_id,
         scenario_ids=scenario_ids,
         sandbox=sandbox,
         max_concurrent=max_concurrent,
+        scenario_refs=scenarios,
     )
     return {"batch": batch}
 
@@ -152,6 +158,7 @@ def start_monitor_evaluation_batch(
     config = batch.get("config_json") or {}
     scenario_ids = config.get("scenario_ids")
     sandbox = config.get("sandbox")
+    max_concurrent = int(config.get("max_concurrent") or 1)
     agent_user_id = batch.get("agent_user_id")
     if not scenario_ids:
         raise ValueError("Evaluation batch is missing scenario_ids")
@@ -171,6 +178,7 @@ def start_monitor_evaluation_batch(
             base_url=base_url.rstrip("/"),
             token=token,
             agent_user_id=str(agent_user_id),
+            max_concurrent=max_concurrent,
         )
     )
     return {"accepted": True, "batch": updated}

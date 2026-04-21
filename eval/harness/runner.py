@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -13,6 +14,8 @@ from eval.storage import TrajectoryStore
 
 if TYPE_CHECKING:
     from eval.models import RunTrajectory
+
+logger = logging.getLogger(__name__)
 
 
 class EvalRunner:
@@ -32,7 +35,9 @@ class EvalRunner:
 
     async def run_scenario(self, scenario: EvalScenario) -> EvalResult:
         """Execute a single scenario end-to-end."""
-        thread_id = await self.client.create_thread(agent_user_id=self.agent_user_id, sandbox=scenario.sandbox)
+        cwd = scenario.workspace.cwd if scenario.workspace and scenario.workspace.cwd else None
+        logger.info("Starting eval scenario %s (benchmark=%s, instance=%s, cwd=%s)", scenario.id, scenario.benchmark.family if scenario.benchmark else "", scenario.benchmark.instance_id if scenario.benchmark else "", cwd)
+        thread_id = await self.client.create_thread(agent_user_id=self.agent_user_id, sandbox=scenario.sandbox, cwd=cwd)
         captures: list[TrajectoryCapture] = []
         started_at = datetime.now(UTC)
         primary_error: BaseException | None = None
@@ -78,9 +83,11 @@ class EvalRunner:
                 trajectory=trajectory,
                 system_metrics=sys_metrics,
                 objective_metrics=obj_metrics,
+                benchmark=scenario.benchmark,
             )
         except BaseException as exc:
             primary_error = exc
+            logger.exception("Eval scenario %s failed", scenario.id)
             raise
         finally:
             try:
@@ -89,6 +96,7 @@ class EvalRunner:
                 if primary_error is not None:
                     primary_error.add_note(f"Thread cleanup failed after primary eval error: {cleanup_exc}")
                 else:
+                    logger.exception("Eval scenario %s failed during thread cleanup", scenario.id)
                     raise
 
     async def run_all(
