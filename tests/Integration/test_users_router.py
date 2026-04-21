@@ -162,6 +162,23 @@ async def test_list_chat_candidates_exposes_default_thread_id_for_owned_agents_o
 
 
 @pytest.mark.asyncio
+async def test_list_chat_candidates_fails_loud_when_owned_agent_threads_need_thread_repo():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _agent("a-owned", "Morel", "u1")]),
+            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
+            contact_repo=_empty_contact_repo(),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await users_router.list_chat_candidates(user_id="u1", app=app)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "Thread repo unavailable"
+
+
+@pytest.mark.asyncio
 async def test_list_chat_candidates_marks_normal_active_contacts_as_chat_candidates():
     app = _users_app(
         [_human("u1", "owner"), _human("u2", "other")],
