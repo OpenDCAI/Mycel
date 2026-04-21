@@ -88,6 +88,7 @@ export default function EvaluationBatchDetailPage() {
   const { data: aggregateData, error: aggregateError } =
     useMonitorData<EvaluationBatchAggregatePayload>(`/evaluation/batches/${batchId}/aggregate`);
   const [batchData, setBatchData] = React.useState<EvaluationBatchDetailPayload | null>(null);
+  const [aggregateSnapshot, setAggregateSnapshot] = React.useState<EvaluationBatchAggregatePayload | null>(null);
   const [startMessage, setStartMessage] = React.useState<string | null>(null);
   const [startError, setStartError] = React.useState<string | null>(null);
   const [startPending, setStartPending] = React.useState(false);
@@ -107,12 +108,18 @@ export default function EvaluationBatchDetailPage() {
     setExportFormat(resolveBatchExportFormat(scenarioRefs));
   }, [data]);
 
+  React.useEffect(() => {
+    if (aggregateData) {
+      setAggregateSnapshot(aggregateData);
+    }
+  }, [aggregateData]);
+
   if (error) return <ErrorState title={`Evaluation batch ${batchId}`} error={error} />;
   if (!batchData) return <div>Loading...</div>;
 
   const batch = batchData.batch ?? {};
   const config = batch.config_json ?? {};
-  const summary = aggregateData?.summary ?? batchData.aggregate ?? batch.summary_json ?? {};
+  const summary = aggregateSnapshot?.summary ?? batchData.aggregate ?? batch.summary_json ?? {};
   const runs = batchData.runs ?? [];
   const scenarioRefs = config.scenario_refs ?? [];
   const contractSummary = summarizeSelectedScenarioContracts(scenarioRefs);
@@ -127,13 +134,18 @@ export default function EvaluationBatchDetailPage() {
     setStartError(null);
     try {
       const result = await postMonitorData<EvaluationBatchStartPayload>(`/evaluation/batches/${batchId}/start`);
-      setBatchData((current) => ({
-        ...(current ?? {}),
+      const [detail, aggregate] = await Promise.all([
+        fetchAPI<EvaluationBatchDetailPayload>(`/evaluation/batches/${batchId}`),
+        fetchAPI<EvaluationBatchAggregatePayload>(`/evaluation/batches/${batchId}/aggregate`),
+      ]);
+      setBatchData({
+        ...detail,
         batch: {
-          ...(current?.batch ?? {}),
+          ...(detail.batch ?? {}),
           ...(result.batch ?? {}),
         },
-      }));
+      });
+      setAggregateSnapshot(aggregate);
       setStartMessage(result.accepted ? "Batch execution scheduled." : "Batch execution was not accepted.");
     } catch (err: unknown) {
       const fetchError = err as MonitorFetchError;
