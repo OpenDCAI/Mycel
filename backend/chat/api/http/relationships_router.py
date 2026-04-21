@@ -35,6 +35,7 @@ class RelationshipActionBody(BaseModel):
 
     actor_user_id: str | None = None
 
+
 def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
     existing = svc.get_by_id(relationship_id)
     if not existing:

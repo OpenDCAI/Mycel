@@ -45,6 +45,7 @@ class MuteChatBody(BaseModel):
     muted: bool
     mute_until: float | None = None
 
+
 def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
     # @@@thread-social-owner-check - sender_id can be a thread-owned social user_id, so
     # ownership must resolve through the thread back to the owning agent user before checking owner.
