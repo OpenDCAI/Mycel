@@ -168,6 +168,7 @@ def _make_app() -> SimpleNamespace:
             thread_tasks={},
             thread_last_active={},
             typing_tracker=None,
+            chat_runtime_state=SimpleNamespace(typing_tracker=None),
             queue_manager=SimpleNamespace(peek=lambda _thread_id: False),
         )
     )
@@ -300,7 +301,7 @@ async def test_streaming_run_agent_to_buffer_borrows_optional_typing_tracker(mon
     monkeypatch.setattr("backend.threads.streaming._run_execution.run_agent_to_buffer", _fake_run_agent_to_buffer)
 
     app = _make_app()
-    app.state.typing_tracker = typing_tracker
+    app.state.chat_runtime_state.typing_tracker = typing_tracker
 
     result = await _run_agent_to_buffer(
         SimpleNamespace(),
