@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.chat.api.http import router as chats_router
+from backend.chat.api.http import chats_router
 from backend.web.routers import auth as auth_router
 
 
