@@ -61,16 +61,20 @@ def _users_app(
 ) -> SimpleNamespace:
     relationships = relationships or {}
     default_threads = default_threads or {}
+    relationship_service = SimpleNamespace(
+        list_for_user=lambda _user_id: [
+            SimpleNamespace(other_user_id=other_user_id, state=state) for other_user_id, state in relationships.items()
+        ]
+    )
+    chat_runtime_state = SimpleNamespace(
+        relationship_service=relationship_service,
+        contact_repo=contact_repo or _empty_contact_repo(),
+    )
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: users),
             thread_repo=SimpleNamespace(get_default_thread=lambda agent_user_id: default_threads.get(agent_user_id)),
-            relationship_service=SimpleNamespace(
-                list_for_user=lambda _user_id: [
-                    SimpleNamespace(other_user_id=other_user_id, state=state) for other_user_id, state in relationships.items()
-                ]
-            ),
-            contact_repo=contact_repo or _empty_contact_repo(),
+            chat_runtime_state=chat_runtime_state,
         )
     )
 
@@ -79,8 +83,8 @@ def _list_chat_candidates(app: SimpleNamespace, *, user_id: str = "u1"):
     return users_router.list_chat_candidates(
         user_id=user_id,
         user_repo=app.state.user_repo,
-        relationship_service=getattr(app.state, "relationship_service", None),
-        contact_repo=getattr(app.state, "contact_repo", None),
+        relationship_service=getattr(app.state.chat_runtime_state, "relationship_service", None),
+        contact_repo=getattr(app.state.chat_runtime_state, "contact_repo", None),
         thread_repo=getattr(app.state, "thread_repo", None),
     )
 
@@ -178,8 +182,10 @@ async def test_list_chat_candidates_fails_loud_when_owned_agent_threads_need_thr
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _agent("a-owned", "Morel", "u1")]),
-            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
-            contact_repo=_empty_contact_repo(),
+            chat_runtime_state=SimpleNamespace(
+                relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
+                contact_repo=_empty_contact_repo(),
+            ),
         )
     )
 
@@ -237,7 +243,7 @@ async def test_list_chat_candidates_fails_loud_when_relationship_service_missing
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _human("u2", "other")]),
             thread_repo=SimpleNamespace(get_default_thread=lambda _agent_user_id: None),
-            contact_repo=_empty_contact_repo(),
+            chat_runtime_state=SimpleNamespace(contact_repo=_empty_contact_repo()),
         )
     )
 
@@ -254,7 +260,9 @@ async def test_list_chat_candidates_fails_loud_when_contact_repo_missing():
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _human("u2", "other")]),
             thread_repo=SimpleNamespace(get_default_thread=lambda _agent_user_id: None),
-            relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
+            chat_runtime_state=SimpleNamespace(
+                relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
+            ),
         )
     )
 
@@ -305,11 +313,13 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
     app.include_router(users_router.users_router)
     app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
     app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
-    app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")])
-    app.state.contact_repo = _empty_contact_repo()
+    relationship_service = SimpleNamespace(
+        list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")]
+    )
+    contact_repo = _empty_contact_repo()
     app.state.chat_runtime_state = SimpleNamespace(
-        relationship_service=app.state.relationship_service,
-        contact_repo=app.state.contact_repo,
+        relationship_service=relationship_service,
+        contact_repo=contact_repo,
     )
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
 
@@ -341,11 +351,11 @@ def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
     app.state.thread_repo = SimpleNamespace(
         get_default_thread=lambda agent_user_id: {"id": "thread-ready"} if agent_user_id == "a-owned" else None
     )
-    app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
-    app.state.contact_repo = _empty_contact_repo()
+    relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
+    contact_repo = _empty_contact_repo()
     app.state.chat_runtime_state = SimpleNamespace(
-        relationship_service=app.state.relationship_service,
-        contact_repo=app.state.contact_repo,
+        relationship_service=relationship_service,
+        contact_repo=contact_repo,
     )
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
 
@@ -376,9 +386,9 @@ def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
     app.include_router(users_router.users_router)
     app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
     app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
-    app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
+    relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
     app.state.chat_runtime_state = SimpleNamespace(
-        relationship_service=app.state.relationship_service,
+        relationship_service=relationship_service,
         contact_repo=None,
     )
     app.dependency_overrides[get_current_user_id] = lambda: "u1"

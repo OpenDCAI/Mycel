@@ -466,7 +466,7 @@ async def test_delete_agent_route_fails_loud_when_thread_repo_missing(monkeypatc
             state=SimpleNamespace(
                 user_repo=SimpleNamespace(),
                 agent_config_repo=SimpleNamespace(),
-                contact_repo=SimpleNamespace(),
+                chat_runtime_state=SimpleNamespace(contact_repo=SimpleNamespace()),
             )
         )
     )
@@ -478,7 +478,7 @@ async def test_delete_agent_route_fails_loud_when_thread_repo_missing(monkeypatc
             request=request,
             user_id="user-1",
             thread_repo=None,
-            contact_repo=request.app.state.contact_repo,
+            contact_repo=request.app.state.chat_runtime_state.contact_repo,
         )
 
     assert exc_info.value.status_code == 503
