@@ -78,11 +78,11 @@ async def lifespan(app: FastAPI):
     # contact_repo returned by chat bootstrap instead of reopening storage.
     app.state.agent_config_repo = storage_container.agent_config_repo()
     attach_auth_runtime_state(app, storage_state=runtime_storage, contact_repo=chat_runtime.contact_repo)
-    attach_threads_runtime(app, storage_container, typing_tracker=chat_runtime.typing_tracker)
+    threads_runtime = attach_threads_runtime(app, storage_container, typing_tracker=chat_runtime.typing_tracker)
     wire_chat_delivery(
         app,
         messaging_service=chat_runtime.messaging_service,
-        activity_reader=app.state.agent_runtime_thread_activity_reader,
+        activity_reader=threads_runtime.activity_reader,
         thread_repo=app.state.thread_repo,
     )
 

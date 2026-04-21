@@ -24,11 +24,14 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
         threads_bootstrap,
         "build_agent_runtime_gateway",
         lambda target_app, *, typing_tracker: (
-            seen.append(("gateway", target_app)) or seen.append(("typing_tracker", typing_tracker)) or gateway
+            seen.append(("gateway", target_app))
+            or seen.append(("typing_tracker", typing_tracker))
+            or setattr(target_app.state, "agent_runtime_thread_activity_reader", "activity-reader")
+            or gateway
         ),
     )
 
-    threads_bootstrap.attach_threads_runtime(app, storage_container, typing_tracker=typing_tracker)
+    state = threads_bootstrap.attach_threads_runtime(app, storage_container, typing_tracker=typing_tracker)
 
     assert app.state.queue_manager is queue_manager
     assert app.state.agent_pool == {}
@@ -39,6 +42,10 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert app.state.subagent_buffers == {}
     assert app.state.thread_last_active == {}
     assert app.state.agent_runtime_gateway is gateway
+    assert app.state.agent_runtime_thread_activity_reader == "activity-reader"
+    assert state.queue_manager is queue_manager
+    assert state.agent_runtime_gateway is gateway
+    assert state.activity_reader == "activity-reader"
     assert seen == [
         ("queue_manager", queue_repo),
         ("gateway", app),

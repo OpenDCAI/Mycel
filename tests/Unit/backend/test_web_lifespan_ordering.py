@@ -97,6 +97,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
         assert typing_tracker is app.state.typing_tracker
         app.state.agent_pool = {}
         app.state.agent_runtime_thread_activity_reader = object()
+        return SimpleNamespace(activity_reader=app.state.agent_runtime_thread_activity_reader)
 
     _patch_lifespan_runtime_contract(
         monkeypatch,
@@ -120,6 +121,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
     returned_contact_repo = object()
+    returned_activity_reader = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
         call_log.append("chat")
@@ -142,11 +144,12 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         assert typing_tracker is returned_typing_tracker
         app.state.agent_pool = {}
         app.state.agent_runtime_thread_activity_reader = object()
+        return SimpleNamespace(activity_reader=returned_activity_reader)
 
     def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo):
         call_log.append("wire")
         assert messaging_service is returned_messaging_service
-        assert activity_reader is _app.state.agent_runtime_thread_activity_reader
+        assert activity_reader is returned_activity_reader
 
     _patch_lifespan_runtime_contract(
         monkeypatch,
@@ -222,7 +225,9 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     monkeypatch.setattr(
         "backend.threads.bootstrap.attach_threads_runtime",
         lambda app, *_args, **_kwargs: (
-            setattr(app.state, "agent_runtime_thread_activity_reader", object()) or setattr(app.state, "agent_pool", {})
+            setattr(app.state, "agent_runtime_thread_activity_reader", object())
+            or setattr(app.state, "agent_pool", {})
+            or SimpleNamespace(activity_reader=app.state.agent_runtime_thread_activity_reader)
         ),
     )
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", lambda *_args, **_kwargs: None)

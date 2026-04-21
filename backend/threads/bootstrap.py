@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
 from core.runtime.middleware.queue import MessageQueueManager
 
 
-def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: Any) -> None:
+@dataclass(frozen=True)
+class ThreadsRuntimeState:
+    queue_manager: Any
+    agent_runtime_gateway: Any
+    activity_reader: Any
+
+
+def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: Any) -> ThreadsRuntimeState:
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
     app.state.agent_pool = {}
     app.state.thread_sandbox = {}
@@ -24,3 +32,11 @@ def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: 
     # chat-owned typing state for agent chat delivery, but the borrow is made
     # at bootstrap so downstream gateway setup does not reopen app.state.
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app, typing_tracker=typing_tracker)
+    # @@@threads-bootstrap-borrowable-state - bootstrap still attaches thread
+    # runtime objects onto app.state for the wider app, but it also returns the
+    # freshly built runtime handles so enclosing lifespans do not need to reread them.
+    return ThreadsRuntimeState(
+        queue_manager=app.state.queue_manager,
+        agent_runtime_gateway=app.state.agent_runtime_gateway,
+        activity_reader=app.state.agent_runtime_thread_activity_reader,
+    )
