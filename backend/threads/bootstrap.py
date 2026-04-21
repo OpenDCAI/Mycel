@@ -32,6 +32,9 @@ def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: 
     # chat-owned typing state for agent chat delivery, but the borrow is made
     # at bootstrap so downstream gateway setup does not reopen app.state.
     app.state.agent_runtime_gateway = build_agent_runtime_gateway(app, typing_tracker=typing_tracker)
+    # @@@threads-bootstrap-borrowable-state - bootstrap still attaches thread
+    # runtime objects onto app.state for the wider app, but it also returns the
+    # freshly built runtime handles so enclosing lifespans do not need to reread them.
     return ThreadsRuntimeState(
         queue_manager=app.state.queue_manager,
         agent_runtime_gateway=app.state.agent_runtime_gateway,
