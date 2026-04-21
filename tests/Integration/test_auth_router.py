@@ -32,7 +32,7 @@ class _FakeAuthService:
 @pytest.mark.asyncio
 async def test_send_otp_calls_auth_service_directly():
     service = _FakeAuthService()
-    app = SimpleNamespace(state=SimpleNamespace(auth_service=service))
+    app = SimpleNamespace(state=SimpleNamespace(auth_runtime_state=SimpleNamespace(auth_service=service)))
 
     result = await auth_router.send_otp(
         auth_router.SendOtpRequest(email="fresh@example.com", password="pass1234", invite_code="invite-1"),
@@ -47,7 +47,7 @@ async def test_send_otp_calls_auth_service_directly():
 async def test_send_otp_maps_value_error_to_bad_request():
     service = _FakeAuthService()
     service.send_otp_error = ValueError("邀请码无效或已过期")
-    app = SimpleNamespace(state=SimpleNamespace(auth_service=service))
+    app = SimpleNamespace(state=SimpleNamespace(auth_runtime_state=SimpleNamespace(auth_service=service)))
 
     with pytest.raises(HTTPException) as exc_info:
         await auth_router.send_otp(
@@ -63,7 +63,7 @@ async def test_send_otp_maps_value_error_to_bad_request():
 async def test_login_maps_value_error_to_unauthorized():
     service = _FakeAuthService()
     service.login_error = ValueError("Invalid username or password")
-    app = SimpleNamespace(state=SimpleNamespace(auth_service=service))
+    app = SimpleNamespace(state=SimpleNamespace(auth_runtime_state=SimpleNamespace(auth_service=service)))
 
     with pytest.raises(HTTPException) as exc_info:
         await auth_router.login(auth_router.LoginRequest(identifier="fresh@example.com", password="pass1234"), app)

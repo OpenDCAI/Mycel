@@ -18,7 +18,8 @@ def _invite_code_payload(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _invite_code_repo(request: Request) -> InviteCodeRepo:
-    sb_client = getattr(request.app.state, "_supabase_client", None)
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    sb_client = getattr(runtime_storage, "supabase_client", None)
     if sb_client is None:
         raise HTTPException(503, "邀请码服务不可用（当前为 SQLite 模式）")
     repo = getattr(request.app.state, "invite_code_repo", None)

@@ -50,8 +50,8 @@ def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyP
         lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
-                "auth_service",
-                SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+                "auth_runtime_state",
+                SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"})),
             )
             or object()
         ),
@@ -86,8 +86,8 @@ def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatc
         lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
-                "auth_service",
-                SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+                "auth_runtime_state",
+                SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"})),
             )
             or object()
         ),
@@ -116,8 +116,8 @@ def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPa
         lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
-                "auth_service",
-                SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+                "auth_runtime_state",
+                SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"})),
             )
             or object()
         ),
@@ -158,8 +158,8 @@ def test_monitor_app_maps_missing_remote_execution_target_to_503(monkeypatch: py
         lambda app, *, storage_state, contact_repo: (
             setattr(
                 app.state,
-                "auth_service",
-                SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"}),
+                "auth_runtime_state",
+                SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "owner-1"})),
             )
             or object()
         ),

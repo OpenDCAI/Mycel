@@ -73,7 +73,8 @@ def list_account_resource_limits(app: Any, user_id: str) -> dict[str, list[dict[
         raise RuntimeError("thread_repo is required for account resource limits")
 
     count_kwargs = {"thread_repo": thread_repo}
-    supabase_client = getattr(app.state, "_supabase_client", None)
+    runtime_storage = getattr(app.state, "runtime_storage_state", None)
+    supabase_client = getattr(runtime_storage, "supabase_client", None)
     if supabase_client is not None:
         count_kwargs["supabase_client"] = supabase_client
     used_by_provider = sandbox_service.count_user_visible_sandboxes_by_provider(user_id, **count_kwargs)

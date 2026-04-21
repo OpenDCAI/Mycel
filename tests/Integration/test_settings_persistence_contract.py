@@ -239,7 +239,7 @@ def test_update_provider_platform_source_removes_stored_user_key():
 def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     app = _settings_test_app(_FakeSettingsRepo())
     app.state.thread_repo = object()
-    app.state._supabase_client = object()
+    app.state.runtime_storage_state = SimpleNamespace(supabase_client=object())
     seen: dict[str, object] = {}
 
     def _fake_count_user_visible_sandboxes_by_provider(user_id: str, **kwargs):
@@ -287,7 +287,7 @@ def test_account_resources_route_returns_backend_quota_contract(monkeypatch):
     }
     assert seen == {
         "user_id": "user-1",
-        "kwargs": {"thread_repo": app.state.thread_repo, "supabase_client": app.state._supabase_client},
+        "kwargs": {"thread_repo": app.state.thread_repo, "supabase_client": app.state.runtime_storage_state.supabase_client},
     }
 
 
