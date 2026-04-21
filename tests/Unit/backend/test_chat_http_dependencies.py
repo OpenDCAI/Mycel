@@ -13,7 +13,9 @@ def _app_state(**kwargs):
 def test_get_messaging_service_returns_service_when_present():
     service = SimpleNamespace(name="messaging")
 
-    assert chat_http_dependencies.get_messaging_service(_app_state(messaging_service=service)) is service
+    app = _app_state(chat_runtime_state=SimpleNamespace(messaging_service=service))
+
+    assert chat_http_dependencies.get_messaging_service(app) is service
 
 
 def test_chat_http_dependencies_read_chat_runtime_state_bundle():
@@ -33,6 +35,23 @@ def test_chat_http_dependencies_read_chat_runtime_state_bundle():
     assert chat_http_dependencies.get_optional_messaging_service(app) is messaging_service
     assert chat_http_dependencies.get_relationship_service(app) is relationship_service
     assert chat_http_dependencies.get_contact_repo(app) is contact_repo
+
+
+def test_chat_http_dependencies_do_not_fall_back_to_legacy_chat_attrs():
+    app = _app_state(
+        messaging_service=object(),
+        relationship_service=object(),
+        contact_repo=object(),
+    )
+
+    with pytest.raises(HTTPException, match="MessagingService not initialized"):
+        chat_http_dependencies.get_messaging_service(app)
+
+    with pytest.raises(HTTPException, match="Relationship service unavailable"):
+        chat_http_dependencies.get_relationship_service(app)
+
+    with pytest.raises(HTTPException, match="Contact repo unavailable"):
+        chat_http_dependencies.get_contact_repo(app)
 
 
 @pytest.mark.asyncio

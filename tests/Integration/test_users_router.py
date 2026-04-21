@@ -307,6 +307,10 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
     app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
     app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")])
     app.state.contact_repo = _empty_contact_repo()
+    app.state.chat_runtime_state = SimpleNamespace(
+        relationship_service=app.state.relationship_service,
+        contact_repo=app.state.contact_repo,
+    )
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
 
     with TestClient(app) as client:
@@ -339,6 +343,10 @@ def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
     )
     app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
     app.state.contact_repo = _empty_contact_repo()
+    app.state.chat_runtime_state = SimpleNamespace(
+        relationship_service=app.state.relationship_service,
+        contact_repo=app.state.contact_repo,
+    )
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
 
     with TestClient(app) as client:
@@ -369,10 +377,14 @@ def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
     app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
     app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
     app.state.relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
+    app.state.chat_runtime_state = SimpleNamespace(
+        relationship_service=app.state.relationship_service,
+        contact_repo=None,
+    )
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
 
     with TestClient(app) as client:
         response = client.get("/api/users/chat-candidates", headers={"Authorization": "Bearer token"})
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Contact repo unavailable"}
+    assert response.json() == {"detail": "chat bootstrap not attached: contact_repo"}

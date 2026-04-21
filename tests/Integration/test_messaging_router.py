@@ -26,6 +26,16 @@ def _chat(chat_id: str) -> SimpleNamespace:
 def _route_test_app(state: SimpleNamespace) -> FastAPI:
     app = FastAPI()
     app.state = state
+    if not hasattr(app.state, "chat_runtime_state"):
+        messaging_service = getattr(app.state, "messaging_service", None)
+        relationship_service = getattr(app.state, "relationship_service", None)
+        contact_repo = getattr(app.state, "contact_repo", None)
+        if any(value is not None for value in (messaging_service, relationship_service, contact_repo)):
+            app.state.chat_runtime_state = SimpleNamespace(
+                messaging_service=messaging_service,
+                relationship_service=relationship_service,
+                contact_repo=contact_repo,
+            )
     app.include_router(chats_router.router)
     app.dependency_overrides[get_current_user_id] = lambda: "human-user-1"
     return app
