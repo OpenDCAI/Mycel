@@ -103,8 +103,6 @@ async def test_gateway_thread_input_passes_enable_trajectory_to_start_agent_run(
         patch("backend.threads.chat_adapters.bootstrap.start_agent_run", return_value="run-123") as start_run,
         patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache"),
     ):
-        await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(
-            _thread_input(enable_trajectory=True)
-        )
+        await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(_thread_input(enable_trajectory=True))
 
     assert start_run.call_args.kwargs["enable_trajectory"] is True

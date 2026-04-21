@@ -36,9 +36,7 @@ async def test_first_screen_reuses_inflight_owner_thread_read_across_conversatio
             thread_repo=thread_repo,
             terminal_repo=SimpleNamespace(summarize_threads=lambda _thread_ids: {}),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             chat_runtime_state=SimpleNamespace(messaging_service=messaging_service),
         )

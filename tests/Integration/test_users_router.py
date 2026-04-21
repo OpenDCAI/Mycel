@@ -313,9 +313,7 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
     app.include_router(users_router.users_router)
     app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
     app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
-    relationship_service = SimpleNamespace(
-        list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")]
-    )
+    relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")])
     contact_repo = _empty_contact_repo()
     app.state.chat_runtime_state = SimpleNamespace(
         relationship_service=relationship_service,

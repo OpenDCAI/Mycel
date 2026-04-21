@@ -209,10 +209,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     )
     monkeypatch.setattr(
         "backend.threads.bootstrap.attach_threads_runtime",
-        lambda app, *_args, **_kwargs: (
-            setattr(app.state, "agent_pool", {})
-            or SimpleNamespace(activity_reader=object())
-        ),
+        lambda app, *_args, **_kwargs: setattr(app.state, "agent_pool", {}) or SimpleNamespace(activity_reader=object()),
     )
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())

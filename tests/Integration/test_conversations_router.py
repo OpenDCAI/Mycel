@@ -40,9 +40,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
                 ),
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             messaging_service=SimpleNamespace(
                 list_conversation_summaries_for_user=lambda _user_id: [
@@ -110,9 +108,7 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                 get_by_user_id=lambda _uid: None,
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={"thread-1": 1775540000.0},
             messaging_service=SimpleNamespace(
                 list_conversation_summaries_for_user=lambda _user_id: [
@@ -170,9 +166,7 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
                 get_by_user_id=lambda _uid: None,
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             messaging_service=None,
         )
@@ -269,9 +263,7 @@ async def test_list_conversations_collapses_hire_threads_to_one_visible_conversa
                 ],
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={"thread-main": 1775540000.0, "thread-extra": 1775541000.0},
             messaging_service=None,
         )
@@ -291,9 +283,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
                 get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not read visit rows itself")),
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             messaging_service=SimpleNamespace(
                 list_conversation_summaries_for_user=lambda _user_id: [
@@ -342,9 +332,7 @@ async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatc
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             messaging_service=messaging_service,
         )
@@ -389,9 +377,7 @@ async def test_list_conversations_fetches_hire_and_visit_sources_in_parallel() -
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=_list_threads),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(
-                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
-            ),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             messaging_service=SimpleNamespace(list_conversation_summaries_for_user=_list_visit_summaries),
         )

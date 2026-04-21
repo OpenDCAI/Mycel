@@ -92,9 +92,7 @@ async def test_chat_events_requires_chat_membership():
         messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, _user_id: False),
         chat_event_bus=_ChatEventBus(),
     )
-    app = SimpleNamespace(
-        state=SimpleNamespace(chat_runtime_state=runtime_state)
-    )
+    app = SimpleNamespace(state=SimpleNamespace(chat_runtime_state=runtime_state))
 
     with pytest.raises(HTTPException) as exc_info:
         await chats_router.stream_chat_events(
@@ -117,9 +115,7 @@ async def test_chat_events_uses_authenticated_participant():
         messaging_service=SimpleNamespace(is_chat_member=lambda _chat_id, user_id: user_id == "user-1"),
         chat_event_bus=event_bus,
     )
-    app = SimpleNamespace(
-        state=SimpleNamespace(chat_runtime_state=runtime_state)
-    )
+    app = SimpleNamespace(state=SimpleNamespace(chat_runtime_state=runtime_state))
 
     response = await chats_router.stream_chat_events(
         "chat-1",
