@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from backend.monitor.api.http.dependencies import get_current_user_id
+from backend.monitor.api.http.execution_target import resolve_monitor_evaluation_base_url
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
 
 router = APIRouter()
@@ -30,7 +31,7 @@ def evaluation_batch_start_action(
     try:
         return monitor_gateway.start_evaluation_batch(
             batch_id=batch_id,
-            base_url=str(request.base_url).rstrip("/"),
+            execution_base_url=resolve_monitor_evaluation_base_url(request),
             token=_extract_bearer_token(request),
             schedule_task=background_tasks.add_task,
         )

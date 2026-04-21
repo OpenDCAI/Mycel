@@ -31,12 +31,12 @@ async def run_monitor_evaluation_batch(
     *,
     batch_id: str,
     scenarios: list[EvalScenario],
-    base_url: str,
+    execution_base_url: str,
     token: str,
     agent_user_id: str,
     batch_service: EvaluationBatchService,
 ) -> None:
-    client = EvalClient(base_url=base_url, token=token)
+    client = EvalClient(base_url=execution_base_url, token=token)
     try:
         runner = EvalRunner(
             client=client,
