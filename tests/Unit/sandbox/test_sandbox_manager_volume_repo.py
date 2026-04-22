@@ -284,7 +284,7 @@ def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_pat
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
-    manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     result = manager._setup_mounts("thread-1")
 
@@ -323,7 +323,7 @@ def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monke
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
-    lease = SimpleNamespace(lease_id="lease-1")
+    lease = SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
 
@@ -340,7 +340,7 @@ def test_setup_mounts_daytona_uses_lease_id_for_managed_volume(monkeypatch, tmp_
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
-    lease = SimpleNamespace(lease_id="lease-1")
+    lease = SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: lease
     manager.lease_store = _FakeLeaseStore()
 
@@ -423,7 +423,7 @@ def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
     ]
     manager.session_manager = _FakeSessionManager(active_rows)
     fake_lease = SimpleNamespace(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="agentbay",
         refresh_instance_status=lambda _provider: "running",
         pause_instance=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("pause should not be used")),
@@ -700,7 +700,7 @@ def test_sync_uploads_skips_local_volume_sync_without_volume_metadata():
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
-    manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._get_thread_lease = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.session_manager = SimpleNamespace(
@@ -767,6 +767,7 @@ def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
         update_state=lambda _state: None,
     )
     lease = SimpleNamespace(
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         observed_state="paused",
         bind_mounts=None,
@@ -797,13 +798,13 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
         get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
     )
     paused_lease = SimpleNamespace(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         observed_state="paused",
         bind_mounts=None,
     )
     resumed_lease = SimpleNamespace(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         observed_state="running",
         bind_mounts=None,
@@ -957,7 +958,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
         },
         create=create_terminal,
     )
-    manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._assert_lease_provider = lambda _lease, _thread_id: None
     manager.session_manager = SimpleNamespace(create=lambda **kwargs: created_background_commands.append(kwargs) or kwargs)
     monkeypatch.setattr(sandbox_manager_module, "terminal_from_row", from_row)
@@ -977,12 +978,12 @@ def test_resume_session_rebinds_live_session_lease_after_resume():
     manager = _new_test_manager()
     terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
     resumed_lease = SimpleNamespace(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         observed_state="running",
         get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
         resume_instance=lambda _provider, source="user_resume": True,
     )
-    stale_lease = SimpleNamespace(lease_id="lease-1", observed_state="paused")
+    stale_lease = SimpleNamespace(sandbox_runtime_id="lease-1", observed_state="paused")
     runtime = SimpleNamespace(sandbox_runtime=stale_lease)
     live_session = SimpleNamespace(
         session_id="sess-1",

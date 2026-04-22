@@ -381,7 +381,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         on_stdout_chunk: Callable[[str], None] | None = None,
     ) -> ExecuteResult:
         if self.sandbox_runtime.observed_state == "paused":
-            raise RuntimeError(f"Sandbox lease {self.sandbox_runtime.lease_id} is paused. Resume before executing commands.")
+            raise RuntimeError(f"Sandbox lease {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands.")
 
         state = self.terminal.get_state()
         start, end, script = _build_windows_shell_script(command, cwd=state.cwd, env_delta=state.env_delta)
@@ -428,7 +428,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
             return self._execute_windows_once_sync(command, timeout, on_stdout_chunk=on_stdout_chunk)
 
         if self.sandbox_runtime.observed_state == "paused":
-            raise RuntimeError(f"Sandbox lease {self.sandbox_runtime.lease_id} is paused. Resume before executing commands.")
+            raise RuntimeError(f"Sandbox lease {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands.")
 
         state = self.terminal.get_state()
         pty_session = self._ensure_session_sync(timeout)

@@ -289,7 +289,7 @@ class ChatSessionManager:
             session_id=session_id,
             thread_id=thread_id,
             terminal_id=terminal.terminal_id,
-            lease_id=sandbox_runtime.lease_id,
+            lease_id=sandbox_runtime.sandbox_runtime_id,
             runtime_id=runtime_id,
             status="active",
             idle_ttl_sec=policy.idle_ttl_sec,

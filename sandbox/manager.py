@@ -189,7 +189,7 @@ def bind_thread_to_existing_sandbox(
         raise RuntimeError("sandbox provider_env_id did not resolve to a lease")
     lease_id = str(lease.get("lease_id") or "").strip()
     if not lease_id:
-        raise RuntimeError("lease.lease_id is required")
+        raise RuntimeError("lease.sandbox_runtime_id is required")
     initial_cwd = bind_thread_to_existing_lease(
         thread_id,
         lease_id,
@@ -320,7 +320,7 @@ class SandboxManager:
         # @@@daytona-upgrade - first startup creates managed volume
         volume_name = self._upgrade_to_daytona_volume(
             thread_id,
-            lease.lease_id,
+            lease.sandbox_runtime_id,
             remote_path,
         )
         self.volume.mount_managed_volume(thread_id, volume_name, remote_path)
@@ -376,7 +376,7 @@ class SandboxManager:
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return None
-        lease_ids = {terminal.lease_id for terminal in terminals}
+        lease_ids = {terminal.sandbox_runtime_id for terminal in terminals}
         # @@@thread-single-lease-invariant - Terminals created via non-block must share one lease per thread.
         if len(lease_ids) != 1:
             raise RuntimeError(f"Thread {thread_id} has inconsistent lease_ids: {sorted(lease_ids)}")
@@ -391,7 +391,7 @@ class SandboxManager:
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return False
-        lease = self._get_sandbox_runtime(terminals[0].lease_id)
+        lease = self._get_sandbox_runtime(terminals[0].sandbox_runtime_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
     def _resolve_sync_source_path(self, thread_id: str) -> Path:
@@ -571,7 +571,7 @@ class SandboxManager:
             self.terminal_store.create(
                 terminal_id=terminal_id,
                 thread_id=thread_id,
-                lease_id=lease.lease_id,
+                lease_id=lease.sandbox_runtime_id,
                 initial_cwd=initial_cwd,
             ),
             self.db_path,
@@ -669,7 +669,7 @@ class SandboxManager:
             if lease:
                 # @@@idle-reaper-shared-lease - non-blocking commands fork background terminals but share one lease.
                 # Do not pause the underlying lease if another session on the same lease is still active/idle.
-                lease_id = str(row.get("lease_id") or lease.lease_id)
+                lease_id = str(row.get("lease_id") or lease.sandbox_runtime_id)
                 has_other_active = False
                 for other in active_rows:
                     if str(other.get("lease_id") or "") != lease_id:
@@ -684,7 +684,7 @@ class SandboxManager:
                     break
 
                 if not has_other_active:
-                    if self._lease_is_busy(lease.lease_id):
+                    if self._lease_is_busy(lease.sandbox_runtime_id):
                         continue
                     status = lease.refresh_instance_status(self.provider)
                     capability = self.provider.get_capability()
@@ -699,14 +699,14 @@ class SandboxManager:
                             else:
                                 print(
                                     f"[idle-reaper] provider {self.provider.name} cannot reclaim expired lease "
-                                    f"{lease.lease_id} for thread {thread_id}"
+                                    f"{lease.sandbox_runtime_id} for thread {thread_id}"
                                 )
                                 continue
                         except Exception as exc:
-                            print(f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} for thread {thread_id}: {exc}")
+                            print(f"[idle-reaper] failed to reclaim expired lease {lease.sandbox_runtime_id} for thread {thread_id}: {exc}")
                             continue
                         if not reclaimed:
-                            print(f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} for thread {thread_id}")
+                            print(f"[idle-reaper] failed to reclaim expired lease {lease.sandbox_runtime_id} for thread {thread_id}")
                             continue
 
             self.session_manager.delete(session_id, reason="idle_timeout")
