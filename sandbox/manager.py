@@ -187,9 +187,9 @@ def bind_thread_to_existing_sandbox(
     )
     if lease is None:
         raise RuntimeError("sandbox provider_env_id did not resolve to a sandbox runtime")
-    lease_id = str(lease.get("lease_id") or "").strip()
+    lease_id = str(lease.get("sandbox_runtime_id") or "").strip()
     if not lease_id:
-        raise RuntimeError("lease.sandbox_runtime_id is required")
+        raise RuntimeError("sandbox_runtime.sandbox_runtime_id is required")
     initial_cwd = bind_thread_to_existing_sandbox_runtime(
         thread_id,
         lease_id,
@@ -892,7 +892,7 @@ class SandboxManager:
         seen_instance_ids: set[str] = set()
 
         for lease_row in self.sandbox_runtime_store.list_by_provider(self.provider.name):
-            lease_id = lease_row["lease_id"]
+            lease_id = lease_row["sandbox_runtime_id"]
             lease = self._get_sandbox_runtime(lease_id)
             if not lease:
                 continue
@@ -918,7 +918,7 @@ class SandboxManager:
                         "status": status,
                         "created_at": lease_row.get("created_at"),
                         "last_active": lease_row.get("updated_at"),
-                        "lease_id": lease_id,
+                        "sandbox_runtime_id": lease_id,
                         "instance_id": refreshed_instance.instance_id,
                         "chat_session_id": None,
                         "source": "lease",
@@ -937,7 +937,7 @@ class SandboxManager:
                         "status": status,
                         "created_at": lease_row.get("created_at"),
                         "last_active": (chat or {}).get("last_active_at") or lease_row.get("updated_at"),
-                        "lease_id": lease_id,
+                        "sandbox_runtime_id": lease_id,
                         "instance_id": refreshed_instance.instance_id,
                         "chat_session_id": (chat or {}).get("session_id"),
                         "source": "lease",

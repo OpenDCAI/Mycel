@@ -67,13 +67,13 @@ def _int_flag(value: Any) -> int:
     return 1 if bool(value) else 0
 
 
-def _instance_from_lease(row: dict[str, Any]) -> dict[str, Any] | None:
+def _instance_from_sandbox_runtime(row: dict[str, Any]) -> dict[str, Any] | None:
     current_instance_id = row.get("current_instance_id")
     if not current_instance_id:
         return None
     return {
         "instance_id": current_instance_id,
-        "lease_id": row.get("lease_id"),
+        "sandbox_runtime_id": row.get("sandbox_runtime_id"),
         "provider_session_id": current_instance_id,
         "status": row.get("observed_state"),
         "created_at": row.get("instance_created_at"),
@@ -81,11 +81,11 @@ def _instance_from_lease(row: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _lease_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
+def _sandbox_runtime_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
     runtime_state = _runtime_state(row)
     result = {
         "sandbox_id": row.get("id"),
-        "lease_id": _lease_id(row),
+        "sandbox_runtime_id": _lease_id(row),
         "provider_name": row.get("provider_name"),
         "recipe_id": runtime_state.get("recipe_id") or row.get("sandbox_template_id"),
         "workspace_key": runtime_state.get("workspace_key"),
@@ -104,7 +104,7 @@ def _lease_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
-    result["_instance"] = _instance_from_lease(result)
+    result["_instance"] = _instance_from_sandbox_runtime(result)
     return result
 
 
@@ -147,7 +147,7 @@ class SupabaseSandboxRuntimeRepo:
         row = self._sandbox_by_lease_id(lease_id)
         if row is None:
             return None
-        return _lease_from_sandbox(row)
+        return _sandbox_runtime_from_sandbox(row)
 
     def create(
         self,
@@ -203,7 +203,7 @@ class SupabaseSandboxRuntimeRepo:
             _REPO,
             "find_by_instance",
         )
-        return _lease_from_sandbox(dict(rows[0])) if rows else None
+        return _sandbox_runtime_from_sandbox(dict(rows[0])) if rows else None
 
     def adopt_instance(
         self,
@@ -354,7 +354,7 @@ class SupabaseSandboxRuntimeRepo:
 
     def list_all(self) -> list[dict[str, Any]]:
         return sorted(
-            [_lease_from_sandbox(row) for row in self._sandbox_rows() if _has_runtime_state(row)],
+            [_sandbox_runtime_from_sandbox(row) for row in self._sandbox_rows() if _has_runtime_state(row)],
             key=lambda row: row.get("created_at") or "",
             reverse=True,
         )

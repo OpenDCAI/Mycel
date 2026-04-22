@@ -84,7 +84,7 @@ async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: 
                 "thread_id": "thread-1",
                 "provider": "local",
                 "status": "running",
-                "lease_" + "id": "lease-1",
+                "sandbox_runtime_" + "id": "lease-1",
                 "instance_id": "instance-1",
             }
         ],
@@ -116,7 +116,7 @@ async def test_sandbox_runtime_mutation_response_strips_lower_runtime_identity(m
             "session_id": "runtime-1",
             "provider": "local",
             "thread_id": None,
-            "lease_" + "id": "lease-1",
+            "sandbox_runtime_" + "id": "lease-1",
             "mode": "manager_runtime",
         }
 

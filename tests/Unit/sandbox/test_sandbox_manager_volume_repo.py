@@ -167,7 +167,9 @@ def _new_test_manager() -> Any:
 
 
 def test_resolve_existing_sandbox_runtime_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
-    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
+        row={"sandbox_runtime_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"}
+    )
 
     def build_provider(name: str):
         return SimpleNamespace(default_cwd=f"/providers/{name}") if name == "local" else None
@@ -227,7 +229,9 @@ def test_resolve_existing_sandbox_runtime_cwd_fails_loud_when_provider_default_i
 
 def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider_default_exists(monkeypatch):
     terminal_repo = _FakeBindTerminalRepo(latest_by_lease={"cwd": "/terminal/latest"})
-    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
+        row={"sandbox_runtime_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"}
+    )
 
     monkeypatch.setattr(
         sandbox_manager_module,
@@ -248,7 +252,7 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
     )
 
     assert initial_cwd == "/providers/local"
-    assert lease["lease_id"] == "lease-1"
+    assert lease["sandbox_runtime_id"] == "lease-1"
     assert terminal_repo.created[0]["initial_cwd"] == "/providers/local"
 
 
@@ -1069,7 +1073,7 @@ def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
 def test_resolve_existing_sandbox_runtime_prefers_provider_env_binding() -> None:
     sandbox_runtime_repo = SimpleNamespace(
         find_by_instance=lambda **kwargs: {
-            "lease_id": "lease-live",
+            "sandbox_runtime_id": "lease-live",
             "provider_name": kwargs["provider_name"],
             "current_instance_id": kwargs["instance_id"],
         },
@@ -1086,7 +1090,7 @@ def test_resolve_existing_sandbox_runtime_prefers_provider_env_binding() -> None
     )
 
     assert lease == {
-        "lease_id": "lease-live",
+        "sandbox_runtime_id": "lease-live",
         "provider_name": "daytona",
         "current_instance_id": "sandbox-env-1",
     }

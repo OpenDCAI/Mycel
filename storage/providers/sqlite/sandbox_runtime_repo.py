@@ -48,6 +48,11 @@ class SQLiteSandboxRuntimeRepo:
             raise RuntimeError(f"SQLite sandbox runtime repo failed to load runtime after {operation}: {lease_id}")
         return row
 
+    def _runtime_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        result = dict(row)
+        result["sandbox_runtime_id"] = str(result.pop("lease_id"))
+        return result
+
     def get(self, lease_id: str) -> dict[str, Any] | None:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
@@ -70,7 +75,7 @@ class SQLiteSandboxRuntimeRepo:
             if not row:
                 return None
 
-            result = dict(row)
+            result = self._runtime_row_from_db_row(row)
 
             # Attach instance data as _instance key
             if result.get("current_instance_id"):
@@ -85,7 +90,12 @@ class SQLiteSandboxRuntimeRepo:
                     (result["current_instance_id"],),
                 ).fetchone()
                 self._conn.row_factory = None
-                result["_instance"] = dict(inst_row) if inst_row else None
+                if inst_row:
+                    instance = dict(inst_row)
+                    instance["sandbox_runtime_id"] = str(instance.pop("lease_id"))
+                    result["_instance"] = instance
+                else:
+                    result["_instance"] = None
             else:
                 result["_instance"] = None
 
@@ -403,7 +413,7 @@ class SQLiteSandboxRuntimeRepo:
                 """,
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
+            return [self._runtime_row_from_db_row(row) for row in rows]
 
     def list_by_provider(self, provider_name: str) -> list[dict[str, Any]]:
         with self._lock:
@@ -420,7 +430,7 @@ class SQLiteSandboxRuntimeRepo:
                 (provider_name,),
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
+            return [self._runtime_row_from_db_row(row) for row in rows]
 
     def _ensure_tables(self) -> None:
         self._conn.execute("PRAGMA journal_mode=WAL")
