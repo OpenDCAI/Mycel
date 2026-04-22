@@ -122,7 +122,7 @@ class _FakeSandboxRepo:
         self.by_id[row.id] = row
 
 
-class _FakeLeaseRepo:
+class _FakeSandboxRuntimeRepo:
     def __init__(self, row: dict[str, object] | None = None) -> None:
         self._row = row
         self.instance_queries: list[tuple[str, str]] = []
@@ -145,7 +145,7 @@ def _make_threads_app():
             runtime_storage_state=SimpleNamespace(recipe_repo=recipe_repo),
             workspace_repo=_FakeWorkspaceRepo(),
             sandbox_repo=_FakeSandboxRepo(),
-            lease_repo=_FakeLeaseRepo(),
+            sandbox_runtime_repo=_FakeSandboxRuntimeRepo(),
             thread_sandbox={},
             thread_cwd={},
         )
@@ -666,7 +666,7 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
         "provider_env_id": "instance-1",
         "config": {},
     }
-    app.state.sandbox_runtime_repo = _FakeLeaseRepo(
+    app.state.sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
         {
             "lease_" + "id": "lease-1",
             "provider_name": "daytona_selfhost",

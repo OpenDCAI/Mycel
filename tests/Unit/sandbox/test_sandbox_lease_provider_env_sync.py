@@ -5,7 +5,7 @@ import sandbox.lease as sandbox_lease_module
 from sandbox.lease import SandboxInstance, SQLiteSandboxRuntimeHandle
 
 
-class _FakeLeaseRepo:
+class _FakeSandboxRuntimeRepo:
     def __init__(self, row):
         self.row = row
         self.observe_calls = []
@@ -25,7 +25,7 @@ class _FakeLeaseRepo:
         self.closed = True
 
 
-class _FakeAdoptLeaseRepo:
+class _FakeAdoptSandboxRuntimeRepo:
     def __init__(self, row):
         self.row = row
         self.adopt_calls = []
@@ -125,7 +125,7 @@ class _FakeProvider:
 
 
 def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> None:
-    fake_lease_repo = _FakeLeaseRepo(
+    fake_sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
         {
             "lease_id": "lease-1",
             "provider_name": "local",
@@ -153,7 +153,7 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
     fake_sandbox_repo = _FakeSandboxRepo()
 
     monkeypatch.setattr(sandbox_lease_module, "_use_supabase_storage", lambda _db_path=None: True)
-    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_lease_repo)
+    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_sandbox_runtime_repo)
     monkeypatch.setattr(sandbox_lease_module, "_make_provider_event_repo", lambda: fake_event_repo)
     monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
 
@@ -190,7 +190,7 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
 
 
 def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(monkeypatch) -> None:
-    fake_lease_repo = _FakeAdoptLeaseRepo(
+    fake_sandbox_runtime_repo = _FakeAdoptSandboxRuntimeRepo(
         {
             "lease_id": "lease-1",
             "provider_name": "local",
@@ -224,7 +224,7 @@ def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(
     fake_sandbox_repo = _FakeSandboxRepo()
 
     monkeypatch.setattr(sandbox_lease_module, "_use_supabase_storage", lambda _db_path=None: True)
-    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_lease_repo)
+    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_sandbox_runtime_repo)
     monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
     monkeypatch.setattr(sandbox_lease_module, "_make_provider_event_repo", lambda: _FakeEventRepo())
 

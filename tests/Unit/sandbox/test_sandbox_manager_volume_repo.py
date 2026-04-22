@@ -100,7 +100,7 @@ class _FakeBindTerminalRepo:
         self.closed = True
 
 
-class _FakeLeaseRepo:
+class _FakeSandboxRuntimeRepo:
     def __init__(self, row: dict[str, Any] | None = None) -> None:
         self._row = row
         self.closed = False
@@ -167,7 +167,7 @@ def _new_test_manager() -> Any:
 
 
 def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
 
     def build_provider(name: str):
         return SimpleNamespace(default_cwd=f"/providers/{name}") if name == "local" else None
@@ -181,16 +181,16 @@ def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_t
     cwd = sandbox_manager_module.resolve_existing_lease_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
-        sandbox_runtime_repo=lease_repo,
+        sandbox_runtime_repo=sandbox_runtime_repo,
     )
 
     assert cwd == "/providers/local"
-    assert lease_repo.requested_ids == ["lease-1"]
-    assert lease_repo.closed is False
+    assert sandbox_runtime_repo.requested_ids == ["lease-1"]
+    assert sandbox_runtime_repo.closed is False
 
 
 def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_provider_default(monkeypatch):
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
     monkeypatch.setattr(
         sandbox_manager_module,
         "_build_provider_from_name",
@@ -200,15 +200,15 @@ def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_prov
     cwd = sandbox_manager_module.resolve_existing_lease_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
-        sandbox_runtime_repo=lease_repo,
+        sandbox_runtime_repo=sandbox_runtime_repo,
     )
 
     assert cwd == "/providers/local"
-    assert lease_repo.requested_ids == ["lease-1"]
+    assert sandbox_runtime_repo.requested_ids == ["lease-1"]
 
 
 def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavailable(monkeypatch):
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "missing-provider"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "missing-provider"})
     monkeypatch.setattr(
         sandbox_manager_module,
         "_build_provider_from_name",
@@ -219,15 +219,15 @@ def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavaila
         sandbox_manager_module.resolve_existing_lease_cwd(
             "lease-1",
             db_path=Path("/tmp/fake-sandbox.db"),
-            sandbox_runtime_repo=lease_repo,
+            sandbox_runtime_repo=sandbox_runtime_repo,
         )
 
-    assert lease_repo.requested_ids == ["lease-1"]
+    assert sandbox_runtime_repo.requested_ids == ["lease-1"]
 
 
 def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider_default_exists(monkeypatch):
     terminal_repo = _FakeBindTerminalRepo(latest_by_lease={"cwd": "/terminal/latest"})
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
 
     monkeypatch.setattr(
         sandbox_manager_module,
@@ -244,7 +244,7 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
         },
         db_path=Path("/tmp/fake-sandbox.db"),
         terminal_repo=terminal_repo,
-        sandbox_runtime_repo=lease_repo,
+        sandbox_runtime_repo=sandbox_runtime_repo,
     )
 
     assert initial_cwd == "/providers/local"
@@ -257,7 +257,7 @@ def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monk
         latest_by_lease={"cwd": "/terminal/latest"},
         active_by_thread={"thread-parent": {"lease_id": "lease-1"}},
     )
-    lease_repo = _FakeLeaseRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local"})
 
     monkeypatch.setattr(
         sandbox_manager_module,
@@ -271,7 +271,7 @@ def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monk
             "thread-parent",
             db_path=Path("/tmp/fake-sandbox.db"),
             terminal_repo=terminal_repo,
-            sandbox_runtime_repo=lease_repo,
+            sandbox_runtime_repo=sandbox_runtime_repo,
         )
     except ValueError as exc:
         assert str(exc) == "thread reuse cwd is required"
@@ -1067,7 +1067,7 @@ def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
 
 
 def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
-    lease_repo = SimpleNamespace(
+    sandbox_runtime_repo = SimpleNamespace(
         find_by_instance=lambda **kwargs: {
             "lease_id": "lease-live",
             "provider_name": kwargs["provider_name"],
@@ -1082,7 +1082,7 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
             "provider_env_id": "sandbox-env-1",
             "config": {"runtime_handle": "stored-runtime"},
         },
-        sandbox_runtime_repo=lease_repo,
+        sandbox_runtime_repo=sandbox_runtime_repo,
     )
 
     assert lease == {
@@ -1093,7 +1093,7 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
 
 
 def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> None:
-    lease_repo = SimpleNamespace(
+    sandbox_runtime_repo = SimpleNamespace(
         find_by_instance=lambda **_kwargs: None,
         close=lambda: None,
     )
@@ -1105,5 +1105,5 @@ def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> N
                 "provider_env_id": "sandbox-env-1",
                 "config": {"runtime_handle": "stored-runtime"},
             },
-            sandbox_runtime_repo=lease_repo,
+            sandbox_runtime_repo=sandbox_runtime_repo,
         )
