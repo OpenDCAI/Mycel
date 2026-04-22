@@ -287,14 +287,14 @@ class SupabaseSandboxRuntimeRepo:
         )
         now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or _utc_now_iso())
         normalized = parse_sandbox_runtime_instance_state(status).value
-        lease_status = "expired" if normalized == "detached" else "active"
+        sandbox_runtime_status = "expired" if normalized == "detached" else "active"
         self._sandboxes().update(
             {
                 "provider_env_id": None if normalized == "detached" else existing.get("current_instance_id"),
                 "observed_state": normalized,
                 "observed_at": now,
                 "last_error": None,
-                "status": lease_status,
+                "status": sandbox_runtime_status,
                 "updated_at": _utc_now_iso(),
                 "config": _patched_config(
                     row,
@@ -303,7 +303,7 @@ class SupabaseSandboxRuntimeRepo:
                         "version": int(existing.get("version") or 0) + 1,
                         "needs_refresh": 0,
                         "refresh_hint_at": None,
-                        "status": lease_status,
+                        "status": sandbox_runtime_status,
                     },
                 ),
             }
