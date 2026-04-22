@@ -1208,7 +1208,7 @@ async def test_run_agent_passes_parent_workspace_path_into_thread_reuse_bind(mon
         captured["cwd"] = cwd
         return "/workspace/parent"
 
-    monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_lease", fake_bind)
+    monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_sandbox_runtime", fake_bind)
 
     service = _make_service(
         tmp_path,
@@ -1294,7 +1294,7 @@ async def test_run_agent_falls_back_to_child_workspace_root_when_parent_workspac
         captured["cwd"] = cwd
         return cwd
 
-    monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_lease", fake_bind)
+    monkeypatch.setattr("sandbox.manager.bind_thread_to_existing_thread_sandbox_runtime", fake_bind)
 
     service = _make_service(
         tmp_path,

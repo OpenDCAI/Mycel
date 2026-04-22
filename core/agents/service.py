@@ -892,10 +892,10 @@ class AgentService:
             prompt = _normalize_child_workspace_prompt(prompt, child_workspace_root)
 
             if parent_thread_id and parent_thread_id != thread_id:
-                from sandbox.manager import bind_thread_to_existing_thread_lease
+                from sandbox.manager import bind_thread_to_existing_thread_sandbox_runtime
 
                 parent_workspace_cwd = self._resolve_parent_workspace_path(parent_thread_id) or str(child_workspace_root)
-                bind_thread_to_existing_thread_lease(
+                bind_thread_to_existing_thread_sandbox_runtime(
                     thread_id,
                     parent_thread_id,
                     cwd=parent_workspace_cwd,

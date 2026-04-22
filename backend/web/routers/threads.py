@@ -56,7 +56,7 @@ from backend.web.utils.serializers import serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
-from sandbox.manager import bind_thread_to_existing_sandbox, resolve_existing_sandbox_lease
+from sandbox.manager import bind_thread_to_existing_sandbox, resolve_existing_sandbox_runtime
 from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
 from storage.contracts import WorkspaceRow
@@ -344,7 +344,7 @@ def _resolve_owned_existing_sandbox_request_lease(
     sandbox_owner_user_id = _request_row_text(sandbox, "owner_user_id", label="sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
-    return resolve_existing_sandbox_lease(
+    return resolve_existing_sandbox_runtime(
         sandbox,
         sandbox_runtime_repo=getattr(app.state, "sandbox_runtime_repo", None),
     )
