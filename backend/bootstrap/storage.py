@@ -12,14 +12,17 @@ from storage.runtime import build_storage_container
 class RuntimeStorageState:
     supabase_client: object
     storage_container: object
+    recipe_repo: object
 
 
 def build_runtime_storage_state() -> RuntimeStorageState:
     supabase_client = create_supabase_client()
     storage_container = build_storage_container(supabase_client=supabase_client)
+    recipe_repo = storage_container.recipe_repo()
     return RuntimeStorageState(
         supabase_client=supabase_client,
         storage_container=storage_container,
+        recipe_repo=recipe_repo,
     )
 
 

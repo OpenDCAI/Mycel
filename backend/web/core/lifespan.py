@@ -56,7 +56,6 @@ async def lifespan(app: FastAPI):
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.lease_repo = storage_container.lease_repo()
-    app.state.recipe_repo = storage_container.recipe_repo()
     app.state.workspace_repo = storage_container.workspace_repo()
     app.state.sandbox_repo = storage_container.sandbox_repo()
     from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery
@@ -112,7 +111,7 @@ async def lifespan(app: FastAPI):
                     pass
 
         if hasattr(app.state, "recipe_repo"):
-            app.state.recipe_repo.close()
+            runtime_storage.recipe_repo.close()
 
         checkpoint_saver_ctx = getattr(app.state, "_thread_checkpoint_saver_ctx", None)
         if checkpoint_saver_ctx is not None:

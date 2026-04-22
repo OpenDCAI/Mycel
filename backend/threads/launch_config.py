@@ -47,8 +47,12 @@ def build_new_launch_config(
 def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
     if available_sandbox_types is None or list_library is None:
         raise RuntimeError("thread_runtime.launch_config requires available_sandbox_types and list_library bindings")
+    runtime_storage = getattr(app.state, "runtime_storage_state", None)
+    recipe_repo = getattr(runtime_storage, "recipe_repo", None)
+    if recipe_repo is None:
+        raise RuntimeError("recipe_repo is required for launch config resolution")
     providers = [item for item in available_sandbox_types() if item.get("available")]
-    sandbox_templates = list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
+    sandbox_templates = list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo)
     agent_threads = app.state.thread_repo.list_by_agent_user(agent_user_id)
 
     return {
@@ -183,7 +187,8 @@ def _resolve_workspace_backed_sandbox_template(
             provider_name=template_provider_name,
         )
 
-    recipe_repo = getattr(app.state, "recipe_repo", None)
+    runtime_storage = getattr(app.state, "runtime_storage_state", None)
+    recipe_repo = getattr(runtime_storage, "recipe_repo", None)
     get = getattr(recipe_repo, "get", None)
     if not callable(get):
         raise RuntimeError("recipe_repo must support get")

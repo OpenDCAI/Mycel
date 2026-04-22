@@ -49,6 +49,7 @@ def _patch_lifespan_runtime_contract(
     runtime_storage = SimpleNamespace(
         supabase_client=object(),
         storage_container=storage_container,
+        recipe_repo=storage_container.recipe_repo(),
     )
 
     monkeypatch.setattr(
@@ -109,6 +110,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
         assert not hasattr(app.state, "invite_code_repo")
         assert not hasattr(app.state, "user_settings_repo")
         assert not hasattr(app.state, "agent_config_repo")
+        assert not hasattr(app.state, "recipe_repo")
 
 
 @pytest.mark.asyncio
@@ -187,6 +189,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     runtime_storage = SimpleNamespace(
         supabase_client=object(),
         storage_container=storage_container,
+        recipe_repo=storage_container.recipe_repo(),
     )
 
     monkeypatch.setattr("backend.bootstrap.storage.attach_runtime_storage_state", lambda _app: runtime_storage)
