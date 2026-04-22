@@ -8,7 +8,7 @@ from typing import Any
 
 from storage.providers.supabase import _query as q
 
-_REPO = "lease repo"
+_REPO = "sandbox runtime repo"
 _SCHEMA = "container"
 _TABLE = "sandboxes"
 _SANDBOX_COLS = (
@@ -130,7 +130,7 @@ class SupabaseSandboxRuntimeRepo:
 
     def _require_lease(self, row: dict[str, Any] | None, *, lease_id: str, operation: str) -> dict[str, Any]:
         if row is None:
-            raise RuntimeError(f"Supabase lease repo failed to load lease after {operation}: {lease_id}")
+            raise RuntimeError(f"Supabase sandbox runtime repo failed to load runtime after {operation}: {lease_id}")
         return row
 
     def _sandbox_rows(self) -> list[dict[str, Any]]:
@@ -159,7 +159,7 @@ class SupabaseSandboxRuntimeRepo:
         owner_user_id: str | None = None,
     ) -> dict[str, Any]:
         if not owner_user_id:
-            raise RuntimeError("Supabase lease repo create requires owner_user_id for container.sandboxes")
+            raise RuntimeError("Supabase sandbox runtime repo create requires owner_user_id for container.sandboxes")
         now = _utc_now_iso()
         self._sandboxes().insert(
             {

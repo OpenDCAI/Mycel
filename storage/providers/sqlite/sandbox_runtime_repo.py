@@ -45,7 +45,7 @@ class SQLiteSandboxRuntimeRepo:
 
     def _require_lease(self, row: dict[str, Any] | None, *, lease_id: str, operation: str) -> dict[str, Any]:
         if row is None:
-            raise RuntimeError(f"SQLite lease repo failed to load lease after {operation}: {lease_id}")
+            raise RuntimeError(f"SQLite sandbox runtime repo failed to load runtime after {operation}: {lease_id}")
         return row
 
     def get(self, lease_id: str) -> dict[str, Any] | None:
