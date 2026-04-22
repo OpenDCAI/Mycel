@@ -139,6 +139,27 @@ async def test_sandbox_runtime_mutation_response_strips_lower_runtime_identity(m
     assert seen["runtime_id"] == "runtime-1"
 
 
+@pytest.mark.asyncio
+async def test_get_sandbox_runtime_metrics_passes_provider_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_get_runtime_metrics(*args: object, **kwargs: object) -> dict[str, object]:
+        seen["args"] = args
+        seen["kwargs"] = kwargs
+        return {"session_id": "runtime-1", "provider": "local", "metrics": None}
+
+    monkeypatch.setattr(
+        sandbox_router.sandbox_runtime_metrics,
+        "get_runtime_metrics",
+        fake_get_runtime_metrics,
+    )
+
+    result = await sandbox_router.get_sandbox_runtime_metrics("runtime-1", provider="local")
+
+    assert result == {"session_id": "runtime-1", "provider": "local", "metrics": None}
+    assert seen["args"] == ("runtime-1", "local")
+
+
 def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.MonkeyPatch) -> None:
     class _MonitorRepo:
         def query_sandboxes(self) -> list[dict[str, object]]:
