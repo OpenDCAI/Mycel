@@ -23,10 +23,10 @@ def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _sandbox_id_for_lease(lease_id: str) -> str:
-    normalized = str(lease_id or "").strip()
+def _sandbox_id_for_runtime(sandbox_runtime_id: str) -> str:
+    normalized = str(sandbox_runtime_id or "").strip()
     if not normalized:
-        raise RuntimeError("lease_id is required")
+        raise RuntimeError("sandbox_runtime_id is required")
     return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-runtime:{normalized}').hex}"
 
 
@@ -48,7 +48,7 @@ def _runtime_state(row: dict[str, Any]) -> dict[str, Any]:
     return dict(value)
 
 
-def _lease_id(row: dict[str, Any]) -> str:
+def _sandbox_runtime_id_from_row(row: dict[str, Any]) -> str:
     value = _config(row).get(_RUNTIME_HANDLE)
     if isinstance(value, str):
         value = value.strip()
@@ -85,7 +85,7 @@ def _sandbox_runtime_from_sandbox(row: dict[str, Any]) -> dict[str, Any]:
     runtime_state = _runtime_state(row)
     result = {
         "sandbox_id": row.get("id"),
-        "sandbox_runtime_id": _lease_id(row),
+        "sandbox_runtime_id": _sandbox_runtime_id_from_row(row),
         "provider_name": row.get("provider_name"),
         "recipe_id": runtime_state.get("recipe_id") or row.get("sandbox_template_id"),
         "workspace_key": runtime_state.get("workspace_key"),
@@ -128,23 +128,25 @@ class SupabaseSandboxRuntimeRepo:
     def _sandboxes(self) -> Any:
         return q.schema_table(self._client, _SCHEMA, _TABLE, _REPO)
 
-    def _require_lease(self, row: dict[str, Any] | None, *, lease_id: str, operation: str) -> dict[str, Any]:
+    def _require_sandbox_runtime(self, row: dict[str, Any] | None, *, sandbox_runtime_id: str, operation: str) -> dict[str, Any]:
         if row is None:
-            raise RuntimeError(f"Supabase sandbox runtime repo failed to load runtime after {operation}: {lease_id}")
+            raise RuntimeError(
+                f"Supabase sandbox runtime repo failed to load runtime after {operation}: {sandbox_runtime_id}"
+            )
         return row
 
     def _sandbox_rows(self) -> list[dict[str, Any]]:
         rows = q.rows(self._sandboxes().select(_SANDBOX_COLS).execute(), _REPO, "list sandboxes")
         return [dict(row) for row in rows if _config(dict(row)).get(_RUNTIME_HANDLE)]
 
-    def _sandbox_by_lease_id(self, lease_id: str) -> dict[str, Any] | None:
+    def _sandbox_by_runtime_id(self, sandbox_runtime_id: str) -> dict[str, Any] | None:
         for row in self._sandbox_rows():
-            if _lease_id(row) == lease_id:
+            if _sandbox_runtime_id_from_row(row) == sandbox_runtime_id:
                 return row
         return None
 
     def get(self, sandbox_runtime_id: str) -> dict[str, Any] | None:
-        row = self._sandbox_by_lease_id(sandbox_runtime_id)
+        row = self._sandbox_by_runtime_id(sandbox_runtime_id)
         if row is None:
             return None
         return _sandbox_runtime_from_sandbox(row)
@@ -163,7 +165,7 @@ class SupabaseSandboxRuntimeRepo:
         now = _utc_now_iso()
         self._sandboxes().insert(
             {
-                "id": _sandbox_id_for_lease(sandbox_runtime_id),
+                "id": _sandbox_id_for_runtime(sandbox_runtime_id),
                 "owner_user_id": owner_user_id,
                 "provider_name": provider_name,
                 "provider_env_id": None,
@@ -190,7 +192,11 @@ class SupabaseSandboxRuntimeRepo:
                 "updated_at": now,
             }
         ).execute()
-        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="create")
+        return self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="create",
+        )
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> dict[str, Any] | None:
         rows = q.rows(
@@ -215,15 +221,19 @@ class SupabaseSandboxRuntimeRepo:
     ) -> dict[str, Any]:
         from sandbox.lifecycle import parse_sandbox_runtime_instance_state
 
-        existing = self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="adopt_instance")
+        existing = self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="adopt_instance",
+        )
         if existing["provider_name"] != provider_name:
             raise RuntimeError(
                 f"Sandbox runtime provider mismatch during adopt: runtime={existing['provider_name']}, requested={provider_name}"
             )
 
-        row = self._require_lease(
-            self._sandbox_by_lease_id(sandbox_runtime_id),
-            lease_id=sandbox_runtime_id,
+        row = self._require_sandbox_runtime(
+            self._sandbox_by_runtime_id(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
             operation="adopt_instance sandbox",
         )
         now = _utc_now_iso()
@@ -250,7 +260,11 @@ class SupabaseSandboxRuntimeRepo:
                 ),
             }
         ).eq("id", row["id"]).execute()
-        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="adopt_instance")
+        return self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="adopt_instance",
+        )
 
     def observe_status(
         self,
@@ -261,10 +275,14 @@ class SupabaseSandboxRuntimeRepo:
     ) -> dict[str, Any]:
         from sandbox.lifecycle import parse_sandbox_runtime_instance_state
 
-        existing = self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="observe_status")
-        row = self._require_lease(
-            self._sandbox_by_lease_id(sandbox_runtime_id),
-            lease_id=sandbox_runtime_id,
+        existing = self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="observe_status",
+        )
+        row = self._require_sandbox_runtime(
+            self._sandbox_by_runtime_id(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
             operation="observe_status sandbox",
         )
         now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or _utc_now_iso())
@@ -290,7 +308,11 @@ class SupabaseSandboxRuntimeRepo:
                 ),
             }
         ).eq("id", row["id"]).execute()
-        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="observe_status")
+        return self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="observe_status",
+        )
 
     def persist_metadata(
         self,
@@ -307,9 +329,9 @@ class SupabaseSandboxRuntimeRepo:
         refresh_hint_at: Any = None,
         status: str,
     ) -> dict[str, Any]:
-        row = self._require_lease(
-            self._sandbox_by_lease_id(sandbox_runtime_id),
-            lease_id=sandbox_runtime_id,
+        row = self._require_sandbox_runtime(
+            self._sandbox_by_runtime_id(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
             operation="persist_metadata sandbox",
         )
         observed_at_value = observed_at.isoformat() if isinstance(observed_at, datetime) else observed_at
@@ -336,12 +358,16 @@ class SupabaseSandboxRuntimeRepo:
                 ),
             }
         ).eq("id", row["id"]).execute()
-        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="persist_metadata")
+        return self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="persist_metadata",
+        )
 
     def mark_needs_refresh(self, sandbox_runtime_id: str, hint_at: Any = None) -> bool:
         from datetime import datetime as _dt
 
-        row = self._sandbox_by_lease_id(sandbox_runtime_id)
+        row = self._sandbox_by_runtime_id(sandbox_runtime_id)
         if row is None:
             return False
         hinted_at = (hint_at or _dt.now(UTC)).isoformat() if not isinstance(hint_at, str) else hint_at
@@ -359,7 +385,7 @@ class SupabaseSandboxRuntimeRepo:
         return len(q.rows(response, _REPO, "mark_needs_refresh")) > 0
 
     def delete(self, sandbox_runtime_id: str) -> None:
-        row = self._sandbox_by_lease_id(sandbox_runtime_id)
+        row = self._sandbox_by_runtime_id(sandbox_runtime_id)
         if row is None:
             return
         self._sandboxes().delete().eq("id", row["id"]).execute()
