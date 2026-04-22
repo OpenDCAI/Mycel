@@ -70,7 +70,7 @@ async def get_sandbox_status_from_repos(
     thread_repo: Any,
     workspace_repo: Any,
     sandbox_repo: Any,
-    lease_repo: Any,
+    sandbox_runtime_repo: Any,
     thread_id: str,
 ) -> dict[str, Any] | None:
     """Get thread sandbox status from storage repos without bootstrapping an agent."""
@@ -81,7 +81,7 @@ async def get_sandbox_status_from_repos(
         sandbox_repo=sandbox_repo,
         thread_id=thread_id,
     )
-    runtime_row = await asyncio.to_thread(_runtime_row_from_binding, lease_repo, binding)
+    runtime_row = await asyncio.to_thread(_runtime_row_from_binding, sandbox_runtime_repo, binding)
     if not runtime_row:
         return None
 

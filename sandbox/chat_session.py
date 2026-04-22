@@ -142,7 +142,7 @@ class ChatSessionManager:
         default_policy: ChatSessionPolicy | None = None,
         chat_session_repo=None,
         terminal_repo=None,
-        lease_repo=None,
+        sandbox_runtime_repo=None,
     ):
         self.provider = provider
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
@@ -153,7 +153,7 @@ class ChatSessionManager:
         else:
             self._repo = make_chat_session_repo(db_path=self.db_path)
         self._terminal_repo = terminal_repo
-        self._lease_repo = lease_repo
+        self._sandbox_runtime_repo = sandbox_runtime_repo
 
     def _close_runtime(self, session: ChatSession, reason: str) -> None:
         try:
@@ -225,15 +225,15 @@ class ChatSessionManager:
             if own_term_repo:
                 _term_repo.close()
         terminal = terminal_from_row(_term_row, self.db_path) if _term_row else None
-        _lease_repo = self._lease_repo
-        own_lease_repo = _lease_repo is None
-        if _lease_repo is None:
-            _lease_repo = make_sandbox_runtime_repo(db_path=self.db_path)
+        _sandbox_runtime_repo = self._sandbox_runtime_repo
+        own_sandbox_runtime_repo = _sandbox_runtime_repo is None
+        if _sandbox_runtime_repo is None:
+            _sandbox_runtime_repo = make_sandbox_runtime_repo(db_path=self.db_path)
         try:
-            _lease_row = _lease_repo.get(row["lease_id"])
+            _lease_row = _sandbox_runtime_repo.get(row["lease_id"])
         finally:
-            if own_lease_repo:
-                _lease_repo.close()
+            if own_sandbox_runtime_repo:
+                _sandbox_runtime_repo.close()
         sandbox_runtime = sandbox_runtime_from_row(_lease_row, self.db_path) if _lease_row else None
         if not terminal or not sandbox_runtime:
             return None

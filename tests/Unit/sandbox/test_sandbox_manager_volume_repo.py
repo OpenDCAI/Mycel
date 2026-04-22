@@ -181,7 +181,7 @@ def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_t
     cwd = sandbox_manager_module.resolve_existing_lease_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
-        lease_repo=lease_repo,
+        sandbox_runtime_repo=lease_repo,
     )
 
     assert cwd == "/providers/local"
@@ -200,7 +200,7 @@ def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_prov
     cwd = sandbox_manager_module.resolve_existing_lease_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
-        lease_repo=lease_repo,
+        sandbox_runtime_repo=lease_repo,
     )
 
     assert cwd == "/providers/local"
@@ -219,7 +219,7 @@ def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavaila
         sandbox_manager_module.resolve_existing_lease_cwd(
             "lease-1",
             db_path=Path("/tmp/fake-sandbox.db"),
-            lease_repo=lease_repo,
+            sandbox_runtime_repo=lease_repo,
         )
 
     assert lease_repo.requested_ids == ["lease-1"]
@@ -244,7 +244,7 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
         },
         db_path=Path("/tmp/fake-sandbox.db"),
         terminal_repo=terminal_repo,
-        lease_repo=lease_repo,
+        sandbox_runtime_repo=lease_repo,
     )
 
     assert initial_cwd == "/providers/local"
@@ -271,7 +271,7 @@ def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monk
             "thread-parent",
             db_path=Path("/tmp/fake-sandbox.db"),
             terminal_repo=terminal_repo,
-            lease_repo=lease_repo,
+            sandbox_runtime_repo=lease_repo,
         )
     except ValueError as exc:
         assert str(exc) == "thread reuse cwd is required"
@@ -1082,7 +1082,7 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
             "provider_env_id": "sandbox-env-1",
             "config": {"runtime_handle": "stored-runtime"},
         },
-        lease_repo=lease_repo,
+        sandbox_runtime_repo=lease_repo,
     )
 
     assert lease == {
@@ -1105,5 +1105,5 @@ def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> N
                 "provider_env_id": "sandbox-env-1",
                 "config": {"runtime_handle": "stored-runtime"},
             },
-            lease_repo=lease_repo,
+            sandbox_runtime_repo=lease_repo,
         )
