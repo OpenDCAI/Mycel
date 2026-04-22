@@ -7,7 +7,7 @@ from .contact_repo import SupabaseContactRepo
 from .eval_repo import SupabaseEvalRepo
 from .file_operation_repo import SupabaseFileOperationRepo
 from .invite_code_repo import SupabaseInviteCodeRepo
-from .lease_repo import SupabaseLeaseRepo
+from .sandbox_runtime_repo import SupabaseSandboxRuntimeRepo
 from .monitor_operation_repo import SupabaseMonitorOperationRepo
 from .provider_event_repo import SupabaseProviderEventRepo
 from .queue_repo import SupabaseQueueRepo
@@ -30,7 +30,7 @@ __all__ = [
     "SupabaseEvalRepo",
     "SupabaseFileOperationRepo",
     "SupabaseInviteCodeRepo",
-    "SupabaseLeaseRepo",
+    "SupabaseSandboxRuntimeRepo",
     "SupabaseMonitorOperationRepo",
     "SupabaseProviderEventRepo",
     "SupabaseQueueRepo",

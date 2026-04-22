@@ -1,4 +1,4 @@
-"""SQLite repository for sandbox lease persistence."""
+"""SQLite repository for sandbox runtime persistence."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from sandbox.lifecycle import parse_lease_instance_state
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 
-class SQLiteLeaseRepo:
+class SQLiteSandboxRuntimeRepo:
     """Lower sandbox runtime persistence backed by SQLite.
 
     Thread-safe: all connection access is serialized via a lock.

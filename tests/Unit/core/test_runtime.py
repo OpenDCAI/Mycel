@@ -23,7 +23,7 @@ from sandbox.runtime import (
 )
 from sandbox.terminal import SQLiteTerminal, TerminalState, terminal_from_row
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.providers.sqlite.sandbox_runtime_repo import SQLiteSandboxRuntimeRepo
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
@@ -38,7 +38,7 @@ def terminal_store(temp_db):
 class _DomainLeaseStore:
     """Thin wrapper: repo returns dicts, tests expect domain objects from create/get."""
 
-    def __init__(self, repo: SQLiteLeaseRepo):
+    def __init__(self, repo: SQLiteSandboxRuntimeRepo):
         self._repo = repo
 
     def create(self, lower_runtime_id, provider_name, **kw):
@@ -55,8 +55,8 @@ class _DomainLeaseStore:
 
 @pytest.fixture
 def lease_store(temp_db):
-    """Create SQLiteLeaseRepo with domain-object conversion for tests."""
-    repo = SQLiteLeaseRepo(db_path=temp_db)
+    """Create SQLiteSandboxRuntimeRepo with domain-object conversion for tests."""
+    repo = SQLiteSandboxRuntimeRepo(db_path=temp_db)
     store = _DomainLeaseStore(repo)
     yield store
     repo.close()
