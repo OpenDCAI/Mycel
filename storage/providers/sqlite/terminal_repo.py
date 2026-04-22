@@ -44,6 +44,11 @@ class SQLiteTerminalRepo:
         if self._own_conn:
             self._conn.close()
 
+    def _terminal_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        result = dict(row)
+        result["sandbox_runtime_id"] = str(result.pop("lease_id"))
+        return result
+
     # ------------------------------------------------------------------
     # Table setup
     # ------------------------------------------------------------------
@@ -170,7 +175,7 @@ class SQLiteTerminalRepo:
                 (terminal_id,),
             ).fetchone()
             self._conn.row_factory = None
-            return dict(row) if row else None
+            return self._terminal_row_from_db_row(row) if row else None
 
     def summarize_threads(self, thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
         normalized_ids = [str(thread_id or "").strip() for thread_id in thread_ids if str(thread_id or "").strip()]
@@ -255,7 +260,7 @@ class SQLiteTerminalRepo:
                 (thread_id,),
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
+            return [self._terminal_row_from_db_row(row) for row in rows]
 
     def list_all(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -268,7 +273,7 @@ class SQLiteTerminalRepo:
                 """
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
+            return [self._terminal_row_from_db_row(row) for row in rows]
 
     # ------------------------------------------------------------------
     # Writes
@@ -358,7 +363,7 @@ class SQLiteTerminalRepo:
         return {
             "terminal_id": terminal_id,
             "thread_id": thread_id,
-            "lease_id": lease_id,
+            "sandbox_runtime_id": lease_id,
             "cwd": initial_cwd,
             "env_delta_json": env_delta_json,
             "state_version": state_version,

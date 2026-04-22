@@ -229,7 +229,7 @@ def bind_thread_to_existing_thread_sandbox_runtime(
     # parent's lower sandbox binding instead of silently provisioning a new one.
     return bind_thread_to_existing_sandbox_runtime(
         thread_id,
-        str(source_terminal["lease_id"]),
+        str(source_terminal["sandbox_runtime_id"]),
         cwd=cwd,
         db_path=target_db,
         terminal_repo=terminal_repo,
@@ -846,7 +846,7 @@ class SandboxManager:
         for lease_id in lease_ids:
             # @@@shared-lease-destroy-boundary - destroying one thread must not tear down
             # a lease that still has surviving terminals bound to it.
-            lease_in_use = any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all())
+            lease_in_use = any(row.get("sandbox_runtime_id") == lease_id for row in self.terminal_store.list_all())
             if lease_in_use:
                 continue
             if not self.destroy_sandbox_runtime_resources(lease_id):
@@ -857,7 +857,7 @@ class SandboxManager:
         lease = self._get_sandbox_runtime(lease_id)
         if not lease:
             return False
-        if any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all()):
+        if any(row.get("sandbox_runtime_id") == lease_id for row in self.terminal_store.list_all()):
             raise RuntimeError(f"Sandbox runtime {lease_id} still has bound terminals")
         lease.destroy_instance(self.provider)
         if self.provider_capability.runtime_kind == "daytona_pty":
@@ -871,7 +871,7 @@ class SandboxManager:
         terminals = self.terminal_store.list_all()
         threads_by_lease: dict[str, list[str]] = {}
         for term in terminals:
-            lease_id = term.get("lease_id")
+            lease_id = term.get("sandbox_runtime_id")
             thread_id = term.get("thread_id")
             if lease_id and thread_id:
                 threads_by_lease.setdefault(lease_id, []).append(thread_id)

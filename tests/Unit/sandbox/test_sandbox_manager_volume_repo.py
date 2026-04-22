@@ -192,7 +192,9 @@ def test_resolve_existing_sandbox_runtime_cwd_prefers_provider_default_when_no_w
 
 
 def test_resolve_existing_sandbox_runtime_cwd_ignores_latest_terminal_cwd_and_prefers_provider_default(monkeypatch):
-    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
+        row={"sandbox_runtime_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"}
+    )
     monkeypatch.setattr(
         sandbox_manager_module,
         "_build_provider_from_name",
@@ -210,7 +212,9 @@ def test_resolve_existing_sandbox_runtime_cwd_ignores_latest_terminal_cwd_and_pr
 
 
 def test_resolve_existing_sandbox_runtime_cwd_fails_loud_when_provider_default_is_unavailable(monkeypatch):
-    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "missing-provider"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
+        row={"sandbox_runtime_id": "lease-1", "provider_name": "missing-provider"}
+    )
     monkeypatch.setattr(
         sandbox_manager_module,
         "_build_provider_from_name",
@@ -259,9 +263,9 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
 def test_bind_thread_to_existing_thread_sandbox_runtime_requires_parent_workspace_cwd(monkeypatch):
     terminal_repo = _FakeBindTerminalRepo(
         latest_by_lease={"cwd": "/terminal/latest"},
-        active_by_thread={"thread-parent": {"lease_id": "lease-1"}},
+        active_by_thread={"thread-parent": {"sandbox_runtime_id": "lease-1"}},
     )
-    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local"})
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"sandbox_runtime_id": "lease-1", "provider_name": "local"})
 
     monkeypatch.setattr(
         sandbox_manager_module,
@@ -376,7 +380,7 @@ def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
             destroyed_leases.append("lease-1")
 
     lease = _Lease()
-    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    all_terminals = [{"terminal_id": "term-1", "sandbox_runtime_id": "lease-1", "thread_id": "thread-1"}]
     manager._get_thread_sandbox_runtime = lambda _thread_id: lease
     manager._get_sandbox_runtime = lambda _lease_id: lease
     manager.terminal_store = SimpleNamespace(
@@ -410,14 +414,14 @@ def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
     )
     manager.terminal_store = SimpleNamespace(
         db_path=Path("/tmp/fake-sandbox.db"),
-        get_by_id=lambda _terminal_id: {"terminal_id": "term-1", "lease_id": "lease-1"},
+        get_by_id=lambda _terminal_id: {"terminal_id": "term-1", "sandbox_runtime_id": "lease-1"},
     )
     active_rows = [
         {
             "session_id": "sess-1",
             "thread_id": "thread-1",
             "terminal_id": "term-1",
-            "lease_id": "lease-1",
+            "sandbox_runtime_id": "lease-1",
             "started_at": "2026-04-04T00:00:00",
             "last_active_at": "2026-04-04T00:00:00",
             "idle_ttl_sec": 1,
@@ -478,7 +482,7 @@ def test_destroy_thread_resources_skips_local_sync_without_volume_metadata():
     manager._get_sandbox_runtime = lambda _lease_id: lease
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.terminal_store = SimpleNamespace(
-        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}],
+        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "sandbox_runtime_id": "lease-1", "thread_id": "thread-1"}],
         delete=lambda _terminal_id: deleted_terminals.append(_terminal_id),
         list_all=lambda: [],
         db_path=Path("/tmp/fake-sandbox.db"),
@@ -540,7 +544,7 @@ def test_destroy_thread_resources_hard_deletes_thread_chat_sessions_before_termi
     manager._get_sandbox_runtime = lambda _lease_id: lease
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.terminal_store = SimpleNamespace(
-        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}],
+        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "sandbox_runtime_id": "lease-1", "thread_id": "thread-1"}],
         delete=lambda terminal_id: (delete_order.append(f"terminal:{terminal_id}"), deleted_terminals.append(terminal_id)),
         list_all=lambda: [],
         db_path=Path("/tmp/fake-sandbox.db"),
@@ -569,8 +573,8 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     destroyed_leases: list[str] = []
     deleted_leases: list[str] = []
     all_terminals = [
-        {"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"},
-        {"terminal_id": "term-2", "lease_id": "lease-1", "thread_id": "thread-2"},
+        {"terminal_id": "term-1", "sandbox_runtime_id": "lease-1", "thread_id": "thread-1"},
+        {"terminal_id": "term-2", "sandbox_runtime_id": "lease-1", "thread_id": "thread-2"},
     ]
 
     class _Lease:
@@ -630,7 +634,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_from_lease_id(t
             destroyed_leases.append("lease-1")
 
     lease = _Lease()
-    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    all_terminals = [{"terminal_id": "term-1", "sandbox_runtime_id": "lease-1", "thread_id": "thread-1"}]
     manager._get_thread_sandbox_runtime = lambda _thread_id: lease
     manager._get_sandbox_runtime = lambda _lease_id: lease
     manager.terminal_store = SimpleNamespace(
@@ -676,7 +680,7 @@ def test_destroy_thread_resources_derives_daytona_volume_name_from_lease_id(tmp_
             destroyed_leases.append("lease-1")
 
     lease = _Lease()
-    all_terminals = [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}]
+    all_terminals = [{"terminal_id": "term-1", "sandbox_runtime_id": "lease-1", "thread_id": "thread-1"}]
     manager._get_thread_sandbox_runtime = lambda _thread_id: lease
     manager._get_sandbox_runtime = lambda _lease_id: lease
     manager.terminal_store = SimpleNamespace(
@@ -941,7 +945,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
         return {
             "terminal_id": kwargs["terminal_id"],
             "thread_id": kwargs["thread_id"],
-            "lease_id": kwargs["lease_id"],
+            "sandbox_runtime_id": kwargs["lease_id"],
             "cwd": kwargs["initial_cwd"],
             "env_delta_json": "{}",
             "state_version": 0,
@@ -955,7 +959,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
         get_default=lambda _thread_id: {
             "terminal_id": "term-default",
             "thread_id": "thread-1",
-            "lease_id": "lease-1",
+            "sandbox_runtime_id": "lease-1",
             "cwd": "/default",
             "env_delta_json": '{"TOKEN": "value"}',
             "state_version": 7,

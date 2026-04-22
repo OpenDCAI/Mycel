@@ -170,7 +170,7 @@ def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
     return SQLiteTerminal(
         terminal_id=row["terminal_id"],
         thread_id=row["thread_id"],
-        lease_id=row["lease_id"],
+        lease_id=row["sandbox_runtime_id"],
         state=state,
         db_path=db_path,
     )
