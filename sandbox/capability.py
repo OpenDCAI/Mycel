@@ -161,9 +161,9 @@ class _CommandWrapper(BaseExecutor):
         terminal = terminal_from_row(terminal_row, self._manager.db_path)
         if terminal.thread_id != self._session.thread_id:
             raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}")
-        sandbox_runtime = self._manager.get_sandbox_runtime(terminal.lease_id)
+        sandbox_runtime = self._manager.get_sandbox_runtime(terminal.sandbox_runtime_id)
         if sandbox_runtime is None:
-            raise RuntimeError(f"Sandbox runtime {terminal.lease_id} not found for terminal {terminal_id}")
+            raise RuntimeError(f"Sandbox runtime {terminal.sandbox_runtime_id} not found for terminal {terminal_id}")
         return self._manager.session_manager.create(
             session_id=f"sess-{uuid.uuid4().hex[:12]}",
             thread_id=self._session.thread_id,

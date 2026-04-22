@@ -307,7 +307,7 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self._get_sandbox_runtime(terminal.lease_id)
+        lease = self._get_sandbox_runtime(terminal.sandbox_runtime_id)
         if not lease:
             raise ValueError(f"No sandbox runtime for thread {thread_id}")
         remote_path = self.volume.resolve_mount_path()
@@ -492,9 +492,9 @@ class SandboxManager:
                 self.db_path,
             )
         else:
-            lease = self._get_sandbox_runtime(terminal.lease_id)
+            lease = self._get_sandbox_runtime(terminal.sandbox_runtime_id)
             if not lease:
-                lease = self._create_sandbox_runtime(terminal.lease_id, self.provider.name)
+                lease = self._create_sandbox_runtime(terminal.sandbox_runtime_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
             if lease.observed_state == "paused":
                 # @@@paused-lease-rehydrate - a persisted thread can lose its in-memory chat session
@@ -506,7 +506,7 @@ class SandboxManager:
                     self._assert_lease_provider(session.sandbox_runtime, thread_id)
                     self._ensure_bound_instance(session.sandbox_runtime)
                     return SandboxCapability(session, manager=self)
-                lease = self._get_sandbox_runtime(terminal.lease_id)
+                lease = self._get_sandbox_runtime(terminal.sandbox_runtime_id)
                 if not lease:
                     raise RuntimeError(f"Sandbox runtime disappeared after resume for thread {thread_id}")
                 self._assert_lease_provider(lease, thread_id)
@@ -560,9 +560,9 @@ class SandboxManager:
         if default_row is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
         default_terminal = terminal_from_row(default_row, self.db_path)
-        lease = self._get_sandbox_runtime(default_terminal.lease_id)
+        lease = self._get_sandbox_runtime(default_terminal.sandbox_runtime_id)
         if lease is None:
-            raise RuntimeError(f"Missing sandbox runtime {default_terminal.lease_id} for thread {thread_id}")
+            raise RuntimeError(f"Missing sandbox runtime {default_terminal.sandbox_runtime_id} for thread {thread_id}")
         self._assert_lease_provider(lease, thread_id)
 
         inherited = default_terminal.get_state()
@@ -659,7 +659,7 @@ class SandboxManager:
             terminal_id = row.get("terminal_id")
             terminal_row = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
             terminal = terminal_from_row(terminal_row, self.db_path) if terminal_row else None
-            lease = self._get_sandbox_runtime(terminal.lease_id) if terminal else None
+            lease = self._get_sandbox_runtime(terminal.sandbox_runtime_id) if terminal else None
             if lease and lease.provider_name != self.provider.name:
                 continue
 
@@ -836,7 +836,7 @@ class SandboxManager:
                     raise
         self.volume.clear_sync_state(thread_id)
 
-        lease_ids = {terminal.lease_id for terminal in terminals}
+        lease_ids = {terminal.sandbox_runtime_id for terminal in terminals}
 
         self.session_manager.delete_thread(thread_id, reason="thread_deleted")
 

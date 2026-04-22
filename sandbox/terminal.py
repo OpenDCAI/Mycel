@@ -83,7 +83,7 @@ class AbstractTerminal(ABC):
     It does NOT own the physical process - that's owned by PhysicalTerminalRuntime.
 
     Responsibilities:
-    - Store terminal identity (terminal_id, thread_id, lease_id)
+    - Store terminal identity (terminal_id, thread_id, sandbox_runtime_id)
     - Maintain state snapshot (cwd, env_delta, state_version)
     - Persist state to database
     - Provide state to PhysicalTerminalRuntime for hydration
@@ -98,12 +98,12 @@ class AbstractTerminal(ABC):
         self,
         terminal_id: str,
         thread_id: str,
-        lease_id: str,
+        sandbox_runtime_id: str,
         state: TerminalState,
     ):
         self.terminal_id = terminal_id
         self.thread_id = thread_id
-        self.lease_id = lease_id
+        self.sandbox_runtime_id = sandbox_runtime_id
         self._state = state
 
     def get_state(self) -> TerminalState:
@@ -133,11 +133,11 @@ class SQLiteTerminal(AbstractTerminal):
         self,
         terminal_id: str,
         thread_id: str,
-        lease_id: str,
+        sandbox_runtime_id: str,
         state: TerminalState,
         db_path: Path | None = None,
     ):
-        super().__init__(terminal_id, thread_id, lease_id, state)
+        super().__init__(terminal_id, thread_id, sandbox_runtime_id, state)
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
     def _persist_state(self) -> None:
@@ -170,7 +170,7 @@ def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
     return SQLiteTerminal(
         terminal_id=row["terminal_id"],
         thread_id=row["thread_id"],
-        lease_id=row["sandbox_runtime_id"],
+        sandbox_runtime_id=row["sandbox_runtime_id"],
         state=state,
         db_path=db_path,
     )
