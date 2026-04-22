@@ -217,7 +217,9 @@ class SupabaseSandboxRuntimeRepo:
 
         existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="adopt_instance")
         if existing["provider_name"] != provider_name:
-            raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
+            raise RuntimeError(
+                f"Sandbox runtime provider mismatch during adopt: runtime={existing['provider_name']}, requested={provider_name}"
+            )
 
         row = self._require_lease(self._sandbox_by_lease_id(lease_id), lease_id=lease_id, operation="adopt_instance sandbox")
         now = _utc_now_iso()

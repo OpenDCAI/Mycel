@@ -164,7 +164,9 @@ class SQLiteSandboxRuntimeRepo:
                 operation="adopt_instance bootstrap",
             )
         if existing["provider_name"] != provider_name:
-            raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
+            raise RuntimeError(
+                f"Sandbox runtime provider mismatch during adopt: runtime={existing['provider_name']}, requested={provider_name}"
+            )
 
         now = datetime.now().isoformat()
         normalized = parse_lease_instance_state(status).value
@@ -235,7 +237,7 @@ class SQLiteSandboxRuntimeRepo:
 
         adopted = self.get(lease_id)
         if adopted is None:
-            raise RuntimeError(f"Failed to load adopted lease: {lease_id}")
+            raise RuntimeError(f"Failed to load adopted sandbox runtime: {lease_id}")
         return adopted
 
     def observe_status(
