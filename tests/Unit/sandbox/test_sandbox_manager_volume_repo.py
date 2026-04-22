@@ -784,7 +784,7 @@ def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
     )
     manager._get_active_terminal = lambda _thread_id: terminal
     manager._get_sandbox_runtime = lambda _lease_id: lease
-    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._assert_sandbox_runtime_provider = lambda _lease, _thread_id: None
     manager._ensure_bound_instance = lambda _lease: None
     resume_calls: list[tuple[str, str]] = []
     manager.resume_session = lambda thread_id, source="user_resume": resume_calls.append((thread_id, source)) or True
@@ -826,7 +826,7 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
     manager.provider = SimpleNamespace(name="local")
     manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
     manager.volume = _FakeVolume()
-    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._assert_sandbox_runtime_provider = lambda _lease, _thread_id: None
     manager._ensure_bound_instance = lambda _lease: None
     resume_calls: list[tuple[str, str]] = []
 
@@ -867,7 +867,7 @@ def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
     )
     manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
     manager._get_active_terminal = lambda _thread_id: terminal
-    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._assert_sandbox_runtime_provider = lambda _lease, _thread_id: None
     manager._ensure_bound_instance = lambda _lease: None
     manager.session_manager = SimpleNamespace(get=lambda _thread_id, _terminal_id: session)
 
@@ -900,7 +900,7 @@ def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay", eager_instance_binding=False)
     manager._get_active_terminal = lambda _thread_id: terminal
     manager._get_sandbox_runtime = lambda _lease_id: lease
-    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._assert_sandbox_runtime_provider = lambda _lease, _thread_id: None
     manager._ensure_bound_instance = lambda _lease: None
     manager._setup_mounts = lambda _thread_id: {"source_path": expected_path, "remote_path": "/workspace"}
     manager._sync_to_sandbox = lambda thread_id, instance_id, source=None, files=None: sync_calls.append((thread_id, instance_id, source))
@@ -967,7 +967,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
         create=create_terminal,
     )
     manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(sandbox_runtime_id="lease-1")
-    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._assert_sandbox_runtime_provider = lambda _lease, _thread_id: None
     manager.session_manager = SimpleNamespace(create=lambda **kwargs: created_background_commands.append(kwargs) or kwargs)
     monkeypatch.setattr(sandbox_manager_module, "terminal_from_row", from_row)
 

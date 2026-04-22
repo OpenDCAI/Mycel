@@ -346,14 +346,14 @@ class SandboxManager:
         if self._on_session_ready:
             self._on_session_ready(session_id, reason)
 
-    def _ensure_bound_instance(self, lease) -> None:
-        if self.provider_capability.eager_instance_binding and not lease.get_instance():
-            lease.ensure_active_instance(self.provider)
+    def _ensure_sandbox_runtime_bound_instance(self, sandbox_runtime) -> None:
+        if self.provider_capability.eager_instance_binding and not sandbox_runtime.get_instance():
+            sandbox_runtime.ensure_active_instance(self.provider)
 
-    def _assert_lease_provider(self, lease, thread_id: str) -> None:
-        if lease.provider_name != self.provider.name:
+    def _assert_sandbox_runtime_provider(self, sandbox_runtime, thread_id: str) -> None:
+        if sandbox_runtime.provider_name != self.provider.name:
             raise RuntimeError(
-                f"Thread {thread_id} is bound to provider {lease.provider_name}, "
+                f"Thread {thread_id} is bound to provider {sandbox_runtime.provider_name}, "
                 f"but current manager provider is {self.provider.name}. "
                 "Use the matching sandbox type for this thread or recreate the thread."
             )
@@ -384,7 +384,7 @@ class SandboxManager:
         lease = self._get_sandbox_runtime(lease_id)
         if lease is None:
             return None
-        self._assert_lease_provider(lease, thread_id)
+        self._assert_sandbox_runtime_provider(lease, thread_id)
         return lease
 
     def _thread_belongs_to_provider(self, thread_id: str) -> bool:
@@ -462,7 +462,7 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         session = self.session_manager.get(thread_id, terminal.terminal_id) if terminal else None
         if session:
-            self._assert_lease_provider(session.sandbox_runtime, thread_id)
+            self._assert_sandbox_runtime_provider(session.sandbox_runtime, thread_id)
             # @@@activity-resume - Any new activity against a paused thread must resume before command execution.
             if session.status == "paused" or getattr(session.sandbox_runtime, "observed_state", None) == "paused":
                 if not self.resume_session(thread_id, source="auto_resume"):
@@ -470,11 +470,11 @@ class SandboxManager:
                 session = self.session_manager.get(thread_id, session.terminal.terminal_id)
                 if not session:
                     raise RuntimeError(f"Session disappeared after resume for thread {thread_id}")
-                self._assert_lease_provider(session.sandbox_runtime, thread_id)
+                self._assert_sandbox_runtime_provider(session.sandbox_runtime, thread_id)
             # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
             if bind_mounts:
                 self.provider.set_thread_bind_mounts(thread_id, bind_mounts)
-            self._ensure_bound_instance(session.sandbox_runtime)
+            self._ensure_sandbox_runtime_bound_instance(session.sandbox_runtime)
             return SandboxCapability(session, manager=self)
 
         if not terminal:
@@ -495,7 +495,7 @@ class SandboxManager:
             lease = self._get_sandbox_runtime(terminal.sandbox_runtime_id)
             if not lease:
                 lease = self._create_sandbox_runtime(terminal.sandbox_runtime_id, self.provider.name)
-            self._assert_lease_provider(lease, thread_id)
+            self._assert_sandbox_runtime_provider(lease, thread_id)
             if lease.observed_state == "paused":
                 # @@@paused-lease-rehydrate - a persisted thread can lose its in-memory chat session
                 # while the lease stays paused in storage; resume before reconstructing capability.
@@ -503,13 +503,13 @@ class SandboxManager:
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, terminal.terminal_id)
                 if session:
-                    self._assert_lease_provider(session.sandbox_runtime, thread_id)
-                    self._ensure_bound_instance(session.sandbox_runtime)
+                    self._assert_sandbox_runtime_provider(session.sandbox_runtime, thread_id)
+                    self._ensure_sandbox_runtime_bound_instance(session.sandbox_runtime)
                     return SandboxCapability(session, manager=self)
                 lease = self._get_sandbox_runtime(terminal.sandbox_runtime_id)
                 if not lease:
                     raise RuntimeError(f"Sandbox runtime disappeared after resume for thread {thread_id}")
-                self._assert_lease_provider(lease, thread_id)
+                self._assert_sandbox_runtime_provider(lease, thread_id)
 
         # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
         if bind_mounts:
@@ -520,7 +520,7 @@ class SandboxManager:
             # @@@volume-strategy-gate - remote runtimes need volume mount/sync before first command.
             storage = self._setup_mounts(thread_id)
 
-        self._ensure_bound_instance(lease)
+        self._ensure_sandbox_runtime_bound_instance(lease)
 
         # @@@force-instance-for-sync - Non-eager providers (E2B, Daytona, etc.) create instances lazily.
         # Force instance creation here so workspace sync can upload files before tools run.
@@ -563,7 +563,7 @@ class SandboxManager:
         lease = self._get_sandbox_runtime(default_terminal.sandbox_runtime_id)
         if lease is None:
             raise RuntimeError(f"Missing sandbox runtime {default_terminal.sandbox_runtime_id} for thread {thread_id}")
-        self._assert_lease_provider(lease, thread_id)
+        self._assert_sandbox_runtime_provider(lease, thread_id)
 
         inherited = default_terminal.get_state()
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
