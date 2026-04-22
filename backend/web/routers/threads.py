@@ -276,7 +276,7 @@ def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
     if payload.existing_sandbox_id:
-        lower_runtime_row = _resolve_owned_existing_sandbox_request_lease(app, owner_user_id, payload.existing_sandbox_id)
+        lower_runtime_row = _resolve_owned_existing_sandbox_request_runtime(app, owner_user_id, payload.existing_sandbox_id)
         if lower_runtime_row is not None:
             sandbox_type = str(lower_runtime_row["provider_name"] or sandbox_type)
     if sandbox_type == "local":
@@ -322,7 +322,7 @@ class _ExistingSandboxThreadBinding:
     thread_cwd: str
 
 
-def _resolve_owned_existing_sandbox_request_lease(
+def _resolve_owned_existing_sandbox_request_runtime(
     app: Any,
     owner_user_id: str,
     existing_sandbox_id: str,
@@ -543,7 +543,7 @@ def _create_thread_sandbox_resources(
     workspace_repo: Any,
     owner_user_id: str,
 ) -> str:
-    """Create lease and terminal resources without pre-provisioning file-channel storage."""
+    """Create sandbox runtime and terminal resources without pre-provisioning file-channel storage."""
     from sandbox.control_plane_repos import make_terminal_repo
     from storage.runtime import build_sandbox_runtime_repo as make_sandbox_runtime_repo
 
@@ -658,12 +658,12 @@ def _bind_existing_sandbox_for_thread(
     if sandbox is None:
         raise HTTPException(403, "Sandbox not authorized")
 
-    resolved_lease = _resolve_owned_existing_sandbox_request_lease(
+    resolved_runtime = _resolve_owned_existing_sandbox_request_runtime(
         app,
         owner_user_id,
         sandbox_id,
     )
-    if resolved_lease is None:
+    if resolved_runtime is None:
         raise HTTPException(403, "Sandbox not authorized")
 
     bind_cwd = _resolve_existing_sandbox_bind_cwd(
@@ -672,21 +672,21 @@ def _bind_existing_sandbox_for_thread(
         owner_user_id=owner_user_id,
         requested_cwd=requested_cwd,
     )
-    bound_cwd, bound_lease = bind_thread_to_existing_sandbox(
+    bound_cwd, bound_runtime = bind_thread_to_existing_sandbox(
         thread_id,
         sandbox,
         cwd=bind_cwd,
         sandbox_runtime_repo=getattr(app.state, "sandbox_runtime_repo", None),
     )
-    if bound_lease is None:
+    if bound_runtime is None:
         raise HTTPException(403, "Sandbox not authorized")
 
-    # @@@existing-sandbox-binding-boundary - lower lease identity is only the
+    # @@@existing-sandbox-binding-boundary - lower sandbox runtime identity is only the
     # mechanism used by sandbox.manager to attach a terminal; router control
     # flow should stay sandbox/workspace-shaped after this point.
     return _ExistingSandboxThreadBinding(
         sandbox_id=sandbox_id,
-        sandbox_type=str(bound_lease["provider_name"] or ""),
+        sandbox_type=str(bound_runtime["provider_name"] or ""),
         workspace_path=bind_cwd or bound_cwd,
         thread_cwd=bound_cwd,
     )
