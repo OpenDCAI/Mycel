@@ -41,6 +41,11 @@ class SQLiteChatSessionRepo:
         if self._own_conn:
             self._conn.close()
 
+    def _session_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        result = dict(row)
+        result["sandbox_runtime_id"] = str(result.pop("lease_id"))
+        return result
+
     # ------------------------------------------------------------------
     # Table setup
     # ------------------------------------------------------------------
@@ -178,7 +183,7 @@ class SQLiteChatSessionRepo:
                     (thread_id,),
                 ).fetchone()
             self._conn.row_factory = None
-            return dict(row) if row else None
+            return self._session_row_from_db_row(row) if row else None
 
     def get_session_by_id(self, session_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -195,7 +200,7 @@ class SQLiteChatSessionRepo:
                 (session_id,),
             ).fetchone()
             self._conn.row_factory = None
-            return dict(row) if row else None
+            return self._session_row_from_db_row(row) if row else None
 
     def load_status(self, session_id: str) -> str | None:
         with self._lock:
@@ -239,7 +244,7 @@ class SQLiteChatSessionRepo:
                 """
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
+            return [self._session_row_from_db_row(row) for row in rows]
 
     def list_all(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -254,7 +259,7 @@ class SQLiteChatSessionRepo:
                 """
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
+            return [self._session_row_from_db_row(row) for row in rows]
 
     # ------------------------------------------------------------------
     # Writes
@@ -317,7 +322,7 @@ class SQLiteChatSessionRepo:
             "session_id": session_id,
             "thread_id": thread_id,
             "terminal_id": terminal_id,
-            "lease_id": lease_id,
+            "sandbox_runtime_id": lease_id,
             "runtime_id": runtime_id,
             "status": status,
             "idle_ttl_sec": idle_ttl_sec,

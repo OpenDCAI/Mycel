@@ -230,7 +230,7 @@ class ChatSessionManager:
         if _sandbox_runtime_repo is None:
             _sandbox_runtime_repo = make_sandbox_runtime_repo(db_path=self.db_path)
         try:
-            _lease_row = _sandbox_runtime_repo.get(row["lease_id"])
+            _lease_row = _sandbox_runtime_repo.get(row["sandbox_runtime_id"])
         finally:
             if own_sandbox_runtime_repo:
                 _sandbox_runtime_repo.close()
