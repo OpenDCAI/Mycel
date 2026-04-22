@@ -156,6 +156,9 @@ def _resolve_workspace_backed_existing_config(
     sandbox_owner_user_id = _required_row_text(sandbox, "owner_user_id", "sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
+    provider_env_id = sandbox.get("provider_env_id") if isinstance(sandbox, dict) else getattr(sandbox, "provider_env_id", None)
+    if not str(provider_env_id or "").strip():
+        return None
     sandbox_template = _resolve_workspace_backed_sandbox_template(
         app=app,
         owner_user_id=owner_user_id,
