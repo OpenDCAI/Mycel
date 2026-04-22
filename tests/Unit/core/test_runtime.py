@@ -12,7 +12,7 @@ import pytest
 
 from sandbox.chat_session import ChatSessionManager
 from sandbox.interfaces.executor import ExecuteResult
-from sandbox.lease import SandboxInstance, lease_from_row
+from sandbox.lease import SandboxInstance, sandbox_runtime_from_row
 from sandbox.provider import ProviderExecResult
 from sandbox.providers.local import LocalPersistentShellRuntime
 from sandbox.runtime import (
@@ -43,11 +43,11 @@ class _DomainLeaseStore:
 
     def create(self, lower_runtime_id, provider_name, **kw):
         row = self._repo.create(lower_runtime_id, provider_name, **kw)
-        return lease_from_row(row, self._repo.db_path)
+        return sandbox_runtime_from_row(row, self._repo.db_path)
 
     def get(self, lower_runtime_id):
         row = self._repo.get(lower_runtime_id)
-        return lease_from_row(row, self._repo.db_path) if row else None
+        return sandbox_runtime_from_row(row, self._repo.db_path) if row else None
 
     def __getattr__(self, name):
         return getattr(self._repo, name)

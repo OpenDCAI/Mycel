@@ -15,7 +15,7 @@ from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.clock import parse_runtime_datetime, utc_now
 from sandbox.control_plane_repos import make_chat_session_repo, make_lease_repo, make_terminal_repo
-from sandbox.lease import lease_from_row
+from sandbox.lease import sandbox_runtime_from_row
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
@@ -273,12 +273,12 @@ class SandboxManager:
         row = self.lease_store.get(lease_id)
         if row is None:
             return None
-        return lease_from_row(row, self.db_path)
+        return sandbox_runtime_from_row(row, self.db_path)
 
     def _create_sandbox_runtime(self, lease_id: str, provider_name: str):
         """Create sandbox runtime and return as domain object."""
         row = self.lease_store.create(lease_id, provider_name)
-        return lease_from_row(row, self.db_path)
+        return sandbox_runtime_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
         """Public API: get active terminal as domain object."""
