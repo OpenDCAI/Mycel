@@ -299,7 +299,7 @@ class SandboxManager:
 
     def _destroy_daytona_managed_volume(self, lease_id: str) -> None:
         # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
-        # ref from lease identity directly, so cleanup no longer depends on dropped volume rows.
+        # ref from sandbox runtime identity directly, so cleanup no longer depends on dropped volume rows.
         self.provider.delete_managed_volume(f"leon-volume-{lease_id}")
 
     def _setup_mounts(self, thread_id: str) -> dict:

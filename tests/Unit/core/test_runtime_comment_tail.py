@@ -6,6 +6,7 @@ from pathlib import Path
 TARGETS = (
     "backend/sandboxes/__init__.py",
     "backend/threads/__init__.py",
+    "sandbox/manager.py",
     "sandbox/runtime.py",
     "sandbox/resource_snapshot.py",
     "core/runtime/agent.py",
@@ -17,6 +18,8 @@ FORBIDDEN = (
     "managed by lease",
     "lease/session creation",
     "shared lease",
+    "Lease state machine",
+    "lease identity directly",
 )
 
 
