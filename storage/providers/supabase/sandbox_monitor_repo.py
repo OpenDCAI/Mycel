@@ -55,17 +55,17 @@ class SupabaseSandboxMonitorRepo:
             workspace_id = str(thread.get("current_workspace_id") or "").strip()
             workspace = workspace_by_id.get(workspace_id)
             sandbox = sandbox_by_id.get(str((workspace or {}).get("sandbox_id") or "").strip())
-            lease = self._lease_row_from_sandbox(sandbox) if sandbox else None
+            sandbox_runtime = self._sandbox_runtime_row_from_sandbox(sandbox) if sandbox else None
             result.append(
                 {
                     "thread_id": thread["id"],
                     "session_count": 0,
-                    "sandbox_id": lease.get("sandbox_id") if lease else None,
+                    "sandbox_id": sandbox_runtime.get("sandbox_id") if sandbox_runtime else None,
                     "last_active": thread.get("last_active_at") or thread.get("updated_at") or thread.get("created_at"),
-                    "provider_name": lease.get("provider_name") if lease else None,
-                    "desired_state": lease.get("desired_state") if lease else None,
-                    "observed_state": lease.get("observed_state") if lease else None,
-                    "current_instance_id": lease.get("current_instance_id") if lease else None,
+                    "provider_name": sandbox_runtime.get("provider_name") if sandbox_runtime else None,
+                    "desired_state": sandbox_runtime.get("desired_state") if sandbox_runtime else None,
+                    "observed_state": sandbox_runtime.get("observed_state") if sandbox_runtime else None,
+                    "current_instance_id": sandbox_runtime.get("current_instance_id") if sandbox_runtime else None,
                 }
             )
         return sorted(result, key=lambda x: x.get("last_active") or "", reverse=True)
@@ -81,7 +81,7 @@ class SupabaseSandboxMonitorRepo:
 
     def query_sandboxes(self) -> list[dict]:
         sandboxes = self._ordered_sandboxes("query_sandboxes")
-        rows = [self._lease_row_from_sandbox(sandbox) for sandbox in sandboxes]
+        rows = [self._sandbox_runtime_row_from_sandbox(sandbox) for sandbox in sandboxes]
         if not rows:
             return []
 
@@ -100,7 +100,7 @@ class SupabaseSandboxMonitorRepo:
             return None
         for sandbox in self._ordered_sandboxes("query_sandbox"):
             if str(sandbox.get("id") or "").strip() == sandbox_key:
-                return self._lease_row_from_sandbox(sandbox)
+                return self._sandbox_runtime_row_from_sandbox(sandbox)
         return None
 
     def query_sandbox_cleanup_target(self, sandbox_id: str) -> dict[str, Any] | None:
@@ -366,7 +366,7 @@ class SupabaseSandboxMonitorRepo:
             result[sandbox_id].append(thread_id)
         return result
 
-    def _lease_row_from_sandbox(self, sandbox: dict[str, Any]) -> dict[str, Any]:
+    def _sandbox_runtime_row_from_sandbox(self, sandbox: dict[str, Any]) -> dict[str, Any]:
         return {
             "sandbox_id": str(sandbox.get("id") or "").strip() or None,
             "provider_name": sandbox.get("provider_name"),
