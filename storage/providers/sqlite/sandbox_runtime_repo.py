@@ -230,7 +230,7 @@ class SQLiteSandboxRuntimeRepo:
             )
             self._conn.execute(
                 """
-                INSERT INTO lease_events (event_id, sandbox_runtime_id, event_type, source, payload_json, error, created_at)
+                INSERT INTO sandbox_runtime_events (event_id, sandbox_runtime_id, event_type, source, payload_json, error, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -390,7 +390,7 @@ class SQLiteSandboxRuntimeRepo:
     def delete(self, sandbox_runtime_id: str) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM sandbox_instances WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
-            self._conn.execute("DELETE FROM lease_events WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
+            self._conn.execute("DELETE FROM sandbox_runtime_events WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (sandbox_runtime_id,))
             self._conn.commit()
 
@@ -472,7 +472,7 @@ class SQLiteSandboxRuntimeRepo:
         )
         self._conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS lease_events (
+            CREATE TABLE IF NOT EXISTS sandbox_runtime_events (
                 event_id TEXT PRIMARY KEY,
                 sandbox_runtime_id TEXT NOT NULL,
                 event_type TEXT NOT NULL,
@@ -485,8 +485,8 @@ class SQLiteSandboxRuntimeRepo:
         )
         self._conn.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_lease_events_runtime_created
-            ON lease_events(sandbox_runtime_id, created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_sandbox_runtime_events_runtime_created
+            ON sandbox_runtime_events(sandbox_runtime_id, created_at DESC)
             """
         )
         self._conn.commit()
@@ -495,7 +495,7 @@ class SQLiteSandboxRuntimeRepo:
 
         lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
         instance_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
-        event_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(lease_events)").fetchall()}
+        event_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtime_events)").fetchall()}
 
         missing_lease = REQUIRED_LEASE_COLUMNS - lease_cols
         if missing_lease:
@@ -507,4 +507,6 @@ class SQLiteSandboxRuntimeRepo:
             )
         missing_events = REQUIRED_EVENT_COLUMNS - event_cols
         if missing_events:
-            raise RuntimeError(f"lease_events schema mismatch: missing {sorted(missing_events)}. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(
+                f"sandbox_runtime_events schema mismatch: missing {sorted(missing_events)}. Purge ~/.leon/sandbox.db and retry."
+            )
