@@ -83,7 +83,8 @@ def _derive_default_config(
             current_workspace_id=thread["current_workspace_id"],
             owner_user_id=owner_user_id,
         )
-        return config
+        if config is not None:
+            return config
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
@@ -131,7 +132,7 @@ def _resolve_workspace_backed_existing_config(
     app: Any,
     current_workspace_id: str,
     owner_user_id: str,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     workspace_repo = getattr(app.state, "workspace_repo", None)
     get_by_id = getattr(workspace_repo, "get_by_id", None)
     if not callable(get_by_id):
@@ -155,6 +156,12 @@ def _resolve_workspace_backed_existing_config(
     sandbox_owner_user_id = _required_row_text(sandbox, "owner_user_id", "sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
+    provider_env_id = sandbox.get("provider_env_id") if isinstance(sandbox, dict) else getattr(sandbox, "provider_env_id", None)
+    if not str(provider_env_id or "").strip():
+        # @@@stale-existing-default-fallback - launch-config should not steer the UI
+        # into existing-sandbox mode when the persisted sandbox row no longer carries
+        # the runtime identity required by the existing-sandbox bind path.
+        return None
     sandbox_template = _resolve_workspace_backed_sandbox_template(
         app=app,
         owner_user_id=owner_user_id,

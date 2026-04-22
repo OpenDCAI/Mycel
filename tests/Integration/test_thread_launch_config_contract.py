@@ -377,6 +377,85 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
     }
 
 
+@pytest.mark.parametrize("provider_env_id", ["", None])
+def test_resolve_default_config_falls_back_to_new_when_workspace_sandbox_lacks_provider_env_id(provider_env_id: str | None) -> None:
+    thread_repo = _FakeThreadRepo()
+    thread_repo.rows["agent-user-1-1"] = {
+        "thread_id": "agent-user-1-1",
+        "agent_user_id": "agent-user-1",
+        "current_workspace_id": "ws-stale",
+        "is_main": True,
+        "branch_index": 0,
+        "created_at": 4.0,
+    }
+    workspace_repo = _FakeWorkspaceRepo()
+    workspace_repo.by_id["ws-stale"] = SimpleNamespace(
+        id="ws-stale",
+        sandbox_id="sandbox-stale",
+        owner_user_id="owner-1",
+        workspace_path="/workspace/stale",
+        name=None,
+        created_at=4.0,
+        updated_at=4.0,
+    )
+    sandbox_repo = _FakeSandboxRepo()
+    sandbox_repo.by_id["sandbox-stale"] = SimpleNamespace(
+        id="sandbox-stale",
+        owner_user_id="owner-1",
+        provider_name="local",
+        provider_env_id=provider_env_id,
+        sandbox_template_id="local:default",
+        desired_state="stopped",
+        observed_state="stopped",
+        status="stopped",
+        observed_at=4.0,
+        last_error=None,
+        config={},
+        created_at=4.0,
+        updated_at=4.0,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=thread_repo,
+            user_repo=SimpleNamespace(),
+            runtime_storage_state=_runtime_storage_state(_FakeRecipeRepo()),
+            workspace_repo=workspace_repo,
+            sandbox_repo=sandbox_repo,
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service,
+            "available_sandbox_types",
+            return_value=[{"name": "local", "available": True}],
+        ),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
+    ):
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="agent-user-1",
+        )
+
+    assert result == {
+        "source": "derived",
+        "config": {
+            "create_mode": "new",
+            "provider_config": "local",
+            "sandbox_template_id": "local:default",
+            "sandbox_template": default_recipe_snapshot("local"),
+            "existing_sandbox_id": None,
+            "model": None,
+            "workspace": None,
+        },
+    }
+
+
 def test_resolve_default_config_fails_loudly_when_workspace_backed_template_source_is_missing() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
