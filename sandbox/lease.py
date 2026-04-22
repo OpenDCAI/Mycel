@@ -61,7 +61,7 @@ REQUIRED_LEASE_COLUMNS = {
 }
 REQUIRED_INSTANCE_COLUMNS = {
     "instance_id",
-    "lease_id",
+    "sandbox_runtime_id",
     "provider_session_id",
     "status",
     "created_at",
@@ -69,7 +69,7 @@ REQUIRED_INSTANCE_COLUMNS = {
 }
 REQUIRED_EVENT_COLUMNS = {
     "event_id",
-    "lease_id",
+    "sandbox_runtime_id",
     "event_type",
     "source",
     "payload_json",
@@ -366,7 +366,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         try:
             target.execute(
                 """
-                INSERT INTO lease_events (event_id, lease_id, event_type, source, payload_json, error, created_at)
+                INSERT INTO lease_events (event_id, sandbox_runtime_id, event_type, source, payload_json, error, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -407,7 +407,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     refresh_hint_at = ?,
                     status = ?,
                     updated_at = ?
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 """,
                 (
                     self._current_instance.instance_id if self._current_instance else None,
@@ -431,10 +431,10 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if self._current_instance:
                 target.execute(
                     """
-                    INSERT INTO sandbox_instances (instance_id, lease_id, provider_session_id, status, created_at, last_seen_at)
+                    INSERT INTO sandbox_instances (instance_id, sandbox_runtime_id, provider_session_id, status, created_at, last_seen_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT(instance_id) DO UPDATE SET
-                        lease_id = excluded.lease_id,
+                        sandbox_runtime_id = excluded.sandbox_runtime_id,
                         status = excluded.status,
                         last_seen_at = excluded.last_seen_at
                     """,
@@ -489,7 +489,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     refresh_hint_at = ?,
                     status = ?,
                     updated_at = ?
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 """,
                 (
                     self.recipe_id,

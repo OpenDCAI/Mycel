@@ -82,17 +82,17 @@ class SQLiteSandboxRuntimeRepo:
                 self._conn.row_factory = sqlite3.Row
                 inst_row = self._conn.execute(
                     """
-                    SELECT instance_id, lease_id, provider_session_id,
-                           status, created_at, last_seen_at
-                    FROM sandbox_instances
-                    WHERE instance_id = ?
+                SELECT instance_id, sandbox_runtime_id, provider_session_id,
+                       status, created_at, last_seen_at
+                FROM sandbox_instances
+                WHERE instance_id = ?
                     """,
                     (result["current_instance_id"],),
                 ).fetchone()
                 self._conn.row_factory = None
                 if inst_row:
                     instance = dict(inst_row)
-                    instance["sandbox_runtime_id"] = str(instance.pop("lease_id"))
+                    instance["sandbox_runtime_id"] = str(instance["sandbox_runtime_id"])
                     result["_instance"] = instance
                 else:
                     result["_instance"] = None
@@ -218,24 +218,24 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.execute(
                 """
                 INSERT INTO sandbox_instances (
-                    instance_id, lease_id, provider_session_id, status, created_at, last_seen_at
+                    instance_id, sandbox_runtime_id, provider_session_id, status, created_at, last_seen_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(instance_id) DO UPDATE SET
-                    lease_id = excluded.lease_id,
+                    sandbox_runtime_id = excluded.sandbox_runtime_id,
                     status = excluded.status,
                     last_seen_at = excluded.last_seen_at
                 """,
-                (instance_id, lease_id, instance_id, normalized, now, now),
+                (instance_id, sandbox_runtime_id, instance_id, normalized, now, now),
             )
             self._conn.execute(
                 """
-                INSERT INTO lease_events (event_id, lease_id, event_type, source, payload_json, error, created_at)
+                INSERT INTO lease_events (event_id, sandbox_runtime_id, event_type, source, payload_json, error, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"evt-{uuid.uuid4().hex}",
-                    lease_id,
+                    sandbox_runtime_id,
                     "observe.status",
                     "adopt",
                     json.dumps({"status": normalized, "instance_id": instance_id}),
@@ -389,8 +389,8 @@ class SQLiteSandboxRuntimeRepo:
 
     def delete(self, sandbox_runtime_id: str) -> None:
         with self._lock:
-            self._conn.execute("DELETE FROM sandbox_instances WHERE lease_id = ?", (sandbox_runtime_id,))
-            self._conn.execute("DELETE FROM lease_events WHERE lease_id = ?", (sandbox_runtime_id,))
+            self._conn.execute("DELETE FROM sandbox_instances WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
+            self._conn.execute("DELETE FROM lease_events WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (sandbox_runtime_id,))
             self._conn.commit()
 
@@ -462,7 +462,7 @@ class SQLiteSandboxRuntimeRepo:
             """
             CREATE TABLE IF NOT EXISTS sandbox_instances (
                 instance_id TEXT PRIMARY KEY,
-                lease_id TEXT NOT NULL,
+                sandbox_runtime_id TEXT NOT NULL,
                 provider_session_id TEXT NOT NULL,
                 status TEXT DEFAULT 'running',
                 created_at TIMESTAMP NOT NULL,
@@ -474,7 +474,7 @@ class SQLiteSandboxRuntimeRepo:
             """
             CREATE TABLE IF NOT EXISTS lease_events (
                 event_id TEXT PRIMARY KEY,
-                lease_id TEXT NOT NULL,
+                sandbox_runtime_id TEXT NOT NULL,
                 event_type TEXT NOT NULL,
                 source TEXT NOT NULL,
                 payload_json TEXT,
@@ -485,8 +485,8 @@ class SQLiteSandboxRuntimeRepo:
         )
         self._conn.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_lease_events_lease_created
-            ON lease_events(lease_id, created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_lease_events_runtime_created
+            ON lease_events(sandbox_runtime_id, created_at DESC)
             """
         )
         self._conn.commit()

@@ -20,3 +20,25 @@ def test_sqlite_sandbox_runtime_repo_returns_sandbox_runtime_id_not_lease_id(tmp
 
     assert created["sandbox_runtime_id"] == "lease-1"
     assert "lease_id" not in created
+
+
+def test_sqlite_sandbox_runtime_repo_schema_uses_sandbox_runtime_id_in_sandbox_instances(tmp_path):
+    repo = SQLiteSandboxRuntimeRepo(tmp_path / "sandbox.db")
+    try:
+        cols = {row[1] for row in repo._conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
+    finally:
+        repo.close()
+
+    assert "sandbox_runtime_id" in cols
+    assert "lease_id" not in cols
+
+
+def test_sqlite_sandbox_runtime_repo_schema_uses_sandbox_runtime_id_in_lease_events(tmp_path):
+    repo = SQLiteSandboxRuntimeRepo(tmp_path / "sandbox.db")
+    try:
+        cols = {row[1] for row in repo._conn.execute("PRAGMA table_info(lease_events)").fetchall()}
+    finally:
+        repo.close()
+
+    assert "sandbox_runtime_id" in cols
+    assert "lease_id" not in cols
