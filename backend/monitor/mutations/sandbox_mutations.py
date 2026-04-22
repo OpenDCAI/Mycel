@@ -10,6 +10,7 @@ from backend.monitor.mutations.contracts import (
     SandboxCleanupRequest,
 )
 from backend.sandboxes.runtime.mutations import destroy_sandbox_runtime, mutate_sandbox_runtime
+from storage.runtime import build_workspace_repo
 
 
 def _public_destroy_result(result: Any) -> Any:
@@ -24,6 +25,11 @@ def cleanup_sandbox(request: SandboxCleanupRequest) -> RuntimeMutationResult:
         provider_name=request.provider_name,
         detach_thread_bindings=request.detach_thread_bindings,
     )
+    workspace_repo = build_workspace_repo()
+    try:
+        workspace_repo.delete_by_sandbox_id(request.sandbox_id)
+    finally:
+        workspace_repo.close()
     return RuntimeMutationResult(destroy_result=_public_destroy_result(result))
 
 

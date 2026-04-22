@@ -6,6 +6,7 @@ class _FakeTable:
         self.insert_payload = None
         self.rows: list[dict] = []
         self.eq_calls: list[tuple[str, object]] = []
+        self.delete_called = False
 
     def insert(self, payload):
         self.insert_payload = payload
@@ -18,7 +19,21 @@ class _FakeTable:
         self.eq_calls.append((key, value))
         return self
 
+    def delete(self):
+        self.delete_called = True
+        return self
+
     def execute(self):
+        if self.delete_called:
+            remaining = []
+            deleted = []
+            for row in self.rows:
+                if all(row.get(key) == value for key, value in self.eq_calls):
+                    deleted.append(row)
+                else:
+                    remaining.append(row)
+            self.rows = remaining
+            return type("Resp", (), {"data": deleted})()
         rows = self.rows
         for key, value in self.eq_calls:
             rows = [row for row in rows if row.get(key) == value]
@@ -65,3 +80,44 @@ def test_supabase_workspace_repo_get_by_id_returns_none_when_missing() -> None:
     repo = SupabaseWorkspaceRepo(client)
 
     assert repo.get_by_id("missing") is None
+
+
+def test_supabase_workspace_repo_delete_by_sandbox_id_removes_workspace_rows() -> None:
+    from storage.providers.supabase.workspace_repo import SupabaseWorkspaceRepo
+
+    client = _FakeClient()
+    client.table_obj.rows = [
+        {
+            "id": "workspace-1",
+            "sandbox_id": "sandbox-1",
+            "owner_user_id": "owner-1",
+            "workspace_path": "/workspace/demo",
+            "name": "demo",
+            "created_at": "2026-04-22T00:00:00+00:00",
+            "updated_at": "2026-04-22T00:00:00+00:00",
+        },
+        {
+            "id": "workspace-2",
+            "sandbox_id": "sandbox-2",
+            "owner_user_id": "owner-1",
+            "workspace_path": "/workspace/keep",
+            "name": "keep",
+            "created_at": "2026-04-22T00:00:00+00:00",
+            "updated_at": "2026-04-22T00:00:00+00:00",
+        },
+    ]
+    repo = SupabaseWorkspaceRepo(client)
+
+    repo.delete_by_sandbox_id("sandbox-1")
+
+    assert client.table_obj.rows == [
+        {
+            "id": "workspace-2",
+            "sandbox_id": "sandbox-2",
+            "owner_user_id": "owner-1",
+            "workspace_path": "/workspace/keep",
+            "name": "keep",
+            "created_at": "2026-04-22T00:00:00+00:00",
+            "updated_at": "2026-04-22T00:00:00+00:00",
+        }
+    ]
