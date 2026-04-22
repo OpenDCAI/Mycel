@@ -8,6 +8,8 @@ def test_sqlite_sandbox_runtime_repo_schema_does_not_create_removed_volume_id(tm
     finally:
         repo.close()
 
+    assert "sandbox_runtime_id" in cols
+    assert "lease_id" not in cols
     assert "volume_id" not in cols
 
 

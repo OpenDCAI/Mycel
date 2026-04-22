@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 LEASE_FRESHNESS_TTL_SEC = 3.0
 
 REQUIRED_LEASE_COLUMNS = {
-    "lease_id",
+    "sandbox_runtime_id",
     "provider_name",
     "recipe_id",
     "recipe_json",
@@ -305,7 +305,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
     def _snapshot(self) -> dict[str, Any]:
         return {
-            "lease_id": self.sandbox_runtime_id,
+            "sandbox_runtime_id": self.sandbox_runtime_id,
             "provider_name": self.provider_name,
             "status": self.status,
             "desired_state": self.desired_state,
