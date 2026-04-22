@@ -1,10 +1,10 @@
-"""SandboxLease - durable compute handle with lease-level state machine.
+"""SandboxRuntimeHandle - durable compute handle with lease-level state machine.
 
 Architecture:
-    SandboxLease (durable) -> SandboxInstance (ephemeral)
+    SandboxRuntimeHandle (durable) -> SandboxInstance (ephemeral)
 
 State machine contract:
-- Physical lifecycle writes must go through SQLiteLease.apply(event).
+- Physical lifecycle writes must go through SQLiteSandboxRuntimeHandle.apply(event).
 - Lease snapshot stores desired_state + observed_state + version.
 """
 
@@ -110,7 +110,7 @@ class SandboxInstance:
     created_at: datetime
 
 
-class SandboxLease(ABC):
+class SandboxRuntimeHandle(ABC):
     """Durable shared compute handle."""
 
     def __init__(
@@ -186,7 +186,7 @@ class SandboxLease(ABC):
     ) -> dict[str, Any]: ...
 
 
-class SQLiteLease(SandboxLease):
+class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
     """SQLite-backed lease implementation."""
 
     _lock_guard = threading.Lock()
@@ -705,7 +705,7 @@ class SQLiteLease(SandboxLease):
         if row:
             self._sync_from(sandbox_runtime_from_row(row, self.db_path))
 
-    def _sync_from(self, other: SQLiteLease) -> None:
+    def _sync_from(self, other: SQLiteSandboxRuntimeHandle) -> None:
         self._current_instance = other._current_instance
         self.status = other.status
         self.workspace_key = other.workspace_key
@@ -1105,8 +1105,8 @@ class SQLiteLease(SandboxLease):
         self._persist_lease_metadata()
 
 
-def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteLease:
-    """Construct SQLiteLease from a dict returned by the repo."""
+def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteSandboxRuntimeHandle:
+    """Construct SQLiteSandboxRuntimeHandle from a dict returned by the repo."""
     instance = None
     inst_data = row.get("_instance")
     if inst_data:
@@ -1132,7 +1132,7 @@ def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteLease:
     if row.get("refresh_hint_at"):
         refresh_hint_at = parse_runtime_datetime(str(row["refresh_hint_at"]))
 
-    return SQLiteLease(
+    return SQLiteSandboxRuntimeHandle(
         lease_id=row["lease_id"],
         provider_name=row["provider_name"],
         recipe_id=row.get("recipe_id"),

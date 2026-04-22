@@ -3,7 +3,7 @@
 Architecture:
     Thread (durable) -> ChatSession (policy window) -> PhysicalTerminalRuntime (ephemeral)
                      -> AbstractTerminal (reference)
-                     -> SandboxLease (reference)
+                     -> SandboxRuntimeHandle (reference)
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from sandbox.lifecycle import (
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
+    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.provider import SandboxProvider
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
@@ -70,7 +70,7 @@ class ChatSession:
         session_id: str,
         thread_id: str,
         terminal: AbstractTerminal,
-        lease: SandboxLease,
+        lease: SandboxRuntimeHandle,
         runtime: PhysicalTerminalRuntime,
         policy: ChatSessionPolicy,
         started_at: datetime,
@@ -179,7 +179,7 @@ class ChatSessionManager:
         if error:
             raise error[0]
 
-    def _build_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+    def _build_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         return self.provider.create_runtime(terminal, lease)
 
     def get(self, thread_id: str, terminal_id: str | None = None) -> ChatSession | None:
@@ -271,7 +271,7 @@ class ChatSessionManager:
         session_id: str,
         thread_id: str,
         terminal: AbstractTerminal,
-        lease: SandboxLease,
+        lease: SandboxRuntimeHandle,
         policy: ChatSessionPolicy | None = None,
     ) -> ChatSession:
         policy = policy or self.default_policy

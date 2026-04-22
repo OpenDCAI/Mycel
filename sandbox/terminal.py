@@ -4,7 +4,7 @@ This module implements the terminal abstraction layer that separates
 durable terminal state (cwd, env_delta) from ephemeral runtime processes.
 
 Architecture:
-    Thread → AbstractTerminal (durable state) → SandboxLease → Instance
+    Thread → AbstractTerminal (durable state) → SandboxRuntimeHandle → Instance
     Thread → ChatSession → PhysicalTerminalRuntime (ephemeral process)
 """
 

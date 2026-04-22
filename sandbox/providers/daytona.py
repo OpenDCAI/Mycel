@@ -54,7 +54,7 @@ def _is_daytona_not_found_error(exc: Exception) -> bool:
 if TYPE_CHECKING:
     from daytona_sdk._sync.sandbox import Sandbox as DaytonaSandbox
 
-    from sandbox.lease import SandboxLease
+    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
 
@@ -511,7 +511,7 @@ class DaytonaProvider(SandboxProvider):
                 time.sleep(2)
         raise RuntimeError(f"Timed out waiting for Daytona sandbox {sandbox_id} to reach started state")
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.providers.daytona import DaytonaSessionRuntime
 
         return DaytonaSessionRuntime(terminal, lease, self)
