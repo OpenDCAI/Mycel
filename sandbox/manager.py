@@ -372,7 +372,7 @@ class SandboxManager:
         rows = self.terminal_store.list_by_thread(thread_id)
         return [terminal_from_row(row, self.db_path) for row in rows]
 
-    def _get_thread_lease(self, thread_id: str):
+    def _get_thread_sandbox_runtime(self, thread_id: str):
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return None
@@ -414,23 +414,23 @@ class SandboxManager:
             raise ValueError("thread.current_workspace_id is required")
         return user_home_path("file_channels", str(workspace_id)).expanduser().resolve()
 
-    def _skip_volume_sync_for_local_lease(self, lease) -> bool:
+    def _skip_volume_sync_for_local_sandbox_runtime(self, lease) -> bool:
         # @@@local-no-volume-sync - local sessions execute directly in host cwd, so upload/download
         # must always no-op there rather than reactivating volume-backed sync.
         return lease is not None and not self._requires_volume_bootstrap()
 
     def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
         if source is None:
-            lease = self._get_thread_lease(thread_id)
-            if self._skip_volume_sync_for_local_lease(lease):
+            lease = self._get_thread_sandbox_runtime(thread_id)
+            if self._skip_volume_sync_for_local_sandbox_runtime(lease):
                 return
             source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
 
     def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
         if source is None:
-            lease = self._get_thread_lease(thread_id)
-            if self._skip_volume_sync_for_local_lease(lease):
+            lease = self._get_thread_sandbox_runtime(thread_id)
+            if self._skip_volume_sync_for_local_sandbox_runtime(lease):
                 return
             source = self._resolve_sync_source_path(thread_id)
         self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_mount_path())
@@ -599,7 +599,7 @@ class SandboxManager:
             return False
         return self.session_manager._repo.terminal_has_running_command(terminal_id)
 
-    def _lease_is_busy(self, lease_id: str) -> bool:
+    def _sandbox_runtime_is_busy(self, lease_id: str) -> bool:
         """Return True if any terminal under this lease has a running command."""
         if not lease_id:
             return False
@@ -684,7 +684,7 @@ class SandboxManager:
                     break
 
                 if not has_other_active:
-                    if self._lease_is_busy(lease.sandbox_runtime_id):
+                    if self._sandbox_runtime_is_busy(lease.sandbox_runtime_id):
                         continue
                     status = lease.refresh_instance_status(self.provider)
                     capability = self.provider.get_capability()
@@ -724,7 +724,7 @@ class SandboxManager:
         if not terminals:
             return False
 
-        lease = self._get_thread_lease(thread_id)
+        lease = self._get_thread_sandbox_runtime(thread_id)
         if not lease:
             return False
 
@@ -760,7 +760,7 @@ class SandboxManager:
         if not terminals:
             return False
 
-        lease = self._get_thread_lease(thread_id)
+        lease = self._get_thread_sandbox_runtime(thread_id)
         if not lease:
             return False
 
@@ -825,7 +825,7 @@ class SandboxManager:
             return False
 
         # @@@workspace-download-before-destroy - sync files before destroy
-        lease = self._get_thread_lease(thread_id)
+        lease = self._get_thread_sandbox_runtime(thread_id)
         if lease and lease.observed_state == "running":
             instance = lease.get_instance()
             if instance:
