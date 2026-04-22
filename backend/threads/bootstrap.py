@@ -17,6 +17,7 @@ class ThreadsRuntimeState:
     activity_reader: Any
     display_builder: Any | None = None
     event_loop: Any | None = None
+    checkpoint_store: Any | None = None
 
 
 def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: Any) -> ThreadsRuntimeState:

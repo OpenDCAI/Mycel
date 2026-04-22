@@ -1065,7 +1065,8 @@ async def get_thread_history(
         return list(messages)
 
     async def _load_checkpoint_messages(current_thread_id: str) -> list[Any]:
-        checkpoint_store = getattr(app.state, "thread_checkpoint_store", None)
+        runtime_state = getattr(app.state, "threads_runtime_state", None)
+        checkpoint_store = getattr(runtime_state, "checkpoint_store", None)
         if checkpoint_store is None:
             raise RuntimeError("thread_checkpoint_store is required for cold thread history reads")
         checkpoint_state = await checkpoint_store.load(current_thread_id)

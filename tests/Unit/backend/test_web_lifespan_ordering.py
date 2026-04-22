@@ -109,6 +109,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
         assert hasattr(app.state, "agent_pool")
         assert not hasattr(app.state, "display_builder")
         assert not hasattr(app.state, "_event_loop")
+        assert not hasattr(app.state, "thread_checkpoint_store")
         assert not hasattr(app.state, "invite_code_repo")
         assert not hasattr(app.state, "user_settings_repo")
         assert not hasattr(app.state, "agent_config_repo")
