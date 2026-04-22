@@ -291,7 +291,7 @@ def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_pat
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     result = manager._setup_mounts("thread-1")
@@ -305,7 +305,7 @@ def test_setup_mounts_reports_missing_lease_not_missing_volume():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: None
 
     with pytest.raises(ValueError, match="No sandbox runtime for thread thread-1"):
@@ -329,7 +329,7 @@ def test_setup_mounts_uses_workspace_source_without_remote_volume_metadata(monke
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     lease = SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: lease
@@ -346,7 +346,7 @@ def test_setup_mounts_daytona_uses_lease_id_for_managed_volume(monkeypatch, tmp_
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = _FakeDaytonaProvider()
     manager.volume = _FakeVolume()
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._resolve_sync_source_path = lambda _thread_id: Path(tmp_path) / "channel-root"
     lease = SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: lease
@@ -444,7 +444,7 @@ def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
     monkeypatch.setattr(
         sandbox_manager_module,
         "terminal_from_row",
-        lambda _row, _db_path: SimpleNamespace(terminal_id="term-1", lease_id="lease-1"),
+        lambda _row, _db_path: SimpleNamespace(terminal_id="term-1", sandbox_runtime_id="lease-1"),
     )
 
     manager.enforce_idle_timeouts()
@@ -707,9 +707,9 @@ def test_sync_uploads_skips_local_volume_sync_without_volume_metadata():
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.volume = _FakeVolume()
-    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", sandbox_runtime_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: SimpleNamespace(sandbox_runtime_id="lease-1")
-    manager._get_thread_sandbox_runtime = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_thread_sandbox_runtime = lambda _thread_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: SimpleNamespace(
@@ -725,7 +725,7 @@ def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(mon
     manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
-    manager._get_thread_sandbox_runtime = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    manager._get_thread_sandbox_runtime = lambda _thread_id: SimpleNamespace(sandbox_runtime_id="lease-1")
     manager.resolve_volume_source = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume source should stay unused"))
 
     class _ThreadRepo:
@@ -770,7 +770,7 @@ def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
     manager.volume = _FakeVolume()
     terminal = SimpleNamespace(
         terminal_id="term-1",
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
         update_state=lambda _state: None,
     )
@@ -802,7 +802,7 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
     manager = _new_test_manager()
     terminal = SimpleNamespace(
         terminal_id="term-1",
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
     )
     paused_lease = SimpleNamespace(
@@ -850,11 +850,11 @@ def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
     bind_mount_calls: list[tuple[str, list[dict[str, str]]]] = []
     terminal = SimpleNamespace(
         terminal_id="term-1",
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
     )
     lease = SimpleNamespace(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         observed_state="running",
         get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
@@ -882,12 +882,12 @@ def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
     manager = _new_test_manager()
     terminal = SimpleNamespace(
         terminal_id="term-1",
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
         update_state=lambda _state: None,
     )
     lease = SimpleNamespace(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="agentbay",
         observed_state="running",
         recipe=None,
@@ -931,7 +931,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
     manager = _new_test_manager()
     default_state = SimpleNamespace(cwd="/default", env_delta={"TOKEN": "value"}, state_version=7)
     created_terminal = SimpleNamespace(updated_state=None)
-    default_terminal = SimpleNamespace(lease_id="lease-1", get_state=lambda: default_state)
+    default_terminal = SimpleNamespace(sandbox_runtime_id="lease-1", get_state=lambda: default_state)
     created_rows: list[dict[str, str]] = []
     created_background_commands: list[dict[str, Any]] = []
 
@@ -984,7 +984,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
 
 def test_resume_session_rebinds_live_session_lease_after_resume():
     manager = _new_test_manager()
-    terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    terminal = SimpleNamespace(terminal_id="term-1", sandbox_runtime_id="lease-1")
     resumed_lease = SimpleNamespace(
         sandbox_runtime_id="lease-1",
         observed_state="running",

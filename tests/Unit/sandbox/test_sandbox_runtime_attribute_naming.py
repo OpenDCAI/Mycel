@@ -28,7 +28,7 @@ def _terminal(db_path: Path) -> SQLiteTerminal:
     return SQLiteTerminal(
         terminal_id="term-1",
         thread_id="thread-1",
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         state=TerminalState(cwd="/tmp"),
         db_path=db_path,
     )
@@ -53,6 +53,8 @@ def test_chat_session_uses_sandbox_runtime_attribute(tmp_path: Path) -> None:
 
     assert session.sandbox_runtime is sandbox_runtime
     assert not hasattr(session, "lease")
+    assert terminal.sandbox_runtime_id == "lease-1"
+    assert not hasattr(terminal, "lease_id")
     assert session.sandbox_runtime.sandbox_runtime_id == "lease-1"
     assert not hasattr(session.sandbox_runtime, "lease_id")
 
@@ -63,6 +65,8 @@ def test_runtime_uses_sandbox_runtime_attribute(tmp_path: Path) -> None:
     sandbox_runtime = _sandbox_runtime(db_path)
     runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
+    assert terminal.sandbox_runtime_id == "lease-1"
+    assert not hasattr(terminal, "lease_id")
     assert runtime.sandbox_runtime is sandbox_runtime
     assert not hasattr(runtime, "lease")
     assert runtime.sandbox_runtime.sandbox_runtime_id == "lease-1"
