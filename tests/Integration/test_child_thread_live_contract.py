@@ -59,9 +59,10 @@ def _fake_storage_container() -> SimpleNamespace:
 
 
 def _app_state_with_display_builder(display_builder: object, **kwargs: object) -> SimpleNamespace:
+    event_loop = kwargs.get("_event_loop")
     return SimpleNamespace(
         display_builder=display_builder,
-        threads_runtime_state=SimpleNamespace(display_builder=display_builder),
+        threads_runtime_state=SimpleNamespace(display_builder=display_builder, event_loop=event_loop),
         **kwargs,
     )
 

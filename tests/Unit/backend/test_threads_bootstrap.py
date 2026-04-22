@@ -47,6 +47,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert state.agent_runtime_gateway is gateway
     assert state.activity_reader is activity_reader
     assert state.display_builder is None
+    assert state.event_loop is None
     assert not hasattr(app.state, "agent_runtime_gateway")
     assert seen == [
         ("queue_manager", queue_repo),

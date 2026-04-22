@@ -88,13 +88,13 @@ async def lifespan(app: FastAPI):
     from backend.threads.display.builder import DisplayBuilder
 
     display_builder = DisplayBuilder()
+    event_loop = asyncio.get_running_loop()
     if is_dataclass(threads_runtime):
-        threads_runtime = replace(threads_runtime, display_builder=display_builder)
+        threads_runtime = replace(threads_runtime, display_builder=display_builder, event_loop=event_loop)
     else:
-        threads_runtime = SimpleNamespace(**vars(threads_runtime), display_builder=display_builder)
+        threads_runtime = SimpleNamespace(**vars(threads_runtime), display_builder=display_builder, event_loop=event_loop)
     app.state.threads_runtime_state = threads_runtime
     app.state.idle_reaper_task = None
-    app.state._event_loop = asyncio.get_running_loop()
 
     try:
         from backend.sandboxes.service import init_providers_and_managers
