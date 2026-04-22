@@ -6,6 +6,52 @@ from datetime import datetime
 from typing import Any
 
 
+def _is_visible_owner_thread(thread_id: Any) -> bool:
+    raw = str(thread_id or "").strip()
+    return bool(raw) and not raw.startswith("subagent-") and raw not in {"(orphan)", "(untracked)"}
+
+
+def _runtime_row_rank(row: dict[str, Any]) -> tuple[int, float]:
+    return (
+        1 if _is_visible_owner_thread(row.get("thread_id")) else 0,
+        _to_ts(row.get("last_active")) or _to_ts(row.get("created_at")),
+    )
+
+
+def _runtime_identity(row: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(row.get("provider") or ""),
+        str(row.get("session_id") or ""),
+    )
+
+
+def _collapse_owner_runtime_rows(runtimes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    collapsed: dict[tuple[str, str], dict[str, Any]] = {}
+    ordered_keys: list[tuple[str, str]] = []
+    for row in runtimes:
+        key = _runtime_identity(row)
+        current = collapsed.get(key)
+        if current is None:
+            collapsed[key] = row
+            ordered_keys.append(key)
+            continue
+        # @@@owner-runtime-collapse - owner-facing runtime surfaces should expose
+        # one row per provider/runtime identity, not one row per subagent thread
+        # that happens to reuse the same lower runtime handle.
+        if _runtime_row_rank(row) > _runtime_row_rank(current):
+            collapsed[key] = row
+    return [collapsed[key] for key in ordered_keys]
+
+
+def _to_ts(value: Any) -> float:
+    if not value or not isinstance(value, str):
+        return 0.0
+    try:
+        return datetime.fromisoformat(value).timestamp()
+    except Exception:
+        return 0.0
+
+
 def load_all_sandbox_runtimes(managers: dict) -> list[dict]:
     """Load sandbox runtime rows from all managers in parallel."""
     runtimes: list[dict] = []
@@ -30,15 +76,9 @@ def load_all_sandbox_runtimes(managers: dict) -> list[dict]:
                 }
             )
 
-    # @@@stable-runtime-order - Keep deterministic ordering across refreshes/providers.
-    def _to_ts(value: Any) -> float:
-        if not value or not isinstance(value, str):
-            return 0.0
-        try:
-            return datetime.fromisoformat(value).timestamp()
-        except Exception:
-            return 0.0
+    runtimes = _collapse_owner_runtime_rows(runtimes)
 
+    # @@@stable-runtime-order - Keep deterministic ordering across refreshes/providers.
     runtimes.sort(
         key=lambda row: (
             -_to_ts(row.get("created_at")),
