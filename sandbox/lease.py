@@ -538,7 +538,7 @@ class SQLiteLease(SandboxLease):
             finally:
                 event_repo.close()
                 repo.close()
-            self._sync_from(lease_from_row(row, self.db_path))
+            self._sync_from(sandbox_runtime_from_row(row, self.db_path))
             return
         self._persist_lease_metadata()
 
@@ -565,7 +565,7 @@ class SQLiteLease(SandboxLease):
         finally:
             event_repo.close()
             repo.close()
-        self._sync_from(lease_from_row(row, self.db_path))
+        self._sync_from(sandbox_runtime_from_row(row, self.db_path))
         if observed == "detached":
             self._sync_sandbox_runtime_binding(None, updated_at=row.get("updated_at") or row.get("observed_at"))
             self._sync_sandbox_observed_state("detached", updated_at=row.get("updated_at") or row.get("observed_at"))
@@ -625,7 +625,7 @@ class SQLiteLease(SandboxLease):
         finally:
             event_repo.close()
             repo.close()
-        self._sync_from(lease_from_row(final_row, self.db_path))
+        self._sync_from(sandbox_runtime_from_row(final_row, self.db_path))
 
     def _transition_instance_via_strategy_repos(
         self,
@@ -694,7 +694,7 @@ class SQLiteLease(SandboxLease):
         finally:
             event_repo.close()
             repo.close()
-        self._sync_from(lease_from_row(final_row, self.db_path))
+        self._sync_from(sandbox_runtime_from_row(final_row, self.db_path))
 
     def _reload_from_storage(self) -> None:
         repo = _make_lease_repo(self.db_path)
@@ -703,7 +703,7 @@ class SQLiteLease(SandboxLease):
         finally:
             repo.close()
         if row:
-            self._sync_from(lease_from_row(row, self.db_path))
+            self._sync_from(sandbox_runtime_from_row(row, self.db_path))
 
     def _sync_from(self, other: SQLiteLease) -> None:
         self._current_instance = other._current_instance
@@ -891,7 +891,7 @@ class SQLiteLease(SandboxLease):
                         )
                     finally:
                         repo.close()
-                    self._sync_from(lease_from_row(row, self.db_path))
+                    self._sync_from(sandbox_runtime_from_row(row, self.db_path))
                     self._sync_sandbox_runtime_binding(
                         row.get("current_instance_id"),
                         updated_at=row.get("updated_at") or row.get("observed_at"),
@@ -933,7 +933,7 @@ class SQLiteLease(SandboxLease):
                             )
                         finally:
                             repo.close()
-                        self._sync_from(lease_from_row(row, self.db_path))
+                        self._sync_from(sandbox_runtime_from_row(row, self.db_path))
                         self._sync_sandbox_runtime_binding(
                             row.get("current_instance_id"),
                             updated_at=row.get("updated_at") or row.get("observed_at"),
@@ -978,7 +978,7 @@ class SQLiteLease(SandboxLease):
                     )
                 finally:
                     repo.close()
-                self._sync_from(lease_from_row(row, self.db_path))
+                self._sync_from(sandbox_runtime_from_row(row, self.db_path))
                 self._sync_sandbox_runtime_binding(
                     row.get("current_instance_id"),
                     updated_at=row.get("updated_at") or row.get("observed_at"),
@@ -1105,7 +1105,7 @@ class SQLiteLease(SandboxLease):
         self._persist_lease_metadata()
 
 
-def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
+def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteLease:
     """Construct SQLiteLease from a dict returned by the repo."""
     instance = None
     inst_data = row.get("_instance")

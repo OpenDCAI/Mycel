@@ -212,7 +212,7 @@ class ChatSessionManager:
         if not row:
             return None
 
-        from sandbox.lease import lease_from_row
+        from sandbox.lease import sandbox_runtime_from_row
         from sandbox.terminal import terminal_from_row
 
         _term_repo = self._terminal_repo
@@ -234,7 +234,7 @@ class ChatSessionManager:
         finally:
             if own_lease_repo:
                 _lease_repo.close()
-        lease = lease_from_row(_lease_row, self.db_path) if _lease_row else None
+        lease = sandbox_runtime_from_row(_lease_row, self.db_path) if _lease_row else None
         if not terminal or not lease:
             return None
 
