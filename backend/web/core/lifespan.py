@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
     app.state._thread_checkpoint_saver_ctx = agent_checkpoint_saver_from_conn_string(pg_url)
     app.state._thread_checkpoint_saver = await app.state._thread_checkpoint_saver_ctx.__aenter__()
     await app.state._thread_checkpoint_saver.setup()
-    app.state.thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
+    thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
 
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
@@ -90,9 +90,19 @@ async def lifespan(app: FastAPI):
     display_builder = DisplayBuilder()
     event_loop = asyncio.get_running_loop()
     if is_dataclass(threads_runtime):
-        threads_runtime = replace(threads_runtime, display_builder=display_builder, event_loop=event_loop)
+        threads_runtime = replace(
+            threads_runtime,
+            display_builder=display_builder,
+            event_loop=event_loop,
+            checkpoint_store=thread_checkpoint_store,
+        )
     else:
-        threads_runtime = SimpleNamespace(**vars(threads_runtime), display_builder=display_builder, event_loop=event_loop)
+        threads_runtime = SimpleNamespace(
+            **vars(threads_runtime),
+            display_builder=display_builder,
+            event_loop=event_loop,
+            checkpoint_store=thread_checkpoint_store,
+        )
     app.state.threads_runtime_state = threads_runtime
     app.state.idle_reaper_task = None
 

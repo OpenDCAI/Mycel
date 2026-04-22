@@ -722,7 +722,7 @@ async def test_get_thread_history_reads_checkpoint_without_creating_agent():
     fake_app = SimpleNamespace(
         state=SimpleNamespace(
             agent_pool={},
-            thread_checkpoint_store=_CheckpointStore(),
+            threads_runtime_state=SimpleNamespace(checkpoint_store=_CheckpointStore()),
         )
     )
 
