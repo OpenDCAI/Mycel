@@ -35,7 +35,7 @@ def test_sandbox_info_does_not_expose_terminal_or_session_identity() -> None:
                     "config": {},
                 }
             ),
-            lease_repo=SimpleNamespace(
+            sandbox_runtime_repo=SimpleNamespace(
                 get=lambda _lower_runtime_id: (_ for _ in ()).throw(AssertionError("sandbox info should not read removed lease id")),
                 find_by_instance=lambda *, provider_name, instance_id: {
                     "lease_" + "id": "lease-1",

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import (
-    build_lease_repo,
+    build_sandbox_runtime_repo,
     uses_supabase_runtime_defaults,
 )
 
@@ -25,7 +25,7 @@ def make_chat_session_repo(db_path: Path | None = None):
 
 def make_sandbox_runtime_repo(db_path: Path | None = None):
     if _use_strategy_control_plane_repo(db_path):
-        return build_lease_repo()
+        return build_sandbox_runtime_repo()
     from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 
     return SQLiteLeaseRepo(db_path=resolve_sandbox_db_path(db_path))

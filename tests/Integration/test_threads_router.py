@@ -413,7 +413,7 @@ def _make_threads_app(
             runtime_storage_state=SimpleNamespace(recipe_repo=recipe_repo),
             workspace_repo=state_overrides.pop("workspace_repo", _FakeWorkspaceRepo()),
             sandbox_repo=state_overrides.pop("sandbox_repo", _FakeSandboxRepo()),
-            lease_repo=state_overrides.pop("lease_repo", _FakeLeaseRepo()),
+            sandbox_runtime_repo=state_overrides.pop("sandbox_runtime_repo", _FakeLeaseRepo()),
             **state_overrides,
         )
     )
@@ -459,7 +459,7 @@ async def test_get_thread_sandbox_status_returns_null_when_thread_has_no_runtime
                     "config": {},
                 }
             ),
-            lease_repo=SimpleNamespace(),
+            sandbox_runtime_repo=SimpleNamespace(),
         )
     )
 
@@ -497,7 +497,7 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
                     "config": {},
                 }
             ),
-            lease_repo=SimpleNamespace(
+            sandbox_runtime_repo=SimpleNamespace(
                 find_by_instance=lambda *, provider_name, instance_id: {
                     "lease_" + "id": "lease-1",
                     "provider_name": "daytona",
@@ -607,7 +607,7 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
         thread_cwd={},
         workspace_repo=workspace_repo,
         sandbox_repo=sandbox_repo,
-        lease_repo=_existing_sandbox_lease_repo(recipe=None),
+        sandbox_runtime_repo=_existing_sandbox_lease_repo(recipe=None),
     )
     payload = CreateThreadRequest.model_validate(
         {
@@ -660,7 +660,7 @@ async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_p
         thread_cwd={},
         workspace_repo=workspace_repo,
         sandbox_repo=sandbox_repo,
-        lease_repo=_existing_sandbox_lease_repo(recipe=None),
+        sandbox_runtime_repo=_existing_sandbox_lease_repo(recipe=None),
     )
     payload = CreateThreadRequest.model_validate(
         {
@@ -759,7 +759,7 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
         thread_cwd={},
         workspace_repo=workspace_repo,
         sandbox_repo=sandbox_repo,
-        lease_repo=_existing_sandbox_lease_repo(recipe={"id": "local:default"}),
+        sandbox_runtime_repo=_existing_sandbox_lease_repo(recipe={"id": "local:default"}),
     )
     payload = CreateThreadRequest.model_validate(
         {
@@ -1034,7 +1034,7 @@ async def test_create_thread_route_rejects_unavailable_provider():
 async def test_create_thread_route_rejects_unavailable_provider_for_existing_sandbox():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     app.state.sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row(provider_name="daytona")
-    app.state.lease_repo = _existing_sandbox_lease_repo(provider_name="daytona", recipe=None)
+    app.state.sandbox_runtime_repo = _existing_sandbox_lease_repo(provider_name="daytona", recipe=None)
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",

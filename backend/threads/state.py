@@ -44,7 +44,7 @@ def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, A
             sandbox_repo=app.state.sandbox_repo,
             thread_id=thread_id,
         )
-        runtime_row = _runtime_row_from_binding(app.state.lease_repo, binding)
+        runtime_row = _runtime_row_from_binding(app.state.sandbox_runtime_repo, binding)
         if not runtime_row:
             return sandbox_info
         instance = runtime_row.get("_instance")
