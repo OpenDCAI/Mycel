@@ -1,6 +1,6 @@
 import pytest
 
-from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
+from storage.providers.supabase.sandbox_runtime_repo import SupabaseSandboxRuntimeRepo
 from tests.fakes.supabase import FakeSupabaseClient
 
 
@@ -58,7 +58,7 @@ def _sandbox_row(
 
 
 def test_supabase_lease_repo_get_reads_container_sandbox_runtime_state():
-    repo = SupabaseLeaseRepo(client=_client({"container.sandboxes": [_sandbox_row()]}))
+    repo = SupabaseSandboxRuntimeRepo(client=_client({"container.sandboxes": [_sandbox_row()]}))
 
     lease = repo.get("lease-1")
 
@@ -77,7 +77,7 @@ def test_supabase_lease_repo_get_reads_container_sandbox_runtime_state():
 
 
 def test_supabase_lease_repo_create_requires_owner_user_id():
-    repo = SupabaseLeaseRepo(client=_client())
+    repo = SupabaseSandboxRuntimeRepo(client=_client())
 
     with pytest.raises(RuntimeError, match="requires owner_user_id"):
         repo.create("lease-1", "local")
@@ -86,7 +86,7 @@ def test_supabase_lease_repo_create_requires_owner_user_id():
 def test_supabase_lease_repo_get_fails_loudly_when_runtime_state_is_missing():
     row = _sandbox_row()
     row["config"].pop("runtime_state")
-    repo = SupabaseLeaseRepo(client=_client({"container.sandboxes": [row]}))
+    repo = SupabaseSandboxRuntimeRepo(client=_client({"container.sandboxes": [row]}))
 
     with pytest.raises(RuntimeError, match="missing config.runtime_state"):
         repo.get("lease-1")
@@ -95,7 +95,7 @@ def test_supabase_lease_repo_get_fails_loudly_when_runtime_state_is_missing():
 def test_supabase_lease_repo_provider_list_ignores_stale_rows_without_runtime_state():
     stale = _sandbox_row(sandbox_id="sandbox-stale", lease_id="lease-stale")
     stale["config"].pop("runtime_state")
-    repo = SupabaseLeaseRepo(client=_client({"container.sandboxes": [_sandbox_row(), stale]}))
+    repo = SupabaseSandboxRuntimeRepo(client=_client({"container.sandboxes": [_sandbox_row(), stale]}))
 
     leases = repo.list_by_provider("local")
 
@@ -106,7 +106,7 @@ def test_supabase_lease_repo_provider_list_ignores_stale_rows_without_runtime_st
 
 def test_supabase_lease_repo_create_writes_container_sandbox_runtime_state():
     tables: dict[str, list[dict]] = {}
-    repo = SupabaseLeaseRepo(client=_client(tables))
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     created = repo.create(
         "lease-1",
@@ -136,7 +136,7 @@ def test_supabase_lease_repo_create_writes_container_sandbox_runtime_state():
 
 def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and_state():
     tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
-    repo = SupabaseLeaseRepo(client=_client(tables))
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     updated = repo.adopt_instance(
         lease_id="lease-1",
@@ -155,7 +155,7 @@ def test_supabase_lease_repo_adopt_instance_updates_container_runtime_fields_and
 
 def test_supabase_lease_repo_persist_metadata_updates_container_runtime_state_fields():
     tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
-    repo = SupabaseLeaseRepo(client=_client(tables))
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     updated = repo.persist_metadata(
         lease_id="lease-1",
@@ -186,7 +186,7 @@ def test_supabase_lease_repo_persist_metadata_updates_container_runtime_state_fi
 
 def test_supabase_lease_repo_observe_status_detaches_instance_from_container_sandbox():
     tables = {"container.sandboxes": [_sandbox_row()]}
-    repo = SupabaseLeaseRepo(client=_client(tables))
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     updated = repo.observe_status(
         lease_id="lease-1",
@@ -208,7 +208,7 @@ def test_supabase_lease_repo_observe_status_detaches_instance_from_container_san
 
 def test_supabase_lease_repo_mark_needs_refresh_updates_runtime_state_only():
     tables = {"container.sandboxes": [_sandbox_row(needs_refresh=0, refresh_hint_at=None)]}
-    repo = SupabaseLeaseRepo(client=_client(tables))
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     assert repo.mark_needs_refresh("lease-1", hint_at="2026-04-07T00:00:06+00:00") is True
 
@@ -219,7 +219,7 @@ def test_supabase_lease_repo_mark_needs_refresh_updates_runtime_state_only():
 
 def test_supabase_lease_repo_delete_removes_container_sandbox_runtime_row():
     tables = {"container.sandboxes": [_sandbox_row()]}
-    repo = SupabaseLeaseRepo(client=_client(tables))
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     repo.delete("lease-1")
 

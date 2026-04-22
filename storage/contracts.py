@@ -15,7 +15,7 @@ NotificationType = Literal["steer", "command", "agent", "chat"]
 # ---------------------------------------------------------------------------
 
 
-class LeaseRepo(Protocol):
+class SandboxRuntimeRepo(Protocol):
     """Lower sandbox runtime persistence. Returns raw dicts for domain object construction."""
 
     def close(self) -> None: ...

@@ -1,4 +1,4 @@
-"""Supabase repository for sandbox lease persistence."""
+"""Supabase repository for sandbox runtime persistence."""
 
 from __future__ import annotations
 
@@ -116,8 +116,8 @@ def _patched_config(row: dict[str, Any], updates: dict[str, Any]) -> dict[str, A
     return config
 
 
-class SupabaseLeaseRepo:
-    """Container-backed LeaseRepo for lower sandbox runtime contracts."""
+class SupabaseSandboxRuntimeRepo:
+    """Container-backed SandboxRuntimeRepo for lower sandbox runtime contracts."""
 
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
