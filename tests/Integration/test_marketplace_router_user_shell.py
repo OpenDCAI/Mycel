@@ -14,6 +14,10 @@ from backend.web.models.marketplace import (
 from backend.web.routers import marketplace as marketplace_router
 
 
+def _runtime_storage_state(agent_config_repo: object) -> SimpleNamespace:
+    return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo))
+
+
 def test_marketplace_router_exposes_agent_user_marketplace_routes() -> None:
     paths = {getattr(route, "path", "") for route in marketplace_router.router.routes}
 
@@ -51,7 +55,7 @@ async def test_publish_agent_user_to_marketplace_uses_user_repo_not_member_repo(
         app=SimpleNamespace(
             state=SimpleNamespace(
                 user_repo=user_repo,
-                agent_config_repo=agent_config_repo,
+                runtime_storage_state=_runtime_storage_state(agent_config_repo),
             )
         )
     )
@@ -80,7 +84,7 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
                 user_repo=SimpleNamespace(
                     get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
                 ),
-                agent_config_repo=SimpleNamespace(),
+                runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
             )
         )
     )
@@ -92,7 +96,7 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
     assert seen["item_id"] == "item-1"
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
-    assert seen["agent_config_repo"] is request.app.state.agent_config_repo
+    assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
 
 
 @pytest.mark.asyncio
@@ -106,7 +110,7 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
         app=SimpleNamespace(
             state=SimpleNamespace(
                 user_repo=SimpleNamespace(get_by_id=lambda user_id: owner_agent if user_id == "agent-1" else None),
-                agent_config_repo=SimpleNamespace(),
+                runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
             )
         )
     )
@@ -118,7 +122,7 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
     assert seen["item_id"] == "item-1"
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
-    assert seen["agent_config_repo"] is request.app.state.agent_config_repo
+    assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
     assert seen["agent_user_id"] == "agent-1"
 
 

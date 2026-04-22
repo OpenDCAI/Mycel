@@ -19,6 +19,10 @@ class _EmptyAgentConfigRepo:
         return {}
 
 
+def _runtime_storage_state(agent_config_repo: object | None) -> SimpleNamespace:
+    return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo))
+
+
 @pytest.mark.asyncio
 async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkeypatch: pytest.MonkeyPatch):
     captured: dict[str, object] = {}
@@ -94,7 +98,7 @@ async def test_registry_get_or_create_agent_uses_explicit_messaging_service(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -141,7 +145,7 @@ async def test_registry_get_or_create_agent_requires_explicit_messaging_service_
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -178,7 +182,7 @@ async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_se
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -395,7 +399,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
             ),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -407,7 +411,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
     # for repo-backed agent users even when a stale member shell still exists on disk.
     assert captured["bundle_dir"] is None
     assert captured["agent_config_id"] == "cfg-1"
-    assert captured["agent_config_repo"] is app.state.agent_config_repo
+    assert captured["agent_config_repo"] is app.state.runtime_storage_state.storage_container.agent_config_repo()
 
 
 @pytest.mark.asyncio
@@ -455,7 +459,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -500,7 +504,7 @@ async def test_get_or_create_agent_fails_loud_when_chat_repos_need_missing_messa
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -547,7 +551,7 @@ async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_all
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -626,7 +630,7 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -691,8 +695,12 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            runtime_storage_state=SimpleNamespace(storage_container=SimpleNamespace(user_settings_repo=lambda: _UserSettingsRepo())),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=SimpleNamespace(
+                storage_container=SimpleNamespace(
+                    user_settings_repo=lambda: _UserSettingsRepo(),
+                    agent_config_repo=lambda: _EmptyAgentConfigRepo(),
+                )
+            ),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -745,8 +753,12 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            runtime_storage_state=SimpleNamespace(storage_container=SimpleNamespace(user_settings_repo=lambda: _UserSettingsRepo())),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=SimpleNamespace(
+                storage_container=SimpleNamespace(
+                    user_settings_repo=lambda: _UserSettingsRepo(),
+                    agent_config_repo=lambda: _EmptyAgentConfigRepo(),
+                )
+            ),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -795,7 +807,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_AgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_AgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -839,7 +851,7 @@ async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_miss
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
-            agent_config_repo=_EmptyAgentConfigRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
