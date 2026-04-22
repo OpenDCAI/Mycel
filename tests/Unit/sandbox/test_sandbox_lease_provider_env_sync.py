@@ -2,7 +2,7 @@ import uuid
 from pathlib import Path
 
 import sandbox.lease as sandbox_lease_module
-from sandbox.lease import SandboxInstance, SQLiteLease
+from sandbox.lease import SandboxInstance, SQLiteSandboxRuntimeHandle
 
 
 class _FakeLeaseRepo:
@@ -157,7 +157,7 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
     monkeypatch.setattr(sandbox_lease_module, "_make_provider_event_repo", lambda: fake_event_repo)
     monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
 
-    lease = SQLiteLease(
+    lease = SQLiteSandboxRuntimeHandle(
         lease_id="lease-1",
         provider_name="local",
         current_instance=SandboxInstance(
@@ -228,7 +228,7 @@ def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(
     monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
     monkeypatch.setattr(sandbox_lease_module, "_make_provider_event_repo", lambda: _FakeEventRepo())
 
-    lease = SQLiteLease(
+    lease = SQLiteSandboxRuntimeHandle(
         lease_id="lease-1",
         provider_name="local",
         db_path=Path("/tmp/fake-sandbox.db"),

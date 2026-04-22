@@ -23,7 +23,7 @@ from sandbox.provider import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
+    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
 
@@ -282,7 +282,7 @@ class LocalSessionProvider(SandboxProvider):
         idle = values[3] + values[4]
         return total, idle
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.providers.local import LocalPersistentShellRuntime
 
         return LocalPersistentShellRuntime(terminal, lease)

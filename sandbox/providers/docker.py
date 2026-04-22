@@ -38,7 +38,7 @@ from sandbox.runtime import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
+    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
 
@@ -408,7 +408,7 @@ class DockerProvider(SandboxProvider):
             return
         raise RuntimeError(f"Unsupported copy source path type: {source}")
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         return DockerPtyRuntime(terminal, lease, self)
 
     @overload

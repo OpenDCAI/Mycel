@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
+    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.provider import SandboxProvider
     from sandbox.terminal import AbstractTerminal, TerminalState
 
@@ -325,14 +325,14 @@ class PhysicalTerminalRuntime(ABC):
 
     Does NOT:
     - Own terminal identity (that's AbstractTerminal)
-    - Own compute lifecycle (that's SandboxLease)
+    - Own compute lifecycle (that's SandboxRuntimeHandle)
     - Outlive ChatSession
     """
 
     def __init__(
         self,
         terminal: AbstractTerminal,
-        lease: SandboxLease,
+        lease: SandboxRuntimeHandle,
     ):
         self.terminal = terminal
         self.lease = lease
@@ -838,7 +838,7 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
     def __init__(
         self,
         terminal: AbstractTerminal,
-        lease: SandboxLease,
+        lease: SandboxRuntimeHandle,
         provider: SandboxProvider,
     ):
         super().__init__(terminal, lease)
@@ -905,7 +905,7 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
     def __init__(
         self,
         terminal: AbstractTerminal,
-        lease: SandboxLease,
+        lease: SandboxRuntimeHandle,
         provider: SandboxProvider,
     ):
         super().__init__(terminal, lease, provider)

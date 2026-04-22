@@ -24,7 +24,7 @@ from sandbox.provider import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
+    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
 
@@ -482,7 +482,7 @@ class AgentBayProvider(SandboxProvider):
             setattr(session, "mcp_tools", tools)
             setattr(session, "mcpTools", tools)
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.runtime import RemoteWrappedRuntime
 
         return RemoteWrappedRuntime(terminal, lease, self)
