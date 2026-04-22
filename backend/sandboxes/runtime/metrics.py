@@ -7,6 +7,15 @@ from typing import Any
 from backend.sandboxes.inventory import init_providers_and_managers
 
 
+def _exact_rows_for_provider_runtime(
+    runtimes: list[dict[str, Any]],
+    *,
+    runtime_id: str,
+    provider_name: str,
+) -> list[dict[str, Any]]:
+    return [row for row in runtimes if row.get("provider") == provider_name and str(row.get("session_id") or "") == runtime_id]
+
+
 def get_runtime_metrics(
     runtime_id: str,
     provider_hint: str | None = None,
@@ -17,7 +26,24 @@ def get_runtime_metrics(
 ) -> dict[str, Any]:
     _, managers = init_providers_and_managers_fn()
     runtimes = load_all_sandbox_runtimes_fn(managers)
-    runtime, manager = find_runtime_and_manager_fn(runtimes, managers, runtime_id, provider_name=provider_hint)
+    try:
+        runtime, manager = find_runtime_and_manager_fn(runtimes, managers, runtime_id, provider_name=provider_hint)
+    except RuntimeError as exc:
+        if "Ambiguous runtime id" not in str(exc) or not provider_hint:
+            raise
+        # @@@provider-hinted-runtime-collapse - metrics reads should treat duplicate
+        # rows for the same provider/session as one runtime when the caller already
+        # supplied the provider hint; the ambiguity is cross-thread residue, not a
+        # reason to fail the high-level metrics surface.
+        exact = _exact_rows_for_provider_runtime(
+            runtimes,
+            runtime_id=runtime_id,
+            provider_name=provider_hint,
+        )
+        if not exact:
+            raise
+        runtime = exact[0]
+        manager = managers.get(provider_hint)
     if not runtime:
         raise RuntimeError(f"Runtime not found: {runtime_id}")
     if manager is None:
