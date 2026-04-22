@@ -71,7 +71,7 @@ def test_mutate_sandbox_runtime_destroys_provider_orphan_without_fake_lease(monk
     assert manager.provider.destroyed == [("sandbox-1", True)]
 
 
-def test_mutate_sandbox_runtime_reports_manager_runtime_for_lower_runtime_handle(monkeypatch):
+def test_mutate_sandbox_runtime_reports_manager_runtime_for_sandbox_runtime_handle(monkeypatch):
     manager = _FakeManager()
     manager.lease = _FakeLease()
     runtimes = [
