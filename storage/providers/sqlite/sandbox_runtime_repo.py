@@ -43,9 +43,17 @@ class SQLiteSandboxRuntimeRepo:
         if self._own_conn:
             self._conn.close()
 
-    def _require_lease(self, row: dict[str, Any] | None, *, lease_id: str, operation: str) -> dict[str, Any]:
+    def _require_sandbox_runtime(
+        self,
+        row: dict[str, Any] | None,
+        *,
+        sandbox_runtime_id: str,
+        operation: str,
+    ) -> dict[str, Any]:
         if row is None:
-            raise RuntimeError(f"SQLite sandbox runtime repo failed to load runtime after {operation}: {lease_id}")
+            raise RuntimeError(
+                f"SQLite sandbox runtime repo failed to load runtime after {operation}: {sandbox_runtime_id}"
+            )
         return row
 
     def _runtime_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -136,7 +144,11 @@ class SQLiteSandboxRuntimeRepo:
                 ),
             )
             self._conn.commit()
-        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="create")
+        return self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="create",
+        )
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -166,9 +178,9 @@ class SQLiteSandboxRuntimeRepo:
         existing = self.get(sandbox_runtime_id)
         if existing is None:
             self.create(sandbox_runtime_id=sandbox_runtime_id, provider_name=provider_name)
-            existing = self._require_lease(
+            existing = self._require_sandbox_runtime(
                 self.get(sandbox_runtime_id),
-                lease_id=sandbox_runtime_id,
+                sandbox_runtime_id=sandbox_runtime_id,
                 operation="adopt_instance bootstrap",
             )
         if existing["provider_name"] != provider_name:
@@ -255,7 +267,11 @@ class SQLiteSandboxRuntimeRepo:
         status: str,
         observed_at: Any = None,
     ) -> dict[str, Any]:
-        existing = self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="observe_status")
+        existing = self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="observe_status",
+        )
         now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or datetime.now().isoformat())
         normalized = parse_sandbox_runtime_instance_state(status).value
         current_instance_id = existing.get("current_instance_id")
@@ -312,7 +328,11 @@ class SQLiteSandboxRuntimeRepo:
                         (normalized, now, current_instance_id),
                     )
             self._conn.commit()
-        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="observe_status")
+        return self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="observe_status",
+        )
 
     def persist_metadata(
         self,
@@ -366,7 +386,11 @@ class SQLiteSandboxRuntimeRepo:
                 ),
             )
             self._conn.commit()
-        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="persist_metadata")
+        return self._require_sandbox_runtime(
+            self.get(sandbox_runtime_id),
+            sandbox_runtime_id=sandbox_runtime_id,
+            operation="persist_metadata",
+        )
 
     def mark_needs_refresh(self, sandbox_runtime_id: str, hint_at: datetime | None = None) -> bool:
         hinted_at = (hint_at or datetime.now()).isoformat()
@@ -392,7 +416,7 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.execute("DELETE FROM sandbox_runtimes WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.commit()
 
-        # Clean up per-lease locks in SQLiteLease
+        # Clean up per-runtime locks in SQLiteLease
         from sandbox.lease import SQLiteLease
 
         with SQLiteLease._lock_guard:
@@ -491,13 +515,15 @@ class SQLiteSandboxRuntimeRepo:
 
         from sandbox.lease import REQUIRED_EVENT_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_LEASE_COLUMNS
 
-        lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtimes)").fetchall()}
+        runtime_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtimes)").fetchall()}
         instance_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
         event_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtime_events)").fetchall()}
 
-        missing_lease = REQUIRED_LEASE_COLUMNS - lease_cols
-        if missing_lease:
-            raise RuntimeError(f"sandbox_runtimes schema mismatch: missing {sorted(missing_lease)}. Purge ~/.leon/sandbox.db and retry.")
+        missing_runtime = REQUIRED_LEASE_COLUMNS - runtime_cols
+        if missing_runtime:
+            raise RuntimeError(
+                f"sandbox_runtimes schema mismatch: missing {sorted(missing_runtime)}. Purge ~/.leon/sandbox.db and retry."
+            )
         missing_instances = REQUIRED_INSTANCE_COLUMNS - instance_cols
         if missing_instances:
             raise RuntimeError(
