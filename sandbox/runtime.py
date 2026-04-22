@@ -332,10 +332,10 @@ class PhysicalTerminalRuntime(ABC):
     def __init__(
         self,
         terminal: AbstractTerminal,
-        lease: SandboxRuntimeHandle,
+        sandbox_runtime: SandboxRuntimeHandle,
     ):
         self.terminal = terminal
-        self.lease = lease
+        self.lease = sandbox_runtime
         self.runtime_id = f"runtime-{uuid.uuid4().hex[:12]}"
         self.chat_session_id: str | None = None
         self._commands: dict[str, AsyncCommand] = {}
@@ -838,10 +838,10 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
     def __init__(
         self,
         terminal: AbstractTerminal,
-        lease: SandboxRuntimeHandle,
+        sandbox_runtime: SandboxRuntimeHandle,
         provider: SandboxProvider,
     ):
-        super().__init__(terminal, lease)
+        super().__init__(terminal, sandbox_runtime)
         self.provider = provider
 
     @staticmethod
@@ -905,10 +905,10 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
     def __init__(
         self,
         terminal: AbstractTerminal,
-        lease: SandboxRuntimeHandle,
+        sandbox_runtime: SandboxRuntimeHandle,
         provider: SandboxProvider,
     ):
-        super().__init__(terminal, lease, provider)
+        super().__init__(terminal, sandbox_runtime, provider)
 
     def _execute_once(self, command: str, timeout: float | None = None) -> ExecuteResult:
         instance = self.lease.ensure_active_instance(self.provider)

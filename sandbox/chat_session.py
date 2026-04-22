@@ -70,7 +70,7 @@ class ChatSession:
         session_id: str,
         thread_id: str,
         terminal: AbstractTerminal,
-        lease: SandboxRuntimeHandle,
+        sandbox_runtime: SandboxRuntimeHandle,
         runtime: PhysicalTerminalRuntime,
         policy: ChatSessionPolicy,
         started_at: datetime,
@@ -87,7 +87,7 @@ class ChatSession:
         self.session_id = session_id
         self.thread_id = thread_id
         self.terminal = terminal
-        self.lease = lease
+        self.lease = sandbox_runtime
         self.runtime = runtime
         self.policy = policy
         self.started_at = started_at
@@ -179,8 +179,8 @@ class ChatSessionManager:
         if error:
             raise error[0]
 
-    def _build_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
-        return self.provider.create_runtime(terminal, lease)
+    def _build_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+        return self.provider.create_runtime(terminal, sandbox_runtime)
 
     def get(self, thread_id: str, terminal_id: str | None = None) -> ChatSession | None:
         if terminal_id is None:
@@ -234,16 +234,16 @@ class ChatSessionManager:
         finally:
             if own_lease_repo:
                 _lease_repo.close()
-        lease = sandbox_runtime_from_row(_lease_row, self.db_path) if _lease_row else None
-        if not terminal or not lease:
+        sandbox_runtime = sandbox_runtime_from_row(_lease_row, self.db_path) if _lease_row else None
+        if not terminal or not sandbox_runtime:
             return None
 
         session = ChatSession(
             session_id=row["session_id"],
             thread_id=row["thread_id"],
             terminal=terminal,
-            lease=lease,
-            runtime=self._build_runtime(terminal, lease),
+            lease=sandbox_runtime,
+            runtime=self._build_runtime(terminal, sandbox_runtime),
             policy=ChatSessionPolicy(
                 idle_ttl_sec=row["idle_ttl_sec"],
                 max_duration_sec=row["max_duration_sec"],
@@ -271,7 +271,7 @@ class ChatSessionManager:
         session_id: str,
         thread_id: str,
         terminal: AbstractTerminal,
-        lease: SandboxRuntimeHandle,
+        sandbox_runtime: SandboxRuntimeHandle,
         policy: ChatSessionPolicy | None = None,
     ) -> ChatSession:
         policy = policy or self.default_policy
@@ -282,14 +282,14 @@ class ChatSessionManager:
             self._close_runtime(existing, reason="superseded")
             self._live_sessions.pop(terminal.terminal_id, None)
 
-        runtime = self._build_runtime(terminal, lease)
+        runtime = self._build_runtime(terminal, sandbox_runtime)
         runtime_id = getattr(runtime, "runtime_id", None)
 
         self._repo.create_session(
             session_id=session_id,
             thread_id=thread_id,
             terminal_id=terminal.terminal_id,
-            lease_id=lease.lease_id,
+            lease_id=sandbox_runtime.lease_id,
             runtime_id=runtime_id,
             status="active",
             idle_ttl_sec=policy.idle_ttl_sec,
@@ -302,7 +302,7 @@ class ChatSessionManager:
             session_id=session_id,
             thread_id=thread_id,
             terminal=terminal,
-            lease=lease,
+            sandbox_runtime=sandbox_runtime,
             runtime=runtime,
             policy=policy,
             started_at=now,

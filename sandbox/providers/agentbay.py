@@ -482,7 +482,7 @@ class AgentBayProvider(SandboxProvider):
             setattr(session, "mcp_tools", tools)
             setattr(session, "mcpTools", tools)
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.runtime import RemoteWrappedRuntime
 
-        return RemoteWrappedRuntime(terminal, lease, self)
+        return RemoteWrappedRuntime(terminal, sandbox_runtime, self)

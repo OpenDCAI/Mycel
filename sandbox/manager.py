@@ -545,7 +545,7 @@ class SandboxManager:
             session_id=session_id,
             thread_id=thread_id,
             terminal=terminal,
-            lease=lease,
+            sandbox_runtime=lease,
         )
 
         if instance and storage is not None:

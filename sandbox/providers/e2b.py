@@ -375,10 +375,10 @@ class E2BProvider(SandboxProvider):
         """Expose native SDK sandbox for runtime-level persistent terminal handling."""
         return self._get_sandbox(session_id)
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.providers.e2b import E2BPtyRuntime
 
-        return E2BPtyRuntime(terminal, lease, self)
+        return E2BPtyRuntime(terminal, sandbox_runtime, self)
 
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -402,8 +402,8 @@ from sandbox.runtime import (  # noqa: E402
 class E2BPtyRuntime(_RemoteRuntimeBase):
     """E2B runtime using native SDK PTY handle for persistent shell."""
 
-    def __init__(self, terminal, lease, provider):
-        super().__init__(terminal, lease, provider)
+    def __init__(self, terminal, sandbox_runtime, provider):
+        super().__init__(terminal, sandbox_runtime, provider)
         self._session_lock = asyncio.Lock()
         self._bound_instance_id: str | None = None
         self._pty_pid: int | None = None
