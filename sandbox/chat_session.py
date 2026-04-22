@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
-from sandbox.control_plane_repos import make_chat_session_repo, make_lease_repo, make_terminal_repo
+from sandbox.control_plane_repos import make_chat_session_repo, make_sandbox_runtime_repo, make_terminal_repo
 from sandbox.lifecycle import (
     ChatSessionState,
     assert_chat_session_transition,
@@ -228,7 +228,7 @@ class ChatSessionManager:
         _lease_repo = self._lease_repo
         own_lease_repo = _lease_repo is None
         if _lease_repo is None:
-            _lease_repo = make_lease_repo(db_path=self.db_path)
+            _lease_repo = make_sandbox_runtime_repo(db_path=self.db_path)
         try:
             _lease_row = _lease_repo.get(row["lease_id"])
         finally:
