@@ -250,7 +250,7 @@ class SandboxManager:
 
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
         self.terminal_store = make_terminal_repo(db_path=self.db_path)
-        self.sandbox_runtime_store = make_lease_repo(db_path=self.db_path)
+        self.lease_store = make_lease_repo(db_path=self.db_path)
 
         self.session_manager = ChatSessionManager(
             provider=provider,
@@ -258,7 +258,7 @@ class SandboxManager:
             default_policy=ChatSessionPolicy(),
             chat_session_repo=make_chat_session_repo(db_path=self.db_path),
             terminal_repo=self.terminal_store,
-            lease_repo=self.sandbox_runtime_store,
+            lease_repo=self.lease_store,
         )
 
         from sandbox.volume import SandboxVolume
@@ -270,14 +270,14 @@ class SandboxManager:
 
     def _get_sandbox_runtime(self, lease_id: str):
         """Get sandbox runtime as domain object, or None."""
-        row = self.sandbox_runtime_store.get(lease_id)
+        row = self.lease_store.get(lease_id)
         if row is None:
             return None
         return sandbox_runtime_from_row(row, self.db_path)
 
     def _create_sandbox_runtime(self, lease_id: str, provider_name: str):
         """Create sandbox runtime and return as domain object."""
-        row = self.sandbox_runtime_store.create(lease_id, provider_name)
+        row = self.lease_store.create(lease_id, provider_name)
         return sandbox_runtime_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
@@ -452,7 +452,7 @@ class SandboxManager:
     def close(self):
         self.session_manager.close(reason="manager_close")
         self.terminal_store.close()
-        self.sandbox_runtime_store.close()
+        self.lease_store.close()
 
     def get_sandbox(self, thread_id: str, bind_mounts: list | None = None) -> SandboxCapability:
         from sandbox.thread_context import set_current_thread_id
@@ -891,7 +891,7 @@ class SandboxManager:
 
         seen_instance_ids: set[str] = set()
 
-        for lease_row in self.sandbox_runtime_store.list_by_provider(self.provider.name):
+        for lease_row in self.lease_store.list_by_provider(self.provider.name):
             lease_id = lease_row["lease_id"]
             lease = self._get_sandbox_runtime(lease_id)
             if not lease:
