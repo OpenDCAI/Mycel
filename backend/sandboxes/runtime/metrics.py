@@ -13,11 +13,7 @@ def _exact_rows_for_provider_runtime(
     runtime_id: str,
     provider_name: str,
 ) -> list[dict[str, Any]]:
-    return [
-        row
-        for row in runtimes
-        if row.get("provider") == provider_name and str(row.get("session_id") or "") == runtime_id
-    ]
+    return [row for row in runtimes if row.get("provider") == provider_name and str(row.get("session_id") or "") == runtime_id]
 
 
 def get_runtime_metrics(
