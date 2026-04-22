@@ -945,7 +945,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
         return {
             "terminal_id": kwargs["terminal_id"],
             "thread_id": kwargs["thread_id"],
-            "sandbox_runtime_id": kwargs["lease_id"],
+            "sandbox_runtime_id": kwargs["sandbox_runtime_id"],
             "cwd": kwargs["initial_cwd"],
             "env_delta_json": "{}",
             "state_version": 0,
@@ -974,7 +974,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
     session = manager.create_background_command_session("thread-1", "/workspace/task")
 
     assert created_rows[0]["thread_id"] == "thread-1"
-    assert created_rows[0]["lease_id"] == "lease-1"
+    assert created_rows[0]["sandbox_runtime_id"] == "lease-1"
     assert created_rows[0]["initial_cwd"] == "/workspace/task"
     assert created_terminal.updated_state.cwd == "/workspace/task"
     assert created_terminal.updated_state.env_delta == {"TOKEN": "value"}

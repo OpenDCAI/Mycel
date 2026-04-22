@@ -22,7 +22,7 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolv
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
     "thread_id",
-    "lease_id",
+    "sandbox_runtime_id",
     "cwd",
     "env_delta_json",
     "state_version",
