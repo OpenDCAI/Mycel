@@ -38,7 +38,10 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
 
     thread_buf = get_or_create_thread_buffer(app, thread_id)
 
-    display_builder_ref = app.state.display_builder
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    display_builder_ref = getattr(runtime_state, "display_builder", None)
+    if display_builder_ref is None:
+        raise RuntimeError("display_builder is required for thread buffer wiring")
 
     async def activity_sink(event: dict) -> None:
         if _append_event is None:

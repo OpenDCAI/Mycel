@@ -54,7 +54,10 @@ async def run_agent_to_buffer(
     typing_tracker: Any | None = None,
 ) -> str:
     run_event_repo = _run_emit.resolve_run_event_repo(agent)
-    display_builder = app.state.display_builder
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    display_builder = getattr(runtime_state, "display_builder", None)
+    if display_builder is None:
+        raise RuntimeError("display_builder is required for thread run execution")
     emit = _run_emit.build_emit(
         thread_id=thread_id,
         run_id=run_id,

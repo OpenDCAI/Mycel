@@ -84,6 +84,23 @@ class _FakeRunEventRepo:
         return 0
 
 
+def _app_with_display_builder(display_builder: object) -> SimpleNamespace:
+    return SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=display_builder,
+            threads_runtime_state=SimpleNamespace(display_builder=display_builder),
+        )
+    )
+
+
+def _state_with_display_builder(display_builder: object, **kwargs: object) -> SimpleNamespace:
+    return SimpleNamespace(
+        display_builder=display_builder,
+        threads_runtime_state=SimpleNamespace(display_builder=display_builder),
+        **kwargs,
+    )
+
+
 def _fake_storage_container() -> SimpleNamespace:
     repo = _FakeRunEventRepo()
     return SimpleNamespace(run_event_repo=lambda: repo)
@@ -503,8 +520,9 @@ def _make_streaming_app(
         start_chat=lambda *_args, **_kwargs: None,
         stop=lambda *_args, **_kwargs: None,
     )
-    state = SimpleNamespace(
-        display_builder=DisplayBuilder(),
+    display_builder = DisplayBuilder()
+    state = _state_with_display_builder(
+        display_builder,
         thread_repo=SimpleNamespace(
             get_by_id=lambda target_thread_id: {"id": target_thread_id, "sandbox_type": "local"},
             get_by_user_id=lambda _user_id: None,
@@ -532,6 +550,7 @@ def _make_streaming_app(
     state.threads_runtime_state = SimpleNamespace(
         agent_runtime_gateway=gateway,
         activity_reader=runtime_state.activity_reader,
+        display_builder=state.display_builder,
     )
     return app, queue_manager
 
@@ -584,7 +603,7 @@ async def _run_direct_notification_followthrough(
         message_metadata=message_metadata,
     )
 
-    entries = app.state.display_builder.get_entries(thread_id)
+    entries = app.state.threads_runtime_state.display_builder.get_entries(thread_id)
     assert entries is not None
     return entries
 
@@ -779,7 +798,7 @@ async def test_cold_detail_and_history_share_interrupted_tool_call_repair():
         agent=loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_app = _app_with_display_builder(DisplayBuilder())
     _put_local_agent_in_pool(fake_app, "cold-repair-thread", fake_agent)
 
     with (
@@ -1135,8 +1154,8 @@ async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(mon
         storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_state_with_display_builder(
+            DisplayBuilder(),
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
@@ -1293,7 +1312,7 @@ async def test_get_thread_messages_rebuilds_idle_thread_when_cached_entries_are_
         agent=loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=display_builder))
+    fake_app = _app_with_display_builder(display_builder)
 
     with (
         patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
@@ -1320,7 +1339,7 @@ async def test_get_thread_messages_idle_rebuild_replays_latest_run_error_from_ev
         agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": [human]}))),
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_app = _app_with_display_builder(DisplayBuilder())
     run_events = [
         {
             "seq": 1,
@@ -1403,7 +1422,7 @@ async def test_cold_rebuild_surfaces_persisted_compaction_notice_in_detail_and_h
         agent=loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_app = _app_with_display_builder(DisplayBuilder())
     _put_local_agent_in_pool(fake_app, "compact-thread", fake_agent)
 
     with (
@@ -1454,7 +1473,7 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
         agent=loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_app = _app_with_display_builder(DisplayBuilder())
     _put_local_agent_in_pool(fake_app, "prompt-too-long-thread", fake_agent)
 
     with (
@@ -1534,7 +1553,7 @@ async def test_get_thread_messages_idle_rebuild_keeps_terminal_subagent_stream_s
         agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": [ai, tool, notice]}))),
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_app = _app_with_display_builder(DisplayBuilder())
 
     with (
         patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
@@ -1587,7 +1606,7 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
     assert memory.summary_store is not None
     assert memory.summary_store.get_latest_summary("compaction-lifecycle-thread") is not None
 
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_app = _app_with_display_builder(DisplayBuilder())
     fake_agent = SimpleNamespace(
         agent=compact_loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
@@ -1737,7 +1756,7 @@ async def test_cold_rebuild_surfaces_compaction_breaker_notice_after_repeated_fa
         agent=loop,
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
-    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_app = _app_with_display_builder(DisplayBuilder())
     _put_local_agent_in_pool(fake_app, "compaction-breaker-thread", fake_agent)
 
     with (
@@ -1796,8 +1815,8 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
         storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_state_with_display_builder(
+            DisplayBuilder(),
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
@@ -1822,7 +1841,7 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
         message_metadata={"source": "system", "notification_type": "agent"},
     )
 
-    entries = app.state.display_builder.get_entries("thread-notice")
+    entries = app.state.threads_runtime_state.display_builder.get_entries("thread-notice")
     assert entries is not None
     assert entries[0]["segments"] == [
         {
@@ -1865,8 +1884,8 @@ async def test_run_agent_to_buffer_persists_terminal_notifications_before_assist
         storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_state_with_display_builder(
+            DisplayBuilder(),
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
@@ -1926,8 +1945,8 @@ async def test_run_agent_to_buffer_resumes_graph_for_terminal_background_notific
         storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_state_with_display_builder(
+            DisplayBuilder(),
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
@@ -2291,8 +2310,8 @@ async def test_run_agent_to_buffer_logs_real_stream_error_without_none_traceback
         storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_state_with_display_builder(
+            DisplayBuilder(),
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
@@ -2335,8 +2354,8 @@ async def test_run_agent_to_buffer_drains_activity_notice_before_stream_error(mo
         storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_state_with_display_builder(
+            DisplayBuilder(),
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
@@ -2411,8 +2430,8 @@ async def test_run_agent_to_buffer_batches_additional_terminal_notifications(mon
         storage_container=_fake_storage_container(),
     )
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_state_with_display_builder(
+            DisplayBuilder(),
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
@@ -2437,7 +2456,7 @@ async def test_run_agent_to_buffer_batches_additional_terminal_notifications(mon
         message_metadata={"source": "system", "notification_type": "agent"},
     )
 
-    entries = app.state.display_builder.get_entries("thread-batch-notice")
+    entries = app.state.threads_runtime_state.display_builder.get_entries("thread-batch-notice")
     assert entries is not None
     notice_segments = [segment for segment in entries[0]["segments"] if segment.get("type") == "notice"]
     assert len(notice_segments) == 3

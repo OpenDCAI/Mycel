@@ -3,6 +3,8 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from dataclasses import is_dataclass, replace
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from psycopg import AsyncConnection
@@ -85,7 +87,12 @@ async def lifespan(app: FastAPI):
     # ---- Existing state ----
     from backend.threads.display.builder import DisplayBuilder
 
-    app.state.display_builder = DisplayBuilder()
+    display_builder = DisplayBuilder()
+    if is_dataclass(threads_runtime):
+        threads_runtime = replace(threads_runtime, display_builder=display_builder)
+    else:
+        threads_runtime = SimpleNamespace(**vars(threads_runtime), display_builder=display_builder)
+    app.state.threads_runtime_state = threads_runtime
     app.state.idle_reaper_task = None
     app.state._event_loop = asyncio.get_running_loop()
 

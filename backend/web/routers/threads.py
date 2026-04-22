@@ -393,7 +393,10 @@ def _checkpoint_tail_is_pending_owner_turn(messages: list[dict[str, Any]]) -> bo
 
 
 async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str, Any]]:
-    display_builder = app.state.display_builder
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    display_builder = getattr(runtime_state, "display_builder", None)
+    if display_builder is None:
+        raise RuntimeError("display_builder is required for thread display entries")
     entries = display_builder.get_entries(thread_id)
     if entries is not None:
         _normalize_blocking_subagent_terminal_status(entries)
@@ -917,7 +920,10 @@ async def get_thread_messages(
     Hot path: return in-memory state.  Cold path: rebuild from checkpoint.
     """
     sandbox_type = resolve_thread_sandbox(app, thread_id)
-    display_builder = app.state.display_builder
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    display_builder = getattr(runtime_state, "display_builder", None)
+    if display_builder is None:
+        raise RuntimeError("display_builder is required for thread runtime surface")
     entries = await _get_thread_display_entries(app, thread_id)
     sandbox_info = get_sandbox_info(app, thread_id, sandbox_type)
     return {
