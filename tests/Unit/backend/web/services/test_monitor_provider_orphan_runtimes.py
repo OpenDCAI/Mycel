@@ -12,7 +12,7 @@ LOWER_RUNTIME_KEY = "lease_" + "id"
 class _FailingManager:
     def __init__(self) -> None:
         self.provider = SimpleNamespace(name="daytona", list_provider_runtimes=lambda: [])
-        self.lease_store = SimpleNamespace(list_by_provider=lambda _provider_name: [])
+        self.sandbox_runtime_store = SimpleNamespace(list_by_provider=lambda _provider_name: [])
         self.provider_capability = SimpleNamespace(inspect_visible=True)
 
     def list_sessions(self):
@@ -40,7 +40,7 @@ def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
                 _provider_runtime("deleted-one", "deleted"),
             ],
         ),
-        lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: [{"current_instance_id": "covered-runtime"}]),
+        sandbox_runtime_store=SimpleNamespace(list_by_provider=lambda _provider_name: [{"current_instance_id": "covered-runtime"}]),
         provider_capability=SimpleNamespace(inspect_visible=False),
     )
 
@@ -77,7 +77,7 @@ def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
 def test_load_provider_orphan_runtimes_rejects_non_list_provider_result():
     manager = SimpleNamespace(
         provider=SimpleNamespace(name="daytona", list_provider_runtimes=lambda: (_provider_runtime("orphan"),)),
-        lease_store=SimpleNamespace(list_by_provider=lambda _provider_name: []),
+        sandbox_runtime_store=SimpleNamespace(list_by_provider=lambda _provider_name: []),
         provider_capability=SimpleNamespace(inspect_visible=False),
     )
 

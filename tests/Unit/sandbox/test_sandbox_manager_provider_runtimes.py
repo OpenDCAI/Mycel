@@ -11,7 +11,7 @@ def _manager_for_provider(provider: SimpleNamespace) -> SandboxManager:
     manager.provider_capability = SimpleNamespace(inspect_visible=True)
     manager.terminal_store = SimpleNamespace(list_all=lambda: [])
     manager.session_manager = SimpleNamespace(list_all=lambda: [])
-    manager.lease_store = SimpleNamespace(list_by_provider=lambda _provider_name: [])
+    manager.sandbox_runtime_store = SimpleNamespace(list_by_provider=lambda _provider_name: [])
     return manager
 
 
