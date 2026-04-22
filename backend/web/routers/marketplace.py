@@ -18,6 +18,13 @@ from backend.web.models.marketplace import (
 router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
 
 
+def _agent_config_repo(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "agent_config_repo", None)
+    return repo_factory() if callable(repo_factory) else None
+
+
 async def _verify_user_ownership(agent_user_id: str, user_id: str, user_repo: Any) -> None:
     """Raise 403 if *user_id* does not own *agent_user_id*."""
 
@@ -72,7 +79,7 @@ async def publish_agent_user_to_marketplace(
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
     publisher_user = user_repo.get_by_id(user_id)
@@ -101,7 +108,7 @@ async def download_from_marketplace(
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     if req.agent_user_id is not None:
         await _verify_user_ownership(req.agent_user_id, user_id, user_repo)
     return await asyncio.to_thread(
@@ -121,7 +128,7 @@ async def upgrade_from_marketplace(
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
     return await asyncio.to_thread(

@@ -50,6 +50,13 @@ def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None
         raise HTTPException(409, "Cannot delete agent with existing threads")
 
 
+def _agent_config_repo(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "agent_config_repo", None)
+    return repo_factory() if callable(repo_factory) else None
+
+
 # ── Agents ──
 
 
@@ -59,7 +66,7 @@ async def list_agents(
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     items = await asyncio.to_thread(
         agent_user_service.list_agent_user_summaries,
         user_id,
@@ -80,7 +87,7 @@ async def get_agent(
         agent_id,
         user_id,
         request.app.state.user_repo,
-        getattr(request.app.state, "agent_config_repo", None),
+        _agent_config_repo(request),
     )
 
 
@@ -92,7 +99,7 @@ async def create_agent(
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     try:
         # @@@panel-chat-consumer - panel owns the agent CRUD route, but contact
         # edge cleanup is chat-owned truth. Borrow the repo explicitly so panel
@@ -120,7 +127,7 @@ async def update_agent(
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     item = await asyncio.to_thread(
         agent_user_service.update_agent_user,
@@ -145,7 +152,7 @@ async def update_agent_config(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     item = await asyncio.to_thread(
         agent_user_service.update_agent_user_config,
         agent_id,
@@ -169,7 +176,7 @@ async def publish_agent(
         raise HTTPException(403, "Cannot publish builtin agent")
     user_repo = request.app.state.user_repo
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     item = await asyncio.to_thread(
         agent_user_service.publish_agent_user,
         agent_id,
@@ -197,7 +204,7 @@ async def delete_agent(
     if thread_repo is None:
         raise HTTPException(503, "Thread repo unavailable")
     await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
-    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    agent_config_repo = _agent_config_repo(request)
     try:
         if contact_repo is None:
             raise RuntimeError("chat bootstrap not attached: contact_repo")
@@ -311,7 +318,7 @@ async def get_used_by(
         resource_name,
         user_id,
         user_repo=request.app.state.user_repo,
-        agent_config_repo=getattr(request.app.state, "agent_config_repo", None),
+        agent_config_repo=_agent_config_repo(request),
     )
     return {"count": len(users), "users": users}
 

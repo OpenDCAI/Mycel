@@ -13,6 +13,10 @@ from backend.web.routers import panel as panel_router
 from storage.contracts import UserRow, UserType
 
 
+def _runtime_storage_state(agent_config_repo: object) -> SimpleNamespace:
+    return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo))
+
+
 @pytest.mark.asyncio
 async def test_panel_agents_uses_injected_user_repo_for_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     agent = UserRow(
@@ -49,7 +53,11 @@ async def test_panel_agents_uses_injected_user_repo_for_owner_scope(monkeypatch:
 
     result = await panel_router.list_agents(
         user_id="user-1",
-        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo, agent_config_repo=fake_agent_config_repo))),
+        request=SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(user_repo=fake_repo, runtime_storage_state=_runtime_storage_state(fake_agent_config_repo))
+            )
+        ),
     )
 
     assert seen == ["user-1"]
@@ -94,7 +102,11 @@ async def test_panel_agent_detail_keeps_full_config_for_owner_scope(monkeypatch:
     result = await panel_router.get_agent(
         "agent-1",
         user_id="user-1",
-        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo, agent_config_repo=fake_agent_config_repo))),
+        request=SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(user_repo=fake_repo, runtime_storage_state=_runtime_storage_state(fake_agent_config_repo))
+            )
+        ),
     )
 
     assert result["id"] == "agent-1"
@@ -416,7 +428,7 @@ async def test_create_agent_route_fails_loud_when_contact_repo_missing():
         app=SimpleNamespace(
             state=SimpleNamespace(
                 user_repo=SimpleNamespace(),
-                agent_config_repo=SimpleNamespace(),
+                runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
             )
         )
     )
@@ -439,7 +451,7 @@ async def test_delete_agent_route_fails_loud_when_contact_repo_missing(monkeypat
         app=SimpleNamespace(
             state=SimpleNamespace(
                 user_repo=SimpleNamespace(),
-                agent_config_repo=SimpleNamespace(),
+                runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
                 thread_repo=SimpleNamespace(list_by_agent_user=lambda _agent_id: []),
             )
         )
@@ -465,7 +477,7 @@ async def test_delete_agent_route_fails_loud_when_thread_repo_missing(monkeypatc
         app=SimpleNamespace(
             state=SimpleNamespace(
                 user_repo=SimpleNamespace(),
-                agent_config_repo=SimpleNamespace(),
+                runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
                 chat_runtime_state=SimpleNamespace(contact_repo=SimpleNamespace()),
             )
         )
@@ -816,7 +828,12 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
         "skill",
         "skill-a",
         request=SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_user_repo, agent_config_repo=fake_agent_config_repo))
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    user_repo=fake_user_repo,
+                    runtime_storage_state=_runtime_storage_state(fake_agent_config_repo),
+                )
+            )
         ),
         user_id="user-1",
     )

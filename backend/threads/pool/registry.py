@@ -108,7 +108,10 @@ async def get_or_create_agent(
         bundle_dir = None
         agent_config_id = None
         memory_config_override = None
-        agent_config_repo = getattr(app_obj.state, "agent_config_repo", None)
+        runtime_storage = getattr(app_obj.state, "runtime_storage_state", None)
+        storage_container = getattr(runtime_storage, "storage_container", None)
+        agent_config_repo_factory = getattr(storage_container, "agent_config_repo", None)
+        agent_config_repo = agent_config_repo_factory() if callable(agent_config_repo_factory) else None
         if thread_data and thread_data.get("agent_user_id"):
             if user_repo is None:
                 raise RuntimeError(f"user_repo is required to resolve agent_config_id for thread {thread_id}")
@@ -147,7 +150,7 @@ async def get_or_create_agent(
                 "owner_id": owner_id,
                 "user_repo": user_repo,
                 "messaging_service": messaging_service,
-                "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
+                "agent_config_repo": agent_config_repo,
             }
 
         try:

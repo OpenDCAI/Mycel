@@ -74,7 +74,6 @@ async def lifespan(app: FastAPI):
     # @@@web-auth-borrowed-chat-contact - auth startup still needs the
     # owner-agent contact repo, but web bootstrap should borrow the chat-owned
     # contact_repo returned by chat bootstrap instead of reopening storage.
-    app.state.agent_config_repo = storage_container.agent_config_repo()
     attach_auth_runtime_state(app, storage_state=runtime_storage, contact_repo=chat_runtime.contact_repo)
     threads_runtime = attach_threads_runtime(app, storage_container, typing_tracker=chat_runtime.typing_tracker)
     wire_chat_delivery(
