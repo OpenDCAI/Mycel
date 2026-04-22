@@ -268,15 +268,15 @@ class SandboxManager:
             provider_capability=self.provider_capability,
         )
 
-    def _get_lease(self, lease_id: str):
-        """Get lease as domain object, or None."""
+    def _get_sandbox_runtime(self, lease_id: str):
+        """Get sandbox runtime as domain object, or None."""
         row = self.lease_store.get(lease_id)
         if row is None:
             return None
         return lease_from_row(row, self.db_path)
 
-    def _create_lease(self, lease_id: str, provider_name: str):
-        """Create lease and return as domain object."""
+    def _create_sandbox_runtime(self, lease_id: str, provider_name: str):
+        """Create sandbox runtime and return as domain object."""
         row = self.lease_store.create(lease_id, provider_name)
         return lease_from_row(row, self.db_path)
 
@@ -284,9 +284,9 @@ class SandboxManager:
         """Public API: get active terminal as domain object."""
         return self._get_active_terminal(thread_id)
 
-    def get_lease(self, lease_id: str):
-        """Public API: get lease as domain object."""
-        return self._get_lease(lease_id)
+    def get_sandbox_runtime(self, lease_id: str):
+        """Public API: get sandbox runtime as domain object."""
+        return self._get_sandbox_runtime(lease_id)
 
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
@@ -307,7 +307,7 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self._get_lease(terminal.lease_id)
+        lease = self._get_sandbox_runtime(terminal.lease_id)
         if not lease:
             raise ValueError(f"No lease for thread {thread_id}")
         remote_path = self.volume.resolve_mount_path()
@@ -381,7 +381,7 @@ class SandboxManager:
         if len(lease_ids) != 1:
             raise RuntimeError(f"Thread {thread_id} has inconsistent lease_ids: {sorted(lease_ids)}")
         lease_id = next(iter(lease_ids))
-        lease = self._get_lease(lease_id)
+        lease = self._get_sandbox_runtime(lease_id)
         if lease is None:
             return None
         self._assert_lease_provider(lease, thread_id)
@@ -391,7 +391,7 @@ class SandboxManager:
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return False
-        lease = self._get_lease(terminals[0].lease_id)
+        lease = self._get_sandbox_runtime(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
     def _resolve_sync_source_path(self, thread_id: str) -> Path:
@@ -480,7 +480,7 @@ class SandboxManager:
         if not terminal:
             terminal_id = f"term-{uuid.uuid4().hex[:12]}"
             lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-            lease = self._create_lease(lease_id, self.provider.name)
+            lease = self._create_sandbox_runtime(lease_id, self.provider.name)
             initial_cwd = self._default_terminal_cwd()
             terminal = terminal_from_row(
                 self.terminal_store.create(
@@ -492,9 +492,9 @@ class SandboxManager:
                 self.db_path,
             )
         else:
-            lease = self._get_lease(terminal.lease_id)
+            lease = self._get_sandbox_runtime(terminal.lease_id)
             if not lease:
-                lease = self._create_lease(terminal.lease_id, self.provider.name)
+                lease = self._create_sandbox_runtime(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
             if lease.observed_state == "paused":
                 # @@@paused-lease-rehydrate - a persisted thread can lose its in-memory chat session
@@ -506,7 +506,7 @@ class SandboxManager:
                     self._assert_lease_provider(session.lease, thread_id)
                     self._ensure_bound_instance(session.lease)
                     return SandboxCapability(session, manager=self)
-                lease = self._get_lease(terminal.lease_id)
+                lease = self._get_sandbox_runtime(terminal.lease_id)
                 if not lease:
                     raise RuntimeError(f"Lease disappeared after resume for thread {thread_id}")
                 self._assert_lease_provider(lease, thread_id)
@@ -560,7 +560,7 @@ class SandboxManager:
         if default_row is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
         default_terminal = terminal_from_row(default_row, self.db_path)
-        lease = self._get_lease(default_terminal.lease_id)
+        lease = self._get_sandbox_runtime(default_terminal.lease_id)
         if lease is None:
             raise RuntimeError(f"Missing lease {default_terminal.lease_id} for thread {thread_id}")
         self._assert_lease_provider(lease, thread_id)
@@ -659,7 +659,7 @@ class SandboxManager:
             terminal_id = row.get("terminal_id")
             terminal_row = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
             terminal = terminal_from_row(terminal_row, self.db_path) if terminal_row else None
-            lease = self._get_lease(terminal.lease_id) if terminal else None
+            lease = self._get_sandbox_runtime(terminal.lease_id) if terminal else None
             if lease and lease.provider_name != self.provider.name:
                 continue
 
@@ -854,7 +854,7 @@ class SandboxManager:
         return True
 
     def destroy_sandbox_runtime_resources(self, lease_id: str) -> bool:
-        lease = self._get_lease(lease_id)
+        lease = self._get_sandbox_runtime(lease_id)
         if not lease:
             return False
         if any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all()):
@@ -893,7 +893,7 @@ class SandboxManager:
 
         for lease_row in self.lease_store.list_by_provider(self.provider.name):
             lease_id = lease_row["lease_id"]
-            lease = self._get_lease(lease_id)
+            lease = self._get_sandbox_runtime(lease_id)
             if not lease:
                 continue
 

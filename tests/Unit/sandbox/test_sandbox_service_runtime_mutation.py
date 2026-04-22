@@ -40,7 +40,7 @@ class _FakeManager:
         self.lease_store = _FakeLeaseStore()
         self.lease = None
 
-    def get_lease(self, lower_runtime_id):
+    def get_sandbox_runtime(self, lower_runtime_id):
         return self.lease if lower_runtime_id == "lease-1" else None
 
 

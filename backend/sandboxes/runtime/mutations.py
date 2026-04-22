@@ -46,7 +46,7 @@ def mutate_sandbox_runtime(
         else:
             raise RuntimeError(f"Unknown action: {action}")
     else:
-        lease = manager.get_lease(lease_id) if lease_id else None
+        lease = manager.get_sandbox_runtime(lease_id) if lease_id else None
         if not lease:
             mode = "provider_orphan_direct"
             if action == "pause":
@@ -132,7 +132,7 @@ def destroy_sandbox_runtime(
     if manager is None:
         raise RuntimeError(f"Provider manager unavailable: {provider_name}")
 
-    lease = manager.get_lease(sandbox_runtime_handle)
+    lease = manager.get_sandbox_runtime(sandbox_runtime_handle)
     if lease is None:
         raise RuntimeError(f"Sandbox runtime not found: {sandbox_runtime_handle}")
 
