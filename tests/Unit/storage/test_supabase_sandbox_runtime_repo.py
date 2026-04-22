@@ -141,7 +141,7 @@ def test_supabase_sandbox_runtime_repo_adopt_instance_updates_container_runtime_
     repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     updated = repo.adopt_instance(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         instance_id="inst-1",
         status="running",
@@ -160,7 +160,7 @@ def test_supabase_sandbox_runtime_repo_persist_metadata_updates_container_runtim
     repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     updated = repo.persist_metadata(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         recipe_id="local:python",
         recipe_json='{"id":"local:python"}',
         desired_state="running",
@@ -192,7 +192,7 @@ def test_supabase_sandbox_runtime_repo_observe_status_detaches_instance_from_con
     repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
 
     updated = repo.observe_status(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         status="detached",
         observed_at="2026-04-07T00:00:05+00:00",
     )

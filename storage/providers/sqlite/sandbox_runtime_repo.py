@@ -53,7 +53,7 @@ class SQLiteSandboxRuntimeRepo:
         result["sandbox_runtime_id"] = str(result.pop("lease_id"))
         return result
 
-    def get(self, lease_id: str) -> dict[str, Any] | None:
+    def get(self, sandbox_runtime_id: str) -> dict[str, Any] | None:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
@@ -68,7 +68,7 @@ class SQLiteSandboxRuntimeRepo:
                 FROM sandbox_leases
                 WHERE lease_id = ?
                 """,
-                (lease_id,),
+                (sandbox_runtime_id,),
             ).fetchone()
             self._conn.row_factory = None
 
@@ -103,7 +103,7 @@ class SQLiteSandboxRuntimeRepo:
 
     def create(
         self,
-        lease_id: str,
+        sandbox_runtime_id: str,
         provider_name: str,
         recipe_id: str | None = None,
         recipe_json: str | None = None,
@@ -120,7 +120,7 @@ class SQLiteSandboxRuntimeRepo:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    lease_id,
+                    sandbox_runtime_id,
                     provider_name,
                     recipe_id,
                     recipe_json,
@@ -138,7 +138,7 @@ class SQLiteSandboxRuntimeRepo:
                 ),
             )
             self._conn.commit()
-        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="create")
+        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="create")
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -160,17 +160,17 @@ class SQLiteSandboxRuntimeRepo:
     def adopt_instance(
         self,
         *,
-        lease_id: str,
+        sandbox_runtime_id: str,
         provider_name: str,
         instance_id: str,
         status: str = "unknown",
     ) -> dict[str, Any]:
-        existing = self.get(lease_id)
+        existing = self.get(sandbox_runtime_id)
         if existing is None:
-            self.create(lease_id=lease_id, provider_name=provider_name)
+            self.create(sandbox_runtime_id=sandbox_runtime_id, provider_name=provider_name)
             existing = self._require_lease(
-                self.get(lease_id),
-                lease_id=lease_id,
+                self.get(sandbox_runtime_id),
+                lease_id=sandbox_runtime_id,
                 operation="adopt_instance bootstrap",
             )
         if existing["provider_name"] != provider_name:
@@ -212,7 +212,7 @@ class SQLiteSandboxRuntimeRepo:
                     now,
                     "active",
                     now,
-                    lease_id,
+                    sandbox_runtime_id,
                 ),
             )
             self._conn.execute(
@@ -245,19 +245,19 @@ class SQLiteSandboxRuntimeRepo:
             )
             self._conn.commit()
 
-        adopted = self.get(lease_id)
+        adopted = self.get(sandbox_runtime_id)
         if adopted is None:
-            raise RuntimeError(f"Failed to load adopted sandbox runtime: {lease_id}")
+            raise RuntimeError(f"Failed to load adopted sandbox runtime: {sandbox_runtime_id}")
         return adopted
 
     def observe_status(
         self,
         *,
-        lease_id: str,
+        sandbox_runtime_id: str,
         status: str,
         observed_at: Any = None,
     ) -> dict[str, Any]:
-        existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+        existing = self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="observe_status")
         now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or datetime.now().isoformat())
         normalized = parse_sandbox_runtime_instance_state(status).value
         current_instance_id = existing.get("current_instance_id")
@@ -291,7 +291,7 @@ class SQLiteSandboxRuntimeRepo:
                     None,
                     "expired" if normalized == "detached" else "active",
                     datetime.now().isoformat(),
-                    lease_id,
+                    sandbox_runtime_id,
                 ),
             )
             if current_instance_id:
@@ -314,12 +314,12 @@ class SQLiteSandboxRuntimeRepo:
                         (normalized, now, current_instance_id),
                     )
             self._conn.commit()
-        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
+        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="observe_status")
 
     def persist_metadata(
         self,
         *,
-        lease_id: str,
+        sandbox_runtime_id: str,
         recipe_id: str | None,
         recipe_json: str | None,
         desired_state: str,
@@ -364,13 +364,13 @@ class SQLiteSandboxRuntimeRepo:
                     refresh_hint_value,
                     status,
                     datetime.now().isoformat(),
-                    lease_id,
+                    sandbox_runtime_id,
                 ),
             )
             self._conn.commit()
-        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="persist_metadata")
+        return self._require_lease(self.get(sandbox_runtime_id), lease_id=sandbox_runtime_id, operation="persist_metadata")
 
-    def mark_needs_refresh(self, lease_id: str, hint_at: datetime | None = None) -> bool:
+    def mark_needs_refresh(self, sandbox_runtime_id: str, hint_at: datetime | None = None) -> bool:
         hinted_at = (hint_at or datetime.now()).isoformat()
         with self._lock:
             cursor = self._conn.execute(
@@ -382,23 +382,23 @@ class SQLiteSandboxRuntimeRepo:
                     updated_at = ?
                 WHERE lease_id = ?
                 """,
-                (hinted_at, datetime.now().isoformat(), lease_id),
+                (hinted_at, datetime.now().isoformat(), sandbox_runtime_id),
             )
             self._conn.commit()
             return cursor.rowcount > 0
 
-    def delete(self, lease_id: str) -> None:
+    def delete(self, sandbox_runtime_id: str) -> None:
         with self._lock:
-            self._conn.execute("DELETE FROM sandbox_instances WHERE lease_id = ?", (lease_id,))
-            self._conn.execute("DELETE FROM lease_events WHERE lease_id = ?", (lease_id,))
-            self._conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
+            self._conn.execute("DELETE FROM sandbox_instances WHERE lease_id = ?", (sandbox_runtime_id,))
+            self._conn.execute("DELETE FROM lease_events WHERE lease_id = ?", (sandbox_runtime_id,))
+            self._conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (sandbox_runtime_id,))
             self._conn.commit()
 
         # Clean up per-lease locks in SQLiteLease
         from sandbox.lease import SQLiteLease
 
         with SQLiteLease._lock_guard:
-            SQLiteLease._lease_locks.pop(lease_id, None)
+            SQLiteLease._lease_locks.pop(sandbox_runtime_id, None)
 
     def list_all(self) -> list[dict[str, Any]]:
         with self._lock:
