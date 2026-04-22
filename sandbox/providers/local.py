@@ -282,10 +282,10 @@ class LocalSessionProvider(SandboxProvider):
         idle = values[3] + values[4]
         return total, idle
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.providers.local import LocalPersistentShellRuntime
 
-        return LocalPersistentShellRuntime(terminal, lease)
+        return LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -348,10 +348,10 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
     def __init__(
         self,
         terminal,
-        lease,
+        sandbox_runtime,
         shell_command: tuple[str, ...] = ("/bin/bash",),
     ):
-        super().__init__(terminal, lease)
+        super().__init__(terminal, sandbox_runtime)
         self.shell_command = shell_command
         self._pty_session: _SubprocessPtySession | None = None
         self._session_lock = asyncio.Lock()

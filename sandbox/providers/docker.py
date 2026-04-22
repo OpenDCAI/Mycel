@@ -408,8 +408,8 @@ class DockerProvider(SandboxProvider):
             return
         raise RuntimeError(f"Unsupported copy source path type: {source}")
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
-        return DockerPtyRuntime(terminal, lease, self)
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+        return DockerPtyRuntime(terminal, sandbox_runtime, self)
 
     @overload
     def _get_container_id(self, session_id: str, allow_missing: Literal[False] = False) -> str: ...
@@ -520,8 +520,8 @@ class DockerProvider(SandboxProvider):
 class DockerPtyRuntime(_RemoteRuntimeBase):
     """Docker runtime using a persistent PTY shell inside container."""
 
-    def __init__(self, terminal, lease, provider):
-        super().__init__(terminal, lease, provider)
+    def __init__(self, terminal, sandbox_runtime, provider):
+        super().__init__(terminal, sandbox_runtime, provider)
         self._session_lock = asyncio.Lock()
         self._bound_instance_id: str | None = None
         self._pty_session: _SubprocessPtySession | None = None

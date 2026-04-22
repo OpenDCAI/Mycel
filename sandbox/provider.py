@@ -194,7 +194,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         """Create the appropriate PhysicalTerminalRuntime for this provider."""
 
     def get_metrics_via_commands(self, session_id: str) -> Metrics | None:

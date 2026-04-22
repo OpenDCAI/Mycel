@@ -511,10 +511,10 @@ class DaytonaProvider(SandboxProvider):
                 time.sleep(2)
         raise RuntimeError(f"Timed out waiting for Daytona sandbox {sandbox_id} to reach started state")
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.providers.daytona import DaytonaSessionRuntime
 
-        return DaytonaSessionRuntime(terminal, lease, self)
+        return DaytonaSessionRuntime(terminal, sandbox_runtime, self)
 
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -541,8 +541,8 @@ from sandbox.runtime import (  # noqa: E402
 class DaytonaSessionRuntime(_RemoteRuntimeBase):
     """Daytona runtime using native PTY session API (persistent terminal semantics)."""
 
-    def __init__(self, terminal, lease, provider):
-        super().__init__(terminal, lease, provider)
+    def __init__(self, terminal, sandbox_runtime, provider):
+        super().__init__(terminal, sandbox_runtime, provider)
         self._session_lock = asyncio.Lock()
         self._pty_session_id = f"leon-pty-{terminal.terminal_id[-12:]}"
         self._bound_instance_id: str | None = None

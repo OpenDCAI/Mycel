@@ -545,7 +545,7 @@ class SandboxManager:
             session_id=session_id,
             thread_id=thread_id,
             terminal=terminal,
-            lease=lease,
+            sandbox_runtime=lease,
         )
 
         if instance and storage is not None:
@@ -588,7 +588,7 @@ class SandboxManager:
             session_id=f"sess-{uuid.uuid4().hex[:12]}",
             thread_id=thread_id,
             terminal=terminal,
-            lease=lease,
+            sandbox_runtime=lease,
         )
 
     def _terminal_is_busy(self, terminal_id: str) -> bool:
