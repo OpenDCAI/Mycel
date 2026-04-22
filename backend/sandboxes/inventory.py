@@ -221,7 +221,7 @@ def load_provider_orphan_runtimes(managers: dict) -> list[dict[str, Any]]:
                     "status": status,
                     "created_at": None,
                     "last_active": None,
-                    "lease_id": None,
+                    "sandbox_runtime_id": None,
                     "instance_id": instance_id,
                     "chat_session_id": None,
                     "source": "provider_orphan",

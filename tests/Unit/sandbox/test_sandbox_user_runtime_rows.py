@@ -22,6 +22,7 @@ def _runtime_row(
 ):
     return {
         LOWER_RUNTIME_KEY: lower_runtime_id,
+        "sandbox_runtime_id": lower_runtime_id,
         "sandbox_id": sandbox_id or lower_runtime_id.replace("lease", "sandbox", 1),
         "provider_name": provider_name,
         "recipe_id": recipe_id or f"{provider_name}:default",
@@ -282,6 +283,7 @@ def test_list_user_sandboxes_returns_user_visible_runtime_fields(monkeypatch):
     assert len(sandboxes) == 1
     sandbox = sandboxes[0]
     assert LOWER_RUNTIME_KEY not in sandbox
+    assert "sandbox_runtime_id" not in sandbox
     assert sandbox["sandbox_id"] == "sandbox-1"
     assert sandbox["provider_name"] == "local"
     assert sandbox["recipe_id"] == "local:default"
@@ -314,6 +316,7 @@ def test_list_user_sandboxes_does_not_require_lower_runtime_identity(monkeypatch
     assert len(sandboxes) == 1
     assert sandboxes[0]["sandbox_id"] == "sandbox-1"
     assert LOWER_RUNTIME_KEY not in sandboxes[0]
+    assert "sandbox_runtime_id" not in sandboxes[0]
 
 
 def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_runtime_identity(monkeypatch):

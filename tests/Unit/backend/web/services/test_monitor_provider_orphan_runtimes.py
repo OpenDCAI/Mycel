@@ -6,7 +6,7 @@ from backend.monitor.application.use_cases import provider_runtimes as monitor_p
 from backend.monitor.infrastructure.providers import provider_runtime_inventory_service as monitor_provider_runtime_inventory_service
 from backend.sandboxes import service as sandbox_service
 
-LOWER_RUNTIME_KEY = "lease_" + "id"
+LOWER_RUNTIME_KEY = "sandbox_runtime_" + "id"
 
 
 class _FailingManager:

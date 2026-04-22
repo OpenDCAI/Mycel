@@ -154,7 +154,7 @@ def _list_user_runtime_rows(
 
 
 def _sandbox_summary(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in row.items() if key != "lease_id"}
+    return {key: value for key, value in row.items() if key not in {"lease_id", "sandbox_runtime_id"}}
 
 
 def list_user_sandboxes(
