@@ -551,7 +551,7 @@ def _create_thread_sandbox_resources(
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
         normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
-        created_lease = sandbox_runtime_repo.create(
+        created_runtime = sandbox_runtime_repo.create(
             lease_id,
             sandbox_type,
             recipe_id=normalized_recipe["id"],
@@ -561,7 +561,7 @@ def _create_thread_sandbox_resources(
     finally:
         sandbox_runtime_repo.close()
 
-    sandbox_id = str((created_lease or {}).get("sandbox_id") or "").strip()
+    sandbox_id = str((created_runtime or {}).get("sandbox_id") or "").strip()
     if not sandbox_id:
         raise RuntimeError("sandbox_runtime_repo.create must return sandbox_id for thread sandbox resources")
 
@@ -611,7 +611,7 @@ def _materialize_workspace_for_sandbox(
     workspace_id = f"workspace-{uuid.uuid4().hex}"
     now = time.time()
     # @@@workspace-binding-write - Phase 2 cuts thread create writes to a real
-    # workspace row; lower lease_id remains terminal/runtime internals, not workspace authority.
+    # workspace row; lower sandbox runtime id remains terminal/runtime internals, not workspace authority.
     workspace_repo.create(
         WorkspaceRow(
             id=workspace_id,
