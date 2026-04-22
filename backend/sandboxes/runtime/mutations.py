@@ -29,7 +29,7 @@ def mutate_sandbox_runtime(
         raise RuntimeError(f"Provider manager unavailable: {provider_name}")
 
     thread_id = str(runtime.get("thread_id") or "")
-    lease_id = runtime.get("lease_id")
+    lease_id = runtime.get("sandbox_runtime_id")
     target_runtime_id = str(runtime.get("session_id") or runtime_id)
 
     ok = False
@@ -78,7 +78,7 @@ def mutate_sandbox_runtime(
         "session_id": target_runtime_id,
         "provider": provider_name,
         "thread_id": thread_id or None,
-        "lease_id": lease_id,
+        "sandbox_runtime_id": lease_id,
         "mode": mode,
     }
 

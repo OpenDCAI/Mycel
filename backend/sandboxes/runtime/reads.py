@@ -68,7 +68,7 @@ def load_all_sandbox_runtimes(managers: dict) -> list[dict]:
                     "status": row.get("status", "running"),
                     "created_at": row.get("created_at"),
                     "last_active": row.get("last_active"),
-                    "lease_id": row.get("lease_id"),
+                    "sandbox_runtime_id": row.get("sandbox_runtime_id"),
                     "instance_id": row.get("instance_id"),
                     "chat_session_id": row.get("chat_session_id"),
                     "source": row.get("source", "unknown"),

@@ -43,7 +43,7 @@ async def _mutate_runtime_action(runtime_id: str, action: str, provider: str | N
 
 
 def _public_runtime_payload(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in row.items() if key != "lease_id"}
+    return {key: value for key, value in row.items() if key not in {"lease_id", "sandbox_runtime_id"}}
 
 
 @router.get("/types")

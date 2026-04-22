@@ -1155,7 +1155,7 @@ def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteSandboxRuntimeHa
         refresh_hint_at = parse_runtime_datetime(str(row["refresh_hint_at"]))
 
     return SQLiteSandboxRuntimeHandle(
-        sandbox_runtime_id=row["lease_id"],
+        sandbox_runtime_id=row["sandbox_runtime_id"],
         provider_name=row["provider_name"],
         recipe_id=row.get("recipe_id"),
         recipe=json.loads(str(row["recipe_json"])) if row.get("recipe_json") else None,

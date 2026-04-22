@@ -2,7 +2,7 @@ from pathlib import Path
 
 from backend.sandboxes import service as sandbox_service
 
-LOWER_RUNTIME_KEY = "lease_" + "id"
+LOWER_RUNTIME_KEY = "sandbox_runtime_" + "id"
 
 
 class _FakeLeaseStore:
