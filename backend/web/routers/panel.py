@@ -57,6 +57,14 @@ def _agent_config_repo(request: Request) -> Any | None:
     return repo_factory() if callable(repo_factory) else None
 
 
+def _recipe_repo(request: Request) -> Any:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    recipe_repo = getattr(runtime_storage, "recipe_repo", None)
+    if recipe_repo is None:
+        raise RuntimeError("recipe_repo is required for panel library routes")
+    return recipe_repo
+
+
 # ── Agents ──
 
 
@@ -231,7 +239,7 @@ async def list_library(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(library_service.list_library, resource_type, user_id, request.app.state.recipe_repo)
+    items = await asyncio.to_thread(library_service.list_library, resource_type, user_id, _recipe_repo(request))
     return {"items": items}
 
 
@@ -253,7 +261,7 @@ async def create_resource(
             req.features,
             req.provider_name,
             user_id,
-            request.app.state.recipe_repo,
+            _recipe_repo(request),
         )
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
@@ -272,7 +280,7 @@ async def update_resource(
         resource_type,
         resource_id,
         user_id,
-        request.app.state.recipe_repo,
+        _recipe_repo(request),
         name=req.name,
         desc=req.desc,
         features=req.features,
@@ -289,7 +297,7 @@ async def delete_resource(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id, user_id, request.app.state.recipe_repo)
+    ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id, user_id, _recipe_repo(request))
     if not ok:
         raise HTTPException(404, "Resource not found")
     return {"success": True}
@@ -301,7 +309,7 @@ async def list_library_names(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(library_service.list_library_names, resource_type, user_id, request.app.state.recipe_repo)
+    items = await asyncio.to_thread(library_service.list_library_names, resource_type, user_id, _recipe_repo(request))
     return {"items": items}
 
 
@@ -335,7 +343,7 @@ async def get_resource_content(
         resource_type,
         resource_id,
         user_id,
-        request.app.state.recipe_repo,
+        _recipe_repo(request),
     )
     if content is None:
         raise HTTPException(404, "Resource not found")

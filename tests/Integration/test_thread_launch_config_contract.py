@@ -137,11 +137,12 @@ class _FakeLeaseRepo:
 
 
 def _make_threads_app():
+    recipe_repo = _FakeRecipeRepo()
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=_FakeUserRepo(),
             thread_repo=_FakeThreadRepo(),
-            recipe_repo=_FakeRecipeRepo(),
+            runtime_storage_state=SimpleNamespace(recipe_repo=recipe_repo),
             workspace_repo=_FakeWorkspaceRepo(),
             sandbox_repo=_FakeSandboxRepo(),
             lease_repo=_FakeLeaseRepo(),
@@ -149,6 +150,10 @@ def _make_threads_app():
             thread_cwd={},
         )
     )
+
+
+def _runtime_storage_state(recipe_repo: object) -> SimpleNamespace:
+    return SimpleNamespace(recipe_repo=recipe_repo)
 
 
 def _route_test_app(app_state: object) -> FastAPI:
@@ -233,7 +238,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
-            recipe_repo=object(),
+            runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=workspace_repo,
             sandbox_repo=sandbox_repo,
         )
@@ -331,7 +336,7 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
-            recipe_repo=recipe_repo,
+            runtime_storage_state=_runtime_storage_state(recipe_repo),
             workspace_repo=workspace_repo,
             sandbox_repo=sandbox_repo,
         )
@@ -412,7 +417,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
-            recipe_repo=_FakeRecipeRepo(),
+            runtime_storage_state=_runtime_storage_state(_FakeRecipeRepo()),
             workspace_repo=workspace_repo,
             sandbox_repo=sandbox_repo,
         )
@@ -453,7 +458,7 @@ def test_resolve_default_config_fails_loudly_when_thread_workspace_binding_is_mi
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
-            recipe_repo=object(),
+            runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=_FakeWorkspaceRepo(),
             sandbox_repo=_FakeSandboxRepo(),
         )
@@ -496,7 +501,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_repo_cannot_read_bin
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
-            recipe_repo=object(),
+            runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=object(),
         )
     )
@@ -537,7 +542,7 @@ def test_resolve_default_config_fails_loudly_for_malformed_workspace_binding() -
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
-            recipe_repo=object(),
+            runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=workspace_repo,
         )
     )
@@ -771,7 +776,7 @@ async def test_create_thread_carries_recipe_snapshot_into_resources_without_laun
         "feature_options": [{"key": "lark_cli", "name": "Lark CLI", "description": "Install Lark CLI"}],
         "builtin": False,
     }
-    app.state.recipe_repo.rows[("owner-1", "local:custom:lark")] = {
+    app.state.runtime_storage_state.recipe_repo.rows[("owner-1", "local:custom:lark")] = {
         "owner_user_id": "owner-1",
         "recipe_id": "local:custom:lark",
         "kind": "custom",

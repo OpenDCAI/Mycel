@@ -405,11 +405,12 @@ def _make_threads_app(
     thread_repo=None,
     **state_overrides,
 ):
+    recipe_repo = state_overrides.pop("recipe_repo", _FakeRecipeRepo())
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=state_overrides.pop("user_repo", _FakeUserRepo()),
             thread_repo=thread_repo or _FakeThreadRepo(),
-            recipe_repo=state_overrides.pop("recipe_repo", _FakeRecipeRepo()),
+            runtime_storage_state=SimpleNamespace(recipe_repo=recipe_repo),
             workspace_repo=state_overrides.pop("workspace_repo", _FakeWorkspaceRepo()),
             sandbox_repo=state_overrides.pop("sandbox_repo", _FakeSandboxRepo()),
             lease_repo=state_overrides.pop("lease_repo", _FakeLeaseRepo()),

@@ -699,7 +699,8 @@ def _resolve_owned_recipe_snapshot(
     if not resolved_recipe_id:
         raise HTTPException(400, "Recipe id is required")
 
-    recipe_repo = getattr(app.state, "recipe_repo", None)
+    runtime_storage = getattr(app.state, "runtime_storage_state", None)
+    recipe_repo = getattr(runtime_storage, "recipe_repo", None)
     if recipe_repo is None:
         raise RuntimeError("recipe_repo is required for thread recipe resolution")
 
