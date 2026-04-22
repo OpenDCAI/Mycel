@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sandbox.lifecycle import parse_lease_instance_state
+from sandbox.lifecycle import parse_sandbox_runtime_instance_state
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 
@@ -169,7 +169,7 @@ class SQLiteSandboxRuntimeRepo:
             )
 
         now = datetime.now().isoformat()
-        normalized = parse_lease_instance_state(status).value
+        normalized = parse_sandbox_runtime_instance_state(status).value
         desired = "paused" if normalized == "paused" else "running"
 
         with self._lock:
@@ -249,7 +249,7 @@ class SQLiteSandboxRuntimeRepo:
     ) -> dict[str, Any]:
         existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
         now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or datetime.now().isoformat())
-        normalized = parse_lease_instance_state(status).value
+        normalized = parse_sandbox_runtime_instance_state(status).value
         current_instance_id = existing.get("current_instance_id")
 
         with self._lock:

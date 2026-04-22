@@ -213,7 +213,7 @@ class SupabaseSandboxRuntimeRepo:
         instance_id: str,
         status: str = "unknown",
     ) -> dict[str, Any]:
-        from sandbox.lifecycle import parse_lease_instance_state
+        from sandbox.lifecycle import parse_sandbox_runtime_instance_state
 
         existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="adopt_instance")
         if existing["provider_name"] != provider_name:
@@ -223,7 +223,7 @@ class SupabaseSandboxRuntimeRepo:
 
         row = self._require_lease(self._sandbox_by_lease_id(lease_id), lease_id=lease_id, operation="adopt_instance sandbox")
         now = _utc_now_iso()
-        normalized = parse_lease_instance_state(status).value
+        normalized = parse_sandbox_runtime_instance_state(status).value
         desired = "paused" if normalized == "paused" else "running"
         self._sandboxes().update(
             {
@@ -255,12 +255,12 @@ class SupabaseSandboxRuntimeRepo:
         status: str,
         observed_at: Any = None,
     ) -> dict[str, Any]:
-        from sandbox.lifecycle import parse_lease_instance_state
+        from sandbox.lifecycle import parse_sandbox_runtime_instance_state
 
         existing = self._require_lease(self.get(lease_id), lease_id=lease_id, operation="observe_status")
         row = self._require_lease(self._sandbox_by_lease_id(lease_id), lease_id=lease_id, operation="observe_status sandbox")
         now = observed_at.isoformat() if isinstance(observed_at, datetime) else (observed_at or _utc_now_iso())
-        normalized = parse_lease_instance_state(status).value
+        normalized = parse_sandbox_runtime_instance_state(status).value
         lease_status = "expired" if normalized == "detached" else "active"
         self._sandboxes().update(
             {

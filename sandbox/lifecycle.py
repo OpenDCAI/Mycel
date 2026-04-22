@@ -1,4 +1,4 @@
-"""Lifecycle state machine contracts for chat sessions and lease instances.
+"""Lifecycle state machine contracts for chat sessions and sandbox runtime instances.
 
 Fail-loud policy:
 - Invalid state strings raise immediately.
@@ -18,7 +18,7 @@ class ChatSessionState(StrEnum):
     FAILED = "failed"
 
 
-class LeaseInstanceState(StrEnum):
+class SandboxRuntimeInstanceState(StrEnum):
     RUNNING = "running"
     PAUSED = "paused"
     DETACHED = "detached"
@@ -34,16 +34,16 @@ def parse_chat_session_state(value: str | None) -> ChatSessionState:
         raise RuntimeError(f"Invalid ChatSession state: {value}") from e
 
 
-def parse_lease_instance_state(value: str | None) -> LeaseInstanceState:
+def parse_sandbox_runtime_instance_state(value: str | None) -> SandboxRuntimeInstanceState:
     if value is None:
-        return LeaseInstanceState.DETACHED
+        return SandboxRuntimeInstanceState.DETACHED
     lowered = value.lower()
     if lowered in {"deleted", "dead", "stopped"}:
-        return LeaseInstanceState.DETACHED
+        return SandboxRuntimeInstanceState.DETACHED
     try:
-        return LeaseInstanceState(lowered)
+        return SandboxRuntimeInstanceState(lowered)
     except ValueError as e:
-        raise RuntimeError(f"Invalid LeaseInstance state: {value}") from e
+        raise RuntimeError(f"Invalid SandboxRuntimeInstance state: {value}") from e
 
 
 def assert_chat_session_transition(
@@ -77,29 +77,29 @@ def assert_chat_session_transition(
         raise RuntimeError(f"Illegal chat session transition: {current} -> {target} ({reason})")
 
 
-def assert_lease_instance_transition(
-    current: LeaseInstanceState | None,
-    target: LeaseInstanceState,
+def assert_sandbox_runtime_instance_transition(
+    current: SandboxRuntimeInstanceState | None,
+    target: SandboxRuntimeInstanceState,
     *,
     reason: str,
 ) -> None:
     if current is None:
-        current = LeaseInstanceState.DETACHED
+        current = SandboxRuntimeInstanceState.DETACHED
     if current == target:
         return
 
-    allowed: set[tuple[LeaseInstanceState, LeaseInstanceState]] = {
-        (LeaseInstanceState.DETACHED, LeaseInstanceState.RUNNING),
-        (LeaseInstanceState.DETACHED, LeaseInstanceState.UNKNOWN),
-        (LeaseInstanceState.RUNNING, LeaseInstanceState.PAUSED),
-        (LeaseInstanceState.RUNNING, LeaseInstanceState.DETACHED),
-        (LeaseInstanceState.RUNNING, LeaseInstanceState.UNKNOWN),
-        (LeaseInstanceState.PAUSED, LeaseInstanceState.RUNNING),
-        (LeaseInstanceState.PAUSED, LeaseInstanceState.DETACHED),
-        (LeaseInstanceState.PAUSED, LeaseInstanceState.UNKNOWN),
-        (LeaseInstanceState.UNKNOWN, LeaseInstanceState.RUNNING),
-        (LeaseInstanceState.UNKNOWN, LeaseInstanceState.PAUSED),
-        (LeaseInstanceState.UNKNOWN, LeaseInstanceState.DETACHED),
+    allowed: set[tuple[SandboxRuntimeInstanceState, SandboxRuntimeInstanceState]] = {
+        (SandboxRuntimeInstanceState.DETACHED, SandboxRuntimeInstanceState.RUNNING),
+        (SandboxRuntimeInstanceState.DETACHED, SandboxRuntimeInstanceState.UNKNOWN),
+        (SandboxRuntimeInstanceState.RUNNING, SandboxRuntimeInstanceState.PAUSED),
+        (SandboxRuntimeInstanceState.RUNNING, SandboxRuntimeInstanceState.DETACHED),
+        (SandboxRuntimeInstanceState.RUNNING, SandboxRuntimeInstanceState.UNKNOWN),
+        (SandboxRuntimeInstanceState.PAUSED, SandboxRuntimeInstanceState.RUNNING),
+        (SandboxRuntimeInstanceState.PAUSED, SandboxRuntimeInstanceState.DETACHED),
+        (SandboxRuntimeInstanceState.PAUSED, SandboxRuntimeInstanceState.UNKNOWN),
+        (SandboxRuntimeInstanceState.UNKNOWN, SandboxRuntimeInstanceState.RUNNING),
+        (SandboxRuntimeInstanceState.UNKNOWN, SandboxRuntimeInstanceState.PAUSED),
+        (SandboxRuntimeInstanceState.UNKNOWN, SandboxRuntimeInstanceState.DETACHED),
     }
     if (current, target) not in allowed:
-        raise RuntimeError(f"Illegal lease transition: {current} -> {target} ({reason})")
+        raise RuntimeError(f"Illegal sandbox runtime transition: {current} -> {target} ({reason})")
