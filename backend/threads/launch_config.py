@@ -83,7 +83,8 @@ def _derive_default_config(
             current_workspace_id=thread["current_workspace_id"],
             owner_user_id=owner_user_id,
         )
-        return config
+        if config is not None:
+            return config
 
     provider_names = [str(item["name"]) for item in providers]
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
@@ -131,7 +132,7 @@ def _resolve_workspace_backed_existing_config(
     app: Any,
     current_workspace_id: str,
     owner_user_id: str,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     workspace_repo = getattr(app.state, "workspace_repo", None)
     get_by_id = getattr(workspace_repo, "get_by_id", None)
     if not callable(get_by_id):
