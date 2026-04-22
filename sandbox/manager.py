@@ -74,7 +74,7 @@ def lookup_sandbox_for_thread(
             _sandbox_runtime_repo.close()
 
 
-def resolve_existing_lease_cwd(
+def resolve_existing_sandbox_runtime_cwd(
     lease_id: str,
     requested_cwd: str | None = None,
     db_path: Path | None = None,
@@ -101,7 +101,7 @@ def resolve_existing_lease_cwd(
     raise ValueError("provider default cwd is required")
 
 
-def bind_thread_to_existing_lease(
+def bind_thread_to_existing_sandbox_runtime(
     thread_id: str,
     lease_id: str,
     *,
@@ -119,7 +119,7 @@ def bind_thread_to_existing_lease(
         existing = _terminal_repo.get_active(thread_id)
         if existing is not None:
             return str(existing["cwd"])
-        initial_cwd = resolve_existing_lease_cwd(
+        initial_cwd = resolve_existing_sandbox_runtime_cwd(
             lease_id,
             cwd,
             db_path=target_db,
@@ -137,7 +137,7 @@ def bind_thread_to_existing_lease(
             _terminal_repo.close()
 
 
-def resolve_existing_sandbox_lease(
+def resolve_existing_sandbox_runtime(
     sandbox: Any,
     *,
     db_path: Path | None = None,
@@ -168,7 +168,7 @@ def resolve_existing_sandbox_lease(
     finally:
         if own_sandbox_runtime_repo:
             _sandbox_runtime_repo.close()
-    raise RuntimeError("sandbox provider_env_id did not resolve to a lease")
+    raise RuntimeError("sandbox provider_env_id did not resolve to a sandbox runtime")
 
 
 def bind_thread_to_existing_sandbox(
@@ -180,17 +180,17 @@ def bind_thread_to_existing_sandbox(
     terminal_repo: Any | None = None,
     sandbox_runtime_repo: Any | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    lease = resolve_existing_sandbox_lease(
+    lease = resolve_existing_sandbox_runtime(
         sandbox,
         db_path=db_path,
         sandbox_runtime_repo=sandbox_runtime_repo,
     )
     if lease is None:
-        raise RuntimeError("sandbox provider_env_id did not resolve to a lease")
+        raise RuntimeError("sandbox provider_env_id did not resolve to a sandbox runtime")
     lease_id = str(lease.get("lease_id") or "").strip()
     if not lease_id:
         raise RuntimeError("lease.sandbox_runtime_id is required")
-    initial_cwd = bind_thread_to_existing_lease(
+    initial_cwd = bind_thread_to_existing_sandbox_runtime(
         thread_id,
         lease_id,
         cwd=cwd,
@@ -201,7 +201,7 @@ def bind_thread_to_existing_sandbox(
     return initial_cwd, lease
 
 
-def bind_thread_to_existing_thread_lease(
+def bind_thread_to_existing_thread_sandbox_runtime(
     thread_id: str,
     source_thread_id: str,
     *,
@@ -227,7 +227,7 @@ def bind_thread_to_existing_thread_lease(
     # @@@subagent-lease-reuse
     # Child threads need their own terminal/session state while reusing the
     # parent's lower sandbox binding instead of silently provisioning a new one.
-    return bind_thread_to_existing_lease(
+    return bind_thread_to_existing_sandbox_runtime(
         thread_id,
         str(source_terminal["lease_id"]),
         cwd=cwd,
@@ -309,7 +309,7 @@ class SandboxManager:
             raise ValueError(f"No active terminal for thread {thread_id}")
         lease = self._get_sandbox_runtime(terminal.lease_id)
         if not lease:
-            raise ValueError(f"No lease for thread {thread_id}")
+            raise ValueError(f"No sandbox runtime for thread {thread_id}")
         remote_path = self.volume.resolve_mount_path()
         source_path = self._resolve_sync_source_path(thread_id)
 
@@ -508,7 +508,7 @@ class SandboxManager:
                     return SandboxCapability(session, manager=self)
                 lease = self._get_sandbox_runtime(terminal.lease_id)
                 if not lease:
-                    raise RuntimeError(f"Lease disappeared after resume for thread {thread_id}")
+                    raise RuntimeError(f"Sandbox runtime disappeared after resume for thread {thread_id}")
                 self._assert_lease_provider(lease, thread_id)
 
         # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
@@ -562,7 +562,7 @@ class SandboxManager:
         default_terminal = terminal_from_row(default_row, self.db_path)
         lease = self._get_sandbox_runtime(default_terminal.lease_id)
         if lease is None:
-            raise RuntimeError(f"Missing lease {default_terminal.lease_id} for thread {thread_id}")
+            raise RuntimeError(f"Missing sandbox runtime {default_terminal.lease_id} for thread {thread_id}")
         self._assert_lease_provider(lease, thread_id)
 
         inherited = default_terminal.get_state()
@@ -850,7 +850,7 @@ class SandboxManager:
             if lease_in_use:
                 continue
             if not self.destroy_sandbox_runtime_resources(lease_id):
-                raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
+                raise RuntimeError(f"Missing sandbox runtime {lease_id} for thread {thread_id}")
         return True
 
     def destroy_sandbox_runtime_resources(self, lease_id: str) -> bool:
@@ -858,7 +858,7 @@ class SandboxManager:
         if not lease:
             return False
         if any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all()):
-            raise RuntimeError(f"Lease {lease_id} still has bound terminals")
+            raise RuntimeError(f"Sandbox runtime {lease_id} still has bound terminals")
         lease.destroy_instance(self.provider)
         if self.provider_capability.runtime_kind == "daytona_pty":
             self._destroy_daytona_managed_volume(lease_id)

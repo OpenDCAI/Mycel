@@ -166,7 +166,7 @@ def _new_test_manager() -> Any:
     return manager
 
 
-def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
+def test_resolve_existing_sandbox_runtime_cwd_prefers_provider_default_when_no_workspace_truth(monkeypatch):
     sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
 
     def build_provider(name: str):
@@ -178,7 +178,7 @@ def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_t
         build_provider,
     )
 
-    cwd = sandbox_manager_module.resolve_existing_lease_cwd(
+    cwd = sandbox_manager_module.resolve_existing_sandbox_runtime_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
         sandbox_runtime_repo=sandbox_runtime_repo,
@@ -189,7 +189,7 @@ def test_resolve_existing_lease_cwd_prefers_provider_default_when_no_workspace_t
     assert sandbox_runtime_repo.closed is False
 
 
-def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_provider_default(monkeypatch):
+def test_resolve_existing_sandbox_runtime_cwd_ignores_latest_terminal_cwd_and_prefers_provider_default(monkeypatch):
     sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "local", "provider_env_id": "env-1"})
     monkeypatch.setattr(
         sandbox_manager_module,
@@ -197,7 +197,7 @@ def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_prov
         lambda name: SimpleNamespace(default_cwd=f"/providers/{name}"),
     )
 
-    cwd = sandbox_manager_module.resolve_existing_lease_cwd(
+    cwd = sandbox_manager_module.resolve_existing_sandbox_runtime_cwd(
         "lease-1",
         db_path=Path("/tmp/fake-sandbox.db"),
         sandbox_runtime_repo=sandbox_runtime_repo,
@@ -207,7 +207,7 @@ def test_resolve_existing_lease_cwd_ignores_latest_terminal_cwd_and_prefers_prov
     assert sandbox_runtime_repo.requested_ids == ["lease-1"]
 
 
-def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavailable(monkeypatch):
+def test_resolve_existing_sandbox_runtime_cwd_fails_loud_when_provider_default_is_unavailable(monkeypatch):
     sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"lease_id": "lease-1", "provider_name": "missing-provider"})
     monkeypatch.setattr(
         sandbox_manager_module,
@@ -216,7 +216,7 @@ def test_resolve_existing_lease_cwd_fails_loud_when_provider_default_is_unavaila
     )
 
     with pytest.raises(ValueError, match="provider default cwd is required"):
-        sandbox_manager_module.resolve_existing_lease_cwd(
+        sandbox_manager_module.resolve_existing_sandbox_runtime_cwd(
             "lease-1",
             db_path=Path("/tmp/fake-sandbox.db"),
             sandbox_runtime_repo=sandbox_runtime_repo,
@@ -252,7 +252,7 @@ def test_bind_thread_to_existing_sandbox_skips_latest_terminal_cwd_when_provider
     assert terminal_repo.created[0]["initial_cwd"] == "/providers/local"
 
 
-def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monkeypatch):
+def test_bind_thread_to_existing_thread_sandbox_runtime_requires_parent_workspace_cwd(monkeypatch):
     terminal_repo = _FakeBindTerminalRepo(
         latest_by_lease={"cwd": "/terminal/latest"},
         active_by_thread={"thread-parent": {"lease_id": "lease-1"}},
@@ -266,7 +266,7 @@ def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monk
     )
 
     try:
-        sandbox_manager_module.bind_thread_to_existing_thread_lease(
+        sandbox_manager_module.bind_thread_to_existing_thread_sandbox_runtime(
             "thread-child",
             "thread-parent",
             db_path=Path("/tmp/fake-sandbox.db"),
@@ -276,7 +276,7 @@ def test_bind_thread_to_existing_thread_lease_requires_parent_workspace_cwd(monk
     except ValueError as exc:
         assert str(exc) == "thread reuse cwd is required"
     else:
-        raise AssertionError("expected bind_thread_to_existing_thread_lease to fail loudly without cwd")
+        raise AssertionError("expected bind_thread_to_existing_thread_sandbox_runtime to fail loudly without cwd")
 
 
 def test_setup_mounts_uses_workspace_sync_source_for_non_daytona_runtime(tmp_path):
@@ -300,7 +300,7 @@ def test_setup_mounts_reports_missing_lease_not_missing_volume():
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._get_sandbox_runtime = lambda _lease_id: None
 
-    with pytest.raises(ValueError, match="No lease for thread thread-1"):
+    with pytest.raises(ValueError, match="No sandbox runtime for thread thread-1"):
         manager._setup_mounts("thread-1")
 
 
@@ -1066,7 +1066,7 @@ def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
         repo.close()
 
 
-def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
+def test_resolve_existing_sandbox_runtime_prefers_provider_env_binding() -> None:
     sandbox_runtime_repo = SimpleNamespace(
         find_by_instance=lambda **kwargs: {
             "lease_id": "lease-live",
@@ -1076,7 +1076,7 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
         close=lambda: None,
     )
 
-    lease = sandbox_manager_module.resolve_existing_sandbox_lease(
+    lease = sandbox_manager_module.resolve_existing_sandbox_runtime(
         {
             "provider_name": "daytona",
             "provider_env_id": "sandbox-env-1",
@@ -1092,14 +1092,14 @@ def test_resolve_existing_sandbox_lease_prefers_provider_env_binding() -> None:
     }
 
 
-def test_resolve_existing_sandbox_lease_fails_when_instance_lookup_misses() -> None:
+def test_resolve_existing_sandbox_runtime_fails_when_instance_lookup_misses() -> None:
     sandbox_runtime_repo = SimpleNamespace(
         find_by_instance=lambda **_kwargs: None,
         close=lambda: None,
     )
 
-    with pytest.raises(RuntimeError, match="sandbox provider_env_id did not resolve to a lease"):
-        sandbox_manager_module.resolve_existing_sandbox_lease(
+    with pytest.raises(RuntimeError, match="sandbox provider_env_id did not resolve to a sandbox runtime"):
+        sandbox_manager_module.resolve_existing_sandbox_runtime(
             {
                 "provider_name": "daytona",
                 "provider_env_id": "sandbox-env-1",
