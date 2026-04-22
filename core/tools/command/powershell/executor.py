@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 
 from sandbox.interfaces.executor import AsyncCommand, BaseExecutor, ExecuteResult
 
 _RUNNING_COMMANDS: dict[str, AsyncCommand] = {}
+logger = logging.getLogger(__name__)
 
 
 class PowerShellExecutor(BaseExecutor):
@@ -112,7 +114,7 @@ class PowerShellExecutor(BaseExecutor):
         )
         _RUNNING_COMMANDS[command_id] = async_cmd
 
-        asyncio.create_task(self._monitor_process(async_cmd))
+        async_cmd.monitor_task = asyncio.create_task(self._monitor_process(async_cmd))
 
         return async_cmd
 
@@ -122,7 +124,13 @@ class PowerShellExecutor(BaseExecutor):
         if proc is None:
             return
 
-        stdout_bytes, stderr_bytes = await proc.communicate()
+        try:
+            stdout_bytes, stderr_bytes = await proc.communicate()
+        except Exception:
+            logger.exception("Failed to monitor async PowerShell command %s", async_cmd.command_id)
+            async_cmd.exit_code = proc.returncode if proc.returncode is not None else 1
+            async_cmd.done = True
+            raise
 
         async_cmd.stdout_buffer.append(stdout_bytes.decode("utf-8", errors="replace"))
         async_cmd.stderr_buffer.append(stderr_bytes.decode("utf-8", errors="replace"))
@@ -130,7 +138,24 @@ class PowerShellExecutor(BaseExecutor):
         async_cmd.done = True
 
     async def get_status(self, command_id: str) -> AsyncCommand | None:
-        return _RUNNING_COMMANDS.get(command_id)
+        async_cmd = _RUNNING_COMMANDS.get(command_id)
+        if async_cmd is None:
+            return None
+        await self._sync_status(async_cmd)
+        return async_cmd
+
+    async def _sync_status(self, async_cmd: AsyncCommand, *, timeout: float = 0.5) -> None:
+        monitor_task = async_cmd.monitor_task
+        if async_cmd.done or monitor_task is None:
+            return
+
+        try:
+            await asyncio.wait_for(asyncio.shield(monitor_task), timeout=timeout)
+        except TimeoutError:
+            logger.debug(
+                "Async PowerShell command %s is still running after status sync window",
+                async_cmd.command_id,
+            )
 
     async def wait_for(
         self,
@@ -143,10 +168,14 @@ class PowerShellExecutor(BaseExecutor):
 
         if not async_cmd.done:
             try:
-                await asyncio.wait_for(
-                    self._wait_until_done(async_cmd),
-                    timeout=timeout,
-                )
+                monitor_task = async_cmd.monitor_task
+                if monitor_task is None:
+                    await asyncio.wait_for(
+                        self._wait_until_done(async_cmd),
+                        timeout=timeout,
+                    )
+                else:
+                    await asyncio.wait_for(asyncio.shield(monitor_task), timeout=timeout)
             except TimeoutError:
                 return ExecuteResult(
                     exit_code=-1,

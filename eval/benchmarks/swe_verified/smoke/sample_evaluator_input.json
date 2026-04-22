@@ -1,0 +1,18 @@
+{
+  "judge_profile": "swe_verified_pytest_smoke_gold_v1",
+  "slice_id": "swe_verified_pytest_smoke_v1",
+  "run_id": "sample-swe-verified-pytest-gold",
+  "max_workers": 1,
+  "dataset_name": "SWE-bench/SWE-bench_Verified",
+  "dataset_split": "test",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "repo": "pytest-dev/pytest",
+  "environment_setup_commit": "634cde9506eb1f48dec3ec77974ee8dc952207c6",
+  "instance_ids": [
+    "pytest-dev__pytest-7521",
+    "pytest-dev__pytest-7571",
+    "pytest-dev__pytest-7490"
+  ],
+  "predictions_path": "eval/benchmarks/swe_verified/smoke/sample_predictions.jsonl",
+  "official_patch_mode": "gold-patch-from-dataset"
+}

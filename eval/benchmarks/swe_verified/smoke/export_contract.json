@@ -1,0 +1,47 @@
+{
+  "contract_id": "mycel.swe_verified.export.v1",
+  "description": "Minimum fields the backend export must align with for the SWE-bench Verified smoke slice.",
+  "top_level_required": [
+    "export_version",
+    "benchmark",
+    "slice_id",
+    "dataset_name",
+    "dataset_split",
+    "dataset_revision",
+    "judge_profile",
+    "run_id",
+    "generated_at",
+    "predictions_path",
+    "instances"
+  ],
+  "instance_required": [
+    "instance_id",
+    "repo",
+    "base_commit",
+    "environment_setup_commit",
+    "problem_statement",
+    "status",
+    "prediction_record",
+    "judge_inputs",
+    "judge_result",
+    "artifacts"
+  ],
+  "prediction_record_required": [
+    "instance_id",
+    "model_name_or_path",
+    "model_patch_sha256"
+  ],
+  "judge_inputs_required": [
+    "fail_to_pass",
+    "pass_to_pass"
+  ],
+  "judge_result_required": [
+    "status",
+    "resolved"
+  ],
+  "artifacts_required": [
+    "patch_diff",
+    "test_patch",
+    "predictions_record"
+  ]
+}

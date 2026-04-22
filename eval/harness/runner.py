@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from eval.collector import MetricsCollector
 from eval.harness.client import EvalClient
-from eval.models import EvalResult, EvalScenario, TrajectoryCapture
+from eval.judge import build_judge
+from eval.models import ArtifactPolicy, ArtifactRecord, EvalResult, EvalScenario, JudgeResult, TrajectoryCapture
 from eval.storage import TrajectoryStore
 
 if TYPE_CHECKING:
     from eval.models import RunTrajectory
+
+logger = logging.getLogger(__name__)
 
 
 class EvalRunner:
@@ -32,7 +36,15 @@ class EvalRunner:
 
     async def run_scenario(self, scenario: EvalScenario) -> EvalResult:
         """Execute a single scenario end-to-end."""
-        thread_id = await self.client.create_thread(agent_user_id=self.agent_user_id, sandbox=scenario.sandbox)
+        cwd = scenario.workspace.cwd if scenario.workspace and scenario.workspace.cwd else None
+        logger.info(
+            "Starting eval scenario %s (benchmark=%s, instance=%s, cwd=%s)",
+            scenario.id,
+            scenario.benchmark.family if scenario.benchmark else "",
+            scenario.benchmark.instance_id if scenario.benchmark else "",
+            cwd,
+        )
+        thread_id = await self.client.create_thread(agent_user_id=self.agent_user_id, sandbox=scenario.sandbox, cwd=cwd)
         captures: list[TrajectoryCapture] = []
         started_at = datetime.now(UTC)
         primary_error: BaseException | None = None
@@ -66,21 +78,48 @@ class EvalRunner:
 
             # Compute metrics
             sys_metrics, obj_metrics = self.collector.compute_all(trajectory, runtime_status)
+            artifacts = self._build_artifacts(scenario, trajectory.final_response)
+            partial_result = EvalResult(
+                scenario_id=scenario.id,
+                trajectory=trajectory,
+                system_metrics=sys_metrics,
+                objective_metrics=obj_metrics,
+                benchmark=scenario.benchmark,
+                artifacts=artifacts,
+                export_config=scenario.export,
+            )
 
             # Persist if store available
             if self.store:
                 self.store.save_trajectory(trajectory)
                 self.store.save_metrics(trajectory.id, "system", sys_metrics)
                 self.store.save_metrics(trajectory.id, "objective", obj_metrics)
+                self.store.save_artifacts(trajectory.id, artifacts)
+                if scenario.benchmark is not None:
+                    self.store.save_benchmark_info(trajectory.id, scenario.benchmark)
 
-            return EvalResult(
-                scenario_id=scenario.id,
-                trajectory=trajectory,
-                system_metrics=sys_metrics,
-                objective_metrics=obj_metrics,
-            )
+            try:
+                judge_result = await self._evaluate_scenario(scenario, partial_result)
+            except Exception as exc:
+                judge_error = JudgeResult(
+                    judge_type=scenario.judge_config.type if scenario.judge_config else "noop",
+                    status="error",
+                    verdict="error",
+                    rationale=str(exc),
+                    metadata={"scenario_id": scenario.id},
+                )
+                if self.store:
+                    self.store.save_judge_result(trajectory.id, judge_error)
+                logger.exception("Judge evaluation failed for scenario %s", scenario.id)
+                raise RuntimeError(f"Judge evaluation failed for scenario {scenario.id}: {exc}") from exc
+
+            if self.store:
+                self.store.save_judge_result(trajectory.id, judge_result)
+
+            return partial_result.model_copy(update={"judge_result": judge_result})
         except BaseException as exc:
             primary_error = exc
+            logger.exception("Eval scenario %s failed", scenario.id)
             raise
         finally:
             try:
@@ -89,7 +128,63 @@ class EvalRunner:
                 if primary_error is not None:
                     primary_error.add_note(f"Thread cleanup failed after primary eval error: {cleanup_exc}")
                 else:
+                    logger.exception("Eval scenario %s failed during thread cleanup", scenario.id)
                     raise
+
+    async def _evaluate_scenario(self, scenario: EvalScenario, result: EvalResult) -> JudgeResult:
+        judge = build_judge(scenario.judge_config)
+        return await judge.evaluate(scenario, result)
+
+    @staticmethod
+    def _build_artifacts(scenario: EvalScenario, final_response: str) -> list[ArtifactRecord]:
+        policy = scenario.artifact_policy or ArtifactPolicy()
+        artifacts: list[ArtifactRecord] = []
+        captured_names: set[str] = set()
+
+        if policy.include_final_response:
+            artifacts.append(
+                ArtifactRecord(
+                    name="final-response",
+                    kind="submission",
+                    content=final_response,
+                    mime_type="text/plain",
+                    metadata={"scenario_id": scenario.id},
+                )
+            )
+            captured_names.add("final-response")
+        if policy.include_benchmark_metadata and scenario.benchmark is not None:
+            artifacts.append(
+                ArtifactRecord(
+                    name="benchmark-instance",
+                    kind="benchmark-metadata",
+                    metadata=scenario.benchmark.model_dump(mode="json"),
+                )
+            )
+            captured_names.add("benchmark-instance")
+        if policy.include_workspace_metadata and scenario.workspace is not None:
+            artifacts.append(
+                ArtifactRecord(
+                    name="workspace",
+                    kind="workspace-metadata",
+                    metadata=scenario.workspace.model_dump(mode="json"),
+                )
+            )
+            captured_names.add("workspace")
+        for requested_artifact in policy.requested_artifacts:
+            if requested_artifact in captured_names:
+                continue
+            artifacts.append(
+                ArtifactRecord(
+                    name=requested_artifact,
+                    kind="requested-artifact",
+                    metadata={
+                        "captured": False,
+                        "status": "not_captured",
+                        "reason": "core benchmark runner has no benchmark-specific artifact adapter yet",
+                    },
+                )
+            )
+        return artifacts
 
     async def run_all(
         self,

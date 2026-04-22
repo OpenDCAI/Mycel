@@ -8,7 +8,6 @@ from backend.monitor.infrastructure.io import resource_io_service as monitor_res
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor_threads as monitor_threads_router
-from backend.web.routers import resources
 
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
@@ -16,6 +15,10 @@ def _app(*, include_product_resources: bool = False) -> FastAPI:
     app.include_router(global_router.router, prefix="/api/monitor")
     app.include_router(monitor_threads_router.router, prefix="/api/monitor")
     if include_product_resources:
+        try:
+            from backend.web.routers import resources
+        except ImportError as exc:  # pragma: no cover - environment guard
+            pytest.skip(f"product resource routes unavailable in lightweight test env: {exc}")
         app.include_router(resources.router)
         app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     return app
@@ -186,7 +189,19 @@ def test_global_monitor_router_accepts_evaluation_batch_create(monkeypatch):
         ("get", "/api/monitor/evaluation/batches", "get_monitor_evaluation_batches", {"items": [], "count": 0}),
         ("get", "/api/monitor/evaluation/scenarios", "get_monitor_evaluation_scenarios", {"items": [], "count": 0}),
         ("get", "/api/monitor/evaluation/batches/batch-1", "get_monitor_evaluation_batch_detail", {"batch": {"batch_id": "batch-1"}}),
+        (
+            "get",
+            "/api/monitor/evaluation/batches/batch-1/aggregate",
+            "get_monitor_evaluation_batch_aggregate",
+            {"summary": {"pass_rate": 1.0}},
+        ),
         ("get", "/api/monitor/evaluation/runs/run-1", "get_monitor_evaluation_run_detail", {"run": {"run_id": "run-1"}}),
+        (
+            "get",
+            "/api/monitor/evaluation/runs/run-1/artifacts",
+            "get_monitor_evaluation_run_artifacts",
+            {"run_id": "run-1", "artifacts": []},
+        ),
     ],
 )
 def test_monitor_routes_delegate_to_service(monkeypatch, method, path, service_name, payload):
@@ -210,7 +225,9 @@ def test_monitor_routes_delegate_to_service(monkeypatch, method, path, service_n
         "get_monitor_evaluation_batches": "get_evaluation_batches",
         "get_monitor_evaluation_scenarios": "get_evaluation_scenarios",
         "get_monitor_evaluation_batch_detail": "get_evaluation_batch_detail",
+        "get_monitor_evaluation_batch_aggregate": "get_evaluation_batch_aggregate",
         "get_monitor_evaluation_run_detail": "get_evaluation_run_detail",
+        "get_monitor_evaluation_run_artifacts": "get_evaluation_run_artifacts",
     }[service_name]
     monkeypatch.setattr(monitor_gateway_impl, gateway_name, _sync)
 
@@ -260,7 +277,13 @@ def test_monitor_thread_detail_route_awaits_service(monkeypatch):
         ("/api/monitor/operations/missing", "get_monitor_operation_detail", "Operation not found: missing"),
         ("/api/monitor/runtimes/missing", "get_monitor_runtime_detail", "Runtime not found: missing"),
         ("/api/monitor/evaluation/batches/missing", "get_monitor_evaluation_batch_detail", "Evaluation batch not found: missing"),
+        (
+            "/api/monitor/evaluation/batches/missing/aggregate",
+            "get_monitor_evaluation_batch_aggregate",
+            "Evaluation batch not found: missing",
+        ),
         ("/api/monitor/evaluation/runs/missing", "get_monitor_evaluation_run_detail", "Evaluation run not found: missing"),
+        ("/api/monitor/evaluation/runs/missing/artifacts", "get_monitor_evaluation_run_artifacts", "Evaluation run not found: missing"),
     ],
 )
 def test_monitor_detail_routes_map_missing_rows_to_404(monkeypatch, path, service_name, message):
@@ -273,7 +296,9 @@ def test_monitor_detail_routes_map_missing_rows_to_404(monkeypatch, path, servic
         "get_monitor_operation_detail": "get_operation_detail",
         "get_monitor_runtime_detail": "get_runtime_detail",
         "get_monitor_evaluation_batch_detail": "get_evaluation_batch_detail",
+        "get_monitor_evaluation_batch_aggregate": "get_evaluation_batch_aggregate",
         "get_monitor_evaluation_run_detail": "get_evaluation_run_detail",
+        "get_monitor_evaluation_run_artifacts": "get_evaluation_run_artifacts",
     }[service_name]
     monkeypatch.setattr(monitor_gateway_impl, gateway_name, _raise)
 
@@ -330,6 +355,30 @@ def test_monitor_evaluation_batch_create_and_start_pass_request_context(monkeypa
     assert start_calls[0]["batch_id"] == "batch-1"
     assert start_calls[0]["execution_base_url"] == "http://testserver"
     assert start_calls[0]["token"] == "token-1"
+
+
+def test_monitor_evaluation_compare_and_export_routes_pass_query_context(monkeypatch):
+    compare_calls = []
+    export_calls = []
+    monkeypatch.setattr(
+        monitor_gateway_impl,
+        "compare_evaluation_batches",
+        lambda **kwargs: compare_calls.append(kwargs) or {"delta": {"pass_rate": {"delta": 1.0}}},
+    )
+    monkeypatch.setattr(
+        monitor_gateway_impl,
+        "export_evaluation_batch",
+        lambda **kwargs: export_calls.append(kwargs) or {"format": "predictions_json"},
+    )
+
+    with TestClient(_app()) as client:
+        compare = client.get("/api/monitor/evaluation/compare?baseline_batch_id=batch-a&candidate_batch_id=batch-b")
+        export = client.get("/api/monitor/evaluation/batches/batch-b/export?format=predictions_json")
+
+    assert compare.status_code == 200
+    assert export.status_code == 200
+    assert compare_calls == [{"baseline_batch_id": "batch-a", "candidate_batch_id": "batch-b"}]
+    assert export_calls == [{"batch_id": "batch-b", "export_format": "predictions_json"}]
 
 
 @pytest.mark.parametrize(

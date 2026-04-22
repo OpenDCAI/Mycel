@@ -176,7 +176,7 @@ class SupabaseEvalRepo:
 
     def get_run(self, run_id: str) -> dict | None:
         query = q.limit(
-            self._t("eval_runs").select("id,thread_id,started_at,finished_at,status,user_message").eq("id", run_id),
+            self._t("eval_runs").select("id,thread_id,started_at,finished_at,status,user_message,final_response").eq("id", run_id),
             1,
             _REPO,
             "get_run",
@@ -192,6 +192,7 @@ class SupabaseEvalRepo:
             "finished_at": row.get("finished_at"),
             "status": str(row.get("status") or ""),
             "user_message": str(row.get("user_message") or ""),
+            "final_response": str(row.get("final_response") or ""),
         }
 
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:

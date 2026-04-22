@@ -138,6 +138,25 @@ def get_evaluation_run_detail(run_id: str) -> dict[str, Any]:
     return monitor_evaluation.get_monitor_evaluation_run_detail(run_id)
 
 
+def get_evaluation_batch_aggregate(batch_id: str) -> dict[str, Any]:
+    return monitor_evaluation.get_monitor_evaluation_batch_aggregate(batch_id)
+
+
+def compare_evaluation_batches(*, baseline_batch_id: str, candidate_batch_id: str) -> dict[str, Any]:
+    return monitor_evaluation.compare_monitor_evaluation_batches(
+        baseline_batch_id=baseline_batch_id,
+        candidate_batch_id=candidate_batch_id,
+    )
+
+
+def get_evaluation_run_artifacts(run_id: str) -> dict[str, Any]:
+    return monitor_evaluation.get_monitor_evaluation_run_artifacts(run_id)
+
+
+def export_evaluation_batch(*, batch_id: str, export_format: str | None = None) -> dict[str, Any]:
+    return monitor_evaluation.export_monitor_evaluation_batch(batch_id, export_format=export_format)
+
+
 def get_resource_overview() -> dict[str, Any]:
     return monitor_resources.get_monitor_resource_overview()
 

@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import json
 from datetime import UTC
+from typing import Any
+
+from pydantic import BaseModel
 
 from eval.models import (
+    ArtifactRecord,
+    BenchmarkInfo,
+    JudgeResult,
     ObjectiveMetrics,
     RunTrajectory,
     SystemMetrics,
@@ -69,16 +75,17 @@ class TrajectoryStore:
         self,
         run_id: str,
         tier: str,
-        metrics: SystemMetrics | ObjectiveMetrics,
+        metrics: SystemMetrics | ObjectiveMetrics | BaseModel | dict[str, Any] | list[Any],
     ) -> None:
         """Save computed metrics for a run."""
         from datetime import datetime
 
+        metrics_json = metrics.model_dump_json() if isinstance(metrics, BaseModel) else json.dumps(metrics)
         self._repo.save_metrics(
             run_id=run_id,
             tier=tier,
             timestamp=datetime.now(UTC).isoformat(),
-            metrics_json=metrics.model_dump_json(),
+            metrics_json=metrics_json,
         )
 
     def get_trajectory(self, run_id: str) -> RunTrajectory | None:
@@ -106,3 +113,49 @@ class TrajectoryStore:
                 del d["metrics_json"]
             result.append(d)
         return result
+
+    def save_artifacts(self, run_id: str, artifacts: list[ArtifactRecord] | list[dict[str, Any]]) -> None:
+        payload = [
+            artifact.model_dump(mode="json")
+            if isinstance(artifact, ArtifactRecord)
+            else ArtifactRecord.model_validate(artifact).model_dump(mode="json")
+            for artifact in artifacts
+        ]
+        self.save_metrics(run_id, "artifacts", payload)
+
+    def get_artifacts(self, run_id: str) -> list[ArtifactRecord]:
+        payload = self.get_latest_payload(run_id, "artifacts")
+        if not payload:
+            return []
+        if not isinstance(payload, list):
+            raise RuntimeError("Expected artifacts payload to be a list")
+        return [ArtifactRecord.model_validate(item) for item in payload]
+
+    def save_judge_result(self, run_id: str, judge_result: JudgeResult | dict[str, Any]) -> None:
+        payload = judge_result if isinstance(judge_result, JudgeResult) else JudgeResult.model_validate(judge_result)
+        self.save_metrics(run_id, "judge", payload)
+
+    def get_judge_result(self, run_id: str) -> JudgeResult | None:
+        payload = self.get_latest_payload(run_id, "judge")
+        if payload is None:
+            return None
+        if not isinstance(payload, dict):
+            raise RuntimeError("Expected judge payload to be an object")
+        return JudgeResult.model_validate(payload)
+
+    def save_benchmark_info(self, run_id: str, benchmark: BenchmarkInfo) -> None:
+        self.save_metrics(run_id, "benchmark", benchmark)
+
+    def get_benchmark_info(self, run_id: str) -> BenchmarkInfo | None:
+        payload = self.get_latest_payload(run_id, "benchmark")
+        if payload is None:
+            return None
+        if not isinstance(payload, dict):
+            raise RuntimeError("Expected benchmark payload to be an object")
+        return BenchmarkInfo.model_validate(payload)
+
+    def get_latest_payload(self, run_id: str, tier: str) -> Any:
+        rows = self.get_metrics(run_id, tier=tier)
+        if not rows:
+            return None
+        return rows[-1].get("metrics")

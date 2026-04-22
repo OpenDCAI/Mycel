@@ -342,7 +342,7 @@ def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monk
             ]
         )
     )
-    monkeypatch.setattr(monitor_evaluation_execution_service, "EVAL_SCENARIO_DIR", scenario_dir)
+    monkeypatch.setenv("LEON_EVAL_SCENARIO_DIRS", str(scenario_dir))
 
     payload = monitor_evaluation_service.get_monitor_evaluation_scenarios()
 
@@ -355,6 +355,10 @@ def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monk
                 "sandbox": "local",
                 "message_count": 1,
                 "timeout_seconds": 120,
+                "benchmark": None,
+                "workspace": None,
+                "judge_type": None,
+                "export_format": None,
             }
         ],
         "count": 1,
@@ -363,6 +367,7 @@ def test_monitor_evaluation_scenario_catalog_reads_yaml_scenarios(tmp_path, monk
 
 def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
     calls = []
+    scenario_refs = [{"scenario_id": "scenario-1", "sandbox": "local"}]
 
     class FakeBatchService:
         def create_batch(self, **kwargs):
@@ -370,6 +375,11 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
             return {"batch_id": "batch-created", "status": "pending"}
 
     monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(
+        monitor_evaluation_execution_service,
+        "select_monitor_eval_scenarios",
+        lambda scenario_ids, *, sandbox: scenario_refs,
+    )
 
     payload = monitor_evaluation_service.create_monitor_evaluation_batch(
         submitted_by_user_id="owner-1",
@@ -387,6 +397,7 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
             "scenario_ids": ["scenario-1"],
             "sandbox": "local",
             "max_concurrent": 1,
+            "scenario_refs": scenario_refs,
         }
     ]
 
@@ -424,7 +435,7 @@ def test_start_monitor_evaluation_batch_schedules_runner_with_explicit_execution
         def update_batch_status(self, batch_id, status):
             return {"batch_id": batch_id, "status": status}
 
-    monkeypatch.setattr(monitor_evaluation_execution_service, "EVAL_SCENARIO_DIR", scenario_dir)
+    monkeypatch.setenv("LEON_EVAL_SCENARIO_DIRS", str(scenario_dir))
     monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     class _Scheduler:

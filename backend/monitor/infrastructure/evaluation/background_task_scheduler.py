@@ -19,5 +19,6 @@ class BackgroundTaskEvaluationScheduler(EvaluationJobScheduler):
             execution_base_url=spec.execution_base_url,
             token=spec.token,
             agent_user_id=spec.agent_user_id,
+            max_concurrent=spec.max_concurrent,
             batch_service=make_eval_batch_service(),
         )

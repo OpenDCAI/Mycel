@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "swe-verified-smoke-judge-prepare",
+  "result": {
+    "status": "prepared",
+    "slice_id": "swe_verified_pytest_smoke_v1",
+    "instance_count": 3,
+    "predictions_path": "eval/benchmarks/swe_verified/smoke/sample_predictions.jsonl",
+    "blocked_by": "task-12 judge bridge implementation"
+  }
+}

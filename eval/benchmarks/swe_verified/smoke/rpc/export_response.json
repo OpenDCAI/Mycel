@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": "swe-verified-smoke-export-preview",
+  "result": {
+    "status": "prepared",
+    "contract_id": "mycel.swe_verified.export.v1",
+    "golden_fixture_path": "eval/benchmarks/swe_verified/smoke/export_golden.json",
+    "blocked_by": "task-12 export API implementation"
+  }
+}

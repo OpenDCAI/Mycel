@@ -15,6 +15,7 @@ class EvaluationJobSpec:
     execution_base_url: str
     token: str
     agent_user_id: str
+    max_concurrent: int = 1
 
 
 class EvaluationJobScheduler(Protocol):

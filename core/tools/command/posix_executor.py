@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 from typing import ClassVar
@@ -10,6 +11,8 @@ from typing import ClassVar
 from sandbox.interfaces.executor import AsyncCommand, BaseExecutor, ExecuteResult
 
 from .base import require_subprocess_pipe
+
+logger = logging.getLogger(__name__)
 
 
 class PosixShellExecutor(BaseExecutor):
@@ -116,7 +119,7 @@ class PosixShellExecutor(BaseExecutor):
         )
         async_cmd = AsyncCommand(command_id=command_id, command_line=command, cwd=work_dir, process=proc)
         self._running_commands[command_id] = async_cmd
-        asyncio.create_task(self._monitor_process(async_cmd))
+        async_cmd.monitor_task = asyncio.create_task(self._monitor_process(async_cmd))
         return async_cmd
 
     async def _monitor_process(self, async_cmd: AsyncCommand) -> None:
@@ -124,14 +127,35 @@ class PosixShellExecutor(BaseExecutor):
         if proc is None:
             return
 
-        stdout_bytes, stderr_bytes = await proc.communicate()
+        try:
+            stdout_bytes, stderr_bytes = await proc.communicate()
+        except Exception:
+            logger.exception("Failed to monitor async POSIX command %s", async_cmd.command_id)
+            async_cmd.exit_code = proc.returncode if proc.returncode is not None else 1
+            async_cmd.done = True
+            raise
+
         async_cmd.stdout_buffer.append(stdout_bytes.decode("utf-8", errors="replace"))
         async_cmd.stderr_buffer.append(stderr_bytes.decode("utf-8", errors="replace"))
         async_cmd.exit_code = proc.returncode
         async_cmd.done = True
 
+    async def _sync_status(self, async_cmd: AsyncCommand, *, timeout: float = 0.5) -> None:
+        monitor_task = async_cmd.monitor_task
+        if async_cmd.done or monitor_task is None:
+            return
+
+        try:
+            await asyncio.wait_for(asyncio.shield(monitor_task), timeout=timeout)
+        except TimeoutError:
+            logger.debug("Async POSIX command %s is still running after status sync window", async_cmd.command_id)
+
     async def get_status(self, command_id: str) -> AsyncCommand | None:
-        return self._running_commands.get(command_id)
+        async_cmd = self._running_commands.get(command_id)
+        if async_cmd is None:
+            return None
+        await self._sync_status(async_cmd)
+        return async_cmd
 
     async def wait_for(self, command_id: str, timeout: float | None = None) -> ExecuteResult | None:
         async_cmd = self._running_commands.get(command_id)
@@ -140,7 +164,11 @@ class PosixShellExecutor(BaseExecutor):
 
         if not async_cmd.done:
             try:
-                await asyncio.wait_for(self._wait_until_done(async_cmd), timeout=timeout)
+                monitor_task = async_cmd.monitor_task
+                if monitor_task is None:
+                    await asyncio.wait_for(self._wait_until_done(async_cmd), timeout=timeout)
+                else:
+                    await asyncio.wait_for(asyncio.shield(monitor_task), timeout=timeout)
             except TimeoutError:
                 return ExecuteResult(
                     exit_code=-1,

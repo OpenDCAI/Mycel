@@ -1,0 +1,47 @@
+id: swe_verified_pytest_7521
+name: "SWE-bench Verified smoke: pytest 7521"
+category: swe
+timeout_seconds: 30
+sandbox: local
+messages:
+  - content: |
+      [[SWE_SMOKE::pytest-dev__pytest-7521::pass]]
+      Apply the smoke patch for pytest-dev__pytest-7521 and summarize the focused pytest result.
+benchmark:
+  family: "SWE-bench Verified"
+  name: "SWE-bench/SWE-bench_Verified"
+  split: test
+  variant: smoke
+  instance_id: "pytest-dev__pytest-7521"
+  dataset_version: "91aa3ed51b709be6457e12d00300a6a596d4c6a3"
+  source_uri: "https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified"
+workspace:
+  cwd: "/workspace/pytest"
+  repo: "pytest-dev/pytest"
+  base_commit: "41d211c24a6781843b174379d6d6538f5c17adb9"
+  env:
+    PYTHONUNBUFFERED: "1"
+judge_config:
+  type: command
+  config:
+    command:
+      - ./.venv/bin/python
+      - -m
+      - eval.benchmarks.swe_verified.acceptance
+      - judge
+      - --instance-id
+      - pytest-dev__pytest-7521
+      - --profile-id
+      - swe_verified_pytest_smoke_gold_v1
+artifact_policy:
+  include_final_response: true
+  include_benchmark_metadata: true
+  include_workspace_metadata: true
+  requested_artifacts:
+    - model_patch.diff
+    - test_output.log
+export:
+  format: predictions_json
+  key: predictions_path
+  config:
+    profile: swe_verified_pytest_smoke_gold_v1

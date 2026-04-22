@@ -161,9 +161,41 @@ def evaluation_batch_detail_snapshot(batch_id: str):
     return _or_404(monitor_gateway.get_evaluation_batch_detail, batch_id)
 
 
+@router.get("/evaluation/batches/{batch_id}/aggregate")
+def evaluation_batch_aggregate_snapshot(batch_id: str):
+    return _or_404(monitor_gateway.get_evaluation_batch_aggregate, batch_id)
+
+
 @router.get("/evaluation/runs/{run_id}")
 def evaluation_run_detail_snapshot(run_id: str):
     return _or_404(monitor_gateway.get_evaluation_run_detail, run_id)
+
+
+@router.get("/evaluation/runs/{run_id}/artifacts")
+def evaluation_run_artifacts_snapshot(run_id: str):
+    return _or_404(monitor_gateway.get_evaluation_run_artifacts, run_id)
+
+
+@router.get("/evaluation/compare")
+def evaluation_compare_snapshot(
+    baseline_batch_id: str = Query(..., min_length=1),
+    candidate_batch_id: str = Query(..., min_length=1),
+):
+    try:
+        return monitor_gateway.compare_evaluation_batches(
+            baseline_batch_id=baseline_batch_id,
+            candidate_batch_id=candidate_batch_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/evaluation/batches/{batch_id}/export")
+def evaluation_batch_export_snapshot(batch_id: str, format: str | None = Query(default=None)):
+    try:
+        return monitor_gateway.export_evaluation_batch(batch_id=batch_id, export_format=format)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/resources")

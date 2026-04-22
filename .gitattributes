@@ -1,0 +1,6 @@
+# Keep smoke patch fixtures byte-stable across Windows checkouts.
+eval/benchmarks/swe_verified/smoke/fixtures/official_patches/*.patch text eol=lf
+
+# Scenario YAML files contain UTF-8 content and should not be rewritten to CRLF.
+eval/scenarios/*.yaml text eol=lf
+eval/benchmarks/**/*.yaml text eol=lf

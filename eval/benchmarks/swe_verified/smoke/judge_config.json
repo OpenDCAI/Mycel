@@ -1,0 +1,53 @@
+{
+  "profile_id": "swe_verified_pytest_smoke_gold_v1",
+  "benchmark": "swe_verified",
+  "slice_manifest_path": "eval/benchmarks/swe_verified/smoke/manifest.json",
+  "dataset_name": "SWE-bench/SWE-bench_Verified",
+  "dataset_split": "test",
+  "dataset_revision": "91aa3ed51b709be6457e12d00300a6a596d4c6a3",
+  "repo": "pytest-dev/pytest",
+  "environment_setup_commit": "634cde9506eb1f48dec3ec77974ee8dc952207c6",
+  "instance_ids": [
+    "pytest-dev__pytest-7521",
+    "pytest-dev__pytest-7571",
+    "pytest-dev__pytest-7490"
+  ],
+  "official_evaluator": {
+    "module": "swebench.harness.run_evaluation",
+    "command_template": [
+      "python",
+      "-m",
+      "swebench.harness.run_evaluation",
+      "--dataset_name",
+      "SWE-bench/SWE-bench_Verified",
+      "--predictions_path",
+      "{predictions_path}",
+      "--max_workers",
+      "{max_workers}",
+      "--instance_ids",
+      "{instance_ids_csv}",
+      "--run_id",
+      "{run_id}"
+    ],
+    "prediction_format": "jsonl",
+    "required_prediction_fields": [
+      "instance_id",
+      "model_name_or_path",
+      "model_patch"
+    ],
+    "gold_predictions_supported": true
+  },
+  "scoring": {
+    "resolved_field": "resolved",
+    "required_test_sets": [
+      "FAIL_TO_PASS",
+      "PASS_TO_PASS"
+    ],
+    "failure_policy": "any FAIL_TO_PASS miss or PASS_TO_PASS regression marks the instance unresolved"
+  },
+  "artifacts": {
+    "prediction_records_path": "eval/benchmarks/swe_verified/smoke/sample_predictions.jsonl",
+    "export_contract_path": "eval/benchmarks/swe_verified/smoke/export_contract.json",
+    "golden_export_path": "eval/benchmarks/swe_verified/smoke/export_golden.json"
+  }
+}

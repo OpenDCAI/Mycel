@@ -1,6 +1,7 @@
 """Tests for command executors, hooks, and CommandService."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -94,6 +95,46 @@ class TestAsyncExecution:
         status = await executor.get_status(async_cmd.command_id)
         assert status is not None
         assert status.done
+
+    @pytest.mark.asyncio
+    async def test_get_status_syncs_completed_monitor_task(self):
+        executor = get_executor()
+        command_id = "cmd_status_sync"
+        async_cmd = AsyncCommand(
+            command_id=command_id,
+            command_line="echo done",
+            cwd="/tmp",
+            process=SimpleNamespace(returncode=0),
+        )
+
+        async def _finish() -> None:
+            await asyncio.sleep(0)
+            async_cmd.stdout_buffer.append("done\n")
+            async_cmd.exit_code = 0
+            async_cmd.done = True
+
+        async_cmd.monitor_task = asyncio.create_task(_finish())
+
+        if executor.shell_name == "powershell":
+            from core.tools.command.powershell import executor as powershell_executor
+
+            powershell_executor._RUNNING_COMMANDS[command_id] = async_cmd
+
+            def cleanup() -> None:
+                powershell_executor._RUNNING_COMMANDS.pop(command_id, None)
+        else:
+            type(executor)._running_commands[command_id] = async_cmd
+
+            def cleanup() -> None:
+                type(executor)._running_commands.pop(command_id, None)
+
+        try:
+            status = await executor.get_status(command_id)
+            assert status is async_cmd
+            assert status.done is True
+            assert status.stdout_buffer == ["done\n"]
+        finally:
+            cleanup()
 
 
 class TestDangerousCommandsHook:

@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": "swe-verified-smoke-judge-prepare",
+  "method": "eval.prepareJudgeRun",
+  "params": {
+    "benchmark": "swe_verified",
+    "judge_config_path": "eval/benchmarks/swe_verified/smoke/judge_config.json",
+    "evaluator_input_path": "eval/benchmarks/swe_verified/smoke/sample_evaluator_input.json"
+  }
+}
