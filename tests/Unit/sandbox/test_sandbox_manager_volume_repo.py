@@ -61,7 +61,7 @@ class _FakeTerminalRepo:
         self.closed = False
         self.requested_lease_ids: list[str] = []
 
-    def get_latest_by_lease(self, lease_id: str):
+    def get_latest_by_sandbox_runtime(self, lease_id: str):
         self.requested_lease_ids.append(lease_id)
         return self._row
 
@@ -78,7 +78,7 @@ class _FakeBindTerminalRepo:
         self.requested_active_threads: list[str] = []
         self.created: list[dict[str, Any]] = []
 
-    def get_latest_by_lease(self, lease_id: str):
+    def get_latest_by_sandbox_runtime(self, lease_id: str):
         self.requested_lease_ids.append(lease_id)
         return self._latest_by_lease
 

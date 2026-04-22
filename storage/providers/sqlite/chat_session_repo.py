@@ -571,7 +571,7 @@ class SQLiteChatSessionRepo:
             ).fetchone()
             return row is not None
 
-    def lease_has_running_command(self, lease_id: str) -> bool:
+    def sandbox_runtime_has_running_command(self, sandbox_runtime_id: str) -> bool:
         with self._lock:
             row = self._conn.execute(
                 """
@@ -581,7 +581,7 @@ class SQLiteChatSessionRepo:
                 WHERE at.sandbox_runtime_id = ? AND tc.status = 'running'
                 LIMIT 1
                 """,
-                (lease_id,),
+                (sandbox_runtime_id,),
             ).fetchone()
             return row is not None
 

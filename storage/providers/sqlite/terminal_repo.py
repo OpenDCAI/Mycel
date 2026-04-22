@@ -221,7 +221,7 @@ class SQLiteTerminalRepo:
                 bucket["latest_terminal_id"] = terminal_id
         return summary
 
-    def get_latest_by_lease(self, lease_id: str) -> dict[str, Any] | None:
+    def get_latest_by_sandbox_runtime(self, sandbox_runtime_id: str) -> dict[str, Any] | None:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
@@ -233,7 +233,7 @@ class SQLiteTerminalRepo:
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                (lease_id,),
+                (sandbox_runtime_id,),
             ).fetchone()
             self._conn.row_factory = None
             return dict(row) if row else None

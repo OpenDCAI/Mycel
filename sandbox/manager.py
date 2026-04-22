@@ -605,7 +605,7 @@ class SandboxManager:
             return False
         if not self.db_path.exists():
             return False
-        return self.session_manager._repo.lease_has_running_command(lease_id)
+        return self.session_manager._repo.sandbox_runtime_has_running_command(lease_id)
 
     def _is_expired(self, session_row: dict, now: datetime) -> bool:
         started_at_raw = session_row.get("started_at")
