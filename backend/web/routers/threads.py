@@ -346,7 +346,7 @@ def _resolve_owned_existing_sandbox_request_lease(
         raise HTTPException(403, "Not authorized")
     return resolve_existing_sandbox_lease(
         sandbox,
-        lease_repo=getattr(app.state, "sandbox_runtime_repo", None),
+        sandbox_runtime_repo=getattr(app.state, "sandbox_runtime_repo", None),
     )
 
 
@@ -676,7 +676,7 @@ def _bind_existing_sandbox_for_thread(
         thread_id,
         sandbox,
         cwd=bind_cwd,
-        lease_repo=getattr(app.state, "sandbox_runtime_repo", None),
+        sandbox_runtime_repo=getattr(app.state, "sandbox_runtime_repo", None),
     )
     if bound_lease is None:
         raise HTTPException(403, "Sandbox not authorized")
