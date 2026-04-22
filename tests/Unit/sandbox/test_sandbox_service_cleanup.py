@@ -29,12 +29,12 @@ def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
         lambda: SimpleNamespace(thread_repo=lambda: SimpleNamespace(close=lambda: None)),
     )
 
-    result = sandbox_service.destroy_sandbox_runtime(lower_runtime_handle="lease-1", provider_name="daytona_selfhost")
+    result = sandbox_service.destroy_sandbox_runtime(sandbox_runtime_handle="lease-1", provider_name="daytona_selfhost")
 
     assert result == {
         "ok": True,
         "action": "destroy",
-        "lower_runtime_handle": "lease-1",
+        "sandbox_runtime_handle": "lease-1",
         "provider": "daytona_selfhost",
         "mode": "manager_runtime",
     }
@@ -83,7 +83,7 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
     )
     monkeypatch.setattr(sandbox_service, "build_storage_container", lambda: _Container())
 
-    result = sandbox_service.destroy_sandbox_runtime(lower_runtime_handle="lease-1", provider_name="daytona_selfhost")
+    result = sandbox_service.destroy_sandbox_runtime(sandbox_runtime_handle="lease-1", provider_name="daytona_selfhost")
 
     assert result["ok"] is True
     assert deleted_thread_chats == [("thread-missing", "stale_terminal_pruned")]
@@ -134,7 +134,7 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
     monkeypatch.setattr(sandbox_service, "build_storage_container", lambda: _Container())
 
     result = sandbox_service.destroy_sandbox_runtime(
-        lower_runtime_handle="lease-1",
+        sandbox_runtime_handle="lease-1",
         provider_name="daytona_selfhost",
         detach_thread_bindings=True,
     )

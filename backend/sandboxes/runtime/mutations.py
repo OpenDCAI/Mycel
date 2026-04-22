@@ -83,24 +83,29 @@ def mutate_sandbox_runtime(
     }
 
 
-def _detach_runtime_terminals(manager: Any, lower_runtime_handle: str) -> None:
+def _detach_runtime_terminals(manager: Any, sandbox_runtime_handle: str) -> None:
     for row in list(manager.terminal_store.list_all()):
-        if str(row.get("lease_id") or "") != lower_runtime_handle:
+        if str(row.get("lease_id") or "") != sandbox_runtime_handle:
             continue
         thread_id = str(row.get("thread_id") or "").strip()
         terminal_id = str(row.get("terminal_id") or "").strip()
         if not terminal_id:
-            raise RuntimeError(f"Lower runtime {lower_runtime_handle} has terminal row without terminal_id")
+            raise RuntimeError(f"Sandbox runtime {sandbox_runtime_handle} has terminal row without terminal_id")
         if thread_id:
             manager.session_manager.delete_thread(thread_id, reason="detached_sandbox_cleanup")
         manager.terminal_store.delete(terminal_id)
 
 
-def _prune_stale_runtime_terminals(manager: Any, lower_runtime_handle: str, *, build_storage_container_fn=build_storage_container) -> None:
+def _prune_stale_runtime_terminals(
+    manager: Any,
+    sandbox_runtime_handle: str,
+    *,
+    build_storage_container_fn=build_storage_container,
+) -> None:
     thread_repo = build_storage_container_fn().thread_repo()
     try:
         for row in list(manager.terminal_store.list_all()):
-            if str(row.get("lease_id") or "") != lower_runtime_handle:
+            if str(row.get("lease_id") or "") != sandbox_runtime_handle:
                 continue
             thread_id = str(row.get("thread_id") or "").strip()
             terminal_id = str(row.get("terminal_id") or "").strip()
@@ -116,7 +121,7 @@ def _prune_stale_runtime_terminals(manager: Any, lower_runtime_handle: str, *, b
 
 def destroy_sandbox_runtime(
     *,
-    lower_runtime_handle: str,
+    sandbox_runtime_handle: str,
     provider_name: str,
     detach_thread_bindings: bool = False,
     init_providers_and_managers_fn=init_providers_and_managers,
@@ -127,19 +132,19 @@ def destroy_sandbox_runtime(
     if manager is None:
         raise RuntimeError(f"Provider manager unavailable: {provider_name}")
 
-    lease = manager.get_lease(lower_runtime_handle)
+    lease = manager.get_lease(sandbox_runtime_handle)
     if lease is None:
-        raise RuntimeError(f"Lower runtime not found: {lower_runtime_handle}")
+        raise RuntimeError(f"Sandbox runtime not found: {sandbox_runtime_handle}")
 
-    _prune_stale_runtime_terminals(manager, lower_runtime_handle, build_storage_container_fn=build_storage_container_fn)
+    _prune_stale_runtime_terminals(manager, sandbox_runtime_handle, build_storage_container_fn=build_storage_container_fn)
     if detach_thread_bindings:
-        _detach_runtime_terminals(manager, lower_runtime_handle)
-    if not manager.destroy_lease_resources(lower_runtime_handle):
-        raise RuntimeError(f"Lower runtime not found: {lower_runtime_handle}")
+        _detach_runtime_terminals(manager, sandbox_runtime_handle)
+    if not manager.destroy_lease_resources(sandbox_runtime_handle):
+        raise RuntimeError(f"Sandbox runtime not found: {sandbox_runtime_handle}")
     return {
         "ok": True,
         "action": "destroy",
-        "lower_runtime_handle": lower_runtime_handle,
+        "sandbox_runtime_handle": sandbox_runtime_handle,
         "provider": provider_name,
         "mode": "manager_runtime",
     }

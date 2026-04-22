@@ -142,9 +142,9 @@ def mutate_sandbox_runtime(
     )
 
 
-def destroy_sandbox_runtime(*, lower_runtime_handle: str, provider_name: str, detach_thread_bindings: bool = False) -> dict[str, Any]:
+def destroy_sandbox_runtime(*, sandbox_runtime_handle: str, provider_name: str, detach_thread_bindings: bool = False) -> dict[str, Any]:
     return _sandbox_runtime_mutations.destroy_sandbox_runtime(
-        lower_runtime_handle=lower_runtime_handle,
+        sandbox_runtime_handle=sandbox_runtime_handle,
         provider_name=provider_name,
         detach_thread_bindings=detach_thread_bindings,
         init_providers_and_managers_fn=init_providers_and_managers,
