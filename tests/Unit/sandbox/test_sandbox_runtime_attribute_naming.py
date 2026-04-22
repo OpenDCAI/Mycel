@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from sandbox.chat_session import ChatSession, ChatSessionPolicy
+from sandbox.lease import SandboxInstance, SQLiteSandboxRuntimeHandle
+from sandbox.providers.local import LocalPersistentShellRuntime
+from sandbox.terminal import SQLiteTerminal, TerminalState
+
+
+def _sandbox_runtime() -> SQLiteSandboxRuntimeHandle:
+    return SQLiteSandboxRuntimeHandle(
+        lease_id="lease-1",
+        provider_name="local",
+        current_instance=SandboxInstance(
+            instance_id="inst-1",
+            provider_name="local",
+            status="running",
+            created_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+        ),
+        db_path=Path("/tmp/fake-sandbox.db"),
+        observed_state="running",
+        status="active",
+    )
+
+
+def _terminal() -> SQLiteTerminal:
+    return SQLiteTerminal(
+        terminal_id="term-1",
+        thread_id="thread-1",
+        lease_id="lease-1",
+        state=TerminalState(cwd="/tmp"),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+
+
+def test_chat_session_uses_sandbox_runtime_attribute() -> None:
+    terminal = _terminal()
+    sandbox_runtime = _sandbox_runtime()
+    runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
+    session = ChatSession(
+        session_id="sess-1",
+        thread_id="thread-1",
+        terminal=terminal,
+        sandbox_runtime=sandbox_runtime,
+        runtime=runtime,
+        policy=ChatSessionPolicy(),
+        started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+        last_active_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+
+    assert session.sandbox_runtime is sandbox_runtime
+    assert not hasattr(session, "lease")
+
+
+def test_runtime_uses_sandbox_runtime_attribute() -> None:
+    terminal = _terminal()
+    sandbox_runtime = _sandbox_runtime()
+    runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
+
+    assert runtime.sandbox_runtime is sandbox_runtime
+    assert not hasattr(runtime, "lease")

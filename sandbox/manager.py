@@ -250,7 +250,7 @@ class SandboxManager:
 
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
         self.terminal_store = make_terminal_repo(db_path=self.db_path)
-        self.lease_store = make_lease_repo(db_path=self.db_path)
+        self.sandbox_runtime_store = make_lease_repo(db_path=self.db_path)
 
         self.session_manager = ChatSessionManager(
             provider=provider,
@@ -258,7 +258,7 @@ class SandboxManager:
             default_policy=ChatSessionPolicy(),
             chat_session_repo=make_chat_session_repo(db_path=self.db_path),
             terminal_repo=self.terminal_store,
-            lease_repo=self.lease_store,
+            lease_repo=self.sandbox_runtime_store,
         )
 
         from sandbox.volume import SandboxVolume
@@ -270,14 +270,14 @@ class SandboxManager:
 
     def _get_sandbox_runtime(self, lease_id: str):
         """Get sandbox runtime as domain object, or None."""
-        row = self.lease_store.get(lease_id)
+        row = self.sandbox_runtime_store.get(lease_id)
         if row is None:
             return None
         return sandbox_runtime_from_row(row, self.db_path)
 
     def _create_sandbox_runtime(self, lease_id: str, provider_name: str):
         """Create sandbox runtime and return as domain object."""
-        row = self.lease_store.create(lease_id, provider_name)
+        row = self.sandbox_runtime_store.create(lease_id, provider_name)
         return sandbox_runtime_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
@@ -443,7 +443,7 @@ class SandboxManager:
         session = self.session_manager.get(thread_id, terminal.terminal_id)
         if not session:
             return False
-        instance = session.lease.get_instance()
+        instance = session.sandbox_runtime.get_instance()
         if not instance:
             return False
         self._sync_to_sandbox(thread_id, instance.instance_id, files=files)
@@ -452,7 +452,7 @@ class SandboxManager:
     def close(self):
         self.session_manager.close(reason="manager_close")
         self.terminal_store.close()
-        self.lease_store.close()
+        self.sandbox_runtime_store.close()
 
     def get_sandbox(self, thread_id: str, bind_mounts: list | None = None) -> SandboxCapability:
         from sandbox.thread_context import set_current_thread_id
@@ -462,19 +462,19 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         session = self.session_manager.get(thread_id, terminal.terminal_id) if terminal else None
         if session:
-            self._assert_lease_provider(session.lease, thread_id)
+            self._assert_lease_provider(session.sandbox_runtime, thread_id)
             # @@@activity-resume - Any new activity against a paused thread must resume before command execution.
-            if session.status == "paused" or getattr(session.lease, "observed_state", None) == "paused":
+            if session.status == "paused" or getattr(session.sandbox_runtime, "observed_state", None) == "paused":
                 if not self.resume_session(thread_id, source="auto_resume"):
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, session.terminal.terminal_id)
                 if not session:
                     raise RuntimeError(f"Session disappeared after resume for thread {thread_id}")
-                self._assert_lease_provider(session.lease, thread_id)
+                self._assert_lease_provider(session.sandbox_runtime, thread_id)
             # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
             if bind_mounts:
                 self.provider.set_thread_bind_mounts(thread_id, bind_mounts)
-            self._ensure_bound_instance(session.lease)
+            self._ensure_bound_instance(session.sandbox_runtime)
             return SandboxCapability(session, manager=self)
 
         if not terminal:
@@ -503,8 +503,8 @@ class SandboxManager:
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, terminal.terminal_id)
                 if session:
-                    self._assert_lease_provider(session.lease, thread_id)
-                    self._ensure_bound_instance(session.lease)
+                    self._assert_lease_provider(session.sandbox_runtime, thread_id)
+                    self._ensure_bound_instance(session.sandbox_runtime)
                     return SandboxCapability(session, manager=self)
                 lease = self._get_sandbox_runtime(terminal.lease_id)
                 if not lease:
@@ -776,10 +776,10 @@ class SandboxManager:
         for terminal in terminals:
             session = self.session_manager.get(thread_id, terminal.terminal_id)
             if session:
-                session.lease = lease
+                session.sandbox_runtime = lease
                 runtime = getattr(session, "runtime", None)
                 if runtime is not None:
-                    runtime.lease = lease
+                    runtime.sandbox_runtime = lease
                 self.session_manager.resume(session.session_id)
                 resumed_any = True
 
@@ -891,7 +891,7 @@ class SandboxManager:
 
         seen_instance_ids: set[str] = set()
 
-        for lease_row in self.lease_store.list_by_provider(self.provider.name):
+        for lease_row in self.sandbox_runtime_store.list_by_provider(self.provider.name):
             lease_id = lease_row["lease_id"]
             lease = self._get_sandbox_runtime(lease_id)
             if not lease:

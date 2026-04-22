@@ -335,7 +335,7 @@ class PhysicalTerminalRuntime(ABC):
         sandbox_runtime: SandboxRuntimeHandle,
     ):
         self.terminal = terminal
-        self.lease = sandbox_runtime
+        self.sandbox_runtime = sandbox_runtime
         self.runtime_id = f"runtime-{uuid.uuid4().hex[:12]}"
         self.chat_session_id: str | None = None
         self._commands: dict[str, AsyncCommand] = {}
@@ -877,13 +877,13 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
 
     def _recover_infra(self) -> None:
         # @@@infra-recovery - Refresh provider truth once, then resume/recreate and retry command exactly once.
-        status = self.lease.refresh_instance_status(self.provider, force=True, max_age_sec=0)
+        status = self.sandbox_runtime.refresh_instance_status(self.provider, force=True, max_age_sec=0)
         if status == "paused":
-            if not self.lease.resume_instance(self.provider):
-                raise RuntimeError(f"Failed to resume paused lease {self.lease.lease_id}")
+            if not self.sandbox_runtime.resume_instance(self.provider):
+                raise RuntimeError(f"Failed to resume paused lease {self.sandbox_runtime.lease_id}")
             return
         if status in {"detached", "unknown"}:
-            self.lease.ensure_active_instance(self.provider)
+            self.sandbox_runtime.ensure_active_instance(self.provider)
 
     def _provider_sandbox(self, instance_id: str):
         getter = getattr(self.provider, "get_runtime_sandbox", None)
@@ -911,13 +911,13 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
         super().__init__(terminal, sandbox_runtime, provider)
 
     def _execute_once(self, command: str, timeout: float | None = None) -> ExecuteResult:
-        instance = self.lease.ensure_active_instance(self.provider)
+        instance = self.sandbox_runtime.ensure_active_instance(self.provider)
         state = self.terminal.get_state()
         timeout_ms = int(timeout * 1000) if timeout else 30000
         print(
             "[RemoteWrappedRuntime._execute_once] "
             f"thread_id={self.terminal.thread_id} "
-            f"lease_id={self.lease.lease_id} "
+            f"lease_id={self.sandbox_runtime.lease_id} "
             f"instance_id={instance.instance_id} "
             f"provider={getattr(self.provider, 'name', '?')} "
             f"cwd={state.cwd!r} "

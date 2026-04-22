@@ -11,7 +11,7 @@ from backend.threads.streaming import prime_sandbox
 async def test_prime_sandbox_uses_capability_session_not_terminal_lookup() -> None:
     resume_calls: list[str] = []
     lease = SimpleNamespace(refresh_instance_status=lambda _provider: "running")
-    capability = SimpleNamespace(_session=SimpleNamespace(lease=lease))
+    capability = SimpleNamespace(_session=SimpleNamespace(sandbox_runtime=lease))
     manager = SimpleNamespace(
         enforce_idle_timeouts=lambda: None,
         get_sandbox=lambda thread_id: capability,
@@ -35,7 +35,7 @@ async def test_prime_sandbox_uses_capability_session_not_terminal_lookup() -> No
 async def test_prime_sandbox_resumes_paused_lease_from_capability_session() -> None:
     resume_calls: list[str] = []
     lease = SimpleNamespace(refresh_instance_status=lambda _provider: "paused")
-    capability = SimpleNamespace(_session=SimpleNamespace(lease=lease))
+    capability = SimpleNamespace(_session=SimpleNamespace(sandbox_runtime=lease))
     manager = SimpleNamespace(
         enforce_idle_timeouts=lambda: None,
         get_sandbox=lambda thread_id: capability,

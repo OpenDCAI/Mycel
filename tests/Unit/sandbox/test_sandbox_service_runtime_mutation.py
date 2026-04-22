@@ -38,10 +38,10 @@ class _FakeManager:
         self.db_path = Path("/tmp/sandbox.db")
         self.provider = _FakeProvider()
         self.lease_store = _FakeLeaseStore()
-        self.lease = None
+        self.sandbox_runtime = None
 
     def get_sandbox_runtime(self, lower_runtime_id):
-        return self.lease if lower_runtime_id == "lease-1" else None
+        return self.sandbox_runtime if lower_runtime_id == "lease-1" else None
 
 
 def test_mutate_sandbox_runtime_destroys_provider_orphan_without_fake_lease(monkeypatch):
@@ -73,7 +73,7 @@ def test_mutate_sandbox_runtime_destroys_provider_orphan_without_fake_lease(monk
 
 def test_mutate_sandbox_runtime_reports_manager_runtime_for_sandbox_runtime_handle(monkeypatch):
     manager = _FakeManager()
-    manager.lease = _FakeLease()
+    manager.sandbox_runtime = _FakeLease()
     runtimes = [
         {
             "session_id": "sandbox-1",
@@ -96,4 +96,4 @@ def test_mutate_sandbox_runtime_reports_manager_runtime_for_sandbox_runtime_hand
     assert payload["ok"] is True
     assert payload["mode"] == "manager_runtime"
     assert payload[LOWER_RUNTIME_KEY] == "lease-1"
-    assert manager.lease.paused == [(manager.provider, "api")]
+    assert manager.sandbox_runtime.paused == [(manager.provider, "api")]

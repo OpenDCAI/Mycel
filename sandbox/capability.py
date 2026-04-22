@@ -58,10 +58,10 @@ class SandboxCapability:
         """Resolve current session info without exposing internal session object."""
         from sandbox.provider import SessionInfo
 
-        instance = self._session.lease.get_instance()
+        instance = self._session.sandbox_runtime.get_instance()
         provider = getattr(self._session.runtime, "provider", None)
         if not instance and provider is not None:
-            instance = self._session.lease.ensure_active_instance(provider)
+            instance = self._session.sandbox_runtime.ensure_active_instance(provider)
         return SessionInfo(
             session_id=instance.instance_id if instance else "local",
             provider=provider_name,
@@ -168,7 +168,7 @@ class _CommandWrapper(BaseExecutor):
             session_id=f"sess-{uuid.uuid4().hex[:12]}",
             thread_id=self._session.thread_id,
             terminal=terminal,
-            lease=lease,
+            sandbox_runtime=lease,
         )
 
     def _resolve_session_for_command(self, command_id: str):
@@ -212,15 +212,15 @@ class _FileSystemWrapper(FileSystemBackend):
         provider = getattr(self._session.runtime, "provider", None)
         if provider is not None:
             try:
-                instance = self._session.lease.ensure_active_instance(provider)
+                instance = self._session.sandbox_runtime.ensure_active_instance(provider)
             except RuntimeError:
-                if self._manager is None or getattr(self._session.lease, "observed_state", None) != "paused":
+                if self._manager is None or getattr(self._session.sandbox_runtime, "observed_state", None) != "paused":
                     raise
                 if not self._manager.resume_session(self._session.thread_id, source="auto_resume"):
                     raise
-                instance = self._session.lease.ensure_active_instance(provider)
+                instance = self._session.sandbox_runtime.ensure_active_instance(provider)
         else:
-            instance = self._session.lease.get_instance()
+            instance = self._session.sandbox_runtime.get_instance()
             if not instance:
                 raise RuntimeError("No active instance")
         return instance.instance_id
