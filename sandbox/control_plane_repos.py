@@ -23,7 +23,7 @@ def make_chat_session_repo(db_path: Path | None = None):
     return SQLiteChatSessionRepo(db_path=resolve_sandbox_db_path(db_path))
 
 
-def make_lease_repo(db_path: Path | None = None):
+def make_sandbox_runtime_repo(db_path: Path | None = None):
     if _use_strategy_control_plane_repo(db_path):
         return build_lease_repo()
     from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
-from sandbox.control_plane_repos import make_lease_repo as _make_sqlite_lease_repo
+from sandbox.control_plane_repos import make_sandbox_runtime_repo as _make_sqlite_sandbox_runtime_repo
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.lifecycle import (
     LeaseInstanceState,
@@ -29,7 +29,7 @@ from sandbox.lifecycle import (
     parse_lease_instance_state,
 )
 from storage.providers.sqlite.kernel import connect_sqlite
-from storage.runtime import build_lease_repo as _build_strategy_lease_repo
+from storage.runtime import build_lease_repo as _build_strategy_sandbox_runtime_repo
 from storage.runtime import build_provider_event_repo as _build_strategy_provider_event_repo
 from storage.runtime import build_sandbox_repo as _build_strategy_sandbox_repo
 from storage.runtime import uses_supabase_runtime_defaults
@@ -86,10 +86,10 @@ def _use_supabase_storage(db_path: Path | None = None) -> bool:
     return uses_supabase_runtime_defaults() and resolve_sandbox_db_path(db_path) == resolve_sandbox_db_path()
 
 
-def _make_lease_repo(db_path: Path | None = None):
+def _make_sandbox_runtime_repo(db_path: Path | None = None):
     if _use_supabase_storage(db_path):
-        return _build_strategy_lease_repo()
-    return _make_sqlite_lease_repo(db_path)
+        return _build_strategy_sandbox_runtime_repo()
+    return _make_sqlite_sandbox_runtime_repo(db_path)
 
 
 def _make_provider_event_repo():
@@ -510,7 +510,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         self.observed_at = utc_now()
         self.version += 1
         if _use_supabase_storage(self.db_path):
-            repo = _make_lease_repo(self.db_path)
+            repo = _make_sandbox_runtime_repo(self.db_path)
             event_repo = _make_provider_event_repo()
             try:
                 row = repo.persist_metadata(
@@ -545,7 +545,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
     def _observe_status_via_strategy_repo(self, raw_status: str, *, source: str) -> None:
         observed = self._normalize_provider_state(raw_status)
         instance_id = self._current_instance.instance_id if self._current_instance else ""
-        repo = _make_lease_repo(self.db_path)
+        repo = _make_sandbox_runtime_repo(self.db_path)
         event_repo = _make_provider_event_repo()
         try:
             row = repo.observe_status(
@@ -590,7 +590,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         self.needs_refresh = False
         self.refresh_hint_at = None
 
-        repo = _make_lease_repo(self.db_path)
+        repo = _make_sandbox_runtime_repo(self.db_path)
         event_repo = _make_provider_event_repo()
         try:
             observed_row = repo.observe_status(
@@ -660,7 +660,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         self.needs_refresh = False
         self.refresh_hint_at = None
 
-        repo = _make_lease_repo(self.db_path)
+        repo = _make_sandbox_runtime_repo(self.db_path)
         event_repo = _make_provider_event_repo()
         try:
             observed_row = repo.observe_status(
@@ -697,7 +697,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         self._sync_from(sandbox_runtime_from_row(final_row, self.db_path))
 
     def _reload_from_storage(self) -> None:
-        repo = _make_lease_repo(self.db_path)
+        repo = _make_sandbox_runtime_repo(self.db_path)
         try:
             row = repo.get(self.sandbox_runtime_id)
         finally:
@@ -881,7 +881,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             try:
                 status = provider.get_session_status(self._current_instance.instance_id)
                 if _use_supabase_storage(self.db_path):
-                    repo = _make_lease_repo(self.db_path)
+                    repo = _make_sandbox_runtime_repo(self.db_path)
                     try:
                         row = repo.adopt_instance(
                             lease_id=self.sandbox_runtime_id,
@@ -923,7 +923,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 try:
                     status = provider.get_session_status(self._current_instance.instance_id)
                     if _use_supabase_storage(self.db_path):
-                        repo = _make_lease_repo(self.db_path)
+                        repo = _make_sandbox_runtime_repo(self.db_path)
                         try:
                             row = repo.adopt_instance(
                                 lease_id=self.sandbox_runtime_id,
@@ -968,7 +968,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 created_at=utc_now(),
             )
             if _use_supabase_storage(self.db_path):
-                repo = _make_lease_repo(self.db_path)
+                repo = _make_sandbox_runtime_repo(self.db_path)
                 try:
                     row = repo.adopt_instance(
                         lease_id=self.sandbox_runtime_id,
@@ -1096,7 +1096,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         self.refresh_hint_at = hint_at or utc_now()
         self.version += 1
         if _use_supabase_storage(self.db_path):
-            repo = _make_lease_repo(self.db_path)
+            repo = _make_sandbox_runtime_repo(self.db_path)
             try:
                 repo.mark_needs_refresh(self.sandbox_runtime_id, hint_at=self.refresh_hint_at)
             finally:

@@ -14,7 +14,7 @@ from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.clock import parse_runtime_datetime, utc_now
-from sandbox.control_plane_repos import make_chat_session_repo, make_lease_repo, make_terminal_repo
+from sandbox.control_plane_repos import make_chat_session_repo, make_sandbox_runtime_repo, make_terminal_repo
 from sandbox.lease import sandbox_runtime_from_row
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
@@ -59,7 +59,7 @@ def lookup_sandbox_for_thread(
     _lease_repo = lease_repo
     own_lease_repo = _lease_repo is None
     if _lease_repo is None:
-        _lease_repo = make_lease_repo(db_path=target_db)
+        _lease_repo = make_sandbox_runtime_repo(db_path=target_db)
     try:
         terminals = _terminal_repo.list_by_thread(thread_id)
         if not terminals:
@@ -88,7 +88,7 @@ def resolve_existing_lease_cwd(
     _lease_repo = lease_repo
     own_lease_repo = _lease_repo is None
     if _lease_repo is None:
-        _lease_repo = make_lease_repo(db_path=target_db)
+        _lease_repo = make_sandbox_runtime_repo(db_path=target_db)
     try:
         lease = _lease_repo.get(lease_id)
     finally:
@@ -160,7 +160,7 @@ def resolve_existing_sandbox_lease(
     _lease_repo = lease_repo
     own_lease_repo = _lease_repo is None
     if _lease_repo is None:
-        _lease_repo = make_lease_repo(db_path=target_db)
+        _lease_repo = make_sandbox_runtime_repo(db_path=target_db)
     try:
         lease = _lease_repo.find_by_instance(provider_name=provider_name, instance_id=provider_env_id)
         if lease is not None:
@@ -250,7 +250,7 @@ class SandboxManager:
 
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
         self.terminal_store = make_terminal_repo(db_path=self.db_path)
-        self.sandbox_runtime_store = make_lease_repo(db_path=self.db_path)
+        self.sandbox_runtime_store = make_sandbox_runtime_repo(db_path=self.db_path)
 
         self.session_manager = ChatSessionManager(
             provider=provider,
