@@ -24,9 +24,9 @@ from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
 from sandbox.control_plane_repos import make_sandbox_runtime_repo as _make_sqlite_sandbox_runtime_repo
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.lifecycle import (
-    LeaseInstanceState,
-    assert_lease_instance_transition,
-    parse_lease_instance_state,
+    SandboxRuntimeInstanceState,
+    assert_sandbox_runtime_instance_transition,
+    parse_sandbox_runtime_instance_state,
 )
 from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import build_sandbox_runtime_repo as _build_strategy_sandbox_runtime_repo
@@ -243,10 +243,10 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             return False
         return (utc_now() - self.observed_at).total_seconds() <= max_age_sec
 
-    def _instance_state(self) -> LeaseInstanceState:
+    def _instance_state(self) -> SandboxRuntimeInstanceState:
         if not self._current_instance:
-            return LeaseInstanceState.DETACHED
-        return parse_lease_instance_state(self._current_instance.status)
+            return SandboxRuntimeInstanceState.DETACHED
+        return parse_sandbox_runtime_instance_state(self._current_instance.status)
 
     def _normalize_provider_state(self, raw: str) -> str:
         lowered = raw.lower().strip()
@@ -266,21 +266,27 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             )
 
         if observed == "running":
-            assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.RUNNING, reason=reason)
+            assert_sandbox_runtime_instance_transition(
+                self._instance_state(), SandboxRuntimeInstanceState.RUNNING, reason=reason
+            )
             if self._current_instance:
                 self._current_instance.status = "running"
             self.observed_state = "running"
             return
 
         if observed == "paused":
-            assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.PAUSED, reason=reason)
+            assert_sandbox_runtime_instance_transition(
+                self._instance_state(), SandboxRuntimeInstanceState.PAUSED, reason=reason
+            )
             if self._current_instance:
                 self._current_instance.status = "paused"
             self.observed_state = "paused"
             return
 
         if observed == "detached":
-            assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.DETACHED, reason=reason)
+            assert_sandbox_runtime_instance_transition(
+                self._instance_state(), SandboxRuntimeInstanceState.DETACHED, reason=reason
+            )
             self._detached_instance = self._current_instance
             self._current_instance = None
             self.observed_state = "detached"
@@ -288,7 +294,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
         if observed == "unknown":
             if self._current_instance:
-                assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.UNKNOWN, reason=reason)
+                assert_sandbox_runtime_instance_transition(
+                    self._instance_state(), SandboxRuntimeInstanceState.UNKNOWN, reason=reason
+                )
                 self._current_instance.status = "unknown"
             self.observed_state = "unknown"
             return
