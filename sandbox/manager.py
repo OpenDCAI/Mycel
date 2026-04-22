@@ -849,11 +849,11 @@ class SandboxManager:
             lease_in_use = any(row.get("lease_id") == lease_id for row in self.terminal_store.list_all())
             if lease_in_use:
                 continue
-            if not self.destroy_lease_resources(lease_id):
+            if not self.destroy_sandbox_runtime_resources(lease_id):
                 raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
         return True
 
-    def destroy_lease_resources(self, lease_id: str) -> bool:
+    def destroy_sandbox_runtime_resources(self, lease_id: str) -> bool:
         lease = self._get_lease(lease_id)
         if not lease:
             return False

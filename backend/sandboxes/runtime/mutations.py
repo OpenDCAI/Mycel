@@ -139,7 +139,7 @@ def destroy_sandbox_runtime(
     _prune_stale_runtime_terminals(manager, sandbox_runtime_handle, build_storage_container_fn=build_storage_container_fn)
     if detach_thread_bindings:
         _detach_runtime_terminals(manager, sandbox_runtime_handle)
-    if not manager.destroy_lease_resources(sandbox_runtime_handle):
+    if not manager.destroy_sandbox_runtime_resources(sandbox_runtime_handle):
         raise RuntimeError(f"Sandbox runtime not found: {sandbox_runtime_handle}")
     return {
         "ok": True,

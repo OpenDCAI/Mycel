@@ -14,7 +14,7 @@ def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
         def get_lease(self, lower_runtime_id: str):
             return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
 
-        def destroy_lease_resources(self, lower_runtime_id: str) -> bool:
+        def destroy_sandbox_runtime_resources(self, lower_runtime_id: str) -> bool:
             calls.append(lower_runtime_id)
             return True
 
@@ -61,7 +61,7 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
         def get_lease(self, lower_runtime_id: str):
             return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
 
-        def destroy_lease_resources(self, lower_runtime_id: str) -> bool:
+        def destroy_sandbox_runtime_resources(self, lower_runtime_id: str) -> bool:
             destroyed.append(lower_runtime_id)
             return True
 
@@ -111,7 +111,7 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
         def get_lease(self, lower_runtime_id: str):
             return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
 
-        def destroy_lease_resources(self, lower_runtime_id: str) -> bool:
+        def destroy_sandbox_runtime_resources(self, lower_runtime_id: str) -> bool:
             destroyed.append(lower_runtime_id)
             return True
 
