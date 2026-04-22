@@ -166,8 +166,8 @@ def request_sandbox_cleanup(
         threads=threads,
     )
 
-    lower_runtime = sandbox_detail.get("lower_runtime") or {}
-    lower_runtime_handle = str(lower_runtime.get("handle") or "")
+    sandbox_runtime = sandbox_detail.get("sandbox_runtime") or {}
+    sandbox_runtime_handle = str(sandbox_runtime.get("handle") or "")
     sandbox_id = str(sandbox.get("sandbox_id") or "")
     current_truth = _cleanup_current_truth(
         sandbox_id=sandbox_id,
@@ -180,7 +180,7 @@ def request_sandbox_cleanup(
             "operation": None,
             "current_truth": current_truth,
         }
-    if not lower_runtime_handle:
+    if not sandbox_runtime_handle:
         return {
             "accepted": False,
             "message": "Sandbox cleanup requires a managed runtime handle.",
@@ -215,7 +215,7 @@ def request_sandbox_cleanup(
         result = runtime_mutation_executor.cleanup_sandbox(
             SandboxCleanupRequest(
                 sandbox_id=sandbox_id,
-                lower_runtime_handle=lower_runtime_handle,
+                sandbox_runtime_handle=sandbox_runtime_handle,
                 provider_name=provider_name,
                 detach_thread_bindings=detach_before_cleanup,
             )

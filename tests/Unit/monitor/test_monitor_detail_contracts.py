@@ -116,7 +116,7 @@ class FakeSandboxMonitorRepo:
             "sandbox_id": sandbox.get("sandbox_id") or sandbox_id,
             "provider_name": sandbox.get("provider_name"),
             "provider_env_id": sandbox.get("current_instance_id"),
-            "lower_runtime_handle": str(sandbox.get(LOWER_RUNTIME_KEY) or "").strip() or None,
+            "sandbox_runtime_handle": str(sandbox.get(LOWER_RUNTIME_KEY) or "").strip() or None,
         }
 
     def query_sandboxes(self):
@@ -186,7 +186,7 @@ def _record_destroy(calls):
         return {
             "ok": True,
             "action": "destroy",
-            "lower_runtime_handle": lower_runtime_handle,
+            "sandbox_runtime_handle": lower_runtime_handle,
             "provider": provider_name,
             "mode": "manager_runtime",
         }
@@ -567,7 +567,7 @@ def test_get_monitor_sandbox_detail_exposes_cleanup_state(monkeypatch):
     assert payload["cleanup"] == _cleanup_state("Sandbox is orphan cleanup residue and can enter managed cleanup.")
 
 
-def test_get_monitor_sandbox_detail_allows_missing_lower_runtime_handle_for_readonly_detail(monkeypatch):
+def test_get_monitor_sandbox_detail_allows_missing_sandbox_runtime_handle_for_readonly_detail(monkeypatch):
     _use_monitor_repo(
         monkeypatch,
         FakeSandboxMonitorRepo(
@@ -640,7 +640,7 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
         runtime_mutation_executor=_runtime_mutation_executor(
             cleanup_sandbox=lambda request: SimpleNamespace(
                 destroy_result=_record_destroy(calls)(
-                    lower_runtime_handle=request.lower_runtime_handle,
+                    lower_runtime_handle=request.sandbox_runtime_handle,
                     provider_name=request.provider_name,
                     detach_thread_bindings=request.detach_thread_bindings,
                 )
@@ -676,7 +676,7 @@ def test_request_monitor_sandbox_cleanup_passes_sandbox_id_to_mutation_executor(
                 captured.append(
                     (
                         request.sandbox_id,
-                        request.lower_runtime_handle,
+                        request.sandbox_runtime_handle,
                         request.provider_name,
                         request.detach_thread_bindings,
                     )
@@ -690,7 +690,7 @@ def test_request_monitor_sandbox_cleanup_passes_sandbox_id_to_mutation_executor(
     assert captured == [("sandbox-1", "lease-1", "daytona", False)]
 
 
-def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_payload(monkeypatch):
+def test_request_monitor_sandbox_cleanup_keeps_runtime_handle_out_of_sandbox_payload(monkeypatch):
     captured: dict[str, object] = {}
     _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox(), runtime_id="runtime-1"))
 
@@ -707,10 +707,10 @@ def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_paylo
 
     assert "lease" not in captured
     assert LOWER_RUNTIME_KEY not in captured["sandbox"]
-    assert captured["lower_runtime"] == {"handle": "lease-1"}
+    assert captured["sandbox_runtime"] == {"handle": "lease-1"}
 
 
-def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypatch):
+def test_sandbox_cleanup_operation_rejects_missing_sandbox_runtime_handle(monkeypatch):
     calls: list[tuple[str, str, bool]] = []
     monkeypatch.setattr(
         "backend.sandboxes.service.destroy_sandbox_runtime",
@@ -721,7 +721,7 @@ def test_sandbox_cleanup_operation_rejects_missing_lower_runtime_handle(monkeypa
     payload = monitor_operation_service.request_sandbox_cleanup(
         {
             "sandbox": _detached_sandbox(),
-            "lower_runtime": {"handle": ""},
+            "sandbox_runtime": {"handle": ""},
             "triage": {"category": "orphan_cleanup"},
             "provider": {"id": "daytona"},
             "runtime": {"runtime_id": "runtime-1"},
@@ -763,7 +763,7 @@ def test_get_monitor_sandbox_detail_shows_recent_sandbox_cleanup_operation(monke
         runtime_mutation_executor=_runtime_mutation_executor(
             cleanup_sandbox=lambda request: SimpleNamespace(
                 destroy_result=_record_destroy(calls)(
-                    lower_runtime_handle=request.lower_runtime_handle,
+                    lower_runtime_handle=request.sandbox_runtime_handle,
                     provider_name=request.provider_name,
                     detach_thread_bindings=request.detach_thread_bindings,
                 )
@@ -1080,7 +1080,7 @@ def test_request_monitor_sandbox_cleanup_records_sandbox_target_without_thread_l
         runtime_mutation_executor=_runtime_mutation_executor(
             cleanup_sandbox=lambda request: SimpleNamespace(
                 destroy_result=_record_destroy(calls)(
-                    lower_runtime_handle=request.lower_runtime_handle,
+                    lower_runtime_handle=request.sandbox_runtime_handle,
                     provider_name=request.provider_name,
                     detach_thread_bindings=request.detach_thread_bindings,
                 )
