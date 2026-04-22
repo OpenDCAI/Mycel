@@ -162,9 +162,11 @@ def _fake_storage_container() -> SimpleNamespace:
 
 
 def _make_app() -> SimpleNamespace:
+    display_builder = _FakeDisplayBuilder()
     return SimpleNamespace(
         state=SimpleNamespace(
-            display_builder=_FakeDisplayBuilder(),
+            display_builder=display_builder,
+            threads_runtime_state=SimpleNamespace(display_builder=display_builder),
             thread_tasks={},
             thread_last_active={},
             typing_tracker=None,

@@ -15,6 +15,7 @@ class ThreadsRuntimeState:
     queue_manager: Any
     agent_runtime_gateway: Any
     activity_reader: Any
+    display_builder: Any | None = None
 
 
 def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: Any) -> ThreadsRuntimeState:

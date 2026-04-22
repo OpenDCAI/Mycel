@@ -58,6 +58,14 @@ def _fake_storage_container() -> SimpleNamespace:
     return SimpleNamespace(run_event_repo=lambda: repo)
 
 
+def _app_state_with_display_builder(display_builder: object, **kwargs: object) -> SimpleNamespace:
+    return SimpleNamespace(
+        display_builder=display_builder,
+        threads_runtime_state=SimpleNamespace(display_builder=display_builder),
+        **kwargs,
+    )
+
+
 class _FakeRuntime:
     def __init__(self) -> None:
         self.current_state = AgentState.IDLE
@@ -229,8 +237,8 @@ def _make_router_app(
     fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
     monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
     return SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=builder,
+        state=_app_state_with_display_builder(
+            builder,
             agent_pool={},
             thread_sandbox={thread_id: "local"},
         )
@@ -251,8 +259,8 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
 
     agent.runtime.bind_thread(_parent_sink)
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_app_state_with_display_builder(
+            DisplayBuilder(),
             queue_manager=MessageQueueManager(),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
@@ -306,8 +314,8 @@ async def test_run_child_thread_live_closes_and_detaches_completed_child_agent_w
     child_thread_id = "subagent-live-detach"
     agent = _BlockingChildAgent()
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_app_state_with_display_builder(
+            DisplayBuilder(),
             queue_manager=MessageQueueManager(),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
@@ -388,8 +396,8 @@ async def test_run_child_thread_live_raises_when_child_run_emits_error_event(mon
     child_thread_id = "subagent-live-error"
     agent = _BlockingChildAgent()
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_app_state_with_display_builder(
+            DisplayBuilder(),
             queue_manager=MessageQueueManager(),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
@@ -428,8 +436,8 @@ async def test_run_child_thread_live_raises_when_child_never_makes_a_model_call(
     child_thread_id = "subagent-live-no-call"
     agent = _BlockingChildAgent()
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
+        state=_app_state_with_display_builder(
+            DisplayBuilder(),
             queue_manager=MessageQueueManager(),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
