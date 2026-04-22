@@ -67,7 +67,7 @@ class SQLiteChatSessionRepo:
                 ended_at TIMESTAMP,
                 close_reason TEXT,
                 FOREIGN KEY (terminal_id) REFERENCES abstract_terminals(terminal_id),
-                FOREIGN KEY (sandbox_runtime_id) REFERENCES sandbox_leases(lease_id)
+                FOREIGN KEY (sandbox_runtime_id) REFERENCES sandbox_runtimes(sandbox_runtime_id)
             )
             """
         )
