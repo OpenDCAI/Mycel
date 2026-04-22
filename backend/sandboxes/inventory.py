@@ -200,7 +200,7 @@ def load_provider_orphan_runtimes(managers: dict) -> list[dict[str, Any]]:
 
         seen_instance_ids = {
             str(row.get("current_instance_id") or "").strip()
-            for row in manager.lease_store.list_by_provider(provider_slug)
+            for row in manager.sandbox_runtime_store.list_by_provider(provider_slug)
             if str(row.get("current_instance_id") or "").strip()
         }
         raw_provider_runtimes = list_provider_runtimes()
