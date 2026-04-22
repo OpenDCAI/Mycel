@@ -1008,4 +1008,4 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
         return first
 
     async def close(self) -> None:
-        """No-op for remote runtime - instance lifecycle managed by lease."""
+        """No-op for remote runtime - instance lifecycle managed by sandbox runtime."""

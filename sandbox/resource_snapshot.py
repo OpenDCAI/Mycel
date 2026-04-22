@@ -118,7 +118,7 @@ def probe_and_upsert_for_instance(
         probe_error = "metrics unavailable"
 
     try:
-        # @@@snapshot-write-nonblocking - runtime startup truth belongs to lease/session creation;
+        # @@@snapshot-write-nonblocking - runtime startup truth belongs to runtime/session creation;
         # snapshot persistence is auxiliary monitor data and must report write failure
         # without turning local sandbox bringup into a Supabase-config contract.
         if repo is not None and hasattr(repo, "upsert_resource_snapshot_for_sandbox"):
