@@ -158,7 +158,7 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
     monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
 
     lease = SQLiteSandboxRuntimeHandle(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         current_instance=SandboxInstance(
             instance_id="inst-1",
@@ -229,7 +229,7 @@ def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(
     monkeypatch.setattr(sandbox_lease_module, "_make_provider_event_repo", lambda: _FakeEventRepo())
 
     lease = SQLiteSandboxRuntimeHandle(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         db_path=Path("/tmp/fake-sandbox.db"),
         observed_state="detached",

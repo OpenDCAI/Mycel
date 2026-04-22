@@ -32,7 +32,7 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     try:
         runtime_row = await asyncio.to_thread(runtime_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
         lower_runtime = lower_runtime_from_row(runtime_row, resolve_sandbox_db_path()) if runtime_row else None
-        matched_sandbox_runtime_handle = lower_runtime.lease_id if lower_runtime else None
+        matched_sandbox_runtime_handle = lower_runtime.sandbox_runtime_id if lower_runtime else None
         matched_sandbox_id = str((runtime_row or {}).get("sandbox_id") or "").strip() or None
 
         # @@@webhook-runtime-observation - Webhook is optimization only: persist event + observe lower-runtime state.

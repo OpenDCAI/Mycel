@@ -115,7 +115,7 @@ class SandboxRuntimeHandle(ABC):
 
     def __init__(
         self,
-        lease_id: str,
+        sandbox_runtime_id: str,
         provider_name: str,
         recipe_id: str | None = None,
         recipe: dict[str, Any] | None = None,
@@ -131,7 +131,7 @@ class SandboxRuntimeHandle(ABC):
         refresh_hint_at: datetime | None = None,
         bind_mounts: list[dict[str, str]] | None = None,
     ):
-        self.lease_id = lease_id
+        self.sandbox_runtime_id = sandbox_runtime_id
         self.provider_name = provider_name
         self.recipe = recipe
         self.recipe_id = recipe_id or (str(recipe.get("id")) if isinstance(recipe, dict) and recipe.get("id") else None)
@@ -194,7 +194,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
     def __init__(
         self,
-        lease_id: str,
+        sandbox_runtime_id: str,
         provider_name: str,
         recipe_id: str | None = None,
         recipe: dict[str, Any] | None = None,
@@ -211,7 +211,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         refresh_hint_at: datetime | None = None,
     ):
         super().__init__(
-            lease_id=lease_id,
+            sandbox_runtime_id=sandbox_runtime_id,
             provider_name=provider_name,
             recipe_id=recipe_id,
             recipe=recipe,
@@ -231,11 +231,11 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
     def _instance_lock(self) -> threading.RLock:
         with self._lock_guard:
-            lock = self._lease_locks.get(self.lease_id)
+            lock = self._lease_locks.get(self.sandbox_runtime_id)
             if lock is None:
                 # @@@reentrant-lease-lock - apply() may be called inside ensure_active_instance critical sections.
                 lock = threading.RLock()
-                self._lease_locks[self.lease_id] = lock
+                self._lease_locks[self.sandbox_runtime_id] = lock
             return lock
 
     def _is_fresh(self, max_age_sec: float = LEASE_FRESHNESS_TTL_SEC) -> bool:
@@ -261,7 +261,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if observed == "unknown":
                 self.observed_state = observed
                 return
-            raise RuntimeError(f"Lease {self.lease_id}: cannot set observed={observed} without bound instance ({reason})")
+            raise RuntimeError(f"Lease {self.sandbox_runtime_id}: cannot set observed={observed} without bound instance ({reason})")
 
         if observed == "running":
             assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.RUNNING, reason=reason)
@@ -291,11 +291,11 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             self.observed_state = "unknown"
             return
 
-        raise RuntimeError(f"Lease {self.lease_id}: invalid observed state '{observed}'")
+        raise RuntimeError(f"Lease {self.sandbox_runtime_id}: invalid observed state '{observed}'")
 
     def _snapshot(self) -> dict[str, Any]:
         return {
-            "lease_id": self.lease_id,
+            "lease_id": self.sandbox_runtime_id,
             "provider_name": self.provider_name,
             "status": self.status,
             "desired_state": self.desired_state,
@@ -313,7 +313,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         }
 
     def _sandbox_runtime_id(self) -> str:
-        return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-runtime:{self.lease_id}').hex}"
+        return f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, f'mycel-runtime:{self.sandbox_runtime_id}').hex}"
 
     def _sync_sandbox_runtime_binding(self, provider_env_id: str | None, *, updated_at: Any) -> None:
         if not _use_supabase_storage(self.db_path):
@@ -361,7 +361,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 """,
                 (
                     event_id,
-                    self.lease_id,
+                    self.sandbox_runtime_id,
                     event_type,
                     source,
                     json.dumps(payload),
@@ -414,7 +414,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     self.refresh_hint_at.isoformat() if self.refresh_hint_at else None,
                     self.status,
                     utc_now_iso(),
-                    self.lease_id,
+                    self.sandbox_runtime_id,
                 ),
             )
 
@@ -430,7 +430,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     """,
                     (
                         self._current_instance.instance_id,
-                        self.lease_id,
+                        self.sandbox_runtime_id,
                         self._current_instance.instance_id,
                         self._current_instance.status,
                         self._current_instance.created_at.isoformat(),
@@ -494,7 +494,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     self.refresh_hint_at.isoformat() if self.refresh_hint_at else None,
                     self.status,
                     utc_now_iso(),
-                    self.lease_id,
+                    self.sandbox_runtime_id,
                 ),
             )
             if should_commit:
@@ -514,7 +514,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             event_repo = _make_provider_event_repo()
             try:
                 row = repo.persist_metadata(
-                    lease_id=self.lease_id,
+                    lease_id=self.sandbox_runtime_id,
                     recipe_id=self.recipe_id,
                     recipe_json=json.dumps(self.recipe, ensure_ascii=False) if self.recipe is not None else None,
                     desired_state=self.desired_state,
@@ -532,7 +532,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                         instance_id=self._current_instance.instance_id,
                         event_type="provider.error",
                         payload={"error": self.last_error, "source": source},
-                        matched_runtime_handle=self.lease_id,
+                        matched_runtime_handle=self.sandbox_runtime_id,
                         matched_sandbox_id=self._sandbox_runtime_id(),
                     )
             finally:
@@ -549,7 +549,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         event_repo = _make_provider_event_repo()
         try:
             row = repo.observe_status(
-                lease_id=self.lease_id,
+                lease_id=self.sandbox_runtime_id,
                 status=observed,
                 observed_at=utc_now_iso(),
             )
@@ -559,7 +559,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     instance_id=instance_id,
                     event_type="observe.status",
                     payload={"status": observed, "instance_id": instance_id},
-                    matched_runtime_handle=self.lease_id,
+                    matched_runtime_handle=self.sandbox_runtime_id,
                     matched_sandbox_id=self._sandbox_runtime_id(),
                 )
         finally:
@@ -580,9 +580,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             try:
                 ok = provider.destroy_session(instance_id)
             except Exception as exc:
-                raise RuntimeError(f"Failed to destroy lease {self.lease_id}: {exc}") from exc
+                raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}: {exc}") from exc
             if not ok:
-                raise RuntimeError(f"Failed to destroy lease {self.lease_id}")
+                raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}")
         self.desired_state = "destroyed"
         self._set_observed_state("detached", reason="intent.destroy")
         self.status = "expired"
@@ -594,13 +594,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         event_repo = _make_provider_event_repo()
         try:
             observed_row = repo.observe_status(
-                lease_id=self.lease_id,
+                lease_id=self.sandbox_runtime_id,
                 status="detached",
                 observed_at=utc_now_iso(),
             )
             self.version = int(observed_row.get("version") or self.version)
             final_row = repo.persist_metadata(
-                lease_id=self.lease_id,
+                lease_id=self.sandbox_runtime_id,
                 recipe_id=observed_row.get("recipe_id"),
                 recipe_json=observed_row.get("recipe_json"),
                 desired_state="destroyed",
@@ -619,7 +619,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     instance_id=instance_id,
                     event_type="intent.destroy",
                     payload={"instance_id": instance_id, "source": source},
-                    matched_runtime_handle=self.lease_id,
+                    matched_runtime_handle=self.sandbox_runtime_id,
                     matched_sandbox_id=self._sandbox_runtime_id(),
                 )
         finally:
@@ -642,16 +642,16 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         if not getattr(capability, capability_name):
             raise RuntimeError(f"Provider {provider.name} does not support {event_type.split('.')[-1]}")
         if not self._current_instance:
-            raise RuntimeError(f"Lease {self.lease_id} has no instance to {event_type.split('.')[-1]}")
+            raise RuntimeError(f"Lease {self.sandbox_runtime_id} has no instance to {event_type.split('.')[-1]}")
 
         instance_id = self._current_instance.instance_id
         provider_method = getattr(provider, provider_method_name)
         try:
             ok = provider_method(instance_id)
         except Exception as exc:
-            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.lease_id}: {exc}") from exc
+            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.sandbox_runtime_id}: {exc}") from exc
         if not ok:
-            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.lease_id}")
+            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.sandbox_runtime_id}")
 
         self.desired_state = desired_state
         self._set_observed_state(observed_state, reason=event_type)
@@ -664,13 +664,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         event_repo = _make_provider_event_repo()
         try:
             observed_row = repo.observe_status(
-                lease_id=self.lease_id,
+                lease_id=self.sandbox_runtime_id,
                 status=observed_state,
                 observed_at=utc_now_iso(),
             )
             self.version = int(observed_row.get("version") or self.version)
             final_row = repo.persist_metadata(
-                lease_id=self.lease_id,
+                lease_id=self.sandbox_runtime_id,
                 recipe_id=observed_row.get("recipe_id"),
                 recipe_json=observed_row.get("recipe_json"),
                 desired_state=desired_state,
@@ -688,7 +688,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 instance_id=instance_id,
                 event_type=event_type,
                 payload={"instance_id": instance_id, "source": source},
-                matched_runtime_handle=self.lease_id,
+                matched_runtime_handle=self.sandbox_runtime_id,
                 matched_sandbox_id=self._sandbox_runtime_id(),
             )
         finally:
@@ -699,7 +699,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
     def _reload_from_storage(self) -> None:
         repo = _make_lease_repo(self.db_path)
         try:
-            row = repo.get(self.lease_id)
+            row = repo.get(self.sandbox_runtime_id)
         finally:
             repo.close()
         if row:
@@ -742,13 +742,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if not capability.can_pause:
                         raise RuntimeError(f"Provider {provider.name} does not support pause")
                     if not self._current_instance:
-                        raise RuntimeError(f"Lease {self.lease_id} has no instance to pause")
+                        raise RuntimeError(f"Lease {self.sandbox_runtime_id} has no instance to pause")
                     try:
                         ok = provider.pause_session(self._current_instance.instance_id)
                     except Exception as exc:
-                        raise RuntimeError(f"Failed to pause lease {self.lease_id}: {exc}") from exc
+                        raise RuntimeError(f"Failed to pause lease {self.sandbox_runtime_id}: {exc}") from exc
                     if not ok:
-                        raise RuntimeError(f"Failed to pause lease {self.lease_id}")
+                        raise RuntimeError(f"Failed to pause lease {self.sandbox_runtime_id}")
                     self.desired_state = "paused"
                     self._set_observed_state("paused", reason="intent.pause")
                     self.status = "active"
@@ -761,13 +761,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if not capability.can_resume:
                         raise RuntimeError(f"Provider {provider.name} does not support resume")
                     if not self._current_instance:
-                        raise RuntimeError(f"Lease {self.lease_id} has no instance to resume")
+                        raise RuntimeError(f"Lease {self.sandbox_runtime_id} has no instance to resume")
                     try:
                         ok = provider.resume_session(self._current_instance.instance_id)
                     except Exception as exc:
-                        raise RuntimeError(f"Failed to resume lease {self.lease_id}: {exc}") from exc
+                        raise RuntimeError(f"Failed to resume lease {self.sandbox_runtime_id}: {exc}") from exc
                     if not ok:
-                        raise RuntimeError(f"Failed to resume lease {self.lease_id}")
+                        raise RuntimeError(f"Failed to resume lease {self.sandbox_runtime_id}")
                     self.desired_state = "running"
                     self._set_observed_state("running", reason="intent.resume")
                     self.status = "active"
@@ -783,9 +783,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                         try:
                             ok = provider.destroy_session(self._current_instance.instance_id)
                         except Exception as exc:
-                            raise RuntimeError(f"Failed to destroy lease {self.lease_id}: {exc}") from exc
+                            raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}: {exc}") from exc
                         if not ok:
-                            raise RuntimeError(f"Failed to destroy lease {self.lease_id}")
+                            raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}")
                     self.desired_state = "destroyed"
                     self._set_observed_state("detached", reason="intent.destroy")
                     self.status = "expired"
@@ -795,7 +795,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
                 elif event_type == "intent.ensure_running":
                     if not self._current_instance:
-                        raise RuntimeError(f"Lease {self.lease_id}: intent.ensure_running requires bound instance")
+                        raise RuntimeError(f"Lease {self.sandbox_runtime_id}: intent.ensure_running requires bound instance")
                     self.desired_state = "running"
                     self._set_observed_state("running", reason="intent.ensure_running")
                     self.status = "active"
@@ -867,7 +867,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if not self._current_instance:
                 return None
             if self.observed_state == "paused":
-                raise RuntimeError(f"Sandbox lease {self.lease_id} is paused. Resume before executing commands.")
+                raise RuntimeError(f"Sandbox lease {self.sandbox_runtime_id} is paused. Resume before executing commands.")
             if self.observed_state == "running" and not self.needs_refresh:
                 return self._current_instance
             self._current_instance = None
@@ -884,7 +884,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     repo = _make_lease_repo(self.db_path)
                     try:
                         row = repo.adopt_instance(
-                            lease_id=self.lease_id,
+                            lease_id=self.sandbox_runtime_id,
                             provider_name=self.provider_name,
                             instance_id=self._current_instance.instance_id,
                             status=self._normalize_provider_state(status),
@@ -906,7 +906,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 if self.observed_state == "running" and self._current_instance:
                     return self._current_instance
                 if self.observed_state == "paused":
-                    raise RuntimeError(f"Sandbox lease {self.lease_id} is paused. Resume before executing commands.")
+                    raise RuntimeError(f"Sandbox lease {self.sandbox_runtime_id} is paused. Resume before executing commands.")
             except RuntimeError:
                 raise
             except Exception as exc:
@@ -926,7 +926,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                         repo = _make_lease_repo(self.db_path)
                         try:
                             row = repo.adopt_instance(
-                                lease_id=self.lease_id,
+                                lease_id=self.sandbox_runtime_id,
                                 provider_name=self.provider_name,
                                 instance_id=self._current_instance.instance_id,
                                 status=self._normalize_provider_state(status),
@@ -948,7 +948,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if self.observed_state == "running" and self._current_instance:
                         return self._current_instance
                     if self.observed_state == "paused":
-                        raise RuntimeError(f"Sandbox lease {self.lease_id} is paused. Resume before executing commands.")
+                        raise RuntimeError(f"Sandbox lease {self.sandbox_runtime_id} is paused. Resume before executing commands.")
                 except RuntimeError:
                     raise
                 except Exception as exc:
@@ -960,7 +960,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             from sandbox.thread_context import get_current_thread_id
 
             thread_id = get_current_thread_id()
-            session_info = provider.create_session(context_id=f"leon-{self.lease_id}", thread_id=thread_id)
+            session_info = provider.create_session(context_id=f"leon-{self.sandbox_runtime_id}", thread_id=thread_id)
             self._current_instance = SandboxInstance(
                 instance_id=session_info.session_id,
                 provider_name=self.provider_name,
@@ -971,7 +971,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 repo = _make_lease_repo(self.db_path)
                 try:
                     row = repo.adopt_instance(
-                        lease_id=self.lease_id,
+                        lease_id=self.sandbox_runtime_id,
                         provider_name=self.provider_name,
                         instance_id=session_info.session_id,
                         status="running",
@@ -991,7 +991,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     payload={"created": True, "instance_id": session_info.session_id},
                 )
             if not self._current_instance:
-                raise RuntimeError(f"Lease {self.lease_id}: failed to bind created instance")
+                raise RuntimeError(f"Lease {self.sandbox_runtime_id}: failed to bind created instance")
             return self._current_instance
 
     def destroy_instance(self, provider: SandboxProvider, *, source: str = "api") -> None:
@@ -1098,7 +1098,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         if _use_supabase_storage(self.db_path):
             repo = _make_lease_repo(self.db_path)
             try:
-                repo.mark_needs_refresh(self.lease_id, hint_at=self.refresh_hint_at)
+                repo.mark_needs_refresh(self.sandbox_runtime_id, hint_at=self.refresh_hint_at)
             finally:
                 repo.close()
             return
@@ -1133,7 +1133,7 @@ def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteSandboxRuntimeHa
         refresh_hint_at = parse_runtime_datetime(str(row["refresh_hint_at"]))
 
     return SQLiteSandboxRuntimeHandle(
-        lease_id=row["lease_id"],
+        sandbox_runtime_id=row["lease_id"],
         provider_name=row["provider_name"],
         recipe_id=row.get("recipe_id"),
         recipe=json.loads(str(row["recipe_json"])) if row.get("recipe_json") else None,

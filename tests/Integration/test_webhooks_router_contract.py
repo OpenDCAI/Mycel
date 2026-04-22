@@ -94,7 +94,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
             return self._event_repo
 
     class _LowerRuntime:
-        locals()["lease_" + "id"] = "lease-1"
+        sandbox_runtime_id = "lease-1"
 
         def __init__(self) -> None:
             self.applied: list[dict[str, object]] = []
