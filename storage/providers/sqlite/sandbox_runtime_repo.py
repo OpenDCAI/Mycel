@@ -49,16 +49,14 @@ class SQLiteSandboxRuntimeRepo:
         return row
 
     def _runtime_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
-        result = dict(row)
-        result["sandbox_runtime_id"] = str(result.pop("lease_id"))
-        return result
+        return dict(row)
 
     def get(self, sandbox_runtime_id: str) -> dict[str, Any] | None:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
                 """
-                SELECT lease_id, provider_name, recipe_id, workspace_key,
+                SELECT sandbox_runtime_id, provider_name, recipe_id, workspace_key,
                        recipe_json,
                        current_instance_id, instance_created_at,
                        desired_state, observed_state, version,
@@ -66,7 +64,7 @@ class SQLiteSandboxRuntimeRepo:
                        refresh_hint_at, status,
                        created_at, updated_at
                 FROM sandbox_leases
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 """,
                 (sandbox_runtime_id,),
             ).fetchone()
@@ -113,7 +111,7 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.execute(
                 """
                 INSERT INTO sandbox_leases (
-                    lease_id, provider_name, recipe_id, recipe_json, desired_state, observed_state,
+                    sandbox_runtime_id, provider_name, recipe_id, recipe_json, desired_state, observed_state,
                     instance_status, version, observed_at, last_error,
                     needs_refresh, refresh_hint_at, status, created_at, updated_at
                 )
@@ -145,7 +143,7 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
                 """
-                SELECT lease_id
+                SELECT sandbox_runtime_id
                 FROM sandbox_leases
                 WHERE provider_name = ? AND current_instance_id = ?
                 LIMIT 1
@@ -155,7 +153,7 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.row_factory = None
         if not row:
             return None
-        return self.get(row["lease_id"])
+        return self.get(row["sandbox_runtime_id"])
 
     def adopt_instance(
         self,
@@ -198,7 +196,7 @@ class SQLiteSandboxRuntimeRepo:
                     refresh_hint_at = ?,
                     status = ?,
                     updated_at = ?
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 """,
                 (
                     instance_id,
@@ -277,7 +275,7 @@ class SQLiteSandboxRuntimeRepo:
                     refresh_hint_at = ?,
                     status = ?,
                     updated_at = ?
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 """,
                 (
                     None if normalized == "detached" else existing.get("current_instance_id"),
@@ -349,7 +347,7 @@ class SQLiteSandboxRuntimeRepo:
                     refresh_hint_at = ?,
                     status = ?,
                     updated_at = ?
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 """,
                 (
                     recipe_id,
@@ -380,7 +378,7 @@ class SQLiteSandboxRuntimeRepo:
                     refresh_hint_at = ?,
                     version = version + 1,
                     updated_at = ?
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 """,
                 (hinted_at, datetime.now().isoformat(), sandbox_runtime_id),
             )
@@ -391,7 +389,7 @@ class SQLiteSandboxRuntimeRepo:
         with self._lock:
             self._conn.execute("DELETE FROM sandbox_instances WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.execute("DELETE FROM sandbox_runtime_events WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
-            self._conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (sandbox_runtime_id,))
+            self._conn.execute("DELETE FROM sandbox_leases WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.commit()
 
         # Clean up per-lease locks in SQLiteLease
@@ -405,7 +403,7 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT lease_id, provider_name, recipe_id, recipe_json, current_instance_id,
+                SELECT sandbox_runtime_id, provider_name, recipe_id, recipe_json, current_instance_id,
                        desired_state, observed_state, version,
                        created_at, updated_at
                 FROM sandbox_leases
@@ -420,7 +418,7 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT lease_id, provider_name, recipe_id, recipe_json, current_instance_id,
+                SELECT sandbox_runtime_id, provider_name, recipe_id, recipe_json, current_instance_id,
                        desired_state, observed_state, version,
                        created_at, updated_at
                 FROM sandbox_leases
@@ -437,7 +435,7 @@ class SQLiteSandboxRuntimeRepo:
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sandbox_leases (
-                lease_id TEXT PRIMARY KEY,
+                sandbox_runtime_id TEXT PRIMARY KEY,
                 provider_name TEXT NOT NULL,
                 recipe_id TEXT,
                 recipe_json TEXT,
