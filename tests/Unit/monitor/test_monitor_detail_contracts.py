@@ -665,6 +665,31 @@ def test_request_monitor_sandbox_cleanup_uses_canonical_sandbox_target(monkeypat
     assert calls == [("lease-1", "daytona", True)]
 
 
+def test_request_monitor_sandbox_cleanup_passes_sandbox_id_to_mutation_executor(monkeypatch):
+    captured: list[tuple[str, str, str, bool]] = []
+    _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox(), runtime_id="runtime-1"))
+
+    payload = monitor_sandbox_detail_service.request_monitor_sandbox_cleanup(
+        "sandbox-1",
+        runtime_mutation_executor=_runtime_mutation_executor(
+            cleanup_sandbox=lambda request: (
+                captured.append(
+                    (
+                        request.sandbox_id,
+                        request.lower_runtime_handle,
+                        request.provider_name,
+                        request.detach_thread_bindings,
+                    )
+                )
+                or SimpleNamespace(destroy_result={"ok": True})
+            )
+        ),
+    )
+
+    assert payload["accepted"] is True
+    assert captured == [("sandbox-1", "lease-1", "daytona", False)]
+
+
 def test_request_monitor_sandbox_cleanup_keeps_lower_handle_out_of_sandbox_payload(monkeypatch):
     captured: dict[str, object] = {}
     _use_monitor_repo(monkeypatch, FakeSandboxMonitorRepo(sandbox=_detached_sandbox(), runtime_id="runtime-1"))

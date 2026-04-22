@@ -74,3 +74,6 @@ class SupabaseWorkspaceRepo:
     def list_by_sandbox_id(self, sandbox_id: str) -> list[WorkspaceRow]:
         response = self._t().select(", ".join(_COLS)).eq("sandbox_id", sandbox_id).execute()
         return [_to_row(row) for row in q.rows(response, _REPO, "list_by_sandbox_id")]
+
+    def delete_by_sandbox_id(self, sandbox_id: str) -> None:
+        self._t().delete().eq("sandbox_id", sandbox_id).execute()

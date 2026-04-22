@@ -214,6 +214,7 @@ def request_sandbox_cleanup(
         )
         result = runtime_mutation_executor.cleanup_sandbox(
             SandboxCleanupRequest(
+                sandbox_id=sandbox_id,
                 lower_runtime_handle=lower_runtime_handle,
                 provider_name=provider_name,
                 detach_thread_bindings=detach_before_cleanup,
