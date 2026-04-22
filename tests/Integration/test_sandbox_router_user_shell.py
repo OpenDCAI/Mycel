@@ -166,6 +166,7 @@ def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.
             return [
                 {
                     "lease_" + "id": "lease-1",
+                    "sandbox_runtime_id": "lease-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "local",
                     "recipe_id": "local:default",
@@ -196,6 +197,7 @@ def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.
 
     assert len(result) == 1
     assert "lease_" + "id" not in result[0]
+    assert "sandbox_runtime_id" not in result[0]
     assert result[0]["sandbox_id"] == "sandbox-1"
     assert result[0]["provider_name"] == "local"
     assert result[0]["thread_ids"] == ["thread-1"]
