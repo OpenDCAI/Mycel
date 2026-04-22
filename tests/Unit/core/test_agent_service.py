@@ -1091,7 +1091,7 @@ async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(m
     observed: dict[str, str] = {}
     parent_thread_id = "parent-thread"
     child_thread_id = "subagent-child"
-    lower_runtime_key = "lease_" + "id"
+    lower_runtime_key = "sandbox_runtime_" + "id"
 
     manager = SandboxManager(
         provider=LocalSessionProvider(default_cwd=str(tmp_path)),

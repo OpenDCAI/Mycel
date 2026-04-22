@@ -880,7 +880,7 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
         status = self.sandbox_runtime.refresh_instance_status(self.provider, force=True, max_age_sec=0)
         if status == "paused":
             if not self.sandbox_runtime.resume_instance(self.provider):
-                raise RuntimeError(f"Failed to resume paused lease {self.sandbox_runtime.lease_id}")
+                raise RuntimeError(f"Failed to resume paused lease {self.sandbox_runtime.sandbox_runtime_id}")
             return
         if status in {"detached", "unknown"}:
             self.sandbox_runtime.ensure_active_instance(self.provider)
@@ -917,7 +917,7 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
         print(
             "[RemoteWrappedRuntime._execute_once] "
             f"thread_id={self.terminal.thread_id} "
-            f"lease_id={self.sandbox_runtime.lease_id} "
+            f"sandbox_runtime_id={self.sandbox_runtime.sandbox_runtime_id} "
             f"instance_id={instance.instance_id} "
             f"provider={getattr(self.provider, 'name', '?')} "
             f"cwd={state.cwd!r} "

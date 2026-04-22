@@ -10,7 +10,7 @@ from sandbox.terminal import SQLiteTerminal, TerminalState
 
 def _sandbox_runtime() -> SQLiteSandboxRuntimeHandle:
     return SQLiteSandboxRuntimeHandle(
-        lease_id="lease-1",
+        sandbox_runtime_id="lease-1",
         provider_name="local",
         current_instance=SandboxInstance(
             instance_id="inst-1",
@@ -52,6 +52,8 @@ def test_chat_session_uses_sandbox_runtime_attribute() -> None:
 
     assert session.sandbox_runtime is sandbox_runtime
     assert not hasattr(session, "lease")
+    assert session.sandbox_runtime.sandbox_runtime_id == "lease-1"
+    assert not hasattr(session.sandbox_runtime, "lease_id")
 
 
 def test_runtime_uses_sandbox_runtime_attribute() -> None:
@@ -61,3 +63,5 @@ def test_runtime_uses_sandbox_runtime_attribute() -> None:
 
     assert runtime.sandbox_runtime is sandbox_runtime
     assert not hasattr(runtime, "lease")
+    assert runtime.sandbox_runtime.sandbox_runtime_id == "lease-1"
+    assert not hasattr(runtime.sandbox_runtime, "lease_id")
