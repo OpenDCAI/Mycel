@@ -42,9 +42,7 @@ class SQLiteChatSessionRepo:
             self._conn.close()
 
     def _session_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
-        result = dict(row)
-        result["sandbox_runtime_id"] = str(result.pop("lease_id"))
-        return result
+        return dict(row)
 
     # ------------------------------------------------------------------
     # Table setup
@@ -58,7 +56,7 @@ class SQLiteChatSessionRepo:
                 chat_session_id TEXT PRIMARY KEY,
                 thread_id TEXT NOT NULL,
                 terminal_id TEXT NOT NULL,
-                lease_id TEXT NOT NULL,
+                sandbox_runtime_id TEXT NOT NULL,
                 runtime_id TEXT,
                 status TEXT NOT NULL DEFAULT 'active',
                 idle_ttl_sec INTEGER NOT NULL,
@@ -69,7 +67,7 @@ class SQLiteChatSessionRepo:
                 ended_at TIMESTAMP,
                 close_reason TEXT,
                 FOREIGN KEY (terminal_id) REFERENCES abstract_terminals(terminal_id),
-                FOREIGN KEY (lease_id) REFERENCES sandbox_leases(lease_id)
+                FOREIGN KEY (sandbox_runtime_id) REFERENCES sandbox_leases(lease_id)
             )
             """
         )
@@ -159,7 +157,7 @@ class SQLiteChatSessionRepo:
             if terminal_id is not None:
                 row = self._conn.execute(
                     """
-                    SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                    SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                            runtime_id, status, idle_ttl_sec, max_duration_sec,
                            budget_json, started_at, last_active_at, ended_at, close_reason
                     FROM chat_sessions
@@ -172,7 +170,7 @@ class SQLiteChatSessionRepo:
             else:
                 row = self._conn.execute(
                     """
-                    SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                    SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                            runtime_id, status, idle_ttl_sec, max_duration_sec,
                            budget_json, started_at, last_active_at, ended_at, close_reason
                     FROM chat_sessions
@@ -190,7 +188,7 @@ class SQLiteChatSessionRepo:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
                 """
-                SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                        runtime_id, status, idle_ttl_sec, max_duration_sec,
                        budget_json, started_at, last_active_at, ended_at, close_reason
                 FROM chat_sessions
@@ -234,7 +232,7 @@ class SQLiteChatSessionRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                        runtime_id, status, idle_ttl_sec, max_duration_sec,
                        budget_json, started_at, last_active_at,
                        ended_at, close_reason
@@ -251,7 +249,7 @@ class SQLiteChatSessionRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                        runtime_id, status, budget_json, started_at, last_active_at,
                        ended_at, close_reason
                 FROM chat_sessions
@@ -270,7 +268,7 @@ class SQLiteChatSessionRepo:
         session_id: str,
         thread_id: str,
         terminal_id: str,
-        lease_id: str,
+        sandbox_runtime_id: str,
         *,
         runtime_id: str | None = None,
         status: str = "active",
@@ -295,7 +293,7 @@ class SQLiteChatSessionRepo:
             self._conn.execute(
                 """
                 INSERT INTO chat_sessions (
-                    chat_session_id, thread_id, terminal_id, lease_id,
+                    chat_session_id, thread_id, terminal_id, sandbox_runtime_id,
                     runtime_id, status, idle_ttl_sec, max_duration_sec,
                     budget_json, started_at, last_active_at, ended_at, close_reason
                 )
@@ -305,7 +303,7 @@ class SQLiteChatSessionRepo:
                     session_id,
                     thread_id,
                     terminal_id,
-                    lease_id,
+                    sandbox_runtime_id,
                     runtime_id,
                     status,
                     idle_ttl_sec,
@@ -322,7 +320,7 @@ class SQLiteChatSessionRepo:
             "session_id": session_id,
             "thread_id": thread_id,
             "terminal_id": terminal_id,
-            "sandbox_runtime_id": lease_id,
+            "sandbox_runtime_id": sandbox_runtime_id,
             "runtime_id": runtime_id,
             "status": status,
             "idle_ttl_sec": idle_ttl_sec,
@@ -580,7 +578,7 @@ class SQLiteChatSessionRepo:
                 SELECT 1
                 FROM terminal_commands tc
                 JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
-                WHERE at.lease_id = ? AND tc.status = 'running'
+                WHERE at.sandbox_runtime_id = ? AND tc.status = 'running'
                 LIMIT 1
                 """,
                 (lease_id,),

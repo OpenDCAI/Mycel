@@ -486,7 +486,7 @@ class SandboxManager:
                 self.terminal_store.create(
                     terminal_id=terminal_id,
                     thread_id=thread_id,
-                    lease_id=lease_id,
+                    sandbox_runtime_id=lease_id,
                     initial_cwd=initial_cwd,
                 ),
                 self.db_path,
@@ -571,7 +571,7 @@ class SandboxManager:
             self.terminal_store.create(
                 terminal_id=terminal_id,
                 thread_id=thread_id,
-                lease_id=lease.sandbox_runtime_id,
+                sandbox_runtime_id=lease.sandbox_runtime_id,
                 initial_cwd=initial_cwd,
             ),
             self.db_path,

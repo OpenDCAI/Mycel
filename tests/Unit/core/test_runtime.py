@@ -136,7 +136,7 @@ def test_terminal_from_row_uses_sqlite_terminal_under_supabase_defaults(monkeypa
     monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
     terminal_store = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
     try:
-        row = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        row = terminal_store.create("term-1", "thread-1", sandbox_runtime_id="lease-1", initial_cwd="/tmp")
         assert row["sandbox_runtime_id"] == "lease-1"
         assert "lease_id" not in row
         terminal = terminal_from_row(row, terminal_store.db_path)
@@ -149,7 +149,7 @@ def test_terminal_from_row_uses_sqlite_terminal_under_supabase_defaults(monkeypa
 def test_terminal_repo_get_active_returns_sandbox_runtime_id_not_lease_id(tmp_path):
     repo = SQLiteTerminalRepo(db_path=tmp_path / "sandbox.db")
     try:
-        repo.create("term-1", "thread-1", "lease-1", "/tmp")
+        repo.create("term-1", "thread-1", sandbox_runtime_id="lease-1", initial_cwd="/tmp")
         active = repo.get_active("thread-1")
     finally:
         repo.close()
@@ -157,6 +157,17 @@ def test_terminal_repo_get_active_returns_sandbox_runtime_id_not_lease_id(tmp_pa
     assert active is not None
     assert active["sandbox_runtime_id"] == "lease-1"
     assert "lease_id" not in active
+
+
+def test_terminal_repo_schema_uses_sandbox_runtime_id_column(tmp_path):
+    repo = SQLiteTerminalRepo(db_path=tmp_path / "sandbox.db")
+    try:
+        cols = {row[1] for row in repo._conn.execute("PRAGMA table_info(abstract_terminals)").fetchall()}
+    finally:
+        repo.close()
+
+    assert "sandbox_runtime_id" in cols
+    assert "lease_id" not in cols
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")

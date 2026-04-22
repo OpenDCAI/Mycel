@@ -45,9 +45,7 @@ class SQLiteTerminalRepo:
             self._conn.close()
 
     def _terminal_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
-        result = dict(row)
-        result["sandbox_runtime_id"] = str(result.pop("lease_id"))
-        return result
+        return dict(row)
 
     # ------------------------------------------------------------------
     # Table setup
@@ -60,7 +58,7 @@ class SQLiteTerminalRepo:
             CREATE TABLE IF NOT EXISTS abstract_terminals (
                 terminal_id TEXT PRIMARY KEY,
                 thread_id TEXT NOT NULL,
-                lease_id TEXT NOT NULL,
+                sandbox_runtime_id TEXT NOT NULL,
                 cwd TEXT NOT NULL,
                 env_delta_json TEXT DEFAULT '{}',
                 state_version INTEGER DEFAULT 0,
@@ -167,7 +165,7 @@ class SQLiteTerminalRepo:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
                 """
-                SELECT terminal_id, thread_id, lease_id, cwd, env_delta_json, state_version,
+                SELECT terminal_id, thread_id, sandbox_runtime_id, cwd, env_delta_json, state_version,
                        created_at, updated_at
                 FROM abstract_terminals
                 WHERE terminal_id = ?
@@ -228,10 +226,10 @@ class SQLiteTerminalRepo:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
                 """
-                SELECT terminal_id, thread_id, lease_id, cwd, env_delta_json, state_version,
+                SELECT terminal_id, thread_id, sandbox_runtime_id, cwd, env_delta_json, state_version,
                        created_at, updated_at
                 FROM abstract_terminals
-                WHERE lease_id = ?
+                WHERE sandbox_runtime_id = ?
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
@@ -251,7 +249,7 @@ class SQLiteTerminalRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT terminal_id, thread_id, lease_id, cwd, env_delta_json, state_version,
+                SELECT terminal_id, thread_id, sandbox_runtime_id, cwd, env_delta_json, state_version,
                        created_at, updated_at
                 FROM abstract_terminals
                 WHERE thread_id = ?
@@ -267,7 +265,7 @@ class SQLiteTerminalRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT terminal_id, thread_id, lease_id, cwd, env_delta_json, state_version, created_at, updated_at
+                SELECT terminal_id, thread_id, sandbox_runtime_id, cwd, env_delta_json, state_version, created_at, updated_at
                 FROM abstract_terminals
                 ORDER BY created_at DESC
                 """
@@ -341,7 +339,7 @@ class SQLiteTerminalRepo:
         self,
         terminal_id: str,
         thread_id: str,
-        lease_id: str,
+        sandbox_runtime_id: str,
         initial_cwd: str = "/root",
     ) -> dict[str, Any]:
         now = datetime.now().isoformat()
@@ -351,10 +349,10 @@ class SQLiteTerminalRepo:
         with self._lock:
             self._conn.execute(
                 """
-                INSERT INTO abstract_terminals (terminal_id, thread_id, lease_id, cwd, env_delta_json, state_version, created_at, updated_at)
+                INSERT INTO abstract_terminals (terminal_id, thread_id, sandbox_runtime_id, cwd, env_delta_json, state_version, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (terminal_id, thread_id, lease_id, initial_cwd, env_delta_json, state_version, now, now),
+                (terminal_id, thread_id, sandbox_runtime_id, initial_cwd, env_delta_json, state_version, now, now),
             )
             self._conn.commit()
 
@@ -363,7 +361,7 @@ class SQLiteTerminalRepo:
         return {
             "terminal_id": terminal_id,
             "thread_id": thread_id,
-            "sandbox_runtime_id": lease_id,
+            "sandbox_runtime_id": sandbox_runtime_id,
             "cwd": initial_cwd,
             "env_delta_json": env_delta_json,
             "state_version": state_version,
