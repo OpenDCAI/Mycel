@@ -20,7 +20,7 @@ def test_cleanup_sandbox_prunes_workspace_rows_after_runtime_destroy(monkeypatch
         "destroy_sandbox_runtime",
         lambda *, lower_runtime_handle, provider_name, detach_thread_bindings: (
             destroyed.append((lower_runtime_handle, provider_name, detach_thread_bindings))
-            or {"ok": True, "action": "destroy", "provider": provider_name, "lower_runtime_handle": lower_runtime_handle}
+            or {"ok": True, "action": "destroy", "provider": provider_name, "sandbox_runtime_handle": lower_runtime_handle}
         ),
     )
     monkeypatch.setattr(sandbox_mutations, "build_workspace_repo", lambda: _FakeWorkspaceRepo())
@@ -28,7 +28,7 @@ def test_cleanup_sandbox_prunes_workspace_rows_after_runtime_destroy(monkeypatch
     payload = sandbox_mutations.cleanup_sandbox(
         SandboxCleanupRequest(
             sandbox_id="sandbox-1",
-            lower_runtime_handle="lease-1",
+            sandbox_runtime_handle="lease-1",
             provider_name="local",
             detach_thread_bindings=False,
         )

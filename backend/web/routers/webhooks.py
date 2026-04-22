@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
 def _public_provider_event(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in row.items() if key != "matched_runtime_handle"}
+    return {key: value for key, value in row.items() if key != "matched_sandbox_runtime_handle"}
 
 
 @router.post("/{provider_name}")
@@ -32,7 +32,7 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     try:
         runtime_row = await asyncio.to_thread(runtime_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
         lower_runtime = lower_runtime_from_row(runtime_row, resolve_sandbox_db_path()) if runtime_row else None
-        matched_runtime_handle = lower_runtime.lease_id if lower_runtime else None
+        matched_sandbox_runtime_handle = lower_runtime.lease_id if lower_runtime else None
         matched_sandbox_id = str((runtime_row or {}).get("sandbox_id") or "").strip() or None
 
         # @@@webhook-runtime-observation - Webhook is optimization only: persist event + observe lower-runtime state.
@@ -42,7 +42,7 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
             instance_id=instance_id,
             event_type=event_type,
             payload=payload,
-            matched_runtime_handle=matched_runtime_handle,
+            matched_sandbox_runtime_handle=matched_sandbox_runtime_handle,
             matched_sandbox_id=matched_sandbox_id,
         )
     finally:

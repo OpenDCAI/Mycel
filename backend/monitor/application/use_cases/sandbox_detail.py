@@ -34,8 +34,8 @@ def _sandbox_detail_cleanup_truth(
     runtime_rows: list[dict[str, object]],
     threads: list[dict[str, str]],
 ) -> dict[str, object]:
-    lower_runtime_handle = str(cleanup_target.get("lower_runtime_handle") or "").strip()
-    if not lower_runtime_handle:
+    sandbox_runtime_handle = str(cleanup_target.get("sandbox_runtime_handle") or "").strip()
+    if not sandbox_runtime_handle:
         return {
             "allowed": False,
             "recommended_action": None,
@@ -124,7 +124,7 @@ def get_monitor_sandbox_detail(sandbox_id: str) -> dict[str, object]:
 
 def _sandbox_cleanup_target(sandbox_id: str) -> dict[str, object]:
     cleanup_target = sandbox_read_service.load_sandbox_cleanup_target(sandbox_id)
-    if not str(cleanup_target.get("lower_runtime_handle") or "").strip():
+    if not str(cleanup_target.get("sandbox_runtime_handle") or "").strip():
         raise RuntimeError("monitor sandbox cleanup target missing managed runtime handle")
     return cleanup_target
 
@@ -142,10 +142,10 @@ def request_monitor_sandbox_cleanup(
     runtime_rows = payload.get("runtime_rows") or []
 
     cleanup_target = _sandbox_cleanup_target(sandbox_id)
-    lower_runtime_handle = str(cleanup_target.get("lower_runtime_handle") or "").strip()
+    sandbox_runtime_handle = str(cleanup_target.get("sandbox_runtime_handle") or "").strip()
     sandbox_detail = {
         "sandbox": sandbox,
-        "lower_runtime": {"handle": lower_runtime_handle},
+        "sandbox_runtime": {"handle": sandbox_runtime_handle},
         "triage": payload.get("triage"),
         "provider": provider,
         "runtime": runtime,

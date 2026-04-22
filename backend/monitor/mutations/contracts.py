@@ -9,7 +9,7 @@ from typing import Any
 @dataclass(frozen=True)
 class SandboxCleanupRequest:
     sandbox_id: str
-    lower_runtime_handle: str
+    sandbox_runtime_handle: str
     provider_name: str
     detach_thread_bindings: bool
 
