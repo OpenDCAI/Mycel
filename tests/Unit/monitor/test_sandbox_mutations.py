@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
-from backend.monitor.mutations.contracts import SandboxCleanupRequest
 from backend.monitor.mutations import sandbox_mutations
+from backend.monitor.mutations.contracts import SandboxCleanupRequest
 
 
 def test_cleanup_sandbox_prunes_workspace_rows_after_runtime_destroy(monkeypatch) -> None:
