@@ -63,7 +63,7 @@ class SQLiteSandboxRuntimeRepo:
                        observed_at, last_error, needs_refresh,
                        refresh_hint_at, status,
                        created_at, updated_at
-                FROM sandbox_leases
+                FROM sandbox_runtimes
                 WHERE sandbox_runtime_id = ?
                 """,
                 (sandbox_runtime_id,),
@@ -110,7 +110,7 @@ class SQLiteSandboxRuntimeRepo:
         with self._lock:
             self._conn.execute(
                 """
-                INSERT INTO sandbox_leases (
+                INSERT INTO sandbox_runtimes (
                     sandbox_runtime_id, provider_name, recipe_id, recipe_json, desired_state, observed_state,
                     instance_status, version, observed_at, last_error,
                     needs_refresh, refresh_hint_at, status, created_at, updated_at
@@ -144,7 +144,7 @@ class SQLiteSandboxRuntimeRepo:
             row = self._conn.execute(
                 """
                 SELECT sandbox_runtime_id
-                FROM sandbox_leases
+                FROM sandbox_runtimes
                 WHERE provider_name = ? AND current_instance_id = ?
                 LIMIT 1
                 """,
@@ -183,7 +183,7 @@ class SQLiteSandboxRuntimeRepo:
         with self._lock:
             self._conn.execute(
                 """
-                UPDATE sandbox_leases
+                UPDATE sandbox_runtimes
                 SET current_instance_id = ?,
                     instance_created_at = ?,
                     desired_state = ?,
@@ -263,7 +263,7 @@ class SQLiteSandboxRuntimeRepo:
         with self._lock:
             self._conn.execute(
                 """
-                UPDATE sandbox_leases
+                UPDATE sandbox_runtimes
                 SET current_instance_id = ?,
                     instance_created_at = ?,
                     observed_state = ?,
@@ -334,7 +334,7 @@ class SQLiteSandboxRuntimeRepo:
         with self._lock:
             self._conn.execute(
                 """
-                UPDATE sandbox_leases
+                UPDATE sandbox_runtimes
                 SET recipe_id = ?,
                     recipe_json = ?,
                     desired_state = ?,
@@ -373,7 +373,7 @@ class SQLiteSandboxRuntimeRepo:
         with self._lock:
             cursor = self._conn.execute(
                 """
-                UPDATE sandbox_leases
+                UPDATE sandbox_runtimes
                 SET needs_refresh = 1,
                     refresh_hint_at = ?,
                     version = version + 1,
@@ -389,7 +389,7 @@ class SQLiteSandboxRuntimeRepo:
         with self._lock:
             self._conn.execute("DELETE FROM sandbox_instances WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.execute("DELETE FROM sandbox_runtime_events WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
-            self._conn.execute("DELETE FROM sandbox_leases WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
+            self._conn.execute("DELETE FROM sandbox_runtimes WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.commit()
 
         # Clean up per-lease locks in SQLiteLease
@@ -406,7 +406,7 @@ class SQLiteSandboxRuntimeRepo:
                 SELECT sandbox_runtime_id, provider_name, recipe_id, recipe_json, current_instance_id,
                        desired_state, observed_state, version,
                        created_at, updated_at
-                FROM sandbox_leases
+                FROM sandbox_runtimes
                 ORDER BY created_at DESC
                 """,
             ).fetchall()
@@ -421,7 +421,7 @@ class SQLiteSandboxRuntimeRepo:
                 SELECT sandbox_runtime_id, provider_name, recipe_id, recipe_json, current_instance_id,
                        desired_state, observed_state, version,
                        created_at, updated_at
-                FROM sandbox_leases
+                FROM sandbox_runtimes
                 WHERE provider_name = ?
                 ORDER BY created_at DESC
                 """,
@@ -434,7 +434,7 @@ class SQLiteSandboxRuntimeRepo:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS sandbox_leases (
+            CREATE TABLE IF NOT EXISTS sandbox_runtimes (
                 sandbox_runtime_id TEXT PRIMARY KEY,
                 provider_name TEXT NOT NULL,
                 recipe_id TEXT,
@@ -491,13 +491,13 @@ class SQLiteSandboxRuntimeRepo:
 
         from sandbox.lease import REQUIRED_EVENT_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_LEASE_COLUMNS
 
-        lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
+        lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtimes)").fetchall()}
         instance_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
         event_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtime_events)").fetchall()}
 
         missing_lease = REQUIRED_LEASE_COLUMNS - lease_cols
         if missing_lease:
-            raise RuntimeError(f"sandbox_leases schema mismatch: missing {sorted(missing_lease)}. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(f"sandbox_runtimes schema mismatch: missing {sorted(missing_lease)}. Purge ~/.leon/sandbox.db and retry.")
         missing_instances = REQUIRED_INSTANCE_COLUMNS - instance_cols
         if missing_instances:
             raise RuntimeError(

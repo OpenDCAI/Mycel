@@ -392,7 +392,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         try:
             target.execute(
                 """
-                UPDATE sandbox_leases
+                UPDATE sandbox_runtimes
                 SET current_instance_id = ?,
                     instance_created_at = ?,
                     recipe_id = ?,
@@ -476,7 +476,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         try:
             target.execute(
                 """
-                UPDATE sandbox_leases
+                UPDATE sandbox_runtimes
                 SET recipe_id = ?,
                     recipe_json = ?,
                     desired_state = ?,
