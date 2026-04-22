@@ -666,7 +666,7 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
         "provider_env_id": "instance-1",
         "config": {},
     }
-    app.state.lease_repo = _FakeLeaseRepo(
+    app.state.sandbox_runtime_repo = _FakeLeaseRepo(
         {
             "lease_" + "id": "lease-1",
             "provider_name": "daytona_selfhost",

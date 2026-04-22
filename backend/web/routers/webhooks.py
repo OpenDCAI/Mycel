@@ -10,7 +10,7 @@ from backend.web.utils.helpers import extract_webhook_instance_id
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.lease import sandbox_runtime_from_row as lower_runtime_from_row
 from storage.container_cache import get_storage_container as _get_container
-from storage.runtime import build_lease_repo as make_lower_runtime_repo
+from storage.runtime import build_sandbox_runtime_repo as make_lower_runtime_repo
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 

@@ -71,8 +71,12 @@ def build_schedule_repo(*, supabase_client: Any | None = None, supabase_client_f
     return _build_storage_repo("schedule_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
 
 
-def build_lease_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
-    return _build_storage_repo("lease_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
+def build_sandbox_runtime_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
+    return _build_storage_repo(
+        "sandbox_runtime_repo",
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+    )
 
 
 def build_resource_snapshot_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):

@@ -35,7 +35,7 @@ def _patch_lifespan_runtime_contract(
     storage_container = SimpleNamespace(
         user_repo=lambda: object(),
         thread_repo=lambda: object(),
-        lease_repo=lambda: object(),
+        sandbox_runtime_repo=lambda: object(),
         recipe_repo=lambda: SimpleNamespace(close=lambda: None),
         workspace_repo=lambda: object(),
         sandbox_repo=lambda: object(),
@@ -178,7 +178,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     storage_container = SimpleNamespace(
         user_repo=lambda: object(),
         thread_repo=lambda: object(),
-        lease_repo=lambda: object(),
+        sandbox_runtime_repo=lambda: object(),
         recipe_repo=lambda: SimpleNamespace(close=lambda: None),
         workspace_repo=lambda: object(),
         sandbox_repo=lambda: object(),

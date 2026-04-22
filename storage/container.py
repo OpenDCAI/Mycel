@@ -42,7 +42,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "evaluation_batch_repo": ("storage.providers.supabase.eval_batch_repo", "SupabaseEvaluationBatchRepo"),
     "queue_repo": ("storage.providers.supabase.queue_repo", "SupabaseQueueRepo"),
     "provider_event_repo": ("storage.providers.supabase.provider_event_repo", "SupabaseProviderEventRepo"),
-    "lease_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
+    "sandbox_runtime_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
     "resource_snapshot_repo": ("storage.providers.supabase.resource_snapshot_repo", "SupabaseResourceSnapshotRepo"),
     "user_repo": ("storage.providers.supabase.user_repo", "SupabaseUserRepo"),
@@ -105,8 +105,8 @@ class StorageContainer:
     def provider_event_repo(self) -> ProviderEventRepo:
         return self._build("provider_event_repo")
 
-    def lease_repo(self) -> LeaseRepo:
-        return self._build("lease_repo")
+    def sandbox_runtime_repo(self) -> LeaseRepo:
+        return self._build("sandbox_runtime_repo")
 
     def tool_task_repo(self) -> ToolTaskRepo:
         return self._build("tool_task_repo")

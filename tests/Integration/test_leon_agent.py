@@ -117,7 +117,7 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
         def terminal_repo(self) -> _FakeControlPlaneRepo:
             return self._terminal_repo
 
-        def lease_repo(self) -> _FakeControlPlaneRepo:
+        def sandbox_runtime_repo(self) -> _FakeControlPlaneRepo:
             return self._lease_repo
 
         def chat_session_repo(self) -> _FakeControlPlaneRepo:

@@ -346,7 +346,7 @@ def _resolve_owned_existing_sandbox_request_lease(
         raise HTTPException(403, "Not authorized")
     return resolve_existing_sandbox_lease(
         sandbox,
-        lease_repo=getattr(app.state, "lease_repo", None),
+        lease_repo=getattr(app.state, "sandbox_runtime_repo", None),
     )
 
 
@@ -545,13 +545,13 @@ def _create_thread_sandbox_resources(
 ) -> str:
     """Create lease and terminal resources without pre-provisioning file-channel storage."""
     from sandbox.control_plane_repos import make_terminal_repo
-    from storage.runtime import build_lease_repo as make_lease_repo
+    from storage.runtime import build_sandbox_runtime_repo as make_sandbox_runtime_repo
 
-    lease_repo = make_lease_repo()
+    sandbox_runtime_repo = make_sandbox_runtime_repo()
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
         normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
-        created_lease = lease_repo.create(
+        created_lease = sandbox_runtime_repo.create(
             lease_id,
             sandbox_type,
             recipe_id=normalized_recipe["id"],
@@ -559,11 +559,11 @@ def _create_thread_sandbox_resources(
             owner_user_id=owner_user_id,
         )
     finally:
-        lease_repo.close()
+        sandbox_runtime_repo.close()
 
     sandbox_id = str((created_lease or {}).get("sandbox_id") or "").strip()
     if not sandbox_id:
-        raise RuntimeError("lease_repo.create must return sandbox_id for thread sandbox resources")
+        raise RuntimeError("sandbox_runtime_repo.create must return sandbox_id for thread sandbox resources")
 
     terminal_repo = make_terminal_repo()
     if terminal_repo is None:
@@ -676,7 +676,7 @@ def _bind_existing_sandbox_for_thread(
         thread_id,
         sandbox,
         cwd=bind_cwd,
-        lease_repo=getattr(app.state, "lease_repo", None),
+        lease_repo=getattr(app.state, "sandbox_runtime_repo", None),
     )
     if bound_lease is None:
         raise HTTPException(403, "Sandbox not authorized")
@@ -1279,7 +1279,7 @@ async def get_thread_sandbox_status(
         app.state.thread_repo,
         app.state.workspace_repo,
         app.state.sandbox_repo,
-        app.state.lease_repo,
+        app.state.sandbox_runtime_repo,
         thread_id,
     )
 
