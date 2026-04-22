@@ -7,6 +7,19 @@ from typing import Any
 from backend.sandboxes.inventory import init_providers_and_managers
 
 
+def _exact_rows_for_provider_runtime(
+    runtimes: list[dict[str, Any]],
+    *,
+    runtime_id: str,
+    provider_name: str,
+) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in runtimes
+        if row.get("provider") == provider_name and str(row.get("session_id") or "") == runtime_id
+    ]
+
+
 def get_runtime_metrics(
     runtime_id: str,
     provider_hint: str | None = None,
@@ -17,7 +30,20 @@ def get_runtime_metrics(
 ) -> dict[str, Any]:
     _, managers = init_providers_and_managers_fn()
     runtimes = load_all_sandbox_runtimes_fn(managers)
-    runtime, manager = find_runtime_and_manager_fn(runtimes, managers, runtime_id, provider_name=provider_hint)
+    try:
+        runtime, manager = find_runtime_and_manager_fn(runtimes, managers, runtime_id, provider_name=provider_hint)
+    except RuntimeError as exc:
+        if "Ambiguous runtime id" not in str(exc) or not provider_hint:
+            raise
+        exact = [
+            row
+            for row in runtimes
+            if row.get("provider") == provider_hint and str(row.get("session_id") or "") == runtime_id
+        ]
+        if not exact:
+            raise
+        runtime = exact[0]
+        manager = managers.get(provider_hint)
     if not runtime:
         raise RuntimeError(f"Runtime not found: {runtime_id}")
     if manager is None:
