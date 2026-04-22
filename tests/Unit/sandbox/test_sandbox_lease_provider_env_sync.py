@@ -11,10 +11,10 @@ class _FakeSandboxRuntimeRepo:
         self.observe_calls = []
         self.closed = False
 
-    def observe_status(self, *, lease_id: str, status: str, observed_at=None):
+    def observe_status(self, *, sandbox_runtime_id: str, status: str, observed_at=None):
         self.observe_calls.append(
             {
-                "lease_id": lease_id,
+                "sandbox_runtime_id": sandbox_runtime_id,
                 "status": status,
                 "observed_at": observed_at,
             }
@@ -32,10 +32,10 @@ class _FakeAdoptSandboxRuntimeRepo:
         self.get_calls = []
         self.closed = False
 
-    def get(self, lease_id: str):
-        self.get_calls.append(lease_id)
+    def get(self, sandbox_runtime_id: str):
+        self.get_calls.append(sandbox_runtime_id)
         return {
-            "lease_id": "lease-1",
+            "sandbox_runtime_id": "lease-1",
             "provider_name": "local",
             "recipe_id": None,
             "recipe_json": None,
@@ -57,10 +57,17 @@ class _FakeAdoptSandboxRuntimeRepo:
             "_instance": None,
         }
 
-    def adopt_instance(self, *, lease_id: str, provider_name: str, instance_id: str, status: str = "unknown"):
+    def adopt_instance(
+        self,
+        *,
+        sandbox_runtime_id: str,
+        provider_name: str,
+        instance_id: str,
+        status: str = "unknown",
+    ):
         self.adopt_calls.append(
             {
-                "lease_id": lease_id,
+                "sandbox_runtime_id": sandbox_runtime_id,
                 "provider_name": provider_name,
                 "instance_id": instance_id,
                 "status": status,
@@ -127,7 +134,7 @@ class _FakeProvider:
 def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> None:
     fake_sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
         {
-            "lease_id": "lease-1",
+            "sandbox_runtime_id": "lease-1",
             "provider_name": "local",
             "recipe_id": None,
             "recipe_json": None,
@@ -192,7 +199,7 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
 def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(monkeypatch) -> None:
     fake_sandbox_runtime_repo = _FakeAdoptSandboxRuntimeRepo(
         {
-            "lease_id": "lease-1",
+            "sandbox_runtime_id": "lease-1",
             "provider_name": "local",
             "recipe_id": None,
             "recipe_json": None,
@@ -213,7 +220,7 @@ def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(
             "updated_at": "2026-04-17T00:00:05+00:00",
             "_instance": {
                 "instance_id": "inst-created",
-                "lease_id": "lease-1",
+                "sandbox_runtime_id": "lease-1",
                 "provider_session_id": "inst-created",
                 "status": "running",
                 "created_at": "2026-04-17T00:00:05+00:00",

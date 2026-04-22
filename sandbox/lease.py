@@ -524,7 +524,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             event_repo = _make_provider_event_repo()
             try:
                 row = repo.persist_metadata(
-                    lease_id=self.sandbox_runtime_id,
+                    sandbox_runtime_id=self.sandbox_runtime_id,
                     recipe_id=self.recipe_id,
                     recipe_json=json.dumps(self.recipe, ensure_ascii=False) if self.recipe is not None else None,
                     desired_state=self.desired_state,
@@ -559,7 +559,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         event_repo = _make_provider_event_repo()
         try:
             row = repo.observe_status(
-                lease_id=self.sandbox_runtime_id,
+                sandbox_runtime_id=self.sandbox_runtime_id,
                 status=observed,
                 observed_at=utc_now_iso(),
             )
@@ -604,13 +604,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         event_repo = _make_provider_event_repo()
         try:
             observed_row = repo.observe_status(
-                lease_id=self.sandbox_runtime_id,
+                sandbox_runtime_id=self.sandbox_runtime_id,
                 status="detached",
                 observed_at=utc_now_iso(),
             )
             self.version = int(observed_row.get("version") or self.version)
             final_row = repo.persist_metadata(
-                lease_id=self.sandbox_runtime_id,
+                sandbox_runtime_id=self.sandbox_runtime_id,
                 recipe_id=observed_row.get("recipe_id"),
                 recipe_json=observed_row.get("recipe_json"),
                 desired_state="destroyed",
@@ -676,13 +676,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         event_repo = _make_provider_event_repo()
         try:
             observed_row = repo.observe_status(
-                lease_id=self.sandbox_runtime_id,
+                sandbox_runtime_id=self.sandbox_runtime_id,
                 status=observed_state,
                 observed_at=utc_now_iso(),
             )
             self.version = int(observed_row.get("version") or self.version)
             final_row = repo.persist_metadata(
-                lease_id=self.sandbox_runtime_id,
+                sandbox_runtime_id=self.sandbox_runtime_id,
                 recipe_id=observed_row.get("recipe_id"),
                 recipe_json=observed_row.get("recipe_json"),
                 desired_state=desired_state,
@@ -902,7 +902,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     repo = _make_sandbox_runtime_repo(self.db_path)
                     try:
                         row = repo.adopt_instance(
-                            lease_id=self.sandbox_runtime_id,
+                            sandbox_runtime_id=self.sandbox_runtime_id,
                             provider_name=self.provider_name,
                             instance_id=self._current_instance.instance_id,
                             status=self._normalize_provider_state(status),
@@ -946,7 +946,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                         repo = _make_sandbox_runtime_repo(self.db_path)
                         try:
                             row = repo.adopt_instance(
-                                lease_id=self.sandbox_runtime_id,
+                                sandbox_runtime_id=self.sandbox_runtime_id,
                                 provider_name=self.provider_name,
                                 instance_id=self._current_instance.instance_id,
                                 status=self._normalize_provider_state(status),
@@ -993,7 +993,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 repo = _make_sandbox_runtime_repo(self.db_path)
                 try:
                     row = repo.adopt_instance(
-                        lease_id=self.sandbox_runtime_id,
+                        sandbox_runtime_id=self.sandbox_runtime_id,
                         provider_name=self.provider_name,
                         instance_id=session_info.session_id,
                         status="running",
