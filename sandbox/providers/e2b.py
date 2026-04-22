@@ -440,7 +440,7 @@ class E2BPtyRuntime(_RemoteRuntimeBase):
         return cast(_E2BSandboxHandle, super()._provider_sandbox(instance_id))
 
     def _ensure_shell_sync(self, timeout: float | None) -> tuple[_E2BSandboxHandle, int]:
-        instance = self.lease.ensure_active_instance(self.provider)
+        instance = self.sandbox_runtime.ensure_active_instance(self.provider)
         if self._bound_instance_id != instance.instance_id:
             self._bound_instance_id = instance.instance_id
             self._pty_pid = None

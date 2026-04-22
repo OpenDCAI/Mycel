@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.monitor.application.use_cases import provider_runtimes as monitor_provider_runtime_service
+from backend.monitor.infrastructure.providers import provider_runtime_inventory_service as monitor_provider_runtime_inventory_service
 from backend.sandboxes import service as sandbox_service
 
 LOWER_RUNTIME_KEY = "lease_" + "id"
@@ -23,7 +24,7 @@ def _provider_runtime(runtime_id: str, status: str = "paused"):
 
 
 def test_monitor_provider_orphan_runtimes_do_not_refresh_all_managed_runtime_rows(monkeypatch):
-    monkeypatch.setattr(sandbox_service, "list_provider_orphan_runtimes", lambda: [])
+    monkeypatch.setattr(monitor_provider_runtime_inventory_service, "load_provider_orphan_runtime_rows", lambda: [])
 
     assert monitor_provider_runtime_service.list_monitor_provider_orphan_runtimes() == {"count": 0, "runtimes": []}
 

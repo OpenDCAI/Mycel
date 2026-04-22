@@ -533,7 +533,7 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
         self._pty_session = None
 
     def _ensure_shell_sync(self, timeout: float | None) -> _SubprocessPtySession:
-        instance = self.lease.ensure_active_instance(self.provider)
+        instance = self.sandbox_runtime.ensure_active_instance(self.provider)
         if self._bound_instance_id != instance.instance_id:
             self._close_shell_sync()
             self._bound_instance_id = instance.instance_id

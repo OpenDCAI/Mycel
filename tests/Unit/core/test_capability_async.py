@@ -182,7 +182,7 @@ def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
         def __init__(self):
             self.thread_id = "thread-paused"
             self.terminal = _DummyTerminal()
-            self.lease = lease
+            self.sandbox_runtime = lease
             self.runtime = SimpleNamespace(provider=provider)
             self.touches = 0
 
@@ -225,7 +225,7 @@ def test_filesystem_wrapper_derives_remote_file_size_from_parent_listing():
         def __init__(self):
             self.thread_id = "thread-size"
             self.terminal = _DummyTerminal()
-            self.lease = _Lease()
+            self.sandbox_runtime = _Lease()
             self.runtime = SimpleNamespace(provider=_RemoteProvider())
             self.touches = 0
 

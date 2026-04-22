@@ -16,9 +16,9 @@ async def prime_sandbox(agent: Any, thread_id: str) -> None:
         mgr = agent._sandbox.manager
         mgr.enforce_idle_timeouts()
         capability = mgr.get_sandbox(thread_id)
-        lease = getattr(getattr(capability, "_session", None), "lease", None)
-        if lease:
-            lease_status = lease.refresh_instance_status(mgr.provider)
+        sandbox_runtime = getattr(getattr(capability, "_session", None), "sandbox_runtime", None)
+        if sandbox_runtime:
+            lease_status = sandbox_runtime.refresh_instance_status(mgr.provider)
             if lease_status == "paused" and mgr.provider_capability.can_resume and not agent._sandbox.resume_thread(thread_id):
                 raise RuntimeError(f"Failed to auto-resume paused sandbox for thread {thread_id}")
 

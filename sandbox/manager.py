@@ -443,7 +443,7 @@ class SandboxManager:
         session = self.session_manager.get(thread_id, terminal.terminal_id)
         if not session:
             return False
-        instance = session.lease.get_instance()
+        instance = session.sandbox_runtime.get_instance()
         if not instance:
             return False
         self._sync_to_sandbox(thread_id, instance.instance_id, files=files)
@@ -462,19 +462,19 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         session = self.session_manager.get(thread_id, terminal.terminal_id) if terminal else None
         if session:
-            self._assert_lease_provider(session.lease, thread_id)
+            self._assert_lease_provider(session.sandbox_runtime, thread_id)
             # @@@activity-resume - Any new activity against a paused thread must resume before command execution.
-            if session.status == "paused" or getattr(session.lease, "observed_state", None) == "paused":
+            if session.status == "paused" or getattr(session.sandbox_runtime, "observed_state", None) == "paused":
                 if not self.resume_session(thread_id, source="auto_resume"):
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, session.terminal.terminal_id)
                 if not session:
                     raise RuntimeError(f"Session disappeared after resume for thread {thread_id}")
-                self._assert_lease_provider(session.lease, thread_id)
+                self._assert_lease_provider(session.sandbox_runtime, thread_id)
             # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
             if bind_mounts:
                 self.provider.set_thread_bind_mounts(thread_id, bind_mounts)
-            self._ensure_bound_instance(session.lease)
+            self._ensure_bound_instance(session.sandbox_runtime)
             return SandboxCapability(session, manager=self)
 
         if not terminal:
@@ -503,8 +503,8 @@ class SandboxManager:
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, terminal.terminal_id)
                 if session:
-                    self._assert_lease_provider(session.lease, thread_id)
-                    self._ensure_bound_instance(session.lease)
+                    self._assert_lease_provider(session.sandbox_runtime, thread_id)
+                    self._ensure_bound_instance(session.sandbox_runtime)
                     return SandboxCapability(session, manager=self)
                 lease = self._get_sandbox_runtime(terminal.lease_id)
                 if not lease:
@@ -776,10 +776,10 @@ class SandboxManager:
         for terminal in terminals:
             session = self.session_manager.get(thread_id, terminal.terminal_id)
             if session:
-                session.lease = lease
+                session.sandbox_runtime = lease
                 runtime = getattr(session, "runtime", None)
                 if runtime is not None:
-                    runtime.lease = lease
+                    runtime.sandbox_runtime = lease
                 self.session_manager.resume(session.session_id)
                 resumed_any = True
 

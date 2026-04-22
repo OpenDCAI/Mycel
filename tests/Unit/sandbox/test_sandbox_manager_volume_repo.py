@@ -705,7 +705,7 @@ def test_sync_uploads_skips_local_volume_sync_without_volume_metadata():
     manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: SimpleNamespace(
-            lease=SimpleNamespace(get_instance=lambda: SimpleNamespace(instance_id="instance-1"))
+            sandbox_runtime=SimpleNamespace(get_instance=lambda: SimpleNamespace(instance_id="instance-1"))
         )
     )
 
@@ -752,7 +752,7 @@ def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path, 
     assert capability.command.runtime_owns_cwd is True
     session = manager.session_manager.get("thread-local")
     assert session is not None
-    assert session.lease.provider_name == "local"
+    assert session.sandbox_runtime.provider_name == "local"
 
 
 def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
@@ -781,7 +781,7 @@ def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
     manager.resume_session = lambda thread_id, source="user_resume": resume_calls.append((thread_id, source)) or True
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: None,
-        create=lambda **_kwargs: SimpleNamespace(session_id="sess-1", terminal=terminal, lease=lease),
+        create=lambda **_kwargs: SimpleNamespace(session_id="sess-1", terminal=terminal, sandbox_runtime=lease),
     )
 
     manager.get_sandbox("thread-1")
@@ -810,7 +810,7 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
     )
     live_session = SimpleNamespace(
         terminal=terminal,
-        lease=paused_lease,
+        sandbox_runtime=paused_lease,
         status="active",
     )
 
@@ -823,7 +823,7 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
 
     def _get_session(_thread_id, _terminal_id):
         if resume_calls:
-            return SimpleNamespace(terminal=terminal, lease=resumed_lease, status="active")
+            return SimpleNamespace(terminal=terminal, sandbox_runtime=resumed_lease, status="active")
         return live_session
 
     manager._get_active_terminal = lambda _thread_id: terminal
@@ -833,7 +833,7 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
     capability = manager.get_sandbox("thread-1")
 
     assert resume_calls == [("thread-1", "auto_resume")]
-    assert capability._session.lease is resumed_lease
+    assert capability._session.sandbox_runtime is resumed_lease
 
 
 def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
@@ -850,7 +850,7 @@ def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
         observed_state="running",
         get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
     )
-    session = SimpleNamespace(terminal=terminal, lease=lease, status="active")
+    session = SimpleNamespace(terminal=terminal, sandbox_runtime=lease, status="active")
 
     manager.provider = SimpleNamespace(
         name="local",
@@ -898,7 +898,7 @@ def test_get_sandbox_remote_bootstrap_syncs_with_path_source():
     manager._fire_session_ready = lambda *_args, **_kwargs: None
     manager.session_manager = SimpleNamespace(
         get=lambda _thread_id, _terminal_id: None,
-        create=lambda **_kwargs: SimpleNamespace(terminal=terminal, lease=lease, status="active"),
+        create=lambda **_kwargs: SimpleNamespace(terminal=terminal, sandbox_runtime=lease, status="active"),
     )
 
     manager.get_sandbox("thread-1")
@@ -983,7 +983,7 @@ def test_resume_session_rebinds_live_session_lease_after_resume():
         resume_instance=lambda _provider, source="user_resume": True,
     )
     stale_lease = SimpleNamespace(lease_id="lease-1", observed_state="paused")
-    runtime = SimpleNamespace(lease=stale_lease)
+    runtime = SimpleNamespace(sandbox_runtime=stale_lease)
     live_session = SimpleNamespace(
         session_id="sess-1",
         terminal=terminal,
@@ -1004,8 +1004,8 @@ def test_resume_session_rebinds_live_session_lease_after_resume():
     ok = manager.resume_session("thread-1", source="auto_resume")
 
     assert ok is True
-    assert live_session.lease is resumed_lease
-    assert runtime.lease is resumed_lease
+    assert live_session.sandbox_runtime is resumed_lease
+    assert runtime.sandbox_runtime is resumed_lease
 
 
 def test_upgrade_to_daytona_volume_uses_lease_id_for_provider_backend_ref(monkeypatch, tmp_path):

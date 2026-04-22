@@ -87,7 +87,7 @@ class ChatSession:
         self.session_id = session_id
         self.thread_id = thread_id
         self.terminal = terminal
-        self.lease = sandbox_runtime
+        self.sandbox_runtime = sandbox_runtime
         self.runtime = runtime
         self.policy = policy
         self.started_at = started_at
@@ -242,7 +242,7 @@ class ChatSessionManager:
             session_id=row["session_id"],
             thread_id=row["thread_id"],
             terminal=terminal,
-            lease=sandbox_runtime,
+            sandbox_runtime=sandbox_runtime,
             runtime=self._build_runtime(terminal, sandbox_runtime),
             policy=ChatSessionPolicy(
                 idle_ttl_sec=row["idle_ttl_sec"],
