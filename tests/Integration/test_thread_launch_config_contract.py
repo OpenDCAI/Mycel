@@ -377,7 +377,8 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
     }
 
 
-def test_resolve_default_config_falls_back_to_new_when_workspace_sandbox_lacks_provider_env_id() -> None:
+@pytest.mark.parametrize("provider_env_id", ["", None])
+def test_resolve_default_config_falls_back_to_new_when_workspace_sandbox_lacks_provider_env_id(provider_env_id: str | None) -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
         "thread_id": "agent-user-1-1",
@@ -402,7 +403,7 @@ def test_resolve_default_config_falls_back_to_new_when_workspace_sandbox_lacks_p
         id="sandbox-stale",
         owner_user_id="owner-1",
         provider_name="local",
-        provider_env_id="",
+        provider_env_id=provider_env_id,
         sandbox_template_id="local:default",
         desired_state="stopped",
         observed_state="stopped",
