@@ -35,6 +35,10 @@ def get_runtime_metrics(
     except RuntimeError as exc:
         if "Ambiguous runtime id" not in str(exc) or not provider_hint:
             raise
+        # @@@provider-hinted-runtime-collapse - metrics reads should treat duplicate
+        # rows for the same provider/session as one runtime when the caller already
+        # supplied the provider hint; the ambiguity is cross-thread residue, not a
+        # reason to fail the high-level metrics surface.
         exact = _exact_rows_for_provider_runtime(
             runtimes,
             runtime_id=runtime_id,
