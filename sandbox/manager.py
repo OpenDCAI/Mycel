@@ -224,7 +224,7 @@ def bind_thread_to_existing_thread_sandbox_runtime(
             _terminal_repo.close()
     if source_terminal is None:
         return None
-    # @@@subagent-lease-reuse
+    # @@@subagent-runtime-reuse
     # Child threads need their own terminal/session state while reusing the
     # parent's lower sandbox binding instead of silently provisioning a new one.
     return bind_thread_to_existing_sandbox_runtime(
@@ -377,7 +377,7 @@ class SandboxManager:
         if not terminals:
             return None
         lease_ids = {terminal.sandbox_runtime_id for terminal in terminals}
-        # @@@thread-single-lease-invariant - Terminals created via non-block must share one lease per thread.
+        # @@@thread-single-runtime-invariant - Terminals created via non-block must share one sandbox runtime per thread.
         if len(lease_ids) != 1:
             raise RuntimeError(f"Thread {thread_id} has inconsistent lease_ids: {sorted(lease_ids)}")
         lease_id = next(iter(lease_ids))
@@ -497,8 +497,8 @@ class SandboxManager:
                 lease = self._create_sandbox_runtime(terminal.sandbox_runtime_id, self.provider.name)
             self._assert_sandbox_runtime_provider(lease, thread_id)
             if lease.observed_state == "paused":
-                # @@@paused-lease-rehydrate - a persisted thread can lose its in-memory chat session
-                # while the lease stays paused in storage; resume before reconstructing capability.
+                # @@@paused-runtime-rehydrate - a persisted thread can lose its in-memory chat session
+                # while the sandbox runtime stays paused in storage; resume before reconstructing capability.
                 if not self.resume_session(thread_id, source="auto_resume"):
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, terminal.terminal_id)
@@ -621,7 +621,7 @@ class SandboxManager:
         return idle_elapsed > idle_ttl_sec or total_elapsed > max_duration_sec
 
     def enforce_idle_timeouts(self) -> int:
-        """Pause expired leases and close chat sessions.
+        """Pause expired sandbox runtimes and close chat sessions.
 
         Rule:
         - If a chat session is idle past idle_ttl_sec, or older than max_duration_sec:
@@ -667,8 +667,8 @@ class SandboxManager:
                 continue
 
             if lease:
-                # @@@idle-reaper-shared-lease - non-blocking commands fork background terminals but share one lease.
-                # Do not pause the underlying lease if another session on the same lease is still active/idle.
+                # @@@idle-reaper-shared-runtime - non-blocking commands fork background terminals but share one sandbox runtime.
+                # Do not pause the underlying sandbox runtime if another session on the same runtime is still active/idle.
                 lease_id = str(row.get("lease_id") or lease.sandbox_runtime_id)
                 has_other_active = False
                 for other in active_rows:
@@ -698,15 +698,19 @@ class SandboxManager:
                                 reclaimed = lease.destroy_instance(self.provider, source="idle_reaper") is None
                             else:
                                 print(
-                                    f"[idle-reaper] provider {self.provider.name} cannot reclaim expired lease "
+                                    f"[idle-reaper] provider {self.provider.name} cannot reclaim expired sandbox runtime "
                                     f"{lease.sandbox_runtime_id} for thread {thread_id}"
                                 )
                                 continue
                         except Exception as exc:
-                            print(f"[idle-reaper] failed to reclaim expired lease {lease.sandbox_runtime_id} for thread {thread_id}: {exc}")
+                            print(
+                                f"[idle-reaper] failed to reclaim expired sandbox runtime {lease.sandbox_runtime_id} for thread {thread_id}: {exc}"
+                            )
                             continue
                         if not reclaimed:
-                            print(f"[idle-reaper] failed to reclaim expired lease {lease.sandbox_runtime_id} for thread {thread_id}")
+                            print(
+                                f"[idle-reaper] failed to reclaim expired sandbox runtime {lease.sandbox_runtime_id} for thread {thread_id}"
+                            )
                             continue
 
             self.session_manager.delete(session_id, reason="idle_timeout")
@@ -818,7 +822,7 @@ class SandboxManager:
         return self.destroy_thread_resources(thread_id)
 
     def destroy_thread_resources(self, thread_id: str) -> bool:
-        """Destroy physical resources and detach thread from terminal/lease records."""
+        """Destroy physical resources and detach thread from terminal/runtime records."""
         terminal_rows = self.terminal_store.list_by_thread(thread_id)
         terminals = [terminal_from_row(r, self.db_path) for r in terminal_rows]
         if not terminals:
