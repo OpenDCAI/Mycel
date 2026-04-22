@@ -6,7 +6,7 @@ Aggregate root: `thread`. Subordinate entities: `run`, `run_event`,
 IN:
     - Threads, runs, run events, checkpoints
     - Runtime bindings and runtime state
-    - Sandbox resolution per thread (which lease binds, not how provisioned)
+    - Sandbox resolution per thread (which sandbox runtime binds, not how provisioned)
     - Chat adapters (chat -> runtime, runtime -> chat) in chat_adapters/
     - Thread history projection for chat
     - Thread launch configuration and visibility

@@ -1,6 +1,6 @@
 """Sandboxes domain — HTTP/service layer for sandbox lifecycle.
 
-Aggregate root: `sandbox_lease` (schema-side; owned via storage/ + sandbox/).
+Aggregate root: `sandbox_runtime` (schema-side; owned via storage/ + sandbox/).
 This package wraps the top-level sandbox/ provider abstraction with
 app.state-aware caching, user-scoped views, and resource projections.
 

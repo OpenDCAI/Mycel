@@ -902,7 +902,7 @@ class LeonAgent:
         """
         # @@@close-idempotent - child agents may explicitly skip sandbox cleanup
         # and later still hit __del__ on GC; never let a second close silently
-        # re-enable default sandbox teardown on a shared lease.
+        # re-enable default sandbox teardown on a shared sandbox runtime.
         if getattr(self, "_closed", False) or getattr(self, "_closing", False):
             return
 
