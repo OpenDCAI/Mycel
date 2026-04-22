@@ -137,11 +137,26 @@ def test_terminal_from_row_uses_sqlite_terminal_under_supabase_defaults(monkeypa
     terminal_store = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
     try:
         row = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        assert row["sandbox_runtime_id"] == "lease-1"
+        assert "lease_id" not in row
         terminal = terminal_from_row(row, terminal_store.db_path)
     finally:
         terminal_store.close()
 
     assert isinstance(terminal, SQLiteTerminal)
+
+
+def test_terminal_repo_get_active_returns_sandbox_runtime_id_not_lease_id(tmp_path):
+    repo = SQLiteTerminalRepo(db_path=tmp_path / "sandbox.db")
+    try:
+        repo.create("term-1", "thread-1", "lease-1", "/tmp")
+        active = repo.get_active("thread-1")
+    finally:
+        repo.close()
+
+    assert active is not None
+    assert active["sandbox_runtime_id"] == "lease-1"
+    assert "lease_id" not in active
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
