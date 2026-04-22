@@ -366,7 +366,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         try:
             target.execute(
                 """
-                INSERT INTO lease_events (event_id, sandbox_runtime_id, event_type, source, payload_json, error, created_at)
+                INSERT INTO sandbox_runtime_events (event_id, sandbox_runtime_id, event_type, source, payload_json, error, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
