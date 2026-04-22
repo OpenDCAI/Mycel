@@ -8,7 +8,7 @@ class _Container:
     pass
 
 
-class _LeaseRepo:
+class _SandboxRuntimeRepo:
     def __init__(self) -> None:
         self.created: list[dict[str, str]] = []
         self.closed = False
@@ -34,13 +34,13 @@ class _TerminalRepo:
 
 
 def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(monkeypatch, tmp_path):
-    lease_repo = _LeaseRepo()
+    sandbox_runtime_repo = _SandboxRuntimeRepo()
     terminal_repo = _TerminalRepo()
     workspace_repo = object()
     materialize_calls: list[dict[str, object]] = []
 
     monkeypatch.setattr(container_cache, "get_storage_container", lambda: _Container())
-    monkeypatch.setattr("storage.runtime.build_sandbox_runtime_repo", lambda: lease_repo)
+    monkeypatch.setattr("storage.runtime.build_sandbox_runtime_repo", lambda: sandbox_runtime_repo)
     monkeypatch.setattr("sandbox.control_plane_repos.make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(
         threads_router,
@@ -58,25 +58,25 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
     )
 
     assert workspace_id == "workspace-1"
-    assert len(lease_repo.created) == 1
-    assert lease_repo.created[0]["provider_name"] == "local"
-    assert "volume_id" not in lease_repo.created[0]
+    assert len(sandbox_runtime_repo.created) == 1
+    assert sandbox_runtime_repo.created[0]["provider_name"] == "local"
+    assert "volume_id" not in sandbox_runtime_repo.created[0]
     assert len(terminal_repo.created) == 1
     assert terminal_repo.created[0]["thread_id"] == "thread-1"
-    assert terminal_repo.created[0][LOWER_RUNTIME_KEY] == lease_repo.created[0][LOWER_RUNTIME_KEY]
+    assert terminal_repo.created[0][LOWER_RUNTIME_KEY] == sandbox_runtime_repo.created[0][LOWER_RUNTIME_KEY]
     assert terminal_repo.created[0]["initial_cwd"] == "/tmp/workspace"
     assert materialize_calls[0]["sandbox_id"] == "sandbox-from-lease-create"
-    assert lease_repo.closed
+    assert sandbox_runtime_repo.closed
     assert terminal_repo.closed
 
 
 def test_create_thread_sandbox_resources_returns_workspace_id(monkeypatch, tmp_path):
-    lease_repo = _LeaseRepo()
+    sandbox_runtime_repo = _SandboxRuntimeRepo()
     terminal_repo = _TerminalRepo()
     workspace_repo = object()
 
     monkeypatch.setattr(container_cache, "get_storage_container", lambda: _Container())
-    monkeypatch.setattr("storage.runtime.build_sandbox_runtime_repo", lambda: lease_repo)
+    monkeypatch.setattr("storage.runtime.build_sandbox_runtime_repo", lambda: sandbox_runtime_repo)
     monkeypatch.setattr("sandbox.control_plane_repos.make_terminal_repo", lambda: terminal_repo)
     monkeypatch.setattr(threads_router, "_materialize_workspace_for_sandbox", lambda *args, **kwargs: "workspace-new")
 
@@ -90,4 +90,4 @@ def test_create_thread_sandbox_resources_returns_workspace_id(monkeypatch, tmp_p
     )
 
     assert workspace_id == "workspace-new"
-    assert "volume_id" not in lease_repo.created[0]
+    assert "volume_id" not in sandbox_runtime_repo.created[0]

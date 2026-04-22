@@ -96,7 +96,7 @@ class _FakeSandboxRepo:
         self.by_id[row.id] = row
 
 
-class _FakeLeaseRepo:
+class _FakeSandboxRuntimeRepo:
     def __init__(self, row: dict[str, Any] | None = None) -> None:
         self._row = row
         self.instance_queries: list[tuple[str, str]] = []
@@ -124,7 +124,7 @@ def _existing_sandbox_row(
     }
 
 
-def _existing_sandbox_lease_repo(
+def _existing_sandbox_runtime_repo(
     *,
     lower_runtime_id: str = "lease-1",
     sandbox_id: str = "sandbox-1",
@@ -132,8 +132,8 @@ def _existing_sandbox_lease_repo(
     provider_env_id: str = "instance-1",
     cwd: str = "/workspace/reused",
     recipe: dict[str, Any] | None = None,
-) -> _FakeLeaseRepo:
-    return _FakeLeaseRepo(
+) -> _FakeSandboxRuntimeRepo:
+    return _FakeSandboxRuntimeRepo(
         {
             "lease_" + "id": lower_runtime_id,
             "sandbox_id": sandbox_id,
@@ -413,7 +413,7 @@ def _make_threads_app(
             runtime_storage_state=SimpleNamespace(recipe_repo=recipe_repo),
             workspace_repo=state_overrides.pop("workspace_repo", _FakeWorkspaceRepo()),
             sandbox_repo=state_overrides.pop("sandbox_repo", _FakeSandboxRepo()),
-            sandbox_runtime_repo=state_overrides.pop("sandbox_runtime_repo", _FakeLeaseRepo()),
+            sandbox_runtime_repo=state_overrides.pop("sandbox_runtime_repo", _FakeSandboxRuntimeRepo()),
             **state_overrides,
         )
     )
@@ -607,7 +607,7 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
         thread_cwd={},
         workspace_repo=workspace_repo,
         sandbox_repo=sandbox_repo,
-        sandbox_runtime_repo=_existing_sandbox_lease_repo(recipe=None),
+        sandbox_runtime_repo=_existing_sandbox_runtime_repo(recipe=None),
     )
     payload = CreateThreadRequest.model_validate(
         {
@@ -660,7 +660,7 @@ async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_p
         thread_cwd={},
         workspace_repo=workspace_repo,
         sandbox_repo=sandbox_repo,
-        sandbox_runtime_repo=_existing_sandbox_lease_repo(recipe=None),
+        sandbox_runtime_repo=_existing_sandbox_runtime_repo(recipe=None),
     )
     payload = CreateThreadRequest.model_validate(
         {
@@ -759,7 +759,7 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
         thread_cwd={},
         workspace_repo=workspace_repo,
         sandbox_repo=sandbox_repo,
-        sandbox_runtime_repo=_existing_sandbox_lease_repo(recipe={"id": "local:default"}),
+        sandbox_runtime_repo=_existing_sandbox_runtime_repo(recipe={"id": "local:default"}),
     )
     payload = CreateThreadRequest.model_validate(
         {
@@ -1034,7 +1034,7 @@ async def test_create_thread_route_rejects_unavailable_provider():
 async def test_create_thread_route_rejects_unavailable_provider_for_existing_sandbox():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     app.state.sandbox_repo.by_id["sandbox-1"] = _existing_sandbox_row(provider_name="daytona")
-    app.state.sandbox_runtime_repo = _existing_sandbox_lease_repo(provider_name="daytona", recipe=None)
+    app.state.sandbox_runtime_repo = _existing_sandbox_runtime_repo(provider_name="daytona", recipe=None)
     payload = CreateThreadRequest.model_validate(
         {
             "agent_user_id": "agent-user-1",
