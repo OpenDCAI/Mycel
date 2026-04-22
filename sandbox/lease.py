@@ -1,11 +1,11 @@
-"""SandboxRuntimeHandle - durable compute handle with lease-level state machine.
+"""SandboxRuntimeHandle - durable compute handle with sandbox-runtime state machine.
 
 Architecture:
     SandboxRuntimeHandle (durable) -> SandboxInstance (ephemeral)
 
 State machine contract:
 - Physical lifecycle writes must go through SQLiteSandboxRuntimeHandle.apply(event).
-- Lease snapshot stores desired_state + observed_state + version.
+- Sandbox runtime snapshot stores desired_state + observed_state + version.
 """
 
 from __future__ import annotations
@@ -261,7 +261,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if observed == "unknown":
                 self.observed_state = observed
                 return
-            raise RuntimeError(f"Lease {self.sandbox_runtime_id}: cannot set observed={observed} without bound instance ({reason})")
+            raise RuntimeError(
+                f"Sandbox runtime {self.sandbox_runtime_id}: cannot set observed={observed} without bound instance ({reason})"
+            )
 
         if observed == "running":
             assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.RUNNING, reason=reason)
@@ -291,7 +293,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             self.observed_state = "unknown"
             return
 
-        raise RuntimeError(f"Lease {self.sandbox_runtime_id}: invalid observed state '{observed}'")
+        raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id}: invalid observed state '{observed}'")
 
     def _snapshot(self) -> dict[str, Any]:
         return {
@@ -580,9 +582,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             try:
                 ok = provider.destroy_session(instance_id)
             except Exception as exc:
-                raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}: {exc}") from exc
+                raise RuntimeError(f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}: {exc}") from exc
             if not ok:
-                raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}")
+                raise RuntimeError(f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}")
         self.desired_state = "destroyed"
         self._set_observed_state("detached", reason="intent.destroy")
         self.status = "expired"
@@ -642,16 +644,18 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         if not getattr(capability, capability_name):
             raise RuntimeError(f"Provider {provider.name} does not support {event_type.split('.')[-1]}")
         if not self._current_instance:
-            raise RuntimeError(f"Lease {self.sandbox_runtime_id} has no instance to {event_type.split('.')[-1]}")
+            raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} has no instance to {event_type.split('.')[-1]}")
 
         instance_id = self._current_instance.instance_id
         provider_method = getattr(provider, provider_method_name)
         try:
             ok = provider_method(instance_id)
         except Exception as exc:
-            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.sandbox_runtime_id}: {exc}") from exc
+            raise RuntimeError(
+                f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}: {exc}"
+            ) from exc
         if not ok:
-            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} lease {self.sandbox_runtime_id}")
+            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}")
 
         self.desired_state = desired_state
         self._set_observed_state(observed_state, reason=event_type)
@@ -742,13 +746,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if not capability.can_pause:
                         raise RuntimeError(f"Provider {provider.name} does not support pause")
                     if not self._current_instance:
-                        raise RuntimeError(f"Lease {self.sandbox_runtime_id} has no instance to pause")
+                        raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} has no instance to pause")
                     try:
                         ok = provider.pause_session(self._current_instance.instance_id)
                     except Exception as exc:
-                        raise RuntimeError(f"Failed to pause lease {self.sandbox_runtime_id}: {exc}") from exc
+                        raise RuntimeError(f"Failed to pause sandbox runtime {self.sandbox_runtime_id}: {exc}") from exc
                     if not ok:
-                        raise RuntimeError(f"Failed to pause lease {self.sandbox_runtime_id}")
+                        raise RuntimeError(f"Failed to pause sandbox runtime {self.sandbox_runtime_id}")
                     self.desired_state = "paused"
                     self._set_observed_state("paused", reason="intent.pause")
                     self.status = "active"
@@ -761,13 +765,13 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if not capability.can_resume:
                         raise RuntimeError(f"Provider {provider.name} does not support resume")
                     if not self._current_instance:
-                        raise RuntimeError(f"Lease {self.sandbox_runtime_id} has no instance to resume")
+                        raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} has no instance to resume")
                     try:
                         ok = provider.resume_session(self._current_instance.instance_id)
                     except Exception as exc:
-                        raise RuntimeError(f"Failed to resume lease {self.sandbox_runtime_id}: {exc}") from exc
+                        raise RuntimeError(f"Failed to resume sandbox runtime {self.sandbox_runtime_id}: {exc}") from exc
                     if not ok:
-                        raise RuntimeError(f"Failed to resume lease {self.sandbox_runtime_id}")
+                        raise RuntimeError(f"Failed to resume sandbox runtime {self.sandbox_runtime_id}")
                     self.desired_state = "running"
                     self._set_observed_state("running", reason="intent.resume")
                     self.status = "active"
@@ -783,9 +787,11 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                         try:
                             ok = provider.destroy_session(self._current_instance.instance_id)
                         except Exception as exc:
-                            raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}: {exc}") from exc
+                            raise RuntimeError(
+                                f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}: {exc}"
+                            ) from exc
                         if not ok:
-                            raise RuntimeError(f"Failed to destroy lease {self.sandbox_runtime_id}")
+                            raise RuntimeError(f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}")
                     self.desired_state = "destroyed"
                     self._set_observed_state("detached", reason="intent.destroy")
                     self.status = "expired"
@@ -795,7 +801,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
                 elif event_type == "intent.ensure_running":
                     if not self._current_instance:
-                        raise RuntimeError(f"Lease {self.sandbox_runtime_id}: intent.ensure_running requires bound instance")
+                        raise RuntimeError(
+                            f"Sandbox runtime {self.sandbox_runtime_id}: intent.ensure_running requires bound instance"
+                        )
                     self.desired_state = "running"
                     self._set_observed_state("running", reason="intent.ensure_running")
                     self.status = "active"
@@ -818,7 +826,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     self.refresh_hint_at = now
 
                 else:
-                    raise RuntimeError(f"Unsupported lease event type: {event_type}")
+                    raise RuntimeError(f"Unsupported sandbox runtime event type: {event_type}")
 
                 self.observed_at = now
                 self.version += 1
@@ -867,7 +875,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if not self._current_instance:
                 return None
             if self.observed_state == "paused":
-                raise RuntimeError(f"Sandbox lease {self.sandbox_runtime_id} is paused. Resume before executing commands.")
+                raise RuntimeError(
+                    f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
+                )
             if self.observed_state == "running" and not self.needs_refresh:
                 return self._current_instance
             self._current_instance = None
@@ -906,7 +916,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 if self.observed_state == "running" and self._current_instance:
                     return self._current_instance
                 if self.observed_state == "paused":
-                    raise RuntimeError(f"Sandbox lease {self.sandbox_runtime_id} is paused. Resume before executing commands.")
+                    raise RuntimeError(
+                        f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
+                    )
             except RuntimeError:
                 raise
             except Exception as exc:
@@ -948,7 +960,9 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if self.observed_state == "running" and self._current_instance:
                         return self._current_instance
                     if self.observed_state == "paused":
-                        raise RuntimeError(f"Sandbox lease {self.sandbox_runtime_id} is paused. Resume before executing commands.")
+                        raise RuntimeError(
+                            f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
+                        )
                 except RuntimeError:
                     raise
                 except Exception as exc:
@@ -991,7 +1005,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     payload={"created": True, "instance_id": session_info.session_id},
                 )
             if not self._current_instance:
-                raise RuntimeError(f"Lease {self.sandbox_runtime_id}: failed to bind created instance")
+                raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id}: failed to bind created instance")
             return self._current_instance
 
     def destroy_instance(self, provider: SandboxProvider, *, source: str = "api") -> None:

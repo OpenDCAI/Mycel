@@ -161,14 +161,14 @@ class _CommandWrapper(BaseExecutor):
         terminal = terminal_from_row(terminal_row, self._manager.db_path)
         if terminal.thread_id != self._session.thread_id:
             raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}")
-        lease = self._manager.get_sandbox_runtime(terminal.lease_id)
-        if lease is None:
-            raise RuntimeError(f"Lease {terminal.lease_id} not found for terminal {terminal_id}")
+        sandbox_runtime = self._manager.get_sandbox_runtime(terminal.lease_id)
+        if sandbox_runtime is None:
+            raise RuntimeError(f"Sandbox runtime {terminal.lease_id} not found for terminal {terminal_id}")
         return self._manager.session_manager.create(
             session_id=f"sess-{uuid.uuid4().hex[:12]}",
             thread_id=self._session.thread_id,
             terminal=terminal,
-            sandbox_runtime=lease,
+            sandbox_runtime=sandbox_runtime,
         )
 
     def _resolve_session_for_command(self, command_id: str):
@@ -191,7 +191,7 @@ class _CommandWrapper(BaseExecutor):
 
 
 class _FileSystemWrapper(FileSystemBackend):
-    """Wrapper that delegates to provider via lease."""
+    """Wrapper that delegates to provider via sandbox runtime."""
 
     is_remote = True
 
@@ -200,7 +200,7 @@ class _FileSystemWrapper(FileSystemBackend):
         self._manager = manager
 
     def _get_provider(self):
-        """Get provider from session's lease."""
+        """Get provider from session's sandbox runtime."""
         provider = getattr(self._session.runtime, "provider", None)
         if provider is None:
             raise RuntimeError("FileSystem operations only supported for remote runtimes")
@@ -208,7 +208,7 @@ class _FileSystemWrapper(FileSystemBackend):
 
     def _get_instance_id(self) -> str:
         """Get active instance ID."""
-        # @@@lease-convergence - File operations can also wake paused instances; always converge through lease.
+        # @@@runtime-convergence - File operations can also wake paused instances; always converge through sandbox runtime.
         provider = getattr(self._session.runtime, "provider", None)
         if provider is not None:
             try:
