@@ -35,11 +35,11 @@ def get_runtime_metrics(
     except RuntimeError as exc:
         if "Ambiguous runtime id" not in str(exc) or not provider_hint:
             raise
-        exact = [
-            row
-            for row in runtimes
-            if row.get("provider") == provider_hint and str(row.get("session_id") or "") == runtime_id
-        ]
+        exact = _exact_rows_for_provider_runtime(
+            runtimes,
+            runtime_id=runtime_id,
+            provider_name=provider_hint,
+        )
         if not exact:
             raise
         runtime = exact[0]
