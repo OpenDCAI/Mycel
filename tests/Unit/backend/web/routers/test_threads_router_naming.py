@@ -9,6 +9,8 @@ FORBIDDEN = (
     "bound_lease",
     "Create lease and terminal resources",
     "lower lease identity",
+    "created_lease",
+    "lower lease_id remains terminal/runtime internals",
 )
 
 
