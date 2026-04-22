@@ -71,7 +71,7 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                 )
 
     qm = app.state.queue_manager
-    loop = getattr(app.state, "_event_loop", None)
+    loop = getattr(runtime_state, "event_loop", None)
 
     def wake_handler(item: Any) -> None:
         """Called by enqueue() with the newly-enqueued QueueItem — may run in any thread."""

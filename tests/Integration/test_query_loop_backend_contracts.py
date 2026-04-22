@@ -84,19 +84,19 @@ class _FakeRunEventRepo:
         return 0
 
 
-def _app_with_display_builder(display_builder: object) -> SimpleNamespace:
+def _app_with_display_builder(display_builder: object, *, event_loop: object | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         state=SimpleNamespace(
             display_builder=display_builder,
-            threads_runtime_state=SimpleNamespace(display_builder=display_builder),
+            threads_runtime_state=SimpleNamespace(display_builder=display_builder, event_loop=event_loop),
         )
     )
 
 
-def _state_with_display_builder(display_builder: object, **kwargs: object) -> SimpleNamespace:
+def _state_with_display_builder(display_builder: object, *, event_loop: object | None = None, **kwargs: object) -> SimpleNamespace:
     return SimpleNamespace(
         display_builder=display_builder,
-        threads_runtime_state=SimpleNamespace(display_builder=display_builder),
+        threads_runtime_state=SimpleNamespace(display_builder=display_builder, event_loop=event_loop),
         **kwargs,
     )
 
@@ -539,10 +539,12 @@ def _make_streaming_app(
         queue_manager=queue_manager,
         thread_last_active={},
     )
+    event_loop = None
     if thread_id is not None and agent is not None:
         state.agent_pool = {f"{thread_id}:local": agent}
         state.thread_sandbox = {thread_id: "local"}
-        state._event_loop = asyncio.get_running_loop()
+        event_loop = asyncio.get_running_loop()
+        state._event_loop = event_loop
     app = SimpleNamespace(state=state)
     runtime_state = build_agent_runtime_state(app, typing_tracker=typing_tracker)
     gateway = runtime_state.gateway
@@ -551,6 +553,7 @@ def _make_streaming_app(
         agent_runtime_gateway=gateway,
         activity_reader=runtime_state.activity_reader,
         display_builder=state.display_builder,
+        event_loop=event_loop,
     )
     return app, queue_manager
 
