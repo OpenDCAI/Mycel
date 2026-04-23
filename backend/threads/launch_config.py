@@ -23,6 +23,8 @@ def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "model": str(payload.get("model") or "").strip() or None,
         "workspace": str(payload.get("workspace") or "").strip() or None,
     }
+
+
 def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
     if available_sandbox_types is None or list_library is None:
         raise RuntimeError("thread_runtime.launch_config requires available_sandbox_types and list_library bindings")
