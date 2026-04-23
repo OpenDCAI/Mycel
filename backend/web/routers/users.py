@@ -143,9 +143,9 @@ def _relationship_states_for_user(relationship_service: Any, user_id: str) -> di
 @users_router.get("/chat-candidates")
 async def list_chat_candidates(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    # @@@chat-candidate-http-di - keep these as HTTP dependency helpers; the
-    # raw runtime_access functions take a plain app param and FastAPI will
-    # otherwise misread that as a query arg on real route calls.
+    # @@@chat-candidate-http-di - keep these as HTTP dependency helpers so the
+    # route surface stays on FastAPI-aware dependency contracts instead of ad hoc
+    # app-state call sites.
     user_repo: Annotated[Any, Depends(get_user_repo)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
     contact_repo: Annotated[Any, Depends(get_contact_repo)],

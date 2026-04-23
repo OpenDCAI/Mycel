@@ -17,7 +17,7 @@ async def get_or_create_agent(*args, **kwargs):
         # @@@agent-pool-borrowed-runtime-bundle - thread runtime still needs a
         # chat-owned messaging service for chat_repos construction, but the
         # borrow now happens through threads_runtime_state rather than a
-        # cross-package chat.runtime_access import.
+        # separate chat-owned runtime accessor layer.
         runtime_state = getattr(app.state, "threads_runtime_state", None)
         messaging_service = getattr(runtime_state, "messaging_service", None)
         if messaging_service is not None:
