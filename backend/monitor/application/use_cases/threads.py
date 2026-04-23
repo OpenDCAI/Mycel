@@ -47,8 +47,8 @@ def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | No
     if owner is None:
         return None
     return {
-        "user_id": owner.get("user_id") or owner.get("agent_user_id"),
-        "display_name": owner.get("display_name") or owner.get("agent_name"),
+        "user_id": owner.get("user_id"),
+        "display_name": owner.get("display_name"),
         "email": owner.get("email"),
         "avatar_url": owner.get("avatar_url"),
     }
@@ -57,7 +57,7 @@ def _normalize_thread_owner(owner: dict[str, Any] | None) -> dict[str, Any] | No
 def _normalize_monitor_thread(thread: dict[str, Any], requested_thread_id: str) -> dict[str, Any]:
     return {
         **thread,
-        "thread_id": thread.get("thread_id") or thread.get("id") or requested_thread_id,
+        "thread_id": thread.get("thread_id") or requested_thread_id,
     }
 
 
