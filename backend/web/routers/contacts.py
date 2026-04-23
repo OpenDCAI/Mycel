@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.chat.runtime_access import get_contact_repo
+from backend.chat.api.http.dependencies import get_contact_repo
 from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
 
