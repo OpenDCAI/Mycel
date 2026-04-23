@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 
 from backend.chat.api.http.dependencies import (
     get_current_user_id,
-    get_optional_messaging_service,
+    get_messaging_service,
     get_owner_thread_rows_loader,
     get_runtime_thread_activity_reader,
     get_thread_last_active_map,
@@ -46,7 +46,7 @@ async def list_conversations(
     owner_thread_rows: Annotated[Any, Depends(get_owner_thread_rows_loader)],
     activity_reader: Annotated[RuntimeThreadActivityReader, Depends(get_runtime_thread_activity_reader)],
     thread_last_active: Annotated[dict[str, Any], Depends(get_thread_last_active_map)],
-    messaging_service: Annotated[Any | None, Depends(get_optional_messaging_service)] = None,
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ) -> list[dict[str, Any]]:
     raw_threads, visit_items = await asyncio.gather(
         owner_thread_rows(user_id),
@@ -99,22 +99,23 @@ def _thread_running(activity_reader: RuntimeThreadActivityReader, agent_user_id:
     )
 
 
-def _list_visit_conversations_for_user(messaging: Any | None, user_id: str) -> list[dict[str, Any]]:
+def _list_visit_conversations_for_user(messaging: Any, user_id: str) -> list[dict[str, Any]]:
+    if messaging is None:
+        raise RuntimeError("MessagingService is required for conversations read")
     items: list[dict[str, Any]] = []
-    if messaging is not None:
-        chats = messaging.list_conversation_summaries_for_user(user_id)
-        for chat in chats:
-            items.append(
-                {
-                    "id": chat["id"],
-                    "type": "visit",
-                    "title": chat.get("title") or "Chat",
-                    "avatar_url": chat.get("avatar_url"),
-                    "updated_at": chat.get("updated_at") or chat.get("created_at"),
-                    "unread_count": chat.get("unread_count", 0),
-                    "running": False,
-                }
-            )
+    chats = messaging.list_conversation_summaries_for_user(user_id)
+    for chat in chats:
+        items.append(
+            {
+                "id": chat["id"],
+                "type": "visit",
+                "title": chat.get("title") or "Chat",
+                "avatar_url": chat.get("avatar_url"),
+                "updated_at": chat.get("updated_at") or chat.get("created_at"),
+                "unread_count": chat.get("unread_count", 0),
+                "running": False,
+            }
+        )
     return items
 
 

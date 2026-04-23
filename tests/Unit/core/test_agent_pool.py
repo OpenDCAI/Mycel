@@ -34,7 +34,7 @@ async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkey
         return SimpleNamespace()
 
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
-    monkeypatch.setattr(agent_pool, "get_optional_messaging_service", lambda app: messaging_service, raising=False)
+    monkeypatch.setattr(agent_pool, "get_messaging_service", lambda app: messaging_service, raising=False)
 
     app = SimpleNamespace(state=SimpleNamespace())
 
@@ -45,22 +45,15 @@ async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkey
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_skips_borrow_when_chat_bootstrap_missing(monkeypatch: pytest.MonkeyPatch):
-    captured: dict[str, object] = {}
-
+async def test_get_or_create_agent_fails_loud_when_chat_bootstrap_missing(monkeypatch: pytest.MonkeyPatch):
     async def _fake_registry_get_or_create_agent(*args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
         return SimpleNamespace()
 
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
-
     app = SimpleNamespace(state=SimpleNamespace())
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-chat")
-
-    kwargs = cast(dict[str, object], captured["kwargs"])
-    assert "messaging_service" not in kwargs
+    with pytest.raises(RuntimeError, match="chat bootstrap not attached: messaging_service"):
+        await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-chat")
 
 
 @pytest.mark.asyncio
@@ -231,6 +224,7 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
     app = SimpleNamespace(
         state=SimpleNamespace(
             agent_pool={},
+            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             thread_repo=_FakeThreadRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -284,6 +278,7 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
     app = SimpleNamespace(
         state=SimpleNamespace(
             agent_pool={},
+            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             thread_repo=_ThreadRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -332,6 +327,7 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
     app = SimpleNamespace(
         state=SimpleNamespace(
             agent_pool={},
+            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             thread_repo=_ThreadRepo(),
             thread_cwd={"thread-3": str(requested)},
             thread_sandbox={},
@@ -510,7 +506,7 @@ async def test_get_or_create_agent_fails_loud_when_chat_repos_need_missing_messa
         )
     )
 
-    with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
+    with pytest.raises(RuntimeError, match="chat bootstrap not attached: messaging_service"):
         await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5")
 
 
@@ -585,6 +581,7 @@ async def test_get_or_create_agent_requires_thread_agent_user_id_for_chat_identi
     app = SimpleNamespace(
         state=SimpleNamespace(
             agent_pool={},
+            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
             thread_cwd={},

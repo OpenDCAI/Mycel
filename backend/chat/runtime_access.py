@@ -17,18 +17,8 @@ def get_messaging_service(app: Any) -> Any:
     return _require_chat_state(app, "messaging_service")
 
 
-def get_optional_messaging_service(app: Any) -> Any | None:
-    runtime_state = getattr(app.state, "chat_runtime_state", None)
-    return getattr(runtime_state, "messaging_service", None) if runtime_state is not None else None
-
-
 def get_typing_tracker(app: Any) -> Any:
     return _require_chat_state(app, "typing_tracker")
-
-
-def get_optional_typing_tracker(app: Any) -> Any | None:
-    runtime_state = getattr(app.state, "chat_runtime_state", None)
-    return getattr(runtime_state, "typing_tracker", None) if runtime_state is not None else None
 
 
 def get_relationship_service(app: Any) -> Any:

@@ -4,7 +4,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from backend.chat.runtime_access import get_optional_typing_tracker
+from backend.chat.runtime_access import get_typing_tracker
 from backend.threads.events.buffer import RunEventBuffer, ThreadEventBuffer
 from backend.threads.events.store import append_event as _append_event
 from backend.threads.events.store import cleanup_old_runs
@@ -211,7 +211,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         run_id=run_id,
         message_metadata=message_metadata,
         input_messages=input_messages,
-        typing_tracker=get_optional_typing_tracker(app),
+        typing_tracker=get_typing_tracker(app),
     )
 
 

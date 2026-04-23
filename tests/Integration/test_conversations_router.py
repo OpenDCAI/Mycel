@@ -29,6 +29,10 @@ async def _list_conversations(app: SimpleNamespace, user_id: str = "human-user-1
     )
 
 
+def _empty_messaging_service() -> SimpleNamespace:
+    return SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: [])
+
+
 @pytest.mark.asyncio
 async def test_list_conversations_resolves_thread_user_participant_title_and_avatar() -> None:
     app = SimpleNamespace(
@@ -172,7 +176,7 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
             agent_pool={},
             threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
-            chat_runtime_state=SimpleNamespace(messaging_service=None),
+            chat_runtime_state=SimpleNamespace(messaging_service=_empty_messaging_service()),
         )
     )
 
@@ -221,7 +225,7 @@ async def test_list_conversations_marks_hire_thread_running_from_runtime_activit
                 )
             ),
             thread_last_active={},
-            chat_runtime_state=SimpleNamespace(messaging_service=None),
+            chat_runtime_state=SimpleNamespace(messaging_service=_empty_messaging_service()),
         )
     )
 
@@ -269,7 +273,7 @@ async def test_list_conversations_collapses_hire_threads_to_one_visible_conversa
             agent_pool={},
             threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={"thread-main": 1775540000.0, "thread-extra": 1775541000.0},
-            chat_runtime_state=SimpleNamespace(messaging_service=None),
+            chat_runtime_state=SimpleNamespace(messaging_service=_empty_messaging_service()),
         )
     )
 
@@ -409,3 +413,18 @@ async def test_list_conversations_fails_loud_when_thread_activity_reader_missing
 
     assert getattr(exc_info.value, "status_code", None) == 503
     assert getattr(exc_info.value, "detail", None) == "Thread activity reader unavailable"
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_fails_loud_when_messaging_service_missing() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            thread_last_active={},
+            chat_runtime_state=SimpleNamespace(messaging_service=None),
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="MessagingService is required for conversations read"):
+        await _list_conversations(app)
