@@ -81,10 +81,7 @@ def load_cli_config(
         chat_base_url or os.getenv("MYCEL_CHAT_BACKEND_URL") or profile.get("chat_base_url") or DEFAULT_CHAT_BASE_URL
     ).strip()
     resolved_threads_base_url = str(
-        threads_base_url
-        or os.getenv("MYCEL_THREADS_BACKEND_URL")
-        or profile.get("threads_base_url")
-        or DEFAULT_THREADS_BASE_URL
+        threads_base_url or os.getenv("MYCEL_THREADS_BACKEND_URL") or profile.get("threads_base_url") or DEFAULT_THREADS_BASE_URL
     ).strip()
     resolved_app_base_url = str(
         app_base_url or os.getenv("MYCEL_APP_BACKEND_URL") or profile.get("app_base_url") or DEFAULT_APP_BASE_URL

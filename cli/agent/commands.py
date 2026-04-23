@@ -175,10 +175,7 @@ def run_cli(
             auth_token=cfg.auth_token,
         )
     elif args.command == "profile" and args.profile_command == "list":
-        payload = [
-            {"name": name, **profile}
-            for name, profile in sorted(load_profiles().items())
-        ]
+        payload = [{"name": name, **profile} for name, profile in sorted(load_profiles().items())]
     elif args.command == "auth" and args.auth_command == "login":
         payload = client.login(args.identifier, _resolve_login_password(args, in_stream))
     elif args.command == "agents" and args.agents_command == "list":

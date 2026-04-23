@@ -71,9 +71,7 @@ def test_internal_identity_router_creates_external_user() -> None:
 
 def test_internal_identity_router_lists_external_users() -> None:
     app_state = _app_state()
-    app_state.state.user_repo.create(
-        UserRow(id="external-user-1", type=UserType.EXTERNAL, display_name="Codex External", created_at=1.0)
-    )
+    app_state.state.user_repo.create(UserRow(id="external-user-1", type=UserType.EXTERNAL, display_name="Codex External", created_at=1.0))
     app = FastAPI()
     app.include_router(chat_app_router.router)
     app.dependency_overrides[get_app] = lambda: app_state

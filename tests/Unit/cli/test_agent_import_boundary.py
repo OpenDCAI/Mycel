@@ -18,6 +18,4 @@ def test_cli_agent_package_does_not_import_backend_modules() -> None:
             else:
                 continue
 
-            assert all(not name.startswith("backend") for name in imported), (
-                f"{path.name} imports backend internals: {imported}"
-            )
+            assert all(not name.startswith("backend") for name in imported), f"{path.name} imports backend internals: {imported}"

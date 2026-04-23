@@ -36,12 +36,14 @@ def test_agent_cli_send_defaults_to_enforce_caught_up(monkeypatch: pytest.Monkey
     captured: dict[str, object] = {}
 
     def _send(chat_id: str, sender_id: str, content: str, **kwargs):
-        captured.update({
-            "chat_id": chat_id,
-            "sender_id": sender_id,
-            "content": content,
-            **kwargs,
-        })
+        captured.update(
+            {
+                "chat_id": chat_id,
+                "sender_id": sender_id,
+                "content": content,
+                **kwargs,
+            }
+        )
         return {"id": "msg-1", "chat_id": chat_id, "sender_id": sender_id, "content": content}
 
     messaging = SimpleNamespace(send=_send)
@@ -203,40 +205,40 @@ def test_agent_cli_external_create_calls_identity_client() -> None:
     assert exit_code == 0
     assert captured == {"user_id": "external-user-9", "display_name": "Codex External"}
 
+
 def test_agent_cli_external_list_calls_identity_client() -> None:
     from cli.agent import commands
 
     out = StringIO()
     exit_code = commands.run_cli(
-        ['external', 'list', '--agent-user-id', 'agent-user-1'],
+        ["external", "list", "--agent-user-id", "agent-user-1"],
         messaging_client=SimpleNamespace(),
         identity_client=SimpleNamespace(
-            create_external_user=lambda **_: (_ for _ in ()).throw(AssertionError('create not expected')),
-            list_users=lambda **kwargs: [{'id': 'external-user-1', 'type': kwargs['user_type'], 'display_name': 'Codex External'}],
+            create_external_user=lambda **_: (_ for _ in ()).throw(AssertionError("create not expected")),
+            list_users=lambda **kwargs: [{"id": "external-user-1", "type": kwargs["user_type"], "display_name": "Codex External"}],
         ),
         runtime_read_client=SimpleNamespace(),
         stdout=out,
     )
 
     assert exit_code == 0
-    assert json.loads(out.getvalue()) == [
-        {'id': 'external-user-1', 'type': 'external', 'display_name': 'Codex External'}
-    ]
+    assert json.loads(out.getvalue()) == [{"id": "external-user-1", "type": "external", "display_name": "Codex External"}]
+
 
 def test_agent_cli_chats_list_calls_messaging_client() -> None:
     from cli.agent import commands
 
     out = StringIO()
     exit_code = commands.run_cli(
-        ['chats', 'list', '--agent-user-id', 'agent-user-1'],
-        messaging_client=SimpleNamespace(list_chats_for_user=lambda user_id: [{'id': 'chat-1', 'user_id': user_id}]),
+        ["chats", "list", "--agent-user-id", "agent-user-1"],
+        messaging_client=SimpleNamespace(list_chats_for_user=lambda user_id: [{"id": "chat-1", "user_id": user_id}]),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
         stdout=out,
     )
 
     assert exit_code == 0
-    assert json.loads(out.getvalue()) == [{'id': 'chat-1', 'user_id': 'agent-user-1'}]
+    assert json.loads(out.getvalue()) == [{"id": "chat-1", "user_id": "agent-user-1"}]
 
 
 def test_agent_cli_messages_list_uses_viewer_identity() -> None:
@@ -245,12 +247,12 @@ def test_agent_cli_messages_list_uses_viewer_identity() -> None:
     captured: dict[str, object] = {}
 
     def _list_messages(chat_id: str, *, limit: int, before: str | None, viewer_id: str):
-        captured.update({'chat_id': chat_id, 'limit': limit, 'before': before, 'viewer_id': viewer_id})
-        return [{'id': 'msg-1'}]
+        captured.update({"chat_id": chat_id, "limit": limit, "before": before, "viewer_id": viewer_id})
+        return [{"id": "msg-1"}]
 
     out = StringIO()
     exit_code = commands.run_cli(
-        ['messages', 'list', 'chat-1', '--limit', '10', '--agent-user-id', 'agent-user-1'],
+        ["messages", "list", "chat-1", "--limit", "10", "--agent-user-id", "agent-user-1"],
         messaging_client=SimpleNamespace(list_messages=_list_messages),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
@@ -258,8 +260,8 @@ def test_agent_cli_messages_list_uses_viewer_identity() -> None:
     )
 
     assert exit_code == 0
-    assert captured == {'chat_id': 'chat-1', 'limit': 10, 'before': None, 'viewer_id': 'agent-user-1'}
-    assert json.loads(out.getvalue()) == [{'id': 'msg-1'}]
+    assert captured == {"chat_id": "chat-1", "limit": 10, "before": None, "viewer_id": "agent-user-1"}
+    assert json.loads(out.getvalue()) == [{"id": "msg-1"}]
 
 
 def test_agent_cli_messages_unread_calls_unread_list() -> None:
@@ -267,15 +269,15 @@ def test_agent_cli_messages_unread_calls_unread_list() -> None:
 
     out = StringIO()
     exit_code = commands.run_cli(
-        ['messages', 'unread', 'chat-1', '--agent-user-id', 'agent-user-1'],
-        messaging_client=SimpleNamespace(list_unread=lambda chat_id, user_id: [{'chat_id': chat_id, 'user_id': user_id}]),
+        ["messages", "unread", "chat-1", "--agent-user-id", "agent-user-1"],
+        messaging_client=SimpleNamespace(list_unread=lambda chat_id, user_id: [{"chat_id": chat_id, "user_id": user_id}]),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
         stdout=out,
     )
 
     assert exit_code == 0
-    assert json.loads(out.getvalue()) == [{'chat_id': 'chat-1', 'user_id': 'agent-user-1'}]
+    assert json.loads(out.getvalue()) == [{"chat_id": "chat-1", "user_id": "agent-user-1"}]
 
 
 def test_agent_cli_read_marks_read_for_agent_identity() -> None:
@@ -284,11 +286,11 @@ def test_agent_cli_read_marks_read_for_agent_identity() -> None:
     captured: dict[str, object] = {}
 
     def _mark_read(chat_id: str, user_id: str):
-        captured.update({'chat_id': chat_id, 'user_id': user_id})
+        captured.update({"chat_id": chat_id, "user_id": user_id})
 
     out = StringIO()
     exit_code = commands.run_cli(
-        ['read', 'chat-1', '--agent-user-id', 'agent-user-1'],
+        ["read", "chat-1", "--agent-user-id", "agent-user-1"],
         messaging_client=SimpleNamespace(mark_read=_mark_read),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
@@ -296,8 +298,8 @@ def test_agent_cli_read_marks_read_for_agent_identity() -> None:
     )
 
     assert exit_code == 0
-    assert captured == {'chat_id': 'chat-1', 'user_id': 'agent-user-1'}
-    assert json.loads(out.getvalue()) == {'status': 'ok', 'chat_id': 'chat-1', 'agent_user_id': 'agent-user-1'}
+    assert captured == {"chat_id": "chat-1", "user_id": "agent-user-1"}
+    assert json.loads(out.getvalue()) == {"status": "ok", "chat_id": "chat-1", "agent_user_id": "agent-user-1"}
 
 
 def test_agent_cli_direct_uses_agent_identity() -> None:
@@ -305,8 +307,8 @@ def test_agent_cli_direct_uses_agent_identity() -> None:
 
     out = StringIO()
     exit_code = commands.run_cli(
-        ['direct', 'target-user-1', '--agent-user-id', 'agent-user-1'],
-        messaging_client=SimpleNamespace(find_direct_chat_id=lambda actor_id, target_id: f'{actor_id}:{target_id}:chat'),
+        ["direct", "target-user-1", "--agent-user-id", "agent-user-1"],
+        messaging_client=SimpleNamespace(find_direct_chat_id=lambda actor_id, target_id: f"{actor_id}:{target_id}:chat"),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
         stdout=out,
@@ -314,24 +316,30 @@ def test_agent_cli_direct_uses_agent_identity() -> None:
 
     assert exit_code == 0
     assert json.loads(out.getvalue()) == {
-        'chat_id': 'agent-user-1:target-user-1:chat',
-        'agent_user_id': 'agent-user-1',
-        'target_id': 'target-user-1',
+        "chat_id": "agent-user-1:target-user-1:chat",
+        "agent_user_id": "agent-user-1",
+        "target_id": "target-user-1",
     }
+
 
 def test_agent_cli_profile_set_writes_profile_file(tmp_path, monkeypatch: pytest.MonkeyPatch):
     from cli.agent import commands
 
-    profile_path = tmp_path / 'profiles.json'
-    monkeypatch.setenv('MYCEL_AGENT_PROFILE_PATH', str(profile_path))
+    profile_path = tmp_path / "profiles.json"
+    monkeypatch.setenv("MYCEL_AGENT_PROFILE_PATH", str(profile_path))
     out = StringIO()
 
     exit_code = commands.run_cli(
         [
-            'profile', 'set', 'codex-dev',
-            '--agent-user-id', 'agent-user-9',
-            '--chat-base-url', 'http://chat-backend',
-            '--threads-base-url', 'http://threads-backend',
+            "profile",
+            "set",
+            "codex-dev",
+            "--agent-user-id",
+            "agent-user-9",
+            "--chat-base-url",
+            "http://chat-backend",
+            "--threads-base-url",
+            "http://threads-backend",
         ],
         messaging_client=SimpleNamespace(),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
@@ -340,13 +348,13 @@ def test_agent_cli_profile_set_writes_profile_file(tmp_path, monkeypatch: pytest
     )
 
     assert exit_code == 0
-    payload = json.loads(profile_path.read_text(encoding='utf-8'))
+    payload = json.loads(profile_path.read_text(encoding="utf-8"))
     assert payload == {
-        'profiles': {
-            'codex-dev': {
-                'agent_user_id': 'agent-user-9',
-                'chat_base_url': 'http://chat-backend',
-                'threads_base_url': 'http://threads-backend',
+        "profiles": {
+            "codex-dev": {
+                "agent_user_id": "agent-user-9",
+                "chat_base_url": "http://chat-backend",
+                "threads_base_url": "http://threads-backend",
             }
         }
     }
@@ -355,13 +363,13 @@ def test_agent_cli_profile_set_writes_profile_file(tmp_path, monkeypatch: pytest
 def test_agent_cli_profile_list_reads_profile_file(tmp_path, monkeypatch: pytest.MonkeyPatch):
     from cli.agent import commands
 
-    profile_path = tmp_path / 'profiles.json'
-    profile_path.write_text(json.dumps({'profiles': {'codex-dev': {'agent_user_id': 'agent-user-9'}}}), encoding='utf-8')
-    monkeypatch.setenv('MYCEL_AGENT_PROFILE_PATH', str(profile_path))
+    profile_path = tmp_path / "profiles.json"
+    profile_path.write_text(json.dumps({"profiles": {"codex-dev": {"agent_user_id": "agent-user-9"}}}), encoding="utf-8")
+    monkeypatch.setenv("MYCEL_AGENT_PROFILE_PATH", str(profile_path))
     out = StringIO()
 
     exit_code = commands.run_cli(
-        ['profile', 'list', '--agent-user-id', 'agent-user-9'],
+        ["profile", "list", "--agent-user-id", "agent-user-9"],
         messaging_client=SimpleNamespace(),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
@@ -369,7 +377,7 @@ def test_agent_cli_profile_list_reads_profile_file(tmp_path, monkeypatch: pytest
     )
 
     assert exit_code == 0
-    assert json.loads(out.getvalue()) == [{'name': 'codex-dev', 'agent_user_id': 'agent-user-9'}]
+    assert json.loads(out.getvalue()) == [{"name": "codex-dev", "agent_user_id": "agent-user-9"}]
 
 
 def test_agent_cli_auth_login_uses_prompted_password_without_agent_identity(monkeypatch: pytest.MonkeyPatch) -> None:
