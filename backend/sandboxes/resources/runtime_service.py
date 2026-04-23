@@ -1,4 +1,4 @@
-"""Monitor resource runtime read-source boundary."""
+"""Shared runtime read helpers for sandbox resource projections."""
 
 from __future__ import annotations
 
