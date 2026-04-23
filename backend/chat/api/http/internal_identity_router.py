@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.chat.api.http.dependencies import get_user_directory
+from backend.chat.api.http.dependencies import get_user_repo
 from storage.contracts import UserRow, UserType
 
 router = APIRouter(prefix="/api/internal/identity", tags=["chat-internal"])
@@ -32,7 +32,7 @@ def _serialize_user(user: UserRow) -> dict[str, Any]:
 @router.post("/users/external")
 def create_external_user(
     body: CreateExternalUserBody,
-    user_repo: Annotated[Any, Depends(get_user_directory)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ) -> dict[str, Any]:
     existing = user_repo.get_by_id(body.user_id)
     if existing is not None:
@@ -51,6 +51,6 @@ def create_external_user(
 @router.get("/users")
 def list_users(
     type: str,
-    user_repo: Annotated[Any, Depends(get_user_directory)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
 ) -> list[dict[str, Any]]:
     return [_serialize_user(row) for row in user_repo.list_by_type(type)]

@@ -7,6 +7,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+DEFAULT_CHAT_BASE_URL = "http://127.0.0.1:8013"
+DEFAULT_THREADS_BASE_URL = "http://127.0.0.1:8012"
+DEFAULT_APP_BASE_URL = "http://127.0.0.1:8010"
+
 
 @dataclass(frozen=True)
 class AgentCliConfig:
@@ -69,23 +73,23 @@ def load_cli_config(
     resolved_alias = str(agent_alias or os.getenv("MYCEL_AGENT_ALIAS") or "").strip()
     profile = load_profiles().get(resolved_alias, {}) if resolved_alias else {}
 
-    resolved_agent_user_id = str(agent_user_id or profile.get("agent_user_id") or os.getenv("MYCEL_AGENT_USER_ID") or "").strip()
+    resolved_agent_user_id = str(agent_user_id or os.getenv("MYCEL_AGENT_USER_ID") or profile.get("agent_user_id") or "").strip()
     if require_agent_user_id and not resolved_agent_user_id:
         raise RuntimeError("MYCEL_AGENT_USER_ID is required")
 
     resolved_chat_base_url = str(
-        chat_base_url or profile.get("chat_base_url") or os.getenv("MYCEL_CHAT_BACKEND_URL") or "http://127.0.0.1:8013"
+        chat_base_url or os.getenv("MYCEL_CHAT_BACKEND_URL") or profile.get("chat_base_url") or DEFAULT_CHAT_BASE_URL
     ).strip()
     resolved_threads_base_url = str(
         threads_base_url
-        or profile.get("threads_base_url")
         or os.getenv("MYCEL_THREADS_BACKEND_URL")
-        or "http://127.0.0.1:8012"
+        or profile.get("threads_base_url")
+        or DEFAULT_THREADS_BASE_URL
     ).strip()
     resolved_app_base_url = str(
-        app_base_url or profile.get("app_base_url") or os.getenv("MYCEL_APP_BACKEND_URL") or "http://127.0.0.1:8010"
+        app_base_url or os.getenv("MYCEL_APP_BACKEND_URL") or profile.get("app_base_url") or DEFAULT_APP_BASE_URL
     ).strip()
-    resolved_auth_token = str(auth_token or profile.get("auth_token") or os.getenv("MYCEL_AGENT_AUTH_TOKEN") or "").strip() or None
+    resolved_auth_token = str(auth_token or os.getenv("MYCEL_AGENT_AUTH_TOKEN") or profile.get("auth_token") or "").strip() or None
 
     return AgentCliConfig(
         agent_user_id=resolved_agent_user_id or None,

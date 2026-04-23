@@ -18,7 +18,7 @@ def test_validate_chat_participant_ids_accepts_external_user() -> None:
 
     result = chats_router._validate_chat_participant_ids(
         _user_directory(rows),
-        agent_actor_lookup=SimpleNamespace(is_agent_actor_user=lambda _user_id: False),
+        SimpleNamespace(get_by_user_id=lambda _user_id: None),
         participant_ids=['human-1', 'external-1'],
         requester_user_id='human-1',
     )

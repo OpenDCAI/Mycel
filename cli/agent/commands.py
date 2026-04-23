@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sys
 from collections.abc import Sequence
 from typing import Any, TextIO
 
 from .client import AgentCliClient
-from .config import load_cli_config, load_profiles, save_profile
+from .config import DEFAULT_APP_BASE_URL, load_cli_config, load_profiles, save_profile
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -70,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     auth_sub = auth.add_subparsers(dest="auth_command", required=True)
     auth_login = auth_sub.add_parser("login", parents=[shared])
     auth_login.add_argument("identifier")
-    auth_login.add_argument("password")
+    auth_login.add_argument("--password-stdin", action="store_true")
 
     agents = sub.add_parser("agents", parents=[shared])
     agents_sub = agents.add_subparsers(dest="agents_command", required=True)
@@ -92,6 +93,15 @@ def _requires_agent_identity(args: argparse.Namespace) -> bool:
     return False
 
 
+def _resolve_login_password(args: argparse.Namespace, stdin: TextIO) -> str:
+    if args.password_stdin:
+        password = stdin.readline().rstrip("\r\n")
+        if not password:
+            raise RuntimeError("stdin password is required")
+        return password
+    return getpass.getpass("Password: ")
+
+
 def run_cli(
     argv: Sequence[str],
     *,
@@ -100,10 +110,12 @@ def run_cli(
     runtime_read_client: Any | None = None,
     auth_client: Any | None = None,
     panel_client: Any | None = None,
+    stdin: TextIO | None = None,
     stdout: TextIO | None = None,
 ) -> int:
     parser = build_parser()
     args = parser.parse_args(list(argv))
+    in_stream = stdin or sys.stdin
     out = stdout or sys.stdout
 
     cfg = load_cli_config(
@@ -151,12 +163,15 @@ def run_cli(
     elif args.command == "external" and args.external_command == "list":
         payload = client.list_external_users()
     elif args.command == "profile" and args.profile_command == "set":
+        saved_app_base_url = None
+        if args.app_base_url or cfg.auth_token or cfg.app_base_url != DEFAULT_APP_BASE_URL:
+            saved_app_base_url = cfg.app_base_url
         payload = save_profile(
             name=args.name,
             agent_user_id=cfg.agent_user_id,
             chat_base_url=cfg.chat_base_url,
             threads_base_url=cfg.threads_base_url,
-            app_base_url=args.app_base_url,
+            app_base_url=saved_app_base_url,
             auth_token=cfg.auth_token,
         )
     elif args.command == "profile" and args.profile_command == "list":
@@ -165,7 +180,7 @@ def run_cli(
             for name, profile in sorted(load_profiles().items())
         ]
     elif args.command == "auth" and args.auth_command == "login":
-        payload = client.login(args.identifier, args.password)
+        payload = client.login(args.identifier, _resolve_login_password(args, in_stream))
     elif args.command == "agents" and args.agents_command == "list":
         payload = client.list_agents()
     elif args.command == "agents" and args.agents_command == "create":

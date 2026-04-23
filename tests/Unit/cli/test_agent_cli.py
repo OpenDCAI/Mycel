@@ -103,6 +103,50 @@ def test_agent_cli_config_resolves_agent_user_from_profile_alias(tmp_path, monke
     assert cfg.agent_user_id == "agent-user-42"
 
 
+def test_agent_cli_config_prefers_direct_env_over_profile_defaults(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    from cli.agent.config import load_cli_config
+
+    profile_path = tmp_path / "profiles.json"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "profiles": {
+                    "codex-dev": {
+                        "agent_user_id": "agent-user-profile",
+                        "chat_base_url": "http://chat-profile",
+                        "threads_base_url": "http://threads-profile",
+                        "app_base_url": "http://app-profile",
+                        "auth_token": "tok-profile",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MYCEL_AGENT_PROFILE_PATH", str(profile_path))
+    monkeypatch.setenv("MYCEL_AGENT_ALIAS", "codex-dev")
+    monkeypatch.setenv("MYCEL_AGENT_USER_ID", "agent-user-env")
+    monkeypatch.setenv("MYCEL_CHAT_BACKEND_URL", "http://chat-env")
+    monkeypatch.setenv("MYCEL_THREADS_BACKEND_URL", "http://threads-env")
+    monkeypatch.setenv("MYCEL_APP_BACKEND_URL", "http://app-env")
+    monkeypatch.setenv("MYCEL_AGENT_AUTH_TOKEN", "tok-env")
+
+    cfg = load_cli_config(
+        agent_user_id=None,
+        agent_alias=None,
+        chat_base_url=None,
+        threads_base_url=None,
+        app_base_url=None,
+        auth_token=None,
+    )
+
+    assert cfg.agent_user_id == "agent-user-env"
+    assert cfg.chat_base_url == "http://chat-env"
+    assert cfg.threads_base_url == "http://threads-env"
+    assert cfg.app_base_url == "http://app-env"
+    assert cfg.auth_token == "tok-env"
+
+
 def test_agent_cli_send_accepts_profile_alias_for_identity(tmp_path, monkeypatch: pytest.MonkeyPatch):
     from cli.agent import commands
 
@@ -328,7 +372,34 @@ def test_agent_cli_profile_list_reads_profile_file(tmp_path, monkeypatch: pytest
     assert json.loads(out.getvalue()) == [{'name': 'codex-dev', 'agent_user_id': 'agent-user-9'}]
 
 
-def test_agent_cli_auth_login_uses_auth_client_without_agent_identity() -> None:
+def test_agent_cli_auth_login_uses_prompted_password_without_agent_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cli.agent import commands
+
+    captured: dict[str, str] = {}
+    out = StringIO()
+
+    monkeypatch.setattr(commands.getpass, "getpass", lambda _prompt: "pw-1")
+
+    def _login(identifier: str, password: str) -> dict[str, str]:
+        captured["identifier"] = identifier
+        captured["password"] = password
+        return {"token": "tok-login"}
+
+    exit_code = commands.run_cli(
+        ["auth", "login", "fresh@example.com", "--app-base-url", "http://backend"],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        auth_client=SimpleNamespace(login=_login),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert captured == {"identifier": "fresh@example.com", "password": "pw-1"}
+    assert json.loads(out.getvalue()) == {"token": "tok-login"}
+
+
+def test_agent_cli_auth_login_can_read_password_from_stdin() -> None:
     from cli.agent import commands
 
     captured: dict[str, str] = {}
@@ -340,16 +411,17 @@ def test_agent_cli_auth_login_uses_auth_client_without_agent_identity() -> None:
         return {"token": "tok-login"}
 
     exit_code = commands.run_cli(
-        ["auth", "login", "fresh@example.com", "pw-1", "--app-base-url", "http://backend"],
+        ["auth", "login", "fresh@example.com", "--password-stdin", "--app-base-url", "http://backend"],
         messaging_client=SimpleNamespace(),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
         auth_client=SimpleNamespace(login=_login),
+        stdin=StringIO("pw-stdin\n"),
         stdout=out,
     )
 
     assert exit_code == 0
-    assert captured == {"identifier": "fresh@example.com", "password": "pw-1"}
+    assert captured == {"identifier": "fresh@example.com", "password": "pw-stdin"}
     assert json.loads(out.getvalue()) == {"token": "tok-login"}
 
 
@@ -444,6 +516,39 @@ def test_agent_cli_profile_set_can_store_owner_token_without_agent_identity(
                 "chat_base_url": "http://127.0.0.1:8013",
                 "threads_base_url": "http://127.0.0.1:8012",
                 "app_base_url": "http://backend",
+            }
+        }
+    }
+
+
+def test_agent_cli_profile_set_persists_env_app_base_url_for_owner_profile(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.agent import commands
+
+    profile_path = tmp_path / "profiles.json"
+    monkeypatch.setenv("MYCEL_AGENT_PROFILE_PATH", str(profile_path))
+    monkeypatch.setenv("MYCEL_AGENT_AUTH_TOKEN", "tok-env")
+    monkeypatch.setenv("MYCEL_APP_BACKEND_URL", "http://env-backend")
+
+    exit_code = commands.run_cli(
+        ["profile", "set", "owner-env"],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        stdout=StringIO(),
+    )
+
+    assert exit_code == 0
+    payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert payload == {
+        "profiles": {
+            "owner-env": {
+                "auth_token": "tok-env",
+                "chat_base_url": "http://127.0.0.1:8013",
+                "threads_base_url": "http://127.0.0.1:8012",
+                "app_base_url": "http://env-backend",
             }
         }
     }

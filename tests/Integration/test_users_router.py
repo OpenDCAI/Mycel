@@ -395,7 +395,7 @@ def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
         response = client.get("/api/users/chat-candidates", headers={"Authorization": "Bearer token"})
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "Contact repo unavailable"}
+    assert response.json() == {"detail": "chat bootstrap not attached: contact_repo"}
 
 @pytest.mark.asyncio
 async def test_list_chat_candidates_projects_external_user_like_unowned_participant() -> None:
