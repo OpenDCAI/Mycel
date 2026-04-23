@@ -11,7 +11,6 @@ def _reader(
 ):
     return SimpleNamespace(
         list_owner_thread_rows=lambda _user_id: rows,
-        summarize_runtime_states=lambda _raw: (_ for _ in ()).throw(AssertionError("should not eagerly summarize all runtime states")),
         converge_runtime_state=lambda thread_id: converge_calls.append(thread_id) or runtime_states[thread_id],
         is_runtime_active=lambda _thread_id, _sandbox_type: False,
         last_active_at=lambda _thread_id: None,

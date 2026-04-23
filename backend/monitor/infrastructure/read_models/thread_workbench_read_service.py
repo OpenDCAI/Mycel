@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.identity.avatar.urls import avatar_url
-from backend.threads.convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
+from backend.threads.convergence import converge_owner_thread_runtime
 from backend.threads.projection import canonical_owner_threads
 from core.runtime.middleware.monitor import AgentState
 
@@ -16,7 +16,6 @@ from core.runtime.middleware.monitor import AgentState
 @dataclass(frozen=True)
 class OwnerThreadWorkbenchReader:
     list_owner_thread_rows: Callable[[str], list[dict[str, Any]]]
-    summarize_runtime_states: Callable[[list[dict[str, Any]]], dict[str, str]]
     converge_runtime_state: Callable[[str], str]
     is_runtime_active: Callable[[str, str], bool]
     last_active_at: Callable[[str], str | None]
@@ -27,7 +26,6 @@ class OwnerThreadWorkbenchReader:
 def build_owner_thread_workbench_reader(app: Any) -> OwnerThreadWorkbenchReader:
     return OwnerThreadWorkbenchReader(
         list_owner_thread_rows=lambda user_id: list_owner_thread_rows(app, user_id),
-        summarize_runtime_states=lambda raw: summarize_runtime_states(app, raw),
         converge_runtime_state=lambda thread_id: converge_runtime_state(app, thread_id),
         is_runtime_active=lambda thread_id, sandbox_type: is_runtime_active(app, thread_id, sandbox_type),
         last_active_at=lambda thread_id: last_active_at(app, thread_id),
@@ -38,10 +36,6 @@ def build_owner_thread_workbench_reader(app: Any) -> OwnerThreadWorkbenchReader:
 
 def list_owner_thread_rows(app: Any, user_id: str) -> list[dict[str, Any]]:
     return app.state.thread_repo.list_by_owner_user_id(user_id)
-
-
-def summarize_runtime_states(app: Any, raw: list[dict[str, Any]]) -> dict[str, str]:
-    return summarize_owner_thread_runtime(app, [str(thread.get("id") or "") for thread in raw if thread.get("id")])
 
 
 def converge_runtime_state(app: Any, thread_id: str) -> str:
