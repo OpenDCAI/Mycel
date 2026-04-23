@@ -13,8 +13,6 @@ from backend.threads.activity_pool_service import get_or_create_agent
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from sandbox.thread_context import set_current_thread_id
 
-inspect_owner_thread_runtime = thread_runtime_convergence.inspect_owner_thread_runtime
-
 
 async def get_app(request: Request) -> FastAPI:
     return request.app
@@ -38,7 +36,7 @@ async def verify_thread_owner(
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
     """Verify that user_id owns the thread. Returns user_id."""
-    runtime_state = inspect_owner_thread_runtime(app, thread_id)
+    runtime_state = thread_runtime_convergence.inspect_owner_thread_runtime(app, thread_id)
     if runtime_state == "missing":
         raise HTTPException(404, "Thread not found")
     if runtime_state == "incomplete":
