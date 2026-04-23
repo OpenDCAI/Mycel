@@ -47,7 +47,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
                 ),
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             chat_runtime_state=SimpleNamespace(
                 messaging_service=SimpleNamespace(
@@ -117,7 +117,7 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                 get_by_user_id=lambda _uid: None,
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={"thread-1": 1775540000.0},
             chat_runtime_state=SimpleNamespace(
                 messaging_service=SimpleNamespace(
@@ -177,7 +177,7 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
                 get_by_user_id=lambda _uid: None,
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             chat_runtime_state=SimpleNamespace(messaging_service=_empty_messaging_service()),
         )
@@ -201,20 +201,21 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
 
 @pytest.mark.asyncio
 async def test_list_conversations_marks_hire_thread_running_from_runtime_activity_reader() -> None:
+    thread_repo = SimpleNamespace(
+        list_by_owner_user_id=lambda _user_id: [
+            {
+                "id": "thread-1",
+                "agent_user_id": "agent-user-1",
+                "agent_name": "Morel",
+                "agent_avatar": "avatars/morel.png",
+                "sandbox_type": "local",
+            }
+        ],
+        get_by_user_id=lambda _uid: None,
+    )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                list_by_owner_user_id=lambda _user_id: [
-                    {
-                        "id": "thread-1",
-                        "agent_user_id": "agent-user-1",
-                        "agent_name": "Morel",
-                        "agent_avatar": "avatars/morel.png",
-                        "sandbox_type": "local",
-                    }
-                ],
-                get_by_user_id=lambda _uid: None,
-            ),
+            thread_repo=thread_repo,
             agent_pool=SimpleNamespace(
                 get=lambda *_args, **_kwargs: (_ for _ in ()).throw(
                     AssertionError("conversations router should not read agent_pool directly for running state")
@@ -275,7 +276,7 @@ async def test_list_conversations_collapses_hire_threads_to_one_visible_conversa
                 ],
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={"thread-main": 1775540000.0, "thread-extra": 1775541000.0},
             chat_runtime_state=SimpleNamespace(messaging_service=_empty_messaging_service()),
         )
@@ -295,7 +296,7 @@ async def test_list_conversations_does_not_require_member_repo() -> None:
                 get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not read visit rows itself")),
             ),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             chat_runtime_state=SimpleNamespace(
                 messaging_service=SimpleNamespace(
@@ -346,7 +347,7 @@ async def test_list_conversations_runs_sync_projection_off_event_loop(monkeypatc
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             chat_runtime_state=SimpleNamespace(messaging_service=messaging_service),
         )
@@ -391,7 +392,7 @@ async def test_list_conversations_fetches_hire_and_visit_sources_in_parallel() -
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=_list_threads),
             agent_pool={},
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             chat_runtime_state=SimpleNamespace(
                 messaging_service=SimpleNamespace(list_conversation_summaries_for_user=_list_visit_summaries)
@@ -424,7 +425,7 @@ async def test_list_conversations_fails_loud_when_messaging_service_missing() ->
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: []),
-            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo, activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
+            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
             thread_last_active={},
             chat_runtime_state=SimpleNamespace(messaging_service=None),
         )
