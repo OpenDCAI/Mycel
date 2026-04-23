@@ -15,12 +15,20 @@ class ThreadsRuntimeState:
     queue_manager: Any
     agent_runtime_gateway: Any
     activity_reader: Any
+    messaging_service: Any | None = None
+    typing_tracker: Any | None = None
     display_builder: Any | None = None
     event_loop: Any | None = None
     checkpoint_store: Any | None = None
 
 
-def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: Any) -> ThreadsRuntimeState:
+def attach_threads_runtime(
+    app: Any,
+    storage_container: Any,
+    *,
+    typing_tracker: Any,
+    messaging_service: Any,
+) -> ThreadsRuntimeState:
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
     app.state.agent_pool = {}
     app.state.thread_sandbox = {}
@@ -43,6 +51,8 @@ def attach_threads_runtime(app: Any, storage_container: Any, *, typing_tracker: 
         queue_manager=app.state.queue_manager,
         agent_runtime_gateway=runtime_state.gateway,
         activity_reader=runtime_state.activity_reader,
+        messaging_service=messaging_service,
+        typing_tracker=typing_tracker,
     )
     app.state.threads_runtime_state = state
     return state

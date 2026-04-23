@@ -4,7 +4,6 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from backend.chat.runtime_access import get_optional_typing_tracker
 from backend.threads.events.buffer import RunEventBuffer, ThreadEventBuffer
 from backend.threads.events.store import append_event as _append_event
 from backend.threads.events.store import cleanup_old_runs
@@ -23,6 +22,11 @@ from storage.contracts import RunEventRepo
 logger = logging.getLogger(__name__)
 
 type SSEEvent = dict[str, str | int]
+
+
+def _get_threads_runtime_typing_tracker(app: Any) -> Any | None:
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    return getattr(runtime_state, "typing_tracker", None) if runtime_state is not None else None
 
 
 def _log_captured_exception(message: str, err: BaseException) -> None:
@@ -211,7 +215,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         run_id=run_id,
         message_metadata=message_metadata,
         input_messages=input_messages,
-        typing_tracker=get_optional_typing_tracker(app),
+        typing_tracker=_get_threads_runtime_typing_tracker(app),
     )
 
 

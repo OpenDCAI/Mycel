@@ -12,6 +12,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     gateway = object()
     activity_reader = object()
     typing_tracker = object()
+    messaging_service = object()
     seen: list[tuple[str, object]] = []
 
     storage_container = SimpleNamespace(queue_repo=lambda: queue_repo)
@@ -32,7 +33,12 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
         ),
     )
 
-    state = threads_bootstrap.attach_threads_runtime(app, storage_container, typing_tracker=typing_tracker)
+    state = threads_bootstrap.attach_threads_runtime(
+        app,
+        storage_container,
+        typing_tracker=typing_tracker,
+        messaging_service=messaging_service,
+    )
 
     assert app.state.queue_manager is queue_manager
     assert app.state.agent_pool == {}
@@ -46,6 +52,8 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert state.queue_manager is queue_manager
     assert state.agent_runtime_gateway is gateway
     assert state.activity_reader is activity_reader
+    assert state.messaging_service is messaging_service
+    assert state.typing_tracker is typing_tracker
     assert state.display_builder is None
     assert state.event_loop is None
     assert state.checkpoint_store is None

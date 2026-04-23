@@ -166,11 +166,9 @@ def _make_app() -> SimpleNamespace:
     return SimpleNamespace(
         state=SimpleNamespace(
             display_builder=display_builder,
-            threads_runtime_state=SimpleNamespace(display_builder=display_builder),
+            threads_runtime_state=SimpleNamespace(display_builder=display_builder, typing_tracker=None),
             thread_tasks={},
             thread_last_active={},
-            typing_tracker=None,
-            chat_runtime_state=SimpleNamespace(typing_tracker=None),
             queue_manager=SimpleNamespace(peek=lambda _thread_id: False),
         )
     )
@@ -303,7 +301,7 @@ async def test_streaming_run_agent_to_buffer_borrows_optional_typing_tracker(mon
     monkeypatch.setattr("backend.threads.streaming._run_execution.run_agent_to_buffer", _fake_run_agent_to_buffer)
 
     app = _make_app()
-    app.state.chat_runtime_state.typing_tracker = typing_tracker
+    app.state.threads_runtime_state.typing_tracker = typing_tracker
 
     result = await _run_agent_to_buffer(
         SimpleNamespace(),
@@ -334,6 +332,7 @@ async def test_streaming_run_agent_to_buffer_passes_none_when_optional_typing_tr
     app = SimpleNamespace(
         state=SimpleNamespace(
             display_builder=_FakeDisplayBuilder(),
+            threads_runtime_state=SimpleNamespace(typing_tracker=None),
             thread_tasks={},
             thread_last_active={},
             queue_manager=SimpleNamespace(peek=lambda _thread_id: False),
