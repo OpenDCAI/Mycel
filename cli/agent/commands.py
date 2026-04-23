@@ -69,6 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     auth = sub.add_parser("auth", parents=[shared])
     auth_sub = auth.add_subparsers(dest="auth_command", required=True)
+    auth_send_otp = auth_sub.add_parser("send-otp", parents=[shared])
+    auth_send_otp.add_argument("email")
+    auth_send_otp.add_argument("invite_code")
+    auth_send_otp.add_argument("--password-stdin", action="store_true")
+    auth_verify_otp = auth_sub.add_parser("verify-otp", parents=[shared])
+    auth_verify_otp.add_argument("email")
+    auth_verify_otp.add_argument("token")
+    auth_complete_register = auth_sub.add_parser("complete-register", parents=[shared])
+    auth_complete_register.add_argument("temp_token")
+    auth_complete_register.add_argument("invite_code")
     auth_login = auth_sub.add_parser("login", parents=[shared])
     auth_login.add_argument("identifier")
     auth_login.add_argument("--password-stdin", action="store_true")
@@ -176,6 +186,12 @@ def run_cli(
         )
     elif args.command == "profile" and args.profile_command == "list":
         payload = [{"name": name, **profile} for name, profile in sorted(load_profiles().items())]
+    elif args.command == "auth" and args.auth_command == "send-otp":
+        payload = client.send_otp(args.email, _resolve_login_password(args, in_stream), args.invite_code)
+    elif args.command == "auth" and args.auth_command == "verify-otp":
+        payload = client.verify_otp(args.email, args.token)
+    elif args.command == "auth" and args.auth_command == "complete-register":
+        payload = client.complete_register(args.temp_token, args.invite_code)
     elif args.command == "auth" and args.auth_command == "login":
         payload = client.login(args.identifier, _resolve_login_password(args, in_stream))
     elif args.command == "agents" and args.agents_command == "list":

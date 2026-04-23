@@ -89,6 +89,15 @@ class AgentCliClient:
     def login(self, identifier: str, password: str) -> dict[str, Any]:
         return self.auth.login(identifier, password)
 
+    def send_otp(self, email: str, password: str, invite_code: str) -> dict[str, Any]:
+        return self.auth.send_otp(email, password, invite_code)
+
+    def verify_otp(self, email: str, token: str) -> dict[str, Any]:
+        return self.auth.verify_otp(email, token)
+
+    def complete_register(self, temp_token: str, invite_code: str) -> dict[str, Any]:
+        return self.auth.complete_register(temp_token, invite_code)
+
     def list_agents(self) -> dict[str, Any]:
         return self.panel.list_agents()
 
