@@ -179,3 +179,47 @@ def test_panel_http_client_uses_bearer_token(monkeypatch):
     assert payload == {"items": [{"id": "agent-1"}]}
     assert captured["path"] == "/api/panel/agents"
     assert captured["headers"] == {"Authorization": "Bearer tok-1"}
+
+
+def test_auth_http_client_supports_registration_flow(monkeypatch):
+    captured: list[tuple[str, dict[str, object]]] = []
+
+    class _Response:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    class _Client:
+        def __init__(self, *, base_url: str, timeout: float, trust_env: bool) -> None:
+            assert base_url == "http://backend"
+            assert trust_env is False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def post(self, path: str, *, json: dict[str, object]) -> _Response:
+            captured.append((path, json))
+            payload = {"ok": True} if path.endswith("/send-otp") else {"token": "tok-1"}
+            if path.endswith("/verify-otp"):
+                payload = {"temp_token": "temp-1"}
+            return _Response(payload)
+
+    monkeypatch.setattr(http.httpx, "Client", _Client)
+    client = http.AuthHttpClient(base_url="http://backend")
+
+    assert client.send_otp("fresh@example.com", "pw-1", "INVITE-1") == {"ok": True}
+    assert client.verify_otp("fresh@example.com", "123456") == {"temp_token": "temp-1"}
+    assert client.complete_register("temp-1", "INVITE-1") == {"token": "tok-1"}
+    assert captured == [
+        ("/api/auth/send-otp", {"email": "fresh@example.com", "password": "pw-1", "invite_code": "INVITE-1"}),
+        ("/api/auth/verify-otp", {"email": "fresh@example.com", "token": "123456"}),
+        ("/api/auth/complete-register", {"temp_token": "temp-1", "invite_code": "INVITE-1"}),
+    ]

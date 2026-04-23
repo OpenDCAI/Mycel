@@ -433,6 +433,67 @@ def test_agent_cli_auth_login_can_read_password_from_stdin() -> None:
     assert json.loads(out.getvalue()) == {"token": "tok-login"}
 
 
+def test_agent_cli_auth_send_otp_reads_password_from_stdin() -> None:
+    from cli.agent import commands
+
+    captured: dict[str, str] = {}
+    out = StringIO()
+
+    def _send_otp(email: str, password: str, invite_code: str) -> dict[str, bool]:
+        captured["email"] = email
+        captured["password"] = password
+        captured["invite_code"] = invite_code
+        return {"ok": True}
+
+    exit_code = commands.run_cli(
+        ["auth", "send-otp", "fresh@example.com", "INVITE-1", "--password-stdin", "--app-base-url", "http://backend"],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        auth_client=SimpleNamespace(send_otp=_send_otp),
+        stdin=StringIO("pw-signup\n"),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert captured == {"email": "fresh@example.com", "password": "pw-signup", "invite_code": "INVITE-1"}
+    assert json.loads(out.getvalue()) == {"ok": True}
+
+
+def test_agent_cli_auth_verify_otp_calls_auth_client() -> None:
+    from cli.agent import commands
+
+    out = StringIO()
+    exit_code = commands.run_cli(
+        ["auth", "verify-otp", "fresh@example.com", "123456", "--app-base-url", "http://backend"],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        auth_client=SimpleNamespace(verify_otp=lambda email, token: {"temp_token": f"{email}:{token}"}),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert json.loads(out.getvalue()) == {"temp_token": "fresh@example.com:123456"}
+
+
+def test_agent_cli_auth_complete_register_calls_auth_client() -> None:
+    from cli.agent import commands
+
+    out = StringIO()
+    exit_code = commands.run_cli(
+        ["auth", "complete-register", "temp-token-1", "INVITE-1", "--app-base-url", "http://backend"],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        auth_client=SimpleNamespace(complete_register=lambda temp_token, invite_code: {"token": f"{temp_token}:{invite_code}"}),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert json.loads(out.getvalue()) == {"token": "temp-token-1:INVITE-1"}
+
+
 def test_agent_cli_agents_list_uses_panel_client_without_agent_identity() -> None:
     from cli.agent import commands
 

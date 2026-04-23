@@ -159,6 +159,30 @@ class AuthHttpClient:
             response.raise_for_status()
             return response.json()
 
+    def send_otp(self, email: str, password: str, invite_code: str) -> dict[str, Any]:
+        with self._client() as client:
+            response = client.post(
+                "/api/auth/send-otp",
+                json={"email": email, "password": password, "invite_code": invite_code},
+            )
+            response.raise_for_status()
+            return response.json()
+
+    def verify_otp(self, email: str, token: str) -> dict[str, Any]:
+        with self._client() as client:
+            response = client.post("/api/auth/verify-otp", json={"email": email, "token": token})
+            response.raise_for_status()
+            return response.json()
+
+    def complete_register(self, temp_token: str, invite_code: str) -> dict[str, Any]:
+        with self._client() as client:
+            response = client.post(
+                "/api/auth/complete-register",
+                json={"temp_token": temp_token, "invite_code": invite_code},
+            )
+            response.raise_for_status()
+            return response.json()
+
 
 class PanelHttpClient:
     def __init__(self, *, base_url: str, auth_token: str | None, timeout: float = 10.0) -> None:
