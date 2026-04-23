@@ -29,12 +29,18 @@ def get_messaging_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     # read chat-owned services from the bundled chat_runtime_state instead of
     # falling back to loose app.state attrs.
     runtime_state = _require_state_attr(app, "chat_runtime_state", "MessagingService not initialized")
-    return runtime_state.messaging_service
+    messaging_service = getattr(runtime_state, "messaging_service", None)
+    if messaging_service is None:
+        raise HTTPException(503, "MessagingService not initialized")
+    return messaging_service
 
 
 def get_relationship_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "chat_runtime_state", "Relationship service unavailable")
-    return runtime_state.relationship_service
+    relationship_service = getattr(runtime_state, "relationship_service", None)
+    if relationship_service is None:
+        raise HTTPException(503, "Relationship service unavailable")
+    return relationship_service
 
 
 def get_user_directory(app: Annotated[Any, Depends(get_app)]) -> UserDirectory:
@@ -52,17 +58,26 @@ def get_thread_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
 
 def get_contact_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "chat_runtime_state", "Contact repo unavailable")
-    return runtime_state.contact_repo
+    contact_repo = getattr(runtime_state, "contact_repo", None)
+    if contact_repo is None:
+        raise HTTPException(503, "Contact repo unavailable")
+    return contact_repo
 
 
 def get_chat_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat repo unavailable")
-    return runtime_state.chat_repo
+    chat_repo = getattr(runtime_state, "chat_repo", None)
+    if chat_repo is None:
+        raise HTTPException(503, "Chat repo unavailable")
+    return chat_repo
 
 
 def get_chat_event_bus(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat event bus unavailable")
-    return runtime_state.chat_event_bus
+    chat_event_bus = getattr(runtime_state, "chat_event_bus", None)
+    if chat_event_bus is None:
+        raise HTTPException(503, "Chat event bus unavailable")
+    return chat_event_bus
 
 
 def get_typing_tracker(app: Annotated[Any, Depends(get_app)]) -> Any:
@@ -88,7 +103,10 @@ def get_agent_actor_lookup(app: Annotated[Any, Depends(get_app)]) -> Any:
 
 def get_runtime_thread_activity_reader(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "threads_runtime_state", "Thread activity reader unavailable")
-    return runtime_state.activity_reader
+    activity_reader = getattr(runtime_state, "activity_reader", None)
+    if activity_reader is None:
+        raise HTTPException(503, "Thread activity reader unavailable")
+    return activity_reader
 
 
 def get_thread_last_active_map(app: Annotated[Any, Depends(get_app)]) -> Any:

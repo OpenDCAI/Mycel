@@ -21,7 +21,10 @@ def test_conversations_router_shell_is_deleted() -> None:
 
 async def _list_conversations(app: SimpleNamespace, user_id: str = "human-user-1"):
     runtime_state = getattr(app.state, "threads_runtime_state", None)
-    if runtime_state is not None and getattr(runtime_state, "thread_repo", None) is None:
+    if runtime_state is None:
+        runtime_state = SimpleNamespace()
+        app.state.threads_runtime_state = runtime_state
+    if getattr(runtime_state, "thread_repo", None) is None:
         runtime_state.thread_repo = getattr(app.state, "thread_repo", None)
     return await owner_conversations_router.list_conversations(
         user_id,
