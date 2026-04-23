@@ -15,7 +15,6 @@ from backend.threads.run import execution as _run_execution
 from backend.threads.run import followups as _run_followups
 from backend.threads.run import lifecycle as _run_lifecycle
 from backend.threads.run import observer as _run_observer
-from core.runtime.notifications import is_terminal_background_notification
 
 logger = logging.getLogger(__name__)
 
@@ -65,35 +64,6 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     _run_buffer_wiring.ensure_thread_handlers(agent, thread_id, app)
 
 
-def _is_terminal_background_notification_message(
-    message: str,
-    *,
-    source: str | None,
-    notification_type: str | None,
-) -> bool:
-    return is_terminal_background_notification(
-        message,
-        source=source,
-        notification_type=notification_type,
-    )
-
-
-def _partition_terminal_followups(items: list[Any]) -> tuple[list[Any], list[Any]]:
-    return _run_cancellation.partition_terminal_followups(items)
-
-
-def _message_metadata_dict(message_metadata: dict[str, Any] | None) -> dict[str, Any]:
-    return dict(message_metadata or {})
-
-
-def _message_already_persisted(message: Any, *, content: str, metadata: dict[str, Any]) -> bool:
-    if message.__class__.__name__ != "HumanMessage":
-        return False
-    if getattr(message, "content", None) != content:
-        return False
-    return (getattr(message, "metadata", None) or {}) == metadata
-
-
 async def _persist_cancelled_run_input_if_missing(
     *,
     agent: Any,
@@ -107,14 +77,6 @@ async def _persist_cancelled_run_input_if_missing(
         message=message,
         message_metadata=message_metadata,
     )
-
-
-def _is_owner_steer_followup_message(
-    *,
-    source: str | None,
-    notification_type: str | None,
-) -> bool:
-    return source == "owner" and notification_type == "steer"
 
 
 async def _persist_cancelled_owner_steers(
