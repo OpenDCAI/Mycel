@@ -19,7 +19,7 @@ Local ports resolve in this order:
 - monitor backend proxy target:
   - `LEON_MONITOR_BACKEND_PORT`
   - `git config --worktree --get worktree.ports.monitor-backend`
-  - fallback to the resolved main backend port
+  - otherwise use the resolved main backend port
 - monitor dev server:
   - `LEON_MONITOR_PORT`
   - `git config --worktree --get worktree.ports.monitor-frontend`

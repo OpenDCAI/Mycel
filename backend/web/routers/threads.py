@@ -615,7 +615,7 @@ def _materialize_workspace_for_sandbox(
     workspace_id = f"workspace-{uuid.uuid4().hex}"
     now = time.time()
     # @@@workspace-binding-write - Phase 2 cuts thread create writes to a real
-    # workspace row; lower sandbox runtime id remains terminal/runtime internals, not workspace authority.
+    # workspace row; sandbox runtime id remains terminal/runtime internals, not workspace authority.
     workspace_repo.create(
         WorkspaceRow(
             id=workspace_id,
@@ -685,7 +685,7 @@ def _bind_existing_sandbox_for_thread(
     if bound_runtime is None:
         raise HTTPException(403, "Sandbox not authorized")
 
-    # @@@existing-sandbox-binding-boundary - lower sandbox runtime identity is only the
+    # @@@existing-sandbox-binding-boundary - sandbox runtime identity is only the
     # mechanism used by sandbox.manager to attach a terminal; router control
     # flow should stay sandbox/workspace-shaped after this point.
     return _ExistingSandboxThreadBinding(

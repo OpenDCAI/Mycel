@@ -11,6 +11,6 @@ def is_owned_by_viewer(viewer_user_id: str, candidate_user: Any | None) -> bool:
     )
 
 
-def access_scope_targets(actor_user: Any | None, fallback_actor_id: str) -> list[str]:
+def access_scope_targets(actor_user: Any | None, actor_user_id: str) -> list[str]:
     owner_user_id = getattr(actor_user, "owner_user_id", None) if actor_user is not None else None
-    return [fallback_actor_id, str(owner_user_id)] if owner_user_id else [fallback_actor_id]
+    return [actor_user_id, str(owner_user_id)] if owner_user_id else [actor_user_id]

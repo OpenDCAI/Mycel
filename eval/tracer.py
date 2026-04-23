@@ -182,7 +182,7 @@ class TrajectoryTracer(BaseTracer):
                     resp_meta = getattr(message, "response_metadata", {}) or {}
                     model_name = resp_meta.get("model_name", "") or resp_meta.get("model", "") or ""
 
-            # Fallback: extract from llm_output (OpenAI format)
+            # OpenAI llm_output token usage path.
             if total_tokens == 0:
                 llm_output = run.outputs.get("llm_output") or {}
                 token_usage = llm_output.get("token_usage") or {}

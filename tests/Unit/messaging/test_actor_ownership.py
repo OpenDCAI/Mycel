@@ -30,10 +30,10 @@ def test_is_owned_by_viewer_rejects_missing_candidate() -> None:
 def test_access_scope_targets_expands_owned_actor_scope() -> None:
     user = SimpleNamespace(id="agent-user-1", owner_user_id="viewer-1")
 
-    assert access_scope_targets(user, fallback_actor_id="agent-user-1") == ["agent-user-1", "viewer-1"]
+    assert access_scope_targets(user, actor_user_id="agent-user-1") == ["agent-user-1", "viewer-1"]
 
 
-def test_access_scope_targets_falls_back_to_raw_actor_id() -> None:
+def test_access_scope_targets_uses_actor_id_without_owner_scope() -> None:
     user = SimpleNamespace(id="human-user-2", owner_user_id=None)
 
-    assert access_scope_targets(user, fallback_actor_id="human-user-2") == ["human-user-2"]
+    assert access_scope_targets(user, actor_user_id="human-user-2") == ["human-user-2"]

@@ -268,7 +268,7 @@ class AgentLoader:
             if skill_md.exists():
                 skills.append({"name": skill_dir.name, "path": str(skill_dir)})
             elif any(skill_dir.glob("*.md")):
-                # Fallback: any .md in skill dir
+                # Accept any markdown file in the skill dir.
                 skills.append({"name": skill_dir.name, "path": str(skill_dir)})
         return skills
 

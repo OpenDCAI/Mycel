@@ -117,7 +117,7 @@ def _patched_config(row: dict[str, Any], updates: dict[str, Any]) -> dict[str, A
 
 
 class SupabaseSandboxRuntimeRepo:
-    """Container-backed SandboxRuntimeRepo for lower sandbox runtime contracts."""
+    """Container-backed SandboxRuntimeRepo for sandbox runtime contracts."""
 
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
