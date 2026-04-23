@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 from backend.web.routers import contacts as contacts_router
 from storage.contracts import ContactEdgeRow
@@ -126,3 +127,24 @@ async def test_delete_contact_fails_loud_when_contact_repo_missing() -> None:
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
+
+
+def test_contacts_http_surface_does_not_expose_query_app_param() -> None:
+    app = FastAPI()
+    app.include_router(contacts_router.router)
+    app.dependency_overrides[contacts_router.get_current_user_id] = lambda: "user-a"
+    app.state.chat_runtime_state = _FakeContactRepo()
+
+    with TestClient(app) as client:
+        openapi = client.get("/openapi.json").json()
+
+    assert openapi["paths"]["/api/contacts"]["get"].get("parameters", []) == []
+    assert openapi["paths"]["/api/contacts"]["post"].get("parameters", []) == []
+    assert openapi["paths"]["/api/contacts/{target_id}"]["delete"].get("parameters", []) == [
+        {
+            "name": "target_id",
+            "in": "path",
+            "required": True,
+            "schema": {"type": "string", "title": "Target Id"},
+        }
+    ]
