@@ -34,9 +34,7 @@ async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkey
         return SimpleNamespace()
 
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
-    monkeypatch.setattr(agent_pool, "get_optional_messaging_service", lambda app: messaging_service, raising=False)
-
-    app = SimpleNamespace(state=SimpleNamespace())
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(messaging_service=messaging_service)))
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
 
@@ -54,7 +52,7 @@ async def test_get_or_create_agent_skips_borrow_when_chat_bootstrap_missing(monk
         return SimpleNamespace()
 
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
-    app = SimpleNamespace(state=SimpleNamespace())
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=None))
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-chat")
 
@@ -142,8 +140,7 @@ async def test_registry_get_or_create_agent_requires_explicit_messaging_service_
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
@@ -179,8 +176,7 @@ async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_se
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
@@ -396,8 +392,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1")
             ),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
@@ -456,8 +451,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
@@ -548,8 +542,7 @@ async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_all
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
@@ -627,8 +620,7 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
@@ -692,8 +684,7 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=SimpleNamespace(
                 storage_container=SimpleNamespace(
                     user_settings_repo=lambda: _UserSettingsRepo(),
@@ -750,8 +741,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=SimpleNamespace(
                 storage_container=SimpleNamespace(
                     user_settings_repo=lambda: _UserSettingsRepo(),
@@ -804,8 +794,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_AgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
@@ -848,8 +837,7 @@ async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_miss
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
-            messaging_service=SimpleNamespace(),
-            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
             thread_sandbox={},
