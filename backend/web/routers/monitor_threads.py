@@ -2,15 +2,19 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 
-from backend.monitor.api.http.dependencies import get_app, get_current_user_id
+from backend.identity.auth.user_resolution import get_current_user_id
 from backend.monitor.application.use_cases import threads as monitor_thread_service
 from backend.monitor.infrastructure.read_models import thread_read_service as monitor_thread_read_service
 from backend.monitor.infrastructure.read_models import thread_workbench_read_service as monitor_thread_workbench_read_service
 from backend.monitor.infrastructure.read_models import trace_read_service as monitor_trace_read_service
 
 router = APIRouter()
+
+
+async def get_app(request: Request) -> FastAPI:
+    return request.app
 
 
 @router.get("/threads")

@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from backend.monitor.api.http.dependencies import get_current_user_id
+from backend.identity.auth.user_resolution import get_current_user_id
 from backend.monitor.api.http.execution_target import resolve_monitor_evaluation_base_url
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
 
