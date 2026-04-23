@@ -651,10 +651,6 @@ def _handle_finalize(td: ThreadDisplay) -> dict | None:
     return {"type": "finalize_turn", "timestamp": now}
 
 
-def _handle_run_done(td: ThreadDisplay, data: dict) -> dict | None:
-    return _handle_finalize(td)
-
-
 def _handle_error(td: ThreadDisplay, data: dict) -> dict | None:
     turn = _get_current_turn(td)
     if not turn:
@@ -782,7 +778,7 @@ def _extract_subagent_stream_identity(step_name: str | None, metadata: dict, con
 _EVENT_HANDLERS: dict[str, Any] = {
     "user_message": _handle_user_message,
     "run_start": _handle_run_start,
-    "run_done": _handle_run_done,
+    "run_done": _handle_finalize,
     "text": _handle_text,
     "tool_call": _handle_tool_call,
     "tool_result": _handle_tool_result,
