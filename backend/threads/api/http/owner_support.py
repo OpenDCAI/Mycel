@@ -440,25 +440,25 @@ def create_thread_sandbox_resources(
     import uuid
 
     from sandbox.control_plane_repos import make_terminal_repo
-    from storage.runtime import build_lease_repo as make_lease_repo
+    from storage.runtime import build_sandbox_runtime_repo as make_sandbox_runtime_repo
 
-    lease_repo = make_lease_repo()
+    sandbox_runtime_repo = make_sandbox_runtime_repo()
     try:
-        lease_id = f"lease-{uuid.uuid4().hex[:12]}"
+        sandbox_runtime_id = f"runtime-{uuid.uuid4().hex[:12]}"
         normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
-        created_lease = lease_repo.create(
-            lease_id,
+        created_runtime = sandbox_runtime_repo.create(
+            sandbox_runtime_id,
             sandbox_type,
             recipe_id=normalized_recipe["id"],
             recipe_json=json.dumps(normalized_recipe, ensure_ascii=False),
             owner_user_id=owner_user_id,
         )
     finally:
-        lease_repo.close()
+        sandbox_runtime_repo.close()
 
-    sandbox_id = str((created_lease or {}).get("sandbox_id") or "").strip()
+    sandbox_id = str((created_runtime or {}).get("sandbox_id") or "").strip()
     if not sandbox_id:
-        raise RuntimeError("lease_repo.create must return sandbox_id for thread sandbox resources")
+        raise RuntimeError("sandbox_runtime_repo.create must return sandbox_id for thread sandbox resources")
 
     terminal_repo = make_terminal_repo()
     if terminal_repo is None:
@@ -477,7 +477,7 @@ def create_thread_sandbox_resources(
         terminal_repo.create(
             terminal_id=terminal_id,
             thread_id=thread_id,
-            lease_id=lease_id,
+            sandbox_runtime_id=sandbox_runtime_id,
             initial_cwd=initial_cwd,
         )
     finally:

@@ -702,6 +702,18 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
         patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(
+            threads_router,
+            "bind_thread_to_existing_sandbox",
+            return_value=(
+                "/workspace/reused",
+                {
+                    "sandbox_runtime_id": "runtime-1",
+                    "provider_name": "daytona_selfhost",
+                    "recipe": {"id": "daytona:recipe-1"},
+                },
+            ),
+        ),
+        patch.object(
             threads_owner_support,
             "bind_thread_to_existing_sandbox",
             return_value=(
