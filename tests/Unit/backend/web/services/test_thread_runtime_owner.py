@@ -186,7 +186,7 @@ def test_streaming_service_uses_thread_runtime_sse_observer_owner() -> None:
     assert owner_module.observe_thread_events is not None
     assert owner_module.observe_run_events is not None
     assert owner_module.observe_sse_buffer is not None
-    assert "from backend.threads.run import observer as _run_observer" in streaming_source
+    assert "from backend.threads.run import observer as _run_observer" not in streaming_source
     assert "backend.web.services.event_buffer" not in owner_source
 
 

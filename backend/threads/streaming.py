@@ -1,10 +1,9 @@
 """SSE streaming service for agent execution."""
 
 import logging
-from collections.abc import AsyncGenerator
 from typing import Any
 
-from backend.threads.events.buffer import RunEventBuffer, ThreadEventBuffer
+from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.events.store import append_event as _append_event
 from backend.threads.events.store import cleanup_old_runs
 from backend.threads.run import buffer_wiring as _run_buffer_wiring
@@ -14,11 +13,8 @@ from backend.threads.run import entrypoints as _run_entrypoints
 from backend.threads.run import execution as _run_execution
 from backend.threads.run import followups as _run_followups
 from backend.threads.run import lifecycle as _run_lifecycle
-from backend.threads.run import observer as _run_observer
 
 logger = logging.getLogger(__name__)
-
-type SSEEvent = dict[str, str | int]
 
 
 def _log_captured_exception(message: str, err: BaseException) -> None:
@@ -200,34 +196,3 @@ async def run_child_thread_live(
         app,
         input_messages=input_messages,
     )
-
-
-# ---------------------------------------------------------------------------
-# Consumer: persistent thread event stream
-# ---------------------------------------------------------------------------
-
-
-async def observe_thread_events(
-    thread_buf: ThreadEventBuffer,
-    after: int = 0,
-) -> AsyncGenerator[SSEEvent, None]:
-    async for event in _run_observer.observe_thread_events(thread_buf, after=after):
-        yield event
-
-
-async def observe_run_events(
-    buf: RunEventBuffer,
-    after: int = 0,
-) -> AsyncGenerator[SSEEvent, None]:
-    async for event in _run_observer.observe_run_events(buf, after=after):
-        yield event
-
-
-async def _observe_sse_buffer(
-    buf: ThreadEventBuffer | RunEventBuffer,
-    *,
-    after: int,
-    stop_on_finish: bool,
-) -> AsyncGenerator[SSEEvent, None]:
-    async for event in _run_observer.observe_sse_buffer(buf, after=after, stop_on_finish=stop_on_finish):
-        yield event
