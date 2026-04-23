@@ -15,9 +15,9 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway, build_agent_runtime_state
 from backend.threads.display.builder import DisplayBuilder
 from backend.threads.events.buffer import ThreadEventBuffer
+from backend.threads.run.lifecycle import repair_incomplete_tool_calls
 from backend.threads.streaming import (
     _ensure_thread_handlers,
-    _repair_incomplete_tool_calls,
     _run_agent_to_buffer,
     start_agent_run,
 )
@@ -656,7 +656,7 @@ async def test_repair_incomplete_tool_calls_uses_query_loop_state():
     trailing.id = "human-after"
     checkpointer.store["repair-live-thread"] = {"channel_values": {"messages": [broken_ai, trailing]}}
 
-    await _repair_incomplete_tool_calls(
+    await repair_incomplete_tool_calls(
         SimpleNamespace(agent=loop),
         {"configurable": {"thread_id": "repair-live-thread"}},
     )

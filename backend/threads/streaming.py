@@ -28,36 +28,6 @@ def _log_captured_exception(message: str, err: BaseException) -> None:
     )
 
 
-async def prime_sandbox(agent: Any, thread_id: str) -> None:
-    await _run_lifecycle.prime_sandbox(agent, thread_id)
-
-
-async def write_cancellation_markers(
-    agent: Any,
-    config: dict[str, Any],
-    pending_tool_calls: dict[str, dict],
-) -> list[str]:
-    return await _run_lifecycle.write_cancellation_markers(agent, config, pending_tool_calls)
-
-
-async def _repair_incomplete_tool_calls(agent: Any, config: dict[str, Any]) -> None:
-    await _run_lifecycle.repair_incomplete_tool_calls(agent, config)
-
-
-# ---------------------------------------------------------------------------
-# Thread event buffer management
-# ---------------------------------------------------------------------------
-
-
-def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
-    return _run_buffer_wiring.get_or_create_thread_buffer(app, thread_id)
-
-
-# ---------------------------------------------------------------------------
-# Per-thread handler setup (idempotent, survives across runs)
-# ---------------------------------------------------------------------------
-
-
 def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     _run_buffer_wiring._append_event = _append_event
     _run_buffer_wiring._start_agent_run = start_agent_run
@@ -138,9 +108,9 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
 ) -> str:
     """Run agent execution and write all SSE events into *thread_buf*."""
     _run_execution.ensure_thread_handlers = _ensure_thread_handlers
-    _run_execution.prime_sandbox = prime_sandbox
-    _run_execution.repair_incomplete_tool_calls = _repair_incomplete_tool_calls
-    _run_execution.write_cancellation_markers = write_cancellation_markers
+    _run_execution.prime_sandbox = _run_lifecycle.prime_sandbox
+    _run_execution.repair_incomplete_tool_calls = _run_lifecycle.repair_incomplete_tool_calls
+    _run_execution.write_cancellation_markers = _run_lifecycle.write_cancellation_markers
     _run_execution.persist_cancelled_run_input_if_missing = _persist_cancelled_run_input_if_missing
     _run_execution.flush_cancelled_owner_steers = _flush_cancelled_owner_steers
     _run_execution.emit_queued_terminal_followups = _emit_queued_terminal_followups
@@ -195,7 +165,7 @@ def start_agent_run(
     input_messages: list[Any] | None = None,
 ) -> str:
     _run_entrypoints._run_agent_to_buffer = _run_agent_to_buffer
-    _run_entrypoints._get_or_create_thread_buffer = get_or_create_thread_buffer
+    _run_entrypoints._get_or_create_thread_buffer = _run_buffer_wiring.get_or_create_thread_buffer
     return _run_entrypoints.start_agent_run(
         agent,
         thread_id,
@@ -221,7 +191,7 @@ async def run_child_thread_live(
     _run_entrypoints._start_agent_run = start_agent_run
     _run_entrypoints._resolve_thread_sandbox = resolve_thread_sandbox
     _run_entrypoints._ensure_thread_handlers = _ensure_thread_handlers
-    _run_entrypoints._get_or_create_thread_buffer = get_or_create_thread_buffer
+    _run_entrypoints._get_or_create_thread_buffer = _run_buffer_wiring.get_or_create_thread_buffer
     _run_entrypoints._extract_text_content = extract_text_content
     return await _run_entrypoints.run_child_thread_live(
         agent,
