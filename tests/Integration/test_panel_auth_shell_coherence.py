@@ -144,7 +144,6 @@ async def test_delete_agent_route_keeps_builtin_guard_before_owner_lookup(monkey
             request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=SimpleNamespace()))),
             user_id="user-1",
             thread_repo=SimpleNamespace(),
-            contact_repo=SimpleNamespace(),
         )
 
     assert excinfo.value.status_code == 403
@@ -166,12 +165,12 @@ async def test_delete_agent_route_rejects_agent_with_existing_threads(monkeypatc
                     state=SimpleNamespace(
                         user_repo=SimpleNamespace(get_by_id=lambda user_id: _agent_user(user_id=user_id) if user_id == "agent-1" else None),
                         thread_repo=SimpleNamespace(list_by_agent_user=lambda agent_user_id: [{"id": f"{agent_user_id}-1"}]),
+                        chat_runtime_state=SimpleNamespace(contact_repo=SimpleNamespace()),
                     )
                 )
             ),
             user_id="user-1",
             thread_repo=SimpleNamespace(list_by_agent_user=lambda agent_user_id: [{"id": f"{agent_user_id}-1"}]),
-            contact_repo=SimpleNamespace(),
         )
 
     assert excinfo.value.status_code == 409
