@@ -396,3 +396,26 @@ def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
 
     assert response.status_code == 503
     assert response.json() == {"detail": "chat bootstrap not attached: contact_repo"}
+
+
+@pytest.mark.asyncio
+async def test_list_chat_candidates_projects_external_user_like_unowned_participant() -> None:
+    current_user = _human("u1", "owner")
+    external_user = UserRow(id="ext-1", display_name="Codex External", type=UserType.EXTERNAL, created_at=NOW)
+    app = _users_app([current_user, external_user], relationships={"ext-1": "visit"})
+
+    result = await _list_chat_candidates(app)
+
+    assert result == [
+        {
+            "user_id": "ext-1",
+            "name": "Codex External",
+            "type": "external",
+            "avatar_url": None,
+            "owner_name": None,
+            "agent_name": "Codex External",
+            "is_owned": False,
+            "relationship_state": "visit",
+            "can_chat": True,
+        }
+    ]
