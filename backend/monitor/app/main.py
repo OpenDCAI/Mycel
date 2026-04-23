@@ -15,13 +15,9 @@ add_permissive_cors(app)
 app.include_router(global_router.router, prefix="/api/monitor")
 
 
-def _resolve_port() -> int:
-    return resolve_app_port("LEON_MONITOR_BACKEND_PORT", "worktree.ports.monitor-backend", 8011)
-
-
 if __name__ == "__main__":
     run_reloadable_app(
         "backend.monitor.app.main:app",
-        port=_resolve_port(),
+        port=resolve_app_port("LEON_MONITOR_BACKEND_PORT", "worktree.ports.monitor-backend", 8011),
         reload_dirs=["backend", "storage", "eval"],
     )

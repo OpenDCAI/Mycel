@@ -180,7 +180,7 @@ def test_monitor_app_resolve_port_prefers_monitor_backend_env(monkeypatch: pytes
     monkeypatch.setenv("LEON_MONITOR_BACKEND_PORT", "55417")
     monkeypatch.setenv("PORT", "9000")
 
-    assert monitor_app_main._resolve_port() == 55417
+    assert app_entrypoint.resolve_app_port("LEON_MONITOR_BACKEND_PORT", "worktree.ports.monitor-backend", 8011) == 55417
 
 
 def test_monitor_app_resolve_port_uses_worktree_config_when_env_missing(monkeypatch: pytest.MonkeyPatch):
@@ -197,7 +197,7 @@ def test_monitor_app_resolve_port_uses_worktree_config_when_env_missing(monkeypa
 
     monkeypatch.setattr(app_entrypoint.subprocess, "run", _run)
 
-    assert monitor_app_main._resolve_port() == 55418
+    assert app_entrypoint.resolve_app_port("LEON_MONITOR_BACKEND_PORT", "worktree.ports.monitor-backend", 8011) == 55418
 
 
 def test_monitor_app_includes_permissive_cors_middleware():
