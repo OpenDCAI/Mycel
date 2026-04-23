@@ -10,11 +10,6 @@ from storage.runtime import (
 )
 
 
-def is_virtual_thread_id(thread_id: str | None) -> bool:
-    """Check if thread_id is a virtual thread (wrapped in parentheses)."""
-    return bool(thread_id) and thread_id.startswith("(") and thread_id.endswith(")")
-
-
 def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
     """Extract provider sandbox-runtime instance id from webhook payload."""
     direct_keys = ("session_id", "sandbox_id", "instance_id", "id")
