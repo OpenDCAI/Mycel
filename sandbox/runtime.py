@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.provider import SandboxProvider
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal, TerminalState
 
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult

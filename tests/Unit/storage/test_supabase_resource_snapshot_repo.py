@@ -2,7 +2,7 @@ import pytest
 
 from storage.providers.supabase.resource_snapshot_repo import SupabaseResourceSnapshotRepo
 
-LOWER_RUNTIME_KEY = "lease_" + "id"
+SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
 
 
 class _FakeTable:
@@ -62,7 +62,7 @@ def test_supabase_resource_snapshot_repo_upserts_sandbox_snapshot_payload() -> N
     assert client.last_schema_name == "container"
     assert client.last_table_name == "resource_snapshots"
     assert client.table_obj.upsert_payload["sandbox_id"] == "sandbox-1"
-    assert LOWER_RUNTIME_KEY not in client.table_obj.upsert_payload
+    assert SANDBOX_RUNTIME_KEY not in client.table_obj.upsert_payload
     assert client.table_obj.upsert_payload["provider_name"] == "daytona"
 
 

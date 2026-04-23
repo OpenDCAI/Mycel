@@ -95,7 +95,7 @@ def _pack_tar(workspace: Path, files: list[str]) -> bytes:
 
 
 def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root: str, files: list[str]):
-    """Fallback: upload via tar+base64+execute for providers without native file API."""
+    """Tar upload path for providers without native file API."""
     t0 = time.time()
     tar_bytes = _pack_tar(workspace, files)
     if not tar_bytes or len(tar_bytes) < 10:
@@ -117,7 +117,7 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
 
 
 def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_root: str):
-    """Fallback: download via tar+base64+execute for providers without native file API."""
+    """Tar download path for providers without native file API."""
     t0 = time.time()
     check = provider.execute(session_id, f"test -d {workspace_root} && echo EXISTS", timeout_ms=10000)
     check_out = (getattr(check, "output", "") or "").strip()

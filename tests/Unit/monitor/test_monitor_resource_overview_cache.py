@@ -163,7 +163,7 @@ def test_resource_overview_cache_refreshes_when_live_resource_row_counts_drift(m
             {
                 "id": "local",
                 "cardCpu": {},
-                "resource_rows": [{"id": "lease-1:m_thread"}],
+                "resource_rows": [{"id": "runtime-1:m_thread"}],
                 "telemetry": {"running": {"used": 1}},
             }
         ],

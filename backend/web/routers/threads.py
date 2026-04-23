@@ -276,9 +276,9 @@ def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
     if payload.existing_sandbox_id:
-        lower_runtime_row = _resolve_owned_existing_sandbox_request_runtime(app, owner_user_id, payload.existing_sandbox_id)
-        if lower_runtime_row is not None:
-            sandbox_type = str(lower_runtime_row["provider_name"] or sandbox_type)
+        sandbox_runtime_row = _resolve_owned_existing_sandbox_request_runtime(app, owner_user_id, payload.existing_sandbox_id)
+        if sandbox_runtime_row is not None:
+            sandbox_type = str(sandbox_runtime_row["provider_name"] or sandbox_type)
     if sandbox_type == "local":
         return None
     provider = sandbox_provider_factory.build_provider_from_config_name(sandbox_type)
@@ -340,7 +340,7 @@ def _resolve_owned_existing_sandbox_request_runtime(
         return None
 
     # @@@existing-sandbox-request-cutover - incoming existing_sandbox_id is sandbox-shaped;
-    # lower runtime identity is resolved only behind the row.
+    # sandbox runtime identity is resolved only behind the row.
     sandbox_owner_user_id = _request_row_text(sandbox, "owner_user_id", label="sandbox")
     if sandbox_owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
@@ -549,10 +549,10 @@ def _create_thread_sandbox_resources(
 
     sandbox_runtime_repo = make_sandbox_runtime_repo()
     try:
-        lease_id = f"lease-{uuid.uuid4().hex[:12]}"
+        sandbox_runtime_id = f"runtime-{uuid.uuid4().hex[:12]}"
         normalized_recipe = normalize_recipe_snapshot(provider_type_from_name(sandbox_type), recipe, provider_name=sandbox_type)
         created_runtime = sandbox_runtime_repo.create(
-            lease_id,
+            sandbox_runtime_id,
             sandbox_type,
             recipe_id=normalized_recipe["id"],
             recipe_json=json.dumps(normalized_recipe, ensure_ascii=False),
@@ -583,7 +583,7 @@ def _create_thread_sandbox_resources(
         terminal_repo.create(
             terminal_id=terminal_id,
             thread_id=thread_id,
-            lease_id=lease_id,
+            sandbox_runtime_id=sandbox_runtime_id,
             initial_cwd=initial_cwd,
         )
     finally:

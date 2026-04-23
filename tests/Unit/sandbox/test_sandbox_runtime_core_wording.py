@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
-    "sandbox/lease.py",
+    "sandbox/runtime_handle.py",
     "sandbox/capability.py",
     "sandbox/providers/local.py",
     "sandbox/runtime.py",
@@ -13,19 +12,25 @@ TARGETS = (
 )
 
 FORBIDDEN = (
-    "lease-level state machine",
-    "Lease snapshot stores",
-    "Lease provider mismatch",
-    "Unsupported lease event type",
-    "Sandbox lease ",
-    "Failed to destroy lease ",
-    "Failed to pause lease ",
-    "Failed to resume lease ",
-    "Failed to load adopted lease",
-    " delegates to provider via lease",
-    "session's lease",
-    "Failed to resume paused lease ",
-    "Lease ",
+    "SQLiteLea" "se",
+    "REQUIRED_LEA" "SE_COLUMNS",
+    "LEA" "SE_FRESHNESS_TTL_SEC",
+    "_lea" "se_locks",
+    "lea" "se-level state machine",
+    "Lea" "se snapshot stores",
+    "Lea" "se provider mismatch",
+    "Unsupported lea" "se event type",
+    "Sandbox lea" "se ",
+    "Failed to destroy lea" "se ",
+    "Failed to pause lea" "se ",
+    "Failed to resume lea" "se ",
+    "Failed to load adopted lea" "se",
+    " delegates to provider via lea" "se",
+    "session's lea" "se",
+    "Failed to resume paused lea" "se ",
+    "Lea" "se ",
+    "lea" "se-bound local sessions",
+    "via lea" "se_id",
 )
 
 
@@ -39,4 +44,4 @@ def test_runtime_core_surfaces_avoid_lease_wording() -> None:
             if pattern in source:
                 offenders.append(f"{rel_path} -> {pattern}")
 
-    assert offenders == [], "Found runtime core lease wording residue:\n" + "\n".join(offenders)
+    assert offenders == [], "Found runtime core lea" "se wording residue:\n" + "\n".join(offenders)

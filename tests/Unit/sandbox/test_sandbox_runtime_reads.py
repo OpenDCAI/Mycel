@@ -15,9 +15,9 @@ def test_load_all_sandbox_runtimes_collapses_duplicate_session_rows_to_visible_o
                 "status": "running",
                 "created_at": "2026-04-22T10:00:00",
                 "last_active": "2026-04-22T10:01:00",
-                "sandbox_runtime_id": "lease-1",
+                "sandbox_runtime_id": "runtime-1",
                 "instance_id": "sess-1",
-                "source": "lease",
+                "source": "runtime",
                 "inspect_visible": True,
             },
             {
@@ -27,10 +27,10 @@ def test_load_all_sandbox_runtimes_collapses_duplicate_session_rows_to_visible_o
                 "status": "running",
                 "created_at": "2026-04-22T10:00:00",
                 "last_active": "2026-04-22T10:02:00",
-                "sandbox_runtime_id": "lease-1",
+                "sandbox_runtime_id": "runtime-1",
                 "instance_id": "sess-1",
                 "chat_session_id": "chat-1",
-                "source": "lease",
+                "source": "runtime",
                 "inspect_visible": True,
             },
         ]
@@ -46,10 +46,10 @@ def test_load_all_sandbox_runtimes_collapses_duplicate_session_rows_to_visible_o
             "status": "running",
             "created_at": "2026-04-22T10:00:00",
             "last_active": "2026-04-22T10:02:00",
-            "sandbox_runtime_id": "lease-1",
+            "sandbox_runtime_id": "runtime-1",
             "instance_id": "sess-1",
             "chat_session_id": "chat-1",
-            "source": "lease",
+            "source": "runtime",
             "inspect_visible": True,
         }
     ]

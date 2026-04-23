@@ -23,8 +23,8 @@ from sandbox.provider import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 
@@ -79,7 +79,7 @@ class LocalSessionProvider(SandboxProvider):
         with self._state_lock:
             # @@@local-provider-process-boundary - LocalSessionProvider state is in-memory only; in multi-worker
             # web backends the pause/resume request can land on a different process than the one that created
-            # the session. For lease-bound local sessions (context_id like "leon-<lease_id>" or "local-..."),
+            # the session. For runtime-bound local sessions (context_id like "leon-<runtime_id>" or "local-..."),
             # treat missing in-memory state as "running" so pause/resume stays idempotent across processes.
             state = self._session_states.get(session_id)
             if state is None:

@@ -54,8 +54,8 @@ def _is_daytona_not_found_error(exc: Exception) -> bool:
 if TYPE_CHECKING:
     from daytona_sdk._sync.sandbox import Sandbox as DaytonaSandbox
 
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 

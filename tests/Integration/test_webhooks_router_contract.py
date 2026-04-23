@@ -36,7 +36,7 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
             return self._event_repo
 
     event_repo = _EventRepo()
-    monkeypatch.setattr(webhooks, "make_lower_runtime_repo", lambda: _RuntimeRepo())
+    monkeypatch.setattr(webhooks, "make_sandbox_runtime_repo", lambda: _RuntimeRepo())
     monkeypatch.setattr(webhooks, "_get_container", lambda: _Container(event_repo))
 
     payload = await webhooks.ingest_provider_webhook(
@@ -64,14 +64,14 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lower_runtime(
+async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_sandbox_runtime(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     class _RuntimeRepo:
         def find_by_instance(self, *, provider_name: str, instance_id: str):
             assert provider_name == "local"
             assert instance_id == "inst-2"
-            return {"lease_" + "id": "lease-1", "sandbox_id": "sandbox-1"}
+            return {"lease_" + "id": "runtime-1", "sandbox_id": "sandbox-1"}
 
         def close(self) -> None:
             return None
@@ -93,8 +93,8 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
         def provider_event_repo(self) -> _EventRepo:
             return self._event_repo
 
-    class _LowerRuntime:
-        sandbox_runtime_id = "lease-1"
+    class _SandboxRuntime:
+        sandbox_runtime_id = "runtime-1"
 
         def __init__(self) -> None:
             self.applied: list[dict[str, object]] = []
@@ -115,19 +115,19 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
 
     expected_db_path = tmp_path / "sandbox.db"
     event_repo = _EventRepo()
-    lower_runtime = _LowerRuntime()
+    sandbox_runtime = _SandboxRuntime()
 
     monkeypatch.setattr(webhooks, "resolve_sandbox_db_path", lambda: expected_db_path, raising=False)
-    monkeypatch.setattr(webhooks, "make_lower_runtime_repo", lambda: _RuntimeRepo())
+    monkeypatch.setattr(webhooks, "make_sandbox_runtime_repo", lambda: _RuntimeRepo())
     monkeypatch.setattr(webhooks, "_get_container", lambda: _Container(event_repo))
     monkeypatch.setattr(webhooks, "init_providers_and_managers", lambda: ({}, {"local": _Manager()}))
 
-    def _fake_lower_runtime_from_row(row, db_path):
-        assert row == {"lease_" + "id": "lease-1", "sandbox_id": "sandbox-1"}
+    def _fake_sandbox_runtime_from_row(row, db_path):
+        assert row == {"lease_" + "id": "runtime-1", "sandbox_id": "sandbox-1"}
         assert db_path == expected_db_path
-        return lower_runtime
+        return sandbox_runtime
 
-    monkeypatch.setattr(webhooks, "lower_runtime_from_row", _fake_lower_runtime_from_row)
+    monkeypatch.setattr(webhooks, "sandbox_runtime_from_row", _fake_sandbox_runtime_from_row)
 
     payload = await webhooks.ingest_provider_webhook(
         "local",
@@ -142,13 +142,13 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
             "instance_id": "inst-2",
             "event_type": "provider.running",
             "payload": {"instance_id": "inst-2", "event": "provider.running"},
-            "matched_sandbox_runtime_handle": "lease-1",
+            "matched_sandbox_runtime_handle": "runtime-1",
             "matched_sandbox_id": "sandbox-1",
         }
     ]
-    assert lower_runtime.applied == [
+    assert sandbox_runtime.applied == [
         {
-            "provider": lower_runtime.applied[0]["provider"],
+            "provider": sandbox_runtime.applied[0]["provider"],
             "event_type": "observe.status",
             "source": "webhook",
             "payload": {"status": "running", "raw_event_type": "provider.running"},
@@ -157,7 +157,7 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_lo
 
 
 @pytest.mark.asyncio
-async def test_list_provider_events_strips_lower_runtime_match_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_provider_events_strips_runtime_match_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     class _EventRepo:
         def list_recent(self, limit: int):
             assert limit == 25
@@ -167,7 +167,7 @@ async def test_list_provider_events_strips_lower_runtime_match_identity(monkeypa
                     "provider_name": "daytona",
                     "instance_id": "instance-1",
                     "event_type": "started",
-                    "matched_sandbox_runtime_handle": "lease-1",
+                    "matched_sandbox_runtime_handle": "runtime-1",
                     "matched_sandbox_id": "sandbox-1",
                     "payload": {"ok": True},
                 }

@@ -268,7 +268,7 @@ describe("thread api client contract", () => {
     await expect(api.listSandboxTypes()).rejects.toThrow("Malformed sandbox types");
   });
 
-  it("listMySandboxes reads canonical sandbox summaries without lower runtime identities", async () => {
+  it("listMySandboxes reads canonical sandbox summaries without runtime identities", async () => {
     authFetch.mockResolvedValue(okJson({
       sandboxes: [{
         sandbox_id: "sandbox-1",

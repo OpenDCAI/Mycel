@@ -25,9 +25,9 @@ from sandbox.lifecycle import (
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.provider import SandboxProvider
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 REQUIRED_CHAT_SESSION_COLUMNS = {
@@ -212,7 +212,7 @@ class ChatSessionManager:
         if not row:
             return None
 
-        from sandbox.lease import sandbox_runtime_from_row
+        from sandbox.runtime_handle import sandbox_runtime_from_row
         from sandbox.terminal import terminal_from_row
 
         _term_repo = self._terminal_repo
@@ -230,11 +230,11 @@ class ChatSessionManager:
         if _sandbox_runtime_repo is None:
             _sandbox_runtime_repo = make_sandbox_runtime_repo(db_path=self.db_path)
         try:
-            _lease_row = _sandbox_runtime_repo.get(row["sandbox_runtime_id"])
+            _sandbox_runtime_row = _sandbox_runtime_repo.get(row["sandbox_runtime_id"])
         finally:
             if own_sandbox_runtime_repo:
                 _sandbox_runtime_repo.close()
-        sandbox_runtime = sandbox_runtime_from_row(_lease_row, self.db_path) if _lease_row else None
+        sandbox_runtime = sandbox_runtime_from_row(_sandbox_runtime_row, self.db_path) if _sandbox_runtime_row else None
         if not terminal or not sandbox_runtime:
             return None
 

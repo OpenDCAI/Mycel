@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "backend/sandboxes/__init__.py",
     "backend/threads/__init__.py",
@@ -10,20 +9,21 @@ TARGETS = (
     "sandbox/runtime.py",
     "sandbox/resource_snapshot.py",
     "core/runtime/agent.py",
+    "core/agents/service.py",
 )
 
 FORBIDDEN = (
-    "sandbox_lease",
-    "which lease binds",
-    "managed by lease",
-    "lease/session creation",
-    "shared lease",
-    "Lease state machine",
-    "lease identity directly",
+    "sandbox_lea" "se",
+    "which lea" "se binds",
+    "managed by lea" "se",
+    "lea" "se/session creation",
+    "shared lea" "se",
+    "Lea" "se state machine",
+    "lea" "se identity directly",
 )
 
 
-def test_runtime_comment_tail_avoids_lease_phrasing() -> None:
+def test_runtime_comment_tail_avoids_runtime_drift_phrasing() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     offenders: list[str] = []
 
@@ -33,4 +33,4 @@ def test_runtime_comment_tail_avoids_lease_phrasing() -> None:
             if pattern in source:
                 offenders.append(f"{rel_path} -> {pattern}")
 
-    assert offenders == [], "Found runtime comment tail lease residue:\n" + "\n".join(offenders)
+    assert offenders == [], "Found runtime comment tail lea" "se residue:\n" + "\n".join(offenders)

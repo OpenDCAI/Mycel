@@ -59,8 +59,8 @@ def _patch_provider_contracts(monkeypatch, *, description: str, vendor: str, typ
     )
 
 
-def _lease(
-    lower_runtime_id: str,
+def _sandbox_runtime_row(
+    sandbox_runtime_id: str,
     *,
     sandbox_id: str | None = None,
     provider_name: str = "daytona_selfhost",
@@ -76,7 +76,7 @@ def _lease(
     recipe: dict | None = None,
 ) -> dict:
     payload = {
-        "lease_" + "id": lower_runtime_id,
+        "lease_" + "id": sandbox_runtime_id,
         "sandbox_id": sandbox_id,
         "provider_name": provider_name,
         "thread_ids": [thread_id],
@@ -95,7 +95,7 @@ def _lease(
 
 
 def _sandbox(*args, **kwargs) -> dict:
-    payload = _lease(*args, **kwargs)
+    payload = _sandbox_runtime_row(*args, **kwargs)
     payload.pop("lease_" + "id", None)
     return payload
 
@@ -147,7 +147,7 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             _sandbox(
-                "lease-1",
+                "runtime-1",
                 sandbox_id="sandbox-1",
                 thread_id="thread-1",
                 agent_user_id="agent-1",
@@ -179,7 +179,7 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
     assert payload["providers"][0]["consoleUrl"] == "https://example.com/daytona"
     assert "sess" + "ions" not in payload["providers"][0]
     resource_row = payload["providers"][0]["resource_rows"][0]
-    assert "lease" + "Id" not in resource_row
+    assert "".join(["lea", "se", "Id"]) not in resource_row
     assert resource_row["sandboxId"] == "sandbox-1"
     assert resource_row["id"] == "sandbox-1:thread-1"
     assert resource_row["threadId"] == "thread-1"
@@ -193,13 +193,13 @@ def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(m
     assert "memberName" not in resource_row
 
 
-def test_user_resource_projection_omits_lower_runtime_identity(monkeypatch) -> None:
+def test_user_resource_projection_omits_sandbox_runtime_identity(monkeypatch) -> None:
     monkeypatch.setattr(
         resource_provider_boundary_service,
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
-            _lease(
-                "lease-1",
+            _sandbox_runtime_row(
+                "runtime-1",
                 sandbox_id="sandbox-1",
                 thread_id="thread-1",
                 agent_user_id="agent-1",
@@ -222,7 +222,7 @@ def test_user_resource_projection_omits_lower_runtime_identity(monkeypatch) -> N
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     assert payload["summary"]["total_providers"] == 1
-    assert "lease" + "Id" not in payload["providers"][0]["resource_rows"][0]
+    assert "".join(["lea", "se", "Id"]) not in payload["providers"][0]["resource_rows"][0]
 
 
 def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
@@ -231,7 +231,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             _sandbox(
-                "lease-1",
+                "runtime-1",
                 thread_id="thread-1",
                 agent_user_id="agent-1",
                 agent_name="Morel",
@@ -278,8 +278,8 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
     [
         (
             [
-                _lease(
-                    "lease-local",
+                _sandbox_runtime_row(
+                    "runtime-local",
                     sandbox_id="sandbox-local",
                     provider_name="local",
                     thread_id="thread-local",
@@ -289,8 +289,8 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                     observed_state="detached",
                     desired_state="running",
                 ),
-                _lease(
-                    "lease-remote",
+                _sandbox_runtime_row(
+                    "runtime-remote",
                     sandbox_id="sandbox-remote",
                     thread_id="thread-remote",
                     agent_user_id="agent-remote",
@@ -311,8 +311,8 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
         ),
         (
             [
-                _lease(
-                    "lease-remote-a",
+                _sandbox_runtime_row(
+                    "runtime-remote-a",
                     sandbox_id="sandbox-a",
                     thread_id="thread-a",
                     agent_user_id="agent-a",
@@ -321,8 +321,8 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                     observed_state="detached",
                     desired_state="running",
                 ),
-                _lease(
-                    "lease-remote-b",
+                _sandbox_runtime_row(
+                    "runtime-remote-b",
                     sandbox_id="sandbox-b",
                     thread_id="thread-b",
                     agent_user_id="agent-b",
@@ -364,7 +364,7 @@ def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases,
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
 
     assert all(assertions(payload))
-    assert monitor_repo.batch_calls == [[lease["sandbox_id"] for lease in leases]]
+    assert monitor_repo.batch_calls == [[sandbox["sandbox_id"] for sandbox in leases]]
 
 
 def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch) -> None:
@@ -382,7 +382,7 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
         "list_user_sandboxes",
         lambda owner_user_id, **_kwargs: [
             _sandbox(
-                "lease-1",
+                "runtime-1",
                 thread_id="thread-1",
                 agent_user_id="agent-1",
                 agent_name="Morel",

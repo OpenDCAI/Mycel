@@ -19,7 +19,7 @@ PYPROJECT = ROOT / "pyproject.toml"
 
 REQUIRED_ENV = {
     "LEON_STORAGE_STRATEGY": "supabase",
-    "LEON_SUPABASE_CLIENT_FACTORY": "backend.web.core.supabase_factory:create_supabase_client",
+    "LEON_SUPABASE_CLIENT_FACTORY": "backend.identity.auth.supabase_runtime:create_supabase_client",
     "LEON_DB_SCHEMA": "staging",
     "SUPABASE_PUBLIC_URL": "https://supabase.mycel.nextmind.space",
     "SUPABASE_INTERNAL_URL": "https://supabase.mycel.nextmind.space",

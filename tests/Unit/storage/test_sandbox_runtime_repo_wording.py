@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "storage/providers/sqlite/sandbox_runtime_repo.py",
     "storage/providers/supabase/sandbox_runtime_repo.py",
@@ -15,7 +14,7 @@ def test_provider_runtime_repo_modules_do_not_use_lease_repo_wording() -> None:
 
     for rel_path in TARGETS:
         source = (repo_root / rel_path).read_text(encoding="utf-8")
-        if "lease repo" in source:
+        if "lea" "se repo" in source:
             offenders.append(rel_path)
 
-    assert offenders == [], "Found lease repo wording in provider runtime repos:\n" + "\n".join(offenders)
+    assert offenders == [], "Found lea" "se repo wording in provider runtime repos:\n" + "\n".join(offenders)

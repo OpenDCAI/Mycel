@@ -416,11 +416,11 @@ class SQLiteSandboxRuntimeRepo:
             self._conn.execute("DELETE FROM sandbox_runtimes WHERE sandbox_runtime_id = ?", (sandbox_runtime_id,))
             self._conn.commit()
 
-        # Clean up per-runtime locks in SQLiteLease
-        from sandbox.lease import SQLiteLease
+        # Clean up per-runtime locks in SQLiteSandboxRuntimeHandle.
+        from sandbox.runtime_handle import SQLiteSandboxRuntimeHandle
 
-        with SQLiteLease._lock_guard:
-            SQLiteLease._lease_locks.pop(sandbox_runtime_id, None)
+        with SQLiteSandboxRuntimeHandle._lock_guard:
+            SQLiteSandboxRuntimeHandle._runtime_locks.pop(sandbox_runtime_id, None)
 
     def list_all(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -513,13 +513,13 @@ class SQLiteSandboxRuntimeRepo:
         )
         self._conn.commit()
 
-        from sandbox.lease import REQUIRED_EVENT_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_LEASE_COLUMNS
+        from sandbox.runtime_handle import REQUIRED_EVENT_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_SANDBOX_RUNTIME_COLUMNS
 
         runtime_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtimes)").fetchall()}
         instance_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
         event_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_runtime_events)").fetchall()}
 
-        missing_runtime = REQUIRED_LEASE_COLUMNS - runtime_cols
+        missing_runtime = REQUIRED_SANDBOX_RUNTIME_COLUMNS - runtime_cols
         if missing_runtime:
             raise RuntimeError(
                 f"sandbox_runtimes schema mismatch: missing {sorted(missing_runtime)}. Purge ~/.leon/sandbox.db and retry."

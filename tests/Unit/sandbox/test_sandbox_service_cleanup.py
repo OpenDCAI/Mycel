@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from backend.sandboxes import service as sandbox_service
 
-LOWER_RUNTIME_KEY = "lease_" + "id"
+SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
 
 
 def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
@@ -11,11 +11,11 @@ def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
     class _Manager:
         terminal_store = SimpleNamespace(list_all=lambda: [], delete=lambda _terminal_id: None)
 
-        def get_sandbox_runtime(self, lower_runtime_id: str):
-            return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
+        def get_sandbox_runtime(self, sandbox_runtime_id: str):
+            return SimpleNamespace(**{SANDBOX_RUNTIME_KEY: sandbox_runtime_id})
 
-        def destroy_sandbox_runtime_resources(self, lower_runtime_id: str) -> bool:
-            calls.append(lower_runtime_id)
+        def destroy_sandbox_runtime_resources(self, sandbox_runtime_id: str) -> bool:
+            calls.append(sandbox_runtime_id)
             return True
 
     monkeypatch.setattr(
@@ -29,16 +29,16 @@ def test_destroy_sandbox_runtime_uses_manager_destroy_resources(monkeypatch):
         lambda: SimpleNamespace(thread_repo=lambda: SimpleNamespace(close=lambda: None)),
     )
 
-    result = sandbox_service.destroy_sandbox_runtime(sandbox_runtime_handle="lease-1", provider_name="daytona_selfhost")
+    result = sandbox_service.destroy_sandbox_runtime(sandbox_runtime_handle="runtime-1", provider_name="daytona_selfhost")
 
     assert result == {
         "ok": True,
         "action": "destroy",
-        "sandbox_runtime_handle": "lease-1",
+        "sandbox_runtime_handle": "runtime-1",
         "provider": "daytona_selfhost",
         "mode": "manager_runtime",
     }
-    assert calls == ["lease-1"]
+    assert calls == ["runtime-1"]
 
 
 def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypatch):
@@ -46,7 +46,7 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
     destroyed: list[str] = []
     deleted_thread_chats: list[tuple[str, str]] = []
     terminal_rows = [
-        {"terminal_id": "term-stale", LOWER_RUNTIME_KEY: "lease-1", "thread_id": "thread-missing"},
+        {"terminal_id": "term-stale", SANDBOX_RUNTIME_KEY: "runtime-1", "thread_id": "thread-missing"},
     ]
 
     class _Manager:
@@ -58,11 +58,11 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
             delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason))
         )
 
-        def get_sandbox_runtime(self, lower_runtime_id: str):
-            return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
+        def get_sandbox_runtime(self, sandbox_runtime_id: str):
+            return SimpleNamespace(**{SANDBOX_RUNTIME_KEY: sandbox_runtime_id})
 
-        def destroy_sandbox_runtime_resources(self, lower_runtime_id: str) -> bool:
-            destroyed.append(lower_runtime_id)
+        def destroy_sandbox_runtime_resources(self, sandbox_runtime_id: str) -> bool:
+            destroyed.append(sandbox_runtime_id)
             return True
 
     class _ThreadRepo:
@@ -83,12 +83,12 @@ def test_destroy_sandbox_runtime_prunes_stale_terminals_before_destroy(monkeypat
     )
     monkeypatch.setattr(sandbox_service, "build_storage_container", lambda: _Container())
 
-    result = sandbox_service.destroy_sandbox_runtime(sandbox_runtime_handle="lease-1", provider_name="daytona_selfhost")
+    result = sandbox_service.destroy_sandbox_runtime(sandbox_runtime_handle="runtime-1", provider_name="daytona_selfhost")
 
     assert result["ok"] is True
     assert deleted_thread_chats == [("thread-missing", "stale_terminal_pruned")]
     assert deleted_terminals == ["term-stale"]
-    assert destroyed == ["lease-1"]
+    assert destroyed == ["runtime-1"]
 
 
 def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(monkeypatch):
@@ -96,7 +96,7 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
     destroyed: list[str] = []
     deleted_thread_chats: list[tuple[str, str]] = []
     terminal_rows = [
-        {"terminal_id": "term-live", LOWER_RUNTIME_KEY: "lease-1", "thread_id": "thread-live"},
+        {"terminal_id": "term-live", SANDBOX_RUNTIME_KEY: "runtime-1", "thread_id": "thread-live"},
     ]
 
     class _Manager:
@@ -108,11 +108,11 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
             delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason))
         )
 
-        def get_sandbox_runtime(self, lower_runtime_id: str):
-            return SimpleNamespace(**{LOWER_RUNTIME_KEY: lower_runtime_id})
+        def get_sandbox_runtime(self, sandbox_runtime_id: str):
+            return SimpleNamespace(**{SANDBOX_RUNTIME_KEY: sandbox_runtime_id})
 
-        def destroy_sandbox_runtime_resources(self, lower_runtime_id: str) -> bool:
-            destroyed.append(lower_runtime_id)
+        def destroy_sandbox_runtime_resources(self, sandbox_runtime_id: str) -> bool:
+            destroyed.append(sandbox_runtime_id)
             return True
 
     class _ThreadRepo:
@@ -134,7 +134,7 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
     monkeypatch.setattr(sandbox_service, "build_storage_container", lambda: _Container())
 
     result = sandbox_service.destroy_sandbox_runtime(
-        sandbox_runtime_handle="lease-1",
+        sandbox_runtime_handle="runtime-1",
         provider_name="daytona_selfhost",
         detach_thread_bindings=True,
     )
@@ -142,4 +142,4 @@ def test_destroy_sandbox_runtime_detaches_threads_with_sandbox_cleanup_reason(mo
     assert result["ok"] is True
     assert deleted_thread_chats == [("thread-live", "detached_sandbox_cleanup")]
     assert deleted_terminals == ["term-live"]
-    assert destroyed == ["lease-1"]
+    assert destroyed == ["runtime-1"]

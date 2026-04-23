@@ -26,8 +26,8 @@ from sandbox.provider import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 logger = logging.getLogger(__name__)

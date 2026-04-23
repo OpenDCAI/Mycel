@@ -3,7 +3,7 @@ import pytest
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from tests.fakes.supabase import FakeSupabaseClient, FakeSupabaseQuery
 
-LOWER_RUNTIME_KEY = "lease_" + "id"
+SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
 
 
 class _BrokenSandboxInstancesClient(FakeSupabaseClient):
@@ -102,7 +102,7 @@ def _chat_session(
     row = {
         "chat_session_id": session_id,
         "thread_id": thread_id,
-        LOWER_RUNTIME_KEY: sandbox_runtime_handle,
+        SANDBOX_RUNTIME_KEY: sandbox_runtime_handle,
         "status": status,
     }
     if started_at is not None:
@@ -115,7 +115,7 @@ def _chat_session(
 def _terminal(terminal_id: str, sandbox_runtime_handle: str, thread_id: str, created_at: str) -> dict:
     return {
         "terminal_id": terminal_id,
-        LOWER_RUNTIME_KEY: sandbox_runtime_handle,
+        SANDBOX_RUNTIME_KEY: sandbox_runtime_handle,
         "thread_id": thread_id,
         "created_at": created_at,
     }
@@ -183,7 +183,7 @@ def test_query_threads_accepts_optional_thread_filter() -> None:
                 _sandbox(
                     "sandbox-1",
                     provider_env_id="instance-1",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                 )
             ],
             "container.workspaces": [
@@ -218,7 +218,7 @@ def test_query_threads_projects_workspace_backed_sandbox_rows() -> None:
                 _sandbox(
                     "sandbox-1",
                     provider_env_id="instance-1",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                 )
             ],
             "container.workspaces": [
@@ -246,7 +246,7 @@ def test_query_threads_projects_workspace_backed_sandbox_rows() -> None:
 
 def test_query_threads_chunks_sandbox_lookup() -> None:
     sandboxes = [
-        _sandbox(f"sandbox-{index}", provider_env_id=f"instance-{index}", sandbox_runtime_handle=f"lease-{index}") for index in range(175)
+        _sandbox(f"sandbox-{index}", provider_env_id=f"instance-{index}", sandbox_runtime_handle=f"runtime-{index}") for index in range(175)
     ]
     workspaces = [
         _workspace(f"workspace-{index}", f"sandbox-{index}", updated_at=f"2026-04-05T10:{index % 60:02d}:00") for index in range(175)
@@ -274,7 +274,7 @@ def test_query_sandbox_threads_returns_workspace_thread_ids() -> None:
             "container.sandboxes": [
                 _sandbox(
                     "sandbox-1",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                 )
             ],
             "container.workspaces": [
@@ -305,7 +305,7 @@ def test_query_sandbox_reads_container_sandbox_row_by_id() -> None:
                     desired_state="paused",
                     observed_state="paused",
                     updated_at="2026-04-05T10:10:00",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                     sandbox_template_id="template-1",
                 )
             ]
@@ -366,13 +366,13 @@ def test_query_thread_runtime_rows_ignores_removed_chat_sessions_rows() -> None:
                     provider_env_id="instance-1",
                     desired_state="paused",
                     observed_state="paused",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                     last_error="last boom",
                 )
             ],
             "chat_sessions": [
                 {
-                    **_chat_session("sess-1", "thread-1", "lease-1", started_at="2026-04-05T10:01:00"),
+                    **_chat_session("sess-1", "thread-1", "runtime-1", started_at="2026-04-05T10:01:00"),
                     "ended_at": None,
                     "close_reason": None,
                 }
@@ -388,7 +388,7 @@ def test_chat_session_monitor_surfaces_do_not_read_removed_chat_sessions_table()
         _BrokenChatSessionsClient(
             {
                 "container.sandboxes": [
-                    _sandbox("sandbox-1", provider_env_id="instance-1", sandbox_runtime_handle="lease-1"),
+                    _sandbox("sandbox-1", provider_env_id="instance-1", sandbox_runtime_handle="runtime-1"),
                 ],
                 "container.workspaces": [
                     _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:05:00"),
@@ -426,7 +426,7 @@ def test_query_sandboxes_uses_latest_workspace_thread_binding() -> None:
                     desired_state="paused",
                     observed_state="paused",
                     updated_at="2026-04-05T10:10:00",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                 )
             ],
             "container.workspaces": [
@@ -467,7 +467,7 @@ def test_query_sandboxes_reads_container_sandboxes_with_workspace_binding() -> N
                     desired_state="paused",
                     observed_state="paused",
                     updated_at="2026-04-05T10:10:00",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                 )
             ],
             "container.workspaces": [
@@ -506,7 +506,7 @@ def test_query_sandboxes_does_not_depend_on_workspace_sandbox_id_in_filter() -> 
                         "sandbox-1",
                         provider_env_id="instance-1",
                         updated_at="2026-04-05T10:10:00",
-                        sandbox_runtime_handle="lease-1",
+                        sandbox_runtime_handle="runtime-1",
                     )
                 ],
                 "container.workspaces": [_workspace("workspace-1", "sandbox-1")],
@@ -524,7 +524,7 @@ def test_query_sandboxes_handles_many_workspace_thread_bindings() -> None:
             f"sandbox-{index}",
             provider_env_id=f"instance-{index}",
             updated_at=f"2026-04-05T10:{index % 60:02d}:00",
-            sandbox_runtime_handle=f"lease-{index}",
+            sandbox_runtime_handle=f"runtime-{index}",
         )
         for index in range(175)
     ]
@@ -553,11 +553,11 @@ def test_query_sandbox_instance_id_uses_sandbox_provider_env_id() -> None:
                     provider_name="daytona_selfhost",
                     observed_state="detached",
                     provider_env_id="instance-sandbox",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                 )
             ],
             "sandbox_instances": [
-                {LOWER_RUNTIME_KEY: "lease-1", "provider_session_id": "instance-lease"},
+                {SANDBOX_RUNTIME_KEY: "runtime-1", "provider_session_id": "instance-runtime"},
             ],
         }
     )
@@ -574,7 +574,7 @@ def test_query_sandbox_cleanup_target_reads_structured_sandbox_target() -> None:
                     provider_name="daytona_selfhost",
                     provider_env_id="instance-sandbox",
                     observed_state="detached",
-                    sandbox_runtime_handle="lease-1",
+                    sandbox_runtime_handle="runtime-1",
                 )
             ],
         }
@@ -584,7 +584,7 @@ def test_query_sandbox_cleanup_target_reads_structured_sandbox_target() -> None:
         "sandbox_id": "sandbox-1",
         "provider_name": "daytona_selfhost",
         "provider_env_id": "instance-sandbox",
-        "sandbox_runtime_handle": "lease-1",
+        "sandbox_runtime_handle": "runtime-1",
     }
 
 
@@ -615,11 +615,11 @@ def test_query_sandbox_instance_ids_chunks_large_lookup() -> None:
                     _sandbox(
                         f"sandbox-{index}",
                         provider_env_id=f"sandbox-instance-sandbox-{index}",
-                        sandbox_runtime_handle=f"lease-{index}",
+                        sandbox_runtime_handle=f"runtime-{index}",
                     )
                     for index in range(175)
                 ],
-                "sandbox_instances": [{LOWER_RUNTIME_KEY: "lease-174", "provider_session_id": "sandbox-instance-sandbox-174"}],
+                "sandbox_instances": [{SANDBOX_RUNTIME_KEY: "runtime-174", "provider_session_id": "sandbox-instance-sandbox-174"}],
             }
         )
     )
@@ -634,11 +634,11 @@ def test_query_sandbox_instance_ids_use_sandbox_provider_env_id() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
-                _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", sandbox_runtime_handle="lease-1"),
-                _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", sandbox_runtime_handle="lease-2"),
+                _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", sandbox_runtime_handle="runtime-1"),
+                _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", sandbox_runtime_handle="runtime-2"),
             ],
             "sandbox_instances": [
-                {LOWER_RUNTIME_KEY: "lease-2", "provider_session_id": "stale-instance-2"},
+                {SANDBOX_RUNTIME_KEY: "runtime-2", "provider_session_id": "stale-instance-2"},
             ],
         }
     )
@@ -653,11 +653,11 @@ def test_query_sandbox_instance_ids_use_sandbox_runtime_identity() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
-                _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", sandbox_runtime_handle="lease-1"),
-                _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", sandbox_runtime_handle="lease-2"),
+                _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", sandbox_runtime_handle="runtime-1"),
+                _sandbox("sandbox-2", provider_env_id="sandbox-instance-2", sandbox_runtime_handle="runtime-2"),
             ],
             "sandbox_instances": [
-                {LOWER_RUNTIME_KEY: "lease-2", "provider_session_id": "stale-instance-2"},
+                {SANDBOX_RUNTIME_KEY: "runtime-2", "provider_session_id": "stale-instance-2"},
             ],
         }
     )
@@ -672,10 +672,10 @@ def test_query_sandbox_instance_id_uses_sandbox_runtime_identity() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
-                _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", sandbox_runtime_handle="lease-1"),
+                _sandbox("sandbox-1", provider_env_id="sandbox-instance-1", sandbox_runtime_handle="runtime-1"),
             ],
             "sandbox_instances": [
-                {LOWER_RUNTIME_KEY: "lease-1", "provider_session_id": "instance-lease"},
+                {SANDBOX_RUNTIME_KEY: "runtime-1", "provider_session_id": "instance-runtime"},
             ],
         }
     )
@@ -693,7 +693,7 @@ def test_list_probe_targets_use_sandbox_provider_env_id() -> None:
                     provider_env_id="instance-sandbox",
                     observed_state="detached",
                     updated_at="2026-04-05T10:10:00",
-                    sandbox_runtime_handle="lease-running",
+                    sandbox_runtime_handle="runtime-running",
                 ),
                 _sandbox(
                     "sandbox-paused",
@@ -701,7 +701,7 @@ def test_list_probe_targets_use_sandbox_provider_env_id() -> None:
                     desired_state="paused",
                     observed_state="paused",
                     updated_at="2026-04-05T10:11:00",
-                    sandbox_runtime_handle="lease-paused",
+                    sandbox_runtime_handle="runtime-paused",
                 ),
                 _sandbox(
                     "sandbox-stopped",
@@ -710,11 +710,11 @@ def test_list_probe_targets_use_sandbox_provider_env_id() -> None:
                     desired_state="stopped",
                     observed_state="stopped",
                     updated_at="2026-04-05T10:12:00",
-                    sandbox_runtime_handle="lease-stopped",
+                    sandbox_runtime_handle="runtime-stopped",
                 ),
             ],
             "sandbox_instances": [
-                {LOWER_RUNTIME_KEY: "lease-running", "provider_session_id": "instance-lease"},
+                {SANDBOX_RUNTIME_KEY: "runtime-running", "provider_session_id": "instance-runtime"},
             ],
         }
     )
@@ -763,7 +763,7 @@ def test_list_probe_targets_use_sandbox_runtime_identity() -> None:
                     provider_env_id="instance-sandbox",
                     observed_state="detached",
                     updated_at="2026-04-05T10:10:00",
-                    sandbox_runtime_handle="lease-running",
+                    sandbox_runtime_handle="runtime-running",
                 ),
                 _sandbox(
                     "sandbox-paused",
@@ -771,11 +771,11 @@ def test_list_probe_targets_use_sandbox_runtime_identity() -> None:
                     desired_state="paused",
                     observed_state="paused",
                     updated_at="2026-04-05T10:11:00",
-                    sandbox_runtime_handle="lease-paused",
+                    sandbox_runtime_handle="runtime-paused",
                 ),
             ],
             "sandbox_instances": [
-                {LOWER_RUNTIME_KEY: "lease-running", "provider_session_id": "instance-lease"},
+                {SANDBOX_RUNTIME_KEY: "runtime-running", "provider_session_id": "instance-runtime"},
             ],
         }
     )
@@ -810,10 +810,10 @@ def test_instance_lookup_does_not_read_removed_instances_table(include_updated_a
             _sandbox(
                 "sandbox-1",
                 provider_name="daytona_selfhost",
-                provider_env_id="instance-lease",
+                provider_env_id="instance-runtime",
                 observed_state="detached",
                 updated_at="2026-04-05T10:10:00" if include_updated_at else "2026-04-05T10:00:00",
-                sandbox_runtime_handle="lease-1",
+                sandbox_runtime_handle="runtime-1",
             )
         ]
     }
@@ -826,26 +826,26 @@ def test_instance_lookup_does_not_read_removed_instances_table(include_updated_a
             {
                 "sandbox_id": "sandbox-1",
                 "provider_name": "daytona_selfhost",
-                "instance_id": "instance-lease",
+                "instance_id": "instance-runtime",
                 "observed_state": "detached",
             }
         ]
     else:
-        assert result == "instance-lease"
+        assert result == "instance-runtime"
 
 
 def test_query_resource_rows_uses_sandbox_thread_rows_without_session_rows() -> None:
     repo = _repo(
         {
             "container.sandboxes": [
-                _sandbox("sandbox-active", created_at="2026-04-05T10:00:00", sandbox_runtime_handle="lease-active"),
+                _sandbox("sandbox-active", created_at="2026-04-05T10:00:00", sandbox_runtime_handle="runtime-active"),
                 _sandbox(
                     "sandbox-terminal",
                     provider_name="daytona_selfhost",
                     desired_state="paused",
                     observed_state="paused",
                     created_at="2026-04-05T11:00:00",
-                    sandbox_runtime_handle="lease-terminal",
+                    sandbox_runtime_handle="runtime-terminal",
                 ),
                 _sandbox(
                     "sandbox-recent",
@@ -853,7 +853,7 @@ def test_query_resource_rows_uses_sandbox_thread_rows_without_session_rows() -> 
                     desired_state="paused",
                     observed_state="paused",
                     created_at="2026-04-05T12:00:00",
-                    sandbox_runtime_handle="lease-recent",
+                    sandbox_runtime_handle="runtime-recent",
                 ),
             ],
             "container.workspaces": [
@@ -865,9 +865,9 @@ def test_query_resource_rows_uses_sandbox_thread_rows_without_session_rows() -> 
                 _thread("subagent-deadbeef", "workspace-subagent", updated_at="2026-04-05T11:06:00"),
             ],
             "chat_sessions": [
-                _chat_session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
-                _chat_session("sess-recent-a", "thread-old", "lease-recent", status="closed", started_at="2026-04-05T12:01:00"),
-                _chat_session("sess-recent-b", "thread-new", "lease-recent", status="closed", started_at="2026-04-05T12:02:00"),
+                _chat_session("sess-active", "thread-active", "runtime-active", started_at="2026-04-05T10:01:00"),
+                _chat_session("sess-recent-a", "thread-old", "runtime-recent", status="closed", started_at="2026-04-05T12:01:00"),
+                _chat_session("sess-recent-b", "thread-new", "runtime-recent", status="closed", started_at="2026-04-05T12:02:00"),
             ],
         }
     )
@@ -951,14 +951,14 @@ def test_query_resource_rows_projects_sandbox_rows_without_session_rows() -> Non
     repo = _repo(
         {
             "container.sandboxes": [
-                _sandbox("sandbox-active", created_at="2026-04-05T10:00:00", sandbox_runtime_handle="lease-active"),
+                _sandbox("sandbox-active", created_at="2026-04-05T10:00:00", sandbox_runtime_handle="runtime-active"),
                 _sandbox(
                     "sandbox-terminal",
                     provider_name="daytona_selfhost",
                     desired_state="paused",
                     observed_state="paused",
                     created_at="2026-04-05T11:00:00",
-                    sandbox_runtime_handle="lease-terminal",
+                    sandbox_runtime_handle="runtime-terminal",
                 ),
             ],
             "container.workspaces": [
@@ -968,7 +968,7 @@ def test_query_resource_rows_projects_sandbox_rows_without_session_rows() -> Non
                 _thread("thread-parent", "workspace-parent", updated_at="2026-04-05T11:05:00"),
             ],
             "chat_sessions": [
-                _chat_session("sess-active", "thread-active", "lease-active", started_at="2026-04-05T10:01:00"),
+                _chat_session("sess-active", "thread-active", "runtime-active", started_at="2026-04-05T10:01:00"),
             ],
         }
     )

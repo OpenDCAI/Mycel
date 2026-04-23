@@ -2,10 +2,17 @@ import pytest
 from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
 from backend.identity.auth import supabase_runtime
-from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
+from backend.identity.auth.supabase_runtime import create_supabase_auth_client, create_supabase_client
 
 
-def test_web_supabase_factory_is_compat_shell():
+def test_web_supabase_factory_compat_shell_is_removed():
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[3]
+    assert not (repo_root / "backend/web/core/supabase_factory.py").exists()
+
+
+def test_supabase_runtime_module_exports_canonical_factories():
     assert create_supabase_client is supabase_runtime.create_supabase_client
     assert create_supabase_auth_client is supabase_runtime.create_supabase_auth_client
 

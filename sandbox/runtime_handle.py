@@ -37,9 +37,9 @@ from storage.runtime import uses_supabase_runtime_defaults
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
 
-LEASE_FRESHNESS_TTL_SEC = 3.0
+SANDBOX_RUNTIME_FRESHNESS_TTL_SEC = 3.0
 
-REQUIRED_LEASE_COLUMNS = {
+REQUIRED_SANDBOX_RUNTIME_COLUMNS = {
     "sandbox_runtime_id",
     "provider_name",
     "recipe_id",
@@ -168,7 +168,7 @@ class SandboxRuntimeHandle(ABC):
         provider: SandboxProvider,
         *,
         force: bool = False,
-        max_age_sec: float = LEASE_FRESHNESS_TTL_SEC,
+        max_age_sec: float = SANDBOX_RUNTIME_FRESHNESS_TTL_SEC,
     ) -> str: ...
 
     @abstractmethod
@@ -187,10 +187,10 @@ class SandboxRuntimeHandle(ABC):
 
 
 class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
-    """SQLite-backed lease implementation."""
+    """SQLite-backed sandbox runtime handle implementation."""
 
     _lock_guard = threading.Lock()
-    _lease_locks: dict[str, threading.RLock] = {}
+    _runtime_locks: dict[str, threading.RLock] = {}
 
     def __init__(
         self,
@@ -231,14 +231,14 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
     def _instance_lock(self) -> threading.RLock:
         with self._lock_guard:
-            lock = self._lease_locks.get(self.sandbox_runtime_id)
+            lock = self._runtime_locks.get(self.sandbox_runtime_id)
             if lock is None:
-                # @@@reentrant-lease-lock - apply() may be called inside ensure_active_instance critical sections.
+                # @@@reentrant-runtime-lock - apply() may be called inside ensure_active_instance critical sections.
                 lock = threading.RLock()
-                self._lease_locks[self.sandbox_runtime_id] = lock
+                self._runtime_locks[self.sandbox_runtime_id] = lock
             return lock
 
-    def _is_fresh(self, max_age_sec: float = LEASE_FRESHNESS_TTL_SEC) -> bool:
+    def _is_fresh(self, max_age_sec: float = SANDBOX_RUNTIME_FRESHNESS_TTL_SEC) -> bool:
         if not self.observed_at:
             return False
         return (utc_now() - self.observed_at).total_seconds() <= max_age_sec
@@ -470,7 +470,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if should_commit:
                 target.close()
 
-    def _persist_lease_metadata(self, conn: sqlite3.Connection | None = None) -> None:
+    def _persist_runtime_metadata(self, conn: sqlite3.Connection | None = None) -> None:
         should_commit = conn is None
         target = conn or _connect(self.db_path)
         try:
@@ -550,7 +550,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 repo.close()
             self._sync_from(sandbox_runtime_from_row(row, self.db_path))
             return
-        self._persist_lease_metadata()
+        self._persist_runtime_metadata()
 
     def _observe_status_via_strategy_repo(self, raw_status: str, *, source: str) -> None:
         observed = self._normalize_provider_state(raw_status)
@@ -860,7 +860,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 self.observed_at = utc_now()
                 self.version += 1
                 with _connect(self.db_path) as conn:
-                    self._persist_lease_metadata(conn=conn)
+                    self._persist_runtime_metadata(conn=conn)
                     self._append_event(
                         event_type=event_type,
                         source=source,
@@ -978,7 +978,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
             self.status = "recovering"
             if not _use_supabase_storage(self.db_path):
-                self._persist_lease_metadata()
+                self._persist_runtime_metadata()
             from sandbox.thread_context import get_current_thread_id
 
             thread_id = get_current_thread_id()
@@ -1075,7 +1075,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         provider: SandboxProvider,
         *,
         force: bool = False,
-        max_age_sec: float = LEASE_FRESHNESS_TTL_SEC,
+        max_age_sec: float = SANDBOX_RUNTIME_FRESHNESS_TTL_SEC,
     ) -> str:
         capability = provider.get_capability()
         if self.needs_refresh:
@@ -1124,7 +1124,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             finally:
                 repo.close()
             return
-        self._persist_lease_metadata()
+        self._persist_runtime_metadata()
 
 
 def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteSandboxRuntimeHandle:

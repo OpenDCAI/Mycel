@@ -1,1 +1,1 @@
-"""Monitor web-facing compatibility/adaptor layer."""
+"""Monitor web-facing integration layer."""

@@ -37,7 +37,7 @@ def _collapse_owner_runtime_rows(runtimes: list[dict[str, Any]]) -> list[dict[st
             continue
         # @@@owner-runtime-collapse - owner-facing runtime surfaces should expose
         # one row per provider/runtime identity, not one row per subagent thread
-        # that happens to reuse the same lower runtime handle.
+        # that happens to reuse the same sandbox runtime handle.
         if _runtime_row_rank(row) > _runtime_row_rank(current):
             collapsed[key] = row
     return [collapsed[key] for key in ordered_keys]

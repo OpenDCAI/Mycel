@@ -73,7 +73,7 @@ async def test_list_sandbox_types_reports_current_daytona_provider_when_inventor
 
 
 @pytest.mark.asyncio
-async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_sandbox_runtimes_strips_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sandbox_router, "init_providers_and_managers", lambda: ({}, {"local": object()}))
     monkeypatch.setattr(
         sandbox_router,
@@ -84,7 +84,7 @@ async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: 
                 "thread_id": "thread-1",
                 "provider": "local",
                 "status": "running",
-                "sandbox_runtime_" + "id": "lease-1",
+                "sandbox_runtime_" + "id": "runtime-1",
                 "instance_id": "instance-1",
             }
         ],
@@ -105,7 +105,7 @@ async def test_list_sandbox_runtimes_strips_lower_runtime_identity(monkeypatch: 
 
 
 @pytest.mark.asyncio
-async def test_sandbox_runtime_mutation_response_strips_lower_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_sandbox_runtime_mutation_response_strips_runtime_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
     def fake_mutate_sandbox_runtime(**kwargs: object) -> dict[str, object]:
@@ -116,7 +116,7 @@ async def test_sandbox_runtime_mutation_response_strips_lower_runtime_identity(m
             "session_id": "runtime-1",
             "provider": "local",
             "thread_id": None,
-            "sandbox_runtime_" + "id": "lease-1",
+            "sandbox_runtime_" + "id": "runtime-1",
             "mode": "manager_runtime",
         }
 
@@ -165,8 +165,8 @@ def test_list_user_sandboxes_projects_internal_runtime_rows(monkeypatch: pytest.
         def query_sandboxes(self) -> list[dict[str, object]]:
             return [
                 {
-                    "lease_" + "id": "lease-1",
-                    "sandbox_runtime_id": "lease-1",
+                    "lease_" + "id": "runtime-1",
+                    "sandbox_runtime_id": "runtime-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "local",
                     "recipe_id": "local:default",

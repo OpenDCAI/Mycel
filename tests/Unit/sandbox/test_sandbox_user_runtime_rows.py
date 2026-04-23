@@ -4,11 +4,11 @@ import pytest
 
 from backend.sandboxes import service as sandbox_service
 
-LOWER_RUNTIME_KEY = "lease_" + "id"
+SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
 
 
 def _runtime_row(
-    lower_runtime_id: str,
+    sandbox_runtime_id: str,
     thread_id: str,
     *,
     provider_name: str = "local",
@@ -21,9 +21,10 @@ def _runtime_row(
     **extra,
 ):
     return {
-        LOWER_RUNTIME_KEY: lower_runtime_id,
-        "sandbox_runtime_id": lower_runtime_id,
-        "sandbox_id": sandbox_id or lower_runtime_id.replace("lease", "sandbox", 1),
+        SANDBOX_RUNTIME_KEY: sandbox_runtime_id,
+        "sandbox_runtime_id": sandbox_runtime_id,
+        "sandbox_id": sandbox_id
+        or sandbox_runtime_id.replace("runtime", "sandbox", 1),
         "provider_name": provider_name,
         "recipe_id": recipe_id or f"{provider_name}:default",
         "recipe_json": None,
@@ -73,7 +74,7 @@ class _FakeMonitorRepo:
         self.sandbox_instance_id_calls.append(sandbox_id)
         for row in self._rows:
             if row.get("sandbox_id") == sandbox_id:
-                return self._instance_ids.get(str(row.get(LOWER_RUNTIME_KEY) or ""))
+                return self._instance_ids.get(str(row.get(SANDBOX_RUNTIME_KEY) or ""))
         return None
 
     def close(self):
@@ -121,8 +122,8 @@ class _FakeUserRepo:
     [
         (
             [
-                _runtime_row("lease-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
-                _runtime_row("lease-1", "subagent-deadbeef", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
+                _runtime_row("runtime-1", "thread-parent", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
+                _runtime_row("runtime-1", "subagent-deadbeef", provider_name="daytona_selfhost", cwd="/home/daytona/files/app"),
             ],
             ("thread-parent", "subagent-deadbeef"),
             ["thread-parent"],
@@ -138,8 +139,8 @@ class _FakeUserRepo:
         ),
         (
             [
-                _runtime_row("lease-1", "thread-a"),
-                _runtime_row("lease-1", "thread-b"),
+                _runtime_row("runtime-1", "thread-a"),
+                _runtime_row("runtime-1", "thread-b"),
             ],
             (
                 ("thread-a", {"branch_index": 2, "is_main": False}),
@@ -180,7 +181,7 @@ def test_user_runtime_rows_visible_thread_contract(
     assert len(sandboxes) == 1
     sandbox = sandboxes[0]
     assert sandbox["sandbox_id"] == "sandbox-1"
-    assert LOWER_RUNTIME_KEY not in sandbox
+    assert SANDBOX_RUNTIME_KEY not in sandbox
     assert sandbox["thread_ids"] == expected_thread_ids
     assert sandbox["agents"] == expected_agents
     assert sandbox["recipe_id"] == expected_recipe_id
@@ -188,8 +189,8 @@ def test_user_runtime_rows_visible_thread_contract(
 
 def test_user_runtime_rows_uses_owner_bulk_repo_surfaces(monkeypatch):
     rows = [
-        _runtime_row("lease-1", "thread-a"),
-        _runtime_row("lease-2", "thread-b", created_at="2026-04-07T10:01:00Z", cwd="/tmp/app2"),
+        _runtime_row("runtime-1", "thread-a"),
+        _runtime_row("runtime-2", "thread-b", created_at="2026-04-07T10:01:00Z", cwd="/tmp/app2"),
     ]
 
     class _BulkOnlyThreadRepo(_FakeThreadRepo):
@@ -228,12 +229,12 @@ def test_user_runtime_rows_uses_owner_bulk_repo_surfaces(monkeypatch):
 
 def test_count_user_visible_sandboxes_by_provider_uses_narrow_owner_surface(monkeypatch):
     rows = [
-        _runtime_row("lease-local", "thread-a", provider_name="local"),
-        _runtime_row("lease-local-duplicate", "thread-a", provider_name="local", sandbox_id="sandbox-local"),
-        _runtime_row("lease-daytona", "thread-b", provider_name="daytona_selfhost"),
-        _runtime_row("lease-subagent", "subagent-hidden", provider_name="daytona_selfhost"),
-        _runtime_row("lease-other-owner", "thread-other", provider_name="e2b"),
-        _runtime_row("lease-destroying", "thread-c", provider_name="docker", desired_state="destroyed"),
+        _runtime_row("runtime-local", "thread-a", provider_name="local"),
+        _runtime_row("runtime-local-duplicate", "thread-a", provider_name="local", sandbox_id="sandbox-local"),
+        _runtime_row("runtime-daytona", "thread-b", provider_name="daytona_selfhost"),
+        _runtime_row("runtime-subagent", "subagent-hidden", provider_name="daytona_selfhost"),
+        _runtime_row("runtime-other-owner", "thread-other", provider_name="e2b"),
+        _runtime_row("runtime-destroying", "thread-c", provider_name="docker", desired_state="destroyed"),
     ]
 
     class _BulkOnlyThreadRepo(_FakeThreadRepo):
@@ -269,7 +270,7 @@ def test_count_user_visible_sandboxes_by_provider_uses_narrow_owner_surface(monk
 
 
 def test_list_user_sandboxes_returns_user_visible_runtime_fields(monkeypatch):
-    rows = [_runtime_row("lease-1", "thread-a", sandbox_id="sandbox-1")]
+    rows = [_runtime_row("runtime-1", "thread-a", sandbox_id="sandbox-1")]
     thread_repo, user_repo = _single_agent_repos("thread-a")
     monitor_repo = _FakeMonitorRepo(rows)
 
@@ -282,7 +283,7 @@ def test_list_user_sandboxes_returns_user_visible_runtime_fields(monkeypatch):
 
     assert len(sandboxes) == 1
     sandbox = sandboxes[0]
-    assert LOWER_RUNTIME_KEY not in sandbox
+    assert SANDBOX_RUNTIME_KEY not in sandbox
     assert "sandbox_runtime_id" not in sandbox
     assert sandbox["sandbox_id"] == "sandbox-1"
     assert sandbox["provider_name"] == "local"
@@ -301,9 +302,9 @@ def test_list_user_sandboxes_returns_user_visible_runtime_fields(monkeypatch):
     ]
 
 
-def test_list_user_sandboxes_does_not_require_lower_runtime_identity(monkeypatch):
-    row = _runtime_row("lease-1", "thread-a", sandbox_id="sandbox-1")
-    row.pop(LOWER_RUNTIME_KEY)
+def test_list_user_sandboxes_does_not_require_sandbox_runtime_identity(monkeypatch):
+    row = _runtime_row("runtime-1", "thread-a", sandbox_id="sandbox-1")
+    row.pop(SANDBOX_RUNTIME_KEY)
     thread_repo, user_repo = _single_agent_repos("thread-a")
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo([row]))
 
@@ -315,13 +316,13 @@ def test_list_user_sandboxes_does_not_require_lower_runtime_identity(monkeypatch
 
     assert len(sandboxes) == 1
     assert sandboxes[0]["sandbox_id"] == "sandbox-1"
-    assert LOWER_RUNTIME_KEY not in sandboxes[0]
+    assert SANDBOX_RUNTIME_KEY not in sandboxes[0]
     assert "sandbox_runtime_id" not in sandboxes[0]
 
 
-def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_runtime_identity(monkeypatch):
-    row = _runtime_row("lease-1", "thread-a", sandbox_id="sandbox-1")
-    row.pop(LOWER_RUNTIME_KEY)
+def test_count_user_visible_sandboxes_by_provider_does_not_require_sandbox_runtime_identity(monkeypatch):
+    row = _runtime_row("runtime-1", "thread-a", sandbox_id="sandbox-1")
+    row.pop(SANDBOX_RUNTIME_KEY)
     thread_repo = _FakeThreadRepo(
         {
             "thread-a": {"agent_user_id": "agent-1", "owner_user_id": "owner-1"},
@@ -348,18 +349,18 @@ def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_runtime
     [
         (
             [
-                _runtime_row("lease-1", "thread-a", sandbox_id="sandbox-1"),
-                _runtime_row("lease-1", "thread-b", created_at="2026-04-07T10:00:01Z", sandbox_id="sandbox-1"),
+                _runtime_row("runtime-1", "thread-a", sandbox_id="sandbox-1"),
+                _runtime_row("runtime-1", "thread-b", created_at="2026-04-07T10:00:01Z", sandbox_id="sandbox-1"),
             ],
             True,
-            {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
+            {"runtime-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             "provider-session-1",
             ["sandbox-1"],
         ),
         (
             [
                 _runtime_row(
-                    "lease-1",
+                    "runtime-1",
                     "thread-parent",
                     sandbox_id="sandbox-1",
                     provider_name="daytona_selfhost",
@@ -369,14 +370,14 @@ def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_runtime
                 )
             ],
             True,
-            {"lease-1": "provider-session-probed", "sandbox-1": "provider-session-probed"},
+            {"runtime-1": "provider-session-probed", "sandbox-1": "provider-session-probed"},
             "provider-session-inline",
             [],
         ),
         (
             [
                 _runtime_row(
-                    "lease-1",
+                    "runtime-1",
                     "thread-parent",
                     sandbox_id="sandbox-1",
                     provider_name="daytona_selfhost",
@@ -385,14 +386,14 @@ def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_runtime
                 )
             ],
             True,
-            {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
+            {"runtime-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             "provider-session-1",
             ["sandbox-1"],
         ),
         (
             [
                 _runtime_row(
-                    "lease-1",
+                    "runtime-1",
                     "thread-parent",
                     sandbox_id="sandbox-1",
                     provider_name="daytona_selfhost",
@@ -401,7 +402,7 @@ def test_count_user_visible_sandboxes_by_provider_does_not_require_lower_runtime
                 )
             ],
             False,
-            {"lease-1": "provider-session-1", "sandbox-1": "provider-session-1"},
+            {"runtime-1": "provider-session-1", "sandbox-1": "provider-session-1"},
             None,
             [],
         ),
@@ -439,9 +440,9 @@ def test_user_runtime_rows_runtime_session_id_contract(
 
 def test_user_runtime_rows_keeps_detached_but_hides_destroying_runtimes(monkeypatch):
     rows = [
-        _runtime_row("lease-running", "thread-running", cwd="/tmp/running"),
+        _runtime_row("runtime-running", "thread-running", cwd="/tmp/running"),
         _runtime_row(
-            "lease-paused",
+            "runtime-paused",
             "thread-paused",
             provider_name="daytona_selfhost",
             recipe_id="daytona:default",
@@ -451,7 +452,7 @@ def test_user_runtime_rows_keeps_detached_but_hides_destroying_runtimes(monkeypa
             cwd="/home/daytona/app",
         ),
         _runtime_row(
-            "lease-detached",
+            "runtime-detached",
             "thread-detached",
             observed_state="detached",
             desired_state="running",
@@ -459,7 +460,7 @@ def test_user_runtime_rows_keeps_detached_but_hides_destroying_runtimes(monkeypa
             cwd="/tmp/stale",
         ),
         _runtime_row(
-            "lease-destroying",
+            "runtime-destroying",
             "thread-destroying",
             observed_state="paused",
             desired_state="destroyed",

@@ -7,7 +7,7 @@ describe("ResourcesPage resource identity contract", () => {
   it("does not keep removed runtime identity as a frontend resource grouping source", () => {
     const resourcesPage = readFileSync(resolve(import.meta.dirname, "ResourcesPage.tsx"), "utf8");
     const resourceTypes = readFileSync(resolve(import.meta.dirname, "resources/types.ts"), "utf8");
-    const removedLeaseFieldToken = "lease" + "Id";
+    const removedLeaseFieldToken = ["lea", "se", "Id"].join("");
 
     expect(resourcesPage).not.toContain(removedLeaseFieldToken);
     expect(resourceTypes).not.toContain(removedLeaseFieldToken);

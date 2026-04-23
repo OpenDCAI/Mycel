@@ -59,7 +59,7 @@ def test_delete_managed_volume_ignores_missing_daytona_volume():
     volume = _FakeVolumeClient(get_error=_MissingDaytonaVolumeError("missing"))
     provider.client = SimpleNamespace(volume=volume)
 
-    provider.delete_managed_volume("leon-volume-lease-missing")
+    provider.delete_managed_volume("leon-volume-runtime-missing")
 
     assert volume.deleted == []
 
@@ -71,4 +71,4 @@ def test_delete_managed_volume_reraises_non_missing_daytona_error():
     provider.client = SimpleNamespace(volume=_FakeVolumeClient(get_error=_BoomError("boom")))
 
     with pytest.raises(_BoomError):
-        provider.delete_managed_volume("leon-volume-lease-boom")
+        provider.delete_managed_volume("leon-volume-runtime-boom")

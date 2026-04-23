@@ -16,12 +16,12 @@ from storage.runtime import build_workspace_repo
 def _public_destroy_result(result: Any) -> Any:
     if not isinstance(result, dict):
         return result
-    return {key: value for key, value in result.items() if key not in {"lease_id", "lower_runtime_handle", "sandbox_runtime_handle"}}
+    return {key: value for key, value in result.items() if key != "sandbox_runtime_handle"}
 
 
 def cleanup_sandbox(request: SandboxCleanupRequest) -> RuntimeMutationResult:
     result = destroy_sandbox_runtime(
-        lower_runtime_handle=request.sandbox_runtime_handle,
+        sandbox_runtime_handle=request.sandbox_runtime_handle,
         provider_name=request.provider_name,
         detach_thread_bindings=request.detach_thread_bindings,
     )

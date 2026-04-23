@@ -1,8 +1,8 @@
 import uuid
 from pathlib import Path
 
-import sandbox.lease as sandbox_lease_module
-from sandbox.lease import SandboxInstance, SQLiteSandboxRuntimeHandle
+import sandbox.runtime_handle as sandbox_runtime_module
+from sandbox.runtime_handle import SandboxInstance, SQLiteSandboxRuntimeHandle
 
 
 class _FakeSandboxRuntimeRepo:
@@ -35,7 +35,7 @@ class _FakeAdoptSandboxRuntimeRepo:
     def get(self, sandbox_runtime_id: str):
         self.get_calls.append(sandbox_runtime_id)
         return {
-            "sandbox_runtime_id": "lease-1",
+            "sandbox_runtime_id": "runtime-1",
             "provider_name": "local",
             "recipe_id": None,
             "recipe_json": None,
@@ -134,7 +134,7 @@ class _FakeProvider:
 def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> None:
     fake_sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
         {
-            "sandbox_runtime_id": "lease-1",
+            "sandbox_runtime_id": "runtime-1",
             "provider_name": "local",
             "recipe_id": None,
             "recipe_json": None,
@@ -159,37 +159,37 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
     fake_event_repo = _FakeEventRepo()
     fake_sandbox_repo = _FakeSandboxRepo()
 
-    monkeypatch.setattr(sandbox_lease_module, "_use_supabase_storage", lambda _db_path=None: True)
-    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_sandbox_runtime_repo)
-    monkeypatch.setattr(sandbox_lease_module, "_make_provider_event_repo", lambda: fake_event_repo)
-    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
+    monkeypatch.setattr(sandbox_runtime_module, "_use_supabase_storage", lambda _db_path=None: True)
+    monkeypatch.setattr(sandbox_runtime_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_sandbox_runtime_repo)
+    monkeypatch.setattr(sandbox_runtime_module, "_make_provider_event_repo", lambda: fake_event_repo)
+    monkeypatch.setattr(sandbox_runtime_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
 
-    lease = SQLiteSandboxRuntimeHandle(
-        sandbox_runtime_id="lease-1",
+    sandbox_runtime = SQLiteSandboxRuntimeHandle(
+        sandbox_runtime_id="runtime-1",
         provider_name="local",
         current_instance=SandboxInstance(
             instance_id="inst-1",
             provider_name="local",
             status="running",
-            created_at=sandbox_lease_module.utc_now(),
+            created_at=sandbox_runtime_module.utc_now(),
         ),
         db_path=Path("/tmp/fake-sandbox.db"),
         observed_state="running",
         status="active",
     )
 
-    lease._observe_status_via_strategy_repo("detached", source="test")
+    sandbox_runtime._observe_status_via_strategy_repo("detached", source="test")
 
     assert fake_sandbox_repo.binding_updates == [
         {
-            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:lease-1').hex}",
+            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:runtime-1').hex}",
             "provider_env_id": None,
             "updated_at": "2026-04-17T00:00:05+00:00",
         }
     ]
     assert fake_sandbox_repo.observed_state_updates == [
         {
-            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:lease-1').hex}",
+            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:runtime-1').hex}",
             "observed_state": "detached",
             "updated_at": "2026-04-17T00:00:05+00:00",
         }
@@ -199,7 +199,7 @@ def test_observe_status_detached_clears_sandbox_provider_env(monkeypatch) -> Non
 def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(monkeypatch) -> None:
     fake_sandbox_runtime_repo = _FakeAdoptSandboxRuntimeRepo(
         {
-            "sandbox_runtime_id": "lease-1",
+            "sandbox_runtime_id": "runtime-1",
             "provider_name": "local",
             "recipe_id": None,
             "recipe_json": None,
@@ -220,7 +220,7 @@ def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(
             "updated_at": "2026-04-17T00:00:05+00:00",
             "_instance": {
                 "instance_id": "inst-created",
-                "sandbox_runtime_id": "lease-1",
+                "sandbox_runtime_id": "runtime-1",
                 "provider_session_id": "inst-created",
                 "status": "running",
                 "created_at": "2026-04-17T00:00:05+00:00",
@@ -230,25 +230,25 @@ def test_ensure_active_instance_sets_sandbox_provider_env_from_adopted_instance(
     )
     fake_sandbox_repo = _FakeSandboxRepo()
 
-    monkeypatch.setattr(sandbox_lease_module, "_use_supabase_storage", lambda _db_path=None: True)
-    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_sandbox_runtime_repo)
-    monkeypatch.setattr(sandbox_lease_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
-    monkeypatch.setattr(sandbox_lease_module, "_make_provider_event_repo", lambda: _FakeEventRepo())
+    monkeypatch.setattr(sandbox_runtime_module, "_use_supabase_storage", lambda _db_path=None: True)
+    monkeypatch.setattr(sandbox_runtime_module, "_make_sandbox_runtime_repo", lambda _db_path=None: fake_sandbox_runtime_repo)
+    monkeypatch.setattr(sandbox_runtime_module, "_make_sandbox_repo", lambda: fake_sandbox_repo)
+    monkeypatch.setattr(sandbox_runtime_module, "_make_provider_event_repo", lambda: _FakeEventRepo())
 
-    lease = SQLiteSandboxRuntimeHandle(
-        sandbox_runtime_id="lease-1",
+    sandbox_runtime = SQLiteSandboxRuntimeHandle(
+        sandbox_runtime_id="runtime-1",
         provider_name="local",
         db_path=Path("/tmp/fake-sandbox.db"),
         observed_state="detached",
         status="active",
     )
 
-    instance = lease.ensure_active_instance(_FakeProvider())
+    instance = sandbox_runtime.ensure_active_instance(_FakeProvider())
 
     assert instance.instance_id == "inst-created"
     assert fake_sandbox_repo.binding_updates == [
         {
-            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:lease-1').hex}",
+            "sandbox_id": f"sandbox-{uuid.uuid5(uuid.NAMESPACE_URL, 'mycel-runtime:runtime-1').hex}",
             "provider_env_id": "inst-created",
             "updated_at": "2026-04-17T00:00:05+00:00",
         }

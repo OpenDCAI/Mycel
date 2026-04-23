@@ -126,7 +126,7 @@ def _existing_sandbox_row(
 
 def _existing_sandbox_runtime_repo(
     *,
-    lower_runtime_id: str = "lease-1",
+    sandbox_runtime_id: str = "runtime-1",
     sandbox_id: str = "sandbox-1",
     provider_name: str = "local",
     provider_env_id: str = "instance-1",
@@ -135,7 +135,7 @@ def _existing_sandbox_runtime_repo(
 ) -> _FakeSandboxRuntimeRepo:
     return _FakeSandboxRuntimeRepo(
         {
-            "lease_" + "id": lower_runtime_id,
+            "lease_" + "id": sandbox_runtime_id,
             "sandbox_id": sandbox_id,
             "provider_name": provider_name,
             "provider_env_id": provider_env_id,
@@ -499,7 +499,7 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
             ),
             sandbox_runtime_repo=SimpleNamespace(
                 find_by_instance=lambda *, provider_name, instance_id: {
-                    "lease_" + "id": "lease-1",
+                    "lease_" + "id": "runtime-1",
                     "provider_name": "daytona",
                     "current_instance_id": instance_id,
                     "desired_state": "running",
@@ -624,7 +624,7 @@ async def test_create_thread_route_persists_workspace_id_for_existing_sandbox() 
             return_value=(
                 "/workspace/reused",
                 {
-                    "lease_" + "id": "lease-1",
+                    "lease_" + "id": "runtime-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "local",
                     "cwd": "/workspace/reused",
@@ -676,7 +676,7 @@ async def test_create_thread_route_existing_sandbox_prefers_existing_workspace_p
             return_value=(
                 "/workspace/existing",
                 {
-                    "lease_" + "id": "lease-1",
+                    "lease_" + "id": "runtime-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "local",
                     "recipe": None,
@@ -776,7 +776,7 @@ async def test_create_thread_route_accepts_sandbox_shaped_existing_identity() ->
             return_value=(
                 "/workspace/reused",
                 {
-                    "lease_" + "id": "lease-1",
+                    "lease_" + "id": "runtime-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "local",
                     "cwd": "/workspace/reused",
