@@ -7,7 +7,6 @@ from .contact_repo import SupabaseContactRepo
 from .eval_repo import SupabaseEvalRepo
 from .file_operation_repo import SupabaseFileOperationRepo
 from .invite_code_repo import SupabaseInviteCodeRepo
-from .sandbox_runtime_repo import SupabaseSandboxRuntimeRepo
 from .monitor_operation_repo import SupabaseMonitorOperationRepo
 from .provider_event_repo import SupabaseProviderEventRepo
 from .queue_repo import SupabaseQueueRepo
@@ -15,6 +14,7 @@ from .recipe_repo import SupabaseRecipeRepo
 from .resource_snapshot_repo import SupabaseResourceSnapshotRepo
 from .run_event_repo import SupabaseRunEventRepo
 from .sandbox_monitor_repo import SupabaseSandboxMonitorRepo
+from .sandbox_runtime_repo import SupabaseSandboxRuntimeRepo
 from .schedule_repo import SupabaseScheduleRepo
 from .summary_repo import SupabaseSummaryRepo
 from .thread_repo import SupabaseThreadRepo

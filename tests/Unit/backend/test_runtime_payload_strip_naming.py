@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "backend/sandboxes/user_reads.py",
     "backend/web/routers/sandbox.py",

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN = (
     "make_" "lower_" "runtime_repo",
     "lower_" "runtime_from_row",

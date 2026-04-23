@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "sandbox/capability.py",
     "backend/web/routers/threads.py",

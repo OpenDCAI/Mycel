@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN = (
     'lea' 'se_id = runtime.get("sandbox_runtime_id")',
     'mode = "lea' 'se_enforced"',

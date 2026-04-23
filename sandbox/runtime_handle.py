@@ -29,9 +29,9 @@ from sandbox.lifecycle import (
     parse_sandbox_runtime_instance_state,
 )
 from storage.providers.sqlite.kernel import connect_sqlite
-from storage.runtime import build_sandbox_runtime_repo as _build_strategy_sandbox_runtime_repo
 from storage.runtime import build_provider_event_repo as _build_strategy_provider_event_repo
 from storage.runtime import build_sandbox_repo as _build_strategy_sandbox_repo
+from storage.runtime import build_sandbox_runtime_repo as _build_strategy_sandbox_runtime_repo
 from storage.runtime import uses_supabase_runtime_defaults
 
 if TYPE_CHECKING:
