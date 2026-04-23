@@ -14,6 +14,8 @@ from backend.threads.message_content import extract_text_content
 class ThreadHistoryTransport:
     load_live_messages: Callable[[str], Awaitable[list[Any] | None]]
     load_checkpoint_messages: Callable[[str], Awaitable[list[Any]]]
+
+
 def _trunc(text: str, truncate: int) -> str:
     if truncate > 0 and len(text) > truncate:
         return text[:truncate] + f"…[+{len(text) - truncate}]"
