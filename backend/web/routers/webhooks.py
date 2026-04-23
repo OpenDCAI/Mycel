@@ -23,21 +23,13 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     """Ingest provider webhook and converge matched sandbox runtime state."""
     direct_keys = ("session_id", "sandbox_id", "instance_id", "id")
     instance_id = next(
-        (
-            value
-            for key in direct_keys
-            if isinstance((value := payload.get(key)), str) and value
-        ),
+        (value for key in direct_keys if isinstance((value := payload.get(key)), str) and value),
         None,
     )
     if instance_id is None and isinstance(payload.get("data"), dict):
         nested = payload["data"]
         instance_id = next(
-            (
-                value
-                for key in direct_keys
-                if isinstance((value := nested.get(key)), str) and value
-            ),
+            (value for key in direct_keys if isinstance((value := nested.get(key)), str) and value),
             None,
         )
     if not instance_id:
