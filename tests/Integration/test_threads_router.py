@@ -408,10 +408,15 @@ def _make_threads_app(
     **state_overrides,
 ):
     recipe_repo = state_overrides.pop("recipe_repo", _FakeRecipeRepo())
+    resolved_thread_repo = thread_repo or _FakeThreadRepo()
+    threads_runtime_state = state_overrides.pop("threads_runtime_state", None)
+    if threads_runtime_state is None:
+        threads_runtime_state = SimpleNamespace(thread_repo=resolved_thread_repo)
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=state_overrides.pop("user_repo", _FakeUserRepo()),
-            thread_repo=thread_repo or _FakeThreadRepo(),
+            thread_repo=resolved_thread_repo,
+            threads_runtime_state=threads_runtime_state,
             runtime_storage_state=SimpleNamespace(recipe_repo=recipe_repo),
             workspace_repo=state_overrides.pop("workspace_repo", _FakeWorkspaceRepo()),
             sandbox_repo=state_overrides.pop("sandbox_repo", _FakeSandboxRepo()),
@@ -937,8 +942,13 @@ async def test_list_threads_runs_owner_workbench_off_event_loop_thread(monkeypat
         return {"threads": []}
 
     monkeypatch.setattr(threads_router, "build_owner_thread_workbench_from_rows", _build_owner_thread_workbench_from_rows)
-
-    app = SimpleNamespace(state=SimpleNamespace(thread_repo=SimpleNamespace(list_by_owner_user_id=lambda _user_id: [])))
+    thread_repo = SimpleNamespace(list_by_owner_user_id=lambda _user_id: [])
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=thread_repo,
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
+        )
+    )
     payload = await threads_router.list_threads("owner-1", app)
 
     assert payload == {"threads": []}
