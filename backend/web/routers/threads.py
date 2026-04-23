@@ -1061,9 +1061,9 @@ async def get_thread_history(
     if display_builder is not None and agent is not None and runtime_state_value is not None and runtime_state_value != AgentState.IDLE:
         entries = display_builder.get_entries(thread_id)
         if entries:
-            # @@@hot-history-same-truth - owner-facing detail and history should not
-            # diverge mid-run just because one reads display state and the other
-            # waits for LangGraph persistence to catch up.
+            # @@@hot-history-same-truth - this is hot owner-read truth, not the
+            # canonical durable ledger. Mid-run /history should match detail's
+            # display state instead of waiting for LangGraph persistence to catch up.
             _normalize_blocking_subagent_terminal_status(entries)
             return build_thread_history_payload_from_display_entries(
                 thread_id=thread_id,
