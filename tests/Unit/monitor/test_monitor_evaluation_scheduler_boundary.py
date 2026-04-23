@@ -28,7 +28,7 @@ class _FakeBatchSvc:
 
 
 def test_start_batch_submits_typed_spec_to_scheduler(monkeypatch):
-    monkeypatch.setattr(monitor_evaluation_service.evaluation_read_service, "make_eval_batch_service", lambda: _FakeBatchSvc())
+    monkeypatch.setattr(monitor_evaluation_service.evaluation_storage_service, "make_eval_batch_service", lambda: _FakeBatchSvc())
     monkeypatch.setattr(
         monitor_evaluation_service.evaluation_execution_service,
         "select_monitor_eval_scenarios",
