@@ -181,7 +181,7 @@ async def run_child_thread_live(
     *,
     input_messages: list[Any],
 ) -> str:
-    from backend.threads.activity_pool_service import resolve_thread_sandbox
+    from backend.threads.sandbox_resolution import resolve_thread_sandbox
     from backend.web.utils.serializers import extract_text_content
 
     _run_entrypoints._start_agent_run = start_agent_run

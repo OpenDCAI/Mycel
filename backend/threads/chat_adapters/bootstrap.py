@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
-from backend.threads.activity_pool_service import get_or_create_agent, resolve_thread_sandbox
+from backend.threads.activity_pool_service import get_or_create_agent
 from backend.threads.chat_adapters.activity_reader import AppRuntimeThreadActivityReader
 from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHandler
 from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRuntimeServices
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
 from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
+from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
 
 
