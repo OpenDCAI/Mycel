@@ -1,7 +1,6 @@
 """Thread file browsing endpoints."""
 
 import asyncio
-from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -23,16 +22,21 @@ _public = APIRouter(prefix="/api/threads/{thread_id}/files", tags=["thread-files
 
 
 async def _call_channel_file_service(
-    method: Callable[..., Any],
+    method_name: str | Any,
     *,
     thread_id: str,
     relative_path: str | None = None,
     missing_status: int | None = None,
 ) -> Any:
     try:
+        if callable(method_name):
+            method = method_name
+        else:
+            source = file_channel_service.get_file_channel_source(thread_id)
+            method = getattr(source, method_name)
         if relative_path is None:
-            return await asyncio.to_thread(method, thread_id=thread_id)
-        return await asyncio.to_thread(method, thread_id=thread_id, relative_path=relative_path)
+            return await asyncio.to_thread(method)
+        return await asyncio.to_thread(method, relative_path)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except FileNotFoundError as e:
@@ -217,7 +221,7 @@ async def download_file(
 ) -> FileResponse:
     """Download a file from thread-scoped files directory."""
     target = await _call_channel_file_service(
-        file_channel_service.resolve_channel_file,
+        "resolve_file",
         thread_id=thread_id,
         relative_path=path,
         missing_status=404,
@@ -232,7 +236,7 @@ async def delete_channel_file(
 ) -> dict[str, Any]:
     """Delete a file from the thread file channel."""
     await _call_channel_file_service(
-        file_channel_service.delete_channel_file,
+        "delete_file",
         thread_id=thread_id,
         relative_path=path,
         missing_status=404,
@@ -246,7 +250,7 @@ async def list_channel_files(
 ) -> dict[str, Any]:
     """List files under thread-scoped files directory."""
     entries = await _call_channel_file_service(
-        file_channel_service.list_channel_files,
+        "list_files",
         thread_id=thread_id,
     )
     return {"thread_id": thread_id, "entries": entries}

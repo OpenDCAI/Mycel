@@ -71,21 +71,6 @@ def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
     return result
 
 
-def list_channel_files(*, thread_id: str) -> list[dict]:
-    """List files in the thread's file channel."""
-    return get_file_channel_source(thread_id).list_files()
-
-
-def resolve_channel_file(*, thread_id: str, relative_path: str):
-    """Resolve file path in the thread's file channel."""
-    return get_file_channel_source(thread_id).resolve_file(relative_path)
-
-
-def delete_channel_file(*, thread_id: str, relative_path: str) -> None:
-    """Delete file from the thread's file channel."""
-    get_file_channel_source(thread_id).delete_file(relative_path)
-
-
 def _row_value(row, key: str):
     if isinstance(row, dict):
         return row.get(key)
