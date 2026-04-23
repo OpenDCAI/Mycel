@@ -19,6 +19,8 @@ def build_parser() -> argparse.ArgumentParser:
     shared.add_argument("--profile")
     shared.add_argument("--chat-base-url")
     shared.add_argument("--threads-base-url")
+    shared.add_argument("--app-base-url")
+    shared.add_argument("--auth-token")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -64,7 +66,30 @@ def build_parser() -> argparse.ArgumentParser:
     profile_set.add_argument("name")
     profile_sub.add_parser("list", parents=[shared])
 
+    auth = sub.add_parser("auth", parents=[shared])
+    auth_sub = auth.add_subparsers(dest="auth_command", required=True)
+    auth_login = auth_sub.add_parser("login", parents=[shared])
+    auth_login.add_argument("identifier")
+    auth_login.add_argument("password")
+
+    agents = sub.add_parser("agents", parents=[shared])
+    agents_sub = agents.add_subparsers(dest="agents_command", required=True)
+    agents_sub.add_parser("list", parents=[shared])
+    agents_create = agents_sub.add_parser("create", parents=[shared])
+    agents_create.add_argument("name")
+    agents_create.add_argument("--description", default="")
+
     return parser
+
+
+def _requires_agent_identity(args: argparse.Namespace) -> bool:
+    if args.command in {"whoami", "read", "send", "direct"}:
+        return True
+    if args.command == "chats":
+        return True
+    if args.command == "messages":
+        return True
+    return False
 
 
 def run_cli(
@@ -73,6 +98,8 @@ def run_cli(
     messaging_client: Any | None = None,
     identity_client: Any | None = None,
     runtime_read_client: Any | None = None,
+    auth_client: Any | None = None,
+    panel_client: Any | None = None,
     stdout: TextIO | None = None,
 ) -> int:
     parser = build_parser()
@@ -84,12 +111,17 @@ def run_cli(
         agent_alias=getattr(args, "profile", None),
         chat_base_url=args.chat_base_url,
         threads_base_url=args.threads_base_url,
+        app_base_url=args.app_base_url,
+        auth_token=args.auth_token,
+        require_agent_user_id=_requires_agent_identity(args),
     )
     default_client = AgentCliClient.from_config(cfg)
     client = AgentCliClient(
         messaging=messaging_client or default_client.messaging,
         identity=identity_client or default_client.identity,
         runtime_read=runtime_read_client or default_client.runtime_read,
+        auth=auth_client or default_client.auth,
+        panel=panel_client or default_client.panel,
         agent_user_id=cfg.agent_user_id,
     )
 
@@ -124,12 +156,20 @@ def run_cli(
             agent_user_id=cfg.agent_user_id,
             chat_base_url=cfg.chat_base_url,
             threads_base_url=cfg.threads_base_url,
+            app_base_url=args.app_base_url,
+            auth_token=cfg.auth_token,
         )
     elif args.command == "profile" and args.profile_command == "list":
         payload = [
             {"name": name, **profile}
             for name, profile in sorted(load_profiles().items())
         ]
+    elif args.command == "auth" and args.auth_command == "login":
+        payload = client.login(args.identifier, args.password)
+    elif args.command == "agents" and args.agents_command == "list":
+        payload = client.list_agents()
+    elif args.command == "agents" and args.agents_command == "create":
+        payload = client.create_agent(args.name, description=args.description)
     else:
         raise RuntimeError(f"unsupported command: {args.command}")
 

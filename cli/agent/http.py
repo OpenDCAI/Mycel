@@ -143,3 +143,49 @@ class ThreadsRuntimeHttpClient:
             response = client.get(f"/api/internal/identity/agent-actors/{social_user_id}/exists")
             response.raise_for_status()
             return bool(response.json()["exists"])
+
+
+class AuthHttpClient:
+    def __init__(self, *, base_url: str, timeout: float = 10.0) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
+
+    def _client(self) -> httpx.Client:
+        return httpx.Client(base_url=self._base_url, timeout=self._timeout, trust_env=False)
+
+    def login(self, identifier: str, password: str) -> dict[str, Any]:
+        with self._client() as client:
+            response = client.post("/api/auth/login", json={"identifier": identifier, "password": password})
+            response.raise_for_status()
+            return response.json()
+
+
+class PanelHttpClient:
+    def __init__(self, *, base_url: str, auth_token: str | None, timeout: float = 10.0) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._auth_token = auth_token
+        self._timeout = timeout
+
+    def _client(self) -> httpx.Client:
+        return httpx.Client(base_url=self._base_url, timeout=self._timeout, trust_env=False)
+
+    def _auth_headers(self) -> dict[str, str]:
+        if not self._auth_token:
+            raise RuntimeError("MYCEL_AGENT_AUTH_TOKEN is required")
+        return {"Authorization": f"Bearer {self._auth_token}"}
+
+    def list_agents(self) -> dict[str, Any]:
+        with self._client() as client:
+            response = client.get("/api/panel/agents", headers=self._auth_headers())
+            response.raise_for_status()
+            return response.json()
+
+    def create_agent(self, name: str, *, description: str = "") -> dict[str, Any]:
+        with self._client() as client:
+            response = client.post(
+                "/api/panel/agents",
+                json={"name": name, "description": description},
+                headers=self._auth_headers(),
+            )
+            response.raise_for_status()
+            return response.json()

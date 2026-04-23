@@ -326,3 +326,124 @@ def test_agent_cli_profile_list_reads_profile_file(tmp_path, monkeypatch: pytest
 
     assert exit_code == 0
     assert json.loads(out.getvalue()) == [{'name': 'codex-dev', 'agent_user_id': 'agent-user-9'}]
+
+
+def test_agent_cli_auth_login_uses_auth_client_without_agent_identity() -> None:
+    from cli.agent import commands
+
+    captured: dict[str, str] = {}
+    out = StringIO()
+
+    def _login(identifier: str, password: str) -> dict[str, str]:
+        captured["identifier"] = identifier
+        captured["password"] = password
+        return {"token": "tok-login"}
+
+    exit_code = commands.run_cli(
+        ["auth", "login", "fresh@example.com", "pw-1", "--app-base-url", "http://backend"],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        auth_client=SimpleNamespace(login=_login),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert captured == {"identifier": "fresh@example.com", "password": "pw-1"}
+    assert json.loads(out.getvalue()) == {"token": "tok-login"}
+
+
+def test_agent_cli_agents_list_uses_panel_client_without_agent_identity() -> None:
+    from cli.agent import commands
+
+    out = StringIO()
+    exit_code = commands.run_cli(
+        ["agents", "list", "--auth-token", "tok-1", "--app-base-url", "http://backend"],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        panel_client=SimpleNamespace(list_agents=lambda: {"items": [{"id": "agent-1", "name": "Toad"}]}),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert json.loads(out.getvalue()) == {"items": [{"id": "agent-1", "name": "Toad"}]}
+
+
+def test_agent_cli_agents_create_uses_panel_client_without_agent_identity() -> None:
+    from cli.agent import commands
+
+    captured: dict[str, str] = {}
+    out = StringIO()
+
+    def _create_agent(name: str, *, description: str = "") -> dict[str, str]:
+        captured["name"] = name
+        captured["description"] = description
+        return {"id": "agent-2", "name": name, "description": description}
+
+    exit_code = commands.run_cli(
+        [
+            "agents",
+            "create",
+            "Morel",
+            "--description",
+            "A local agent",
+            "--auth-token",
+            "tok-1",
+            "--app-base-url",
+            "http://backend",
+        ],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        panel_client=SimpleNamespace(create_agent=_create_agent),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert captured == {"name": "Morel", "description": "A local agent"}
+    assert json.loads(out.getvalue()) == {
+        "id": "agent-2",
+        "name": "Morel",
+        "description": "A local agent",
+    }
+
+
+def test_agent_cli_profile_set_can_store_owner_token_without_agent_identity(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from cli.agent import commands
+
+    profile_path = tmp_path / "profiles.json"
+    monkeypatch.setenv("MYCEL_AGENT_PROFILE_PATH", str(profile_path))
+    out = StringIO()
+
+    exit_code = commands.run_cli(
+        [
+            "profile",
+            "set",
+            "owner-dev",
+            "--auth-token",
+            "tok-1",
+            "--app-base-url",
+            "http://backend",
+        ],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert payload == {
+        "profiles": {
+            "owner-dev": {
+                "auth_token": "tok-1",
+                "chat_base_url": "http://127.0.0.1:8013",
+                "threads_base_url": "http://127.0.0.1:8012",
+                "app_base_url": "http://backend",
+            }
+        }
+    }

@@ -10,9 +10,11 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class AgentCliConfig:
-    agent_user_id: str
+    agent_user_id: str | None
     chat_base_url: str
     threads_base_url: str
+    app_base_url: str
+    auth_token: str | None
 
 
 def profile_path() -> Path:
@@ -30,20 +32,28 @@ def load_profiles() -> dict[str, dict[str, str]]:
 def save_profile(
     *,
     name: str,
-    agent_user_id: str,
+    agent_user_id: str | None,
     chat_base_url: str,
     threads_base_url: str,
+    app_base_url: str | None,
+    auth_token: str | None,
 ) -> dict[str, str]:
     profiles = load_profiles()
-    profiles[name] = {
-        "agent_user_id": agent_user_id,
+    profile: dict[str, str] = {
         "chat_base_url": chat_base_url,
         "threads_base_url": threads_base_url,
     }
+    if app_base_url:
+        profile["app_base_url"] = app_base_url
+    if agent_user_id:
+        profile["agent_user_id"] = agent_user_id
+    if auth_token:
+        profile["auth_token"] = auth_token
+    profiles[name] = profile
     path = profile_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"profiles": profiles}, ensure_ascii=False, indent=2), encoding="utf-8")
-    return profiles[name]
+    return profile
 
 
 def load_cli_config(
@@ -52,22 +62,35 @@ def load_cli_config(
     agent_alias: str | None = None,
     chat_base_url: str | None,
     threads_base_url: str | None,
+    app_base_url: str | None = None,
+    auth_token: str | None = None,
+    require_agent_user_id: bool = True,
 ) -> AgentCliConfig:
-    resolved_agent_user_id = str(agent_user_id or os.getenv("MYCEL_AGENT_USER_ID") or "").strip()
-    if not resolved_agent_user_id:
-        resolved_alias = str(agent_alias or os.getenv("MYCEL_AGENT_ALIAS") or "").strip()
-        if resolved_alias:
-            resolved_agent_user_id = str(load_profiles().get(resolved_alias, {}).get("agent_user_id") or "").strip()
-    if not resolved_agent_user_id:
+    resolved_alias = str(agent_alias or os.getenv("MYCEL_AGENT_ALIAS") or "").strip()
+    profile = load_profiles().get(resolved_alias, {}) if resolved_alias else {}
+
+    resolved_agent_user_id = str(agent_user_id or profile.get("agent_user_id") or os.getenv("MYCEL_AGENT_USER_ID") or "").strip()
+    if require_agent_user_id and not resolved_agent_user_id:
         raise RuntimeError("MYCEL_AGENT_USER_ID is required")
 
-    resolved_chat_base_url = str(chat_base_url or os.getenv("MYCEL_CHAT_BACKEND_URL") or "http://127.0.0.1:8013").strip()
-    resolved_threads_base_url = str(
-        threads_base_url or os.getenv("MYCEL_THREADS_BACKEND_URL") or "http://127.0.0.1:8012"
+    resolved_chat_base_url = str(
+        chat_base_url or profile.get("chat_base_url") or os.getenv("MYCEL_CHAT_BACKEND_URL") or "http://127.0.0.1:8013"
     ).strip()
+    resolved_threads_base_url = str(
+        threads_base_url
+        or profile.get("threads_base_url")
+        or os.getenv("MYCEL_THREADS_BACKEND_URL")
+        or "http://127.0.0.1:8012"
+    ).strip()
+    resolved_app_base_url = str(
+        app_base_url or profile.get("app_base_url") or os.getenv("MYCEL_APP_BACKEND_URL") or "http://127.0.0.1:8010"
+    ).strip()
+    resolved_auth_token = str(auth_token or profile.get("auth_token") or os.getenv("MYCEL_AGENT_AUTH_TOKEN") or "").strip() or None
 
     return AgentCliConfig(
-        agent_user_id=resolved_agent_user_id,
+        agent_user_id=resolved_agent_user_id or None,
         chat_base_url=resolved_chat_base_url,
         threads_base_url=resolved_threads_base_url,
+        app_base_url=resolved_app_base_url,
+        auth_token=resolved_auth_token,
     )
