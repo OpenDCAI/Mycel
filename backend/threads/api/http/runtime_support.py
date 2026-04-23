@@ -12,6 +12,7 @@ from backend.threads.interruption import repair_interrupted_tool_call_messages
 from backend.threads.runtime_access import get_optional_messaging_service
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from backend.web.utils.serializers import serialize_message
+from core.runtime.middleware.monitor import AgentState
 from sandbox.thread_context import set_current_thread_id
 
 _IDLE_REPLAYABLE_RUN_EVENTS = frozenset({"error", "cancelled", "retry"})
@@ -196,7 +197,7 @@ async def get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str,
     if entries is not None:
         normalize_blocking_subagent_terminal_status(entries)
     agent = get_agent_for_thread(app, thread_id)
-    if agent is not None and entries is not None:
+    if agent is not None and entries is not None and getattr(getattr(agent, "runtime", None), "current_state", None) != AgentState.IDLE:
         return entries
     if agent is None:
         checkpoint_messages = await _load_checkpoint_messages_for_detail(app, thread_id)

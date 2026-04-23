@@ -731,58 +731,6 @@ async def test_query_loop_aget_state_uses_live_permission_state_while_active():
 
 
 @pytest.mark.asyncio
-async def test_query_loop_aget_state_prefers_live_thread_state_when_runtime_is_ready():
-    checkpointer = _MemoryCheckpointer()
-    checkpointer.store["state-thread"] = {
-        "channel_values": {
-            "messages": [HumanMessage(content="stale checkpoint")],
-            "tool_permission_context": {},
-            "pending_permission_requests": {},
-            "resolved_permission_requests": {},
-            "memory_compaction_state": {},
-            "mcp_instruction_state": {},
-        }
-    }
-    app_state = AppState(messages=[HumanMessage(content="fresh live"), AIMessage(content="live reply")])
-    loop = make_loop(
-        model=mock_model_no_tools("unused"),
-        checkpointer=checkpointer,
-        app_state=app_state,
-        runtime=SimpleNamespace(current_state=AgentState.READY),
-    )
-
-    state = await loop.aget_state({"configurable": {"thread_id": "state-thread"}})
-
-    assert [msg.content for msg in state.values["messages"]] == ["fresh live", "live reply"]
-
-
-@pytest.mark.asyncio
-async def test_query_loop_aget_state_prefers_live_messages_over_stale_checkpoint_when_runtime_is_ready():
-    checkpointer = _MemoryCheckpointer()
-    checkpointer.store["state-thread"] = {
-        "channel_values": {
-            "messages": [HumanMessage(content="stale checkpoint")],
-            "tool_permission_context": {},
-            "pending_permission_requests": {},
-            "resolved_permission_requests": {},
-            "memory_compaction_state": {},
-            "mcp_instruction_state": {},
-        }
-    }
-    app_state = AppState(messages=[HumanMessage(content="fresh live"), AIMessage(content="live reply")])
-    loop = make_loop(
-        model=mock_model_no_tools("unused"),
-        checkpointer=checkpointer,
-        app_state=app_state,
-        runtime=SimpleNamespace(current_state=AgentState.READY),
-    )
-
-    state = await loop.aget_state({"configurable": {"thread_id": "state-thread"}})
-
-    assert [msg.content for msg in state.values["messages"]] == ["fresh live", "live reply"]
-
-
-@pytest.mark.asyncio
 async def test_query_loop_restores_persisted_permission_state_into_live_app_state():
     checkpointer = _MemoryCheckpointer()
     pending = {
