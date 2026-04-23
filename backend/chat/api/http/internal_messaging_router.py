@@ -22,7 +22,7 @@ class FindOrCreateChatBody(BaseModel):
     title: str | None = None
 
 
-class SendMessageBody(BaseModel):
+class InternalSendMessageBody(BaseModel):
     sender_id: str
     content: str
     message_type: str = "human"
@@ -116,7 +116,7 @@ def list_unread_messages(
 @router.post("/chats/{chat_id}/messages/send")
 def send_message(
     chat_id: str,
-    body: SendMessageBody,
+    body: InternalSendMessageBody,
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ) -> dict[str, Any]:
     return messaging_service.send(
