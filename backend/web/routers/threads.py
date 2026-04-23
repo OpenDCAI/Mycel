@@ -28,7 +28,11 @@ from backend.threads.convergence import delete_thread_in_db
 from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
 from backend.threads.file_channel import get_file_channel_binding
-from backend.threads.history import build_thread_history_transport, get_thread_history_payload
+from backend.threads.history import (
+    build_thread_history_payload_from_display_entries,
+    build_thread_history_transport,
+    get_thread_history_payload,
+)
 from backend.threads.interruption import repair_interrupted_tool_call_messages
 from backend.threads.launch_config import resolve_default_config
 from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
@@ -1048,6 +1052,25 @@ async def get_thread_history(
         limit: Max messages to return, from the end (default 20)
         truncate: Truncate content to this many chars (default 300, 0 = no limit)
     """
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    display_builder = getattr(runtime_state, "display_builder", None)
+    agent_pool = getattr(app.state, "agent_pool", None)
+    sandbox_type = resolve_thread_sandbox(app, thread_id)
+    agent = agent_pool.get(f"{thread_id}:{sandbox_type}") if isinstance(agent_pool, dict) else None
+    runtime_state_value = getattr(getattr(agent, "runtime", None), "current_state", None)
+    if display_builder is not None and agent is not None and runtime_state_value is not None and runtime_state_value != AgentState.IDLE:
+        entries = display_builder.get_entries(thread_id)
+        if entries:
+            # @@@hot-history-same-truth - owner-facing detail and history should not
+            # diverge mid-run just because one reads display state and the other
+            # waits for LangGraph persistence to catch up.
+            _normalize_blocking_subagent_terminal_status(entries)
+            return build_thread_history_payload_from_display_entries(
+                thread_id=thread_id,
+                entries=entries,
+                limit=limit,
+                truncate=truncate,
+            )
 
     async def _load_live_messages(current_thread_id: str) -> list[Any] | None:
         agent_pool = getattr(app.state, "agent_pool", None)
