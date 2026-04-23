@@ -17,7 +17,7 @@ def test_thread_runtime_namespace_exports_legacy_helpers() -> None:
     assert projection_owner.canonical_owner_threads is not None
     assert convergence_owner.inspect_owner_thread_runtime is not None
     assert sandbox_owner.resolve_thread_sandbox is not None
-    assert reads_owner.build_run_event_read_transport is not None
+    assert reads_owner.RunEventReadTransport is not None
     assert buffer_owner.ThreadEventBuffer is not None
     assert buffer_owner.RunEventBuffer is not None
 
