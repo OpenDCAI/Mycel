@@ -25,28 +25,18 @@ class OwnerThreadWorkbenchReader:
 
 def build_owner_thread_workbench_reader(app: Any) -> OwnerThreadWorkbenchReader:
     return OwnerThreadWorkbenchReader(
-        list_owner_thread_rows=lambda user_id: list_owner_thread_rows(app, user_id),
-        converge_runtime_state=lambda thread_id: converge_runtime_state(app, thread_id),
-        is_runtime_active=lambda thread_id, sandbox_type: is_runtime_active(app, thread_id, sandbox_type),
-        last_active_at=lambda thread_id: last_active_at(app, thread_id),
+        list_owner_thread_rows=lambda user_id: app.state.thread_repo.list_by_owner_user_id(user_id),
+        converge_runtime_state=lambda thread_id: converge_owner_thread_runtime(app, thread_id),
+        is_runtime_active=lambda thread_id, sandbox_type: bool(
+            (agent := app.state.agent_pool.get(f"{thread_id}:{sandbox_type}"))
+            and hasattr(agent, "runtime")
+            and agent.runtime.current_state == AgentState.ACTIVE
+        ),
+        last_active_at=lambda thread_id: (
+            datetime.fromtimestamp(last_active, tz=UTC).isoformat()
+            if (last_active := app.state.thread_last_active.get(thread_id))
+            else None
+        ),
         canonical_owner_threads=canonical_owner_threads,
         avatar_url=avatar_url,
     )
-
-
-def list_owner_thread_rows(app: Any, user_id: str) -> list[dict[str, Any]]:
-    return app.state.thread_repo.list_by_owner_user_id(user_id)
-
-
-def converge_runtime_state(app: Any, thread_id: str) -> str:
-    return converge_owner_thread_runtime(app, thread_id)
-
-
-def is_runtime_active(app: Any, thread_id: str, sandbox_type: str) -> bool:
-    agent = app.state.agent_pool.get(f"{thread_id}:{sandbox_type}")
-    return bool(agent and hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE)
-
-
-def last_active_at(app: Any, thread_id: str) -> str | None:
-    last_active = app.state.thread_last_active.get(thread_id)
-    return datetime.fromtimestamp(last_active, tz=UTC).isoformat() if last_active else None
