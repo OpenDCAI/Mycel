@@ -26,7 +26,9 @@ def get_file_channel_source(thread_id: str):
     from sandbox.volume_source import HostVolume
 
     binding = get_file_channel_binding(thread_id)
-    return HostVolume(_required_path(binding.local_staging_root, "file_channel.local_staging_root"))
+    if binding.local_staging_root is None:
+        raise ValueError("file_channel.local_staging_root is required")
+    return HostVolume(binding.local_staging_root)
 
 
 def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
@@ -69,27 +71,13 @@ def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
     result = source.save_file(relative_path, content)
     result["thread_id"] = thread_id
     return result
-
-
-def _row_value(row, key: str):
-    if isinstance(row, dict):
-        return row.get(key)
-    return getattr(row, key, None)
-
-
 def _required_text(row, key: str, label: str) -> str:
-    value = _row_value(row, key)
+    value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
     if isinstance(value, str):
         value = value.strip()
     if value in (None, ""):
         raise ValueError(f"{label}.{key} is required")
     return str(value)
-
-
-def _required_path(value: Path | None, label: str) -> Path:
-    if value is None:
-        raise ValueError(f"{label} is required")
-    return value
 
 
 def _workspace_file_channel_root(workspace_id: str) -> Path:
