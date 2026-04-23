@@ -95,3 +95,75 @@ def test_threads_runtime_http_client_checks_agent_actor(monkeypatch):
 
     assert client.is_agent_actor_user('agent-user-1') is True
     assert captured['path'] == '/api/internal/identity/agent-actors/agent-user-1/exists'
+
+
+def test_auth_http_client_posts_login(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            captured["raised"] = True
+
+        def json(self) -> dict[str, object]:
+            return {"token": "tok-login"}
+
+    class _Client:
+        def __init__(self, *, base_url: str, timeout: float, trust_env: bool) -> None:
+            captured["base_url"] = base_url
+            captured["timeout"] = timeout
+            captured["trust_env"] = trust_env
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def post(self, path: str, *, json: dict[str, object]) -> _Response:
+            captured["path"] = path
+            captured["json"] = json
+            return _Response()
+
+    monkeypatch.setattr(http.httpx, "Client", _Client)
+    client = http.AuthHttpClient(base_url="http://backend")
+    payload = client.login("fresh@example.com", "pw-1")
+
+    assert payload == {"token": "tok-login"}
+    assert captured["path"] == "/api/auth/login"
+    assert captured["json"] == {"identifier": "fresh@example.com", "password": "pw-1"}
+
+
+def test_panel_http_client_uses_bearer_token(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            captured["raised"] = True
+
+        def json(self) -> dict[str, object]:
+            return {"items": [{"id": "agent-1"}]}
+
+    class _Client:
+        def __init__(self, *, base_url: str, timeout: float, trust_env: bool) -> None:
+            captured["base_url"] = base_url
+            captured["timeout"] = timeout
+            captured["trust_env"] = trust_env
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def get(self, path: str, *, headers: dict[str, str]) -> _Response:
+            captured["path"] = path
+            captured["headers"] = headers
+            return _Response()
+
+    monkeypatch.setattr(http.httpx, "Client", _Client)
+    client = http.PanelHttpClient(base_url="http://backend", auth_token="tok-1")
+    payload = client.list_agents()
+
+    assert payload == {"items": [{"id": "agent-1"}]}
+    assert captured["path"] == "/api/panel/agents"
+    assert captured["headers"] == {"Authorization": "Bearer tok-1"}

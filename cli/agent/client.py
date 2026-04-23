@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .config import AgentCliConfig
-from .http import ChatHttpClient, IdentityHttpClient, ThreadsRuntimeHttpClient
+from .http import AuthHttpClient, ChatHttpClient, IdentityHttpClient, PanelHttpClient, ThreadsRuntimeHttpClient
 
 
 @dataclass(frozen=True)
@@ -14,7 +14,9 @@ class AgentCliClient:
     messaging: Any
     identity: Any
     runtime_read: Any
-    agent_user_id: str
+    auth: Any
+    panel: Any
+    agent_user_id: str | None
 
     @classmethod
     def from_config(cls, config: AgentCliConfig) -> AgentCliClient:
@@ -22,6 +24,8 @@ class AgentCliClient:
             messaging=ChatHttpClient(base_url=config.chat_base_url),
             identity=IdentityHttpClient(base_url=config.chat_base_url),
             runtime_read=ThreadsRuntimeHttpClient(base_url=config.threads_base_url),
+            auth=AuthHttpClient(base_url=config.app_base_url),
+            panel=PanelHttpClient(base_url=config.app_base_url, auth_token=config.auth_token),
             agent_user_id=config.agent_user_id,
         )
 
@@ -81,3 +85,12 @@ class AgentCliClient:
 
     def list_external_users(self) -> list[dict[str, Any]]:
         return self.identity.list_users(user_type="external")
+
+    def login(self, identifier: str, password: str) -> dict[str, Any]:
+        return self.auth.login(identifier, password)
+
+    def list_agents(self) -> dict[str, Any]:
+        return self.panel.list_agents()
+
+    def create_agent(self, name: str, *, description: str = "") -> dict[str, Any]:
+        return self.panel.create_agent(name, description=description)
