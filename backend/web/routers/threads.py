@@ -29,7 +29,6 @@ from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
 from backend.threads.file_channel import get_file_channel_binding
 from backend.threads.history import (
-    ThreadHistoryTransport,
     build_thread_history_payload_from_display_entries,
     get_thread_history_payload,
 )
@@ -1095,14 +1094,11 @@ async def get_thread_history(
         checkpoint_state = await checkpoint_store.load(current_thread_id)
         return list(checkpoint_state.messages) if checkpoint_state is not None else []
 
-    history_transport = ThreadHistoryTransport(
-        load_live_messages=_load_live_messages,
-        load_checkpoint_messages=_load_checkpoint_messages,
-    )
     set_current_thread_id(thread_id)
     return await get_thread_history_payload(
         thread_id=thread_id,
-        history_transport=history_transport,
+        load_live_messages=_load_live_messages,
+        load_checkpoint_messages=_load_checkpoint_messages,
         limit=limit,
         truncate=truncate,
     )

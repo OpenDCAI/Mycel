@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.events.reads import build_run_event_read_transport
-from backend.threads.history import ThreadHistoryTransport, get_thread_history_payload
+from backend.threads.history import get_thread_history_payload
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from sandbox.thread_context import set_current_thread_id
 
@@ -42,16 +42,12 @@ def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
         checkpoint_state = await checkpoint_store.load(thread_id)
         return list(checkpoint_state.messages) if checkpoint_state is not None else []
 
-    history_transport = ThreadHistoryTransport(
-        load_live_messages=_load_live_messages,
-        load_checkpoint_messages=_load_checkpoint_messages,
-    )
-
     async def _load_thread_history_payload(thread_id: str) -> dict[str, Any]:
         set_current_thread_id(thread_id)
         return await get_thread_history_payload(
             thread_id=thread_id,
-            history_transport=history_transport,
+            load_live_messages=_load_live_messages,
+            load_checkpoint_messages=_load_checkpoint_messages,
             limit=200,
             truncate=0,
         )

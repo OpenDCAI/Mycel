@@ -13,7 +13,7 @@ def test_thread_runtime_namespace_exports_legacy_helpers() -> None:
     reads_owner = importlib.import_module("backend.threads.events.reads")
     buffer_owner = importlib.import_module("backend.threads.events.buffer")
 
-    assert history_owner.ThreadHistoryTransport is not None
+    assert history_owner.get_thread_history_payload is not None
     assert projection_owner.canonical_owner_threads is not None
     assert convergence_owner.inspect_owner_thread_runtime is not None
     assert sandbox_owner.resolve_thread_sandbox is not None
