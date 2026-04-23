@@ -28,7 +28,7 @@ def test_trace_read_service_uses_thread_runtime_history_owner() -> None:
     trace_source = inspect.getsource(importlib.import_module("backend.monitor.infrastructure.read_models.trace_read_service"))
 
     assert "from backend.thread_history import build_thread_history_transport, get_thread_history_payload" not in trace_source
-    assert "from backend.threads.history import ThreadHistoryTransport, get_thread_history_payload" in trace_source
+    assert "from backend.threads.history import get_thread_history_payload" in trace_source
 
 
 def test_thread_runtime_convergence_does_not_import_web_compat_shell() -> None:
