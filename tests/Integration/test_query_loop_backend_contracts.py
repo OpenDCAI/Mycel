@@ -1135,6 +1135,52 @@ async def test_get_thread_history_prefers_hot_display_builder_entries_for_active
 
 
 @pytest.mark.asyncio
+async def test_get_thread_history_hot_display_keeps_visible_user_entry():
+    display_builder = DisplayBuilder()
+    display_builder.set_entries(
+        "history-hot-display-user-thread",
+        [
+            {
+                "id": "user-hot-1",
+                "role": "user",
+                "content": "owner visible prompt",
+                "timestamp": 1,
+            },
+            {
+                "id": "turn-hot-2",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {
+                        "type": "text",
+                        "content": "assistant visible reply",
+                    },
+                ],
+            },
+        ],
+    )
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": []}))),
+        runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+    )
+    fake_app = _app_with_display_builder(display_builder)
+    _put_local_agent_in_pool(fake_app, "history-hot-display-user-thread", fake_agent)
+
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
+        history = await get_thread_history(
+            "history-hot-display-user-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert [item["role"] for item in history["messages"]] == ["human", "assistant"]
+    assert history["messages"][0]["text"] == "owner visible prompt"
+    assert history["messages"][1]["text"] == "assistant visible reply"
+
+
+@pytest.mark.asyncio
 async def test_get_thread_history_hot_display_limit_keeps_whole_last_entry():
     display_builder = DisplayBuilder()
     display_builder.set_entries(
