@@ -93,6 +93,7 @@ class SupabaseMessagesRepo:
 
     def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
         """Insert a new message. Returns the created row."""
+        now = time.time()
         if expected_read_seq is None:
             seq_response = q.schema_rpc(
                 self._client,
@@ -116,7 +117,7 @@ class SupabaseMessagesRepo:
             next_seq = int(expected_read_seq) + 1
             update_res = (
                 self._chats_t()
-                .update({"next_message_seq": next_seq})
+                .update({"next_message_seq": next_seq, "updated_at": now})
                 .eq("id", row["chat_id"])
                 .eq("next_message_seq", int(expected_read_seq))
                 .execute()
@@ -126,6 +127,8 @@ class SupabaseMessagesRepo:
             seq = next_seq
         payload = {**row, "seq": int(seq)}
         res = self._t().insert(payload).execute()
+        if expected_read_seq is None:
+            self._chats_t().update({"updated_at": now}).eq("id", row["chat_id"]).execute()
         return res.data[0] if res.data else payload
 
     def get_by_id(self, message_id: str) -> dict[str, Any] | None:

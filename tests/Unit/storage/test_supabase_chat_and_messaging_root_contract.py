@@ -382,7 +382,9 @@ def test_supabase_messages_repo_create_with_expected_read_seq_uses_chat_cas() ->
 
     assert client.rpc_calls == []
     chats = client.tables["chat.chats"]
-    assert chats.update_payload == {"next_message_seq": 7}
+    assert chats.update_payload is not None
+    assert chats.update_payload["next_message_seq"] == 7
+    assert isinstance(chats.update_payload["updated_at"], float)
     assert ("id", "chat-1") in chats.eq_calls
     assert ("next_message_seq", 6) in chats.eq_calls
     payload = client.tables["chat.messages"].insert_payload
@@ -408,6 +410,73 @@ def test_supabase_messages_repo_create_with_stale_expected_read_seq_fails_loudly
             },
             expected_read_seq=6,
         )
+
+
+def test_supabase_messages_repo_create_bumps_chat_updated_at_on_send(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _FakeClient()
+    client.schema("chat").table("messages").rows = [
+        {
+            "id": "msg-1",
+            "chat_id": "chat-1",
+            "seq": 7,
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        }
+    ]
+    monkeypatch.setattr("storage.providers.supabase.messaging_repo.time.time", lambda: 456.0)
+    repo = SupabaseMessagesRepo(client)
+
+    repo.create(
+        {
+            "id": "msg-1",
+            "chat_id": "chat-1",
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        }
+    )
+
+    chats = client.tables["chat.chats"]
+    assert chats.update_payload == {"updated_at": 456.0}
+    assert ("id", "chat-1") in chats.eq_calls
+
+
+def test_supabase_messages_repo_create_with_expected_read_seq_bumps_chat_updated_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _FakeClient()
+    client.schema("chat").table("chats").rows = [{"id": "chat-1", "next_message_seq": 6}]
+    client.schema("chat").table("messages").rows = [
+        {
+            "id": "msg-7",
+            "chat_id": "chat-1",
+            "seq": 7,
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        }
+    ]
+    monkeypatch.setattr("storage.providers.supabase.messaging_repo.time.time", lambda: 789.0)
+    repo = SupabaseMessagesRepo(client)
+
+    repo.create(
+        {
+            "id": "msg-7",
+            "chat_id": "chat-1",
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        },
+        expected_read_seq=6,
+    )
+
+    chats = client.tables["chat.chats"]
+    assert chats.update_payload == {"next_message_seq": 7, "updated_at": 789.0}
+    assert ("id", "chat-1") in chats.eq_calls
+    assert ("next_message_seq", 6) in chats.eq_calls
 
 
 def test_supabase_messages_repo_list_by_chat_uses_seq_ordering() -> None:
