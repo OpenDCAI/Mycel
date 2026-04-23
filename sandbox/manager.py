@@ -1,6 +1,6 @@
 """Sandbox session manager.
 
-Orchestrates: Thread → ChatSession → Runtime with lower sandbox bindings.
+Orchestrates: Thread → ChatSession → Runtime with sandbox runtime bindings.
 """
 
 import logging
@@ -226,7 +226,7 @@ def bind_thread_to_existing_thread_sandbox_runtime(
         return None
     # @@@subagent-runtime-reuse
     # Child threads need their own terminal/session state while reusing the
-    # parent's lower sandbox binding instead of silently provisioning a new one.
+    # parent's sandbox runtime binding instead of silently provisioning a new one.
     return bind_thread_to_existing_sandbox_runtime(
         thread_id,
         str(source_terminal["sandbox_runtime_id"]),

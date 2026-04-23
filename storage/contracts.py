@@ -16,7 +16,7 @@ NotificationType = Literal["steer", "command", "agent", "chat"]
 
 
 class SandboxRuntimeRepo(Protocol):
-    """Lower sandbox runtime persistence. Returns raw dicts for domain object construction."""
+    """Sandbox runtime persistence. Returns raw dicts for domain object construction."""
 
     def close(self) -> None: ...
     def get(self, sandbox_runtime_id: str) -> dict[str, Any] | None: ...
