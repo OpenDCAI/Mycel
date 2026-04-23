@@ -187,6 +187,7 @@ async def test_verify_thread_owner_fails_loud_without_purging_terminal_less_thre
     request_app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(get_by_id=_get_thread, delete=_delete_thread),
+            threads_runtime_state=SimpleNamespace(thread_repo=SimpleNamespace(get_by_id=_get_thread, delete=_delete_thread)),
             terminal_repo=SimpleNamespace(get_active=lambda _thread_id: None, list_by_thread=lambda _thread_id: []),
             auth_runtime_state=SimpleNamespace(
                 user_directory=SimpleNamespace(

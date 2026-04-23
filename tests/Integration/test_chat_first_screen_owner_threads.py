@@ -48,10 +48,11 @@ async def test_first_screen_reuses_inflight_owner_thread_read_across_conversatio
         state=SimpleNamespace(
             terminal_repo=SimpleNamespace(summarize_threads=lambda _thread_ids: {}),
             threads_runtime_state=SimpleNamespace(
+                activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
                 thread_repo=thread_repo,
             ),
+            thread_last_active={},
             chat_runtime_state=SimpleNamespace(
-                hire_conversation_reader=SimpleNamespace(list_hire_conversations_for_user=_list_hire_conversations_for_user),
                 messaging_service=messaging_service,
             ),
         )
@@ -60,7 +61,9 @@ async def test_first_screen_reuses_inflight_owner_thread_read_across_conversatio
     conversations, threads = await asyncio.gather(
         owner_conversations_router.list_conversations(
             "owner-1",
-            hire_conversation_reader=owner_conversations_router.get_hire_conversation_reader(app),
+            owner_thread_rows=owner_conversations_router.get_owner_thread_rows_loader(app),
+            activity_reader=owner_conversations_router.get_runtime_thread_activity_reader(app),
+            thread_last_active=owner_conversations_router.get_thread_last_active_map(app),
             messaging_service=app.state.chat_runtime_state.messaging_service,
         ),
         threads_router.list_threads("owner-1", app=app),

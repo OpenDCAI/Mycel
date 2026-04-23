@@ -34,7 +34,6 @@ from backend.threads.history import (
     build_thread_history_transport,
     get_thread_history_payload,
 )
-from backend.threads.interruption import repair_interrupted_tool_call_messages
 from backend.threads.launch_config import resolve_default_config
 from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.threads.run.buffer_wiring import get_or_create_thread_buffer

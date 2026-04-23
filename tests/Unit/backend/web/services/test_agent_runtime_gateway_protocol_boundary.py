@@ -39,7 +39,7 @@ def test_agent_chat_recipient_supports_optional_preselected_thread_id() -> None:
 
     recipient_fields = get_type_hints(protocol_module.AgentChatRecipient)
 
-    assert recipient_fields["thread_id"] == str | None
+    assert "thread_id" not in recipient_fields
 
 
 def test_agent_runtime_thread_input_result_is_a_protocol_object() -> None:

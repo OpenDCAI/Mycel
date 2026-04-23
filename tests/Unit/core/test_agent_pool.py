@@ -23,10 +23,13 @@ def _runtime_storage_state(agent_config_repo: object | None) -> SimpleNamespace:
     return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo))
 
 
+def _threads_runtime_state(thread_repo: object) -> SimpleNamespace:
+    return SimpleNamespace(thread_repo=thread_repo)
+
+
 @pytest.mark.asyncio
 async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkeypatch: pytest.MonkeyPatch):
     captured: dict[str, object] = {}
-    messaging_service = object()
 
     async def _fake_registry_get_or_create_agent(*args, **kwargs):
         captured["args"] = args
@@ -34,14 +37,13 @@ async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkey
         return SimpleNamespace()
 
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
-    monkeypatch.setattr(agent_pool, "get_optional_messaging_service", lambda app: messaging_service, raising=False)
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
 
     kwargs = cast(dict[str, object], captured["kwargs"])
-    assert kwargs["messaging_service"] is messaging_service
+    assert "messaging_service" not in kwargs
 
 
 @pytest.mark.asyncio
@@ -96,6 +98,7 @@ async def test_registry_get_or_create_agent_uses_explicit_messaging_service(
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
@@ -141,6 +144,7 @@ async def test_registry_get_or_create_agent_requires_explicit_messaging_service_
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -178,6 +182,7 @@ async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_se
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -231,6 +236,7 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_FakeThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_FakeThreadRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -284,6 +290,7 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -332,6 +339,7 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             thread_cwd={"thread-3": str(requested)},
             thread_sandbox={},
         )
@@ -393,6 +401,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1")
             ),
@@ -404,7 +413,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-4")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-4", messaging_service=SimpleNamespace())
 
     # @@@runtime-repo-source-of-truth - runtime startup must stay repo-rooted
     # for repo-backed agent users even when a stale member shell still exists on disk.
@@ -455,6 +464,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -464,7 +474,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5", messaging_service=SimpleNamespace())
 
     chat_repos = cast(dict[str, object], captured["chat_repos"])
     assert chat_repos["chat_identity_id"] == "agent-user-5"
@@ -502,6 +512,7 @@ async def test_get_or_create_agent_fails_loud_when_chat_repos_need_missing_messa
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
             thread_cwd={},
@@ -547,6 +558,7 @@ async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_all
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -556,7 +568,9 @@ async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_all
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-binding")
+    await agent_pool.get_or_create_agent(
+        cast(Any, app), "local", thread_id="thread-binding", messaging_service=SimpleNamespace()
+    )
 
     assert captured["extra_allowed_paths"] == [str(Path("/tmp/channel-root"))]
 
@@ -585,6 +599,7 @@ async def test_get_or_create_agent_requires_thread_agent_user_id_for_chat_identi
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             thread_cwd={},
             thread_sandbox={},
@@ -626,6 +641,7 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -635,7 +651,7 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-7")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-7", messaging_service=SimpleNamespace())
 
     assert seen["user_id"] == "agent-user-7"
     assert "member" not in seen
@@ -691,6 +707,7 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -705,7 +722,9 @@ async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id=thread_id)
+    await agent_pool.get_or_create_agent(
+        cast(Any, app), "local", thread_id=thread_id, messaging_service=SimpleNamespace()
+    )
 
     assert captured["model_name"] == expected_model_name
 
@@ -749,6 +768,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -763,7 +783,7 @@ async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-11")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-11", messaging_service=SimpleNamespace())
 
     assert captured["models_config_override"] == {"providers": {"openai": {"credential_source": "user", "api_key": "repo-key"}}}
 
@@ -803,6 +823,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -812,7 +833,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-12")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-12", messaging_service=SimpleNamespace())
 
     assert captured["memory_config_override"] == {"compaction": {"trigger_tokens": 80000}}
 
@@ -847,6 +868,7 @@ async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_miss
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            threads_runtime_state=_threads_runtime_state(_ThreadRepo()),
             user_repo=_UserRepo(),
             messaging_service=SimpleNamespace(),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
@@ -856,6 +878,6 @@ async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_miss
         )
     )
 
-    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-10")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-10", messaging_service=SimpleNamespace())
 
     assert captured["model_name"] is None

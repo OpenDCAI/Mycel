@@ -31,8 +31,7 @@ async def test_gateway_chat_delivery_routes_via_agent_user_lookup_not_envelope_t
         state=SimpleNamespace(
             threads_runtime_state=SimpleNamespace(thread_repo=SimpleNamespace(
                 get_by_id=lambda thread_id: {"id": thread_id, "sandbox_type": "local"},
-                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": uid, "is_main": True, "branch_index": 0},
-                list_by_agent_user=lambda uid: [{"id": "thread-main", "agent_user_id": uid, "is_main": True, "branch_index": 0}],
+                get_canonical_thread_for_agent_actor=lambda uid: {"id": "thread-main", "agent_user_id": uid, "is_main": True, "branch_index": 0},
             )),
             agent_pool={},
             queue_manager=SimpleNamespace(

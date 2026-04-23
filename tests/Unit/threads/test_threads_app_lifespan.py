@@ -25,6 +25,7 @@ async def test_threads_app_lifespan_attaches_storage_auth_and_threads_runtime(mo
             contact_repo=lambda: contact_repo,
             workspace_repo=lambda: "workspace-repo",
             sandbox_repo=lambda: "sandbox-repo",
+            sandbox_runtime_repo=lambda: "sandbox-runtime-repo",
             lease_repo=lambda: "lease-repo",
         )
     )
@@ -84,7 +85,7 @@ async def test_threads_app_lifespan_attaches_storage_auth_and_threads_runtime(mo
         assert app.state.user_repo == "user-repo"
         assert app.state.workspace_repo == "workspace-repo"
         assert app.state.sandbox_repo == "sandbox-repo"
-        assert app.state.lease_repo == "lease-repo"
+        assert app.state.sandbox_runtime_repo == "sandbox-runtime-repo"
         assert app.state.threads_runtime_state.display_builder is display_builder
         assert app.state.threads_runtime_state.checkpoint_store is checkpoint_store
         assert app.state.threads_runtime_state.event_loop is asyncio.get_running_loop()
