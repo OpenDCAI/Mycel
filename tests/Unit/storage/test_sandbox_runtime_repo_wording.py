@@ -14,7 +14,7 @@ def test_provider_runtime_repo_modules_do_not_use_lease_repo_wording() -> None:
 
     for rel_path in TARGETS:
         source = (repo_root / rel_path).read_text(encoding="utf-8")
-        if "lea" "se repo" in source:
+        if "lease repo" in source:
             offenders.append(rel_path)
 
-    assert offenders == [], "Found lea" "se repo wording in provider runtime repos:\n" + "\n".join(offenders)
+    assert offenders == [], "Found lease repo wording in provider runtime repos:\n" + "\n".join(offenders)

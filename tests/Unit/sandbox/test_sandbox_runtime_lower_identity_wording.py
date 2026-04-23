@@ -9,8 +9,8 @@ TARGETS = (
 )
 
 FORBIDDEN = (
-    "lower" " runtime",
-    "lower" "-runtime",
+    "lower runtime",
+    "lower-runtime",
 )
 
 

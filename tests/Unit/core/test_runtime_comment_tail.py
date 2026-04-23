@@ -13,13 +13,13 @@ TARGETS = (
 )
 
 FORBIDDEN = (
-    "sandbox_lea" "se",
-    "which lea" "se binds",
-    "managed by lea" "se",
-    "lea" "se/session creation",
-    "shared lea" "se",
-    "Lea" "se state machine",
-    "lea" "se identity directly",
+    "sandbox_lease",
+    "which lease binds",
+    "managed by lease",
+    "lease/session creation",
+    "shared lease",
+    "Lease state machine",
+    "lease identity directly",
 )
 
 
@@ -33,4 +33,4 @@ def test_runtime_comment_tail_avoids_runtime_drift_phrasing() -> None:
             if pattern in source:
                 offenders.append(f"{rel_path} -> {pattern}")
 
-    assert offenders == [], "Found runtime comment tail lea" "se residue:\n" + "\n".join(offenders)
+    assert offenders == [], "Found runtime comment tail lease residue:\n" + "\n".join(offenders)

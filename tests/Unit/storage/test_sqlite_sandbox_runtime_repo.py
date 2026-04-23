@@ -12,7 +12,7 @@ def test_sqlite_sandbox_runtime_repo_schema_does_not_create_removed_volume_id(tm
     assert "sandbox_runtimes" in table_names
     assert "sandbox_leases" not in table_names
     assert "sandbox_runtime_id" in cols
-    assert "lea" "se_id" not in cols
+    assert "lease_id" not in cols
     assert "volume_id" not in cols
 
 
@@ -24,7 +24,7 @@ def test_sqlite_sandbox_runtime_repo_returns_sandbox_runtime_id_not_legacy_runti
         repo.close()
 
     assert created["sandbox_runtime_id"] == "runtime-1"
-    assert "lea" "se_id" not in created
+    assert "lease_id" not in created
 
 
 def test_sqlite_sandbox_runtime_repo_schema_uses_sandbox_runtime_id_in_sandbox_instances(tmp_path):
@@ -35,7 +35,7 @@ def test_sqlite_sandbox_runtime_repo_schema_uses_sandbox_runtime_id_in_sandbox_i
         repo.close()
 
     assert "sandbox_runtime_id" in cols
-    assert "lea" "se_id" not in cols
+    assert "lease_id" not in cols
 
 
 def test_sqlite_sandbox_runtime_repo_schema_uses_sandbox_runtime_id_in_sandbox_runtime_events(tmp_path):
@@ -49,7 +49,7 @@ def test_sqlite_sandbox_runtime_repo_schema_uses_sandbox_runtime_id_in_sandbox_r
     assert "sandbox_runtime_events" in table_names
     assert "lease_events" not in table_names
     assert "sandbox_runtime_id" in cols
-    assert "lea" "se_id" not in cols
+    assert "lease_id" not in cols
 
 
 def test_sqlite_sandbox_runtime_repo_delete_removes_runtime_without_legacy_sqlitelease_import(tmp_path):

@@ -14,7 +14,7 @@ def test_chat_session_repo_create_returns_sandbox_runtime_id_not_legacy_runtime_
         repo.close()
 
     assert created["sandbox_runtime_id"] == "runtime-1"
-    assert "lea" "se_id" not in created
+    assert "lease_id" not in created
 
 
 def test_chat_session_repo_get_returns_sandbox_runtime_id_not_legacy_runtime_id(tmp_path):
@@ -32,7 +32,7 @@ def test_chat_session_repo_get_returns_sandbox_runtime_id_not_legacy_runtime_id(
 
     assert row is not None
     assert row["sandbox_runtime_id"] == "runtime-1"
-    assert "lea" "se_id" not in row
+    assert "lease_id" not in row
 
 
 def test_chat_session_repo_schema_uses_sandbox_runtime_id_column(tmp_path):
@@ -43,4 +43,4 @@ def test_chat_session_repo_schema_uses_sandbox_runtime_id_column(tmp_path):
         repo.close()
 
     assert "sandbox_runtime_id" in cols
-    assert "lea" "se_id" not in cols
+    assert "lease_id" not in cols

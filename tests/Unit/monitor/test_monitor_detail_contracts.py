@@ -485,7 +485,7 @@ def test_get_monitor_sandbox_detail_merges_monitor_repo_state(monkeypatch):
     ]
     assert "sess" + "ions" not in payload
     assert payload["cleanup"]["allowed"] is False
-    assert "lea" "se" not in payload
+    assert "lease" not in payload
 
 
 def test_get_monitor_sandbox_detail_collapses_live_threads_to_canonical_primary_thread(monkeypatch):
@@ -705,7 +705,7 @@ def test_request_monitor_sandbox_cleanup_keeps_runtime_handle_out_of_sandbox_pay
         runtime_mutation_executor=_runtime_mutation_executor(),
     ) == {"accepted": True}
 
-    assert "lea" "se" not in captured
+    assert "lease" not in captured
     assert SANDBOX_RUNTIME_KEY not in captured["sandbox"]
     assert captured["sandbox_runtime"] == {"handle": "runtime-1"}
 

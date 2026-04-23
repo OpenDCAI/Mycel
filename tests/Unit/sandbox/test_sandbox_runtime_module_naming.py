@@ -23,7 +23,7 @@ def test_runtime_production_imports_do_not_reference_sandbox_lease_module() -> N
 
     for rel_path in TARGETS:
         source = (repo_root / rel_path).read_text(encoding="utf-8")
-        if "sandbox.lea" "se" in source:
+        if "sandbox.lease" in source:
             offenders.append(rel_path)
 
-    assert offenders == [], "Found production imports still referencing sandbox.lea" "se:\n" + "\n".join(offenders)
+    assert offenders == [], "Found production imports still referencing sandbox.lease:\n" + "\n".join(offenders)

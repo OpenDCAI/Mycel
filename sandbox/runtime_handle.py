@@ -266,27 +266,21 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             )
 
         if observed == "running":
-            assert_sandbox_runtime_instance_transition(
-                self._instance_state(), SandboxRuntimeInstanceState.RUNNING, reason=reason
-            )
+            assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.RUNNING, reason=reason)
             if self._current_instance:
                 self._current_instance.status = "running"
             self.observed_state = "running"
             return
 
         if observed == "paused":
-            assert_sandbox_runtime_instance_transition(
-                self._instance_state(), SandboxRuntimeInstanceState.PAUSED, reason=reason
-            )
+            assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.PAUSED, reason=reason)
             if self._current_instance:
                 self._current_instance.status = "paused"
             self.observed_state = "paused"
             return
 
         if observed == "detached":
-            assert_sandbox_runtime_instance_transition(
-                self._instance_state(), SandboxRuntimeInstanceState.DETACHED, reason=reason
-            )
+            assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.DETACHED, reason=reason)
             self._detached_instance = self._current_instance
             self._current_instance = None
             self.observed_state = "detached"
@@ -294,9 +288,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
         if observed == "unknown":
             if self._current_instance:
-                assert_sandbox_runtime_instance_transition(
-                    self._instance_state(), SandboxRuntimeInstanceState.UNKNOWN, reason=reason
-                )
+                assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.UNKNOWN, reason=reason)
                 self._current_instance.status = "unknown"
             self.observed_state = "unknown"
             return
@@ -659,9 +651,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         try:
             ok = provider_method(instance_id)
         except Exception as exc:
-            raise RuntimeError(
-                f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}: {exc}"
-            ) from exc
+            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}: {exc}") from exc
         if not ok:
             raise RuntimeError(f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}")
 
@@ -795,9 +785,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                         try:
                             ok = provider.destroy_session(self._current_instance.instance_id)
                         except Exception as exc:
-                            raise RuntimeError(
-                                f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}: {exc}"
-                            ) from exc
+                            raise RuntimeError(f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}: {exc}") from exc
                         if not ok:
                             raise RuntimeError(f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}")
                     self.desired_state = "destroyed"
@@ -809,9 +797,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
                 elif event_type == "intent.ensure_running":
                     if not self._current_instance:
-                        raise RuntimeError(
-                            f"Sandbox runtime {self.sandbox_runtime_id}: intent.ensure_running requires bound instance"
-                        )
+                        raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id}: intent.ensure_running requires bound instance")
                     self.desired_state = "running"
                     self._set_observed_state("running", reason="intent.ensure_running")
                     self.status = "active"
@@ -883,9 +869,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if not self._current_instance:
                 return None
             if self.observed_state == "paused":
-                raise RuntimeError(
-                    f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
-                )
+                raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands.")
             if self.observed_state == "running" and not self.needs_refresh:
                 return self._current_instance
             self._current_instance = None
@@ -924,9 +908,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 if self.observed_state == "running" and self._current_instance:
                     return self._current_instance
                 if self.observed_state == "paused":
-                    raise RuntimeError(
-                        f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
-                    )
+                    raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands.")
             except RuntimeError:
                 raise
             except Exception as exc:
@@ -968,9 +950,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if self.observed_state == "running" and self._current_instance:
                         return self._current_instance
                     if self.observed_state == "paused":
-                        raise RuntimeError(
-                            f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
-                        )
+                        raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands.")
                 except RuntimeError:
                     raise
                 except Exception as exc:

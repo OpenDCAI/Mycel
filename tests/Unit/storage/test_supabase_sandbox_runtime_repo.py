@@ -65,7 +65,7 @@ def test_supabase_sandbox_runtime_repo_get_reads_container_sandbox_runtime_state
     assert sandbox_runtime is not None
     assert sandbox_runtime["sandbox_id"] == "sandbox-1"
     assert sandbox_runtime["sandbox_runtime_id"] == "runtime-1"
-    assert "lea" "se_id" not in sandbox_runtime
+    assert "lease_id" not in sandbox_runtime
     assert sandbox_runtime["provider_name"] == "local"
     assert sandbox_runtime["recipe_id"] == "local:default"
     assert sandbox_runtime["recipe_json"] == '{"id":"local:default"}'
@@ -120,7 +120,7 @@ def test_supabase_sandbox_runtime_repo_create_writes_container_sandbox_runtime_s
     row = tables["container.sandboxes"][0]
     assert created["sandbox_id"] == row["id"]
     assert created["sandbox_runtime_id"] == "runtime-1"
-    assert "lea" "se_id" not in created
+    assert "lease_id" not in created
     assert row["owner_user_id"] == "owner-1"
     assert row["provider_name"] == "local"
     assert row["sandbox_template_id"] == "local:default"
@@ -176,7 +176,7 @@ def test_supabase_sandbox_runtime_repo_persist_metadata_updates_container_runtim
     row = tables["container.sandboxes"][0]
     runtime_state = row["config"]["runtime_state"]
     assert updated["sandbox_runtime_id"] == "runtime-1"
-    assert "lea" "se_id" not in updated
+    assert "lease_id" not in updated
     assert row["sandbox_template_id"] == "local:python"
     assert row["observed_state"] == "unknown"
     assert row["last_error"] == "provider boom"
@@ -200,7 +200,7 @@ def test_supabase_sandbox_runtime_repo_observe_status_detaches_instance_from_con
     row = tables["container.sandboxes"][0]
     runtime_state = row["config"]["runtime_state"]
     assert updated["sandbox_runtime_id"] == "runtime-1"
-    assert "lea" "se_id" not in updated
+    assert "lease_id" not in updated
     assert row["provider_env_id"] is None
     assert row["observed_state"] == "detached"
     assert runtime_state["status"] == "expired"

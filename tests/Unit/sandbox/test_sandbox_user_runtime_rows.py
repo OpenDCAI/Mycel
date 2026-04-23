@@ -23,8 +23,7 @@ def _runtime_row(
     return {
         SANDBOX_RUNTIME_KEY: sandbox_runtime_id,
         "sandbox_runtime_id": sandbox_runtime_id,
-        "sandbox_id": sandbox_id
-        or sandbox_runtime_id.replace("runtime", "sandbox", 1),
+        "sandbox_id": sandbox_id or sandbox_runtime_id.replace("runtime", "sandbox", 1),
         "provider_name": provider_name,
         "recipe_id": recipe_id or f"{provider_name}:default",
         "recipe_json": None,

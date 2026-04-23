@@ -12,17 +12,17 @@ TARGETS = (
 )
 
 FORBIDDEN = (
-    "_FakeLea" "seRepo",
-    "_Lea" "seRepo",
-    "_FakeLea" "seStore",
-    "class _FakeLea" "se:",
-    '"lea' 'se-1"',
-    '"lea' 'se-live"',
+    "_FakeLeaseRepo",
+    "_LeaseRepo",
+    "_FakeLeaseStore",
+    "class _FakeLease:",
+    '"lease-1"',
+    '"lease-live"',
 )
 
 FORBIDDEN_FILENAMES = (
-    "tests/Unit/storage/test_sqlite_lea" "se_repo.py",
-    "tests/Unit/storage/test_supabase_lea" "se_repo.py",
+    "tests/Unit/storage/test_sqlite_lease_repo.py",
+    "tests/Unit/storage/test_supabase_lease_repo.py",
 )
 
 
@@ -40,4 +40,4 @@ def test_target_runtime_tests_do_not_use_legacy_runtime_repo_helper_names() -> N
         if (repo_root / rel_path).exists():
             offenders.append(f"{rel_path} -> filename")
 
-    assert offenders == [], "Found legacy lea" "se repo test residue:\n" + "\n".join(offenders)
+    assert offenders == [], "Found legacy lease repo test residue:\n" + "\n".join(offenders)

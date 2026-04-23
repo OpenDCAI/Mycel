@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 FORBIDDEN = (
-    "make_" "lower_" "runtime_repo",
-    "lower_" "runtime_from_row",
-    "lower_" "runtime = ",
-    "matched lower" "-runtime state",
-    "lower" "-runtime state",
+    "make_lower_runtime_repo",
+    "lower_runtime_from_row",
+    "lower_runtime = ",
+    "matched lower-runtime state",
+    "lower-runtime state",
 )
 
 

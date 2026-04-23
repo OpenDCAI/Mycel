@@ -854,9 +854,7 @@ class SandboxManager:
         for sandbox_runtime_id in sandbox_runtime_ids:
             # @@@shared-runtime-destroy-boundary - destroying one thread must not tear down
             # a sandbox runtime that still has surviving terminals bound to it.
-            sandbox_runtime_in_use = any(
-                row.get("sandbox_runtime_id") == sandbox_runtime_id for row in self.terminal_store.list_all()
-            )
+            sandbox_runtime_in_use = any(row.get("sandbox_runtime_id") == sandbox_runtime_id for row in self.terminal_store.list_all())
             if sandbox_runtime_in_use:
                 continue
             if not self.destroy_sandbox_runtime_resources(sandbox_runtime_id):

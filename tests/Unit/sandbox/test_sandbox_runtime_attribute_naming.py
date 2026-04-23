@@ -52,11 +52,11 @@ def test_chat_session_uses_sandbox_runtime_attribute(tmp_path: Path) -> None:
     )
 
     assert session.sandbox_runtime is sandbox_runtime
-    assert not hasattr(session, "lea" "se")
+    assert not hasattr(session, "lease")
     assert terminal.sandbox_runtime_id == "runtime-1"
-    assert not hasattr(terminal, "lea" "se_id")
+    assert not hasattr(terminal, "lease_id")
     assert session.sandbox_runtime.sandbox_runtime_id == "runtime-1"
-    assert not hasattr(session.sandbox_runtime, "lea" "se_id")
+    assert not hasattr(session.sandbox_runtime, "lease_id")
 
 
 def test_runtime_uses_sandbox_runtime_attribute(tmp_path: Path) -> None:
@@ -66,8 +66,8 @@ def test_runtime_uses_sandbox_runtime_attribute(tmp_path: Path) -> None:
     runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
     assert terminal.sandbox_runtime_id == "runtime-1"
-    assert not hasattr(terminal, "lea" "se_id")
+    assert not hasattr(terminal, "lease_id")
     assert runtime.sandbox_runtime is sandbox_runtime
-    assert not hasattr(runtime, "lea" "se")
+    assert not hasattr(runtime, "lease")
     assert runtime.sandbox_runtime.sandbox_runtime_id == "runtime-1"
-    assert not hasattr(runtime.sandbox_runtime, "lea" "se_id")
+    assert not hasattr(runtime.sandbox_runtime, "lease_id")

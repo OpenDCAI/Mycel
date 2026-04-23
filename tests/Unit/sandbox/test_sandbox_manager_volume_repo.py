@@ -245,9 +245,7 @@ def test_resolve_existing_sandbox_runtime_cwd_ignores_latest_terminal_cwd_and_pr
 
 
 def test_resolve_existing_sandbox_runtime_cwd_fails_loud_when_provider_default_is_unavailable(monkeypatch):
-    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
-        row={"sandbox_runtime_id": "runtime-1", "provider_name": "missing-provider"}
-    )
+    sandbox_runtime_repo = _FakeSandboxRuntimeRepo(row={"sandbox_runtime_id": "runtime-1", "provider_name": "missing-provider"})
     monkeypatch.setattr(
         sandbox_manager_module,
         "_build_provider_from_name",
@@ -428,9 +426,7 @@ def test_destroy_thread_resources_daytona_does_not_require_volume_row(tmp_path):
     manager.session_manager = SimpleNamespace(
         delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
-    manager.sandbox_runtime_store = SimpleNamespace(
-        delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id)
-    )
+    manager.sandbox_runtime_store = SimpleNamespace(delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id))
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert destroyed_leases == ["runtime-1"]
@@ -635,9 +631,7 @@ def test_destroy_thread_resources_skips_local_sync_without_volume_metadata():
             destroy_calls.append("runtime-1")
 
     sandbox_runtime = _SandboxRuntime()
-    manager.sandbox_runtime_store = SimpleNamespace(
-        delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id)
-    )
+    manager.sandbox_runtime_store = SimpleNamespace(delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id))
     deleted_leases: list[str] = []
 
     assert manager.destroy_thread_resources("thread-1") is True
@@ -684,9 +678,7 @@ def test_destroy_thread_resources_hard_deletes_thread_chat_sessions_before_termi
         delete=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("soft delete should not be used")),
         delete_thread=lambda thread_id, reason="thread_deleted": delete_order.append(f"thread:{thread_id}:{reason}"),
     )
-    manager.sandbox_runtime_store = SimpleNamespace(
-        delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id)
-    )
+    manager.sandbox_runtime_store = SimpleNamespace(delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id))
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert delete_order == ["thread:thread-1:thread_deleted", "terminal:term-1"]
@@ -735,9 +727,7 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     manager.session_manager = SimpleNamespace(
         delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
-    manager.sandbox_runtime_store = SimpleNamespace(
-        delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id)
-    )
+    manager.sandbox_runtime_store = SimpleNamespace(delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id))
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert deleted_thread_chats == [("thread-1", "thread_deleted")]
@@ -783,9 +773,7 @@ def test_destroy_thread_resources_deletes_daytona_managed_volume_from_runtime_id
     manager.session_manager = SimpleNamespace(
         delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
-    manager.sandbox_runtime_store = SimpleNamespace(
-        delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id)
-    )
+    manager.sandbox_runtime_store = SimpleNamespace(delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id))
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert destroyed_leases == ["runtime-1"]
@@ -831,9 +819,7 @@ def test_destroy_thread_resources_derives_daytona_volume_name_from_runtime_id(tm
     manager.session_manager = SimpleNamespace(
         delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
     )
-    manager.sandbox_runtime_store = SimpleNamespace(
-        delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id)
-    )
+    manager.sandbox_runtime_store = SimpleNamespace(delete=lambda sandbox_runtime_id: deleted_leases.append(sandbox_runtime_id))
 
     assert manager.destroy_thread_resources("thread-1") is True
     assert destroyed_leases == ["runtime-1"]

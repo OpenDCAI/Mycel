@@ -15,7 +15,7 @@ def test_runtime_payload_strippers_do_not_carry_legacy_runtime_id_filters() -> N
 
     for rel_path in TARGETS:
         source = (repo_root / rel_path).read_text(encoding="utf-8")
-        if '"lea' 'se_id"' in source:
+        if '"lease_id"' in source:
             offenders.append(rel_path)
 
     assert offenders == [], "Found legacy runtime-id strip residue:\n" + "\n".join(offenders)

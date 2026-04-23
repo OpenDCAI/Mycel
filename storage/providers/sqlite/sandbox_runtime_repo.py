@@ -51,9 +51,7 @@ class SQLiteSandboxRuntimeRepo:
         operation: str,
     ) -> dict[str, Any]:
         if row is None:
-            raise RuntimeError(
-                f"SQLite sandbox runtime repo failed to load runtime after {operation}: {sandbox_runtime_id}"
-            )
+            raise RuntimeError(f"SQLite sandbox runtime repo failed to load runtime after {operation}: {sandbox_runtime_id}")
         return row
 
     def _runtime_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -521,9 +519,7 @@ class SQLiteSandboxRuntimeRepo:
 
         missing_runtime = REQUIRED_SANDBOX_RUNTIME_COLUMNS - runtime_cols
         if missing_runtime:
-            raise RuntimeError(
-                f"sandbox_runtimes schema mismatch: missing {sorted(missing_runtime)}. Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError(f"sandbox_runtimes schema mismatch: missing {sorted(missing_runtime)}. Purge ~/.leon/sandbox.db and retry.")
         missing_instances = REQUIRED_INSTANCE_COLUMNS - instance_cols
         if missing_instances:
             raise RuntimeError(

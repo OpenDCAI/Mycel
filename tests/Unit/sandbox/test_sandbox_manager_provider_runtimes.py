@@ -43,4 +43,4 @@ def test_provider_runtime_listing_does_not_emit_legacy_runtime_id_field() -> Non
 
     assert len(sessions) == 1
     assert sessions[0]["source"] == "provider_orphan"
-    assert "lea" "se_id" not in sessions[0]
+    assert "lease_id" not in sessions[0]
