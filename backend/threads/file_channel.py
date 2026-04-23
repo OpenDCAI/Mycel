@@ -42,7 +42,9 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
     try:
         thread_row = thread_repo.get_by_id(thread_id)
     finally:
-        _close_repo(thread_repo)
+        close = getattr(thread_repo, "close", None)
+        if callable(close):
+            close()
     if thread_row is None:
         raise ValueError(f"Thread not found: {thread_id}")
 
@@ -52,7 +54,9 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
     try:
         workspace_row = workspace_repo.get_by_id(workspace_id)
     finally:
-        _close_repo(workspace_repo)
+        close = getattr(workspace_repo, "close", None)
+        if callable(close):
+            close()
     if workspace_row is None:
         raise ValueError(f"Workspace not found: {workspace_id}")
 
@@ -60,7 +64,7 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
         thread_id=thread_id,
         workspace_id=workspace_id,
         workspace_path=_required_text(workspace_row, "workspace_path", "workspace"),
-        local_staging_root=_workspace_file_channel_root(workspace_id),
+        local_staging_root=user_home_path("file_channels", workspace_id).expanduser().resolve(),
         remote_files_dir="/workspace/files",
     )
 
@@ -80,13 +84,3 @@ def _required_text(row, key: str, label: str) -> str:
     if value in (None, ""):
         raise ValueError(f"{label}.{key} is required")
     return str(value)
-
-
-def _workspace_file_channel_root(workspace_id: str) -> Path:
-    return user_home_path("file_channels", workspace_id).expanduser().resolve()
-
-
-def _close_repo(repo) -> None:
-    close = getattr(repo, "close", None)
-    if callable(close):
-        close()
