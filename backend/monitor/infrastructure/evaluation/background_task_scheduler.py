@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from backend.monitor.infrastructure.evaluation.evaluation_execution_service import run_monitor_evaluation_batch
-from backend.monitor.infrastructure.evaluation.evaluation_read_service import make_eval_batch_service
 from backend.monitor.infrastructure.evaluation.evaluation_scheduler import EvaluationJobScheduler, EvaluationJobSpec
+from backend.monitor.infrastructure.evaluation.evaluation_storage_service import make_eval_batch_service
 
 
 class BackgroundTaskEvaluationScheduler(EvaluationJobScheduler):

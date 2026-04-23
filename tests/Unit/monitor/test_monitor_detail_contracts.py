@@ -17,7 +17,7 @@ from backend.monitor.infrastructure.evaluation import (
     evaluation_execution_service as monitor_evaluation_execution_service,
 )
 from backend.monitor.infrastructure.evaluation import (
-    evaluation_read_service as monitor_evaluation_read_service,
+    evaluation_storage_service as monitor_evaluation_storage_service,
 )
 from backend.monitor.infrastructure.persistence import operation_repo as monitor_operation_repo_service
 from backend.monitor.infrastructure.providers import (
@@ -50,7 +50,7 @@ def _default_eval_batch_service(monkeypatch):
         def list_batch_runs_for_thread(self, _thread_id):
             return []
 
-    monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_storage_service, "make_eval_batch_service", lambda: FakeBatchService())
 
 
 @pytest.fixture(autouse=True)
@@ -369,7 +369,7 @@ def test_create_monitor_evaluation_batch_uses_batch_service(monkeypatch):
             calls.append(kwargs)
             return {"batch_id": "batch-created", "status": "pending"}
 
-    monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_storage_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     payload = monitor_evaluation_service.create_monitor_evaluation_batch(
         submitted_by_user_id="owner-1",
@@ -425,7 +425,7 @@ def test_start_monitor_evaluation_batch_schedules_runner_with_explicit_execution
             return {"batch_id": batch_id, "status": status}
 
     monkeypatch.setattr(monitor_evaluation_execution_service, "EVAL_SCENARIO_DIR", scenario_dir)
-    monkeypatch.setattr(monitor_evaluation_read_service, "make_eval_batch_service", lambda: FakeBatchService())
+    monkeypatch.setattr(monitor_evaluation_storage_service, "make_eval_batch_service", lambda: FakeBatchService())
 
     class _Scheduler:
         def submit(self, spec):
