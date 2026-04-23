@@ -29,17 +29,17 @@ from sandbox.lifecycle import (
     parse_sandbox_runtime_instance_state,
 )
 from storage.providers.sqlite.kernel import connect_sqlite
-from storage.runtime import build_sandbox_runtime_repo as _build_strategy_sandbox_runtime_repo
 from storage.runtime import build_provider_event_repo as _build_strategy_provider_event_repo
 from storage.runtime import build_sandbox_repo as _build_strategy_sandbox_repo
+from storage.runtime import build_sandbox_runtime_repo as _build_strategy_sandbox_runtime_repo
 from storage.runtime import uses_supabase_runtime_defaults
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
 
-LEASE_FRESHNESS_TTL_SEC = 3.0
+SANDBOX_RUNTIME_FRESHNESS_TTL_SEC = 3.0
 
-REQUIRED_LEASE_COLUMNS = {
+REQUIRED_SANDBOX_RUNTIME_COLUMNS = {
     "sandbox_runtime_id",
     "provider_name",
     "recipe_id",
@@ -168,7 +168,7 @@ class SandboxRuntimeHandle(ABC):
         provider: SandboxProvider,
         *,
         force: bool = False,
-        max_age_sec: float = LEASE_FRESHNESS_TTL_SEC,
+        max_age_sec: float = SANDBOX_RUNTIME_FRESHNESS_TTL_SEC,
     ) -> str: ...
 
     @abstractmethod
@@ -187,10 +187,10 @@ class SandboxRuntimeHandle(ABC):
 
 
 class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
-    """SQLite-backed lease implementation."""
+    """SQLite-backed sandbox runtime handle implementation."""
 
     _lock_guard = threading.Lock()
-    _lease_locks: dict[str, threading.RLock] = {}
+    _runtime_locks: dict[str, threading.RLock] = {}
 
     def __init__(
         self,
@@ -231,14 +231,14 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
     def _instance_lock(self) -> threading.RLock:
         with self._lock_guard:
-            lock = self._lease_locks.get(self.sandbox_runtime_id)
+            lock = self._runtime_locks.get(self.sandbox_runtime_id)
             if lock is None:
-                # @@@reentrant-lease-lock - apply() may be called inside ensure_active_instance critical sections.
+                # @@@reentrant-runtime-lock - apply() may be called inside ensure_active_instance critical sections.
                 lock = threading.RLock()
-                self._lease_locks[self.sandbox_runtime_id] = lock
+                self._runtime_locks[self.sandbox_runtime_id] = lock
             return lock
 
-    def _is_fresh(self, max_age_sec: float = LEASE_FRESHNESS_TTL_SEC) -> bool:
+    def _is_fresh(self, max_age_sec: float = SANDBOX_RUNTIME_FRESHNESS_TTL_SEC) -> bool:
         if not self.observed_at:
             return False
         return (utc_now() - self.observed_at).total_seconds() <= max_age_sec
@@ -266,27 +266,21 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             )
 
         if observed == "running":
-            assert_sandbox_runtime_instance_transition(
-                self._instance_state(), SandboxRuntimeInstanceState.RUNNING, reason=reason
-            )
+            assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.RUNNING, reason=reason)
             if self._current_instance:
                 self._current_instance.status = "running"
             self.observed_state = "running"
             return
 
         if observed == "paused":
-            assert_sandbox_runtime_instance_transition(
-                self._instance_state(), SandboxRuntimeInstanceState.PAUSED, reason=reason
-            )
+            assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.PAUSED, reason=reason)
             if self._current_instance:
                 self._current_instance.status = "paused"
             self.observed_state = "paused"
             return
 
         if observed == "detached":
-            assert_sandbox_runtime_instance_transition(
-                self._instance_state(), SandboxRuntimeInstanceState.DETACHED, reason=reason
-            )
+            assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.DETACHED, reason=reason)
             self._detached_instance = self._current_instance
             self._current_instance = None
             self.observed_state = "detached"
@@ -294,9 +288,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
         if observed == "unknown":
             if self._current_instance:
-                assert_sandbox_runtime_instance_transition(
-                    self._instance_state(), SandboxRuntimeInstanceState.UNKNOWN, reason=reason
-                )
+                assert_sandbox_runtime_instance_transition(self._instance_state(), SandboxRuntimeInstanceState.UNKNOWN, reason=reason)
                 self._current_instance.status = "unknown"
             self.observed_state = "unknown"
             return
@@ -470,7 +462,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if should_commit:
                 target.close()
 
-    def _persist_lease_metadata(self, conn: sqlite3.Connection | None = None) -> None:
+    def _persist_runtime_metadata(self, conn: sqlite3.Connection | None = None) -> None:
         should_commit = conn is None
         target = conn or _connect(self.db_path)
         try:
@@ -550,7 +542,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 repo.close()
             self._sync_from(sandbox_runtime_from_row(row, self.db_path))
             return
-        self._persist_lease_metadata()
+        self._persist_runtime_metadata()
 
     def _observe_status_via_strategy_repo(self, raw_status: str, *, source: str) -> None:
         observed = self._normalize_provider_state(raw_status)
@@ -659,9 +651,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         try:
             ok = provider_method(instance_id)
         except Exception as exc:
-            raise RuntimeError(
-                f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}: {exc}"
-            ) from exc
+            raise RuntimeError(f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}: {exc}") from exc
         if not ok:
             raise RuntimeError(f"Failed to {event_type.split('.')[-1]} sandbox runtime {self.sandbox_runtime_id}")
 
@@ -795,9 +785,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                         try:
                             ok = provider.destroy_session(self._current_instance.instance_id)
                         except Exception as exc:
-                            raise RuntimeError(
-                                f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}: {exc}"
-                            ) from exc
+                            raise RuntimeError(f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}: {exc}") from exc
                         if not ok:
                             raise RuntimeError(f"Failed to destroy sandbox runtime {self.sandbox_runtime_id}")
                     self.desired_state = "destroyed"
@@ -809,9 +797,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
                 elif event_type == "intent.ensure_running":
                     if not self._current_instance:
-                        raise RuntimeError(
-                            f"Sandbox runtime {self.sandbox_runtime_id}: intent.ensure_running requires bound instance"
-                        )
+                        raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id}: intent.ensure_running requires bound instance")
                     self.desired_state = "running"
                     self._set_observed_state("running", reason="intent.ensure_running")
                     self.status = "active"
@@ -860,7 +846,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 self.observed_at = utc_now()
                 self.version += 1
                 with _connect(self.db_path) as conn:
-                    self._persist_lease_metadata(conn=conn)
+                    self._persist_runtime_metadata(conn=conn)
                     self._append_event(
                         event_type=event_type,
                         source=source,
@@ -883,9 +869,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             if not self._current_instance:
                 return None
             if self.observed_state == "paused":
-                raise RuntimeError(
-                    f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
-                )
+                raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands.")
             if self.observed_state == "running" and not self.needs_refresh:
                 return self._current_instance
             self._current_instance = None
@@ -924,9 +908,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                 if self.observed_state == "running" and self._current_instance:
                     return self._current_instance
                 if self.observed_state == "paused":
-                    raise RuntimeError(
-                        f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
-                    )
+                    raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands.")
             except RuntimeError:
                 raise
             except Exception as exc:
@@ -968,9 +950,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
                     if self.observed_state == "running" and self._current_instance:
                         return self._current_instance
                     if self.observed_state == "paused":
-                        raise RuntimeError(
-                            f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands."
-                        )
+                        raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime_id} is paused. Resume before executing commands.")
                 except RuntimeError:
                     raise
                 except Exception as exc:
@@ -978,7 +958,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
             self.status = "recovering"
             if not _use_supabase_storage(self.db_path):
-                self._persist_lease_metadata()
+                self._persist_runtime_metadata()
             from sandbox.thread_context import get_current_thread_id
 
             thread_id = get_current_thread_id()
@@ -1075,7 +1055,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         provider: SandboxProvider,
         *,
         force: bool = False,
-        max_age_sec: float = LEASE_FRESHNESS_TTL_SEC,
+        max_age_sec: float = SANDBOX_RUNTIME_FRESHNESS_TTL_SEC,
     ) -> str:
         capability = provider.get_capability()
         if self.needs_refresh:
@@ -1124,7 +1104,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             finally:
                 repo.close()
             return
-        self._persist_lease_metadata()
+        self._persist_runtime_metadata()
 
 
 def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteSandboxRuntimeHandle:

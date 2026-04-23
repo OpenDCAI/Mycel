@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN = (
     "@@@subagent-lease-reuse",
     "@@@thread-single-lease-invariant",
     "@@@paused-lease-rehydrate",
     "@@@idle-reaper-shared-lease",
+    "@@@shared-lease-destroy-boundary",
     "Pause expired leases and close chat sessions.",
+    "pause physical lease instance",
     "expired lease ",
     "terminal/lease records",
+    "Re-resolve through lease",
 )
 
 

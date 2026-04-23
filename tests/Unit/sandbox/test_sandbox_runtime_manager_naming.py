@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN = (
     "def resolve_existing_lease_cwd(",
     "def bind_thread_to_existing_lease(",

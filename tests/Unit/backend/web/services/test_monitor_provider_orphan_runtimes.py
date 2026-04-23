@@ -6,7 +6,7 @@ from backend.monitor.application.use_cases import provider_runtimes as monitor_p
 from backend.monitor.infrastructure.providers import provider_runtime_inventory_service as monitor_provider_runtime_inventory_service
 from backend.sandboxes import service as sandbox_service
 
-LOWER_RUNTIME_KEY = "sandbox_runtime_" + "id"
+SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
 
 
 class _FailingManager:
@@ -52,7 +52,7 @@ def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
             "status": "paused",
             "created_at": None,
             "last_active": None,
-            LOWER_RUNTIME_KEY: None,
+            SANDBOX_RUNTIME_KEY: None,
             "instance_id": "orphan-paused",
             "chat_session_id": None,
             "source": "provider_orphan",
@@ -65,7 +65,7 @@ def test_load_provider_orphan_runtimes_excludes_covered_provider_runtimes():
             "status": "running",
             "created_at": None,
             "last_active": None,
-            LOWER_RUNTIME_KEY: None,
+            SANDBOX_RUNTIME_KEY: None,
             "instance_id": "orphan-running",
             "chat_session_id": None,
             "source": "provider_orphan",

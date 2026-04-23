@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "storage/providers/supabase/sandbox_runtime_repo.py",
     "backend/threads/run/lifecycle.py",

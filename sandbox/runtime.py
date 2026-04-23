@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.provider import SandboxProvider
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal, TerminalState
 
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
@@ -880,9 +880,7 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
         status = self.sandbox_runtime.refresh_instance_status(self.provider, force=True, max_age_sec=0)
         if status == "paused":
             if not self.sandbox_runtime.resume_instance(self.provider):
-                raise RuntimeError(
-                    f"Failed to resume paused sandbox runtime {self.sandbox_runtime.sandbox_runtime_id}"
-                )
+                raise RuntimeError(f"Failed to resume paused sandbox runtime {self.sandbox_runtime.sandbox_runtime_id}")
             return
         if status in {"detached", "unknown"}:
             self.sandbox_runtime.ensure_active_instance(self.provider)

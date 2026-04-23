@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN = (
     "_sandbox_id_for_lease(",
     "_lease_id(",

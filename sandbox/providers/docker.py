@@ -38,8 +38,8 @@ from sandbox.runtime import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ class DockerProvider(SandboxProvider):
             cmd.extend(["-v", volume_arg])
 
         if context_id:
-            # @@@context-label - also label with context_id so probe can find container via lease_id
+            # @@@context-label - also label with context_id so probe can find container via runtime handle
             cmd.extend(["--label", f"leon.context_id={context_id}"])
             volume = context_id
             cmd.extend(["-v", f"{volume}:{self.mount_path}"])

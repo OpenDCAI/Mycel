@@ -23,8 +23,8 @@ from sandbox.provider import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxRuntimeHandle
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 
@@ -79,7 +79,7 @@ class LocalSessionProvider(SandboxProvider):
         with self._state_lock:
             # @@@local-provider-process-boundary - LocalSessionProvider state is in-memory only; in multi-worker
             # web backends the pause/resume request can land on a different process than the one that created
-            # the session. For lease-bound local sessions (context_id like "leon-<lease_id>" or "local-..."),
+            # the session. For runtime-bound local sessions (context_id like "leon-<runtime_id>" or "local-..."),
             # treat missing in-memory state as "running" so pause/resume stays idempotent across processes.
             state = self._session_states.get(session_id)
             if state is None:
@@ -381,9 +381,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         on_stdout_chunk: Callable[[str], None] | None = None,
     ) -> ExecuteResult:
         if self.sandbox_runtime.observed_state == "paused":
-            raise RuntimeError(
-                f"Sandbox runtime {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands."
-            )
+            raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands.")
 
         state = self.terminal.get_state()
         start, end, script = _build_windows_shell_script(command, cwd=state.cwd, env_delta=state.env_delta)
@@ -430,9 +428,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
             return self._execute_windows_once_sync(command, timeout, on_stdout_chunk=on_stdout_chunk)
 
         if self.sandbox_runtime.observed_state == "paused":
-            raise RuntimeError(
-                f"Sandbox runtime {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands."
-            )
+            raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands.")
 
         state = self.terminal.get_state()
         pty_session = self._ensure_session_sync(timeout)

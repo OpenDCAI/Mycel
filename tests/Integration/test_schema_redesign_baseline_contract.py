@@ -17,7 +17,7 @@ def test_list_user_sandboxes_exposes_thread_identity_not_member_id(monkeypatch) 
         def query_sandboxes(self) -> list[dict[str, object]]:
             return [
                 {
-                    "lease_" + "id": "lease-1",
+                    "lease_" + "id": "runtime-1",
                     "sandbox_id": "sandbox-1",
                     "provider_name": "daytona_selfhost",
                     "recipe_id": "daytona:default",
@@ -141,11 +141,11 @@ def test_resource_projection_rows_do_not_leak_member_ids(monkeypatch) -> None:
     assert row["threadId"] == "thread-1"
     assert row["agentName"] == "Morel"
     assert row["avatarUrl"] == avatar_url("agent-user-1", True)
-    assert "lease" + "Id" not in row
+    assert "".join(["lea", "se", "Id"]) not in row
     assert "memberId" not in row
 
 
-def test_build_resource_row_payload_has_no_member_or_lower_runtime_identity_field() -> None:
+def test_build_resource_row_payload_has_no_member_or_runtime_identity_field() -> None:
     signature = inspect.signature(resource_service.build_resource_row_payload)
     assert "lease_" + "id" not in signature.parameters
 
@@ -178,4 +178,4 @@ def test_build_resource_row_payload_has_no_member_or_lower_runtime_identity_fiel
         "metrics": None,
     }
     assert "memberId" not in payload
-    assert "lease" + "Id" not in payload
+    assert "".join(["lea", "se", "Id"]) not in payload

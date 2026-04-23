@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "backend/sandboxes/__init__.py",
     "backend/threads/__init__.py",
@@ -10,6 +9,7 @@ TARGETS = (
     "sandbox/runtime.py",
     "sandbox/resource_snapshot.py",
     "core/runtime/agent.py",
+    "core/agents/service.py",
 )
 
 FORBIDDEN = (
@@ -23,7 +23,7 @@ FORBIDDEN = (
 )
 
 
-def test_runtime_comment_tail_avoids_lease_phrasing() -> None:
+def test_runtime_comment_tail_avoids_runtime_drift_phrasing() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     offenders: list[str] = []
 

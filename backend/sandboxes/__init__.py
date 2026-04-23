@@ -20,7 +20,7 @@ IN:
 
 OUT:
     - Provider implementation details (sandbox/providers/)
-    - Sandbox runtime state machine (sandbox/lease.py, sandbox/lifecycle.py)
+    - Sandbox runtime state machine (sandbox/runtime_handle.py, sandbox/lifecycle.py)
     - Volume engine (sandbox/volume.py)
     - Thread-sandbox binding (backend/threads/sandbox_resolution.py)
 

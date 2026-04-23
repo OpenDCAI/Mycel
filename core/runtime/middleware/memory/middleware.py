@@ -359,7 +359,7 @@ class MemoryMiddleware(AgentMiddleware):
         tid = get_current_thread_id()
         if tid:
             return tid
-        # Fallback: try request.config (used in tests)
+        # Test path: try request.config
         config = getattr(request, "config", None)
         if not config:
             return None

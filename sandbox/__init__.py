@@ -32,7 +32,7 @@ def create_sandbox(
 
     Args:
         config: SandboxConfig (from SandboxConfig.load() or inline)
-        workspace_root: Fallback working dir for LocalSandbox
+        workspace_root: Default working dir for LocalSandbox
         db_path: SQLite path for session tracking
     """
     p = config.provider

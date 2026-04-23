@@ -1099,8 +1099,8 @@ class AgentService:
                     # path owns the eventual close after it harvests the result.
                     if self._web_app is None:
                         # @@@subagent-sandbox-close-skip - Child agents can share the
-                        # parent's lease; closing the child sandbox here can pause the
-                        # shared lease mid-owner-turn.
+                        # parent's sandbox runtime; closing the child sandbox here can pause the
+                        # shared runtime mid-owner-turn.
                         agent.close(cleanup_sandbox=False)
                 except Exception:
                     logger.exception("Failed to clean up child agent after task %s", task_id)

@@ -36,9 +36,11 @@ def test_sandbox_info_does_not_expose_terminal_or_session_identity() -> None:
                 }
             ),
             sandbox_runtime_repo=SimpleNamespace(
-                get=lambda _lower_runtime_id: (_ for _ in ()).throw(AssertionError("sandbox info should not read removed lease id")),
+                get=lambda _sandbox_runtime_id: (_ for _ in ()).throw(
+                    AssertionError("sandbox info should not read removed sandbox runtime id")
+                ),
                 find_by_instance=lambda *, provider_name, instance_id: {
-                    "lease_" + "id": "lease-1",
+                    "lease_" + "id": "runtime-1",
                     "provider_name": provider_name,
                     "current_instance_id": instance_id,
                     "observed_state": "running",
@@ -84,9 +86,11 @@ async def test_sandbox_status_resolves_runtime_from_provider_env_not_config() ->
         }
     )
     sandbox_runtime_repo = SimpleNamespace(
-        get=lambda _lower_runtime_id: (_ for _ in ()).throw(AssertionError("thread sandbox status must not read removed lease id")),
+        get=lambda _sandbox_runtime_id: (_ for _ in ()).throw(
+            AssertionError("thread sandbox status must not read removed sandbox runtime id")
+        ),
         find_by_instance=lambda *, provider_name, instance_id: {
-            "lease_" + "id": "lease-1",
+            "lease_" + "id": "runtime-1",
             "provider_name": provider_name,
             "current_instance_id": instance_id,
             "desired_state": "running",

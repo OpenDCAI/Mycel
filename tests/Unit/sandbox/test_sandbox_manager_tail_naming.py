@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN = (
     "_assert_lease_provider",
     "def _ensure_bound_instance(self, lease)",
     "Thread {thread_id} is bound to provider {lease.provider_name}",
+    "inconsistent lease_ids",
 )
 
 

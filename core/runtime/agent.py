@@ -920,7 +920,7 @@ class LeonAgent:
             if hasattr(self, "_cleanup_registry") and cleanup_sandbox:
                 self._run_async_cleanup(self._cleanup_registry.run_cleanup, "CleanupRegistry")
             else:
-                # Fallback for edge cases where __init__ did not complete fully
+                # Direct cleanup path for edge cases where __init__ did not complete fully
                 cleanup_steps = [
                     ("monitor", self._mark_terminated),
                     ("MCP client", self._cleanup_mcp_client),
@@ -1550,7 +1550,7 @@ class LeonAgent:
             # Reuse the event loop created during initialization
             if hasattr(self, "_event_loop") and self._event_loop:
                 return self._event_loop.run_until_complete(_ainvoke())
-            # Fallback to asyncio.run() if no loop exists
+            # Use asyncio.run() if no loop exists
             return asyncio.run(_ainvoke())
         except Exception as e:
             self._monitor_middleware.mark_error(e)

@@ -29,11 +29,11 @@ def mutate_sandbox_runtime(
         raise RuntimeError(f"Provider manager unavailable: {provider_name}")
 
     thread_id = str(runtime.get("thread_id") or "")
-    lease_id = runtime.get("sandbox_runtime_id")
+    sandbox_runtime_id = runtime.get("sandbox_runtime_id")
     target_runtime_id = str(runtime.get("session_id") or runtime_id)
 
     ok = False
-    mode = "lease_enforced"
+    mode = "runtime_enforced"
 
     if thread_id and not is_virtual_thread_id(thread_id):
         mode = "manager_thread"
@@ -46,8 +46,8 @@ def mutate_sandbox_runtime(
         else:
             raise RuntimeError(f"Unknown action: {action}")
     else:
-        lease = manager.get_sandbox_runtime(lease_id) if lease_id else None
-        if not lease:
+        sandbox_runtime = manager.get_sandbox_runtime(sandbox_runtime_id) if sandbox_runtime_id else None
+        if not sandbox_runtime:
             mode = "provider_orphan_direct"
             if action == "pause":
                 ok = manager.provider.pause_session(target_runtime_id)
@@ -60,11 +60,11 @@ def mutate_sandbox_runtime(
         else:
             mode = "manager_runtime"
             if action == "pause":
-                ok = lease.pause_instance(manager.provider, source="api")
+                ok = sandbox_runtime.pause_instance(manager.provider, source="api")
             elif action == "resume":
-                ok = lease.resume_instance(manager.provider, source="api")
+                ok = sandbox_runtime.resume_instance(manager.provider, source="api")
             elif action == "destroy":
-                lease.destroy_instance(manager.provider, source="api")
+                sandbox_runtime.destroy_instance(manager.provider, source="api")
                 ok = True
             else:
                 raise RuntimeError(f"Unknown action: {action}")
@@ -78,14 +78,14 @@ def mutate_sandbox_runtime(
         "session_id": target_runtime_id,
         "provider": provider_name,
         "thread_id": thread_id or None,
-        "sandbox_runtime_id": lease_id,
+        "sandbox_runtime_id": sandbox_runtime_id,
         "mode": mode,
     }
 
 
 def _detach_runtime_terminals(manager: Any, sandbox_runtime_handle: str) -> None:
     for row in list(manager.terminal_store.list_all()):
-        if str(row.get("lease_id") or "") != sandbox_runtime_handle:
+        if str(row.get("sandbox_runtime_id") or "") != sandbox_runtime_handle:
             continue
         thread_id = str(row.get("thread_id") or "").strip()
         terminal_id = str(row.get("terminal_id") or "").strip()
@@ -105,7 +105,7 @@ def _prune_stale_runtime_terminals(
     thread_repo = build_storage_container_fn().thread_repo()
     try:
         for row in list(manager.terminal_store.list_all()):
-            if str(row.get("lease_id") or "") != sandbox_runtime_handle:
+            if str(row.get("sandbox_runtime_id") or "") != sandbox_runtime_handle:
                 continue
             thread_id = str(row.get("thread_id") or "").strip()
             terminal_id = str(row.get("terminal_id") or "").strip()
@@ -132,8 +132,8 @@ def destroy_sandbox_runtime(
     if manager is None:
         raise RuntimeError(f"Provider manager unavailable: {provider_name}")
 
-    lease = manager.get_sandbox_runtime(sandbox_runtime_handle)
-    if lease is None:
+    sandbox_runtime = manager.get_sandbox_runtime(sandbox_runtime_handle)
+    if sandbox_runtime is None:
         raise RuntimeError(f"Sandbox runtime not found: {sandbox_runtime_handle}")
 
     _prune_stale_runtime_terminals(manager, sandbox_runtime_handle, build_storage_container_fn=build_storage_container_fn)

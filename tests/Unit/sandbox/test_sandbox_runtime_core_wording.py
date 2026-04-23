@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
-    "sandbox/lease.py",
+    "sandbox/runtime_handle.py",
     "sandbox/capability.py",
     "sandbox/providers/local.py",
     "sandbox/runtime.py",
@@ -13,6 +12,10 @@ TARGETS = (
 )
 
 FORBIDDEN = (
+    "SQLiteLease",
+    "REQUIRED_LEASE_COLUMNS",
+    "LEASE_FRESHNESS_TTL_SEC",
+    "_lease_locks",
     "lease-level state machine",
     "Lease snapshot stores",
     "Lease provider mismatch",
@@ -26,6 +29,8 @@ FORBIDDEN = (
     "session's lease",
     "Failed to resume paused lease ",
     "Lease ",
+    "lease-bound local sessions",
+    "via lease_id",
 )
 
 

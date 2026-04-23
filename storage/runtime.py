@@ -9,7 +9,7 @@ from typing import Any
 
 from storage.container import StorageContainer
 
-_WEB_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_supabase_client"
+_WEB_SUPABASE_CLIENT_FACTORY = "backend.identity.auth.supabase_runtime:create_supabase_client"
 
 
 def uses_supabase_storage() -> bool:

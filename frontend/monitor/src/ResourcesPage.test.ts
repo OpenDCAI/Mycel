@@ -4,7 +4,7 @@ import { groupResourceRows } from "./ResourcesPage";
 import type { ResourceRow } from "./resources/types";
 
 describe("resource row grouping", () => {
-  it("groups sandbox-backed resource rows by sandbox identity before lower runtime-handle residue", () => {
+  it("groups sandbox-backed resource rows by sandbox identity before runtime-handle residue", () => {
     const resourceRows: ResourceRow[] = [
       {
         id: "sandbox-1:thread-1",

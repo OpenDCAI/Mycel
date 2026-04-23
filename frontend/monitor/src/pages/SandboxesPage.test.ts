@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildSandboxWorkbenchShell } from "./SandboxesPage";
 
 describe("sandboxes page shell", () => {
-  const lowerLocalRuntimePrefix = ["leon", "lease"].join("-") + "-";
+  const lowerLocalRuntimePrefix = ["leon", "runtime"].join("-") + "-";
 
   it("uses sandbox-shaped headings and canonical sandbox links", () => {
     const shell = buildSandboxWorkbenchShell({
@@ -38,7 +38,7 @@ describe("sandboxes page shell", () => {
     expect(shell.rows[0].href).toBe("/sandboxes/sandbox-1");
   });
 
-  it("does not expose lower local runtime ids in visible row data", () => {
+  it("does not expose local runtime ids in visible row data", () => {
     const shell = buildSandboxWorkbenchShell({
       title: "All Sandboxes",
       count: 1,

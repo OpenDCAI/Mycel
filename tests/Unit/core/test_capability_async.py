@@ -159,13 +159,13 @@ def test_local_sandbox_records_thread_id_when_building_capability():
 
 
 def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
-    class _PausedLease:
+    class _PausedSandboxRuntime:
         def __init__(self):
             self.observed_state = "paused"
 
         def ensure_active_instance(self, _provider):
             if self.observed_state == "paused":
-                raise RuntimeError("Sandbox lease lease-1 is paused. Resume before executing commands.")
+                raise RuntimeError("Sandbox runtime runtime-1 is paused. Resume before executing commands.")
             return SimpleNamespace(instance_id="inst-1")
 
     class _RemoteProvider:
@@ -174,7 +174,7 @@ def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
             assert path == "/home/daytona"
             return [{"name": "demo.txt", "type": "file", "size": 7}]
 
-    lease = _PausedLease()
+    sandbox_runtime = _PausedSandboxRuntime()
     provider = _RemoteProvider()
     resume_calls: list[tuple[str, str]] = []
 
@@ -182,7 +182,7 @@ def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
         def __init__(self):
             self.thread_id = "thread-paused"
             self.terminal = _DummyTerminal()
-            self.sandbox_runtime = lease
+            self.sandbox_runtime = sandbox_runtime
             self.runtime = SimpleNamespace(provider=provider)
             self.touches = 0
 
@@ -192,7 +192,7 @@ def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
     session = _RemoteSession()
     manager = SimpleNamespace(
         resume_session=lambda thread_id, source="user_resume": (
-            resume_calls.append((thread_id, source)) or setattr(lease, "observed_state", "running") or True
+            resume_calls.append((thread_id, source)) or setattr(sandbox_runtime, "observed_state", "running") or True
         )
     )
 
@@ -206,7 +206,7 @@ def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
 
 
 def test_filesystem_wrapper_derives_remote_file_size_from_parent_listing():
-    class _Lease:
+    class _SandboxRuntime:
         observed_state = "running"
 
         def ensure_active_instance(self, _provider):
@@ -225,7 +225,7 @@ def test_filesystem_wrapper_derives_remote_file_size_from_parent_listing():
         def __init__(self):
             self.thread_id = "thread-size"
             self.terminal = _DummyTerminal()
-            self.sandbox_runtime = _Lease()
+            self.sandbox_runtime = _SandboxRuntime()
             self.runtime = SimpleNamespace(provider=_RemoteProvider())
             self.touches = 0
 

@@ -130,9 +130,7 @@ class SupabaseSandboxRuntimeRepo:
 
     def _require_sandbox_runtime(self, row: dict[str, Any] | None, *, sandbox_runtime_id: str, operation: str) -> dict[str, Any]:
         if row is None:
-            raise RuntimeError(
-                f"Supabase sandbox runtime repo failed to load runtime after {operation}: {sandbox_runtime_id}"
-            )
+            raise RuntimeError(f"Supabase sandbox runtime repo failed to load runtime after {operation}: {sandbox_runtime_id}")
         return row
 
     def _sandbox_rows(self) -> list[dict[str, Any]]:

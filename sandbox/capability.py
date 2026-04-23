@@ -2,7 +2,7 @@
 
 This module provides the capability object that agents interact with.
 It wraps the agent-facing thread/runtime/sandbox binding surface while
-keeping lower runtime identity details behind the capability interface.
+keeping sandbox runtime identity details behind the capability interface.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ class SandboxCapability:
     """Agent-facing capability object.
 
     Wraps ChatSession and provides access to command execution and filesystem.
-    Agents interact through command and filesystem handles; lower runtime
+    Agents interact through command and filesystem handles; sandbox runtime
     binding details stay behind this capability object.
 
     Usage:

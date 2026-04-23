@@ -1086,12 +1086,12 @@ async def test_run_agent_links_child_abort_controller_to_parent_tool_context(mon
 
 
 @pytest.mark.asyncio
-async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(monkeypatch, tmp_path, temp_db):
+async def test_run_agent_reuses_parent_sandbox_runtime_for_child_thread_terminal(monkeypatch, tmp_path, temp_db):
     created: list[_FakeChildAgent] = []
     observed: dict[str, str] = {}
     parent_thread_id = "parent-thread"
     child_thread_id = "subagent-child"
-    lower_runtime_key = "sandbox_runtime_" + "id"
+    sandbox_runtime_key = "sandbox_runtime_" + "id"
 
     manager = SandboxManager(
         provider=LocalSessionProvider(default_cwd=str(tmp_path)),
@@ -1103,25 +1103,25 @@ async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(m
 
     parent_capability = manager.get_sandbox(parent_thread_id)
     parent_terminal_id = parent_capability._session.terminal.terminal_id
-    parent_lower_runtime_id = getattr(parent_capability._session.sandbox_runtime, lower_runtime_key)
+    parent_sandbox_runtime_id = getattr(parent_capability._session.sandbox_runtime, sandbox_runtime_key)
 
-    class _LeaseCapturingChild(_FakeChildAgent):
+    class _RuntimeCapturingChild(_FakeChildAgent):
         async def _astream(self, *args, **kwargs):
             current_thread_id = get_current_thread_id()
             assert current_thread_id is not None
             child_capability = manager.get_sandbox(current_thread_id)
             observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
-            observed["child_lower_runtime_id"] = getattr(child_capability._session.sandbox_runtime, lower_runtime_key)
+            observed["child_sandbox_runtime_id"] = getattr(child_capability._session.sandbox_runtime, sandbox_runtime_key)
             if False:
                 yield None
             return
 
-    _patch_create_leon_agent(monkeypatch, child_cls=_LeaseCapturingChild, created=created)
+    _patch_create_leon_agent(monkeypatch, child_cls=_RuntimeCapturingChild, created=created)
 
     async def _fake_run_child_thread_live(agent, thread_id, message, app, *, input_messages):
         child_capability = manager.get_sandbox(thread_id)
         observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
-        observed["child_lower_runtime_id"] = getattr(child_capability._session.sandbox_runtime, lower_runtime_key)
+        observed["child_sandbox_runtime_id"] = getattr(child_capability._session.sandbox_runtime, sandbox_runtime_key)
         return "(Agent completed with no text output)"
 
     set_current_thread_id(parent_thread_id)
@@ -1164,7 +1164,7 @@ async def test_run_agent_reuses_parent_lower_runtime_for_child_thread_terminal(m
         assert result == "(Agent completed with no text output)"
         assert created
         assert observed["child_terminal_id"] != parent_terminal_id
-        assert observed["child_lower_runtime_id"] == parent_lower_runtime_id
+        assert observed["child_sandbox_runtime_id"] == parent_sandbox_runtime_id
     finally:
         manager.close()
 

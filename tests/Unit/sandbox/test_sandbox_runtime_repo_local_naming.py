@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "sandbox/chat_session.py",
     "sandbox/manager.py",

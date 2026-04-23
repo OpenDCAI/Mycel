@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TARGETS = (
     "storage/providers/sqlite/sandbox_runtime_repo.py",
     "storage/providers/supabase/sandbox_runtime_repo.py",

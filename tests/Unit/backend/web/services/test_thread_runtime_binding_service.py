@@ -76,7 +76,7 @@ def _sandbox(**overrides):
     return sandbox.model_copy(update=overrides)
 
 
-def test_resolves_thread_workspace_sandbox_binding_without_terminal_or_lower_runtime_ids() -> None:
+def test_resolves_thread_workspace_sandbox_binding_without_terminal_or_runtime_ids() -> None:
     binding = resolve_thread_runtime_binding(
         **_repos(thread=_thread(), workspace=_workspace(), sandbox=_sandbox()),
         thread_id="thread-1",

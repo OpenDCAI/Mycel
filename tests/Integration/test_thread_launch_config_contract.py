@@ -522,7 +522,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
         )
 
 
-@pytest.mark.parametrize("missing_workspace_id", ["lease-2", "missing-workspace"])
+@pytest.mark.parametrize("missing_workspace_id", ["runtime-2", "missing-workspace"])
 def test_resolve_default_config_fails_loudly_when_thread_workspace_binding_is_missing(missing_workspace_id: str) -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
@@ -668,7 +668,7 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
     }
     app.state.sandbox_runtime_repo = _FakeSandboxRuntimeRepo(
         {
-            "lease_" + "id": "lease-1",
+            "lease_" + "id": "runtime-1",
             "provider_name": "daytona_selfhost",
             "provider_env_id": "instance-1",
             "recipe": {"id": "daytona:recipe-1"},
@@ -693,7 +693,7 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
             return_value=(
                 "/workspace/reused",
                 {
-                    "lease_" + "id": "lease-1",
+                    "lease_" + "id": "runtime-1",
                     "provider_name": "daytona_selfhost",
                     "recipe": {"id": "daytona:recipe-1"},
                 },
@@ -765,7 +765,7 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
             "config": {
                 "create_mode": "existing",
                 "provider_config": "local",
-                "existing_sandbox_id": "lease-1",
+                "existing_sandbox_id": "runtime-1",
             },
         },
     )
@@ -777,7 +777,7 @@ async def test_get_default_thread_config_runs_sync_repo_work_off_event_loop(monk
         "config": {
             "create_mode": "existing",
             "provider_config": "local",
-            "existing_sandbox_id": "lease-1",
+            "existing_sandbox_id": "runtime-1",
         },
     }
     assert to_thread_calls == [("_resolve_default_config_for_owned_agent", (app, "owner-1", "agent-user-1"))]
