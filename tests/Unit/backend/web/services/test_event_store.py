@@ -42,7 +42,7 @@ async def test_read_events_after_fails_loudly_when_default_run_event_repo_is_una
         await event_store.read_events_after("thread-1", "run-1")
 
 
-def test_build_run_event_read_transport_uses_repo_boundary() -> None:
+def test_run_event_read_transport_uses_repo_boundary() -> None:
     calls: list[tuple[str, tuple, dict]] = []
 
     class _Repo:
@@ -54,7 +54,8 @@ def test_build_run_event_read_transport_uses_repo_boundary() -> None:
             calls.append(("list_events", (thread_id, run_id), {"after": after, "limit": limit}))
             return [{"seq": 1, "event_type": "delta", "data": {"text": "hello"}}]
 
-    transport = event_store_reads.build_run_event_read_transport(_Repo())
+    repo = _Repo()
+    transport = event_store_reads.RunEventReadTransport(latest_run_id=repo.latest_run_id, list_events=repo.list_events)
 
     assert transport.latest_run_id("thread-1") == "run-1"
     assert transport.list_events("thread-1", "run-1", after=3, limit=50) == [{"seq": 1, "event_type": "delta", "data": {"text": "hello"}}]
@@ -75,4 +76,4 @@ def test_run_event_store_write_owner_lives_under_backend_thread_runtime_events()
     assert hasattr(owner_module, "get_run_start_seq")
     assert hasattr(owner_module, "get_latest_run_id")
     assert hasattr(owner_module, "cleanup_old_runs")
-    assert hasattr(read_owner_module, "build_run_event_read_transport")
+    assert hasattr(read_owner_module, "RunEventReadTransport")

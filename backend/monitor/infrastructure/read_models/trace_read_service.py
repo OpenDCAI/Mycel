@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from backend.threads.events.reads import build_run_event_read_transport
+from backend.threads.events.reads import _resolve_run_event_repo
 from backend.threads.history import get_thread_history_payload
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from sandbox.thread_context import set_current_thread_id
@@ -53,11 +53,11 @@ def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
         )
 
     def _load_latest_run_events(thread_id: str) -> tuple[str | None, list[dict[str, Any]]]:
-        transport = build_run_event_read_transport()
-        run_id = transport.latest_run_id(thread_id)
+        repo = _resolve_run_event_repo(None)
+        run_id = repo.latest_run_id(thread_id)
         if run_id is None:
             return None, []
-        return run_id, transport.list_events(thread_id, run_id, after=0, limit=1000)
+        return run_id, repo.list_events(thread_id, run_id, after=0, limit=1000)
 
     return MonitorTraceReader(
         load_thread_history_payload=_load_thread_history_payload,
