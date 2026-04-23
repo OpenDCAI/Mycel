@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from typing import Any, TextIO
 
 from .client import AgentCliClient
-from .config import load_cli_config
+from .config import load_cli_config, load_profiles, save_profile
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
     external_create.add_argument("user_id")
     external_create.add_argument("display_name")
     external_sub.add_parser("list", parents=[shared])
+
+    profile = sub.add_parser("profile", parents=[shared])
+    profile_sub = profile.add_subparsers(dest="profile_command", required=True)
+    profile_set = profile_sub.add_parser("set", parents=[shared])
+    profile_set.add_argument("name")
+    profile_sub.add_parser("list", parents=[shared])
 
     return parser
 
@@ -112,6 +118,18 @@ def run_cli(
         payload = client.create_external_user(user_id=args.user_id, display_name=args.display_name)
     elif args.command == "external" and args.external_command == "list":
         payload = client.list_external_users()
+    elif args.command == "profile" and args.profile_command == "set":
+        payload = save_profile(
+            name=args.name,
+            agent_user_id=cfg.agent_user_id,
+            chat_base_url=cfg.chat_base_url,
+            threads_base_url=cfg.threads_base_url,
+        )
+    elif args.command == "profile" and args.profile_command == "list":
+        payload = [
+            {"name": name, **profile}
+            for name, profile in sorted(load_profiles().items())
+        ]
     else:
         raise RuntimeError(f"unsupported command: {args.command}")
 

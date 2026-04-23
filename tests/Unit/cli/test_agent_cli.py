@@ -274,3 +274,55 @@ def test_agent_cli_direct_uses_agent_identity() -> None:
         'agent_user_id': 'agent-user-1',
         'target_id': 'target-user-1',
     }
+
+def test_agent_cli_profile_set_writes_profile_file(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    from cli.agent import commands
+
+    profile_path = tmp_path / 'profiles.json'
+    monkeypatch.setenv('MYCEL_AGENT_PROFILE_PATH', str(profile_path))
+    out = StringIO()
+
+    exit_code = commands.run_cli(
+        [
+            'profile', 'set', 'codex-dev',
+            '--agent-user-id', 'agent-user-9',
+            '--chat-base-url', 'http://chat-backend',
+            '--threads-base-url', 'http://threads-backend',
+        ],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    payload = json.loads(profile_path.read_text(encoding='utf-8'))
+    assert payload == {
+        'profiles': {
+            'codex-dev': {
+                'agent_user_id': 'agent-user-9',
+                'chat_base_url': 'http://chat-backend',
+                'threads_base_url': 'http://threads-backend',
+            }
+        }
+    }
+
+
+def test_agent_cli_profile_list_reads_profile_file(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    from cli.agent import commands
+
+    profile_path = tmp_path / 'profiles.json'
+    profile_path.write_text(json.dumps({'profiles': {'codex-dev': {'agent_user_id': 'agent-user-9'}}}), encoding='utf-8')
+    monkeypatch.setenv('MYCEL_AGENT_PROFILE_PATH', str(profile_path))
+    out = StringIO()
+
+    exit_code = commands.run_cli(
+        ['profile', 'list', '--agent-user-id', 'agent-user-9'],
+        messaging_client=SimpleNamespace(),
+        identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
+        runtime_read_client=SimpleNamespace(),
+        stdout=out,
+    )
+
+    assert exit_code == 0
+    assert json.loads(out.getvalue()) == [{'name': 'codex-dev', 'agent_user_id': 'agent-user-9'}]
