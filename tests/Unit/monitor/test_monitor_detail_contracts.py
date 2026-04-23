@@ -1126,7 +1126,7 @@ async def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(mon
     _use_monitor_repo(monkeypatch, FakeMonitorThreadRepo())
     _stub_thread_detail(
         monkeypatch,
-        owner={"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"},
+        owner={"user_id": "agent-1", "display_name": "Toad", "avatar_url": "/api/users/agent-1/avatar"},
     )
     app = SimpleNamespace(state=SimpleNamespace(thread_repo=FakeThreadRepo({"status": "active"}), user_repo=None))
 
@@ -1150,7 +1150,7 @@ async def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(mo
     _stub_thread_detail(monkeypatch, owner=None)
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=FakeThreadRepo({"id": "thread-1", "title": "Investigate drift", "status": "active"}),
+            thread_repo=FakeThreadRepo({"thread_id": "thread-1", "title": "Investigate drift", "status": "active"}),
             user_repo=None,
         )
     )
