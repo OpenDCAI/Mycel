@@ -180,12 +180,16 @@ def _recipe_library_entry(provider_type: str) -> dict[str, object]:
     }
 
 
-def test_build_new_launch_config_uses_sandbox_template_id() -> None:
-    config = thread_launch_config_service.build_new_launch_config(
-        provider_config="local",
-        sandbox_template_id="local:custom",
-        model="gpt-5.4-mini",
-        workspace="/tmp/custom",
+def test_normalize_launch_config_payload_uses_sandbox_template_id() -> None:
+    config = thread_launch_config_service.normalize_launch_config_payload(
+        {
+            "create_mode": "new",
+            "provider_config": "local",
+            "sandbox_template_id": "local:custom",
+            "existing_sandbox_id": None,
+            "model": "gpt-5.4-mini",
+            "workspace": "/tmp/custom",
+        }
     )
 
     assert config == {
