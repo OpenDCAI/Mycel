@@ -6,18 +6,6 @@ from typing import Any
 from backend.threads.binding import resolve_thread_runtime_binding
 
 
-def _display_repo_sandbox_status(runtime_row: dict[str, Any], instance: dict[str, Any]) -> str:
-    observed = runtime_row.get("observed_state")
-    if observed in {None, "", "detached"}:
-        status = instance.get("status")
-        if not isinstance(status, str) or not status:
-            raise RuntimeError("Sandbox instance missing status")
-        return status
-    if not isinstance(observed, str):
-        raise RuntimeError("Sandbox runtime observed_state must be a string when present")
-    return observed
-
-
 def _runtime_row_from_binding(runtime_repo: Any, binding: Any) -> dict[str, Any] | None:
     provider_env_id = str(binding.provider_env_id or "").strip()
     if not provider_env_id:
@@ -49,7 +37,16 @@ def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, A
             return sandbox_info
         instance = runtime_row.get("_instance")
         if instance:
-            sandbox_info["status"] = _display_repo_sandbox_status(runtime_row, instance)
+            observed = runtime_row.get("observed_state")
+            if observed in {None, "", "detached"}:
+                status = instance.get("status")
+                if not isinstance(status, str) or not status:
+                    raise RuntimeError("Sandbox instance missing status")
+                sandbox_info["status"] = status
+            elif not isinstance(observed, str):
+                raise RuntimeError("Sandbox runtime observed_state must be a string when present")
+            else:
+                sandbox_info["status"] = observed
         else:
             sandbox_info["status"] = "detached"
     except Exception as exc:
