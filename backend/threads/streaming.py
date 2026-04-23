@@ -13,11 +13,9 @@ from backend.threads.run import emit as _run_emit
 from backend.threads.run import entrypoints as _run_entrypoints
 from backend.threads.run import execution as _run_execution
 from backend.threads.run import followups as _run_followups
-from backend.threads.run import input_construction as _run_input_construction
 from backend.threads.run import lifecycle as _run_lifecycle
 from backend.threads.run import observer as _run_observer
 from core.runtime.notifications import is_terminal_background_notification
-from storage.contracts import RunEventRepo
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +32,6 @@ def _log_captured_exception(message: str, err: BaseException) -> None:
         message,
         exc_info=(type(err), err, err.__traceback__),
     )
-
-
-def _resolve_run_event_repo(agent: Any) -> RunEventRepo:
-    return _run_emit.resolve_run_event_repo(agent)
-
-
-def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any:
-    return _run_input_construction.augment_system_prompt_for_terminal_followthrough(system_prompt)
 
 
 async def prime_sandbox(agent: Any, thread_id: str) -> None:
