@@ -23,15 +23,14 @@ def _require_monitor_runtime_contract(app: FastAPI) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _require_monitor_runtime_contract(app)
-    app.state.monitor_resources_task = None
+    monitor_resources_task = None
     try:
-        app.state.monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())
+        monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())
         yield
     finally:
-        task = getattr(app.state, "monitor_resources_task", None)
-        if task:
-            task.cancel()
+        if monitor_resources_task:
+            monitor_resources_task.cancel()
             try:
-                await task
+                await monitor_resources_task
             except asyncio.CancelledError:
                 pass
