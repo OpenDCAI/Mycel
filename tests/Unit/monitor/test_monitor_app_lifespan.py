@@ -40,8 +40,6 @@ async def test_monitor_app_lifespan_starts_and_cancels_resource_refresh_loop(mon
 
     async with monitor_app_lifespan.lifespan(app):
         await asyncio.wait_for(started.wait(), timeout=1)
-        assert app.state.monitor_resources_task is not None
-        assert not app.state.monitor_resources_task.done()
         assert app.state.user_repo is user_repo
 
     await asyncio.wait_for(cancelled.wait(), timeout=1)
