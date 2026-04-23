@@ -9,25 +9,6 @@ from storage.runtime import (
     build_thread_repo,
 )
 
-
-def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
-    """Extract provider sandbox-runtime instance id from webhook payload."""
-    direct_keys = ("session_id", "sandbox_id", "instance_id", "id")
-    for key in direct_keys:
-        value = payload.get(key)
-        if isinstance(value, str) and value:
-            return value
-
-    nested = payload.get("data")
-    if isinstance(nested, dict):
-        for key in direct_keys:
-            value = nested.get(key)
-            if isinstance(value, str) and value:
-                return value
-
-    return None
-
-
 _cached_thread_repo = None
 
 
