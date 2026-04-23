@@ -90,7 +90,7 @@ async def run_agent_to_buffer(
         if trajectory_scope is not None:
             trajectory_scope.inject_callback(config)
 
-        _obs_handler, _obs_active, flush_observation = _run_observation.build_observation(app, thread_id, config)
+        flush_observation = _run_observation.build_observation(app, thread_id, config)
 
         drain_activity_events, attach_activity_bridge, detach_activity_bridge = _run_activity_bridge.build_activity_bridge(
             runtime=getattr(agent, "runtime", None),
