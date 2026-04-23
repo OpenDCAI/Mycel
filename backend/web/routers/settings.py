@@ -308,7 +308,7 @@ class ModelConfigRequest(BaseModel):
 @router.post("/config")
 async def update_model_config(request: ModelConfigRequest, req: Request) -> dict[str, Any]:
     """Update model configuration for agent (hot-reload) and persist per-thread."""
-    from backend.threads.activity_pool_service import update_agent_config
+    from backend.threads.pool.registry import update_agent_config
 
     # Persist model per-thread if thread_id provided
     if request.thread_id:
