@@ -54,7 +54,6 @@ async def test_get_or_create_agent_skips_borrow_when_chat_bootstrap_missing(monk
         return SimpleNamespace()
 
     monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
-
     app = SimpleNamespace(state=SimpleNamespace())
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-chat")

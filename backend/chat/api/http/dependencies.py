@@ -30,11 +30,6 @@ def get_messaging_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     return runtime_state.messaging_service
 
 
-def get_optional_messaging_service(app: Annotated[Any, Depends(get_app)]) -> Any | None:
-    runtime_state = getattr(app.state, "chat_runtime_state", None)
-    return getattr(runtime_state, "messaging_service", None) if runtime_state is not None else None
-
-
 def get_relationship_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "chat_runtime_state", "Relationship service unavailable")
     return runtime_state.relationship_service

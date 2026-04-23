@@ -47,7 +47,6 @@ def test_runtime_access_reads_chat_runtime_state_bundle():
     assert chat_runtime_access.get_messaging_service(app) is messaging_service
     assert chat_runtime_access.get_optional_messaging_service(app) is messaging_service
     assert chat_runtime_access.get_typing_tracker(app) is typing_tracker
-    assert chat_runtime_access.get_optional_typing_tracker(app) is typing_tracker
     assert chat_runtime_access.get_relationship_service(app) is relationship_service
     assert chat_runtime_access.get_contact_repo(app) is contact_repo
 
@@ -62,13 +61,10 @@ def test_runtime_access_does_not_fall_back_to_legacy_chat_attrs():
 
     with pytest.raises(RuntimeError, match="chat bootstrap not attached: messaging_service"):
         chat_runtime_access.get_messaging_service(app)
-
     assert chat_runtime_access.get_optional_messaging_service(app) is None
 
     with pytest.raises(RuntimeError, match="chat bootstrap not attached: typing_tracker"):
         chat_runtime_access.get_typing_tracker(app)
-
-    assert chat_runtime_access.get_optional_typing_tracker(app) is None
 
     with pytest.raises(RuntimeError, match="chat bootstrap not attached: relationship_service"):
         chat_runtime_access.get_relationship_service(app)

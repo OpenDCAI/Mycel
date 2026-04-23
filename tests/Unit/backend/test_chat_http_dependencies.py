@@ -36,7 +36,6 @@ def test_chat_http_dependencies_read_chat_runtime_state_bundle():
     )
 
     assert chat_http_dependencies.get_messaging_service(app) is messaging_service
-    assert chat_http_dependencies.get_optional_messaging_service(app) is messaging_service
     assert chat_http_dependencies.get_relationship_service(app) is relationship_service
     assert chat_http_dependencies.get_contact_repo(app) is contact_repo
     assert chat_http_dependencies.get_chat_repo(app) is chat_repo
