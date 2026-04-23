@@ -33,6 +33,8 @@ def partition_terminal_followups(items: list[Any]) -> tuple[list[Any], list[Any]
         else:
             passthrough.append(item)
     return terminal, passthrough
+
+
 async def persist_cancelled_run_input_if_missing(
     *,
     agent: Any,
