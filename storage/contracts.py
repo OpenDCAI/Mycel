@@ -106,6 +106,7 @@ class SandboxMonitorRepo(Protocol):
 class UserType(StrEnum):
     HUMAN = "human"
     AGENT = "agent"
+    EXTERNAL = "external"
 
 
 class UserRow(BaseModel):
@@ -124,13 +125,15 @@ class UserRow(BaseModel):
     @model_validator(mode="after")
     def _validate_identity_shape(self) -> UserRow:
         # @@@user-row-shape - users are the unified social identity surface, so
-        # human/agent optional fields must fail loudly instead of drifting into
-        # mixed half-valid rows.
-        if self.type is UserType.HUMAN:
+        # human/external/agent optional fields must fail loudly instead of drifting
+        # into mixed half-valid rows.
+        if self.type in {UserType.HUMAN, UserType.EXTERNAL}:
             if self.owner_user_id is not None:
-                raise ValueError("human users must not carry owner_user_id")
+                kind = "human" if self.type is UserType.HUMAN else "external"
+                raise ValueError(f"{kind} users must not carry owner_user_id")
             if self.agent_config_id is not None:
-                raise ValueError("human users must not carry agent_config_id")
+                kind = "human" if self.type is UserType.HUMAN else "external"
+                raise ValueError(f"{kind} users must not carry agent_config_id")
             return self
         if self.owner_user_id is None:
             raise ValueError("agent users require owner_user_id")
