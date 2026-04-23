@@ -7,16 +7,6 @@ from typing import Any
 from storage.runtime import build_thread_repo, build_user_repo
 
 
-def _branch_index(row: dict[str, Any]) -> int:
-    return int(row.get("branch_index") or 0)
-
-
-def _is_better_canonical_thread(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
-    if bool(candidate.get("is_main")) != bool(current.get("is_main")):
-        return bool(candidate.get("is_main"))
-    return _branch_index(candidate) < _branch_index(current)
-
-
 def canonical_owner_threads(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return one user-visible thread per agent user, preserving first agent order."""
     order: list[str] = []
@@ -29,7 +19,12 @@ def canonical_owner_threads(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             order.append(agent_user_id)
             by_agent[agent_user_id] = row
             continue
-        if _is_better_canonical_thread(row, by_agent[agent_user_id]):
+        current = by_agent[agent_user_id]
+        if bool(row.get("is_main")) != bool(current.get("is_main")):
+            if bool(row.get("is_main")):
+                by_agent[agent_user_id] = row
+            continue
+        if int(row.get("branch_index") or 0) < int(current.get("branch_index") or 0):
             by_agent[agent_user_id] = row
     return [by_agent[agent_user_id] for agent_user_id in order]
 
