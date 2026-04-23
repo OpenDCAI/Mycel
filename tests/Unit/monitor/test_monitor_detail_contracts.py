@@ -993,7 +993,7 @@ async def test_get_monitor_thread_detail_exposes_trajectory_state(monkeypatch):
 
     payload = await monitor_thread_service.get_monitor_thread_detail(
         "thread-1",
-        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        load_thread_base=lambda thread_id: monitor_thread_read_service.load_monitor_thread_base(app, thread_id),
         trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
     )
 
@@ -1046,7 +1046,7 @@ async def test_get_monitor_thread_detail_derives_summary_from_runtime_row_when_r
 
     payload = await monitor_thread_service.get_monitor_thread_detail(
         "thread-1",
-        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        load_thread_base=lambda thread_id: monitor_thread_read_service.load_monitor_thread_base(app, thread_id),
         trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
     )
 
@@ -1132,7 +1132,7 @@ async def test_get_monitor_thread_detail_normalizes_owner_shape_for_frontend(mon
 
     payload = await monitor_thread_service.get_monitor_thread_detail(
         "thread-1",
-        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        load_thread_base=lambda thread_id: monitor_thread_read_service.load_monitor_thread_base(app, thread_id),
         trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
     )
 
@@ -1157,7 +1157,7 @@ async def test_get_monitor_thread_detail_normalizes_thread_shape_for_frontend(mo
 
     payload = await monitor_thread_service.get_monitor_thread_detail(
         "thread-1",
-        load_thread_base=monitor_thread_read_service.build_monitor_thread_base_loader(app),
+        load_thread_base=lambda thread_id: monitor_thread_read_service.load_monitor_thread_base(app, thread_id),
         trace_reader=monitor_trace_read_service.build_monitor_trace_reader(app),
     )
 
