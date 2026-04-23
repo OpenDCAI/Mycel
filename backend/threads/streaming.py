@@ -22,11 +22,6 @@ logger = logging.getLogger(__name__)
 type SSEEvent = dict[str, str | int]
 
 
-def _get_threads_runtime_typing_tracker(app: Any) -> Any | None:
-    runtime_state = getattr(app.state, "threads_runtime_state", None)
-    return getattr(runtime_state, "typing_tracker", None) if runtime_state is not None else None
-
-
 def _log_captured_exception(message: str, err: BaseException) -> None:
     logger.error(
         message,
@@ -205,7 +200,11 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         run_id=run_id,
         message_metadata=message_metadata,
         input_messages=input_messages,
-        typing_tracker=_get_threads_runtime_typing_tracker(app),
+        typing_tracker=(
+            getattr(runtime_state, "typing_tracker", None)
+            if (runtime_state := getattr(app.state, "threads_runtime_state", None)) is not None
+            else None
+        ),
     )
 
 
