@@ -636,7 +636,7 @@ def _handle_notice(td: ThreadDisplay, data: dict) -> dict | None:
     return {"type": "append_entry", "entry": entry}
 
 
-def _handle_finalize(td: ThreadDisplay) -> dict | None:
+def _handle_finalize(td: ThreadDisplay, _data: dict | None = None) -> dict | None:
     turn = _get_current_turn(td)
     if not turn:
         td.current_turn_id = None
