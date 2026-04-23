@@ -4,7 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 from backend.library import service as library_service
 from backend.threads import agent_user_service
@@ -438,7 +439,6 @@ async def test_create_agent_route_fails_loud_when_contact_repo_missing():
             panel_router.CreateAgentRequest(name="Toad", description="probe"),
             request=request,
             user_id="user-1",
-            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
@@ -464,7 +464,6 @@ async def test_delete_agent_route_fails_loud_when_contact_repo_missing(monkeypat
             request=request,
             user_id="user-1",
             thread_repo=request.app.state.thread_repo,
-            contact_repo=None,
         )
 
     assert exc_info.value.status_code == 503
@@ -490,11 +489,54 @@ async def test_delete_agent_route_fails_loud_when_thread_repo_missing(monkeypatc
             request=request,
             user_id="user-1",
             thread_repo=None,
-            contact_repo=request.app.state.chat_runtime_state.contact_repo,
         )
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "Thread repo unavailable"
+
+
+def test_panel_agents_http_surface_does_not_expose_query_app_param(monkeypatch: pytest.MonkeyPatch):
+    app = FastAPI()
+    app.include_router(panel_router.router)
+    app.dependency_overrides[panel_router.get_current_user_id] = lambda: "user-1"
+    app.state.user_repo = SimpleNamespace()
+    app.state.runtime_storage_state = _runtime_storage_state(SimpleNamespace())
+    app.state.thread_repo = SimpleNamespace(list_by_agent_user=lambda _agent_id: [])
+    app.state.chat_runtime_state = SimpleNamespace(contact_repo=SimpleNamespace())
+
+    monkeypatch.setattr(
+        agent_user_service,
+        "create_agent_user",
+        lambda name, description="", **_kwargs: {"id": "agent-1", "name": name, "description": description},
+    )
+    monkeypatch.setattr(panel_router, "_require_owned_agent_user", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(agent_user_service, "delete_agent_user", lambda *_args, **_kwargs: True)
+
+    with TestClient(app) as client:
+        openapi = client.get("/openapi.json")
+        create_params = openapi.json()["paths"]["/api/panel/agents"]["post"].get("parameters", [])
+        delete_params = openapi.json()["paths"]["/api/panel/agents/{agent_id}"]["delete"].get("parameters", [])
+
+        create = client.post(
+            "/api/panel/agents",
+            json={"name": "Toad", "description": "probe"},
+            headers={"Authorization": "Bearer token"},
+        )
+        delete = client.delete("/api/panel/agents/agent-1", headers={"Authorization": "Bearer token"})
+
+    assert create_params == []
+    assert delete_params == [
+        {
+            "name": "agent_id",
+            "in": "path",
+            "required": True,
+            "schema": {"type": "string", "title": "Agent Id"},
+        }
+    ]
+    assert create.status_code == 200
+    assert create.json() == {"id": "agent-1", "name": "Toad", "description": "probe"}
+    assert delete.status_code == 200
+    assert delete.json() == {"success": True}
 
 
 def test_get_agent_user_preserves_explicit_empty_repo_skill_desc(monkeypatch: pytest.MonkeyPatch):
