@@ -31,20 +31,14 @@ def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
 _cached_thread_repo = None
 
 
-def _get_thread_repo(thread_repo=None):
-    """Get cached ThreadRepo instance, or use injected repo."""
-    if thread_repo is not None:
-        return thread_repo
-    global _cached_thread_repo
-    if _cached_thread_repo is not None:
-        return _cached_thread_repo
-    _cached_thread_repo = build_thread_repo()
-    return _cached_thread_repo
-
-
 def load_thread_row(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
     """Load the current thread row. Returns dict or None."""
-    return _get_thread_repo(thread_repo).get_by_id(thread_id)
+    if thread_repo is None:
+        global _cached_thread_repo
+        if _cached_thread_repo is None:
+            _cached_thread_repo = build_thread_repo()
+        thread_repo = _cached_thread_repo
+    return thread_repo.get_by_id(thread_id)
 
 
 def resolve_local_workspace_path(
