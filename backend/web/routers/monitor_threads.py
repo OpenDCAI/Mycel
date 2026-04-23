@@ -1,8 +1,8 @@
 """Web-owned monitor-local thread routes."""
 
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.identity.auth.user_resolution import get_current_user_id
 from backend.monitor.application.use_cases import threads as monitor_thread_service
@@ -13,18 +13,14 @@ from backend.monitor.infrastructure.read_models import trace_read_service as mon
 router = APIRouter()
 
 
-async def get_app(request: Request) -> FastAPI:
-    return request.app
-
-
 @router.get("/threads")
 def threads_snapshot(
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
 ):
     return monitor_thread_service.list_monitor_threads(
         user_id,
-        workbench_reader=monitor_thread_workbench_read_service.build_owner_thread_workbench_reader(app),
+        workbench_reader=monitor_thread_workbench_read_service.build_owner_thread_workbench_reader(request.app),
     )
 
 
