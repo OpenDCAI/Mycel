@@ -80,6 +80,7 @@ def build_thread_history_payload_from_display_entries(
         if role == "user":
             if entry.get("showing", True) is False:
                 continue
+            visible_entries.append(entry)
             continue
         if role in {"assistant", "notice"}:
             visible_entries.append(entry)
