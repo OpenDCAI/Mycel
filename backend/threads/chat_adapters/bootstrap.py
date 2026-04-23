@@ -59,7 +59,3 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
     # runtime handles without mirroring them onto loose app.state attrs, so
     # callers must keep borrowing through the bundle they just built.
     return AgentRuntimeGatewayState(gateway=gateway, activity_reader=activity_reader)
-
-
-def build_agent_runtime_gateway(app: Any, *, typing_tracker: Any) -> NativeAgentRuntimeGateway:
-    return build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway

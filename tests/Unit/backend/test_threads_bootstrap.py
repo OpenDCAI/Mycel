@@ -75,20 +75,6 @@ def test_attach_threads_runtime_requires_explicit_typing_tracker():
         threads_bootstrap.attach_threads_runtime(app, storage_container)
 
 
-def test_build_agent_runtime_gateway_returns_gateway_from_runtime_state(monkeypatch):
-    gateway = object()
-    activity_reader = object()
-    app = SimpleNamespace(state=SimpleNamespace())
-
-    monkeypatch.setattr(
-        runtime_bootstrap,
-        "build_agent_runtime_state",
-        lambda target_app, *, typing_tracker: SimpleNamespace(gateway=gateway, activity_reader=activity_reader),
-    )
-
-    assert runtime_bootstrap.build_agent_runtime_gateway(app, typing_tracker=object()) is gateway
-
-
 def test_build_agent_runtime_state_does_not_write_top_level_activity_reader(monkeypatch):
     gateway = object()
     activity_reader = object()

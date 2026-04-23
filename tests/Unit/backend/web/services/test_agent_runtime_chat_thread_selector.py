@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_state
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -56,7 +56,7 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
         message=AgentRuntimeMessage(content="hello", signal="ping"),
     )
 
-    result = await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_chat(envelope)
+    result = await build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway.dispatch_chat(envelope)
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-preselected"
