@@ -7,9 +7,6 @@ name: Deploy Staging
 # Both update the staging apps to the target branch, then deploy.
 
 on:
-  push:
-    branches:
-      - pr188-agent-optimize
   pull_request:
     types: [labeled]
   workflow_dispatch:
@@ -125,9 +122,8 @@ jobs:
             if [ "$configs_status" = "200" ] && [ "$sandboxes_status" = "200" ]; then
               cat /tmp/staging-sandbox-configs.json
               cat /tmp/staging-sandboxes.json
-              jq -e '.source == "runtime_sandbox_inventory" and (.count | type == "number")' /tmp/staging-sandbox-configs.json >/dev/null
-              jq -e '.source == "sandbox_canonical" and (.count | type == "number")' /tmp/staging-sandboxes.json >/dev/null
-              ! grep -E 'legacy_lease_id|lease_compat|matched_lease_id|manager_lease' /tmp/staging-sandbox-configs.json /tmp/staging-sandboxes.json
+              jq -e '.source == "runtime_sandbox_inventory" and (.count | type == "number") and (.providers | type == "array") and all(.providers[]?; has("provider") and has("available") and has("capability"))' /tmp/staging-sandbox-configs.json >/dev/null
+              jq -e '.source == "sandbox_canonical" and (.count | type == "number") and (.items | type == "array") and all(.items[]?; has("sandbox_id") and has("provider") and (has("lease_id") | not))' /tmp/staging-sandboxes.json >/dev/null
               exit 0
             fi
             cat /tmp/staging-sandbox-configs.json || true
