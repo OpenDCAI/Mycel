@@ -1,6 +1,6 @@
 """Agent pool management service."""
 
-from backend.chat.runtime_access import get_messaging_service
+from backend.chat.runtime_access import get_optional_messaging_service
 from backend.threads.file_channel import get_file_channel_binding
 from backend.threads.pool import registry as _registry
 from backend.threads.pool.factory import create_agent_sync
@@ -19,7 +19,9 @@ async def get_or_create_agent(*args, **kwargs):
         # but chat-owned messaging_service is still needed when chat_repos are
         # constructed. Borrow it here so registry does not reach back through
         # app state for chat truth on its own.
-        kwargs["messaging_service"] = get_messaging_service(app)
+        messaging_service = get_optional_messaging_service(app)
+        if messaging_service is not None:
+            kwargs["messaging_service"] = messaging_service
     return await _registry.get_or_create_agent(*args, **kwargs)
 
 
