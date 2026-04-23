@@ -69,6 +69,8 @@ def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
     result = source.save_file(relative_path, content)
     result["thread_id"] = thread_id
     return result
+
+
 def _row_value(row, key: str):
     if isinstance(row, dict):
         return row.get(key)
