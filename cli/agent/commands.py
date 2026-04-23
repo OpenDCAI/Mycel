@@ -77,8 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     auth_verify_otp.add_argument("email")
     auth_verify_otp.add_argument("token")
     auth_complete_register = auth_sub.add_parser("complete-register", parents=[shared])
-    auth_complete_register.add_argument("temp_token")
     auth_complete_register.add_argument("invite_code")
+    auth_complete_register.add_argument("--temp-token-stdin", action="store_true")
     auth_login = auth_sub.add_parser("login", parents=[shared])
     auth_login.add_argument("identifier")
     auth_login.add_argument("--password-stdin", action="store_true")
@@ -110,6 +110,15 @@ def _resolve_login_password(args: argparse.Namespace, stdin: TextIO) -> str:
             raise RuntimeError("stdin password is required")
         return password
     return getpass.getpass("Password: ")
+
+
+def _resolve_temp_token(args: argparse.Namespace, stdin: TextIO) -> str:
+    if args.temp_token_stdin:
+        temp_token = stdin.readline().rstrip("\r\n")
+        if not temp_token:
+            raise RuntimeError("stdin temp token is required")
+        return temp_token
+    return getpass.getpass("Temp token: ")
 
 
 def run_cli(
@@ -191,7 +200,7 @@ def run_cli(
     elif args.command == "auth" and args.auth_command == "verify-otp":
         payload = client.verify_otp(args.email, args.token)
     elif args.command == "auth" and args.auth_command == "complete-register":
-        payload = client.complete_register(args.temp_token, args.invite_code)
+        payload = client.complete_register(_resolve_temp_token(args, in_stream), args.invite_code)
     elif args.command == "auth" and args.auth_command == "login":
         payload = client.login(args.identifier, _resolve_login_password(args, in_stream))
     elif args.command == "agents" and args.agents_command == "list":

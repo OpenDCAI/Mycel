@@ -482,11 +482,12 @@ def test_agent_cli_auth_complete_register_calls_auth_client() -> None:
 
     out = StringIO()
     exit_code = commands.run_cli(
-        ["auth", "complete-register", "temp-token-1", "INVITE-1", "--app-base-url", "http://backend"],
+        ["auth", "complete-register", "INVITE-1", "--temp-token-stdin", "--app-base-url", "http://backend"],
         messaging_client=SimpleNamespace(),
         identity_client=SimpleNamespace(create_external_user=lambda **_: None, list_users=lambda **_: []),
         runtime_read_client=SimpleNamespace(),
         auth_client=SimpleNamespace(complete_register=lambda temp_token, invite_code: {"token": f"{temp_token}:{invite_code}"}),
+        stdin=StringIO("temp-token-1\n"),
         stdout=out,
     )
 
