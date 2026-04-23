@@ -15,16 +15,6 @@ def test_thread_runtime_namespace_exports_binding_and_state_helpers() -> None:
     assert "backend.web.services.thread_runtime_binding_service" not in inspect.getsource(state_owner)
 
 
-def test_agent_pool_uses_thread_runtime_sandbox_owner() -> None:
-    sandbox_owner = importlib.import_module("backend.threads.sandbox_resolution")
-    agent_pool_module = importlib.import_module("backend.threads.activity_pool_service")
-    source = inspect.getsource(agent_pool_module)
-
-    assert agent_pool_module.resolve_thread_sandbox is sandbox_owner.resolve_thread_sandbox
-    assert "from backend.threads.sandbox_resolution import resolve_thread_sandbox" in source
-    assert "def resolve_thread_sandbox(" not in source
-
-
 def test_thread_runtime_history_uses_thread_runtime_message_repair_owner() -> None:
     history_source = inspect.getsource(importlib.import_module("backend.threads.history"))
     owner_module = importlib.import_module("backend.threads.interruption")
@@ -77,7 +67,9 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
     owner_source = inspect.getsource(owner_module)
 
     assert hasattr(agent_pool_module, "get_or_create_agent")
+    assert not hasattr(agent_pool_module, "resolve_thread_sandbox")
     assert "from backend.threads.pool import registry as _registry" in source
+    assert "from backend.threads.sandbox_resolution import resolve_thread_sandbox as _resolve_thread_sandbox" in source
     assert "async def get_or_create_agent(" in source
     assert hasattr(agent_pool_module, "get_or_create_agent_id")
     assert hasattr(agent_pool_module, "get_file_channel_binding")
@@ -85,6 +77,7 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
     assert owner_module.update_agent_config.__module__ == "backend.threads.pool.registry"
     assert "backend.web.services.file_channel_service" not in owner_source
     assert "from backend.threads.file_channel import get_file_channel_binding" in source
+    assert "_registry.resolve_thread_sandbox = _resolve_thread_sandbox" in source
     assert "backend.web.services.file_channel_service" not in source
 
 
