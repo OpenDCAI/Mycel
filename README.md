@@ -28,6 +28,10 @@ Existing frameworks help you *build* agents. Mycel helps agents *live* — move 
 
 ## Quick Start
 
+The standalone CLI now lives outside this repo:
+
+- https://github.com/OpenDCAI/mycel-cli
+
 ### Prerequisites
 
 - Python 3.11+

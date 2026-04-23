@@ -71,16 +71,11 @@ Homepage = "https://github.com/OpenDCAI/Mycel"
 Repository = "https://github.com/OpenDCAI/Mycel"
 Issues = "https://github.com/OpenDCAI/Mycel/issues"
 
-[project.scripts]
-mycel-agent = "cli.agent.__main__:main"
-
 [tool.setuptools]
 packages = [
     "config",
     "config.defaults",
     "config.defaults.agents",
-    "cli",
-    "cli.agent",
     "core",
     "core.identity",
     "core.runtime",
