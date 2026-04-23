@@ -1073,6 +1073,146 @@ async def test_get_thread_history_rebuilds_persisted_midrun_steer_message(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_get_thread_history_prefers_hot_display_builder_entries_for_active_thread():
+    display_builder = DisplayBuilder()
+    display_builder.set_entries(
+        "history-hot-display-thread",
+        [
+            {
+                "id": "turn-hot-1",
+                "role": "assistant",
+                "timestamp": 1,
+                "segments": [
+                    {
+                        "type": "notice",
+                        "content": "New message from owner in chat chat-1.",
+                        "notification_type": "chat",
+                    },
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "tool-send-1",
+                            "name": "send_message",
+                            "args": {"chat_id": "chat-1", "content": "HOT_DISPLAY_REPLY"},
+                            "status": "done",
+                            "result": "Message sent to chat.",
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "content": "Replied in chat with: HOT_DISPLAY_REPLY",
+                    },
+                ],
+            }
+        ],
+    )
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": []}))),
+        runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+    )
+    fake_app = _app_with_display_builder(display_builder)
+    _put_local_agent_in_pool(fake_app, "history-hot-display-thread", fake_agent)
+
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
+        history = await get_thread_history(
+            "history-hot-display-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert [item["role"] for item in history["messages"]] == [
+        "notification",
+        "tool_call",
+        "tool_result",
+        "assistant",
+    ]
+    assert history["messages"][0]["text"] == "New message from owner in chat chat-1."
+    assert history["messages"][1]["tool"] == "send_message"
+    assert history["messages"][2]["text"] == "Message sent to chat."
+    assert history["messages"][3]["text"] == "Replied in chat with: HOT_DISPLAY_REPLY"
+
+
+@pytest.mark.asyncio
+async def test_get_thread_history_hot_display_limit_keeps_whole_last_entry():
+    display_builder = DisplayBuilder()
+    display_builder.set_entries(
+        "history-hot-display-limit-thread",
+        [
+            {
+                "id": "turn-hot-old",
+                "role": "assistant",
+                "timestamp": 1,
+                "segments": [
+                    {
+                        "type": "notice",
+                        "content": "Old notice",
+                        "notification_type": "chat",
+                    },
+                    {
+                        "type": "text",
+                        "content": "Old reply",
+                    },
+                ],
+            },
+            {
+                "id": "turn-hot-new",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {
+                        "type": "notice",
+                        "content": "New notice",
+                        "notification_type": "chat",
+                    },
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "tool-send-2",
+                            "name": "send_message",
+                            "args": {"chat_id": "chat-2", "content": "NEW_REPLY"},
+                            "status": "done",
+                            "result": "Message sent to chat.",
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "content": "Replied in chat with: NEW_REPLY",
+                    },
+                ],
+            },
+        ],
+    )
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": []}))),
+        runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+    )
+    fake_app = _app_with_display_builder(display_builder)
+    _put_local_agent_in_pool(fake_app, "history-hot-display-limit-thread", fake_agent)
+
+    with patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"):
+        history = await get_thread_history(
+            "history-hot-display-limit-thread",
+            limit=1,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert history["total"] == 2
+    assert history["showing"] == 1
+    assert [item["role"] for item in history["messages"]] == [
+        "notification",
+        "tool_call",
+        "tool_result",
+        "assistant",
+    ]
+    assert history["messages"][0]["text"] == "New notice"
+    assert history["messages"][3]["text"] == "Replied in chat with: NEW_REPLY"
+
+
+@pytest.mark.asyncio
 async def test_query_loop_adds_non_preemptive_steer_contract_before_terminal_reply(tmp_path):
     checkpointer = _MemoryCheckpointer()
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))

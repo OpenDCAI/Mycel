@@ -67,6 +67,90 @@ def _expand_history_message(msg: Any, truncate: int) -> list[dict[str, Any]]:
     return [{"role": "system", "text": _trunc(extract_text_content(msg.content), truncate)}]
 
 
+def build_thread_history_payload_from_display_entries(
+    *,
+    thread_id: str,
+    entries: list[dict[str, Any]],
+    limit: int = 20,
+    truncate: int = 300,
+) -> dict[str, Any]:
+    visible_entries: list[dict[str, Any]] = []
+    for entry in entries:
+        role = entry.get("role")
+        if role == "user":
+            if entry.get("showing", True) is False:
+                continue
+            visible_entries.append(entry)
+            continue
+        if role in {"assistant", "notice"}:
+            visible_entries.append(entry)
+
+    selected_entries = visible_entries[-limit:] if limit > 0 else visible_entries
+    flat: list[dict[str, Any]] = []
+
+    for entry in selected_entries:
+        role = entry.get("role")
+        if role == "notice":
+            text = entry.get("content")
+            if isinstance(text, str) and text:
+                flat.append({"role": "notification", "text": _trunc(text, truncate)})
+            continue
+
+        if role == "user":
+            text = entry.get("content")
+            if isinstance(text, str) and text:
+                flat.append({"role": "human", "text": _trunc(text, truncate)})
+            continue
+
+        if role != "assistant":
+            continue
+
+        for segment in entry.get("segments", []):
+            segment_type = segment.get("type")
+            if segment_type == "notice":
+                text = segment.get("content")
+                if isinstance(text, str) and text:
+                    flat.append({"role": "notification", "text": _trunc(text, truncate)})
+                continue
+
+            if segment_type == "text":
+                text = segment.get("content")
+                if isinstance(text, str) and text:
+                    flat.append({"role": "assistant", "text": _trunc(text, truncate)})
+                continue
+
+            if segment_type != "tool":
+                continue
+
+            step = segment.get("step") or {}
+            tool_name = str(step.get("name") or "?")
+            flat.append(
+                {
+                    "role": "tool_call",
+                    "tool": tool_name,
+                    "args": _trunc(str(step.get("args", {})), truncate if truncate > 0 else 200),
+                }
+            )
+            result = step.get("result")
+            if isinstance(result, str) and result:
+                flat.append(
+                    {
+                        "role": "tool_result",
+                        "tool": tool_name,
+                        "text": _trunc(result, truncate),
+                    }
+                )
+
+    total = len(visible_entries)
+    messages = flat
+    return {
+        "thread_id": thread_id,
+        "total": total,
+        "showing": len(selected_entries),
+        "messages": messages,
+    }
+
+
 async def get_thread_history_payload(
     *,
     thread_id: str,
