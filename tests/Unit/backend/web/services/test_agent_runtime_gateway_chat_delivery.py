@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_state
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -76,7 +76,7 @@ async def test_gateway_dispatch_chat_enqueues_notification(monkeypatch: pytest.M
     app, started, unread_calls, enqueued = _app()
     typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
 
-    result = await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_chat(_envelope())
+    result = await build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway.dispatch_chat(_envelope())
 
     assert result.status == "accepted"
     assert result.thread_id == "thread-1"
@@ -94,7 +94,7 @@ async def test_gateway_dispatch_chat_raises_for_missing_thread(monkeypatch: pyte
     typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
 
     with pytest.raises(RuntimeError, match="Agent chat recipient has no runtime thread: agent-user-1"):
-        await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_chat(_envelope(thread_id=None))
+        await build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway.dispatch_chat(_envelope(thread_id=None))
 
     assert started == []
     assert unread_calls == []
@@ -113,7 +113,7 @@ async def test_gateway_dispatch_chat_uses_explicit_typing_tracker(monkeypatch: p
     started: list[tuple[str, str, str]] = []
     explicit_typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
 
-    result = await build_agent_runtime_gateway(app, typing_tracker=explicit_typing_tracker).dispatch_chat(_envelope())
+    result = await build_agent_runtime_state(app, typing_tracker=explicit_typing_tracker).gateway.dispatch_chat(_envelope())
 
     assert result.status == "accepted"
     assert started == [("thread-1", "chat-1", "agent-user-1")]

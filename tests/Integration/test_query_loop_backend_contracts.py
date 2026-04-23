@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway, build_agent_runtime_state
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_state
 from backend.threads.display.builder import DisplayBuilder
 from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.run.lifecycle import repair_incomplete_tool_calls
@@ -1461,7 +1461,7 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     typing_tracker = SimpleNamespace(start_chat=lambda *_args, **_kwargs: None)
 
     startup_task = asyncio.create_task(
-        build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(
+        build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway.dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="owner"),

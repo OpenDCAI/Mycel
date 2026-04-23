@@ -73,7 +73,7 @@ def test_agent_runtime_implementation_lives_under_backend_agent_runtime() -> Non
     thread_handler_impl = importlib.import_module("backend.threads.chat_adapters.thread_handler")
 
     assert gateway_impl.NativeAgentRuntimeGateway.__module__ == "backend.threads.chat_adapters.gateway"
-    assert bootstrap_impl.build_agent_runtime_gateway.__module__ == "backend.threads.chat_adapters.bootstrap"
+    assert bootstrap_impl.build_agent_runtime_state.__module__ == "backend.threads.chat_adapters.bootstrap"
     assert port_impl.get_agent_runtime_gateway.__module__ == "backend.threads.chat_adapters.port"
     assert chat_handler_impl.NativeAgentChatDeliveryHandler.__module__ == "backend.threads.chat_adapters.chat_handler"
     assert thread_handler_impl.NativeAgentThreadInputHandler.__module__ == "backend.threads.chat_adapters.thread_handler"
