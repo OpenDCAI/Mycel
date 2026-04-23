@@ -32,7 +32,20 @@ async def append_event(
     run_event_repo: RunEventRepo | None = None,
 ) -> int:
     repo = _resolve_run_event_repo(run_event_repo)
-    payload = _event_payload_to_dict(event)
+    raw_data = event.get("data", {})
+    if isinstance(raw_data, dict):
+        payload = raw_data
+    elif raw_data in (None, ""):
+        payload = {}
+    else:
+        if not isinstance(raw_data, str):
+            raise RuntimeError("Run event data must be a dict or JSON string when using storage_container run_event_repo.")
+        try:
+            payload = json.loads(raw_data)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Run event data must be valid JSON when using storage_container run_event_repo.") from exc
+        if not isinstance(payload, dict):
+            raise RuntimeError("Run event data JSON must decode to an object when using storage_container run_event_repo.")
     return int(
         await asyncio.to_thread(
             repo.append_event,
@@ -99,20 +112,3 @@ async def cleanup_old_runs(
     if not old_ids:
         return 0
     return int(await asyncio.to_thread(repo.delete_runs, thread_id, old_ids))
-
-
-def _event_payload_to_dict(event: dict[str, Any]) -> dict[str, Any]:
-    raw_data = event.get("data", {})
-    if isinstance(raw_data, dict):
-        return raw_data
-    if raw_data in (None, ""):
-        return {}
-    if not isinstance(raw_data, str):
-        raise RuntimeError("Run event data must be a dict or JSON string when using storage_container run_event_repo.")
-    try:
-        payload = json.loads(raw_data)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("Run event data must be valid JSON when using storage_container run_event_repo.") from exc
-    if not isinstance(payload, dict):
-        raise RuntimeError("Run event data JSON must decode to an object when using storage_container run_event_repo.")
-    return payload
