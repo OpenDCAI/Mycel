@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from backend.threads.events.buffer import ThreadEventBuffer
-from backend.threads.streaming import _run_agent_to_buffer, write_cancellation_markers
+from backend.threads.run.lifecycle import write_cancellation_markers
+from backend.threads.streaming import _run_agent_to_buffer
 from core.runtime.middleware.monitor import AgentState
 from eval.models import RunTrajectory
 
@@ -186,7 +187,7 @@ def _install_runtime_writer_test_doubles(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("backend.threads.streaming.cleanup_old_runs", _noop_async)
     monkeypatch.setattr("backend.threads.streaming._ensure_thread_handlers", lambda *args, **kwargs: None)
     monkeypatch.setattr("backend.threads.streaming._consume_followup_queue", _noop_async)
-    monkeypatch.setattr("backend.threads.streaming.write_cancellation_markers", _noop_async)
+    monkeypatch.setattr("backend.threads.streaming._run_lifecycle.write_cancellation_markers", _noop_async)
     monkeypatch.setattr("backend.threads.streaming._persist_cancelled_run_input_if_missing", _noop_async)
     monkeypatch.setattr("backend.threads.streaming._flush_cancelled_owner_steers", _noop_async)
     monkeypatch.setattr("eval.storage.TrajectoryStore", _FakeTrajectoryStore)
