@@ -16,17 +16,6 @@ class ThreadHistoryTransport:
     load_checkpoint_messages: Callable[[str], Awaitable[list[Any]]]
 
 
-def build_thread_history_transport(
-    *,
-    load_live_messages: Callable[[str], Awaitable[list[Any] | None]],
-    load_checkpoint_messages: Callable[[str], Awaitable[list[Any]]],
-) -> ThreadHistoryTransport:
-    return ThreadHistoryTransport(
-        load_live_messages=load_live_messages,
-        load_checkpoint_messages=load_checkpoint_messages,
-    )
-
-
 def _trunc(text: str, truncate: int) -> str:
     if truncate > 0 and len(text) > truncate:
         return text[:truncate] + f"…[+{len(text) - truncate}]"
