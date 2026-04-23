@@ -26,14 +26,13 @@ class NativeAgentChatDeliveryHandler:
         var_child_runnable_config.set(None)
 
         logger.info(
-            "[agent-runtime-gateway] dispatch_chat: recipient=%s user=%s thread=%s from=%s",
+            "[agent-runtime-gateway] dispatch_chat: recipient=%s user=%s from=%s",
             envelope.recipient.agent_user_id,
             envelope.recipient.agent_user_id,
-            envelope.recipient.thread_id,
             envelope.sender.display_name,
         )
 
-        thread_id = envelope.recipient.thread_id
+        thread_id = self._runtime_services.resolve_chat_thread_id(envelope.recipient.agent_user_id)
         if not thread_id:
             raise RuntimeError(f"Agent chat recipient has no runtime thread: {envelope.recipient.agent_user_id}")
         await self._runtime_services.get_or_create_thread_agent(thread_id)

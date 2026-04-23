@@ -29,6 +29,7 @@ def test_chat_runtime_services_use_injected_typing_tracker_and_queue_manager():
     services = AppAgentChatRuntimeServices(
         app,
         typing_tracker=injected_typing_tracker,
+        thread_repo=SimpleNamespace(get_canonical_thread_for_agent_actor=lambda _user_id: {"id": "thread-1"}),
         queue_manager=injected_queue_manager,
         get_or_create_agent=lambda *_args, **_kwargs: None,
         resolve_thread_sandbox=lambda *_args, **_kwargs: "local",
@@ -67,6 +68,7 @@ def test_chat_runtime_services_use_injected_runtime_callables():
     services = AppAgentChatRuntimeServices(
         app,
         typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
+        thread_repo=SimpleNamespace(get_canonical_thread_for_agent_actor=lambda _user_id: {"id": "thread-1"}),
         queue_manager=SimpleNamespace(enqueue=lambda *_args, **_kwargs: None),
         get_or_create_agent=_get_or_create_agent,
         resolve_thread_sandbox=_resolve_thread_sandbox,

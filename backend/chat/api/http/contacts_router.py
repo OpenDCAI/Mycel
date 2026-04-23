@@ -1,4 +1,4 @@
-"""Contacts API router — /api/contacts endpoints."""
+"""Contacts API router — chat/backend owner module."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.chat.runtime_access import get_contact_repo
-from backend.web.core.dependencies import get_current_user_id
+from backend.chat.api.http.dependencies import get_contact_repo, get_current_user_id
 from storage.contracts import ContactEdgeRow
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
@@ -26,7 +25,6 @@ async def list_contacts(
     user_id: Annotated[str, Depends(get_current_user_id)],
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ):
-    """List contacts (blocked/muted) for the current user."""
     try:
         if contact_repo is None:
             raise RuntimeError("chat bootstrap not attached: contact_repo")
@@ -54,7 +52,6 @@ async def set_contact(
     user_id: Annotated[str, Depends(get_current_user_id)],
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ):
-    """Upsert contact (block/mute/normal)."""
     try:
         if contact_repo is None:
             raise RuntimeError("chat bootstrap not attached: contact_repo")
@@ -81,7 +78,6 @@ async def delete_contact(
     user_id: Annotated[str, Depends(get_current_user_id)],
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ):
-    """Remove contact entry."""
     try:
         if contact_repo is None:
             raise RuntimeError("chat bootstrap not attached: contact_repo")

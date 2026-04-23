@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from backend.threads.api.http import owner_router as threads_owner_router
+from backend.threads.api.http import runtime_router as threads_runtime_router
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_gateway, build_agent_runtime_state
 from backend.threads.display.builder import DisplayBuilder
 from backend.threads.events.buffer import ThreadEventBuffer
@@ -21,9 +23,10 @@ from backend.threads.streaming import (
     _run_agent_to_buffer,
     start_agent_run,
 )
+from backend.threads.transport import build_inprocess_thread_input_transport
 from backend.web.models.requests import SendMessageRequest
 from backend.web.routers import threads as threads_router
-from backend.web.routers.threads import get_thread_history, get_thread_messages
+from backend.web.routers.threads import get_thread_messages
 from core.runtime.checkpoint_store import ThreadCheckpointState
 from core.runtime.loop import QueryLoop
 from core.runtime.middleware.memory.middleware import MemoryMiddleware
@@ -35,6 +38,8 @@ from core.runtime.state import AppState, BootstrapConfig
 from core.tools.tool_search.service import ToolSearchService
 from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
 from storage.contracts import NotificationType
+
+get_thread_history = threads_owner_router.get_thread_history
 
 
 class _MemoryCheckpointer:
@@ -85,18 +90,28 @@ class _FakeRunEventRepo:
 
 
 def _app_with_display_builder(display_builder: object, *, event_loop: object | None = None) -> SimpleNamespace:
+    thread_repo = SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "sandbox_type": "local"})
     return SimpleNamespace(
         state=SimpleNamespace(
             display_builder=display_builder,
-            threads_runtime_state=SimpleNamespace(display_builder=display_builder, event_loop=event_loop),
+            thread_sandbox={},
+            threads_runtime_state=SimpleNamespace(
+                display_builder=display_builder,
+                event_loop=event_loop,
+                thread_repo=thread_repo,
+            ),
         )
     )
 
 
 def _state_with_display_builder(display_builder: object, *, event_loop: object | None = None, **kwargs: object) -> SimpleNamespace:
+    thread_repo = kwargs.get("thread_repo")
+    runtime_state = SimpleNamespace(display_builder=display_builder, event_loop=event_loop)
+    if thread_repo is not None:
+        runtime_state.thread_repo = thread_repo
     return SimpleNamespace(
         display_builder=display_builder,
-        threads_runtime_state=SimpleNamespace(display_builder=display_builder, event_loop=event_loop),
+        threads_runtime_state=runtime_state,
         **kwargs,
     )
 
@@ -546,11 +561,17 @@ def _make_streaming_app(
         event_loop = asyncio.get_running_loop()
         state._event_loop = event_loop
     app = SimpleNamespace(state=state)
-    runtime_state = build_agent_runtime_state(app, typing_tracker=typing_tracker)
+    runtime_state = build_agent_runtime_state(
+        app,
+        thread_repo=app.state.threads_runtime_state.thread_repo,
+        typing_tracker=typing_tracker,
+    )
     gateway = runtime_state.gateway
     state.agent_runtime_gateway_state = runtime_state
     state.threads_runtime_state = SimpleNamespace(
+        thread_repo=state.thread_repo,
         agent_runtime_gateway=gateway,
+        thread_input_transport=build_inprocess_thread_input_transport(runtime_gateway=gateway),
         activity_reader=runtime_state.activity_reader,
         display_builder=state.display_builder,
         event_loop=event_loop,
@@ -622,6 +643,20 @@ def _put_local_agent_in_pool(app: SimpleNamespace, thread_id: str, agent: Simple
     if not isinstance(pool, dict):
         app.state.agent_pool = {}
     app.state.agent_pool[f"{thread_id}:local"] = agent
+    thread_sandbox = getattr(app.state, "thread_sandbox", None)
+    if not isinstance(thread_sandbox, dict):
+        app.state.thread_sandbox = {}
+        thread_sandbox = app.state.thread_sandbox
+    thread_sandbox[thread_id] = "local"
+
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    if runtime_state is None:
+        runtime_state = SimpleNamespace()
+        app.state.threads_runtime_state = runtime_state
+    if getattr(runtime_state, "thread_repo", None) is None:
+        runtime_state.thread_repo = SimpleNamespace(
+            get_by_id=lambda target_thread_id: {"id": target_thread_id, "sandbox_type": "local"} if target_thread_id == thread_id else None
+        )
 
 
 async def _get_local_thread_history(thread_id: str, *, agent: SimpleNamespace, app: SimpleNamespace) -> dict:
@@ -744,6 +779,150 @@ async def test_get_thread_history_reads_checkpoint_without_creating_agent():
     assert history["total"] == 2
     assert [item["role"] for item in history["messages"]] == ["human", "assistant"]
     assert history["messages"][1]["text"] == "history reply"
+
+
+@pytest.mark.asyncio
+async def test_get_thread_messages_returns_empty_detail_from_checkpoint_store_without_creating_agent():
+    class _CheckpointStore:
+        async def load(self, thread_id: str):
+            assert thread_id == "detail-empty-thread"
+            return None
+
+    display_builder = DisplayBuilder()
+    fake_app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=display_builder,
+            thread_sandbox={},
+            agent_pool={},
+            threads_runtime_state=SimpleNamespace(
+                display_builder=display_builder,
+                checkpoint_store=_CheckpointStore(),
+                thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "sandbox_type": "local"}),
+            ),
+        )
+    )
+
+    async def fail_agent_creation(*_args, **_kwargs):
+        raise AssertionError("detail read must not create a LeonAgent")
+
+    with (
+        patch("backend.threads.api.http.runtime_support.get_or_create_agent", side_effect=fail_agent_creation),
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "detail-empty-thread",
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert detail["entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_thread_messages_reads_checkpoint_without_creating_agent():
+    class _CheckpointStore:
+        async def load(self, thread_id: str):
+            assert thread_id == "detail-checkpoint-thread"
+            return ThreadCheckpointState(
+                messages=[HumanMessage(content="hello"), AIMessage(content="detail reply")],
+                tool_permission_context={},
+                pending_permission_requests={},
+                resolved_permission_requests={},
+                memory_compaction_state={},
+                mcp_instruction_state={},
+            )
+
+    display_builder = _FakeDisplayBuilder(cached_entries=None)
+    fake_app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=display_builder,
+            thread_sandbox={},
+            agent_pool={},
+            threads_runtime_state=SimpleNamespace(
+                display_builder=display_builder,
+                checkpoint_store=_CheckpointStore(),
+                thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "sandbox_type": "local"}),
+            ),
+        )
+    )
+
+    async def fail_agent_creation(*_args, **_kwargs):
+        raise AssertionError("detail read must not create a LeonAgent")
+
+    with (
+        patch("backend.threads.api.http.runtime_support.get_or_create_agent", side_effect=fail_agent_creation),
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "detail-checkpoint-thread",
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert detail["entries"] == [{"id": "rebuilt-notice", "role": "notice", "content": "rebuilt"}]
+    assert display_builder.rebuilt_with is not None
+    rebuilt_thread_id, rebuilt_messages = display_builder.rebuilt_with
+    assert rebuilt_thread_id == "detail-checkpoint-thread"
+    assert [msg["type"] for msg in rebuilt_messages] == ["HumanMessage", "AIMessage"]
+
+
+@pytest.mark.asyncio
+async def test_get_thread_messages_falls_back_to_agent_when_checkpoint_read_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class _CheckpointStore:
+        async def load(self, thread_id: str):
+            assert thread_id == "detail-checkpoint-broken-thread"
+            raise RuntimeError("checkpoint connection closed")
+
+    display_builder = _FakeDisplayBuilder(cached_entries=None)
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(
+            aget_state=AsyncMock(
+                return_value=SimpleNamespace(
+                    values={
+                        "messages": [
+                            HumanMessage(content="hello"),
+                            AIMessage(content="fallback reply"),
+                        ]
+                    }
+                )
+            )
+        ),
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+    fake_app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=display_builder,
+            thread_sandbox={},
+            agent_pool={},
+            threads_runtime_state=SimpleNamespace(
+                display_builder=display_builder,
+                checkpoint_store=_CheckpointStore(),
+                thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "sandbox_type": "local"}),
+            ),
+        )
+    )
+
+    with (
+        patch("backend.threads.api.http.runtime_support.get_or_create_agent", AsyncMock(return_value=fake_agent)) as get_agent,
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "detail-checkpoint-broken-thread",
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert detail["entries"] == [{"id": "rebuilt-notice", "role": "notice", "content": "rebuilt"}]
+    get_agent.assert_awaited_once()
+    assert display_builder.rebuilt_with is not None
+    rebuilt_thread_id, rebuilt_messages = display_builder.rebuilt_with
+    assert rebuilt_thread_id == "detail-checkpoint-broken-thread"
+    assert [msg["type"] for msg in rebuilt_messages] == ["HumanMessage", "AIMessage"]
 
 
 @pytest.mark.asyncio
@@ -1435,11 +1614,11 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
+            threads_runtime_state=SimpleNamespace(thread_repo=SimpleNamespace(
                 get_by_id=lambda target_thread_id: {"id": target_thread_id, "sandbox_type": "local"},
                 get_by_user_id=lambda _user_id: None,
                 list_by_agent_user=lambda _user_id: [],
-            ),
+            )),
             agent_pool={},
             thread_sandbox={},
             thread_cwd={},
@@ -1461,7 +1640,11 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
     typing_tracker = SimpleNamespace(start_chat=lambda *_args, **_kwargs: None)
 
     startup_task = asyncio.create_task(
-        build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_thread_input(
+        build_agent_runtime_gateway(
+            app,
+            thread_repo=app.state.threads_runtime_state.thread_repo,
+            typing_tracker=typing_tracker,
+        ).dispatch_thread_input(
             AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="owner"),
@@ -1504,8 +1687,8 @@ async def test_get_thread_messages_rebuilds_idle_thread_when_cached_entries_are_
     fake_app = _app_with_display_builder(display_builder)
 
     with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.api.http.runtime_support.get_or_create_agent", return_value=fake_agent),
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
         patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
     ):
         detail = await get_thread_messages(
@@ -1519,6 +1702,106 @@ async def test_get_thread_messages_rebuilds_idle_thread_when_cached_entries_are_
     rebuilt_thread_id, rebuilt_messages = display_builder.rebuilt_with
     assert rebuilt_thread_id == "detail-thread"
     assert [msg["type"] for msg in rebuilt_messages] == ["HumanMessage", "AIMessage"]
+
+
+@pytest.mark.asyncio
+async def test_get_thread_messages_prefers_live_display_entries_when_thread_is_active():
+    display_builder = DisplayBuilder()
+    display_builder.set_entries(
+        "detail-thread",
+        [
+            {"id": "u1", "role": "user", "content": "hello", "timestamp": 1},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [{"type": "text", "content": "live reply"}],
+            },
+        ],
+    )
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(
+            aget_state=AsyncMock(side_effect=AssertionError("active detail should trust display_builder"))
+        ),
+        runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+    )
+    fake_app = _app_with_display_builder(display_builder)
+    _put_local_agent_in_pool(fake_app, "detail-thread", fake_agent)
+
+    with (
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "detail-thread",
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert detail["entries"] == [
+        {"id": "u1", "role": "user", "content": "hello", "timestamp": 1},
+        {
+            "id": "a1",
+            "role": "assistant",
+            "timestamp": 2,
+            "segments": [{"type": "text", "content": "live reply"}],
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_thread_history_prefers_live_display_entries_when_thread_is_active():
+    display_builder = DisplayBuilder()
+    display_builder.set_entries(
+        "history-thread",
+        [
+            {"id": "u1", "role": "user", "content": "hello", "timestamp": 1},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {"type": "notice", "content": "notice text", "notification_type": "chat"},
+                    {"type": "text", "content": "live reply"},
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "call-1",
+                            "name": "send_message",
+                            "args": {"chat_id": "chat-1"},
+                            "status": "done",
+                            "result": "Message sent to chat.",
+                        },
+                    },
+                ],
+            },
+        ],
+    )
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(
+            aget_state=AsyncMock(side_effect=AssertionError("active history should trust display_builder"))
+        ),
+        runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+    )
+    fake_app = _app_with_display_builder(display_builder)
+    _put_local_agent_in_pool(fake_app, "history-thread", fake_agent)
+
+    with patch.object(threads_router, "resolve_thread_sandbox", return_value="local"):
+        history = await get_thread_history(
+            "history-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert history["messages"] == [
+        {"role": "human", "text": "hello"},
+        {"role": "notification", "text": "notice text"},
+        {"role": "assistant", "text": "live reply"},
+        {"role": "tool_call", "tool": "send_message", "args": "{'chat_id': 'chat-1'}"},
+        {"role": "tool_result", "tool": "send_message", "text": "Message sent to chat."},
+    ]
 
 
 @pytest.mark.asyncio
@@ -1558,11 +1841,11 @@ async def test_get_thread_messages_idle_rebuild_replays_latest_run_error_from_ev
     ]
 
     with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.api.http.runtime_support.get_or_create_agent", return_value=fake_agent),
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
         patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
-        patch("backend.web.routers.threads.get_latest_run_id", AsyncMock(return_value="run-error-1")),
-        patch("backend.web.routers.threads.read_events_after", AsyncMock(return_value=run_events)),
+        patch("backend.threads.api.http.runtime_support.get_latest_run_id", AsyncMock(return_value="run-error-1")),
+        patch("backend.threads.api.http.runtime_support.read_events_after", AsyncMock(return_value=run_events)),
     ):
         detail = await get_thread_messages(
             "detail-thread",
@@ -1615,8 +1898,8 @@ async def test_cold_rebuild_surfaces_persisted_compaction_notice_in_detail_and_h
     _put_local_agent_in_pool(fake_app, "compact-thread", fake_agent)
 
     with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.api.http.runtime_support.get_or_create_agent", return_value=fake_agent),
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
         patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
     ):
         detail = await get_thread_messages(
@@ -1745,8 +2028,8 @@ async def test_get_thread_messages_idle_rebuild_keeps_terminal_subagent_stream_s
     fake_app = _app_with_display_builder(DisplayBuilder())
 
     with (
-        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
-        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.threads.api.http.runtime_support.get_or_create_agent", return_value=fake_agent),
+        patch("backend.threads.api.http.runtime_support.resolve_thread_sandbox", return_value="local"),
         patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
     ):
         detail = await get_thread_messages(
@@ -2293,7 +2576,7 @@ async def test_cancelled_task_notification_wakes_followthrough_run(monkeypatch, 
     loop = _make_loop(text="AFTER_CANCEL_WAKE", checkpointer=checkpointer)
     queue_manager, agent, app = _make_route_followthrough_context(tmp_path, thread_id=thread_id, loop=loop)
     run = SimpleNamespace(is_done=True, description="cancelled task", command="echo hi")
-    await threads_router._notify_task_cancelled(app, thread_id, "cmd-cancel", run)
+    await threads_runtime_router._notify_task_cancelled(app, thread_id, "cmd-cancel", run)
 
     await _wait_for_followthrough_text(loop, thread_id, "AFTER_CANCEL_WAKE")
     history = await _get_local_thread_history(thread_id, agent=agent, app=app)
@@ -2331,7 +2614,7 @@ async def test_cancel_task_route_marks_bash_run_cancelled_and_forces_process_sto
 
     monkeypatch.setattr("core.agents.service.asyncio.wait_for", _raise_timeout)
 
-    response = await threads_router.cancel_task(
+    response = await threads_runtime_router.cancel_task(
         thread_id,
         "cmd-cancel-route",
         cast(Any, SimpleNamespace(app=app)),
@@ -2343,8 +2626,8 @@ async def test_cancel_task_route_marks_bash_run_cancelled_and_forces_process_sto
     assert async_cmd.cancelled is True
     assert async_cmd.done is True
     assert async_cmd.exit_code == -9
-    assert threads_router._serialize_background_run("cmd-cancel-route", run, include_result=False)["status"] == "cancelled"
-    assert threads_router._serialize_background_run("cmd-cancel-route", run, include_result=True) == {
+    assert threads_runtime_router._serialize_background_run("cmd-cancel-route", run, include_result=False)["status"] == "cancelled"
+    assert threads_runtime_router._serialize_background_run("cmd-cancel-route", run, include_result=True) == {
         "task_id": "cmd-cancel-route",
         "task_type": "bash",
         "status": "cancelled",
@@ -2375,7 +2658,7 @@ async def test_send_message_route_then_agent_terminal_notification_reenters_foll
         patch("backend.threads.chat_adapters.bootstrap.get_or_create_agent", AsyncMock(return_value=agent)),
         patch("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", return_value="local"),
     ):
-        result = await threads_router.send_message(
+        result = await threads_owner_router.send_message(
             thread_id,
             SendMessageRequest(message="start owner turn"),
             user_id="u",
@@ -2461,6 +2744,71 @@ async def test_run_agent_to_buffer_turns_silent_chat_notification_into_visible_f
         'read_messages(chat_id="chat-123")',
         'I received a chat notification, but the followthrough assistant reply was empty. Read it with read_messages(chat_id="chat-123") before deciding whether to reply.',
     )
+
+
+@pytest.mark.asyncio
+async def test_external_chat_notification_is_visible_in_owner_thread_detail_and_history(monkeypatch, tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(model=_ChatNotificationSilentModel(), checkpointer=checkpointer)
+    _patch_direct_streaming(monkeypatch)
+    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
+    thread_id = "thread-chat-owner-surface"
+
+    await _run_agent_to_buffer(
+        agent,
+        thread_id,
+        '<system-reminder>\nNew message from alice in chat chat-123 (1 unread).\nRead it with read_messages(chat_id="chat-123").\nReply with send_message(chat_id="chat-123", content="...").\nDo not treat your normal assistant text as a chat reply.\n</system-reminder>',
+        app,
+        False,
+        thread_buf,
+        "run-chat-owner-surface",
+        message_metadata={"source": "external", "notification_type": "chat"},
+    )
+
+    _put_local_agent_in_pool(app, thread_id, agent)
+    with patch.object(threads_router, "resolve_thread_sandbox", return_value="local"):
+        detail = await get_thread_messages(thread_id, user_id="u", app=app)
+        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+
+    assert detail["entries"]
+    assert detail["entries"][0]["segments"][0]["type"] == "notice"
+    assert 'read_messages(chat_id="chat-123")' in detail["entries"][0]["segments"][0]["content"]
+    assert history["messages"]
+    assert any('read_messages(chat_id="chat-123")' in item.get("text", "") for item in history["messages"])
+
+
+@pytest.mark.asyncio
+async def test_external_chat_notification_via_wake_handler_is_visible_in_owner_thread_detail_and_history(monkeypatch, tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(model=_ChatNotificationSilentModel(), checkpointer=checkpointer)
+    _patch_streaming_event_store(monkeypatch)
+    _patch_fake_event_bus(monkeypatch)
+    thread_id = "thread-chat-owner-surface-wake"
+    queue_manager, agent, app = _make_route_followthrough_context(tmp_path, thread_id=thread_id, loop=loop)
+
+    queue_manager.enqueue(
+        '<system-reminder>\nNew message from alice in chat chat-123 (1 unread).\nRead it with read_messages(chat_id="chat-123").\nReply with send_message(chat_id="chat-123", content="...").\nDo not treat your normal assistant text as a chat reply.\n</system-reminder>',
+        thread_id,
+        notification_type="chat",
+        source="external",
+        sender_id="human-user-1",
+        sender_name="alice",
+    )
+
+    await _wait_for_followthrough_text(
+        loop,
+        thread_id,
+        'I received a chat notification, but the followthrough assistant reply was empty. Read it with read_messages(chat_id="chat-123") before deciding whether to reply.',
+    )
+
+    with patch.object(threads_router, "resolve_thread_sandbox", return_value="local"):
+        detail = await get_thread_messages(thread_id, user_id="u", app=app)
+        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+
+    assert detail["entries"]
+    assert detail["entries"][0]["segments"][0]["type"] == "notice"
+    assert 'read_messages(chat_id="chat-123")' in detail["entries"][0]["segments"][0]["content"]
+    assert history["messages"]
 
 
 @pytest.mark.asyncio

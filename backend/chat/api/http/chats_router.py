@@ -11,14 +11,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.chat.api.http.dependencies import (
+    get_agent_actor_lookup,
     get_chat_event_bus,
     get_chat_repo,
     get_contact_repo,
     get_current_user_id,
     get_messaging_service,
     get_relationship_service,
-    get_thread_repo,
-    get_user_repo,
+    get_user_directory,
 )
 from messaging.actor_ownership import is_owned_by_viewer
 from messaging.social_access import can_group_chat_with_participant
@@ -48,7 +48,7 @@ class MuteChatBody(BaseModel):
 def _verify_user_ownership(messaging_service: Any, sender_id: str, user_id: str) -> None:
     # @@@thread-social-owner-check - sender_id can be a thread-owned social user_id, so
     # ownership must resolve through the thread back to the owning agent user before checking owner.
-    sender = _resolve_display_user(messaging_service, sender_id)
+    sender = messaging_service.resolve_display_user(sender_id)
     if not sender:
         raise HTTPException(403, "User not found")
     if is_owned_by_viewer(user_id, sender):
@@ -65,13 +65,9 @@ def _get_accessible_chat_or_404(chat_repo: Any, messaging_service: Any, chat_id:
     return chat
 
 
-def _resolve_display_user(messaging_service: Any, social_user_id: str) -> Any | None:
-    return messaging_service.resolve_display_user(social_user_id)
-
-
 def _validate_chat_participant_ids(
-    user_repo: Any,
-    thread_repo: Any,
+    user_directory: Any,
+    agent_actor_lookup: Any,
     participant_ids: list[str],
     requester_user_id: str,
 ) -> list[str]:
@@ -80,10 +76,10 @@ def _validate_chat_participant_ids(
         if participant_id == requester_user_id:
             validated.append(participant_id)
             continue
-        if thread_repo.get_by_user_id(participant_id) is not None:
+        if agent_actor_lookup.is_agent_actor_user(participant_id):
             validated.append(participant_id)
             continue
-        candidate = user_repo.get_by_id(participant_id)
+        candidate = user_directory.get_by_id(participant_id)
         if candidate is not None and getattr(candidate, "owner_user_id", None) is None:
             validated.append(participant_id)
             continue
@@ -93,23 +89,23 @@ def _validate_chat_participant_ids(
     return validated
 
 
-def _is_owned_participant(user_repo: Any, participant_id: str, requester_user_id: str) -> bool:
-    participant = user_repo.get_by_id(participant_id)
+def _is_owned_participant(user_directory: Any, participant_id: str, requester_user_id: str) -> bool:
+    participant = user_directory.get_by_id(participant_id)
     return is_owned_by_viewer(requester_user_id, participant)
 
 
 def _validate_group_chat_relationships(
     relationship_service: Any,
     contact_repo: Any,
-    user_repo: Any,
+    user_directory: Any,
     participant_ids: list[str],
     requester_user_id: str,
 ) -> None:
     for participant_id in dict.fromkeys(participant_ids):
-        if participant_id == requester_user_id or _is_owned_participant(user_repo, participant_id, requester_user_id):
+        if participant_id == requester_user_id or _is_owned_participant(user_directory, participant_id, requester_user_id):
             continue
         try:
-            participant_user = user_repo.get_by_id(participant_id)
+            participant_user = user_directory.get_by_id(participant_id)
             if can_group_chat_with_participant(
                 viewer_user_id=requester_user_id,
                 participant_user_id=participant_id,
@@ -136,18 +132,18 @@ def create_chat(
     body: CreateChatBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
-    thread_repo: Annotated[Any, Depends(get_thread_repo)],
+    user_directory: Annotated[Any, Depends(get_user_directory)],
+    agent_actor_lookup: Annotated[Any, Depends(get_agent_actor_lookup)],
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
 ):
     try:
-        participant_ids = _validate_chat_participant_ids(user_repo, thread_repo, body.user_ids, user_id)
+        participant_ids = _validate_chat_participant_ids(user_directory, agent_actor_lookup, body.user_ids, user_id)
         if len(participant_ids) >= 3:
             _validate_group_chat_relationships(
                 relationship_service,
                 contact_repo,
-                user_repo,
+                user_directory,
                 participant_ids,
                 user_id,
             )

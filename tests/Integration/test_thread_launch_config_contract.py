@@ -9,6 +9,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.threads import launch_config as thread_launch_config_service
+from backend.threads.api.http import app_router as threads_app_router
+from backend.threads.api.http import owner_router as threads_owner_router
+from backend.threads.api.http import owner_support as threads_owner_support
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
@@ -138,10 +141,14 @@ class _FakeSandboxRuntimeRepo:
 
 def _make_threads_app():
     recipe_repo = _FakeRecipeRepo()
+    user_repo = _FakeUserRepo()
+    thread_repo = _FakeThreadRepo()
     return SimpleNamespace(
         state=SimpleNamespace(
-            user_repo=_FakeUserRepo(),
-            thread_repo=_FakeThreadRepo(),
+            user_repo=user_repo,
+            auth_runtime_state=SimpleNamespace(user_directory=user_repo),
+            thread_repo=thread_repo,
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=SimpleNamespace(recipe_repo=recipe_repo),
             workspace_repo=_FakeWorkspaceRepo(),
             sandbox_repo=_FakeSandboxRepo(),
@@ -158,7 +165,7 @@ def _runtime_storage_state(recipe_repo: object) -> SimpleNamespace:
 
 def _route_test_app(app_state: object) -> FastAPI:
     test_app = FastAPI()
-    test_app.include_router(threads_router.router)
+    test_app.include_router(threads_app_router.router)
     test_app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     test_app.dependency_overrides[get_app] = lambda: app_state
     return test_app
@@ -238,6 +245,7 @@ def test_resolve_default_config_derives_existing_from_workspace_backed_current_w
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=workspace_repo,
             sandbox_repo=sandbox_repo,
@@ -336,6 +344,7 @@ def test_resolve_default_config_uses_sandbox_template_id_over_lease_recipe_for_w
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=_runtime_storage_state(recipe_repo),
             workspace_repo=workspace_repo,
             sandbox_repo=sandbox_repo,
@@ -418,6 +427,7 @@ def test_resolve_default_config_falls_back_to_new_when_workspace_sandbox_lacks_p
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=_runtime_storage_state(_FakeRecipeRepo()),
             workspace_repo=workspace_repo,
             sandbox_repo=sandbox_repo,
@@ -496,6 +506,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_backed_template_sour
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=_runtime_storage_state(_FakeRecipeRepo()),
             workspace_repo=workspace_repo,
             sandbox_repo=sandbox_repo,
@@ -537,6 +548,7 @@ def test_resolve_default_config_fails_loudly_when_thread_workspace_binding_is_mi
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=_FakeWorkspaceRepo(),
             sandbox_repo=_FakeSandboxRepo(),
@@ -580,6 +592,7 @@ def test_resolve_default_config_fails_loudly_when_workspace_repo_cannot_read_bin
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=object(),
         )
@@ -621,6 +634,7 @@ def test_resolve_default_config_fails_loudly_for_malformed_workspace_binding() -
         state=SimpleNamespace(
             thread_repo=thread_repo,
             user_repo=SimpleNamespace(),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             runtime_storage_state=_runtime_storage_state(object()),
             workspace_repo=workspace_repo,
         )
@@ -688,7 +702,7 @@ async def test_create_thread_existing_sandbox_binds_without_launch_config_save()
         patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(
-            threads_router,
+            threads_owner_support,
             "bind_thread_to_existing_sandbox",
             return_value=(
                 "/workspace/reused",
@@ -797,8 +811,8 @@ def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monk
     app = _make_threads_app()
     calls: list[tuple[object, str, str]] = []
     monkeypatch.setattr(
-        threads_router,
-        "resolve_default_config",
+        threads_owner_router,
+        "resolve_default_config_for_owned_agent",
         lambda app_obj, owner_user_id, agent_user_id: (
             calls.append((app_obj, owner_user_id, agent_user_id))
             or {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
@@ -931,7 +945,7 @@ async def test_create_thread_rejects_new_lease_when_account_resource_limit_is_re
     )
 
     def _raise_limit(*_args, **_kwargs):
-        raise threads_router.account_resource_service.AccountResourceLimitExceededError(
+        raise threads_owner_support.account_resource_service.AccountResourceLimitExceededError(
             {
                 "resource": "sandbox",
                 "provider_name": "daytona_selfhost",
@@ -946,7 +960,7 @@ async def test_create_thread_rejects_new_lease_when_account_resource_limit_is_re
     with (
         patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
         patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
-        patch.object(threads_router.account_resource_service, "assert_can_create_sandbox", side_effect=_raise_limit),
+        patch.object(threads_owner_support.account_resource_service, "assert_can_create_sandbox", side_effect=_raise_limit),
         patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
     ):
         result = await threads_router.create_thread(payload, "owner-1", app)

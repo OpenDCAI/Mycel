@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.chat.api.http import conversations_router as owner_conversations_router
+from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.web.routers import threads as threads_router
 
 
@@ -30,24 +31,36 @@ class _CountingOwnerThreadRepo:
 @pytest.mark.asyncio
 async def test_first_screen_reuses_inflight_owner_thread_read_across_conversations_and_threads() -> None:
     thread_repo = _CountingOwnerThreadRepo()
+    async def _list_hire_conversations_for_user(_user_id: str):
+        rows = await list_owner_thread_rows_for_auth_burst(app, _user_id)
+        return [
+            {
+                "id": row["id"],
+                "title": row["agent_name"],
+                "avatar_url": None,
+                "updated_at": None,
+                "running": False,
+            }
+            for row in rows
+        ]
     messaging_service = SimpleNamespace(list_conversation_summaries_for_user=lambda _user_id: [])
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=thread_repo,
             terminal_repo=SimpleNamespace(summarize_threads=lambda _thread_ids: {}),
-            agent_pool={},
-            threads_runtime_state=SimpleNamespace(activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])),
-            thread_last_active={},
-            chat_runtime_state=SimpleNamespace(messaging_service=messaging_service),
+            threads_runtime_state=SimpleNamespace(
+                thread_repo=thread_repo,
+            ),
+            chat_runtime_state=SimpleNamespace(
+                hire_conversation_reader=SimpleNamespace(list_hire_conversations_for_user=_list_hire_conversations_for_user),
+                messaging_service=messaging_service,
+            ),
         )
     )
 
     conversations, threads = await asyncio.gather(
         owner_conversations_router.list_conversations(
             "owner-1",
-            owner_thread_rows=owner_conversations_router.get_owner_thread_rows_loader(app),
-            activity_reader=app.state.threads_runtime_state.activity_reader,
-            thread_last_active=app.state.thread_last_active,
+            hire_conversation_reader=owner_conversations_router.get_hire_conversation_reader(app),
             messaging_service=app.state.chat_runtime_state.messaging_service,
         ),
         threads_router.list_threads("owner-1", app=app),

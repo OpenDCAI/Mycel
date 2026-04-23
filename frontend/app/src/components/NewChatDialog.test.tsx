@@ -109,7 +109,6 @@ describe("NewChatDialog", () => {
           avatar_url: "/api/users/agent-2/avatar",
           owner_name: "Owner",
           agent_name: "Toad",
-          default_thread_id: "thread-toad",
           is_owned: false,
           relationship_state: "hire",
           can_chat: true,
@@ -176,7 +175,6 @@ describe("NewChatDialog", () => {
           avatar_url: null,
           owner_name: "我的 Agent",
           agent_name: "Morel",
-          default_thread_id: "thread-morel",
           is_owned: true,
           relationship_state: "none",
           can_chat: true,
@@ -217,7 +215,7 @@ describe("NewChatDialog", () => {
     });
   });
 
-  it("hides owned agents without a default thread from the group-chat picker", async () => {
+  it("hides non-chatable candidates from the group-chat picker", async () => {
     authFetch.mockResolvedValueOnce(okJson([
       {
         user_id: "agent-ready",
@@ -228,7 +226,6 @@ describe("NewChatDialog", () => {
         is_owned: true,
         relationship_state: "none",
         can_chat: true,
-        default_thread_id: "thread-ready",
       },
       {
         user_id: "agent-cold",
@@ -238,8 +235,7 @@ describe("NewChatDialog", () => {
         owner_name: "Me",
         is_owned: true,
         relationship_state: "none",
-        can_chat: true,
-        default_thread_id: null,
+        can_chat: false,
       },
       {
         user_id: "human-2",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.threads.binding import ThreadRuntimeBindingError, resolve_thread_runtime_binding
+from backend.threads.runtime_access import get_thread_repo
 from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
 from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
 from storage.container_cache import get_storage_container as _get_container
@@ -37,7 +38,7 @@ def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
     # current thread->workspace->sandbox runtime binding should be removed once,
     # not kept alive behind endpoint-level repair guesses.
     delete_thread_in_db(thread_id)
-    app.state.thread_repo.delete(thread_id)
+    get_thread_repo(app).delete(thread_id)
 
     for attr in ("thread_sandbox", "thread_cwd", "thread_event_buffers", "thread_tasks", "thread_last_active"):
         mapping = getattr(app.state, attr, None)
@@ -56,13 +57,14 @@ def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
 
 def inspect_owner_thread_runtime(app: Any, thread_id: str) -> str:
     """Check an owner-visible thread against the runtime contract without mutating thread rows."""
-    thread = app.state.thread_repo.get_by_id(thread_id)
+    thread_repo = get_thread_repo(app)
+    thread = thread_repo.get_by_id(thread_id)
     if thread is None:
         return "missing"
 
     try:
         resolve_thread_runtime_binding(
-            thread_repo=app.state.thread_repo,
+            thread_repo=thread_repo,
             workspace_repo=app.state.workspace_repo,
             sandbox_repo=app.state.sandbox_repo,
             thread_id=thread_id,

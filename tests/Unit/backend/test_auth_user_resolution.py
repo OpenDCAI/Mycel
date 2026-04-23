@@ -17,9 +17,9 @@ class _Request:
         self.app = SimpleNamespace(
             state=SimpleNamespace(
                 auth_runtime_state=SimpleNamespace(
-                    auth_service=SimpleNamespace(verify_token=lambda seen: payload if seen == token else None)
+                    auth_service=SimpleNamespace(verify_token=lambda seen: payload if seen == token else None),
+                    user_directory=SimpleNamespace(get_by_id=lambda _user_id: object() if user_exists else None),
                 ),
-                user_repo=SimpleNamespace(get_by_id=lambda _user_id: object() if user_exists else None),
                 member_repo=SimpleNamespace(
                     get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("member_repo should not gate auth"))
                 ),
@@ -60,8 +60,10 @@ async def test_get_current_user_returns_user_row_off_event_loop_thread():
         headers={"Authorization": "Bearer tok-1"},
         app=SimpleNamespace(
             state=SimpleNamespace(
-                auth_runtime_state=SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"})),
-                user_repo=_UserRepo(),
+                auth_runtime_state=SimpleNamespace(
+                    auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"}),
+                    user_directory=_UserRepo(),
+                ),
             )
         ),
     )
@@ -85,8 +87,10 @@ async def test_get_current_user_id_coalesces_concurrent_user_existence_checks():
     repo = CountingUserRepo()
     app = SimpleNamespace(
         state=SimpleNamespace(
-            auth_runtime_state=SimpleNamespace(auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"})),
-            user_repo=repo,
+            auth_runtime_state=SimpleNamespace(
+                auth_service=SimpleNamespace(verify_token=lambda _token: {"user_id": "user-1"}),
+                user_directory=repo,
+            ),
         )
     )
     requests = [SimpleNamespace(headers={"Authorization": "Bearer tok-1"}, app=app) for _ in range(5)]
@@ -105,9 +109,19 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
                     "agent_user_id": "agent-1",
                     "owner_user_id": "owner-1",
                     "current_workspace_id": "workspace-1",
-                }
-            ),
-            workspace_repo=SimpleNamespace(
+                    }
+                ),
+                threads_runtime_state=SimpleNamespace(
+                    thread_repo=SimpleNamespace(
+                        get_by_id=lambda _thread_id: {
+                            "id": "thread-1",
+                            "agent_user_id": "agent-1",
+                            "owner_user_id": "owner-1",
+                            "current_workspace_id": "workspace-1",
+                        }
+                    )
+                ),
+                workspace_repo=SimpleNamespace(
                 get_by_id=lambda _workspace_id: SimpleNamespace(
                     id="workspace-1",
                     owner_user_id="owner-1",
@@ -126,8 +140,10 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
             terminal_repo=SimpleNamespace(
                 get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("terminal_repo should not gate ownership"))
             ),
-            user_repo=SimpleNamespace(
-                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            auth_runtime_state=SimpleNamespace(
+                user_directory=SimpleNamespace(
+                    get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+                )
             ),
             member_repo=SimpleNamespace(
                 get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("member_repo should not gate thread ownership"))
@@ -143,8 +159,11 @@ async def test_verify_thread_row_owner_allows_terminal_less_visible_thread():
     request_app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-1"}),
-            user_repo=SimpleNamespace(
-                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            threads_runtime_state=SimpleNamespace(thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-1"})),
+            auth_runtime_state=SimpleNamespace(
+                user_directory=SimpleNamespace(
+                    get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+                )
             ),
         )
     )
@@ -169,8 +188,10 @@ async def test_verify_thread_owner_fails_loud_without_purging_terminal_less_thre
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(get_by_id=_get_thread, delete=_delete_thread),
             terminal_repo=SimpleNamespace(get_active=lambda _thread_id: None, list_by_thread=lambda _thread_id: []),
-            user_repo=SimpleNamespace(
-                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            auth_runtime_state=SimpleNamespace(
+                user_directory=SimpleNamespace(
+                    get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+                )
             ),
             queue_manager=SimpleNamespace(clear_all=lambda _thread_id: None),
             thread_sandbox={},
@@ -206,9 +227,19 @@ async def test_verify_thread_owner_allows_terminal_less_workspace_backed_thread(
                     "agent_user_id": "agent-1",
                     "owner_user_id": "owner-1",
                     "current_workspace_id": "workspace-1",
-                }
-            ),
-            workspace_repo=SimpleNamespace(
+                    }
+                ),
+                threads_runtime_state=SimpleNamespace(
+                    thread_repo=SimpleNamespace(
+                        get_by_id=lambda _thread_id: {
+                            "id": "thread-1",
+                            "agent_user_id": "agent-1",
+                            "owner_user_id": "owner-1",
+                            "current_workspace_id": "workspace-1",
+                        }
+                    )
+                ),
+                workspace_repo=SimpleNamespace(
                 get_by_id=lambda _workspace_id: SimpleNamespace(
                     id="workspace-1",
                     owner_user_id="owner-1",
@@ -227,8 +258,10 @@ async def test_verify_thread_owner_allows_terminal_less_workspace_backed_thread(
             terminal_repo=SimpleNamespace(
                 get_active=lambda _thread_id: (_ for _ in ()).throw(AssertionError("terminal_repo should not gate ownership"))
             ),
-            user_repo=SimpleNamespace(
-                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            auth_runtime_state=SimpleNamespace(
+                user_directory=SimpleNamespace(
+                    get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+                )
             ),
         )
     )

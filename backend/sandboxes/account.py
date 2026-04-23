@@ -73,6 +73,9 @@ def _weekly_token_limit(raw_limits: dict[str, Any] | None) -> int:
 def list_account_resource_limits(app: Any, user_id: str) -> dict[str, list[dict[str, Any]]]:
     thread_repo = getattr(app.state, "thread_repo", None)
     if thread_repo is None:
+        runtime_state = getattr(app.state, "threads_runtime_state", None)
+        thread_repo = getattr(runtime_state, "thread_repo", None)
+    if thread_repo is None:
         raise RuntimeError("thread_repo is required for account resource limits")
 
     count_kwargs = {"thread_repo": thread_repo}

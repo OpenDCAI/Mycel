@@ -45,14 +45,22 @@ def test_agent_chat_recipient_supports_optional_preselected_thread_id() -> None:
 def test_agent_runtime_thread_input_result_is_a_protocol_object() -> None:
     protocol_module = importlib.import_module("protocols.agent_runtime")
     gateway_module = importlib.import_module("backend.threads.chat_adapters.gateway")
-    port_module = importlib.import_module("backend.threads.chat_adapters.port")
 
     gateway_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.dispatch_thread_input)
-    port_hints = get_type_hints(port_module.AgentRuntimeGatewayPort.dispatch_thread_input)
+    protocol_hints = get_type_hints(protocol_module.AgentRuntimeGateway.dispatch_thread_input)
 
     assert protocol_module.AgentThreadInputResult.__module__ == "protocols.agent_runtime"
     assert gateway_hints["return"] is protocol_module.AgentThreadInputResult
-    assert port_hints["return"] is protocol_module.AgentThreadInputResult
+    assert protocol_hints["return"] is protocol_module.AgentThreadInputResult
+
+
+def test_chat_and_thread_transports_live_in_protocols_not_backend_packages() -> None:
+    protocol_module = importlib.import_module("protocols.agent_runtime")
+    chat_transport_module = importlib.import_module("backend.chat.transport")
+
+    assert protocol_module.ChatDeliveryTransport.__module__ == "protocols.agent_runtime"
+    assert protocol_module.ThreadInputTransport.__module__ == "protocols.agent_runtime"
+    assert not hasattr(chat_transport_module, "ChatTransport")
 
 
 def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
@@ -74,10 +82,10 @@ def test_agent_runtime_implementation_lives_under_backend_agent_runtime() -> Non
 
     assert gateway_impl.NativeAgentRuntimeGateway.__module__ == "backend.threads.chat_adapters.gateway"
     assert bootstrap_impl.build_agent_runtime_gateway.__module__ == "backend.threads.chat_adapters.bootstrap"
-    assert port_impl.get_agent_runtime_gateway.__module__ == "backend.threads.chat_adapters.port"
+    assert port_impl.get_thread_input_transport.__module__ == "backend.threads.chat_adapters.port"
     assert chat_handler_impl.NativeAgentChatDeliveryHandler.__module__ == "backend.threads.chat_adapters.chat_handler"
     assert thread_handler_impl.NativeAgentThreadInputHandler.__module__ == "backend.threads.chat_adapters.thread_handler"
     assert gateway_impl.NativeAgentRuntimeGateway is not None
-    assert port_impl.get_agent_runtime_gateway is not None
+    assert port_impl.get_thread_input_transport is not None
     assert chat_handler_impl.NativeAgentChatDeliveryHandler is not None
     assert thread_handler_impl.NativeAgentThreadInputHandler is not None

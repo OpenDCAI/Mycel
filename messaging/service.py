@@ -14,12 +14,14 @@ import time
 import uuid
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from typing import Any
 
 from messaging.avatars import AvatarUrlBuilder
 from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
 from messaging.display_user import resolve_messaging_display_user
+from protocols.identity_read import UserDirectory
 
 logger = logging.getLogger(__name__)
 
@@ -32,23 +34,25 @@ class MessagingService:
         chat_repo: Any,
         chat_member_repo: Any,
         messages_repo: Any,
-        user_repo: Any,
-        thread_repo: Any | None = None,
+        user_directory: UserDirectory | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: ChatDeliveryFn | None = None,
         delivery_dispatcher: ChatDeliveryDispatcher | None = None,
         event_bus: Any | None = None,
         *,
+        user_repo: UserDirectory | None = None,
         avatar_url_builder: AvatarUrlBuilder | None = None,
     ) -> None:
         self._chats = chat_repo
         self._chat_members_repo = chat_member_repo
         self._messages = messages_repo
-        self._user_repo = user_repo
+        self._user_directory = user_directory or user_repo
+        if self._user_directory is None:
+            raise TypeError("user_directory is required")
         self._avatar_url_builder = avatar_url_builder
         self._delivery_dispatcher = delivery_dispatcher or ChatDeliveryDispatcher(
             chat_member_repo=chat_member_repo,
-            user_repo=user_repo,
+            user_lookup=self._user_directory,
             avatar_url_builder=avatar_url_builder,
             unread_counter=getattr(messages_repo, "count_unread", None),
             delivery_resolver=delivery_resolver,
@@ -88,7 +92,7 @@ class MessagingService:
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         return resolve_messaging_display_user(
-            user_repo=self._user_repo,
+            user_lookup=self._user_directory,
             social_user_id=social_user_id,
         )
 
@@ -291,6 +295,8 @@ class MessagingService:
         after: str | None = None,
         before: str | None = None,
     ) -> list[dict[str, Any]]:
+        after = _normalize_time_range_endpoint(after)
+        before = _normalize_time_range_endpoint(before)
         rows = self._messages.list_by_time_range(chat_id, after=after, before=before)
         return [self._normalize_message_row(row) for row in rows]
 
@@ -484,7 +490,7 @@ class MessagingService:
     def _users_by_id(self, user_ids: list[str]) -> dict[str, Any]:
         if not user_ids:
             return {}
-        rows = self._user_repo.list_by_ids(user_ids)
+        rows = self._user_directory.list_by_ids(user_ids)
         if not isinstance(rows, list):
             raise RuntimeError("User row collection is invalid")
         for user in rows:
@@ -507,3 +513,12 @@ class MessagingService:
         if self._avatar_url_builder is None:
             raise RuntimeError("Messaging avatar URL builder is not configured")
         return self._avatar_url_builder(user_id, has_avatar)
+
+
+def _normalize_time_range_endpoint(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        return str(datetime.fromisoformat(value).timestamp())
+    except ValueError:
+        return value

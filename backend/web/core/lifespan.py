@@ -34,6 +34,12 @@ async def _validate_web_checkpointer_contract() -> None:
         await conn.close()
 
 
+def _extend_runtime_state(state: object, /, **updates: object) -> object:
+    if is_dataclass(state):
+        return replace(state, **updates)
+    return SimpleNamespace(**vars(state), **updates)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown."""
@@ -55,12 +61,16 @@ async def lifespan(app: FastAPI):
     await app.state._thread_checkpoint_saver.setup()
     thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
 
-    app.state.user_repo = storage_container.user_repo()
-    app.state.thread_repo = storage_container.thread_repo()
+    user_directory = storage_container.user_repo()
+    thread_repo = storage_container.thread_repo()
+    app.state.user_repo = user_directory
+    app.state.thread_repo = thread_repo
     app.state.sandbox_runtime_repo = storage_container.sandbox_runtime_repo()
     app.state.workspace_repo = storage_container.workspace_repo()
     app.state.sandbox_repo = storage_container.sandbox_repo()
     from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery
+    from backend.chat.runtime_delivery import make_chat_delivery_fn
+    from backend.chat.transport import build_inprocess_chat_transport
     from backend.threads.bootstrap import attach_threads_runtime
 
     # @@@web-chat-before-threads - threads bootstrap now constructs the agent
@@ -69,19 +79,35 @@ async def lifespan(app: FastAPI):
     chat_runtime = attach_chat_runtime(
         app,
         storage_container,
-        user_repo=app.state.user_repo,
-        thread_repo=app.state.thread_repo,
+        user_repo=user_directory,
     )
     # @@@web-auth-borrowed-chat-contact - auth startup still needs the
     # owner-agent contact repo, but web bootstrap should borrow the chat-owned
     # contact_repo returned by chat bootstrap instead of reopening storage.
     attach_auth_runtime_state(app, storage_state=runtime_storage, contact_repo=chat_runtime.contact_repo)
-    threads_runtime = attach_threads_runtime(app, storage_container, typing_tracker=chat_runtime.typing_tracker)
-    wire_chat_delivery(
+    threads_runtime = attach_threads_runtime(
         app,
+        storage_container,
+        thread_repo=thread_repo,
+        typing_tracker=chat_runtime.typing_tracker,
         messaging_service=chat_runtime.messaging_service,
-        activity_reader=threads_runtime.activity_reader,
-        thread_repo=app.state.thread_repo,
+    )
+    chat_runtime = _extend_runtime_state(
+        chat_runtime,
+        hire_conversation_reader=getattr(threads_runtime, "conversation_reader", None),
+        agent_actor_lookup=getattr(threads_runtime, "agent_actor_lookup", None),
+    )
+    app.state.chat_runtime_state = chat_runtime
+    transport = build_inprocess_chat_transport(
+        runtime_gateway=threads_runtime.agent_runtime_gateway,
+        loop=asyncio.get_running_loop(),
+    )
+    delivery_fn = make_chat_delivery_fn(
+        transport=transport,
+    )
+    wire_chat_delivery(
+        messaging_service=chat_runtime.messaging_service,
+        delivery_fn=delivery_fn,
     )
 
     # ---- Existing state ----
@@ -89,20 +115,12 @@ async def lifespan(app: FastAPI):
 
     display_builder = DisplayBuilder()
     event_loop = asyncio.get_running_loop()
-    if is_dataclass(threads_runtime):
-        threads_runtime = replace(
-            threads_runtime,
-            display_builder=display_builder,
-            event_loop=event_loop,
-            checkpoint_store=thread_checkpoint_store,
-        )
-    else:
-        threads_runtime = SimpleNamespace(
-            **vars(threads_runtime),
-            display_builder=display_builder,
-            event_loop=event_loop,
-            checkpoint_store=thread_checkpoint_store,
-        )
+    threads_runtime = _extend_runtime_state(
+        threads_runtime,
+        display_builder=display_builder,
+        event_loop=event_loop,
+        checkpoint_store=thread_checkpoint_store,
+    )
     app.state.threads_runtime_state = threads_runtime
     app.state.idle_reaper_task = None
 

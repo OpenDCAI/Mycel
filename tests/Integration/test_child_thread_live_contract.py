@@ -11,6 +11,7 @@ import pytest
 from fastapi import Request
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from backend.threads.api.http import runtime_router as threads_runtime_router
 from backend.threads.display.builder import DisplayBuilder
 from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.streaming import run_child_thread_live
@@ -60,9 +61,13 @@ def _fake_storage_container() -> SimpleNamespace:
 
 def _app_state_with_display_builder(display_builder: object, **kwargs: object) -> SimpleNamespace:
     event_loop = kwargs.get("_event_loop")
+    thread_repo = kwargs.get("thread_repo")
+    runtime_state = SimpleNamespace(display_builder=display_builder, event_loop=event_loop)
+    if thread_repo is not None:
+        runtime_state.thread_repo = thread_repo
     return SimpleNamespace(
         display_builder=display_builder,
-        threads_runtime_state=SimpleNamespace(display_builder=display_builder, event_loop=event_loop),
+        threads_runtime_state=runtime_state,
         **kwargs,
     )
 
@@ -151,9 +156,9 @@ def _make_request(app: SimpleNamespace) -> Request:
 
 
 def _patch_event_store(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("backend.web.routers.threads.get_last_seq", AsyncMock(return_value=0))
-    monkeypatch.setattr("backend.web.routers.threads.get_latest_run_id", AsyncMock(return_value=None))
-    monkeypatch.setattr("backend.web.routers.threads.get_run_start_seq", AsyncMock(return_value=0))
+    monkeypatch.setattr("backend.threads.api.http.runtime_router.get_last_seq", AsyncMock(return_value=0))
+    monkeypatch.setattr("backend.threads.api.http.runtime_router.get_latest_run_id", AsyncMock(return_value=None))
+    monkeypatch.setattr("backend.threads.api.http.runtime_router.get_run_start_seq", AsyncMock(return_value=0))
 
 
 def _require_entries(builder: DisplayBuilder, thread_id: str) -> list[dict]:
@@ -236,11 +241,11 @@ def _make_router_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> SimpleNamespace:
     fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
-    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
     return SimpleNamespace(
         state=_app_state_with_display_builder(
             builder,
-            agent_pool={},
+            thread_repo=SimpleNamespace(get_by_id=lambda target_thread_id: {"id": target_thread_id, "sandbox_type": "local"}),
+            agent_pool={f"{thread_id}:local": fake_agent},
             thread_sandbox={thread_id: "local"},
         )
     )
@@ -286,7 +291,7 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
 
     await agent.agent.started.wait()
 
-    runtime = await threads_router.get_thread_runtime(child_thread_id, stream=False, user_id="owner-1", app=app)
+    runtime = await threads_runtime_router.get_thread_runtime(child_thread_id, stream=False, user_id="owner-1", app=app)
     detail = await threads_router.get_thread_messages(child_thread_id, user_id="owner-1", app=app)
 
     assert runtime["state"]["state"] == "active"
@@ -359,10 +364,11 @@ async def test_run_child_thread_live_closes_and_detaches_completed_child_agent_w
             )
         ),
     )
-    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=rebuilt_agent))
+    monkeypatch.setattr("backend.threads.api.http.runtime_support.get_or_create_agent", AsyncMock(return_value=rebuilt_agent))
+    monkeypatch.setattr(threads_runtime_router, "get_or_create_agent", AsyncMock(return_value=rebuilt_agent))
 
     detail = await threads_router.get_thread_messages(child_thread_id, user_id="owner-1", app=app)
-    runtime = await threads_router.get_thread_runtime(child_thread_id, stream=False, user_id="owner-1", app=app)
+    runtime = await threads_runtime_router.get_thread_runtime(child_thread_id, stream=False, user_id="owner-1", app=app)
 
     assert result == "CHILD_DONE"
     assert agent.closed is True
@@ -382,11 +388,15 @@ async def test_thread_runtime_omits_model_when_thread_has_no_model(monkeypatch):
         state=SimpleNamespace(
             thread_sandbox={"thread-without-model": "local"},
             thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {} if thread_id == "thread-without-model" else None),
+            threads_runtime_state=SimpleNamespace(
+                thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {} if thread_id == "thread-without-model" else None)
+            ),
+            agent_pool={},
         )
     )
-    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=SimpleNamespace(runtime=runtime)))
+    monkeypatch.setattr(threads_runtime_router, "get_or_create_agent", AsyncMock(return_value=SimpleNamespace(runtime=runtime)))
 
-    result = await threads_router.get_thread_runtime("thread-without-model", stream=False, user_id="owner-1", app=app)
+    result = await threads_runtime_router.get_thread_runtime("thread-without-model", stream=False, user_id="owner-1", app=app)
 
     assert "model" not in result
     assert result["tokens"]["total_tokens"] == 0
@@ -797,7 +807,7 @@ async def test_list_tasks_includes_subagent_stream_from_display_entries():
     monkeypatch = pytest.MonkeyPatch()
     app = _make_router_app(builder, thread_id, monkeypatch)
 
-    tasks = await threads_router.list_tasks(thread_id, request=_make_request(app))
+    tasks = await threads_runtime_router.list_tasks(thread_id, request=_make_request(app))
 
     assert tasks == [
         {
@@ -828,7 +838,7 @@ async def test_get_task_returns_subagent_stream_result_from_display_entries():
     monkeypatch = pytest.MonkeyPatch()
     app = _make_router_app(builder, thread_id, monkeypatch)
 
-    task = await threads_router.get_task(thread_id, "task-123", request=_make_request(app))
+    task = await threads_runtime_router.get_task(thread_id, "task-123", request=_make_request(app))
 
     assert task == {
         "task_id": "task-123",
@@ -856,8 +866,8 @@ async def test_blocking_subagent_done_state_overrides_stale_running_stream_on_de
     app = _make_router_app(builder, thread_id, monkeypatch)
 
     detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
-    tasks = await threads_router.list_tasks(thread_id, request=_make_request(app))
-    task = await threads_router.get_task(thread_id, "task-stale-completed", request=_make_request(app))
+    tasks = await threads_runtime_router.list_tasks(thread_id, request=_make_request(app))
+    task = await threads_runtime_router.get_task(thread_id, "task-stale-completed", request=_make_request(app))
 
     stream = detail["entries"][1]["segments"][0]["step"]["subagent_stream"]
     assert stream["status"] == "completed"
@@ -880,8 +890,8 @@ async def test_blocking_subagent_error_overrides_stale_running_stream_on_detail_
     app = _make_router_app(builder, thread_id, monkeypatch)
 
     detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
-    tasks = await threads_router.list_tasks(thread_id, request=_make_request(app))
-    task = await threads_router.get_task(thread_id, "task-stale-error", request=_make_request(app))
+    tasks = await threads_runtime_router.list_tasks(thread_id, request=_make_request(app))
+    task = await threads_runtime_router.get_task(thread_id, "task-stale-error", request=_make_request(app))
 
     stream = detail["entries"][1]["segments"][0]["step"]["subagent_stream"]
     assert stream["status"] == "error"

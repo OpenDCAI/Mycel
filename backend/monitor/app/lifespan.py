@@ -12,7 +12,6 @@ from backend.monitor.infrastructure.resources.resource_overview_cache import res
 
 def _require_monitor_runtime_contract(app: FastAPI) -> None:
     runtime_storage = attach_runtime_storage_state(app)
-    app.state.user_repo = runtime_storage.storage_container.user_repo()
     attach_auth_runtime_state(
         app,
         storage_state=runtime_storage,

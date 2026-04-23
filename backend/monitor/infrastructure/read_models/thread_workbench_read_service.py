@@ -10,6 +10,7 @@ from typing import Any
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.convergence import converge_owner_thread_runtime, summarize_owner_thread_runtime
 from backend.threads.projection import canonical_owner_threads
+from backend.threads.runtime_access import get_thread_repo
 from core.runtime.middleware.monitor import AgentState
 
 
@@ -37,7 +38,7 @@ def build_owner_thread_workbench_reader(app: Any) -> OwnerThreadWorkbenchReader:
 
 
 def list_owner_thread_rows(app: Any, user_id: str) -> list[dict[str, Any]]:
-    return app.state.thread_repo.list_by_owner_user_id(user_id)
+    return get_thread_repo(app).list_by_owner_user_id(user_id)
 
 
 def summarize_runtime_states(app: Any, raw: list[dict[str, Any]]) -> dict[str, str]:

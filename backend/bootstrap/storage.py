@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from backend.identity.auth.supabase_runtime import create_supabase_client
@@ -15,7 +16,11 @@ class RuntimeStorageState:
     recipe_repo: object
 
 
+_NEUTRAL_SUPABASE_CLIENT_FACTORY = "backend.identity.auth.supabase_runtime:create_supabase_client"
+
+
 def build_runtime_storage_state() -> RuntimeStorageState:
+    os.environ.setdefault("LEON_SUPABASE_CLIENT_FACTORY", _NEUTRAL_SUPABASE_CLIENT_FACTORY)
     supabase_client = create_supabase_client()
     storage_container = build_storage_container(supabase_client=supabase_client)
     recipe_repo = storage_container.recipe_repo()

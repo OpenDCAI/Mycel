@@ -5,8 +5,10 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 
+from backend.chat import runtime_access as chat_runtime_access
 from backend.identity.auth.user_resolution import get_current_user_id as resolve_current_user_id
 from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
+from protocols.identity_read import UserDirectory
 
 get_current_user_id = resolve_current_user_id
 
@@ -35,6 +37,11 @@ def get_relationship_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     return runtime_state.relationship_service
 
 
+def get_user_directory(app: Annotated[Any, Depends(get_app)]) -> UserDirectory:
+    runtime_state = _require_state_attr(app, "auth_runtime_state", "User directory unavailable")
+    return runtime_state.user_directory
+
+
 def get_user_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
     return _require_state_attr(app, "user_repo", "User repo unavailable")
 
@@ -56,6 +63,27 @@ def get_chat_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
 def get_chat_event_bus(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat event bus unavailable")
     return runtime_state.chat_event_bus
+
+
+def get_typing_tracker(app: Annotated[Any, Depends(get_app)]) -> Any:
+    try:
+        return chat_runtime_access.get_typing_tracker(app)
+    except RuntimeError as exc:
+        raise HTTPException(503, "Typing tracker unavailable") from exc
+
+
+def get_hire_conversation_reader(app: Annotated[Any, Depends(get_app)]) -> Any:
+    try:
+        return chat_runtime_access.get_hire_conversation_reader(app)
+    except RuntimeError as exc:
+        raise HTTPException(503, "Hire conversation reader unavailable") from exc
+
+
+def get_agent_actor_lookup(app: Annotated[Any, Depends(get_app)]) -> Any:
+    try:
+        return chat_runtime_access.get_agent_actor_lookup(app)
+    except RuntimeError as exc:
+        raise HTTPException(503, "Agent actor lookup unavailable") from exc
 
 
 def get_runtime_thread_activity_reader(app: Annotated[Any, Depends(get_app)]) -> Any:

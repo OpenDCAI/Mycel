@@ -8,10 +8,10 @@ from fastapi import FastAPI  # noqa: E402
 
 from backend.chat.api.http import app_router as chat_app_router  # noqa: E402
 from backend.monitor.api.http import global_router  # noqa: E402
+from backend.threads.api.http import app_router as threads_app_router  # noqa: E402
 from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
-    contacts,
     invite_codes,
     marketplace,
     monitor_threads,
@@ -19,8 +19,6 @@ from backend.web.routers import (  # noqa: E402
     resources,
     sandbox,
     settings,
-    thread_files,
-    threads,
     users,
     webhooks,
 )
@@ -33,16 +31,12 @@ add_permissive_cors(app)
 # Include routers
 app.include_router(auth.router)
 app.include_router(invite_codes.router)
-app.include_router(threads.router)
-
 app.include_router(chat_app_router.router)
+app.include_router(threads_app_router.router)
 
-app.include_router(contacts.router)
 app.include_router(users.users_router)
 app.include_router(sandbox.router)
 app.include_router(webhooks.router)
-app.include_router(thread_files.router)
-app.include_router(thread_files._public)
 app.include_router(settings.router)
 app.include_router(panel.router)
 app.include_router(global_router.router, prefix="/api/monitor")

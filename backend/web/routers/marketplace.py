@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.hub import client as marketplace_client
+from backend.identity.auth.dependencies import _get_user_directory
 from backend.identity.profile import get_profile
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.marketplace import (
@@ -78,7 +79,7 @@ async def publish_agent_user_to_marketplace(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     agent_config_repo = _agent_config_repo(request)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
@@ -107,7 +108,7 @@ async def download_from_marketplace(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     agent_config_repo = _agent_config_repo(request)
     if req.agent_user_id is not None:
         await _verify_user_ownership(req.agent_user_id, user_id, user_repo)
@@ -127,7 +128,7 @@ async def upgrade_from_marketplace(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     agent_config_repo = _agent_config_repo(request)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 

@@ -1,3 +1,4 @@
+import os
 from types import SimpleNamespace
 
 from backend.bootstrap import storage as runtime_storage_bootstrap
@@ -37,3 +38,15 @@ def test_attach_runtime_storage_state_returns_bundle_without_loose_state_mirrors
     assert result is fake_state
     assert not hasattr(app.state, "_supabase_client")
     assert not hasattr(app.state, "_storage_container")
+
+
+def test_build_runtime_storage_state_sets_neutral_supabase_factory_env(monkeypatch):
+    fake_client = object()
+    fake_container = SimpleNamespace(recipe_repo=lambda: object())
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr(runtime_storage_bootstrap, "create_supabase_client", lambda: fake_client)
+    monkeypatch.setattr(runtime_storage_bootstrap, "build_storage_container", lambda *, supabase_client: fake_container)
+
+    runtime_storage_bootstrap.build_runtime_storage_state()
+
+    assert os.environ["LEON_SUPABASE_CLIENT_FACTORY"] == "backend.identity.auth.supabase_runtime:create_supabase_client"

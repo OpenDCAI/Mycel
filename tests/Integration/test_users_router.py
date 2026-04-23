@@ -12,6 +12,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+from backend.chat.api.http import chat_candidates_router
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import users as users_router
 from storage.contracts import ContactEdgeRow, UserRow, UserType
@@ -57,10 +58,8 @@ def _users_app(
     *,
     relationships: dict[str, str] | None = None,
     contact_repo: object | None = None,
-    default_threads: dict[str, dict[str, object] | None] | None = None,
 ) -> SimpleNamespace:
     relationships = relationships or {}
-    default_threads = default_threads or {}
     relationship_service = SimpleNamespace(
         list_for_user=lambda _user_id: [
             SimpleNamespace(other_user_id=other_user_id, state=state) for other_user_id, state in relationships.items()
@@ -73,19 +72,17 @@ def _users_app(
     return SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: users),
-            thread_repo=SimpleNamespace(get_default_thread=lambda agent_user_id: default_threads.get(agent_user_id)),
             chat_runtime_state=chat_runtime_state,
         )
     )
 
 
 def _list_chat_candidates(app: SimpleNamespace, *, user_id: str = "u1"):
-    return users_router.list_chat_candidates(
+    return chat_candidates_router.list_chat_candidates(
         user_id=user_id,
-        user_repo=app.state.user_repo,
+        user_directory=app.state.user_repo,
         relationship_service=getattr(app.state.chat_runtime_state, "relationship_service", None),
         contact_repo=getattr(app.state.chat_runtime_state, "contact_repo", None),
-        thread_repo=getattr(app.state, "thread_repo", None),
     )
 
 
@@ -160,43 +157,6 @@ async def test_list_chat_candidates_marks_owned_agents_as_chat_candidates_withou
 
 
 @pytest.mark.asyncio
-async def test_list_chat_candidates_exposes_default_thread_id_for_owned_agents_only():
-    app = _users_app(
-        [_human("u1", "owner"), _agent("a-owned-ready", "Ready Agent", "u1"), _agent("a-owned-cold", "Cold Agent", "u1")],
-        default_threads={
-            "a-owned-ready": {"id": "thread-ready"},
-            "a-owned-cold": None,
-        },
-    )
-
-    result = await _list_chat_candidates(app)
-
-    ready = next(item for item in result if item["user_id"] == "a-owned-ready")
-    cold = next(item for item in result if item["user_id"] == "a-owned-cold")
-    assert ready["default_thread_id"] == "thread-ready"
-    assert cold["default_thread_id"] is None
-
-
-@pytest.mark.asyncio
-async def test_list_chat_candidates_fails_loud_when_owned_agent_threads_need_thread_repo():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _agent("a-owned", "Morel", "u1")]),
-            chat_runtime_state=SimpleNamespace(
-                relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
-                contact_repo=_empty_contact_repo(),
-            ),
-        )
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        await _list_chat_candidates(app)
-
-    assert exc_info.value.status_code == 503
-    assert exc_info.value.detail == "Thread repo unavailable"
-
-
-@pytest.mark.asyncio
 async def test_list_chat_candidates_marks_normal_active_contacts_as_chat_candidates():
     app = _users_app(
         [_human("u1", "owner"), _human("u2", "other")],
@@ -242,7 +202,6 @@ async def test_list_chat_candidates_fails_loud_when_relationship_service_missing
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _human("u2", "other")]),
-            thread_repo=SimpleNamespace(get_default_thread=lambda _agent_user_id: None),
             chat_runtime_state=SimpleNamespace(contact_repo=_empty_contact_repo()),
         )
     )
@@ -259,7 +218,6 @@ async def test_list_chat_candidates_fails_loud_when_contact_repo_missing():
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(list_all=lambda: [_human("u1", "owner"), _human("u2", "other")]),
-            thread_repo=SimpleNamespace(get_default_thread=lambda _agent_user_id: None),
             chat_runtime_state=SimpleNamespace(
                 relationship_service=SimpleNamespace(list_for_user=lambda _user_id: []),
             ),
@@ -277,7 +235,9 @@ def test_get_user_or_404_returns_user():
     agent = _agent("a-main", "Toad", "u2")
     app = SimpleNamespace(
         state=SimpleNamespace(
-            user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "a-main" else None),
+            auth_runtime_state=SimpleNamespace(
+                user_directory=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "a-main" else None)
+            ),
         )
     )
 
@@ -289,7 +249,7 @@ def test_get_user_or_404_returns_user():
 def test_get_user_or_404_raises_for_missing_user():
     app = SimpleNamespace(
         state=SimpleNamespace(
-            user_repo=SimpleNamespace(get_by_id=lambda _user_id: None),
+            auth_runtime_state=SimpleNamespace(user_directory=SimpleNamespace(get_by_id=lambda _user_id: None)),
         )
     )
 
@@ -300,8 +260,8 @@ def test_get_user_or_404_raises_for_missing_user():
     assert exc_info.value.detail == "User not found"
 
 
-def test_user_router_exposes_chat_candidates_route():
-    paths = {route.path for route in users_router.users_router.routes}
+def test_chat_candidates_router_exposes_chat_candidates_route():
+    paths = {route.path for route in chat_candidates_router.router.routes}
 
     assert "/api/users/chat-candidates" in paths
 
@@ -310,9 +270,8 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
     owner = _human("u1", "owner")
     other = _human("u2", "other")
     app = FastAPI()
-    app.include_router(users_router.users_router)
-    app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
-    app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
+    app.include_router(chat_candidates_router.router)
+    app.state.auth_runtime_state = SimpleNamespace(user_directory=SimpleNamespace(list_all=lambda: [owner, other]))
     relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")])
     contact_repo = _empty_contact_repo()
     app.state.chat_runtime_state = SimpleNamespace(
@@ -340,15 +299,12 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
     ]
 
 
-def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
+def test_chat_candidates_route_exposes_owned_agent_without_thread_identity_leak() -> None:
     owner = _human("u1", "owner")
     owned_agent = _agent("a-owned", "Ready Agent", "u1")
     app = FastAPI()
-    app.include_router(users_router.users_router)
-    app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, owned_agent])
-    app.state.thread_repo = SimpleNamespace(
-        get_default_thread=lambda agent_user_id: {"id": "thread-ready"} if agent_user_id == "a-owned" else None
-    )
+    app.include_router(chat_candidates_router.router)
+    app.state.auth_runtime_state = SimpleNamespace(user_directory=SimpleNamespace(list_all=lambda: [owner, owned_agent]))
     relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
     contact_repo = _empty_contact_repo()
     app.state.chat_runtime_state = SimpleNamespace(
@@ -372,7 +328,6 @@ def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
             "is_owned": True,
             "relationship_state": "none",
             "can_chat": True,
-            "default_thread_id": "thread-ready",
         }
     ]
 
@@ -381,9 +336,8 @@ def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
     owner = _human("u1", "owner")
     other = _human("u2", "other")
     app = FastAPI()
-    app.include_router(users_router.users_router)
-    app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
-    app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
+    app.include_router(chat_candidates_router.router)
+    app.state.auth_runtime_state = SimpleNamespace(user_directory=SimpleNamespace(list_all=lambda: [owner, other]))
     relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [])
     app.state.chat_runtime_state = SimpleNamespace(
         relationship_service=relationship_service,
@@ -395,4 +349,4 @@ def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
         response = client.get("/api/users/chat-candidates", headers={"Authorization": "Bearer token"})
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "chat bootstrap not attached: contact_repo"}
+    assert response.json() == {"detail": "Contact repo unavailable"}

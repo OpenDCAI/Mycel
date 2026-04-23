@@ -13,17 +13,19 @@ from backend.identity.auth.supabase_runtime import create_supabase_auth_client
 class AuthRuntimeState:
     auth_service: object
     supabase_auth_client_factory: Callable[[], object]
+    user_directory: object
 
 
 def build_auth_runtime_state(storage_state, *, contact_repo) -> AuthRuntimeState:
     storage_container = storage_state.storage_container
     supabase_client = storage_state.supabase_client
+    user_directory = storage_container.user_repo()
     supabase_auth_client_factory = create_supabase_auth_client
     # @@@auth-runtime-borrowed-contact-repo - auth runtime seeds owner-agent
     # contacts, but chat-owned contact_repo must be borrowed explicitly by the
     # enclosing app bootstrap instead of being reopened inside this helper.
     auth_service = AuthService(
-        users=storage_container.user_repo(),
+        users=user_directory,
         agent_configs=storage_container.agent_config_repo(),
         supabase_client=supabase_client,
         supabase_auth_client_factory=supabase_auth_client_factory,
@@ -34,6 +36,7 @@ def build_auth_runtime_state(storage_state, *, contact_repo) -> AuthRuntimeState
     return AuthRuntimeState(
         auth_service=auth_service,
         supabase_auth_client_factory=supabase_auth_client_factory,
+        user_directory=user_directory,
     )
 
 

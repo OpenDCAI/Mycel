@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.chat.api.http.dependencies import (
     get_current_user_id,
     get_relationship_service,
-    get_user_repo,
+    get_user_directory,
 )
 from messaging.actor_ownership import is_owned_by_viewer
 from messaging.contracts import RelationshipRow
@@ -44,10 +44,10 @@ def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
     return existing
 
 
-def _resolve_actor_user_id(user_repo: Any, current_user_id: str, actor_user_id: str | None) -> str:
+def _resolve_actor_user_id(user_directory: Any, current_user_id: str, actor_user_id: str | None) -> str:
     if actor_user_id is None or actor_user_id == current_user_id:
         return current_user_id
-    actor = user_repo.get_by_id(actor_user_id)
+    actor = user_directory.get_by_id(actor_user_id)
     if actor is None:
         raise HTTPException(404, "Actor user not found")
     if not is_owned_by_viewer(current_user_id, actor):
@@ -89,9 +89,9 @@ async def request_relationship(
     body: RelationshipRequestBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
+    user_directory: Annotated[Any, Depends(get_user_directory)],
 ):
-    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_directory, user_id, body.actor_user_id)
     if actor_user_id == body.target_user_id:
         raise HTTPException(400, "Cannot request relationship with yourself")
     try:
@@ -107,9 +107,9 @@ async def approve_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
+    user_directory: Annotated[Any, Depends(get_user_directory)],
 ):
-    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_directory, user_id, body.actor_user_id)
     existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     requester_id, _ = _resolve_parties(existing, actor_user_id)
     if actor_user_id == requester_id:
@@ -126,9 +126,9 @@ async def reject_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
+    user_directory: Annotated[Any, Depends(get_user_directory)],
 ):
-    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_directory, user_id, body.actor_user_id)
     existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     requester_id, _ = _resolve_parties(existing, actor_user_id)
     if actor_user_id == requester_id:
@@ -145,9 +145,9 @@ async def upgrade_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
+    user_directory: Annotated[Any, Depends(get_user_directory)],
 ):
-    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_directory, user_id, body.actor_user_id)
     existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
     try:
@@ -162,9 +162,9 @@ async def revoke_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
+    user_directory: Annotated[Any, Depends(get_user_directory)],
 ):
-    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_directory, user_id, body.actor_user_id)
     existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
     try:
@@ -179,9 +179,9 @@ async def downgrade_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
+    user_directory: Annotated[Any, Depends(get_user_directory)],
 ):
-    actor_user_id = _resolve_actor_user_id(user_repo, user_id, body.actor_user_id)
+    actor_user_id = _resolve_actor_user_id(user_directory, user_id, body.actor_user_id)
     existing = _get_existing(relationship_service, relationship_id, actor_user_id)
     _, other_id = _resolve_parties(existing, actor_user_id)
     try:

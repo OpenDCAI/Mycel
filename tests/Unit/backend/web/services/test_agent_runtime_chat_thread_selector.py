@@ -16,7 +16,7 @@ from protocols.agent_runtime import (
 
 
 @pytest.mark.asyncio
-async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_gateway_chat_delivery_routes_via_agent_user_lookup_not_envelope_thread_id(monkeypatch: pytest.MonkeyPatch) -> None:
     started: list[tuple[str, str, str]] = []
     enqueued: list[tuple[str, str]] = []
 
@@ -29,13 +29,11 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
 
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
+            threads_runtime_state=SimpleNamespace(thread_repo=SimpleNamespace(
                 get_by_id=lambda thread_id: {"id": thread_id, "sandbox_type": "local"},
-                get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("handler should not resolve thread id locally")),
-                list_by_agent_user=lambda _uid: (_ for _ in ()).throw(
-                    AssertionError("handler should not scan runtime thread candidates locally")
-                ),
-            ),
+                get_by_user_id=lambda uid: {"id": "thread-main", "agent_user_id": uid, "is_main": True, "branch_index": 0},
+                list_by_agent_user=lambda uid: [{"id": "thread-main", "agent_user_id": uid, "is_main": True, "branch_index": 0}],
+            )),
             agent_pool={},
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, _notification_type, **_meta: enqueued.append((content, thread_id))
@@ -52,13 +50,17 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
     envelope = AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id="chat-1"),
         sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human"),
-        recipient=AgentChatRecipient(agent_user_id="agent-user-1", runtime_source="mycel", thread_id="thread-preselected"),
+        recipient=AgentChatRecipient(agent_user_id="agent-user-1", runtime_source="mycel"),
         message=AgentRuntimeMessage(content="hello", signal="ping"),
     )
 
-    result = await build_agent_runtime_gateway(app, typing_tracker=typing_tracker).dispatch_chat(envelope)
+    result = await build_agent_runtime_gateway(
+        app,
+        thread_repo=app.state.threads_runtime_state.thread_repo,
+        typing_tracker=typing_tracker,
+    ).dispatch_chat(envelope)
 
     assert result.status == "accepted"
-    assert result.thread_id == "thread-preselected"
-    assert started == [("thread-preselected", "chat-1", "agent-user-1")]
-    assert enqueued == [("hello", "thread-preselected")]
+    assert result.thread_id == "thread-main"
+    assert started == [("thread-main", "chat-1", "agent-user-1")]
+    assert enqueued == [("hello", "thread-main")]

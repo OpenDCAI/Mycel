@@ -10,6 +10,7 @@ from messaging.avatars import AvatarUrlBuilder
 from messaging.delivery.actions import DeliveryAction
 from messaging.delivery.contracts import ChatDeliveryFn, ChatDeliveryRequest
 from messaging.display_user import resolve_messaging_display_user
+from protocols.identity_read import DisplayUserLookup
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +21,18 @@ class ChatDeliveryDispatcher:
     def __init__(
         self,
         chat_member_repo: Any,
-        user_repo: Any,
+        user_lookup: DisplayUserLookup | None = None,
         *,
+        user_repo: DisplayUserLookup | None = None,
         avatar_url_builder: AvatarUrlBuilder | None = None,
         unread_counter: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: ChatDeliveryFn | None = None,
     ) -> None:
         self._chat_members_repo = chat_member_repo
-        self._user_repo = user_repo
+        self._user_lookup = user_lookup or user_repo
+        if self._user_lookup is None:
+            raise TypeError("user_lookup is required")
         self._avatar_url_builder = avatar_url_builder
         self._unread_counter = unread_counter
         self._delivery_resolver = delivery_resolver
@@ -111,7 +115,7 @@ class ChatDeliveryDispatcher:
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         return resolve_messaging_display_user(
-            user_repo=self._user_repo,
+            user_lookup=self._user_lookup,
             social_user_id=social_user_id,
         )
 

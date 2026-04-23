@@ -4,7 +4,6 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from backend.chat.runtime_access import get_optional_typing_tracker
 from backend.threads.events.buffer import RunEventBuffer, ThreadEventBuffer
 from backend.threads.events.store import append_event as _append_event
 from backend.threads.events.store import cleanup_old_runs
@@ -17,6 +16,7 @@ from backend.threads.run import followups as _run_followups
 from backend.threads.run import input_construction as _run_input_construction
 from backend.threads.run import lifecycle as _run_lifecycle
 from backend.threads.run import observer as _run_observer
+from backend.threads.runtime_access import get_optional_typing_tracker
 from core.runtime.notifications import is_terminal_background_notification
 from storage.contracts import RunEventRepo
 

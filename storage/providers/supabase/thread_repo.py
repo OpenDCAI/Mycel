@@ -127,13 +127,13 @@ class SupabaseThreadRepo:
         indexed = {row["id"]: row for row in normalized_rows}
         return [indexed[thread_id] for thread_id in ordered_ids if thread_id in indexed]
 
-    def get_by_user_id(self, user_id: str) -> dict[str, Any] | None:
+    def get_canonical_thread_for_agent_actor(self, social_user_id: str) -> dict[str, Any] | None:
         select = ", ".join(_COLS)
-        # @@@agent-user-thread-lookup - social/user-facing lookups must resolve to the
+        # @@@agent-actor-canonical-thread - social actor-facing lookups must resolve to the
         # representative main thread, not an arbitrary branch, once one agent can own
         # multiple thread rows.
-        response = self._t().select(select).eq("agent_user_id", user_id).eq("is_main", 1).execute()
-        rows = q.rows(response, _REPO, "get_by_user_id")
+        response = self._t().select(select).eq("agent_user_id", social_user_id).eq("is_main", 1).execute()
+        rows = q.rows(response, _REPO, "get_canonical_thread_for_agent_actor")
         if not rows:
             return None
         return _to_dict(rows[0])

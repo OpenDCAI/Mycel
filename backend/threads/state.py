@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from backend.threads.binding import resolve_thread_runtime_binding
+from backend.threads.runtime_access import get_thread_repo
 
 
 def _display_repo_sandbox_status(runtime_row: dict[str, Any], instance: dict[str, Any]) -> str:
@@ -39,7 +40,7 @@ def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, A
 
     try:
         binding = resolve_thread_runtime_binding(
-            thread_repo=app.state.thread_repo,
+            thread_repo=get_thread_repo(app),
             workspace_repo=app.state.workspace_repo,
             sandbox_repo=app.state.sandbox_repo,
             thread_id=thread_id,

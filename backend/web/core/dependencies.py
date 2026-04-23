@@ -10,6 +10,7 @@ from backend.identity.auth.user_resolution import get_current_user as get_curren
 from backend.identity.auth.user_resolution import get_current_user_id as get_current_user_id
 from backend.threads import convergence as thread_runtime_convergence
 from backend.threads.activity_pool_service import get_or_create_agent, resolve_thread_sandbox
+from backend.threads.runtime_access import get_optional_messaging_service
 from sandbox.thread_context import set_current_thread_id
 
 inspect_owner_thread_runtime = thread_runtime_convergence.inspect_owner_thread_runtime
@@ -17,6 +18,22 @@ inspect_owner_thread_runtime = thread_runtime_convergence.inspect_owner_thread_r
 
 async def get_app(request: Request) -> FastAPI:
     return request.app
+
+
+def _get_user_directory(app: FastAPI) -> Any:
+    runtime_state = getattr(app.state, "auth_runtime_state", None)
+    user_directory = getattr(runtime_state, "user_directory", None)
+    if user_directory is None:
+        raise HTTPException(503, "User directory unavailable")
+    return user_directory
+
+
+def _get_thread_repo(app: FastAPI) -> Any:
+    runtime_state = getattr(app.state, "threads_runtime_state", None)
+    thread_repo = getattr(runtime_state, "thread_repo", None)
+    if thread_repo is None:
+        raise HTTPException(503, "Thread repo unavailable")
+    return thread_repo
 
 
 __all__ = [
@@ -42,10 +59,10 @@ async def verify_thread_owner(
         raise HTTPException(404, "Thread not found")
     if runtime_state == "incomplete":
         raise HTTPException(409, "Thread runtime incomplete: missing workspace/sandbox binding")
-    thread = app.state.thread_repo.get_by_id(thread_id)
+    thread = _get_thread_repo(app).get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
-    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    agent_user = _get_user_directory(app).get_by_id(thread["agent_user_id"])
     if not agent_user or agent_user.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
     return user_id
@@ -57,10 +74,10 @@ async def verify_thread_row_owner(
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
     """Verify ownership without mutating or converging thread runtime state."""
-    thread = app.state.thread_repo.get_by_id(thread_id)
+    thread = _get_thread_repo(app).get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
-    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    agent_user = _get_user_directory(app).get_by_id(thread["agent_user_id"])
     if not agent_user or agent_user.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
     return user_id
@@ -87,7 +104,12 @@ async def get_thread_agent(
         raise HTTPException(400, "Local threads have no remote sandbox")
     try:
         set_current_thread_id(thread_id)
-        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+        agent = await get_or_create_agent(
+            app,
+            sandbox_type,
+            thread_id=thread_id,
+            messaging_service=get_optional_messaging_service(app),
+        )
     # @@@http_passthrough - keep intentional HTTP status from agent bootstrap
     except HTTPException:
         raise

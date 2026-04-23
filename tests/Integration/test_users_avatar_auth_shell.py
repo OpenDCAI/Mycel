@@ -59,7 +59,7 @@ async def test_delete_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
     result = await users_router.delete_avatar(
         "agent-1",
         current_user_id="user-1",
-        app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo)),
+        app=SimpleNamespace(state=SimpleNamespace(auth_runtime_state=SimpleNamespace(user_directory=fake_repo))),
     )
 
     assert result == {"status": "ok"}
@@ -94,7 +94,7 @@ async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
         "agent-1",
         _FakeUploadFile(b"png-bytes", content_type="image/png"),
         current_user_id="user-1",
-        app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo)),
+        app=SimpleNamespace(state=SimpleNamespace(auth_runtime_state=SimpleNamespace(user_directory=fake_repo))),
     )
 
     assert result == {"status": "ok", "avatar": "avatars/agent-1.png"}

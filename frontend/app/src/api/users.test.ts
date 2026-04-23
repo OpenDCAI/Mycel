@@ -70,7 +70,6 @@ describe("fetchUserChatCandidates", () => {
         is_owned: false,
         relationship_state: "visit",
         can_chat: true,
-        default_thread_id: null,
       },
     ]);
     await expect(second).resolves.toEqual([
@@ -83,7 +82,6 @@ describe("fetchUserChatCandidates", () => {
         is_owned: false,
         relationship_state: "visit",
         can_chat: true,
-        default_thread_id: null,
       },
     ]);
   });
@@ -127,7 +125,6 @@ describe("fetchUserChatCandidates", () => {
         is_owned: false,
         relationship_state: "visit",
         can_chat: true,
-        default_thread_id: null,
       },
     ]);
     await expect(fetchUserChatCandidates()).resolves.toEqual([
@@ -140,7 +137,6 @@ describe("fetchUserChatCandidates", () => {
         is_owned: false,
         relationship_state: "visit",
         can_chat: true,
-        default_thread_id: null,
       },
     ]);
 

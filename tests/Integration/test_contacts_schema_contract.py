@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from backend.web.routers import contacts as contacts_router
+from backend.chat.api.http import contacts_router
 from storage.contracts import ContactEdgeRow
 
 

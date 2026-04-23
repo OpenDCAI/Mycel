@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from protocols.identity_read import DisplayUserLookup
 
 
-def resolve_messaging_display_user(*, user_repo: Any, social_user_id: str) -> Any | None:
-    return user_repo.get_by_id(social_user_id)
+def resolve_messaging_display_user(*, user_lookup: DisplayUserLookup, social_user_id: str):
+    return user_lookup.get_by_id(social_user_id)

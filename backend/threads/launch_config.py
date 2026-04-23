@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.threads.runtime_access import get_thread_repo
 from sandbox.recipes import default_recipe_id, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 
 available_sandbox_types: Any = None
@@ -53,7 +54,7 @@ def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> 
         raise RuntimeError("recipe_repo is required for launch config resolution")
     providers = [item for item in available_sandbox_types() if item.get("available")]
     sandbox_templates = list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo)
-    agent_threads = app.state.thread_repo.list_by_agent_user(agent_user_id)
+    agent_threads = get_thread_repo(app).list_by_agent_user(agent_user_id)
 
     return {
         "source": "derived",

@@ -80,10 +80,10 @@ def _create_chat_route_state(
     messaging_service = SimpleNamespace(**messaging_entrypoint)
     state = SimpleNamespace(
         user_repo=SimpleNamespace(get_by_id=lambda uid: users.get(uid)),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": f"thread-{uid}"} if uid in thread_user_ids else None,
-        ),
         chat_runtime_state=SimpleNamespace(
+            agent_actor_lookup=SimpleNamespace(
+                is_agent_actor_user=lambda uid: uid in thread_user_ids,
+            ),
             relationship_service=relationship_service,
             contact_repo=contact_repo,
             messaging_service=messaging_service,
@@ -97,8 +97,8 @@ def _create_chat(app: SimpleNamespace, body: chats_router.CreateChatBody, *, use
         body,
         user_id=user_id,
         messaging_service=app.state.chat_runtime_state.messaging_service,
-        user_repo=app.state.user_repo,
-        thread_repo=app.state.thread_repo,
+        user_directory=app.state.user_repo,
+        agent_actor_lookup=app.state.chat_runtime_state.agent_actor_lookup,
         contact_repo=app.state.chat_runtime_state.contact_repo,
         relationship_service=app.state.chat_runtime_state.relationship_service,
     )
@@ -163,16 +163,14 @@ def test_get_accessible_chat_or_404_raises_403_for_non_member():
     assert exc_info.value.detail == "Not a participant of this chat"
 
 
-def test_resolve_display_user_delegates_to_messaging_service(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_verify_user_ownership_delegates_to_messaging_service() -> None:
     seen: list[tuple[str, str]] = []
-    expected = SimpleNamespace(id="agent-user-1", display_name="Toad")
+    expected = SimpleNamespace(id="agent-user-1", display_name="Toad", owner_user_id="owner-user")
     messaging_service = SimpleNamespace(
         resolve_display_user=lambda social_user_id: seen.append(("resolve_display_user", social_user_id)) or expected
     )
 
-    result = chats_router._resolve_display_user(messaging_service, "thread-user-1")
-
-    assert result is expected
+    chats_router._verify_user_ownership(messaging_service, "thread-user-1", "owner-user")
     assert seen == [("resolve_display_user", "thread-user-1")]
 
 

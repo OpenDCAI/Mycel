@@ -13,6 +13,8 @@ import pytest
 from fastapi import Request
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
+from backend.threads.api.http import runtime_router as threads_runtime_router
+from backend.threads.api.http import runtime_support as threads_runtime_support
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
 from core.runtime.loop import QueryLoop
@@ -535,6 +537,82 @@ async def test_get_thread_sandbox_status_reads_repos_without_agent_bootstrap():
         "created_at": "2026-04-12T00:00:00Z",
         "updated_at": "2026-04-12T00:01:00Z",
     }
+
+
+@pytest.mark.asyncio
+async def test_get_thread_runtime_passes_borrowed_messaging_service_to_cold_agent_startup(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, Any] = {}
+    messaging_service = object()
+    app = _make_threads_app(
+        thread_sandbox={"thread-1": "local"},
+        threads_runtime_state=SimpleNamespace(
+            thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "model": None}),
+            messaging_service=messaging_service,
+        ),
+    )
+
+    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str, messaging_service=None):
+        captured["thread_id"] = thread_id
+        captured["messaging_service"] = messaging_service
+        return SimpleNamespace(runtime=SimpleNamespace(get_status_dict=lambda: {"state": {"state": "idle"}}))
+
+    monkeypatch.setattr(threads_runtime_router, "get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr(threads_runtime_router, "resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr(threads_runtime_router, "get_last_seq", AsyncMock(return_value=0))
+
+    result = await threads_runtime_router.get_thread_runtime("thread-1", app=app)
+
+    assert result["state"]["state"] == "idle"
+    assert captured == {
+        "thread_id": "thread-1",
+        "messaging_service": messaging_service,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_thread_display_entries_passes_borrowed_messaging_service_to_cold_agent_startup(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, Any] = {}
+    messaging_service = object()
+    app = _make_threads_app(
+        thread_sandbox={"thread-1": "local"},
+        threads_runtime_state=SimpleNamespace(
+            thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "model": None}),
+            display_builder=SimpleNamespace(
+                get_entries=lambda _thread_id: None,
+                build_from_checkpoint=lambda _thread_id, _annotated: [],
+            ),
+            messaging_service=messaging_service,
+        ),
+    )
+    app.state.agent_pool = {}
+
+    monkeypatch.setattr(threads_runtime_support, "resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr(
+        threads_runtime_support,
+        "get_or_create_agent",
+        AsyncMock(
+            side_effect=lambda _app, _sandbox_type, *, thread_id, messaging_service=None: captured.update(
+                {
+                    "thread_id": thread_id,
+                    "messaging_service": messaging_service,
+                }
+            )
+            or SimpleNamespace(
+                runtime=SimpleNamespace(current_state=AgentState.IDLE),
+                agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": []}))),
+            )
+        ),
+    )
+
+    result = await threads_runtime_support.get_thread_display_entries(app, "thread-1")
+
+    assert result == []
+    assert captured["thread_id"] == "thread-1"
+    assert captured["messaging_service"] is messaging_service
 
 
 @pytest.mark.asyncio

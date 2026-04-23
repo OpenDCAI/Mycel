@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.identity.avatar.urls import avatar_url
-from backend.threads.chat_adapters.chat_inlet import make_chat_delivery_fn
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.realtime.events import ChatEventBus
 from messaging.realtime.typing import TypingTracker
@@ -22,6 +21,8 @@ class ChatRuntimeState:
     typing_tracker: Any
     relationship_service: Any
     messaging_service: Any
+    hire_conversation_reader: Any | None = None
+    agent_actor_lookup: Any | None = None
 
 
 def attach_chat_runtime(
@@ -29,7 +30,6 @@ def attach_chat_runtime(
     storage_container: Any,
     *,
     user_repo: Any,
-    thread_repo: Any,
 ) -> ChatRuntimeState:
     chat_repo = storage_container.chat_repo()
     contact_repo = storage_container.contact_repo()
@@ -50,8 +50,7 @@ def attach_chat_runtime(
         chat_repo=chat_repo,
         chat_member_repo=chat_member_repo,
         messages_repo=messages_repo,
-        user_repo=user_repo,
-        thread_repo=thread_repo,
+        user_directory=user_repo,
         event_bus=chat_event_bus,
         delivery_resolver=delivery_resolver,
         avatar_url_builder=avatar_url,
@@ -72,15 +71,9 @@ def attach_chat_runtime(
     return state
 
 
-def wire_chat_delivery(app: Any, *, messaging_service: Any, activity_reader: Any, thread_repo: Any) -> None:
-    # @@@chat-delivery-borrowed-service - delivery wiring runs after chat bootstrap,
-    # but it should still consume the already-constructed messaging service
-    # explicitly rather than re-reading app.state and silently depending on
-    # bootstrap ordering through a hidden state lookup.
-    messaging_service.set_delivery_fn(
-        make_chat_delivery_fn(
-            app,
-            activity_reader=activity_reader,
-            thread_repo=thread_repo,
-        )
-    )
+def wire_chat_delivery(*, messaging_service: Any, delivery_fn: Any) -> None:
+    # @@@chat-delivery-explicit-hook - chat bootstrap no longer imports the
+    # threads-side delivery implementation directly. The web composition layer
+    # must build the delivery hook and hand it in explicitly so chat only owns
+    # binding, not the threads transport implementation.
+    messaging_service.set_delivery_fn(delivery_fn)

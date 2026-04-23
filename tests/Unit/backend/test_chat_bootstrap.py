@@ -1,3 +1,4 @@
+import inspect
 from types import SimpleNamespace
 
 from backend.chat import bootstrap as chat_bootstrap
@@ -51,7 +52,6 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=object(),
-            thread_repo=object(),
         )
     )
 
@@ -59,7 +59,6 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
         app,
         storage_container,
         user_repo=app.state.user_repo,
-        thread_repo=app.state.thread_repo,
     )
 
     assert app.state.chat_runtime_state is state
@@ -70,7 +69,6 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert state.relationship_service.repo is relationship_repo
     assert state.messaging_service.kwargs["chat_repo"] is chat_repo
     assert state.messaging_service.kwargs["delivery_resolver"]["contact_repo"] is contact_repo
-    assert state.messaging_service.kwargs["thread_repo"] is app.state.thread_repo
     assert state.messaging_service.delivery_fn is None
     assert not hasattr(app.state, "chat_repo")
     assert not hasattr(app.state, "contact_repo")
@@ -132,7 +130,6 @@ def test_attach_chat_runtime_does_not_read_back_chat_state_during_wiring(monkeyp
         app,
         storage_container,
         user_repo=tracking_state.user_repo,
-        thread_repo=tracking_state.thread_repo,
     )
 
     forbidden_reads = {
@@ -146,7 +143,7 @@ def test_attach_chat_runtime_does_not_read_back_chat_state_during_wiring(monkeyp
     assert forbidden_reads.isdisjoint(tracking_state.reads)
 
 
-def test_attach_chat_runtime_requires_explicit_user_repo_and_thread_repo():
+def test_attach_chat_runtime_requires_explicit_user_repo():
     app = SimpleNamespace(state=SimpleNamespace(user_repo=object(), thread_repo=object()))
     storage_container = SimpleNamespace(
         chat_repo=lambda: object(),
@@ -161,41 +158,28 @@ def test_attach_chat_runtime_requires_explicit_user_repo_and_thread_repo():
     except TypeError as exc:
         message = str(exc)
         assert "user_repo" in message
-        assert "thread_repo" in message
     else:
-        raise AssertionError("attach_chat_runtime should require explicit user_repo/thread_repo kwargs")
+        raise AssertionError("attach_chat_runtime should require explicit user_repo kwargs")
 
 
 def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
     delivery_fn = object()
     messaging_service = SimpleNamespace(delivery_fn=None)
-    activity_reader = object()
-    thread_repo = object()
 
     def _set_delivery_fn(value):
         messaging_service.delivery_fn = value
 
     messaging_service.set_delivery_fn = _set_delivery_fn
 
-    app = SimpleNamespace(state=SimpleNamespace())
-
-    monkeypatch.setattr(
-        chat_bootstrap,
-        "make_chat_delivery_fn",
-        lambda target_app, *, activity_reader, thread_repo: delivery_fn,
-    )
-
     chat_bootstrap.wire_chat_delivery(
-        app,
         messaging_service=messaging_service,
-        activity_reader=activity_reader,
-        thread_repo=thread_repo,
+        delivery_fn=delivery_fn,
     )
 
     assert messaging_service.delivery_fn is delivery_fn
 
 
-def test_wire_chat_delivery_does_not_read_back_messaging_service(monkeypatch):
+def test_wire_chat_delivery_does_not_read_back_messaging_service():
     class _TrackingState:
         def __init__(self):
             object.__setattr__(self, "_values", {})
@@ -223,20 +207,17 @@ def test_wire_chat_delivery_does_not_read_back_messaging_service(monkeypatch):
     messaging_service.set_delivery_fn = _set_delivery_fn
 
     tracking_state = _TrackingState()
-    app = SimpleNamespace(state=tracking_state)
-
-    monkeypatch.setattr(
-        chat_bootstrap,
-        "make_chat_delivery_fn",
-        lambda target_app, *, activity_reader, thread_repo: delivery_fn,
-    )
 
     chat_bootstrap.wire_chat_delivery(
-        app,
         messaging_service=messaging_service,
-        activity_reader=object(),
-        thread_repo=object(),
+        delivery_fn=delivery_fn,
     )
 
     assert "messaging_service" not in tracking_state.reads
     assert messaging_service.delivery_fn is delivery_fn
+
+
+def test_chat_bootstrap_no_longer_imports_threads_chat_inlet() -> None:
+    source = inspect.getsource(chat_bootstrap)
+
+    assert "backend.threads.chat_adapters.chat_inlet" not in source

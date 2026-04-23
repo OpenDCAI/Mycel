@@ -8,12 +8,11 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.chat.api.http.dependencies import get_contact_repo, get_relationship_service, get_thread_repo, get_user_repo
+from backend.identity.auth.dependencies import _get_user_directory
 from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.avatar.paths import avatars_dir
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_app, get_current_user_id
-from messaging.social_access import active_contact_target_ids, can_chat_with_owner_scope
 from storage.contracts import UserType
 
 logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ async def list_users(
     app: Annotated[Any, Depends(get_app)],
 ):
     """List all agent users for the user directory page."""
-    user_repo = app.state.user_repo
+    user_repo = _get_user_directory(app)
 
     all_users = user_repo.list_all()
     result = []
@@ -77,7 +76,7 @@ async def upload_avatar(
     app: Annotated[Any, Depends(get_app)],
 ) -> dict[str, str]:
     """Upload/replace avatar image. Resizes to 256x256 PNG."""
-    repo = app.state.user_repo
+    repo = _get_user_directory(app)
     _get_owned_avatar_user_or_404(user_id, current_user_id, repo)
     ct = file.content_type or ""
     if ct not in ALLOWED_CONTENT_TYPES:
@@ -112,109 +111,13 @@ async def delete_avatar(
     app: Annotated[Any, Depends(get_app)],
 ) -> dict[str, str]:
     """Delete avatar."""
-    repo = app.state.user_repo
+    repo = _get_user_directory(app)
     _get_owned_avatar_user_or_404(user_id, current_user_id, repo)
     path = _avatar_path(user_id)
     if path.exists():
         path.unlink()
     repo.update(user_id, avatar=None, updated_at=time.time())
     return {"status": "ok"}
-
-
-# ---------------------------------------------------------------------------
-# User chat candidates
-# ---------------------------------------------------------------------------
-
-
-def _relationship_states_for_user(relationship_service: Any, user_id: str) -> dict[str, str]:
-    if relationship_service is None:
-        raise HTTPException(503, "chat bootstrap not attached: relationship_service")
-    states: dict[str, str] = {}
-    for row in relationship_service.list_for_user(user_id):
-        other_id = getattr(row, "other_user_id", None)
-        if other_id is None:
-            user_low = getattr(row, "user_low")
-            user_high = getattr(row, "user_high")
-            other_id = user_high if user_id == user_low else user_low
-        states[str(other_id)] = str(getattr(row, "state"))
-    return states
-
-
-@users_router.get("/chat-candidates")
-async def list_chat_candidates(
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    # @@@chat-candidate-http-di - keep these as HTTP dependency helpers; the
-    # raw runtime_access functions take a plain app param and FastAPI will
-    # otherwise misread that as a query arg on real route calls.
-    user_repo: Annotated[Any, Depends(get_user_repo)],
-    relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    contact_repo: Annotated[Any, Depends(get_contact_repo)],
-    thread_repo: Annotated[Any, Depends(get_thread_repo)],
-):
-    """List chattable users for discovery (New Chat picker). Excludes the current user."""
-    users = user_repo.list_all()
-    user_map = {user.id: user for user in users}
-    relationship_states = _relationship_states_for_user(relationship_service, user_id)
-    try:
-        if contact_repo is None:
-            raise RuntimeError("chat bootstrap not attached: contact_repo")
-        contact_targets = active_contact_target_ids(contact_repo, user_id)
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc)) from exc
-
-    items = []
-
-    for user in users:
-        if user.id == user_id:
-            continue
-        is_owned = user.type is UserType.AGENT and user.owner_user_id == user_id
-        if is_owned and thread_repo is None:
-            # @@@owned-agent-thread-truth - owned agent candidates expose
-            # default_thread_id when available, so this consumer must fail loud
-            # when thread_repo is absent instead of silently pretending the
-            # owned agent has no thread truth.
-            raise HTTPException(503, "Thread repo unavailable")
-        relationship_state = relationship_states.get(user.id, "none")
-        owner_user_id = str(user.owner_user_id) if user.type is UserType.AGENT and user.owner_user_id else None
-        can_chat = can_chat_with_owner_scope(
-            is_owned=is_owned,
-            relationship_state=relationship_state,
-            has_contact=user.id in contact_targets,
-            owner_relationship_state=relationship_states.get(owner_user_id, "none") if owner_user_id else None,
-            owner_has_contact=owner_user_id in contact_targets if owner_user_id else False,
-        )
-        if user.type is UserType.HUMAN:
-            items.append(
-                {
-                    "user_id": user.id,
-                    "name": user.display_name,
-                    "type": "human",
-                    "avatar_url": avatar_url(user.id, bool(user.avatar)),
-                    "owner_name": None,
-                    "agent_name": user.display_name,
-                    "is_owned": False,
-                    "relationship_state": relationship_state,
-                    "can_chat": can_chat,
-                }
-            )
-        else:
-            owner = user_map.get(user.owner_user_id) if user.owner_user_id else None
-            default_thread = thread_repo.get_default_thread(user.id) if is_owned and thread_repo is not None else None
-            item = {
-                "user_id": user.id,
-                "name": user.display_name,
-                "type": user.type.value,
-                "avatar_url": avatar_url(user.id, bool(user.avatar)),
-                "owner_name": owner.display_name if owner else None,
-                "agent_name": user.display_name,
-                "is_owned": is_owned,
-                "relationship_state": relationship_state,
-                "can_chat": can_chat,
-            }
-            if is_owned:
-                item["default_thread_id"] = default_thread["id"] if default_thread else None
-            items.append(item)
-    return items
 
 
 @users_router.get("/{user_id}/profile")
@@ -236,7 +139,7 @@ async def get_user_profile(
 
 
 def _get_user_or_404(app: Any, user_id: str) -> Any:
-    user = app.state.user_repo.get_by_id(user_id)
+    user = _get_user_directory(app).get_by_id(user_id)
     if not user:
         raise HTTPException(404, "User not found")
     return user

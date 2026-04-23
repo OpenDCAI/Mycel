@@ -24,6 +24,7 @@ from backend.sandboxes import provider_factory as sandbox_provider_factory
 from backend.sandboxes.inventory import init_providers_and_managers
 from backend.sandboxes.thread_resources import destroy_thread_resources_sync
 from backend.threads.activity_pool_service import get_or_create_agent
+from backend.threads.api.http import runtime_support as threads_runtime_support
 from backend.threads.convergence import delete_thread_in_db
 from backend.threads.events.buffer import ThreadEventBuffer
 from backend.threads.events.store import get_last_seq, get_latest_run_id, get_run_start_seq, read_events_after
@@ -39,6 +40,7 @@ from backend.threads.owner_reads import list_owner_thread_rows_for_auth_burst
 from backend.threads.run.buffer_wiring import get_or_create_thread_buffer
 from backend.threads.run.lifecycle import prime_sandbox
 from backend.threads.run.observer import observe_thread_events
+from backend.threads.runtime_access import get_optional_messaging_service
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from backend.threads.state import get_sandbox_info, get_sandbox_status_from_repos
 from backend.web.core.dependencies import (
@@ -56,7 +58,6 @@ from backend.web.models.requests import (
     SendMessageRequest,
     ThreadPermissionRuleRequest,
 )
-from backend.web.utils.serializers import serialize_message
 from core.agents.service import _background_run_cancelled, _background_run_result, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
@@ -397,40 +398,7 @@ def _checkpoint_tail_is_pending_owner_turn(messages: list[dict[str, Any]]) -> bo
 
 
 async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str, Any]]:
-    runtime_state = getattr(app.state, "threads_runtime_state", None)
-    display_builder = getattr(runtime_state, "display_builder", None)
-    if display_builder is None:
-        raise RuntimeError("display_builder is required for thread display entries")
-    entries = display_builder.get_entries(thread_id)
-    if entries is not None:
-        _normalize_blocking_subagent_terminal_status(entries)
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-    if entries is not None and getattr(agent.runtime, "current_state", None) != AgentState.IDLE:
-        return entries
-
-    set_current_thread_id(thread_id)
-    config = {"configurable": {"thread_id": thread_id}}
-    state = await agent.agent.aget_state(config)
-    values = getattr(state, "values", {}) if state else {}
-    messages = values.get("messages", []) if isinstance(values, dict) else []
-    messages = repair_interrupted_tool_call_messages(list(messages))
-    serialized = [serialize_message(msg) for msg in messages]
-
-    from core.runtime.visibility import annotate_owner_visibility
-
-    annotated, _ = annotate_owner_visibility(serialized)
-    if entries is not None and not _display_entries_need_idle_rebuild(entries, annotated):
-        return entries
-    entries = display_builder.build_from_checkpoint(thread_id, annotated)
-    if _checkpoint_tail_is_pending_owner_turn(annotated):
-        await _replay_latest_run_failure_events(
-            thread_id=thread_id,
-            display_builder=display_builder,
-        )
-        entries = display_builder.get_entries(thread_id) or entries
-    _normalize_blocking_subagent_terminal_status(entries)
-    return entries
+    return await threads_runtime_support.get_thread_display_entries(app, thread_id)
 
 
 def _display_entries_need_idle_rebuild(entries: list[dict[str, Any]], messages: list[dict[str, Any]]) -> bool:
@@ -995,7 +963,12 @@ async def send_message(
     # @@@attachment-wire - sync files to sandbox and prepend paths
     if payload.attachments:
         sandbox_type = resolve_thread_sandbox(app, thread_id)
-        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+        agent = await get_or_create_agent(
+            app,
+            sandbox_type,
+            thread_id=thread_id,
+            messaging_service=get_optional_messaging_service(app),
+        )
         message, _ = await _prepare_attachment_message(
             thread_id,
             sandbox_type,

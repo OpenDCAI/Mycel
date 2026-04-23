@@ -34,6 +34,7 @@ def _make_app(*, thread_repo, workspace_repo=None, sandbox_repo=None):
     return SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=thread_repo,
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             workspace_repo=workspace_repo or _Repo({}),
             sandbox_repo=sandbox_repo or _Repo({}),
             thread_sandbox={"thread-1": "local"},

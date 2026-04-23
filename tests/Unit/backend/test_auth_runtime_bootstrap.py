@@ -16,6 +16,7 @@ def _fake_storage_container():
 def test_build_auth_runtime_state_uses_runtime_storage_state(monkeypatch):
     calls = {}
     fake_auth_factory = object()
+    user_repo = "users-repo"
 
     class _FakeAuthService:
         def __init__(self, **kwargs):
@@ -33,6 +34,7 @@ def test_build_auth_runtime_state_uses_runtime_storage_state(monkeypatch):
 
     assert state.supabase_auth_client_factory() is fake_auth_factory
     assert isinstance(state.auth_service, _FakeAuthService)
+    assert state.user_directory == user_repo
     assert calls["kwargs"] == {
         "users": "users-repo",
         "agent_configs": "agent-config-repo",
@@ -59,7 +61,7 @@ def test_build_auth_runtime_state_requires_explicit_contact_repo():
 
 
 def test_attach_auth_runtime_state_returns_bundle_without_loose_state_mirrors(monkeypatch):
-    fake_state = SimpleNamespace(auth_service=object(), supabase_auth_client_factory=object())
+    fake_state = SimpleNamespace(auth_service=object(), supabase_auth_client_factory=object(), user_directory=object())
     app = type("_App", (), {"state": type("_State", (), {})()})()
 
     monkeypatch.setattr(auth_runtime_bootstrap, "build_auth_runtime_state", lambda _storage_state, *, contact_repo: fake_state)

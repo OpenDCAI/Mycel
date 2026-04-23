@@ -8,16 +8,18 @@ from backend.threads.state import get_sandbox_info, get_sandbox_status_from_repo
 
 
 def test_sandbox_info_does_not_expose_terminal_or_session_identity() -> None:
+    thread_repo = SimpleNamespace(
+        get_by_id=lambda thread_id: {
+            "id": thread_id,
+            "owner_user_id": "owner-1",
+            "agent_user_id": "agent-user-1",
+            "current_workspace_id": "workspace-1",
+        }
+    )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                get_by_id=lambda thread_id: {
-                    "id": thread_id,
-                    "owner_user_id": "owner-1",
-                    "agent_user_id": "agent-user-1",
-                    "current_workspace_id": "workspace-1",
-                }
-            ),
+            thread_repo=thread_repo,
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             workspace_repo=SimpleNamespace(
                 get_by_id=lambda workspace_id: {
                     "id": workspace_id,

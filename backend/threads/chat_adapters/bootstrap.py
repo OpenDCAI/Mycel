@@ -12,6 +12,7 @@ from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHa
 from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRuntimeServices
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
 from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
+from backend.threads.owner_reads import AppAgentActorLookup, AppHireConversationReader
 from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
 
 
@@ -19,13 +20,36 @@ from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
 class AgentRuntimeGatewayState:
     gateway: NativeAgentRuntimeGateway
     activity_reader: Any
+    conversation_reader: Any
+    agent_actor_lookup: Any
 
 
-def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeGatewayState:
+def build_agent_runtime_state(
+    app: Any,
+    *,
+    thread_repo: Any,
+    typing_tracker: Any,
+    messaging_service: Any | None = None,
+) -> AgentRuntimeGatewayState:
+    async def _get_or_create_runtime_agent(target_app: Any, sandbox_type: str, *, thread_id: str) -> Any:
+        kwargs = {"thread_id": thread_id}
+        if messaging_service is not None:
+            kwargs["messaging_service"] = messaging_service
+        return await get_or_create_agent(
+            target_app,
+            sandbox_type,
+            **kwargs,
+        )
+
     activity_reader = AppRuntimeThreadActivityReader(
-        thread_repo=app.state.thread_repo,
+        thread_repo=thread_repo,
         agent_pool=app.state.agent_pool,
     )
+    conversation_reader = AppHireConversationReader(
+        app,
+        activity_reader=activity_reader,
+    )
+    agent_actor_lookup = AppAgentActorLookup(app)
     gateway = NativeAgentRuntimeGateway(
         chat_handlers={
             "mycel": NativeAgentChatDeliveryHandler(
@@ -36,8 +60,9 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
                     # bootstrap so this gateway builder does not reach back
                     # through app.state for chat truth on its own.
                     typing_tracker=typing_tracker,
+                    thread_repo=thread_repo,
                     queue_manager=app.state.queue_manager,
-                    get_or_create_agent=get_or_create_agent,
+                    get_or_create_agent=_get_or_create_runtime_agent,
                     resolve_thread_sandbox=resolve_thread_sandbox,
                     ensure_thread_handlers=_ensure_thread_handlers,
                 ),
@@ -49,7 +74,7 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
             thread_tasks=app.state.thread_tasks,
             thread_locks=app.state.thread_locks,
             thread_locks_guard=app.state.thread_locks_guard,
-            get_or_create_agent=get_or_create_agent,
+            get_or_create_agent=_get_or_create_runtime_agent,
             resolve_thread_sandbox=resolve_thread_sandbox,
             start_agent_run=start_agent_run,
             clear_resource_overview_cache=clear_resource_overview_cache,
@@ -58,8 +83,24 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
     # @@@gateway-bootstrap-borrowable-state - gateway bootstrap now returns the
     # runtime handles without mirroring them onto loose app.state attrs, so
     # callers must keep borrowing through the bundle they just built.
-    return AgentRuntimeGatewayState(gateway=gateway, activity_reader=activity_reader)
+    return AgentRuntimeGatewayState(
+        gateway=gateway,
+        activity_reader=activity_reader,
+        conversation_reader=conversation_reader,
+        agent_actor_lookup=agent_actor_lookup,
+    )
 
 
-def build_agent_runtime_gateway(app: Any, *, typing_tracker: Any) -> NativeAgentRuntimeGateway:
-    return build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway
+def build_agent_runtime_gateway(
+    app: Any,
+    *,
+    thread_repo: Any,
+    typing_tracker: Any,
+    messaging_service: Any | None = None,
+) -> NativeAgentRuntimeGateway:
+    return build_agent_runtime_state(
+        app,
+        thread_repo=thread_repo,
+        typing_tracker=typing_tracker,
+        messaging_service=messaging_service,
+    ).gateway

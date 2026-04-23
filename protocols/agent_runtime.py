@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Literal
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass
+from typing import Any, Literal, Protocol
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,6 @@ class AgentRuntimeActor:
 class AgentChatRecipient:
     agent_user_id: str
     runtime_source: str
-    thread_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,3 +87,116 @@ class AgentThreadInputResult:
         if self.run_id is not None:
             response["run_id"] = self.run_id
         return response
+
+
+class AgentRuntimeGateway(Protocol):
+    async def dispatch_chat(self, envelope: AgentChatDeliveryEnvelope) -> AgentChatDeliveryResult: ...
+
+    async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult: ...
+
+
+class ThreadInputTransport(Protocol):
+    async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult: ...
+
+
+class ChatDeliveryTransport(Protocol):
+    def deliver_chat(self, envelope: AgentChatDeliveryEnvelope) -> None: ...
+
+
+def _transport_from_payload(payload: Mapping[str, Any] | None) -> AgentRuntimeTransport:
+    data = payload or {}
+    return AgentRuntimeTransport(
+        delivery_id=data.get("delivery_id"),
+        correlation_id=data.get("correlation_id"),
+        idempotency_key=data.get("idempotency_key"),
+    )
+
+
+def chat_delivery_envelope_to_payload(envelope: AgentChatDeliveryEnvelope) -> dict[str, Any]:
+    return asdict(envelope)
+
+
+def chat_delivery_envelope_from_payload(payload: Mapping[str, Any]) -> AgentChatDeliveryEnvelope:
+    chat = payload["chat"]
+    sender = payload["sender"]
+    recipient = payload["recipient"]
+    message = payload["message"]
+    return AgentChatDeliveryEnvelope(
+        chat=AgentChatContext(
+            chat_id=chat["chat_id"],
+            title=chat.get("title"),
+        ),
+        sender=AgentRuntimeActor(
+            user_id=sender["user_id"],
+            user_type=sender["user_type"],
+            display_name=sender["display_name"],
+            avatar_url=sender.get("avatar_url"),
+            source=sender.get("source"),
+        ),
+        recipient=AgentChatRecipient(
+            agent_user_id=recipient["agent_user_id"],
+            runtime_source=recipient["runtime_source"],
+        ),
+        message=AgentRuntimeMessage(
+            content=message["content"],
+            content_type=message.get("content_type", "text"),
+            message_id=message.get("message_id"),
+            signal=message.get("signal"),
+            created_at=message.get("created_at"),
+            attachments=message.get("attachments"),
+            metadata=message.get("metadata"),
+        ),
+        transport=_transport_from_payload(payload.get("transport")),
+        protocol_version=payload.get("protocol_version", "agent.chat.delivery.v1"),
+        event_type=payload.get("event_type", "chat.message"),
+        extensions=payload.get("extensions"),
+    )
+
+
+def chat_delivery_result_to_payload(result: AgentChatDeliveryResult) -> dict[str, Any]:
+    return asdict(result)
+
+
+def thread_input_envelope_to_payload(envelope: AgentThreadInputEnvelope) -> dict[str, Any]:
+    return asdict(envelope)
+
+
+def thread_input_envelope_from_payload(payload: Mapping[str, Any]) -> AgentThreadInputEnvelope:
+    sender = payload["sender"]
+    message = payload["message"]
+    return AgentThreadInputEnvelope(
+        thread_id=payload["thread_id"],
+        sender=AgentRuntimeActor(
+            user_id=sender["user_id"],
+            user_type=sender["user_type"],
+            display_name=sender["display_name"],
+            avatar_url=sender.get("avatar_url"),
+            source=sender.get("source"),
+        ),
+        message=AgentRuntimeMessage(
+            content=message["content"],
+            content_type=message.get("content_type", "text"),
+            message_id=message.get("message_id"),
+            signal=message.get("signal"),
+            created_at=message.get("created_at"),
+            attachments=message.get("attachments"),
+            metadata=message.get("metadata"),
+        ),
+        transport=_transport_from_payload(payload.get("transport")),
+        enable_trajectory=payload.get("enable_trajectory", False),
+        protocol_version=payload.get("protocol_version", "agent.thread.input.v1"),
+        event_type=payload.get("event_type", "thread.input"),
+    )
+
+
+def thread_input_result_to_payload(result: AgentThreadInputResult) -> dict[str, Any]:
+    return asdict(result)
+
+
+def thread_input_result_from_payload(payload: Mapping[str, Any]) -> AgentThreadInputResult:
+    return AgentThreadInputResult(
+        status=payload["status"],
+        routing=payload["routing"],
+        thread_id=payload["thread_id"],
+        run_id=payload.get("run_id"),
+    )

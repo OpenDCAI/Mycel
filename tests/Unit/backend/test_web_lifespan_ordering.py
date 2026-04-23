@@ -19,11 +19,15 @@ class _FakeCheckpointCtx:
 def _patch_lifespan_runtime_contract(
     monkeypatch,
     *,
+    user_repo=None,
     attach_chat_runtime,
     attach_auth_runtime,
     attach_threads_runtime,
+    build_chat_transport,
+    make_chat_delivery_fn,
     wire_chat_delivery,
 ):
+    resolved_user_repo = object() if user_repo is None else user_repo
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
     monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
 
@@ -33,7 +37,7 @@ def _patch_lifespan_runtime_contract(
     monkeypatch.setattr(web_lifespan, "_validate_web_checkpointer_contract", _no_validate)
 
     storage_container = SimpleNamespace(
-        user_repo=lambda: object(),
+        user_repo=lambda: resolved_user_repo,
         thread_repo=lambda: object(),
         sandbox_runtime_repo=lambda: object(),
         recipe_repo=lambda: SimpleNamespace(close=lambda: None),
@@ -70,6 +74,8 @@ def _patch_lifespan_runtime_contract(
     )
     monkeypatch.setattr("backend.chat.bootstrap.attach_chat_runtime", attach_chat_runtime)
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", wire_chat_delivery)
+    monkeypatch.setattr("backend.chat.transport.build_inprocess_chat_transport", build_chat_transport)
+    monkeypatch.setattr("backend.chat.runtime_delivery.make_chat_delivery_fn", make_chat_delivery_fn)
     monkeypatch.setattr("backend.threads.bootstrap.attach_threads_runtime", attach_threads_runtime)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
     monkeypatch.setattr("backend.sandboxes.service.init_providers_and_managers", lambda: None)
@@ -79,27 +85,33 @@ def _patch_lifespan_runtime_contract(
 
 @pytest.mark.asyncio
 async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeypatch):
+    user_repo = object()
     returned_typing_tracker = object()
+    returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
 
-    def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
+    def _attach_chat_runtime(app, _storage_container, *, user_repo):
         contact_repo = object()
-        messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
         return SimpleNamespace(
             contact_repo=contact_repo,
             typing_tracker=returned_typing_tracker,
-            messaging_service=messaging_service,
+            messaging_service=returned_messaging_service,
         )
 
-    def _attach_threads_runtime(app, _storage_container, *, typing_tracker):
+    def _attach_threads_runtime(app, _storage_container, *, thread_repo, typing_tracker, messaging_service):
         assert typing_tracker is returned_typing_tracker
+        assert thread_repo is not None
+        assert messaging_service is returned_messaging_service
         app.state.agent_pool = {}
-        return SimpleNamespace(activity_reader=object())
+        return SimpleNamespace(activity_reader=object(), agent_runtime_gateway=object())
 
     _patch_lifespan_runtime_contract(
         monkeypatch,
+        user_repo=user_repo,
         attach_chat_runtime=_attach_chat_runtime,
         attach_auth_runtime=lambda *_args, **_kwargs: object(),
         attach_threads_runtime=_attach_threads_runtime,
+        build_chat_transport=lambda **_kwargs: object(),
+        make_chat_delivery_fn=lambda *_args, **_kwargs: object(),
         wire_chat_delivery=lambda *_args, **_kwargs: None,
     )
 
@@ -107,6 +119,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
 
     async with web_lifespan.lifespan(app):
         assert hasattr(app.state, "agent_pool")
+        assert app.state.user_repo is user_repo
         assert not hasattr(app.state, "display_builder")
         assert not hasattr(app.state, "_event_loop")
         assert not hasattr(app.state, "thread_checkpoint_store")
@@ -122,9 +135,12 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
     returned_contact_repo = object()
-    returned_activity_reader = object()
+    returned_conversation_reader = object()
+    returned_agent_actor_lookup = object()
+    returned_transport = object()
+    returned_delivery_fn = object()
 
-    def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
+    def _attach_chat_runtime(app, _storage_container, *, user_repo):
         call_log.append("chat")
         return SimpleNamespace(
             contact_repo=returned_contact_repo,
@@ -137,29 +153,51 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         assert contact_repo is returned_contact_repo
         return object()
 
-    def _attach_threads_runtime(app, _storage_container, *, typing_tracker):
+    def _attach_threads_runtime(app, _storage_container, *, thread_repo, typing_tracker, messaging_service):
         call_log.append("threads")
         assert typing_tracker is returned_typing_tracker
+        assert thread_repo is not None
+        assert messaging_service is returned_messaging_service
         app.state.agent_pool = {}
-        return SimpleNamespace(activity_reader=returned_activity_reader)
+        return SimpleNamespace(
+            activity_reader=object(),
+            conversation_reader=returned_conversation_reader,
+            agent_actor_lookup=returned_agent_actor_lookup,
+            agent_runtime_gateway=object(),
+        )
 
-    def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo):
+    def _build_chat_transport(*, runtime_gateway, loop):
+        call_log.append("transport")
+        assert runtime_gateway is not None
+        assert loop is not None
+        return returned_transport
+
+    def _make_chat_delivery_fn(*, transport):
+        call_log.append("delivery-fn")
+        assert transport is returned_transport
+        return returned_delivery_fn
+
+    def _wire_chat_delivery(*, messaging_service, delivery_fn):
         call_log.append("wire")
         assert messaging_service is returned_messaging_service
-        assert activity_reader is returned_activity_reader
+        assert delivery_fn is returned_delivery_fn
 
     _patch_lifespan_runtime_contract(
         monkeypatch,
         attach_chat_runtime=_attach_chat_runtime,
         attach_auth_runtime=_attach_auth_runtime,
         attach_threads_runtime=_attach_threads_runtime,
+        build_chat_transport=_build_chat_transport,
+        make_chat_delivery_fn=_make_chat_delivery_fn,
         wire_chat_delivery=_wire_chat_delivery,
     )
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     async with web_lifespan.lifespan(app):
-        assert call_log == ["chat", "auth", "threads", "wire"]
+        assert call_log == ["chat", "auth", "threads", "transport", "delivery-fn", "wire"]
+        assert app.state.chat_runtime_state.hire_conversation_reader is returned_conversation_reader
+        assert app.state.chat_runtime_state.agent_actor_lookup is returned_agent_actor_lookup
 
 
 @pytest.mark.asyncio
@@ -210,15 +248,20 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     )
     monkeypatch.setattr(
         "backend.chat.bootstrap.attach_chat_runtime",
-        lambda app, _storage_container, *, user_repo, thread_repo: SimpleNamespace(
+        lambda app, _storage_container, *, user_repo: SimpleNamespace(
             contact_repo=contact_repo,
             typing_tracker=object(),
             messaging_service=SimpleNamespace(set_delivery_fn=lambda _fn: None),
         ),
     )
+    monkeypatch.setattr("backend.chat.transport.build_inprocess_chat_transport", lambda **_kwargs: object())
+    monkeypatch.setattr("backend.chat.runtime_delivery.make_chat_delivery_fn", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(
         "backend.threads.bootstrap.attach_threads_runtime",
-        lambda app, *_args, **_kwargs: setattr(app.state, "agent_pool", {}) or SimpleNamespace(activity_reader=object()),
+        lambda app, *_args, **_kwargs: setattr(app.state, "agent_pool", {}) or SimpleNamespace(
+            activity_reader=object(),
+            agent_runtime_gateway=object(),
+        ),
     )
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())

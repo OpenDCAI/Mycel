@@ -1,0 +1,1 @@
+"""Chat backend app shell."""

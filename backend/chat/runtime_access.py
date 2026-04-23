@@ -37,3 +37,19 @@ def get_relationship_service(app: Any) -> Any:
 
 def get_contact_repo(app: Any) -> Any:
     return _require_chat_state(app, "contact_repo")
+
+
+def get_chat_repo(app: Any) -> Any:
+    return _require_chat_state(app, "chat_repo")
+
+
+def get_chat_event_bus(app: Any) -> Any:
+    return _require_chat_state(app, "chat_event_bus")
+
+
+def get_hire_conversation_reader(app: Any) -> Any:
+    return _require_chat_state(app, "hire_conversation_reader")
+
+
+def get_agent_actor_lookup(app: Any) -> Any:
+    return _require_chat_state(app, "agent_actor_lookup")

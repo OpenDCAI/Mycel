@@ -151,6 +151,21 @@ def build_thread_history_payload_from_display_entries(
     }
 
 
+def get_thread_history_payload_from_display_entries(
+    *,
+    thread_id: str,
+    entries: list[dict[str, Any]],
+    limit: int = 20,
+    truncate: int = 300,
+) -> dict[str, Any]:
+    return build_thread_history_payload_from_display_entries(
+        thread_id=thread_id,
+        entries=entries,
+        limit=limit,
+        truncate=truncate,
+    )
+
+
 async def get_thread_history_payload(
     *,
     thread_id: str,

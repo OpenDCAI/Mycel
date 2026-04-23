@@ -6,6 +6,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from backend.threads.runtime_access import get_thread_repo
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,7 +18,7 @@ def build_observation(app: Any, thread_id: str, config: dict[str, Any]) -> tuple
     obs_provider = None
 
     try:
-        thread_data = app.state.thread_repo.get_by_id(thread_id) if hasattr(app.state, "thread_repo") else None
+        thread_data = get_thread_repo(app).get_by_id(thread_id)
         obs_provider = thread_data.get("observation_provider") if thread_data else None
 
         if obs_provider:

@@ -9,3 +9,11 @@ def _get_auth_service(app: FastAPI):
     if auth_service is None:
         raise HTTPException(500, "Auth service not initialized")
     return auth_service
+
+
+def _get_user_directory(app: FastAPI):
+    runtime_state = getattr(app.state, "auth_runtime_state", None)
+    user_directory = getattr(runtime_state, "user_directory", None)
+    if user_directory is None:
+        raise HTTPException(500, "User directory not initialized")
+    return user_directory

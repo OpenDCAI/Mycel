@@ -7,8 +7,9 @@ from typing import Any, cast
 
 import pytest
 
+from backend.chat import runtime_delivery as chat_delivery_hook
+from backend.chat.transport import InProcessChatRuntimeTransport
 from backend.identity.avatar.urls import avatar_url
-from backend.threads.chat_adapters import chat_inlet as chat_delivery_hook
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_state
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
@@ -77,7 +78,7 @@ def _messaging_display_service(**overrides: Any) -> SimpleNamespace:
 
 def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     resolved = resolve_messaging_display_user(
-        user_repo=SimpleNamespace(
+        user_lookup=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
             )
@@ -91,7 +92,7 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
 
 def test_messaging_display_user_resolver_does_not_read_removed_thread_user_id() -> None:
     resolved = resolve_messaging_display_user(
-        user_repo=SimpleNamespace(
+        user_lookup=SimpleNamespace(
             get_by_id=lambda uid: (
                 None
                 if uid == "thread-user-1"
@@ -757,7 +758,7 @@ def test_chat_tool_service_rejects_empty_chat_identity_id(chat_identity_id: str 
 def test_chat_tool_service_rejects_dead_repo_constructor_kwargs() -> None:
     registry = ToolRegistry()
 
-    with pytest.raises(TypeError, match="chat_member_repo|messages_repo|owner_id|relationship_repo|user_repo|thread_repo"):
+    with pytest.raises(TypeError, match="chat_member_repo|messages_repo|owner_id|relationship_repo|user_repo"):
         ChatToolService(
             registry=registry,
             chat_identity_id="agent-user-1",
@@ -979,7 +980,6 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
             ],
             get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("chat list should not fetch users one by one")),
         ),
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("agent users are direct chat ids"))),
     )
 
     chats = service.list_chats_for_user("human-user-1")
@@ -1126,9 +1126,6 @@ def test_messaging_service_conversation_summaries_use_bulk_projection_repos() ->
         user_repo=SimpleNamespace(
             list_by_ids=lambda user_ids: calls.append(f"users:{','.join(user_ids)}") or [user_rows[user_id] for user_id in user_ids],
             get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("conversation summaries must not fetch users one by one")),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda _uid: (_ for _ in ()).throw(AssertionError("direct user ids should not query threads"))
         ),
     )
 
@@ -2573,14 +2570,20 @@ async def test_agent_runtime_gateway_uses_recipient_social_user_id_for_thread_lo
 
 
 @pytest.mark.asyncio
-async def test_recipient_thread_resolution_requires_current_thread_repo_contract() -> None:
+async def test_recipient_thread_resolution_uses_gateway_captured_thread_repo_contract() -> None:
+    cached_agent = SimpleNamespace(
+        id="agent-for-thread-1",
+        runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+    )
+    thread_repo = SimpleNamespace(
+        get_canonical_thread_for_agent_actor=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
+        get_by_id=lambda thread_id: {"id": thread_id, "agent_user_id": "agent-user-1"} if thread_id == "thread-1" else None,
+        list_by_agent_user=lambda uid: [{"id": "thread-1", "agent_user_id": uid}] if uid == "agent-user-1" else [],
+    )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "agent-user-1" else None,
-                get_by_id=lambda thread_id: {"id": thread_id, "agent_user_id": "agent-user-1"} if thread_id == "thread-1" else None,
-            ),
-            agent_pool={},
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
+            agent_pool={"thread-1:local": cached_agent},
             queue_manager=SimpleNamespace(enqueue=lambda *_args, **_kwargs: None),
             thread_cwd={},
             thread_sandbox={},
@@ -2589,33 +2592,37 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
             thread_locks_guard=asyncio.Lock(),
         )
     )
-    runtime_state = build_agent_runtime_state(app, typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None))
+    runtime_state = build_agent_runtime_state(
+        app,
+        thread_repo=thread_repo,
+        typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
+    )
     gateway = runtime_state.gateway
     app.state.threads_runtime_state = SimpleNamespace(
+        thread_repo=thread_repo,
         agent_runtime_gateway=gateway,
         activity_reader=runtime_state.activity_reader,
     )
 
-    with pytest.raises(AttributeError):
-        await asyncio.to_thread(
-            chat_delivery_hook.make_chat_delivery_fn(
-                app,
-                activity_reader=runtime_state.activity_reader,
-                thread_repo=app.state.thread_repo,
-            ),
-            ChatDeliveryRequest(
-                recipient_id="agent-user-1",
-                recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
-                content="hello",
-                sender_name="Human",
-                sender_type="human",
-                chat_id="chat-1",
-                sender_id="human-user-1",
-                sender_avatar_url=None,
-                unread_count=1,
-                signal="ping",
-            ),
-        )
+    transport = InProcessChatRuntimeTransport(runtime_gateway=gateway, loop=asyncio.get_running_loop())
+
+    await asyncio.to_thread(
+        chat_delivery_hook.make_chat_delivery_fn(
+            transport=transport,
+        ),
+        ChatDeliveryRequest(
+            recipient_id="agent-user-1",
+            recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
+            content="hello",
+            sender_name="Human",
+            sender_type="human",
+            chat_id="chat-1",
+            sender_id="human-user-1",
+            sender_avatar_url=None,
+            unread_count=1,
+            signal="ping",
+        ),
+    )
 
 
 async def _run_chat_delivery(
@@ -2637,19 +2644,20 @@ async def _run_chat_delivery(
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        "backend.threads.chat_adapters.chat_inlet.format_chat_notification",
+        "backend.chat.runtime_delivery.format_chat_notification",
         lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
     )
 
     thread_rows = threads or [{"id": "thread-1", "agent_user_id": "agent-user-1", "is_main": True, "branch_index": 0}]
     default_thread = next((row for row in thread_rows if row.get("is_main")), thread_rows[0])
+    thread_repo = SimpleNamespace(
+        get_canonical_thread_for_agent_actor=lambda uid: default_thread if uid == "agent-user-1" else None,
+        list_by_agent_user=lambda uid: list(thread_rows) if uid == "agent-user-1" else [],
+        get_by_id=lambda thread_id: next((row for row in thread_rows if row["id"] == thread_id), None),
+    )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: default_thread if uid == "agent-user-1" else None,
-                list_by_agent_user=lambda uid: list(thread_rows) if uid == "agent-user-1" else [],
-                get_by_id=lambda thread_id: next((row for row in thread_rows if row["id"] == thread_id), None),
-            ),
+            threads_runtime_state=SimpleNamespace(thread_repo=thread_repo),
             agent_pool=pool or {},
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
@@ -2665,19 +2673,20 @@ async def _run_chat_delivery(
     )
     runtime_state = build_agent_runtime_state(
         app,
+        thread_repo=thread_repo,
         typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
     )
     gateway = runtime_state.gateway
     app.state.threads_runtime_state = SimpleNamespace(
+        thread_repo=thread_repo,
         agent_runtime_gateway=gateway,
         activity_reader=runtime_state.activity_reader,
     )
+    transport = InProcessChatRuntimeTransport(runtime_gateway=gateway, loop=asyncio.get_running_loop())
 
     await asyncio.to_thread(
         chat_delivery_hook.make_chat_delivery_fn(
-            app,
-            activity_reader=runtime_state.activity_reader,
-            thread_repo=app.state.thread_repo,
+            transport=transport,
         ),
         ChatDeliveryRequest(
             recipient_id="agent-user-1",
@@ -2711,7 +2720,7 @@ async def _run_chat_delivery(
             },
             "chat-2",
             3,
-            "thread-child",
+            "thread-main",
         ),
         (
             [
@@ -2724,7 +2733,7 @@ async def _run_chat_delivery(
             },
             "chat-3",
             1,
-            "thread-child",
+            "thread-main",
         ),
         (
             [
@@ -2737,7 +2746,7 @@ async def _run_chat_delivery(
             },
             "chat-4",
             1,
-            "thread-child",
+            "thread-main",
         ),
         (
             [
@@ -2752,12 +2761,12 @@ async def _run_chat_delivery(
             },
             "chat-5",
             1,
-            "thread-child-fresh",
+            "thread-main",
         ),
     ],
     ids=["active-child-main-idle", "ready-child-main-idle", "ready-child-active-main", "latest-live-child"],
 )
-async def test_agent_runtime_gateway_prefers_latest_live_child_thread_over_active_main(
+async def test_agent_runtime_gateway_defaults_to_main_thread_when_chat_does_not_explicitly_target_a_thread(
     monkeypatch: pytest.MonkeyPatch,
     threads,
     pool,

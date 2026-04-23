@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from backend.threads.agent_actor_routing import select_runtime_thread_for_recipient
+
 
 class AgentChatRuntimeServices(Protocol):
     async def get_or_create_thread_agent(self, thread_id: str) -> Any: ...
+
+    def resolve_chat_thread_id(self, recipient_user_id: str) -> str | None: ...
 
     def start_chat(self, thread_id: str, chat_id: str, recipient_user_id: str) -> None: ...
 
@@ -29,6 +33,7 @@ class AppAgentChatRuntimeServices:
         app: Any,
         *,
         typing_tracker: Any,
+        thread_repo: Any,
         queue_manager: Any,
         get_or_create_agent: Any,
         resolve_thread_sandbox: Any,
@@ -36,6 +41,7 @@ class AppAgentChatRuntimeServices:
     ) -> None:
         self._app = app
         self._typing_tracker = typing_tracker
+        self._thread_repo = thread_repo
         self._queue_manager = queue_manager
         self._get_or_create_agent = get_or_create_agent
         self._resolve_thread_sandbox = resolve_thread_sandbox
@@ -46,6 +52,12 @@ class AppAgentChatRuntimeServices:
         agent = await self._get_or_create_agent(self._app, sandbox_type, thread_id=thread_id)
         self._ensure_thread_handlers(agent, thread_id, self._app)
         return agent
+
+    def resolve_chat_thread_id(self, recipient_user_id: str) -> str | None:
+        return select_runtime_thread_for_recipient(
+            recipient_user_id,
+            thread_repo=self._thread_repo,
+        )
 
     def start_chat(self, thread_id: str, chat_id: str, recipient_user_id: str) -> None:
         self._typing_tracker.start_chat(thread_id, chat_id, recipient_user_id)

@@ -21,3 +21,5 @@ def test_chat_app_router_mounts_chat_relationship_and_conversation_routes() -> N
     assert "/api/chats" in paths
     assert "/api/relationships" in paths
     assert "/api/conversations" in paths
+    assert "/api/contacts" in paths
+    assert "/api/users/chat-candidates" in paths

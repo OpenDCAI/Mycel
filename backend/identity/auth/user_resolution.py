@@ -50,10 +50,11 @@ async def _get_user_row_for_auth(request: Request, user_id: str, user_repo: Any)
 
 async def _resolve_current_user(request: Request) -> tuple[str, Any | None]:
     user_id = _extract_jwt_payload(request)["user_id"]
-    user_repo = getattr(request.app.state, "user_repo", None)
-    if user_repo is None:
+    auth_runtime_state = getattr(request.app.state, "auth_runtime_state", None)
+    user_directory = getattr(auth_runtime_state, "user_directory", None)
+    if user_directory is None:
         return user_id, None
-    user = await _get_user_row_for_auth(request, user_id, user_repo)
+    user = await _get_user_row_for_auth(request, user_id, user_directory)
     if user is None:
         raise HTTPException(401, "User no longer exists — please re-login")
     return user_id, user

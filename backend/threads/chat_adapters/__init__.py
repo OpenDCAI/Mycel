@@ -7,9 +7,8 @@ architecture §2 aggregate-root rule and §5.5 "agent_runtime absorbs").
 
 IN:
     - gateway.py, port.py (transport facade)
-    - chat_inlet.py, chat_handler.py (chat -> thread dispatch)
+    - chat_handler.py (chat -> thread dispatch implementation)
     - thread_handler.py (direct thread input)
-    - chat_notification_format.py (system-reminder formatting)
     - chat_runtime_services.py (app-backed services)
     - activity_reader.py (implements protocols.runtime_read.
       RuntimeThreadActivityReader)

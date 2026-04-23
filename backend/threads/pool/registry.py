@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from backend.threads.pool.factory import create_agent_sync
+from backend.threads.runtime_access import get_thread_repo
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from core.identity.agent_registry import get_or_create_agent_id
 from sandbox.thread_context import set_current_thread_id
@@ -57,7 +58,7 @@ async def get_or_create_agent(
 
         # For local sandbox, check if thread has custom cwd (live map -> persisted thread row).
         workspace_root = None
-        thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
+        thread_data = get_thread_repo(app_obj).get_by_id(thread_id)
         if sandbox_type == "local":
             cwd = app_obj.state.thread_cwd.get(thread_id)
             cwd_from_live_map = cwd is not None
@@ -181,7 +182,7 @@ async def get_or_create_agent(
             "model_name": model_name,
             "agent": agent_name,
             "bundle_dir": bundle_dir,
-            "thread_repo": getattr(app_obj.state, "thread_repo", None),
+            "thread_repo": get_thread_repo(app_obj),
             "user_repo": getattr(app_obj.state, "user_repo", None),
             "queue_manager": qm,
             "chat_repos": chat_repos,

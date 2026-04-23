@@ -54,7 +54,7 @@ async def test_publish_agent_user_to_marketplace_uses_user_repo_not_member_repo(
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                user_repo=user_repo,
+                auth_runtime_state=SimpleNamespace(user_directory=user_repo),
                 runtime_storage_state=_runtime_storage_state(agent_config_repo),
             )
         )
@@ -67,7 +67,7 @@ async def test_publish_agent_user_to_marketplace_uses_user_repo_not_member_repo(
     assert seen["type_"] == "member"
     assert seen["publisher_user_id"] == "owner-1"
     assert seen["publisher_username"] == "owner-name"
-    assert seen["user_repo"] is user_repo
+    assert seen["user_repo"] is request.app.state.auth_runtime_state.user_directory
     assert seen["agent_config_repo"] is agent_config_repo
 
 
@@ -81,9 +81,9 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                user_repo=SimpleNamespace(
+                auth_runtime_state=SimpleNamespace(user_directory=SimpleNamespace(
                     get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
-                ),
+                )),
                 runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
             )
         )
@@ -95,7 +95,7 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
     assert seen["user_id"] == "agent-1"
     assert seen["item_id"] == "item-1"
     assert seen["owner_user_id"] == "owner-1"
-    assert seen["user_repo"] is request.app.state.user_repo
+    assert seen["user_repo"] is request.app.state.auth_runtime_state.user_directory
     assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
 
 
@@ -109,7 +109,9 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
     request = SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                user_repo=SimpleNamespace(get_by_id=lambda user_id: owner_agent if user_id == "agent-1" else None),
+                auth_runtime_state=SimpleNamespace(
+                    user_directory=SimpleNamespace(get_by_id=lambda user_id: owner_agent if user_id == "agent-1" else None)
+                ),
                 runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
             )
         )
@@ -121,7 +123,7 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
     assert result == {"ok": True}
     assert seen["item_id"] == "item-1"
     assert seen["owner_user_id"] == "owner-1"
-    assert seen["user_repo"] is request.app.state.user_repo
+    assert seen["user_repo"] is request.app.state.auth_runtime_state.user_directory
     assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
     assert seen["agent_user_id"] == "agent-1"
 

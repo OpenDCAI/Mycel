@@ -5,9 +5,9 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.chat.api.http.dependencies import get_thread_repo
-from backend.chat.runtime_access import get_contact_repo
+from backend.chat.api.http.dependencies import get_contact_repo
 from backend.identity import profile as profile_owner
+from backend.identity.auth.dependencies import _get_user_directory
 from backend.library import service as library_service
 from backend.threads import agent_user_service
 from backend.web.core.dependencies import get_current_user, get_current_user_id
@@ -44,9 +44,16 @@ def _get_owned_agent_or_404_with_config(agent_id: str, user_id: str, user_repo: 
     return item
 
 
+def _thread_repo_or_503(request: Request) -> Any:
+    runtime_state = getattr(request.app.state, "threads_runtime_state", None)
+    thread_repo = getattr(runtime_state, "thread_repo", None)
+    if thread_repo is None:
+        raise HTTPException(503, "Thread repo unavailable")
+    return thread_repo
+
+
 def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None:
-    rows = thread_repo.list_by_agent_user(agent_id)
-    if rows:
+    if thread_repo.list_by_agent_user(agent_id):
         raise HTTPException(409, "Cannot delete agent with existing threads")
 
 
@@ -73,7 +80,7 @@ async def list_agents(
     user_id: CurrentUserId,
     request: Request,
 ) -> dict[str, Any]:
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     agent_config_repo = _agent_config_repo(request)
     items = await asyncio.to_thread(
         agent_user_service.list_agent_user_summaries,
@@ -94,7 +101,7 @@ async def get_agent(
         _get_owned_agent_or_404_with_config,
         agent_id,
         user_id,
-        request.app.state.user_repo,
+        _get_user_directory(request.app),
         _agent_config_repo(request),
     )
 
@@ -106,7 +113,7 @@ async def create_agent(
     request: Request,
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ) -> dict[str, Any]:
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     agent_config_repo = _agent_config_repo(request)
     try:
         # @@@panel-chat-consumer - panel owns the agent CRUD route, but contact
@@ -134,7 +141,7 @@ async def update_agent(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     agent_config_repo = _agent_config_repo(request)
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     item = await asyncio.to_thread(
@@ -158,7 +165,7 @@ async def update_agent_config(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     agent_config_repo = _agent_config_repo(request)
     item = await asyncio.to_thread(
@@ -182,7 +189,7 @@ async def publish_agent(
 ) -> dict[str, Any]:
     if agent_id == "__leon__":
         raise HTTPException(403, "Cannot publish builtin agent")
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     agent_config_repo = _agent_config_repo(request)
     item = await asyncio.to_thread(
@@ -202,15 +209,13 @@ async def delete_agent(
     agent_id: str,
     request: Request,
     user_id: CurrentUserId,
-    thread_repo: Annotated[Any, Depends(get_thread_repo)],
     contact_repo: Annotated[Any, Depends(get_contact_repo)],
 ) -> dict[str, Any]:
     if agent_id == "__leon__":
         raise HTTPException(403, "Cannot delete builtin agent")
-    user_repo = request.app.state.user_repo
+    user_repo = _get_user_directory(request.app)
     await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
-    if thread_repo is None:
-        raise HTTPException(503, "Thread repo unavailable")
+    thread_repo = _thread_repo_or_503(request)
     await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = _agent_config_repo(request)
     try:
@@ -325,7 +330,7 @@ async def get_used_by(
         resource_type,
         resource_name,
         user_id,
-        user_repo=request.app.state.user_repo,
+        user_repo=_get_user_directory(request.app),
         agent_config_repo=_agent_config_repo(request),
     )
     return {"count": len(users), "users": users}
@@ -378,7 +383,7 @@ async def update_profile(
 ) -> dict[str, Any]:
     return await asyncio.to_thread(
         profile_owner.update_profile,
-        user_repo=request.app.state.user_repo,
+        user_repo=_get_user_directory(request.app),
         user_id=user_id,
         name=req.name,
         email=req.email,
