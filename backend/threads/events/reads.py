@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from storage.contracts import RunEventRepo
-from storage.runtime import build_storage_container
 
 _default_run_event_repo: RunEventRepo | None = None
 
@@ -15,16 +14,3 @@ _default_run_event_repo: RunEventRepo | None = None
 class RunEventReadTransport:
     latest_run_id: Any
     list_events: Any
-
-
-def _resolve_run_event_repo(run_event_repo: RunEventRepo | None) -> RunEventRepo:
-    if run_event_repo is not None:
-        return run_event_repo
-
-    global _default_run_event_repo
-    if _default_run_event_repo is not None:
-        return _default_run_event_repo
-
-    container = build_storage_container()
-    _default_run_event_repo = container.run_event_repo()
-    return _default_run_event_repo

@@ -82,12 +82,13 @@ def test_monitor_trace_uses_trace_read_source_port():
     assert "get_thread_history_payload" in read_source
     assert "get_thread_history_payload(app=" not in read_source
     assert "load_live_messages=_load_live_messages" in read_source
-    assert "from backend.threads.events.reads import _resolve_run_event_repo" in read_source
+    assert "from backend.threads.events import reads as event_store_reads" in read_source
     assert "from backend.threads.sandbox_resolution import resolve_thread_sandbox" in read_source
     assert "backend.run_event_reads" not in read_source
     assert "backend.thread_sandbox" not in read_source
-    assert "build_storage_container" not in read_source
-    assert "repo = _resolve_run_event_repo(None)" in read_source
+    assert "from storage.runtime import build_storage_container" not in read_source
+    assert "repo = event_store_reads._default_run_event_repo" in read_source
+    assert "event_store_reads.build_storage_container().run_event_repo()" in read_source
     assert "backend.web.services.thread_history_service" not in read_source
     assert "backend.threads.activity_pool_service" not in read_source
     assert "backend.web.services.event_store" not in read_source
