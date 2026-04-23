@@ -48,27 +48,22 @@ def build_monitor_trace_reader(app: Any) -> MonitorTraceReader:
     )
 
     async def _load_thread_history_payload(thread_id: str) -> dict[str, Any]:
-        return await load_thread_history_payload(thread_id, history_transport=history_transport)
+        set_current_thread_id(thread_id)
+        return await get_thread_history_payload(
+            thread_id=thread_id,
+            history_transport=history_transport,
+            limit=200,
+            truncate=0,
+        )
+
+    def _load_latest_run_events(thread_id: str) -> tuple[str | None, list[dict[str, Any]]]:
+        transport = build_run_event_read_transport()
+        run_id = transport.latest_run_id(thread_id)
+        if run_id is None:
+            return None, []
+        return run_id, transport.list_events(thread_id, run_id, after=0, limit=1000)
 
     return MonitorTraceReader(
         load_thread_history_payload=_load_thread_history_payload,
-        load_latest_run_events=load_latest_run_events,
+        load_latest_run_events=_load_latest_run_events,
     )
-
-
-async def load_thread_history_payload(thread_id: str, *, history_transport) -> dict[str, Any]:
-    set_current_thread_id(thread_id)
-    return await get_thread_history_payload(
-        thread_id=thread_id,
-        history_transport=history_transport,
-        limit=200,
-        truncate=0,
-    )
-
-
-def load_latest_run_events(thread_id: str) -> tuple[str | None, list[dict[str, Any]]]:
-    transport = build_run_event_read_transport()
-    run_id = transport.latest_run_id(thread_id)
-    if run_id is None:
-        return None, []
-    return run_id, transport.list_events(thread_id, run_id, after=0, limit=1000)
