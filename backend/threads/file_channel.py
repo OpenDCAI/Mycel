@@ -71,6 +71,8 @@ def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
     result = source.save_file(relative_path, content)
     result["thread_id"] = thread_id
     return result
+
+
 def _required_text(row, key: str, label: str) -> str:
     value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
     if isinstance(value, str):
