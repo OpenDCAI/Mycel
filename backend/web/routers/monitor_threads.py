@@ -29,9 +29,7 @@ async def thread_detail_snapshot(request: Request, thread_id: str):
     try:
         return await monitor_thread_service.get_monitor_thread_detail(
             thread_id,
-            load_thread_base=lambda target_thread_id: monitor_thread_read_service.load_monitor_thread_base(
-                request.app, target_thread_id
-            ),
+            load_thread_base=lambda target_thread_id: monitor_thread_read_service.load_monitor_thread_base(request.app, target_thread_id),
             trace_reader=monitor_trace_read_service.build_monitor_trace_reader(request.app),
         )
     except KeyError as exc:
