@@ -33,20 +33,6 @@ def partition_terminal_followups(items: list[Any]) -> tuple[list[Any], list[Any]
         else:
             passthrough.append(item)
     return terminal, passthrough
-
-
-def _message_metadata_dict(message_metadata: dict[str, Any] | None) -> dict[str, Any]:
-    return dict(message_metadata or {})
-
-
-def _message_already_persisted(message: Any, *, content: str, metadata: dict[str, Any]) -> bool:
-    if message.__class__.__name__ != "HumanMessage":
-        return False
-    if getattr(message, "content", None) != content:
-        return False
-    return (getattr(message, "metadata", None) or {}) == metadata
-
-
 async def persist_cancelled_run_input_if_missing(
     *,
     agent: Any,
@@ -60,10 +46,15 @@ async def persist_cancelled_run_input_if_missing(
 
     from langchain_core.messages import HumanMessage
 
-    metadata = _message_metadata_dict(message_metadata)
+    metadata = dict(message_metadata or {})
     state = await graph.aget_state(config)
     persisted = list((getattr(state, "values", None) or {}).get("messages", []))
-    if persisted and _message_already_persisted(persisted[-1], content=message, metadata=metadata):
+    if (
+        persisted
+        and persisted[-1].__class__.__name__ == "HumanMessage"
+        and getattr(persisted[-1], "content", None) == message
+        and (getattr(persisted[-1], "metadata", None) or {}) == metadata
+    ):
         return
 
     # @@@cancelled-run-input-persist - a started run has already accepted this
