@@ -7,24 +7,11 @@ from typing import Any
 from core.runtime.notifications import is_terminal_background_notification
 
 
-def _is_terminal_background_notification_message(
-    message: str,
-    *,
-    source: str | None,
-    notification_type: str | None,
-) -> bool:
-    return is_terminal_background_notification(
-        message,
-        source=source,
-        notification_type=notification_type,
-    )
-
-
 def partition_terminal_followups(items: list[Any]) -> tuple[list[Any], list[Any]]:
     terminal = []
     passthrough = []
     for item in items:
-        if _is_terminal_background_notification_message(
+        if is_terminal_background_notification(
             item.content,
             source=item.source or "system",
             notification_type=item.notification_type,
@@ -65,14 +52,6 @@ async def persist_cancelled_run_input_if_missing(
     # never happened.
     candidate = HumanMessage(content=message, metadata=metadata) if metadata else HumanMessage(content=message)
     await graph.aupdate_state(config, {"messages": [candidate]})
-
-
-def _is_owner_steer_followup_message(
-    *,
-    source: str | None,
-    notification_type: str | None,
-) -> bool:
-    return source == "owner" and notification_type == "steer"
 
 
 async def persist_cancelled_owner_steers(
@@ -123,10 +102,7 @@ async def flush_cancelled_owner_steers(
     owner_steers: list[dict[str, str | None]] = []
     passthrough: list[Any] = []
     for item in queued_items:
-        if _is_owner_steer_followup_message(
-            source=item.source,
-            notification_type=item.notification_type,
-        ):
+        if item.source == "owner" and item.notification_type == "steer":
             owner_steers.append(
                 {
                     "content": item.content,
