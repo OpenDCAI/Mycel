@@ -6,7 +6,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.sandboxes.inventory import init_providers_and_managers
-from backend.web.utils.helpers import extract_webhook_instance_id
 from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.runtime_handle import sandbox_runtime_from_row
 from storage.container_cache import get_storage_container as _get_container
@@ -22,7 +21,25 @@ def _public_provider_event(row: dict[str, Any]) -> dict[str, Any]:
 @router.post("/{provider_name}")
 async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Ingest provider webhook and converge matched sandbox runtime state."""
-    instance_id = extract_webhook_instance_id(payload)
+    direct_keys = ("session_id", "sandbox_id", "instance_id", "id")
+    instance_id = next(
+        (
+            value
+            for key in direct_keys
+            if isinstance((value := payload.get(key)), str) and value
+        ),
+        None,
+    )
+    if instance_id is None and isinstance(payload.get("data"), dict):
+        nested = payload["data"]
+        instance_id = next(
+            (
+                value
+                for key in direct_keys
+                if isinstance((value := nested.get(key)), str) and value
+            ),
+            None,
+        )
     if not instance_id:
         raise HTTPException(400, "Webhook payload missing instance/session id")
 
