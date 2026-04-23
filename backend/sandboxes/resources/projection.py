@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import backend.sandboxes.resources.provider_boundary as resource_provider_boundary
-from backend.monitor.infrastructure.read_models import resource_runtime_service
 from backend.sandboxes.paths import SANDBOXES_DIR
+from backend.sandboxes.resources import runtime_service as resource_runtime_service
 from backend.sandboxes.resources.common import CATALOG as _CATALOG
 from backend.sandboxes.resources.common import CatalogEntry as _CatalogEntry
 from backend.sandboxes.resources.common import aggregate_provider_telemetry as _aggregate_provider_telemetry
