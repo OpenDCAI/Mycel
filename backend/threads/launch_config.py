@@ -23,27 +23,6 @@ def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "model": str(payload.get("model") or "").strip() or None,
         "workspace": str(payload.get("workspace") or "").strip() or None,
     }
-
-
-def build_new_launch_config(
-    *,
-    provider_config: str,
-    sandbox_template_id: str | None,
-    model: str | None,
-    workspace: str | None,
-) -> dict[str, Any]:
-    return normalize_launch_config_payload(
-        {
-            "create_mode": "new",
-            "provider_config": provider_config,
-            "sandbox_template_id": sandbox_template_id,
-            "existing_sandbox_id": None,
-            "model": model,
-            "workspace": workspace,
-        }
-    )
-
-
 def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
     if available_sandbox_types is None or list_library is None:
         raise RuntimeError("thread_runtime.launch_config requires available_sandbox_types and list_library bindings")

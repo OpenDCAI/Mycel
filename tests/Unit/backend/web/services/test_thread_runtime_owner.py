@@ -93,7 +93,6 @@ def test_thread_launch_config_uses_thread_runtime_launch_config_owner() -> None:
     owner_source = inspect.getsource(owner_module)
 
     assert owner_module.normalize_launch_config_payload is not None
-    assert owner_module.build_new_launch_config is not None
     assert owner_module.resolve_default_config is not None
     assert "sandbox_service.available_sandbox_types" not in owner_source
     assert "available_sandbox_types is None or list_library is None" in owner_source
