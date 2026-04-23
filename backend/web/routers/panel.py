@@ -5,8 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.chat.api.http.dependencies import get_thread_repo
-from backend.chat.runtime_access import get_contact_repo
+from backend.chat.api.http.dependencies import get_contact_repo, get_thread_repo
 from backend.identity import profile as profile_owner
 from backend.library import service as library_service
 from backend.threads import agent_user_service
@@ -65,6 +64,13 @@ def _recipe_repo(request: Request) -> Any:
     return recipe_repo
 
 
+def _panel_contact_repo(request: Request) -> Any:
+    try:
+        return get_contact_repo(request.app)
+    except HTTPException as exc:
+        raise HTTPException(503, "chat bootstrap not attached: contact_repo") from exc
+
+
 # ── Agents ──
 
 
@@ -107,13 +113,11 @@ async def create_agent(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = _agent_config_repo(request)
-    try:
-        # @@@panel-chat-consumer - panel owns the agent CRUD route, but contact
-        # edge cleanup is chat-owned truth. Borrow the repo explicitly so panel
-        # does not reach through request.app for chat runtime state.
-        contact_repo = get_contact_repo(request.app)
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc)) from exc
+    # @@@panel-chat-consumer - panel owns the agent CRUD route, but contact
+    # edge cleanup is chat-owned truth. Borrow the repo explicitly from the
+    # shared chat HTTP dependency surface so panel does not keep its own
+    # parallel chat-runtime accessor layer alive.
+    contact_repo = _panel_contact_repo(request)
     return await asyncio.to_thread(
         agent_user_service.create_agent_user,
         req.name,
@@ -210,10 +214,7 @@ async def delete_agent(
         raise HTTPException(503, "Thread repo unavailable")
     await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = _agent_config_repo(request)
-    try:
-        contact_repo = get_contact_repo(request.app)
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc)) from exc
+    contact_repo = _panel_contact_repo(request)
     ok = await asyncio.to_thread(
         agent_user_service.delete_agent_user,
         agent_id,
