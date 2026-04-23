@@ -9,7 +9,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def build_observation(app: Any, thread_id: str, config: dict[str, Any]) -> tuple[Any, str | None, Callable[[], None]]:
+def build_observation(app: Any, thread_id: str, config: dict[str, Any]) -> Callable[[], None]:
     """Build an observation handler and its flush callback."""
     obs_handler = None
     obs_active = None
@@ -93,4 +93,4 @@ def build_observation(app: Any, thread_id: str, config: dict[str, Any]) -> tuple
         except Exception as flush_err:
             logger.warning("Observation flush error: %s", flush_err)
 
-    return obs_handler, obs_active, flush
+    return flush
