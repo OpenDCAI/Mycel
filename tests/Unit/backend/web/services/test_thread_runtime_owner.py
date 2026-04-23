@@ -77,10 +77,8 @@ def test_agent_pool_uses_thread_runtime_pool_registry_owner() -> None:
     owner_source = inspect.getsource(owner_module)
 
     assert hasattr(agent_pool_module, "get_or_create_agent")
-    assert hasattr(agent_pool_module, "update_agent_config")
     assert "from backend.threads.pool import registry as _registry" in source
     assert "async def get_or_create_agent(" in source
-    assert "async def update_agent_config(" in source
     assert hasattr(agent_pool_module, "get_or_create_agent_id")
     assert hasattr(agent_pool_module, "get_file_channel_binding")
     assert owner_module.get_or_create_agent.__module__ == "backend.threads.pool.registry"

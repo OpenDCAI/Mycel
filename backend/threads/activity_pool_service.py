@@ -23,11 +23,3 @@ async def get_or_create_agent(*args, **kwargs):
         if messaging_service is not None:
             kwargs["messaging_service"] = messaging_service
     return await _registry.get_or_create_agent(*args, **kwargs)
-
-
-async def update_agent_config(*args, **kwargs):
-    _registry.create_agent_sync = create_agent_sync
-    _registry.get_or_create_agent_id = get_or_create_agent_id
-    _registry.get_file_channel_binding = get_file_channel_binding
-    _registry.resolve_thread_sandbox = resolve_thread_sandbox
-    return await _registry.update_agent_config(*args, **kwargs)
