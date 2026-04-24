@@ -1,5 +1,3 @@
-"""Follow-up queue consumption helpers for thread runtime runs."""
-
 from __future__ import annotations
 
 import logging
@@ -13,7 +11,6 @@ _start_agent_run = None
 
 
 async def consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
-    """Dequeue a pending followup message and start a new run."""
     item = None
     try:
         qm = app.state.queue_manager

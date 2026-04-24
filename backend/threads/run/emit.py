@@ -1,5 +1,3 @@
-"""Event emission helpers for thread runtime runs."""
-
 from __future__ import annotations
 
 import json

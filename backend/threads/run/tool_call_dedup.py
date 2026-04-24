@@ -1,5 +1,3 @@
-"""Tool-call dedup helpers for thread runtime runs."""
-
 from __future__ import annotations
 
 from typing import Any
