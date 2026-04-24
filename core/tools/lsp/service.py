@@ -1,17 +1,3 @@
-"""LSP Service - Language Server Protocol code intelligence via multilspy.
-
-Registers a single DEFERRED `LSP` tool with 9 operations:
-  goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol,
-  goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls
-
-Sessions are managed by the process-level _LSPSessionPool singleton — they
-start lazily on first use and persist for the lifetime of the process,
-surviving agent restarts. Call `await lsp_pool.close_all()` on process exit.
-
-Supported languages (via multilspy):
-  python, typescript, javascript, go, rust, java, ruby, kotlin, csharp
-"""
-
 from __future__ import annotations
 
 import asyncio

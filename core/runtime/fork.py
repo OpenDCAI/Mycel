@@ -1,11 +1,3 @@
-"""Context fork for sub-agent spawning.
-
-When a sub-agent is spawned, it inherits workspace/model/permission configuration
-from the parent but gets its own isolated messages and session identity.
-
-Aligned with CC createSubagentContext() field-by-field fork table.
-"""
-
 from __future__ import annotations
 
 import copy

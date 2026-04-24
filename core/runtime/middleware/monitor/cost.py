@@ -1,10 +1,3 @@
-"""模型成本计算
-
-定价来源优先级：
-1. OpenRouter API（启动时拉取，缓存到 ~/.leon/pricing_cache.json，24h TTL）
-2. 本地 models.json（OpenRouter /models 原始快照，随代码发布，离线兜底）
-"""
-
 from __future__ import annotations
 
 import json

@@ -1,15 +1,3 @@
-"""System prompt builders — pure functions, no agent state.
-
-Extracted from LeonAgent so agent.py stays lean.
-
-Middleware Stack
-- MemoryMiddleware: trims/compacts conversation context before model calls.
-- MonitorMiddleware: aggregates runtime metrics and observes model execution.
-- PromptCachingMiddleware: enables Anthropic prompt caching for eligible requests.
-- SteeringMiddleware: drains queued messages and injects them before the next model call.
-- SpillBufferMiddleware: spills oversized tool outputs to disk and replaces them with previews.
-"""
-
 from __future__ import annotations
 
 from typing import NamedTuple

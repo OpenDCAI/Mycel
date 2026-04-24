@@ -1,10 +1,3 @@
-"""Anthropic prompt caching middleware.
-
-Requires:
-    - local `core.runtime.middleware` protocol types
-    - `langchain-anthropic`: For `ChatAnthropic` model
-"""
-
 from collections.abc import Awaitable, Callable
 from typing import Literal
 from warnings import warn
@@ -29,16 +22,6 @@ except ImportError as e:
 
 
 class PromptCachingMiddleware(AgentMiddleware):
-    """Prompt Caching Middleware.
-
-    Optimizes API usage by caching conversation prefixes for Anthropic models.
-
-    Requires the local runtime middleware protocol plus `langchain-anthropic`.
-
-    Learn more about Anthropic prompt caching
-    [here](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
-    """
-
     def __init__(
         self,
         type: Literal["ephemeral"] = "ephemeral",  # noqa: A002
