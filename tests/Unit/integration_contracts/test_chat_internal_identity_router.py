@@ -38,7 +38,6 @@ def _app_state() -> SimpleNamespace:
                 chat_event_bus=object(),
                 typing_tracker=object(),
                 hire_conversation_reader=object(),
-                agent_actor_lookup=object(),
             ),
             threads_runtime_state=SimpleNamespace(activity_reader=object()),
             thread_last_active={},

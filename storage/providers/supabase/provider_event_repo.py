@@ -31,7 +31,7 @@ class SupabaseProviderEventRepo:
         instance_id: str,
         event_type: str,
         payload: dict[str, Any],
-        matched_sandbox_runtime_handle: str | None,
+        matched_runtime_handle: str | None,
         matched_sandbox_id: str | None,
     ) -> None:
         self._t().insert(
@@ -40,7 +40,7 @@ class SupabaseProviderEventRepo:
                 "instance_id": instance_id,
                 "event_type": event_type,
                 "payload_json": json.dumps(payload, ensure_ascii=False),
-                "matched_sandbox_runtime_handle": matched_sandbox_runtime_handle,
+                "matched_runtime_handle": matched_runtime_handle,
                 "matched_sandbox_id": matched_sandbox_id,
                 "created_at": datetime.now().isoformat(),
             }
@@ -51,7 +51,7 @@ class SupabaseProviderEventRepo:
             q.limit(
                 q.order(
                     self._t().select(
-                        "event_id,provider_name,instance_id,event_type,payload_json,matched_sandbox_runtime_handle,matched_sandbox_id,created_at"
+                        "event_id,provider_name,instance_id,event_type,payload_json,matched_runtime_handle,matched_sandbox_id,created_at"
                     ),
                     "created_at",
                     desc=True,
