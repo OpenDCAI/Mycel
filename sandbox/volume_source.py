@@ -12,24 +12,19 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class VolumeSource(Protocol):
-    """Abstract persistent storage backend."""
-
     def save_file(self, relative_path: str, content: bytes) -> dict[str, Any]: ...
     def list_files(self) -> list[dict[str, Any]]: ...
     def resolve_file(self, relative_path: str) -> Path: ...
     def delete_file(self, relative_path: str) -> None: ...
 
     @property
-    def host_path(self) -> Path | None:
-        """Host filesystem path for sync. None if no host backing."""
-        ...
+    def host_path(self) -> Path | None: ...
 
     def cleanup(self) -> None: ...
     def serialize(self) -> dict[str, Any]: ...
 
 
 def _resolve_safe_path(base: Path, relative_path: str) -> Path:
-    """Resolve relative path with traversal protection."""
     # @@@path-boundary - Reject traversal so callers cannot escape the volume root
     requested = Path(relative_path)
     if requested.is_absolute():
@@ -40,8 +35,6 @@ def _resolve_safe_path(base: Path, relative_path: str) -> Path:
 
 
 class HostVolume:
-    """Host filesystem volume used by host-backed providers and Daytona file roots."""
-
     def __init__(self, base_path: Path):
         self.base_path = base_path.expanduser().resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
