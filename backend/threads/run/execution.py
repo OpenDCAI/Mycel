@@ -1,5 +1,3 @@
-"""Execution orchestration helpers for thread runtime runs."""
-
 from __future__ import annotations
 
 import asyncio

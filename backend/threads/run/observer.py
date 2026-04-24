@@ -1,5 +1,3 @@
-"""SSE observer helpers for thread runtime event buffers."""
-
 from __future__ import annotations
 
 import json
@@ -14,7 +12,6 @@ async def observe_thread_events(
     thread_buf: ThreadEventBuffer,
     after: int = 0,
 ) -> AsyncGenerator[SSEEvent, None]:
-    """Consume events from a persistent ThreadEventBuffer."""
     async for event in observe_sse_buffer(thread_buf, after=after, stop_on_finish=False):
         yield event
 
@@ -23,7 +20,6 @@ async def observe_run_events(
     buf: RunEventBuffer,
     after: int = 0,
 ) -> AsyncGenerator[SSEEvent, None]:
-    """Consume events from a RunEventBuffer (subagent streams only)."""
     async for event in observe_sse_buffer(buf, after=after, stop_on_finish=True):
         yield event
 
@@ -34,7 +30,6 @@ async def observe_sse_buffer(
     after: int,
     stop_on_finish: bool,
 ) -> AsyncGenerator[SSEEvent, None]:
-    """Shared SSE observer loop for thread and run buffers."""
     yield {"retry": 5000}
 
     cursor = 0

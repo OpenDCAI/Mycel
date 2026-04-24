@@ -1,5 +1,3 @@
-"""Cancellation and terminal follow-up helpers for thread runtime runs."""
-
 import asyncio
 import json
 from typing import Any
