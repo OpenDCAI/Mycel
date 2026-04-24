@@ -1,5 +1,3 @@
-"""Supabase read-only queries against the sandbox tables for monitoring."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -14,8 +12,6 @@ _SANDBOX_SELECT = (
 
 
 class SupabaseSandboxMonitorRepo:
-    """Read-only monitor queries backed by Supabase tables."""
-
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
 

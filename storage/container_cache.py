@@ -1,5 +1,3 @@
-"""Process-local storage container cache."""
-
 from __future__ import annotations
 
 from storage.container import StorageContainer

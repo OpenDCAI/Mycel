@@ -1,5 +1,3 @@
-"""Shared PostgREST query helpers for all Supabase repos."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
