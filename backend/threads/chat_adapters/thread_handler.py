@@ -11,8 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class NativeAgentThreadInputHandler:
-    """Routes direct thread input into native Mycel Agent runs."""
-
     def __init__(
         self,
         app: Any,

@@ -21,8 +21,6 @@ def _normalize_state(state: AgentState) -> Literal["initializing", "ready", "act
 
 
 class AppRuntimeThreadActivityReader:
-    """Read live runtime thread activity from app-backed state."""
-
     def __init__(self, *, thread_repo: Any, agent_pool: dict[str, Any]) -> None:
         self._thread_repo = thread_repo
         self._agent_pool = agent_pool

@@ -104,6 +104,5 @@ class SupabaseInviteCodeRepo:
         return not _is_expired(existing)
 
     def revoke(self, code: str) -> bool:
-        """Delete (revoke) a code. Returns True if it existed."""
         resp = self._table().delete().eq("code", code).execute()
         return bool(resp.data)

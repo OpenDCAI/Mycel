@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
-    """Create a delivery callback for MessagingService."""
     import asyncio
 
     if activity_reader is None:
