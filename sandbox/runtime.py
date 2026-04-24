@@ -910,17 +910,6 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
         instance = self.sandbox_runtime.ensure_active_instance(self.provider)
         state = self.terminal.get_state()
         timeout_ms = int(timeout * 1000) if timeout else 30000
-        print(
-            "[RemoteWrappedRuntime._execute_once] "
-            f"thread_id={self.terminal.thread_id} "
-            f"sandbox_runtime_id={self.sandbox_runtime.sandbox_runtime_id} "
-            f"instance_id={instance.instance_id} "
-            f"provider={getattr(self.provider, 'name', '?')} "
-            f"cwd={state.cwd!r} "
-            f"timeout_ms={timeout_ms} "
-            f"command={command[:200]!r}",
-            flush=True,
-        )
         start_marker, end_marker = _build_state_markers()
         exports = _build_export_block(state.env_delta)
         wrapped = "\n".join(
@@ -945,14 +934,6 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
             cwd=state.cwd,
         )
         raw_output = result.output or ""
-        print(
-            "[RemoteWrappedRuntime._execute_once] "
-            f"thread_id={self.terminal.thread_id} "
-            f"provider_exit={result.exit_code} "
-            f"provider_error={result.error!r} "
-            f"output_len={len(raw_output)}",
-            flush=True,
-        )
 
         try:
             new_cwd, env_map, raw_output = _extract_state_from_output(
