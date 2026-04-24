@@ -12,8 +12,6 @@ NotificationType = Literal["steer", "command", "agent", "chat"]
 
 
 class SandboxRuntimeRepo(Protocol):
-    """Sandbox runtime persistence. Returns raw dicts for domain object construction."""
-
     def close(self) -> None: ...
     def get(self, sandbox_runtime_id: str) -> dict[str, Any] | None: ...
     def create(
@@ -52,8 +50,6 @@ class SandboxRuntimeRepo(Protocol):
 
 
 class ProviderEventRepo(Protocol):
-    """Webhook event persistence."""
-
     def close(self) -> None: ...
     def record(
         self,
@@ -69,8 +65,6 @@ class ProviderEventRepo(Protocol):
 
 
 class MonitorOperationRepo(Protocol):
-    """Monitor operation persistence."""
-
     def close(self) -> None: ...
     def create(self, operation: dict[str, Any]) -> dict[str, Any]: ...
     def save(self, operation: dict[str, Any]) -> None: ...
@@ -80,8 +74,6 @@ class MonitorOperationRepo(Protocol):
 
 
 class SandboxMonitorRepo(Protocol):
-    """Read-only monitor queries over sandbox, thread, and resource rows."""
-
     def close(self) -> None: ...
     def query_sandboxes(self) -> list[dict[str, Any]]: ...
     def query_sandbox_cleanup_target(self, sandbox_id: str) -> dict[str, Any] | None: ...
@@ -405,8 +397,6 @@ class RelationshipRow(BaseModel):
 
 
 class DeliveryAction(StrEnum):
-    """What to do when a chat message reaches a recipient."""
-
     DELIVER = "deliver"  # full delivery: inject into agent context, wake agent
     NOTIFY = "notify"  # red dot only: message stored, unread counted, no delivery
     DROP = "drop"  # silent: message stored but invisible to this user
@@ -416,8 +406,6 @@ ContactRelation = Literal["normal", "blocked", "muted"]
 
 
 class ContactRow(BaseModel):
-    """Directional relationship between two social identities. A→B independent of B→A."""
-
     owner_id: str  # social identity: direct user_id for humans, thread-attached user_id for agents
     target_id: str  # social identity: direct user_id for humans, thread-attached user_id for agents
     relation: ContactRelation
@@ -591,8 +579,6 @@ class SummaryRepo(Protocol):
 
 
 class QueueItem(BaseModel):
-    """A dequeued message with its notification type."""
-
     content: str
     notification_type: NotificationType
     source: str | None = None  # "owner" | "external" | "system"
@@ -758,11 +744,6 @@ class ContactRepo(Protocol):
 
 
 class DeliveryResolver(Protocol):
-    """Evaluates delivery strategy for a chat message recipient.
-
-    Checks contact-level block/mute, then chat-level mute, then defaults to DELIVER.
-    """
-
     def resolve(self, recipient_id: str, chat_id: str, sender_id: str, *, is_mentioned: bool = False) -> DeliveryAction: ...
 
 
