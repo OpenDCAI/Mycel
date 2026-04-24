@@ -101,15 +101,6 @@ class TokenMonitor(BaseMonitor):
             "cache_write_tokens": self.cache_write_tokens,
         }
 
-    # 向后兼容别名
-    @property
-    def prompt_tokens(self) -> int:
-        return self.input_tokens + self.cache_read_tokens + self.cache_write_tokens
-
-    @property
-    def completion_tokens(self) -> int:
-        return self.output_tokens + self.reasoning_tokens
-
     def get_metrics(self) -> dict[str, Any]:
         cost = self.get_cost()
         return {
@@ -119,9 +110,6 @@ class TokenMonitor(BaseMonitor):
             "reasoning_tokens": self.reasoning_tokens,
             "cache_read_tokens": self.cache_read_tokens,
             "cache_write_tokens": self.cache_write_tokens,
-            # 向后兼容
-            "prompt_tokens": self.prompt_tokens,
-            "completion_tokens": self.completion_tokens,
             "call_count": self.call_count,
             "cost": float(cost.get("total", 0)),
         }

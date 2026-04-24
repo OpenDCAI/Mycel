@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRuntime:
-    """聚合所有 Monitor 的数据，提供统一的状态访问接口"""
-
     def __init__(
         self,
         token_monitor: TokenMonitor,
@@ -28,8 +26,6 @@ class AgentRuntime:
         self._activity_sink: Callable[[dict], Any] | None = None
         # @@@run-source-tracking — set per-run by streaming_service
         self.current_run_source: str | None = None  # "owner" | "external" | "system"
-
-    # ========== 状态代理 ==========
 
     @property
     def current_state(self) -> AgentState:
@@ -50,8 +46,6 @@ class AgentRuntime:
 
     def is_running(self) -> bool:
         return self.state.is_running()
-
-    # ========== Token 代理 ==========
 
     @property
     def total_tokens(self) -> int:
@@ -77,23 +71,9 @@ class AgentRuntime:
     def cache_write_tokens(self) -> int:
         return self.token.cache_write_tokens
 
-    # 向后兼容
-    @property
-    def prompt_tokens(self) -> int:
-        return self.token.prompt_tokens
-
-    @property
-    def completion_tokens(self) -> int:
-        return self.token.completion_tokens
-
-    # ========== 成本代理 ==========
-
     @property
     def cost(self) -> float:
-        """当前累计成本（USD）"""
         return float(self.token.get_cost().get("total", 0))
-
-    # ========== 上下文代理 ==========
 
     @property
     def message_count(self) -> int:
@@ -106,10 +86,7 @@ class AgentRuntime:
     def is_context_near_limit(self) -> bool:
         return self.context.is_near_limit()
 
-    # ========== 聚合输出 ==========
-
     def get_status_dict(self) -> dict[str, Any]:
-        """返回完整状态字典（verbose）"""
         return {
             "state": self.state.get_metrics(),
             "tokens": self.token.get_metrics(),
@@ -117,7 +94,6 @@ class AgentRuntime:
         }
 
     def get_compact_dict(self) -> dict[str, Any]:
-        """返回精简状态字典，适合轻量观察（不含 streaming 细节）"""
         token = self.token
         ctx = self.context
         usage_percent = round(ctx.estimated_tokens / ctx.context_limit * 100, 1) if ctx.context_limit > 0 else 0.0
@@ -130,7 +106,6 @@ class AgentRuntime:
         }
 
     def get_status_line(self) -> str:
-        """返回单行状态，用于 TUI 状态栏"""
         parts = [f"[{self.current_state.value.upper()}]"]
 
         flag_names = [
@@ -156,26 +131,19 @@ class AgentRuntime:
 
         return " | ".join(parts)
 
-    # ========== Event callback ==========
-
     def set_event_callback(self, callback: Callable[[dict], None] | None) -> None:
-        """Set real-time event callback. Used by streaming_service."""
         self._event_callback = callback
 
     def set_activity_sink(self, sink: Callable[[dict], Any] | None) -> None:
-        """Set persistent activity event sink. Unlike _event_callback, this survives across runs."""
         self._activity_sink = sink
 
     def bind_thread(self, activity_sink: Callable[[dict], Any]) -> None:
-        """Set per-thread activity sink. Idempotent — safe to call on every run."""
         self._activity_sink = activity_sink
 
     def unbind_thread(self) -> None:
-        """Clear per-thread handlers on thread deletion."""
         self._activity_sink = None
 
     def _dispatch_to_sink(self, event: dict[str, Any]) -> None:
-        """Fire-and-forget dispatch to persistent activity sink."""
         if not self._activity_sink:
             return
         try:
@@ -205,8 +173,6 @@ class AgentRuntime:
             self._event_callback(event)
         else:
             self._dispatch_to_sink(event)
-
-    # ========== Sub-agent event dispatch ==========
 
     def emit_subagent_event(
         self,
@@ -240,7 +206,6 @@ class AgentRuntime:
             self._subagent_event_buffer.setdefault(parent_tool_call_id, []).append(enriched_event)
 
     def get_pending_subagent_events(self) -> list[tuple[str, list[dict[str, Any]]]]:
-        """Get and clear pending sub-agent events."""
         events = list(self._subagent_event_buffer.items())
         self._subagent_event_buffer.clear()
         return events
