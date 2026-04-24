@@ -1,5 +1,3 @@
-"""Tests for SearchService Grep and Glob tools."""
-
 from __future__ import annotations
 
 import time
@@ -13,45 +11,33 @@ from core.tools.search.service import DEFAULT_EXCLUDES, SearchService
 
 @pytest.fixture()
 def workspace(tmp_path: Path) -> Path:
-    """Create a temporary workspace with sample files for search tests."""
-    # src/main.py
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.py").write_text("import os\nimport sys\n\ndef main():\n    print('hello world')\n")
-    # src/utils.py
     (src / "utils.py").write_text("def helper():\n    return 42\n\ndef another():\n    return 'HELLO'\n")
-    # src/app.js
     (src / "app.js").write_text("const app = () => console.log('hello');\n")
-    # README.md at root
     (tmp_path / "README.md").write_text("# Project\nHello World\n")
-    # data.txt at root
     (tmp_path / "data.txt").write_text("line1\nline2 hello\nline3\nline4 hello\nline5\n")
     return tmp_path
 
 
 @pytest.fixture()
 def mw(workspace: Path) -> SearchService:
-    """SearchService instance using the Python implementation (no ripgrep)."""
     with patch("shutil.which", return_value=None):
         return SearchService(MagicMock(), workspace_root=workspace)
 
 
 def _grep(mw: SearchService, **kwargs) -> str:
-    """Shortcut: invoke _grep directly and return content."""
     return mw._grep(**kwargs)
 
 
 def _glob(mw: SearchService, **kwargs) -> str:
-    """Shortcut: invoke _glob directly and return content."""
     return mw._glob(**kwargs)
 
 
 class TestGrepFilesWithMatches:
-    """Default output_mode = 'files_with_matches'."""
-
     def test_basic_search(self, mw: SearchService, workspace: Path):
         result = _grep(mw, pattern="hello")
-        # Should match data.txt, app.js, and main.py (print('hello world'))
         assert "data.txt" in result
         assert "main.py" in result
 
@@ -61,16 +47,12 @@ class TestGrepFilesWithMatches:
 
 
 class TestGrepContent:
-    """output_mode = 'content' returns matching lines with line numbers."""
-
     def test_content_mode(self, mw: SearchService, workspace: Path):
         result = _grep(mw, pattern="hello", output_mode="content")
-        # Python implementation format: <filepath>:<lineno>:<line>
         assert ":2:" in result or ":5:" in result  # line2 or line5 in data.txt
         assert "hello" in result
 
     def test_content_line_numbers(self, mw: SearchService, workspace: Path):
-        # data.txt has "hello" on lines 2 and 4
         data_path = str(workspace / "data.txt")
         result = _grep(mw, pattern="hello", path=data_path, output_mode="content")
         assert f"{data_path}:2:" in result
@@ -78,12 +60,9 @@ class TestGrepContent:
 
 
 class TestGrepCount:
-    """output_mode = 'count' returns match counts per file."""
-
     def test_count_mode(self, mw: SearchService, workspace: Path):
         data_path = str(workspace / "data.txt")
         result = _grep(mw, pattern="hello", path=data_path, output_mode="count")
-        # data.txt has 2 lines matching "hello"
         assert f"{data_path}:2" in result
 
     def test_count_multiple_files(self, mw: SearchService):
@@ -384,8 +363,6 @@ class TestGlobPathParameter:
 
 
 class TestPaginate:
-    """Unit tests for _paginate static method."""
-
     @pytest.mark.parametrize(
         ("text", "head_limit", "offset", "expected"),
         [
@@ -401,8 +378,6 @@ class TestPaginate:
 
 
 class TestIsExcluded:
-    """Unit tests for _is_excluded."""
-
     @pytest.mark.parametrize(
         ("path", "expected"),
         [

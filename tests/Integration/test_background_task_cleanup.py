@@ -1,5 +1,3 @@
-"""Integration tests for background task cleanup across command/agent surfaces."""
-
 import asyncio
 import json
 import shlex

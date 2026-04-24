@@ -1,11 +1,3 @@
-"""Tests for followup queue re-enqueue logic in streaming_service.
-
-Covers the _consume_followup_queue function:
-- Normal path: dequeue + start_agent_run succeeds
-- Re-enqueue on failure: message is put back when start_agent_run raises
-- No followup: dequeue returns None, nothing happens
-"""
-
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -22,7 +14,6 @@ def queue_manager(tmp_path):
 
 @pytest.fixture()
 def mock_app(queue_manager):
-    """Minimal app stub with state.queue_manager and state.thread_event_buffers/thread_tasks."""
     state = SimpleNamespace(
         queue_manager=queue_manager,
         thread_event_buffers={},
@@ -33,7 +24,6 @@ def mock_app(queue_manager):
 
 @pytest.fixture()
 def mock_agent():
-    """Minimal agent stub with runtime that supports transition()."""
     runtime = MagicMock()
     runtime.transition.return_value = True
     runtime._activity_sink = None
@@ -43,25 +33,19 @@ def mock_agent():
 
 @pytest.mark.asyncio
 class TestConsumeFollowupQueue:
-    """Tests for _consume_followup_queue re-enqueue logic."""
-
     async def test_no_followup_does_nothing(self, mock_agent, mock_app):
-        """When queue is empty, nothing happens."""
         from backend.threads.streaming import _consume_followup_queue
 
         await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-        # Queue is still empty
         assert mock_app.state.queue_manager.dequeue("thread-1") is None
-        # Runtime transition was never called
         mock_agent.runtime.transition.assert_not_called()
 
     async def test_successful_followup_consumes_message(self, mock_agent, mock_app, queue_manager):
-        """When followup succeeds, message is consumed and not re-enqueued."""
         queue_manager.enqueue("do something", "thread-1")
         from backend.threads.streaming import _consume_followup_queue
 
         with patch("backend.threads.streaming.start_agent_run") as mock_start:
-            mock_start.return_value = "run-123"  # start_agent_run returns str run_id
+            mock_start.return_value = "run-123"
 
             await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
@@ -78,24 +62,20 @@ class TestConsumeFollowupQueue:
                     "is_steer": False,
                 },
             )
-        # Message was consumed, queue is empty
         assert queue_manager.dequeue("thread-1") is None
 
     async def test_exception_re_enqueues_message(self, mock_agent, mock_app, queue_manager):
-        """When start_agent_run raises, the dequeued message is re-enqueued."""
         queue_manager.enqueue("important followup", "thread-1")
         from backend.threads.streaming import _consume_followup_queue
 
         with patch("backend.threads.streaming.start_agent_run", side_effect=RuntimeError("boom")):
             await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
-        # Message was re-enqueued — it should be available again
         item = queue_manager.dequeue("thread-1")
         assert item is not None
         assert item.content == "important followup"
 
     async def test_transition_failure_skips_start(self, mock_agent, mock_app, queue_manager):
-        """When runtime.transition returns False, followup stays queued."""
         queue_manager.enqueue("wont run", "thread-1")
         mock_agent.runtime.transition.return_value = False
         from backend.threads.streaming import _consume_followup_queue

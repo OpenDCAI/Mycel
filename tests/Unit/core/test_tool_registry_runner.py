@@ -1,11 +1,3 @@
-"""Tests for ToolRegistry, ToolRunner, and ToolValidator (P0/P1 verification).
-
-Covers:
-- P0: Three-tier error normalization (Layer 1: validation, Layer 2: execution, Layer 3: soft)
-- P1: ToolRegistry inline/deferred mode
-- P1: ToolRunner dispatches registered tools and normalizes errors
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -2140,7 +2132,6 @@ class TestToolRunnerInlineInjection:
         )
         runner = _make_runner([entry])
 
-        # Build a mock ModelRequest
         request = MagicMock()
         request.tools = []
 

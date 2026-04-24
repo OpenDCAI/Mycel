@@ -1,5 +1,3 @@
-"""Tests for core.spill_buffer: spill_if_needed() and SpillBufferMiddleware."""
-
 import posixpath
 from dataclasses import dataclass
 from typing import Any, cast
@@ -56,8 +54,6 @@ def _spill(content: Any, *, threshold_bytes: int, tool_call_id: str = "call", fs
 
 
 class TestSpillIfNeeded:
-    """Unit tests for the core spill function."""
-
     @pytest.mark.parametrize(
         ("content", "threshold"),
         [
@@ -197,8 +193,6 @@ class TestSpillIfNeeded:
 
 
 class TestSpillBufferMiddleware:
-    """Tests for the middleware that wraps tool calls."""
-
     def _make_middleware(self, thresholds=None, default_threshold=50_000):
         fs = _make_fs_backend()
         mw = SpillBufferMiddleware(

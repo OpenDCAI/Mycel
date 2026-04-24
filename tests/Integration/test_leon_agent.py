@@ -1,8 +1,3 @@
-"""Integration tests for LeonAgent with QueryLoop.
-
-Uses mock model to verify the full astream pipeline without real API calls.
-"""
-
 import json
 import os
 from types import SimpleNamespace
@@ -14,12 +9,10 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Sys
 
 
 def _mock_model(text="Integration test response"):
-    """Create a mock LangChain model that returns a plain AIMessage."""
     ai_msg = AIMessage(content=text)
     model = MagicMock()
     model.bind_tools.return_value = model
     model.ainvoke = AsyncMock(return_value=ai_msg)
-    # configurable_fields support
     model.configurable_fields.return_value = model
     model.with_config.return_value = model
     return model
@@ -44,7 +37,6 @@ def _empty_stream_model():
 
 
 def _patch_env_api_key():
-    """Ensure ANTHROPIC_API_KEY is set for LeonAgent init (uses a fake value)."""
     return patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test-integration"})
 
 

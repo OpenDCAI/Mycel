@@ -1,5 +1,3 @@
-"""Unit tests for AgentService sub-agent boundaries and policy."""
-
 from __future__ import annotations
 
 import asyncio

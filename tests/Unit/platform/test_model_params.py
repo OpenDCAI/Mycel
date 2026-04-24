@@ -1,5 +1,3 @@
-"""Tests for model parameter normalization."""
-
 from core.model_params import normalize_model_kwargs
 
 

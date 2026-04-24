@@ -1,5 +1,3 @@
-"""Tests for marketplace_client business logic (publish/download)."""
-
 import importlib
 import json
 from types import SimpleNamespace
@@ -11,8 +9,6 @@ from fastapi import HTTPException
 
 import backend.library.paths as _lib_paths
 from backend.hub.versioning import bump_semver
-
-# ── Version Bump (tested via publish internals) ──
 
 
 class TestVersionBump:
@@ -140,7 +136,6 @@ class TestDownloadSkill:
             with pytest.raises(ValueError, match="Invalid slug"):
                 download("item-evil")
 
-        # Ensure no files written outside library
         assert not (tmp_path / "evil").exists()
 
     def test_installs_skill_to_agent_config_when_agent_user_id_is_provided(self):
