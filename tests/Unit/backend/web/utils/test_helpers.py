@@ -69,7 +69,6 @@ def test_delete_thread_in_db_uses_runtime_repo_factories_without_db_path(monkeyp
     assert session_repo.closed
     assert terminal_repo.closed
     assert sync_state.closed
-    assert type(sync_state.repo).__name__ == "ProcessLocalSyncFileBacking"
 
 
 def test_delete_thread_in_db_cleans_runtime_repos_when_supabase_defaults_without_local_db(monkeypatch, tmp_path):

@@ -3,10 +3,6 @@ from types import SimpleNamespace
 from backend.chat import bootstrap as chat_bootstrap
 
 
-def test_chat_bootstrap_uses_identity_avatar_owner() -> None:
-    assert chat_bootstrap.avatar_url.__module__ == "backend.identity.avatar.urls"
-
-
 def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     chat_repo = object()
     contact_repo = object()

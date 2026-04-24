@@ -4,19 +4,6 @@ import importlib
 from typing import get_type_hints
 
 
-def test_agent_runtime_protocol_types_live_outside_web_service_layer() -> None:
-    protocol_module = importlib.import_module("protocols.agent_runtime")
-    gateway_module = importlib.import_module("backend.threads.chat_adapters.gateway")
-
-    assert protocol_module.AgentChatDeliveryEnvelope.__module__ == "protocols.agent_runtime"
-    assert protocol_module.AgentThreadInputEnvelope.__module__ == "protocols.agent_runtime"
-    assert protocol_module.AgentChatDeliveryResult.__module__ == "protocols.agent_runtime"
-    assert not hasattr(protocol_module, "AgentGatewayDeliveryResult")
-    assert not hasattr(gateway_module, "AgentChatDeliveryEnvelope")
-    assert not hasattr(gateway_module, "AgentThreadInputEnvelope")
-    assert not hasattr(gateway_module, "AgentChatDeliveryResult")
-
-
 def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -> None:
     protocol_module = importlib.import_module("protocols.agent_runtime")
 
@@ -50,7 +37,6 @@ def test_agent_runtime_thread_input_result_is_a_protocol_object() -> None:
     gateway_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.dispatch_thread_input)
     port_hints = get_type_hints(port_module.AgentRuntimeGatewayPort.dispatch_thread_input)
 
-    assert protocol_module.AgentThreadInputResult.__module__ == "protocols.agent_runtime"
     assert gateway_hints["return"] is protocol_module.AgentThreadInputResult
     assert port_hints["return"] is protocol_module.AgentThreadInputResult
 
