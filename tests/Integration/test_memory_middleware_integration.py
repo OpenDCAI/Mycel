@@ -1,8 +1,3 @@
-"""Integration tests for MemoryMiddleware with SummaryStore persistence.
-
-Tests the complete flow: MemoryMiddleware → SummaryStore → SQLite → Checkpointer
-"""
-
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,7 +12,6 @@ from sandbox.thread_context import set_current_thread_id
 
 @pytest.fixture
 def mock_checkpointer():
-    """Create mock checkpointer for testing."""
     checkpointer = MagicMock()
 
     def mock_get(config):
@@ -25,7 +19,6 @@ def mock_checkpointer():
         if not thread_id:
             return None
 
-        # Return mock checkpoint with messages
         return {
             "channel_values": {
                 "messages": [
@@ -48,11 +41,9 @@ def mock_checkpointer():
 
 @pytest.fixture
 def mock_model():
-    """Create mock LLM model for testing."""
     model = MagicMock()
 
     async def mock_ainvoke(messages):
-        # Return a mock summary response
         response = MagicMock()
         response.content = "This is a test summary of the conversation."
         return response
@@ -64,12 +55,10 @@ def mock_model():
 
 @pytest.fixture
 def mock_request():
-    """Create mock ModelRequest for testing."""
     request = MagicMock()
     request.messages = []
     request.system_message = None
 
-    # Add config with thread_id
     config = MagicMock()
     config.configurable = {"thread_id": "test-thread-1"}
     request.config = config
@@ -78,7 +67,6 @@ def mock_request():
 
 
 def create_large_message_list(count: int = 50) -> list:
-    """Create a large list of messages to trigger compaction."""
     messages = []
     for i in range(count):
         messages.append(HumanMessage(content=f"User message {i}" * 100))  # ~1500 chars each
@@ -98,12 +86,8 @@ class _AsyncOnlyCheckpointer:
 
 
 class TestSummarySaveOnCompaction:
-    """Test 1: Verify summary is saved to store when compaction occurs."""
-
     @pytest.mark.asyncio
     async def test_summary_save_on_compaction(self, temp_db, mock_model, mock_request):
-        """Trigger compaction and verify summary is saved to store."""
-        # Create middleware with low threshold to trigger compaction
         middleware = MemoryMiddleware(
             context_limit=10000,
             compaction_threshold=0.5,
@@ -112,18 +96,14 @@ class TestSummarySaveOnCompaction:
         )
         middleware.set_model(mock_model)
 
-        # Create large message list to trigger compaction
         messages = create_large_message_list(30)
         mock_request.messages = messages
 
-        # Mock handler
         async def mock_handler(req):
             return MagicMock()
 
-        # Execute middleware
         await middleware.awrap_model_call(mock_request, mock_handler)
 
-        # Verify summary was saved to store
         store = SummaryStore(temp_db)
         summary = store.get_latest_summary("test-thread-1")
 
@@ -137,12 +117,8 @@ class TestSummarySaveOnCompaction:
 
 
 class TestSummaryRestoreOnStartup:
-    """Test 2: Verify summary is restored from store on middleware startup."""
-
     @pytest.mark.asyncio
     async def test_summary_restore_on_startup(self, temp_db, mock_model, mock_request):
-        """Restart middleware and verify summary is restored from store."""
-        # Step 1: Create middleware and trigger compaction
         middleware1 = MemoryMiddleware(
             context_limit=10000,
             compaction_threshold=0.5,
@@ -159,12 +135,10 @@ class TestSummaryRestoreOnStartup:
 
         await middleware1.awrap_model_call(mock_request, mock_handler)
 
-        # Verify summary was saved
         assert middleware1._cached_summary is not None
         original_summary = middleware1._cached_summary
         original_index = middleware1._compact_up_to_index
 
-        # Step 2: Create new middleware instance (simulating restart)
         middleware2 = MemoryMiddleware(
             context_limit=10000,
             compaction_threshold=0.5,
@@ -173,14 +147,11 @@ class TestSummaryRestoreOnStartup:
         )
         middleware2.set_model(mock_model)
 
-        # Create new request with fewer messages (below threshold)
         small_messages = create_large_message_list(5)
         mock_request.messages = small_messages
 
-        # Execute middleware - should restore summary
         await middleware2.awrap_model_call(mock_request, mock_handler)
 
-        # Verify summary was restored
         assert middleware2._cached_summary == original_summary
         assert middleware2._compact_up_to_index == original_index
         assert middleware2._summary_restored is True
@@ -242,8 +213,6 @@ class TestSummaryRestoreOnStartup:
 
 
 class TestRebuildFromCheckpointer:
-    """Test 4: Verify summary can be rebuilt from checkpointer when store data is corrupted."""
-
     @pytest.mark.asyncio
     async def test_late_bound_async_checkpointer_rebuilds_summary(self, temp_db, mock_model):
         """Late-bound async savers should be enough for rebuild; sync .get() is not required."""
@@ -274,8 +243,6 @@ class TestRebuildFromCheckpointer:
 
     @pytest.mark.asyncio
     async def test_rebuild_from_checkpointer(self, temp_db, mock_model, mock_checkpointer, mock_request):
-        """Test rebuilding summary from checkpointer when store is corrupted."""
-        # Create middleware with checkpointer
         middleware = MemoryMiddleware(
             context_limit=10000,
             compaction_threshold=0.5,
@@ -285,7 +252,6 @@ class TestRebuildFromCheckpointer:
         )
         middleware.set_model(mock_model)
 
-        # Manually corrupt the store by saving invalid data
         store = SummaryStore(temp_db)
         store.save_summary(
             thread_id="test-thread-1",
@@ -294,17 +260,14 @@ class TestRebuildFromCheckpointer:
             compacted_at=0,
         )
 
-        # Create request with messages
         messages = create_large_message_list(30)
         mock_request.messages = messages
 
         async def mock_handler(req):
             return MagicMock()
 
-        # Execute middleware - should detect corruption and rebuild
         await middleware.awrap_model_call(mock_request, mock_handler)
 
-        # Verify summary was rebuilt
         rebuilt_summary = store.get_latest_summary("test-thread-1")
         assert rebuilt_summary is not None
         assert rebuilt_summary.summary_text != ""
@@ -312,11 +275,8 @@ class TestRebuildFromCheckpointer:
 
 
 class TestMultipleThreadsIsolated:
-    """Test 5: Verify multiple thread_ids maintain isolated summaries."""
-
     @pytest.mark.asyncio
     async def test_multiple_threads_isolated(self, temp_db, mock_model):
-        """Test that multiple threads maintain separate summaries."""
         middleware = MemoryMiddleware(
             context_limit=10000,
             compaction_threshold=0.5,
@@ -325,11 +285,9 @@ class TestMultipleThreadsIsolated:
         )
         middleware.set_model(mock_model)
 
-        # Create different summaries for different threads
         async def mock_handler(req):
             return MagicMock()
 
-        # Thread 1
         request1 = MagicMock()
         request1.messages = create_large_message_list(30)
         request1.system_message = None
@@ -337,7 +295,6 @@ class TestMultipleThreadsIsolated:
         config1.configurable = {"thread_id": "thread-1"}
         request1.config = config1
 
-        # Thread 2
         request2 = MagicMock()
         request2.messages = create_large_message_list(30)
         request2.system_message = None
@@ -345,15 +302,12 @@ class TestMultipleThreadsIsolated:
         config2.configurable = {"thread_id": "thread-2"}
         request2.config = config2
 
-        # Execute for both threads
         await middleware.awrap_model_call(request1, mock_handler)
 
-        # Reset restoration flag for second thread
         middleware._summary_restored = False
 
         await middleware.awrap_model_call(request2, mock_handler)
 
-        # Verify both threads have separate summaries
         store = SummaryStore(temp_db)
         summary1 = store.get_latest_summary("thread-1")
         summary2 = store.get_latest_summary("thread-2")
@@ -420,12 +374,8 @@ class TestCompactionBreakerScope:
 
 
 class TestSummaryUpdateOnSecondCompaction:
-    """Test 8: Verify summary is updated correctly on second compaction."""
-
     @pytest.mark.asyncio
     async def test_summary_update_on_second_compaction(self, temp_db, mock_model, mock_request):
-        """Test that second compaction updates the summary correctly."""
-        # Create mock model that returns different summaries
         call_count = [0]
 
         async def mock_ainvoke_sequential(messages):
@@ -444,7 +394,6 @@ class TestSummaryUpdateOnSecondCompaction:
         )
         middleware.set_model(mock_model)
 
-        # First compaction
         messages1 = create_large_message_list(30)
         mock_request.messages = messages1
 
@@ -459,23 +408,18 @@ class TestSummaryUpdateOnSecondCompaction:
         # Summary may include split turn context, so check for version 1 presence
         assert "Summary version 1" in summary1.summary_text or "Summary version 2" in summary1.summary_text
 
-        # Second compaction with more messages
         messages2 = create_large_message_list(60)
         mock_request.messages = messages2
 
-        # Reset restoration flag to allow new compaction
         middleware._summary_restored = False
 
         await middleware.awrap_model_call(mock_request, mock_handler)
 
-        # Verify summary was updated
         summary2 = store.get_latest_summary("test-thread-1")
         assert summary2 is not None
-        # Check that a new summary version exists
         assert "Summary version" in summary2.summary_text
         assert summary2.summary_id != summary1.summary_id
 
-        # Verify old summary is marked inactive
         all_summaries = store.list_summaries("test-thread-1")
         assert len(all_summaries) == 2
         active_summaries = [s for s in all_summaries if s["is_active"]]

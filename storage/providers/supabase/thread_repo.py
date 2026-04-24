@@ -208,7 +208,6 @@ class SupabaseThreadRepo:
         user_map: dict[str, dict[str, Any]] = {r["id"]: r for r in user_rows}
         agent_user_ids = list(user_map.keys())
 
-        # Step 2: get threads for those agent users
         thread_cols = ", ".join(_COLS)
         thread_rows = q.rows_in_chunks(
             lambda: q.order(
@@ -230,7 +229,6 @@ class SupabaseThreadRepo:
             "list_by_owner_user_id:threads",
         )
 
-        # Step 3: enrich with agent display data from user_map
         result: list[dict[str, Any]] = []
         for raw in thread_rows:
             d = _to_dict(raw)
