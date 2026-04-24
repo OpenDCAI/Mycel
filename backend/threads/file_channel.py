@@ -29,11 +29,6 @@ def get_file_channel_source(thread_id: str):
 
 
 def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
-    """Resolve split file-channel truth for a thread.
-
-    Ownership/binding lives on the thread -> workspace edge.
-    Host file storage remains whatever local root the current runtime uses.
-    """
     container = _get_container()
     thread_repo = container.thread_repo()
     try:
@@ -67,7 +62,6 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
 
 
 def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
-    """Save file to the thread's file channel."""
     source = get_file_channel_source(thread_id)
     result = source.save_file(relative_path, content)
     result["thread_id"] = thread_id
